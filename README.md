@@ -1,36 +1,46 @@
-# The Faery Tale Adventure - Amiga
 
-This repository contains the source code to the original "The Faery Tale Adventure" published
-by MicroIllusions on the Amiga in 1987. It was written by me (Talin) over the course of seven
-months.
+# The Faery Tale Adventure - Rust
 
-## State of the code
+This is a Rust port of "The Faery Tale Adventure" published by MicroIllusions
+on the Amiga in 1987.
 
-This code was written very early in my programming career, and in a hurry; the code is of generally
-poor quality with few comments. I don't remember very much about it, and probably won't be able
-to give useful answers to questions about it.
+This project is an exercise in learning Rust. Please do not expect anything
+from it. This is a personal project, a labor of love really. Especially do not
+expect updates in a timely manner.
 
-The code is primarily written in Aztec C, with some 68000 assembly.
+# Build
 
-I don't know whether it would be possible to actually get the game running on some other platform;
-but even so the code may have some historical interest.
+To build and run, just clone the repository and run "cargo run" from the root
+directory.
 
-## Copyright status
+There will be no releases, nor efforts to ensure compatibility with other
+platforms. Primary development is done on Linux but I see no reason it
+wouldn't work on other platforms as Cargo/Rust seem to manage these things
+fairly well.
 
-Under U.S. Copyright law, a creator may reclaim the copyright of their work after 35 years,
-a process known as "termination of transfer". Accordingly, in 2022 I sent a termination of transfer
-notice to Hollyware, Inc., the successors-in-interest to the intellectual property of
-MicroIllusions. Unfortunately, they have not responded to my letter or any other inquiries I have
-made over the years.
+# Directives
 
-Thus, I cannot say for certain exactly what the copyright status of this code is. However, whatever
-rights I do have, I hereby make freely available under an MIT-style permissive license.
+I have goals around this:
+1. Be true to the original game, implement (as much as possible) the original
+game mechanics.
+2. No enhancements or bug fixes, unless I have to go out of my way to
+*implement* a bug.
+3. Use original assets, as provided.
 
-## Active Forks
+# License
 
-I'm not planning on making any changes to this code, it's purpose is mainly to serve as a historical
-reference (so please don't send me PRs). However, a number of folks have forked the code and are
-trying to get the game to run in various environments:
+This project is released under an MIT open source license. You are free to do
+whatever you want with it.
 
-* https://github.com/XarkLabs/faery-tale-amiga - an effort to getting the game running on "modern" hardware using SDL.
-* https://github.com/tomdionysus/faery-tale-amiga - targeted towards running the game on an Amiga emulator.
+The original code this project is based on was written by David "Talin" Joiner,
+who very graciously released the source code under an MIT license. This project
+is forked from his project on GitHub. The original source has been moved to
+a subdirectory and as the project progresses will slowly be butchered to death
+as it is deconstructed. Do not expect the original code provided to compile or
+be in any sort of working order.
+
+# Note to developers
+
+PRs will not be accepted, please do not submit any. As stated, this is *purely*
+a learning project and the source is being posted publicly for academic
+purposes only.
