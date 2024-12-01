@@ -1,8 +1,12 @@
 /* include file for faery tale adventures - by Talin */
 
-#include "fmain.p"
-#include "fmain2.p"
-#include "iffsubs.p"
+#pragma once
+
+#include "amiga.h"
+
+#include "fmain.h"
+#include "fmain2.h"
+#include "iffsubs.h"
 
 #define free_chip(new,old,size) if (new!=old) FreeMem(new,size);
 
