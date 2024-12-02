@@ -9,6 +9,7 @@ use sdl2::event::Event;
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormatEnum;
 
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
@@ -17,12 +18,16 @@ pub fn main() -> Result<(), String> {
     let mut fps_man = FPSManager::new();
     fps_man.set_framerate(60)?;
 
-    let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
+    let window = video_subsystem.window("The Faery Tale Adventure", 1280, 960)
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+    canvas.set_scale(2.0, 2.0).unwrap();
+
+
+    let tex_maker = canvas.texture_creator();
 
     let ref orange = Color::RGB(230, 100, 0);
 
@@ -36,16 +41,30 @@ pub fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
 
-    let amber: DiskFont = game::font::load_font("game/fonts/Amber/9".to_string()).unwrap();
+    let mut amber: DiskFont = game::font::load_font("game/fonts/Amber/9".to_string()).unwrap();
     // println!("amber font: {:?}", amber);
+    // amber.dump_font();
+    // amber.print("\"No need to shout, son!\" he said.");
 
-    for cc in amber.lo_char ..= amber.hi_char {
-        amber.print_char(cc);
-    }
+    let font_bounds = amber.get_texture_size();
+    let mut font_tex = tex_maker.create_texture_static(Some(PixelFormatEnum::BGRA8888), font_bounds.width(), font_bounds.height()).unwrap();
+
+    amber.update_texture(&mut font_tex, &font_bounds);
 
     'running: loop {
+        // FIXME: only redraw if dirty
         canvas.set_draw_color(Color::from(&sys_palette[color_index]));
         canvas.clear();
+
+        font_tex.set_color_mod(200, 30, 0);
+        font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+
+        // canvas.copy(&font_tex,
+        //     Some(Rect::new(0, 0, font_bounds.width(), font_bounds.height())),
+        //     Some(Rect::new(0, 0, font_bounds.width(), font_bounds.height())))
+        //     .unwrap();
+
+        amber.render_string("\"No need to shout, son!\" he said.", &mut canvas, &mut font_tex, 50, 50);
 
         let mut kill_flag = false;
 

@@ -7,9 +7,6 @@ use std::fs;
 use crate::game::byteops::*;
 
 // All on-disk data are big endian format
-// use:
-// i32.from_be(value)
-// i16.from_be(value)
 
 #[derive(Debug, Clone)]
 pub struct HunkError;
@@ -116,8 +113,6 @@ pub fn load_hunkfile(filepath: String) -> Result<HunkData, HunkError> {
 
     'hunkloop: loop {
         let hunk_id = read_u32(&file_data, &mut offset);
-        println!("Hunk ID: {:X}", hunk_id);
-
         if hunk_id == HUNK_CODE || hunk_id == HUNK_DATA {
             let saved_size = hunk.header.hunk_sizes[hunk_index];
             let size = read_u32(&file_data, &mut offset) as usize * 4;
@@ -146,20 +141,15 @@ pub fn load_hunkfile(filepath: String) -> Result<HunkData, HunkError> {
              */
             'reloloop: loop {
                 let count = read_u32(&file_data, &mut offset);
-                println!("RELO count: {}", count);
                 if count == 0 {
-                    println!("No more relo blocks");
                     break 'reloloop;
                 }
                 let hunk_num = read_u32(&file_data, &mut offset) as usize;
                 let ref hunk_data = hunk.hunks[hunk_num].data;
 
-                println!("Hunk {}", hunk_num);
-
                 for _index in 0 .. count as usize {
                     let mut rel_offset = read_u32(&file_data, &mut offset) as usize;
                     let _value = read_u32(hunk_data, &mut rel_offset);
-                    // println!("   {index}: {} => 0x{value:X}", rel_offset-4);
                 }
             }
         } else if hunk_id == HUNK_END {
