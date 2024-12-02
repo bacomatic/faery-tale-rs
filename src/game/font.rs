@@ -5,70 +5,195 @@ use core::str;
 use crate::game::byteops::*;
 use crate::game::hunk::*;
 
+use sdl2::rect::Rect;
+use sdl2::render::Canvas;
+use sdl2::render::Texture;
+use sdl2::video::Window;
+
 // Amiga Font loader and renderer
 // A loaded font can be rendered directly to a SDL Texture
 
 // I'm using u8 for character data because the Rust char type is
 // Unicode and it makes everything so much more complicated.
 
-// FIXME: very little of this actually needs to be pub
 #[derive(Debug, Clone)]
 pub struct DiskFont {
-    pub name: String,   // name of this font (might be empty)
-    pub y_size: i16,    // # pixels high
-    pub x_size: i16,    // # pixels wide (for monospace fonts)
-    pub style: u8,      // font style
-    pub flags: u8,      // font flags
-    pub baseline: i16,  // # of pixel from top to use as text baseline
-    pub lo_char: u8,  // first ASCII character in font
-    pub hi_char: u8,  // last ASCII character in font
+    pub name: String,    // name of this font (might be empty)
+    pub y_size: usize,   // # pixels high
+    pub x_size: usize,   // # pixels wide (for monospace fonts)
+    pub style: u8,       // font style
+    pub flags: u8,       // font flags
+    pub baseline: usize, // # of pixel from top to use as text baseline
+    pub lo_char: u8,     // first ASCII character in font
+    pub hi_char: u8,     // last ASCII character in font
 
 
-    pub char_data: Vec<u8>,         // Character raw bitmap data
-    pub modulo: usize,    // bytes per row in font char data
-
+    pub char_data: Vec<u8>,  // Character raw bitmap data
+    pub modulo: usize,       // bytes per row in font char data
     pub char_loc: Vec<(usize,usize)>,   // for each char (offset, len)
                                         // offset is bit count from start of row
                                         // len is number of bits wide
-
     pub char_space: Vec<isize>,         // pixel width for each character, this could be negative for RTL
-
     pub char_kern: Vec<isize>,          // kerning (pixel gap to next char) for each character, could be negative
+
+    // cached pixel arrays used to generate textures, so we don't have to repeat
+    // expensive operations.
+    pixels_32: Vec<u8>,
 }
 
+
+// TODO: Break the texture functions out into a separate class to keep DiskFont self-contained
+
+
 impl DiskFont {
-    pub fn print_char(&self, c: u8) {
-        if c >= self.lo_char && c <= self.hi_char {
-            let char_index = (c - self.lo_char) as usize;
+    // Calculate the minimum size needed to store this font as a texture
+    // This is likely not what the actual texture size will be
+    pub fn get_texture_size(&self) -> Rect {
+        Rect::new(0_i32, 0_i32, self.modulo as u32, self.y_size as u32)
+    }
 
-            // get char location
-            let char_loc: (usize, usize) = self.char_loc[char_index];
+    // Draw all the font glyphs into the provided texture within the rect provided
+    // returns the actual area updated
+    // NOTE: this is hard coded to assume 32 bit ARGB format of some kind. What kind doesn't matter as
+    //       each pixel is either white with full alpha or black with zero alpha.
+    pub fn update_texture(&mut self, texture: &mut Texture, bounds: &Rect) -> Rect {
+        let font_rect = Rect::new(bounds.x, bounds.y, self.modulo as u32, self.y_size as u32);
+        let render_rect = font_rect.intersection(*bounds).unwrap();
 
-            let char_str = str::from_utf8(&[c]).unwrap().to_string();
-            let total_width = self.char_space[char_index] as usize;
+        let tex_info = texture.query();
+        // println!("texture info: {:?}", tex_info);
+        assert_eq!(tex_info.format.byte_size_per_pixel(), 4); // Enforce 32 bits per pixel
 
-            println!("{:-^1$}", char_str, total_width + 2);
-            for index in 0 .. self.y_size as usize {
-                let offset: usize = (self.modulo * index) + char_loc.0;
-                print!("|");
-                let is_baseline = index == self.baseline as usize;
+        // build the pixel cache if needed
+        if self.pixels_32.len() == 0 {
+            for yy in 0 .. self.y_size {
+                let offset = yy * self.modulo;
+                for xx in 0 .. self.modulo {
+                    let px = self.char_data[offset + xx];
 
-                for xx in 0 .. char_loc.1 {
-                    let cc = self.char_data[offset + xx];
-                    if cc > 0 {
-                        print!("#");
-                    } else {
-                        print!("{}", if is_baseline { "-" } else { " " });
-                    }
-                }
-
-                if is_baseline {
-                    println!("{:->1$}", "|", total_width - char_loc.1 + 1);
-                } else {
-                    println!("{: >1$}", "|", total_width - char_loc.1 + 1);
+                    // move to all four bytes
+                    self.pixels_32.push(px);
+                    self.pixels_32.push(px);
+                    self.pixels_32.push(px);
+                    self.pixels_32.push(px);
                 }
             }
-            println!("{:-^1$}", char_str, total_width + 2);
+        }
+
+        texture.update(render_rect, self.pixels_32.as_slice(), self.modulo * 4).unwrap();
+
+        return render_rect;
+    }
+
+    // render a string to the given canvas
+    // this does not handle newlines, it assumes the string will reside on a single line
+    // FIXME: it should be easy to handle newlines
+    pub fn render_string(&self, s: &str, canvas: &mut Canvas<Window>, texture: &mut Texture, x: i32, y: i32) {
+        let cstr = s.as_bytes();
+
+        let mut glyph_rect = Rect::new(x, y, 0, self.y_size as u32);
+        for cc in cstr {
+            if *cc >= self.lo_char && *cc <= self.hi_char {
+                let cc_index = (cc - self.lo_char) as usize;
+                let cc_loc = self.char_loc[cc_index];
+
+                // Don't do anything for spaces, just skip ahead to the next coordinates
+                if cc_loc.1 > 0 {
+                    // grab glyph width and adjust glyph_rect
+                    glyph_rect.set_width(cc_loc.1 as u32);
+                    let src_rect = Rect::new(cc_loc.0 as i32, 0, cc_loc.1 as u32, self.y_size as u32);
+
+                    // copy the glyph
+                    canvas.copy(&texture, Some(src_rect), Some(glyph_rect)).unwrap();
+                }
+
+                // advance to the next glyph location
+                glyph_rect.set_x(glyph_rect.x() + self.char_space[cc_index] as i32);
+            }
+        }
+    }
+
+    pub fn print(&self, s: &str) {
+        // we need to ensure the string is ascii, and get a byte slice from it
+        let cstr = s.as_bytes();
+
+        for yy in 0 .. self.y_size {
+            for pc in 0 .. cstr.len() {
+                if cstr[pc] >= self.lo_char && cstr[pc] <= self.hi_char {
+                    self.print_char_line((cstr[pc] - self.lo_char) as usize, yy, false);
+                }
+            }
+            println!("");
+        }
+    }
+
+    // print a single line of the given character
+    // if the char is invalid (not ascii, not in the font range) then do nothing
+    fn print_char_line(&self, char_index: usize, line: usize, mark: bool) {
+        // get char location
+        let char_loc = self.char_loc[char_index];
+        let offset = (self.modulo * line) + char_loc.0;
+        let total_width = self.char_space[char_index].abs() as usize; // FIXME: handle negative offsets
+        let is_baseline = line == self.baseline;
+
+        if mark {
+            print!("|");
+        }
+
+        for xx in 0 .. char_loc.1 {
+            let cc = self.char_data[offset + xx];
+            if cc > 0 {
+                print!("#");
+            } else {
+                print!("{}", if is_baseline && mark { "-" } else { " " });
+            }
+        }
+
+        // fill out to the total width
+        if mark {
+            if is_baseline {
+                print!("{:->1$}", "|", total_width - char_loc.1 + 1);
+            } else {
+                print!("{: >1$}", "|", total_width - char_loc.1 + 1);
+            }
+        } else {
+            // still need to fill out to the total width
+            print!("{: >1$}", "", total_width - char_loc.1);
+        }
+    }
+
+    // Print every character glyph in the font to the terminal
+    pub fn dump_font(&self) {
+        for cc in self.lo_char ..= self.hi_char {
+            self.print_char(cc, true);
+        }
+    }
+
+    // print a single character, with or without bounding markers
+    fn print_char(&self, c: u8, mark: bool) {
+        if c >= self.lo_char && c <= self.hi_char {
+            let char_index = (c - self.lo_char) as usize;
+            let total_width = self.char_space[char_index].abs() as usize;
+
+            // make sure it's a printable char first
+            let char_str = if c.is_ascii_graphic() {
+                str::from_utf8(&[c]).unwrap().to_string()
+            } else {
+                char::REPLACEMENT_CHARACTER.to_string()
+            };
+
+            if mark {
+                println!("{:-^1$} : {2}", char_str, total_width + 2, total_width);
+            }
+
+            for index in 0 .. self.y_size as usize {
+                self.print_char_line(char_index, index, mark);
+                println!("");
+            }
+
+            if mark {
+                println!("{:-^1$}", char_str, total_width + 2);
+            }
         }
     }
 }
@@ -87,7 +212,8 @@ pub fn load_font(fontfile: String) -> Result<DiskFont, HunkError> {
         char_data: Vec::new(),
         char_loc: Vec::new(),
         char_space: Vec::new(),
-        char_kern: Vec::new()
+        char_kern: Vec::new(),
+        pixels_32: Vec::new(),
     };
 
     let hunk = load_hunkfile(fontfile).unwrap();
@@ -129,11 +255,11 @@ pub fn load_font(fontfile: String) -> Result<DiskFont, HunkError> {
     _ = read_u16(hunk_data, &mut offset); // reserved for 1.4
 
     // Finally, actual font information
-    disk_font.y_size = read_i16(hunk_data, &mut offset);
+    disk_font.y_size = read_i16(hunk_data, &mut offset) as usize;
     disk_font.style = read_u8(hunk_data, &mut offset);
     disk_font.flags = read_u8(hunk_data, &mut offset);
-    disk_font.x_size = read_i16(hunk_data, &mut offset);
-    disk_font.baseline = read_i16(hunk_data, &mut offset);
+    disk_font.x_size = read_i16(hunk_data, &mut offset) as usize;
+    disk_font.baseline = read_i16(hunk_data, &mut offset) as usize;
     _ = read_i16(hunk_data, &mut offset); // tf_BoldSmear (don't care ?)
     _ = read_i16(hunk_data, &mut offset); // tf_Accessors (don't care)
     disk_font.lo_char = read_u8(hunk_data, &mut offset);
@@ -175,10 +301,11 @@ pub fn load_font(fontfile: String) -> Result<DiskFont, HunkError> {
         &[0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8] // b"****"
     ];
 
-    // Convert the bitmap into a bytemap
-    for yy in 0 .. disk_font.y_size as usize {
+    // Convert the bitmap into an 8 bit alpha map
+    // This will be used later as a mask when rendering to a texture
+    for yy in 0 .. disk_font.y_size {
         // modulo is already bytes per row, so just use it
-        let row_offset = font_data_offset + (yy * disk_font.modulo as usize);
+        let row_offset = font_data_offset + (yy * disk_font.modulo);
         for xx in 0 .. disk_font.modulo as usize {
             let cc = hunk_data[row_offset + xx] as usize;
 

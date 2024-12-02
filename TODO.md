@@ -7,13 +7,13 @@ tracker), here's a damn ToDo list, in no particular order.
     * Set up core engine (SDL based)
     * Set up game data (characters, objects, maps, etc)
     * IFF loading
-    * Amber font loading
     * Font rendering
     * Set mouse cursor
     * Core game FSM
+    * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
     * Implement scenes
         * Static text
-        * Swirly bordered text
+        * Swirly bordered text ("placard")
         * Storybook, page turning
     * Implement opening sequence
         * Credits
@@ -43,6 +43,7 @@ tracker), here's a damn ToDo list, in no particular order.
 
 Completed tasks:
 * Basic Infrastructure
+    * Amber font loading
 * Core Game Mechanics
 * Audio
 * Graphics Effects

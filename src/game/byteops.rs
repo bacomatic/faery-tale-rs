@@ -46,7 +46,6 @@ pub fn read_string(data: &Vec<u8>, offset: &mut usize) -> String {
 
     // str::from_utf8 will borrow the slice then to_string will clone
     // this avoids altering the source vector
-    println!("read_string: start {str_start} -> end {str_end}");
 
     // for some reason passing just a NUL character to from_ut8 results in "\0"
     // instead of an empty string, IMHO this is a bug in Rust

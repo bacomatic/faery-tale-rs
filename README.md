@@ -44,3 +44,14 @@ be in any sort of working order.
 PRs will not be accepted, please do not submit any. As stated, this is *purely*
 a learning project and the source is being posted publicly for academic
 purposes only.
+
+
+    .     ######     .
+    .    ########    .
+    .    #  ##  #    .
+    .     ##  ##     .
+    .      ####      .
+    .   ## #  # ##   .
+    .     # ## #     .
+    .     ##  ##     .
+    .   ##      ##   .

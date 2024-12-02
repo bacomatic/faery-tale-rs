@@ -289,7 +289,7 @@ msg6
 			dc.b	XY,25/2,45,"The Lesson of the Story:"
 			dc.b	XY,66/2,88,"Stay at Home!"
 			dc.b	ETX
-msg7		
+msg7
 			dc.b	XY,28/2,32,"Having defeated the"
 			dc.b	XY,28/2,43,"villanous Necromancer"
 			dc.b	XY,28/2,54,"and recovered the"
@@ -387,7 +387,7 @@ _speeches
 ; 16 - princess message
 		dc.b	'"Please, sir, rescue me from this horrible prison!" '
 		dc.b	'pleaded the princess.',0
-; 17 - king messages		
+; 17 - king messages
 		dc.b	'"I cannot help you, young man." said the king. '
 		dc.b	'"My armies are decimated, and I fear that with the '
 		dc.b	'loss of my children, I have lost all hope."',0
@@ -434,7 +434,7 @@ _speeches
 		dc.b	'"The maiden you seek lies imprisoned in an unreachable '
 		dc.b	'castle surrounded by unclimbable mountains."',0
 ; 33 - wizard message 7
-		dc.b	"Tame the golden beast and no mountain may deny you! '
+		dc.b	'"Tame the golden beast and no mountain may deny you! '
 		dc.b	'But what rope could hold such a creature?"',0
 ; 34 - wizard message 8
 		dc.b	'"Just what I needed!" he said.',0
@@ -443,7 +443,7 @@ _speeches
 		dc.b	'"Perhaps you can find some small animal to torment '
 		dc.b	'if that pleases you!"',0
 ; 36 - cleric message 1
-		dc.b	"You must seek your enemy on the spirit plane. '
+		dc.b	'"You must seek your enemy on the spirit plane. '
 		dc.b	'It is hazardous in the extreme. Space may twist, '
 		dc.b	'and time itself may run backwards!"',0
 ; 37 - cleric message 2
