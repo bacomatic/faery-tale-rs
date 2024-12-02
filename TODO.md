@@ -10,7 +10,6 @@ tracker), here's a damn ToDo list, in no particular order.
     * Font rendering
     * Set mouse cursor
     * Core game FSM
-    * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
     * Implement scenes
         * Static text
         * Swirly bordered text ("placard")
@@ -44,6 +43,7 @@ tracker), here's a damn ToDo list, in no particular order.
 Completed tasks:
 * Basic Infrastructure
     * Amber font loading
+    * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
 * Core Game Mechanics
 * Audio
 * Graphics Effects
