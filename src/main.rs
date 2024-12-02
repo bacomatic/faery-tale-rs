@@ -24,7 +24,7 @@ pub fn main() -> Result<(), String> {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(2.0, 2.0).unwrap();
+    // canvas.set_scale(2.0, 2.0).unwrap();
 
 
     let tex_maker = canvas.texture_creator();
@@ -49,22 +49,33 @@ pub fn main() -> Result<(), String> {
     let font_bounds = amber.get_texture_size();
     let mut font_tex = tex_maker.create_texture_static(Some(PixelFormatEnum::BGRA8888), font_bounds.width(), font_bounds.height()).unwrap();
 
+    // SDL treats all pixels as 1:1 aspect ratio, we're working with graphics intended for a 4:3 (standard NTSC) aspect ratio
+    // Set up the render texture at the original 640x400 then stretch to the window size. This will correct the aspect ratio so the game looks correct
+    // 640x400 -> 1280x960 produces a 4:3 aspect ratio.
+    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 640, 400).unwrap();
+
     amber.update_texture(&mut font_tex, &font_bounds);
+    let mut dirty: bool = true;
 
     'running: loop {
-        // FIXME: only redraw if dirty
-        canvas.set_draw_color(Color::from(&sys_palette[color_index]));
-        canvas.clear();
+        if dirty {
+            let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
+                play_canvas.set_draw_color(Color::from(&sys_palette[color_index]));
+                play_canvas.clear();
 
-        font_tex.set_color_mod(200, 30, 0);
-        font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+                font_tex.set_color_mod(200, 30, 0);
+                font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+                amber.render_string("\"No need to shout, son!\" he said.",
+                    &mut play_canvas,
+                    &mut font_tex,
+                    50,
+                    50);
+            });
 
-        // canvas.copy(&font_tex,
-        //     Some(Rect::new(0, 0, font_bounds.width(), font_bounds.height())),
-        //     Some(Rect::new(0, 0, font_bounds.width(), font_bounds.height())))
-        //     .unwrap();
-
-        amber.render_string("\"No need to shout, son!\" he said.", &mut canvas, &mut font_tex, 50, 50);
+            // FIXME: only redraw if dirty
+            canvas.copy(&play_tex, None, None).unwrap();
+            dirty = false;
+        }
 
         let mut kill_flag = false;
 
@@ -80,6 +91,7 @@ pub fn main() -> Result<(), String> {
                     println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode == Some(Scancode::Up) {
                         color_index = (color_index + 1) % 4;
+                        dirty = true;
                     }
                 },
                 Event::KeyUp {scancode, keymod, ..}
@@ -91,6 +103,7 @@ pub fn main() -> Result<(), String> {
                         } else {
                             color_index -= 1;
                         }
+                        dirty = true;
                     }
                 },
                 _ => {}
