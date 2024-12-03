@@ -72,8 +72,9 @@ pub fn main() -> Result<(), String> {
                     50);
             });
 
-            // FIXME: only redraw if dirty
             canvas.copy(&play_tex, None, None).unwrap();
+            canvas.present();
+
             dirty = false;
         }
 
@@ -115,7 +116,6 @@ pub fn main() -> Result<(), String> {
         if kill_flag {
             break 'running
         } else {
-            canvas.present();
             fps_man.delay();
         }
     }
