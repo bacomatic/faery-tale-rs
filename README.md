@@ -18,6 +18,27 @@ platforms. Primary development is done on Linux but I see no reason it
 wouldn't work on other platforms as Cargo/Rust seem to manage these things
 fairly well.
 
+## Linux
+
+This just needs a few dependencies (assuming an apt based system):
+    $ sudo apt install rust libsdl2-dev libsdl2-gfx-dev libsdl2-mixer-dev
+    $ cargo run
+
+## macOS
+
+This builds and runs on macOS. Install some things:
+    $ brew install rust sdl2 sdl2_gfx sdl2_mixer
+    $ export LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib"
+    $ cargo run
+
+Place the LIBRARY_PATH line in your .profile, adjust the install path for
+homebrew if it's different. Without it, you won't be able to link the SDL2
+libs.
+
+## Windows
+
+??? Haven't tried, probably won't try personally.
+
 # Directives
 
 I have goals around this:
@@ -46,12 +67,12 @@ a learning project and the source is being posted publicly for academic
 purposes only.
 
 
-    .     ######     .
-    .    ########    .
-    .    #  ##  #    .
-    .     ##  ##     .
-    .      ####      .
-    .   ## #  # ##   .
-    .     # ## #     .
-    .     ##  ##     .
-    .   ##      ##   .
+    .                         ######                         .
+    .                        ########                        .
+    .                        #  ##  #                        .
+    .                         ##  ##                         .
+    .                          ####                          .
+    .                       ## #  # ##                       .
+    .                         # ## #                         .
+    .                         ##  ##                         .
+    .                       ##      ##                       .
