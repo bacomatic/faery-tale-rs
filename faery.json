@@ -1,0 +1,135 @@
+{
+    "placards": [
+        {
+            "name": "msg1",
+            "lines": [
+                {"x": 20, "y": 28, "text": "   \"Rescue the Talisman!\""},
+                {"x": 20, "y": 39, "text": "was the Mayor's plea." },
+                {"x": 20, "y": 50, "text": "\"Only the Talisman can" },
+                {"x": 20, "y": 61, "text": "protect our village from" },
+                {"x": 20, "y": 72, "text": "the evil forces of the" },
+                {"x": 20, "y": 83, "text": "night.\" And so Julian" },
+                {"x": 20, "y": 94, "text": "set out on his quest to" },
+                {"x": 20, "y": 105, "text": "recover it." }
+            ]
+        },
+        {
+            "name": "msg2",
+            "lines": [
+                {"x": 24, "y": 44, "text": "Unfortunately for Julian," },
+                {"x": 24, "y": 55, "text": "his luck had run out." },
+                {"x": 24, "y": 66, "text": "Many months passed and" },
+                {"x": 24, "y": 77, "text": "Julian did not return..." }
+            ]
+        },
+        {
+            "name": "msg3",
+            "lines": [
+                {"x": 40, "y": 44, "text": "So Phillip set out," },
+                {"x": 40, "y": 55, "text": "determined to find his" },
+                {"x": 40, "y": 66, "text": "brother and complete" },
+                {"x": 40, "y": 77, "text": "the quest." }
+            ]
+        },
+        {
+            "name": "msg4",
+            "lines": [
+                {"x": 24, "y": 44, "text": "But sadly, Phillip's" },
+                {"x": 24, "y": 55, "text": "cleverness could not save" },
+                {"x": 24, "y": 66, "text": "him from the same fate" },
+                {"x": 24, "y": 77, "text": "as his older brother." }
+            ]
+        },
+        {
+            "name": "msg5",
+            "lines": [
+                {"x": 30, "y": 30, "text": "So Kevin took up the" },
+                {"x": 30, "y": 41, "text": "quest, risking all, for" },
+                {"x": 30, "y": 52, "text": "the village had grown" },
+                {"x": 30, "y": 63, "text": "desperate. Young and" },
+                {"x": 30, "y": 74, "text": "inexperienced, his" },
+                {"x": 30, "y": 85, "text": "chances did not look" },
+                {"x": 30, "y": 96, "text": "good." }
+            ]
+        },
+        {
+            "name": "msg6",
+            "lines": [
+                {"x": 20, "y": 31, "text": "And so ends our sad tale." },
+                {"x": 25, "y": 45, "text": "The Lesson of the Story:" },
+                {"x": 66, "y": 88, "text": "Stay at Home!" }
+            ]
+        },
+        {
+            "name": "msg7",
+            "lines": [
+                {"x": 28, "y": 32, "text": "Having defeated the" },
+                {"x": 28, "y": 43, "text": "villanous Necromancer" },
+                {"x": 28, "y": 54, "text": "and recovered the" },
+                {"x": 28, "y": 65, "text": "Talisman, %" },
+                {"x": 28, "y": 76, "text": "returned to Marheim" },
+                {"x": 28, "y": 87, "text": "where he wed the" },
+                {"x": 28, "y": 98, "text": "princess..." }
+            ]
+        },
+        {
+            "name": "msg8",
+            "lines": [
+                {"x": 21, "y": 26, "text": "% had rescued Katra," },
+                {"x": 21, "y": 37, "text": "Princess of Marheim." },
+                {"x": 21, "y": 48, "text": "Though they had pledged" },
+                {"x": 21, "y": 59, "text": "their love for each, " },
+                {"x": 21, "y": 70, "text": "other, % knew that" },
+                {"x": 21, "y": 81, "text": " his quest could not" },
+                {"x": 21, "y": 92, "text": "be forsaken." }
+            ]
+        },
+        {
+            "name": "msg9",
+            "lines": [
+                {"x": 21, "y": 33, "text": "% had rescued Karla" },
+                {"x": 21, "y": 44, "text": "(Katra's sister), Princess" },
+                {"x": 21, "y": 55, "text": "of Marheim. Though they" },
+                {"x": 21, "y": 66, "text": "had pledged their love" },
+                {"x": 21, "y": 77, "text": "for each other, %" },
+                {"x": 21, "y": 88, "text": "knew that his quest" },
+                {"x": 21, "y": 99, "text": "could not be forsaken." }
+            ]
+        },
+        {
+            "name": "msg10",
+            "lines": [
+                {"x": 21, "y": 26, "text": "% had rescued Kandy" },
+                {"x": 21, "y": 37, "text": "(Katra's and Karla's" },
+                {"x": 21, "y": 48, "text": "sister), Princess of" },
+                {"x": 21, "y": 59, "text": "Marheim. Though they had" },
+                {"x": 21, "y": 70, "text": "pledged their love for" },
+                {"x": 21, "y": 81, "text": "each other, % knew " },
+                {"x": 21, "y": 92, "text": "that his quest could" },
+                {"x": 21, "y": 103, "text": "not be forsaken." }
+            ]
+        },
+        {
+            "name": "msg11",
+            "lines": [
+                {"x": 71, "y": 37, "text": "After seeing the" },
+                {"x": 35, "y": 48, "text": "princess safely to her" },
+                {"x": 35, "y": 59, "text": "home city, and with a" },
+                {"x": 35, "y": 70, "text": "king's gift in gold," },
+                {"x": 35, "y": 81, "text": "% once more set" },
+                {"x": 35, "y": 92, "text": "out on his quest." }
+            ]
+        },
+        {
+            "name": "msg12",
+            "lines": [
+                {"x": 128, "y": 19, "text": "So..." },
+                {"x": 34, "y": 65, "text": "You, game seeker, would guide the" },
+                {"x": 10, "y": 75, "text": "brothers to their destiny? You would" },
+                {"x": 10, "y": 85, "text": "aid them and give directions? Answer," },
+                {"x": 10, "y": 95, "text": "then, these three questions and prove" },
+                {"x": 10, "y": 105, "text": "your fitness to be their advisor:" }
+            ]
+        }
+    ]
+}

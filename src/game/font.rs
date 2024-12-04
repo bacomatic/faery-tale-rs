@@ -5,10 +5,13 @@ use core::str;
 use crate::game::byteops::*;
 use crate::game::hunk::*;
 
+
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
+use sdl2::render::RenderTarget;
 use sdl2::render::Texture;
-use sdl2::video::Window;
+
+use std::path::Path;
 
 // Amiga Font loader and renderer
 // A loaded font can be rendered directly to a SDL Texture
@@ -87,8 +90,7 @@ impl DiskFont {
 
     // render a string to the given canvas
     // this does not handle newlines, it assumes the string will reside on a single line
-    // FIXME: it should be easy to handle newlines
-    pub fn render_string(&self, s: &str, canvas: &mut Canvas<Window>, texture: &mut Texture, x: i32, y: i32) {
+    pub fn render_string<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &mut Texture, x: i32, y: i32) {
         let cstr = s.as_bytes();
 
         let mut glyph_rect = Rect::new(x, y, 0, self.y_size as u32);
@@ -198,7 +200,7 @@ impl DiskFont {
     }
 }
 
-pub fn load_font(fontfile: String) -> Result<DiskFont, HunkError> {
+pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
     let mut disk_font: DiskFont = DiskFont {
         name: "".to_string(),
         y_size: 0,

@@ -3,6 +3,7 @@
 // and process it
 
 use std::fs;
+use std::path::Path;
 
 use crate::game::byteops::*;
 
@@ -65,7 +66,7 @@ pub struct HunkData {
 
 // FIXME: there is no bounds checking or error handling, using this with bad or unsupported hunks will cause panics
 
-pub fn load_hunkfile(filepath: String) -> Result<HunkData, HunkError> {
+pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, HunkError> {
     // Just read the whole thing into memory first
     let file_data: Vec<u8> = fs::read(filepath).unwrap(); // FIXME: proper error handling
     let mut offset: usize = 0;

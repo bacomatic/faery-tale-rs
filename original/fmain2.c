@@ -750,6 +750,12 @@ void extract(register char *start)
     }
 }
 
+msg(register char* start, register long num)
+{
+    while (num) if (*start++ == 0) num--;
+    extract(start);
+}
+
 #if 0
 #asm
 ;msg(start,num) register char *start; register long num;

@@ -1,4 +1,4 @@
-;		assembly language subroutines for faerie tale adventure 
+;		assembly language subroutines for faerie tale adventure
 ;		written august 86 by Talin
 
 ;		AmigaDOS subroutine vectors
@@ -245,6 +245,7 @@ _titletext	dc.b	XY,(160-26*4)/2,33,$22,"The Faery Tale Adventure",$22
 ;			dc.b	XY,168/2,160,"Copyright (C) 1986 MicroIllusions "
 			dc.b	ETX
 
+			; Compass bitmap data
 			public _hinor,_hivar
 _hinor
 			dc.l	$01FFF8FF,$FC038000,$01FF0007,$FC038000
@@ -339,7 +340,7 @@ _rnd		bsr.s	_rand		; rand() % x
 
 			public	_prdec
 
-_prdec		
+_prdec
 			movem.l	a0-a6/d0-d7,-(sp)
 			move.l	60+4(sp),d0
 			bsr.s	ion6
@@ -396,7 +397,7 @@ _placard
 iiloop	move.l	d4,-(sp)
 		moveq	#15,d5			; j
 		lea		xmod(pc),a2		; table of adders
-jloop	
+jloop
 		clr.l	d0
 		move.l	d7,d3			; dy
 		move.b	16(a2),d0		; dy + ymod[j]
@@ -533,7 +534,7 @@ setxy		clr.l	d0
 			bra.s	ssp10
 sspx
 			movem.l	(sp)+,a0-a2/d0-d1
-			rts			
+			rts
 
 
 		public	_px_to_im,_xreg,_yreg,_map_mem,_sector_mem
@@ -1338,7 +1339,7 @@ newyy	movem.l	(sp)+,d2/d3
 ;		sub.w	d0,d2
 ;		move.b	d2,_xjoy
 ;		sub.w	d1,d3
-;		move.b	d3,_yjoy		
+;		move.b	d3,_yjoy
 
 ;		or.b	d2,d3
 ;		clr.l	d0
@@ -1478,7 +1479,7 @@ _page_det
 		bgt.s	pagex
 
 		moveq	#3,d0
-pagex	
+pagex
 		move.l	8(sp),a0
 		move.l	(sp)+,d1
 		rts
@@ -1569,11 +1570,11 @@ decodekey
 		cmp.w	#10,d2
 		bge.s	decodenull
 		bra.s	setcomp
-		
+
 decodenull
 		moveq	#9,d2
 		clr.w	_keydir
-		
+
 setcomp
 		cmp.w	_oldir,d2			; if dir != oldir
 		beq.s	setcompx
@@ -1643,7 +1644,7 @@ mm05
 		move.w	(a0)+,d0		; take AND of all planes
 		and.w	(a1)+,d0
 		and.w	(a2)+,d0
-		and.w	(a3)+,d0		
+		and.w	(a3)+,d0
 		and.w	(a4)+,d0
 		not.w	d0				; it's an inverted mask
 		move.w	d0,(a5)+		; and store in destination
@@ -1672,7 +1673,7 @@ mbuff		equ		28		; mask area
 shapedata	equ		28
 maskdata	equ		32
 
-bc0		equ		$09F0		; 
+bc0		equ		$09F0		;
 ;bc1 = (mode type>>1) & 2   ; no shift, no fill/line, maybe descending
 
 DMACONR		equ		2
@@ -1708,7 +1709,7 @@ scan5		equ		5*vsc		; number of scanlines to 5 characters
 scan6		equ		6*vsc		; number of scanlines to 6 characters
 
 scroll_table					; table of constants for blitting
-;	constants are Aoffset, Doffset, modulus, blitsize --- entry is 8 bytes	
+;	constants are Aoffset, Doffset, modulus, blitsize --- entry is 8 bytes
 			dc.w	len6-6,len6+2-6
 			dc.w	vmod,(scan6*64)+18
 
