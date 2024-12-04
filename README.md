@@ -21,12 +21,14 @@ fairly well.
 ## Linux
 
 This just needs a few dependencies (assuming an apt based system):
+
     $ sudo apt install rust libsdl2-dev libsdl2-gfx-dev libsdl2-mixer-dev
     $ cargo run
 
 ## macOS
 
 This builds and runs on macOS. Install some things:
+
     $ brew install rust sdl2 sdl2_gfx sdl2_mixer
     $ export LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib"
     $ cargo run
