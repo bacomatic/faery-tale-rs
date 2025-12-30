@@ -14,7 +14,7 @@ pub struct HunkError;
 
 const ALLOC_FLAG_MASK: u32 = 0x3FFFFFFF_u32; // use to mask off the mem flags
 
-// Amiga HUNK file magic cookie
+// Amiga HUNK file magic cookie (really, this is HUNK_HEADER ID)
 const MAGIC_COOKIE: u32 = 0x03F3;
 
 // hunk IDs
@@ -97,7 +97,6 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, HunkError> {
 
     let strings = read_u32(&file_data, &mut offset);
     assert_eq!(strings, 0);
-    assert_eq!(offset, 8); // make sure we're borrowing correctly
 
     hunk.header.table_size = read_u32(&file_data, &mut offset);
     hunk.header.first_hunk = read_u32(&file_data, &mut offset);
@@ -110,10 +109,14 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, HunkError> {
         hunk.header.hunk_sizes.push(size as usize);
     }
 
+    // println!("Hunk Header: {:?}", hunk.header);
+
     let mut hunk_index: usize = hunk.header.first_hunk as usize;
 
     'hunkloop: loop {
         let hunk_id = read_u32(&file_data, &mut offset);
+        // println!("HUNK ID: {hunk_id:X}");
+
         if hunk_id == HUNK_CODE || hunk_id == HUNK_DATA {
             let saved_size = hunk.header.hunk_sizes[hunk_index];
             let size = read_u32(&file_data, &mut offset) as usize * 4;
@@ -147,10 +150,14 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, HunkError> {
                 }
                 let hunk_num = read_u32(&file_data, &mut offset) as usize;
                 let ref hunk_data = hunk.hunks[hunk_num].data;
+                // println!("Relocating hunk {} with {} entries", hunk_num, count);
 
                 for _index in 0 .. count as usize {
                     let mut rel_offset = read_u32(&file_data, &mut offset) as usize;
                     let _value = read_u32(hunk_data, &mut rel_offset);
+                    // println!("Relocating hunk {} at offset {:X} value {:X}", hunk_num, rel_offset - 4, value);
+
+                    // since we're indexing into an array instead of memory, we don't need to do anything special
                 }
             }
         } else if hunk_id == HUNK_END {

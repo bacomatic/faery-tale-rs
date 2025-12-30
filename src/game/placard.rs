@@ -1,9 +1,8 @@
 
-use crate::game::font::DiskFont;
+use crate::game::font_texture::FontTexture;
 
 use sdl2::render::Canvas;
 use sdl2::render::RenderTarget;
-use sdl2::render::Texture;
 
 use serde::Deserialize;
 
@@ -32,9 +31,9 @@ impl Placard {
         }
     }
 
-    pub fn draw<T: RenderTarget>(&self, font: &DiskFont, canvas: &mut Canvas<T>, texture: &mut Texture) {
+    pub fn draw<'a, T: RenderTarget>(&self, font: &FontTexture<'a>, canvas: &mut Canvas<T>) {
         for line in &self.lines {
-            font.render_string(&line.text, canvas, texture, line.x as i32, line.y as i32);
+            font.render_string(&line.text, canvas, line.x as i32, line.y as i32);
         }
     }
 

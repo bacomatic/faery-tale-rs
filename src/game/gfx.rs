@@ -1,5 +1,3 @@
-extern crate sdl2;
-
 use sdl2::pixels::Color;
 
 use std::convert::From;
@@ -59,6 +57,33 @@ impl From<&RGB4> for Color {
             (gc | (gc << 4)) as u8,
             (bc | (bc << 4)) as u8
         )
+    }
+}
+
+impl RGB4 {
+    pub fn to_color(&self) -> Color {
+        let rc = (self.color & 0xF00) >> 8;
+        let gc = (self.color & 0xF0) >> 4;
+        let bc = self.color & 0x0F;
+
+        Color::RGB (
+            (rc | (rc << 4)) as u8,
+            (gc | (gc << 4)) as u8,
+            (bc | (bc << 4)) as u8
+        )
+    }
+
+    pub fn r(&self) -> u8 {
+        let rc = (self.color & 0xF00) >> 8;
+        (rc | (rc << 4)) as u8
+    }
+    pub fn g(&self) -> u8 {
+        let gc = (self.color & 0xF0) >> 4;
+        (gc | (gc << 4)) as u8
+    }
+    pub fn b(&self) -> u8 {
+        let bc = self.color & 0x0F;
+        (bc | (bc << 4)) as u8
     }
 }
 

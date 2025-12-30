@@ -2,6 +2,7 @@ extern crate sdl2;
 
 mod game;
 
+use game::font_texture::FontTexture;
 use game::game_library;
 use game::gfx::Palette4;
 use game::font::DiskFont;
@@ -10,9 +11,10 @@ use sdl2::event::Event;
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
-use sdl2::pixels::PixelFormatEnum;
 
+use std::cell::RefCell;
 use std::path::Path;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
 struct CycleInt {
@@ -76,8 +78,6 @@ pub fn main() -> Result<(), String> {
 
     // load the game library
     let game_lib = game_library::load_game_library(Path::new("faery.json")).unwrap();
-    game_lib.print_placard("msg1");
-
     let tex_maker = canvas.texture_creator();
 
     let ref orange = Color::RGB(230, 100, 0);
@@ -92,10 +92,23 @@ pub fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
 
-    let mut amber: DiskFont = game::font::load_font(Path::new("game/fonts/Amber/9")).unwrap();
+    // FIXME: implement font/asset loader and move all this code there
 
-    let font_bounds = amber.get_texture_size();
-    let mut font_tex = tex_maker.create_texture_static(Some(PixelFormatEnum::BGRA8888), font_bounds.width(), font_bounds.height()).unwrap();
+    let amber: DiskFont = game::font::load_font(Path::new("game/fonts/Amber/9")).unwrap();
+    let topaz: DiskFont = game::font::load_font(Path::new("game/fonts/topaz13/8")).unwrap();
+
+    let amber_bounds = amber.get_font_bounds();
+    // leave a little space between the two font atlases
+    let mut topaz_bounds = topaz.get_font_bounds();
+    topaz_bounds.offset(0, amber_bounds.height() as i32 + 4);
+
+    let atlas_bounds = amber_bounds.union(topaz_bounds);
+
+    // Build font textures, create a single shared texture for all font atlases
+    let font_texture = Rc::new(RefCell::new(tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::BGRA8888), atlas_bounds.width(), atlas_bounds.height()).unwrap()));
+
+    let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
+    let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
 
     // SDL treats all pixels as 1:1 aspect ratio, we're working with graphics intended for a 4:3 (standard NTSC) aspect ratio
     // Set up the render texture at the original 640x400 then stretch to the window size. This will correct the aspect ratio so the game looks correct
@@ -104,12 +117,17 @@ pub fn main() -> Result<(), String> {
     // let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 640, 400).unwrap();
     let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 320, 200).unwrap();
 
-    amber.update_texture(&mut font_tex, &font_bounds);
     let mut dirty: bool = true;
     let mut mode: i32 = 1;
 
-    let mut placard: CycleInt = CycleInt::new(11);
+    let mut placard: CycleInt = CycleInt::new(game_lib.get_placard_count().saturating_sub(1));
     let mut message_index: CycleInt = CycleInt::new(100);
+
+    let mut text_color: CycleInt = CycleInt::new(3);
+    text_color.set(3);
+
+    // use a weak reference here because we need to be able to swap fonts
+    let mut text_font = Rc::downgrade(&amber_text);
 
     'running: loop {
         if dirty {
@@ -117,20 +135,32 @@ pub fn main() -> Result<(), String> {
                 play_canvas.set_draw_color(Color::from(&sys_palette[color_index]));
                 play_canvas.clear();
 
-                font_tex.set_color_mod(200, 30, 0);
-                font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+                // set text color
+                {
+                    let color = &sys_palette[text_color.value];
+
+                    let mut result = font_texture.try_borrow_mut();
+                    match result {
+                        Err(e) => {
+                            println!("Error borrowing font texture: {}", e);
+                        },
+                        Ok(ref mut texture) => {
+                            texture.set_color_mod(color.r(), color.g(), color.b());
+                            texture.set_blend_mode(sdl2::render::BlendMode::Blend);
+                        }
+                    }
+                }
 
                 match mode {
                     1 => {
-                        game_lib.draw_placard_n(placard.value, &amber, &mut play_canvas, &mut font_tex);
+                        game_lib.draw_placard_n(placard.value, &text_font.upgrade().unwrap().borrow(), &mut play_canvas);
                         // game_lib.print_placard_n(placard.value);
                     }
                     2 => {
-                        amber.render_string("\"No need to shout, son!\" he said.",
-                        &mut play_canvas,
-                        &mut font_tex,
-                        50,
-                        50);
+                        amber_text.borrow().render_string("\"No need to shout, son!\" he said.",
+                            &mut play_canvas,
+                            50,
+                            50);
                     }
                     _ => {}
                 }
@@ -153,7 +183,7 @@ pub fn main() -> Result<(), String> {
                 },
                 Event::KeyDown {keycode, scancode, keymod, repeat: false, ..}
                 => {
-                    println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
+                    // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
                         continue;
                     }
@@ -182,6 +212,22 @@ pub fn main() -> Result<(), String> {
                             dirty = true;
                         }
 
+                        Scancode::F => {
+                            // FIXME: name isn't reliable here, need a better way to identify fonts
+                            if text_font.upgrade().unwrap().borrow().name() == amber_text.borrow().name() {
+                                text_font = Rc::downgrade(&topaz_text);
+                            } else {
+                                text_font = Rc::downgrade(&amber_text);
+                            }
+                            dirty = true;
+                        }
+
+                        Scancode::C => {
+                            // Cycle text color
+                            text_color.modify(keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD));
+                            dirty = true;
+                        }
+
                         Scancode::Num1 | Scancode::Num2 | Scancode::Num3 | Scancode::Num4
                         | Scancode::Num5 | Scancode::Num6 | Scancode::Num7 | Scancode::Num8
                         | Scancode::Num9 | Scancode::Num0 => {
@@ -192,10 +238,12 @@ pub fn main() -> Result<(), String> {
                         _ => {}
                     }
                 },
+                /*
                 Event::KeyUp {scancode, keymod, ..}
                 => {
                     println!("Key UP: scancode = {:?}, mod {}", scancode, keymod);
                 },
+                 */
                 _ => {}
             }
         }

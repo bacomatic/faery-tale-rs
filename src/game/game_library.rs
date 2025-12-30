@@ -1,10 +1,9 @@
 
-use crate::game::font::DiskFont;
+use crate::game::font_texture::FontTexture;
 use crate::game::placard::Placard;
 
 use sdl2::render::Canvas;
 use sdl2::render::RenderTarget;
-use sdl2::render::Texture;
 
 use serde::Deserialize;
 
@@ -29,6 +28,10 @@ pub struct GameLibrary {
 }
 
 impl GameLibrary {
+    pub fn get_placard_count(&self) -> usize {
+        self.placards.len()
+    }
+
     pub fn print_placard_n(&self, index: usize) {
         if index < self.placards.len() {
             self.placards[index].print();
@@ -44,16 +47,16 @@ impl GameLibrary {
         }
     }
 
-    pub fn draw_placard_n<T: RenderTarget>(&self, index: usize, font: &DiskFont, canvas: &mut Canvas<T>, texture: &mut Texture) {
+    pub fn draw_placard_n<'a, T: RenderTarget>(&self, index: usize, font: &FontTexture<'a>, canvas: &mut Canvas<T>) {
         if index < self.placards.len() {
-            self.placards[index].draw(font, canvas, texture);
+            self.placards[index].draw(font, canvas);
         }
     }
 
-    pub fn draw_placard<T: RenderTarget>(&self, name: &str, font: &DiskFont, canvas: &mut Canvas<T>, texture: &mut Texture) {
+    pub fn draw_placard<'a, T: RenderTarget>(&self, name: &str, font: &FontTexture<'a>, canvas: &mut Canvas<T>) {
         let pi = self.find_placard(name);
         if pi.is_some() {
-            self.draw_placard_n(pi.unwrap(), font, canvas, texture);
+            self.draw_placard_n(pi.unwrap(), font, canvas);
         } else {
             println!("No placard named {name}");
         }

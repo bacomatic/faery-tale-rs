@@ -1,16 +1,10 @@
-extern crate sdl2;
-
 use core::str;
+use std::char;
 
 use crate::game::byteops::*;
 use crate::game::hunk::*;
 
-
 use sdl2::rect::Rect;
-use sdl2::render::Canvas;
-use sdl2::render::RenderTarget;
-use sdl2::render::Texture;
-
 use std::path::Path;
 
 // Amiga Font loader and renderer
@@ -38,10 +32,6 @@ pub struct DiskFont {
                                         // len is number of bits wide
     pub char_space: Vec<isize>,         // pixel width for each character, this could be negative for RTL
     pub char_kern: Vec<isize>,          // kerning (pixel gap to next char) for each character, could be negative
-
-    // cached pixel arrays used to generate textures, so we don't have to repeat
-    // expensive operations.
-    pixels_32: Vec<u8>,
 }
 
 
@@ -51,68 +41,8 @@ pub struct DiskFont {
 impl DiskFont {
     // Calculate the minimum size needed to store this font as a texture
     // This is likely not what the actual texture size will be
-    pub fn get_texture_size(&self) -> Rect {
+    pub fn get_font_bounds(&self) -> Rect {
         Rect::new(0_i32, 0_i32, self.modulo as u32, self.y_size as u32)
-    }
-
-    // Draw all the font glyphs into the provided texture within the rect provided
-    // returns the actual area updated
-    // NOTE: this is hard coded to assume 32 bit ARGB format of some kind. What kind doesn't matter as
-    //       each pixel is either white with full alpha or black with zero alpha.
-    pub fn update_texture(&mut self, texture: &mut Texture, bounds: &Rect) -> Rect {
-        let font_rect = Rect::new(bounds.x, bounds.y, self.modulo as u32, self.y_size as u32);
-        let render_rect = font_rect.intersection(*bounds).unwrap();
-
-        let tex_info = texture.query();
-        // println!("texture info: {:?}", tex_info);
-        assert_eq!(tex_info.format.byte_size_per_pixel(), 4); // Enforce 32 bits per pixel
-
-        // build the pixel cache if needed
-        if self.pixels_32.len() == 0 {
-            for yy in 0 .. self.y_size {
-                let offset = yy * self.modulo;
-                for xx in 0 .. self.modulo {
-                    let px = self.char_data[offset + xx];
-
-                    // move to all four bytes
-                    self.pixels_32.push(px);
-                    self.pixels_32.push(px);
-                    self.pixels_32.push(px);
-                    self.pixels_32.push(px);
-                }
-            }
-        }
-
-        texture.update(render_rect, self.pixels_32.as_slice(), self.modulo * 4).unwrap();
-
-        return render_rect;
-    }
-
-    // render a string to the given canvas
-    // this does not handle newlines, it assumes the string will reside on a single line
-    pub fn render_string<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &mut Texture, x: i32, y: i32) {
-        let cstr = s.as_bytes();
-
-        let mut glyph_rect = Rect::new(x, y, 0, self.y_size as u32);
-        for cc in cstr {
-            if *cc >= self.lo_char && *cc <= self.hi_char {
-                let cc_index = (cc - self.lo_char) as usize;
-                let cc_loc = self.char_loc[cc_index];
-
-                // Don't do anything for spaces, just skip ahead to the next coordinates
-                if cc_loc.1 > 0 {
-                    // grab glyph width and adjust glyph_rect
-                    glyph_rect.set_width(cc_loc.1 as u32);
-                    let src_rect = Rect::new(cc_loc.0 as i32, 0, cc_loc.1 as u32, self.y_size as u32);
-
-                    // copy the glyph
-                    canvas.copy(&texture, Some(src_rect), Some(glyph_rect)).unwrap();
-                }
-
-                // advance to the next glyph location
-                glyph_rect.set_x(glyph_rect.x() + self.char_space[cc_index] as i32);
-            }
-        }
     }
 
     pub fn print(&self, s: &str) {
@@ -215,11 +145,10 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
         char_loc: Vec::new(),
         char_space: Vec::new(),
         char_kern: Vec::new(),
-        pixels_32: Vec::new(),
     };
 
     let hunk = load_hunkfile(fontfile).unwrap();
-    assert!(hunk.header.table_size > 0);
+    assert!(hunk.header.table_size == 1);
 
     // There should be one hunk loaded
     let ref hunk_data= hunk.hunks[0].data;
@@ -241,14 +170,19 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
     assert_eq!(file_id, 0x0F80);
     _ = read_u16(hunk_data, &mut offset); // dfh_Revision, don't care
     _ = read_u32(hunk_data, &mut offset); // dfh_Segment, we don't really care because hunks don't need to be relocated (for now)
-    disk_font.name = read_string(hunk_data, &mut offset);
-    offset += 32 - disk_font.name.len();   // dfh_Name[MAXFONTNAME] -> MAXFONTNAME = 32
+    let mut name_offset = offset;
+
+    // FIXME: font loading should be done by loading the .font file, on AmigaOS, this would also fill in the name field after LoadSeg
+    //        is called to load the font data into memory
+
+    disk_font.name = read_string(hunk_data, &mut name_offset); // read my hacked names in
+    offset += 32;   // dfh_Name[MAXFONTNAME] -> MAXFONTNAME = 32 (always skip 32 bytes here)
 
     // struct TextFont dfh_TF
         // another Node...
     _ = read_u32(hunk_data, &mut offset); // ln_Succ
     _ = read_u32(hunk_data, &mut offset); // ln_Prev
-    let ln_type = read_u8(hunk_data, &mut offset); // ln_Type
+    let _ln_type = read_u8(hunk_data, &mut offset); // ln_Type
     assert_eq!(ln_type, 12); // NT_FONT = 12, double check
 
     _ = read_u8(hunk_data, &mut offset); // ln_Pri
@@ -328,13 +262,20 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
         disk_font.char_loc.push((char_off, char_len));
 
         // Load font spacing
-        offset = font_space_offset + (index * 2);
-        let char_space = read_i16(hunk_data, &mut offset) as isize;
+        let mut char_space: isize = disk_font.x_size as isize;
+        let mut char_kern: isize = 0;
+
+        if font_space_offset > 0 {
+            offset = font_space_offset + (index * 2);
+            char_space = read_i16(hunk_data, &mut offset) as isize;
+        }
         disk_font.char_space.push(char_space);
 
         // Load font kerning
-        offset = font_kern_offset + (index * 2);
-        let char_kern = read_i16(hunk_data, &mut offset) as isize;
+        if font_kern_offset > 0 {
+            offset = font_kern_offset + (index * 2);
+            char_kern = read_i16(hunk_data, &mut offset) as isize;
+        }
         disk_font.char_kern.push(char_kern);
 
         // println!("char {} : loc ({}, {}), space {}, kern {}", disk_font.lo_char as usize + index, char_off, char_len, char_space, char_kern);

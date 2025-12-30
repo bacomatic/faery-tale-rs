@@ -2,8 +2,8 @@
 
 pub mod byteops;
 pub mod font;
+pub mod font_texture;
 pub mod game_library;
 pub mod gfx;
 pub mod hunk;
-
-mod placard;
+pub mod placard;
