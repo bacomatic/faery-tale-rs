@@ -4,13 +4,12 @@ mod game;
 
 use game::font_texture::FontTexture;
 use game::game_library;
-use game::gfx::Palette4;
-use game::font::DiskFont;
 
 use sdl2::event::Event;
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
+use sdl2::rect::Rect;
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -62,6 +61,43 @@ impl CycleInt {
     }
 }
 
+pub struct NameCycler {
+    names: Vec<String>,
+    index: CycleInt
+}
+
+impl NameCycler {
+    pub fn new(names: Vec<String>) -> NameCycler {
+        let max = if names.len() == 0 { 0 } else { names.len() - 1 };
+        NameCycler {
+            names,
+            index: CycleInt::new(max)
+        }
+    }
+
+    pub fn get_current(&self) -> Option<&String> {
+        if self.names.len() == 0 {
+            None
+        } else {
+            Some(&self.names[self.index.value])
+        }
+    }
+
+    pub fn modify(&mut self, increase: bool) {
+        self.index.modify(increase);
+    }
+
+    pub fn set(&mut self, name: &str) -> Option<usize> {
+        for (i, n) in self.names.iter().enumerate() {
+            if n == name {
+                self.index.set(i);
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -69,33 +105,42 @@ pub fn main() -> Result<(), String> {
     let mut fps_man = FPSManager::new();
     fps_man.set_framerate(60)?;
 
-    let window = video_subsystem.window("The Faery Tale Adventure", 1280, 960)
+    let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
+        .resizable()
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+    // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio
+    canvas.set_logical_size(640, 480).unwrap();
 
     // load the game library
-    let game_lib = game_library::load_game_library(Path::new("faery.json")).unwrap();
+    let game_lib = game_library::load_game_library(Path::new("faery.toml"));
+    if game_lib.is_err() {
+        return Err(format!("Failed to load game library: {}", game_lib.err().unwrap()));
+    }
+    let game_lib = game_lib.unwrap();
+
     let tex_maker = canvas.texture_creator();
 
-    let ref orange = Color::RGB(230, 100, 0);
-
-    let sys_palette: Palette4 = [
-        (0, 0, 0).into(),
-        0x0FFF.into(),
-        [0, 0, 255].into(),
-        orange.into()
-    ];
+    let sys_palette = game_lib.find_palette("introcolors").unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
 
-    // FIXME: implement font/asset loader and move all this code there
 
-    let amber: DiskFont = game::font::load_font(Path::new("game/fonts/Amber/9")).unwrap();
-    let topaz: DiskFont = game::font::load_font(Path::new("game/fonts/topaz13/8")).unwrap();
+    let billboard_names = game_lib.get_billboard_names();
+    let mut billboard_cycler = NameCycler::new(billboard_names);
+    billboard_cycler.set("titletext");
+
+    let font_names = game_lib.get_font_names();
+    let mut font_cycler = NameCycler::new(font_names);
+    font_cycler.set("amber");
+
+    // TODO: Move somewhere else....
+    let amber = game_lib.find_font("amber", 9).unwrap();
+    let topaz = game_lib.find_font("topaz", 8).unwrap();
 
     let amber_bounds = amber.get_font_bounds();
     // leave a little space between the two font atlases
@@ -110,21 +155,13 @@ pub fn main() -> Result<(), String> {
     let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
     let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
 
-    // SDL treats all pixels as 1:1 aspect ratio, we're working with graphics intended for a 4:3 (standard NTSC) aspect ratio
-    // Set up the render texture at the original 640x400 then stretch to the window size. This will correct the aspect ratio so the game looks correct
-    // 640x400 -> 1280x960 produces a 4:3 aspect ratio.
-
-    // let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 640, 400).unwrap();
-    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 320, 200).unwrap();
+    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 640, 200).unwrap();
 
     let mut dirty: bool = true;
     let mut mode: i32 = 1;
 
-    let mut placard: CycleInt = CycleInt::new(game_lib.get_placard_count().saturating_sub(1));
-    let mut message_index: CycleInt = CycleInt::new(100);
-
-    let mut text_color: CycleInt = CycleInt::new(3);
-    text_color.set(3);
+    let mut text_color: CycleInt = CycleInt::new(sys_palette.colors.len() - 1);
+    text_color.set(1);
 
     // use a weak reference here because we need to be able to swap fonts
     let mut text_font = Rc::downgrade(&amber_text);
@@ -132,12 +169,12 @@ pub fn main() -> Result<(), String> {
     'running: loop {
         if dirty {
             let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
-                play_canvas.set_draw_color(Color::from(&sys_palette[color_index]));
+                play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
                 play_canvas.clear();
 
                 // set text color
                 {
-                    let color = &sys_palette[text_color.value];
+                    let color = &sys_palette.colors[text_color.value];
 
                     let mut result = font_texture.try_borrow_mut();
                     match result {
@@ -153,8 +190,12 @@ pub fn main() -> Result<(), String> {
 
                 match mode {
                     1 => {
-                        game_lib.draw_placard_n(placard.value, &text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                        // game_lib.print_placard_n(placard.value);
+                        let result = game_lib.find_billboard(billboard_cycler.get_current().unwrap());
+                        if result.is_some() {
+                            let billboard = result.unwrap();
+                            billboard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+                            // billboard.print();
+                        }
                     }
                     2 => {
                         amber_text.borrow().render_string("\"No need to shout, son!\" he said.",
@@ -166,7 +207,12 @@ pub fn main() -> Result<(), String> {
                 }
             });
 
-            canvas.copy(&play_tex, None, None).unwrap();
+            canvas.set_draw_color(Color::BLACK);
+            canvas.clear();
+
+            let screen_dest = Rect::new(0, 40, 640, 400);
+            canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
+
             canvas.present();
 
             dirty = false;
@@ -176,6 +222,11 @@ pub fn main() -> Result<(), String> {
 
         for event in event_pump.poll_iter() {
             match event {
+                // handle window events
+                Event::Window { .. } => {
+                    // just redraw the window
+                    dirty = true;
+                },
                 Event::Quit { .. } |
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. }
                 => {
@@ -205,15 +256,29 @@ pub fn main() -> Result<(), String> {
                         Scancode::Left | Scancode::Right => {
                             let increase = sc == Scancode::Right;
                             match mode {
-                                0 => { message_index.modify(increase) }
-                                1 => { placard.modify(increase) }
+                                0 => { } // no action in mode 0 yet
+                                1 => { billboard_cycler.modify(increase) }
                                 _ => {}
                             }
                             dirty = true;
                         }
 
                         Scancode::F => {
-                            // FIXME: name isn't reliable here, need a better way to identify fonts
+                            font_cycler.modify(true);
+                            match font_cycler.get_current() {
+                                Some(fname) => {
+                                    match fname.as_str() {
+                                        "amber" => {
+                                            text_font = Rc::downgrade(&amber_text);
+                                        },
+                                        "topaz" => {
+                                            text_font = Rc::downgrade(&topaz_text);
+                                        },
+                                        _ => {}
+                                    }
+                                },
+                                None => {}
+                            }
                             if text_font.upgrade().unwrap().borrow().name() == amber_text.borrow().name() {
                                 text_font = Rc::downgrade(&topaz_text);
                             } else {

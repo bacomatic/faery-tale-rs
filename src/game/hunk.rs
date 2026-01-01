@@ -9,9 +9,6 @@ use crate::game::byteops::*;
 
 // All on-disk data are big endian format
 
-#[derive(Debug, Clone)]
-pub struct HunkError;
-
 const ALLOC_FLAG_MASK: u32 = 0x3FFFFFFF_u32; // use to mask off the mem flags
 
 // Amiga HUNK file magic cookie (really, this is HUNK_HEADER ID)
@@ -66,9 +63,10 @@ pub struct HunkData {
 
 // FIXME: there is no bounds checking or error handling, using this with bad or unsupported hunks will cause panics
 
-pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, HunkError> {
+pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
     // Just read the whole thing into memory first
-    let file_data: Vec<u8> = fs::read(filepath).unwrap(); // FIXME: proper error handling
+    let file_data: Vec<u8> = fs::read(filepath)
+        .map_err(|e| format!("Failed to read hunk file {:?}: {}", filepath, e))?;
     let mut offset: usize = 0;
 
     // check for magic cookie

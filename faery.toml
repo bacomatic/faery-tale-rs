@@ -1,0 +1,193 @@
+[palettes]
+[palettes.introcolors]
+colors = [
+    0x000, 0xFFF, 0xE00, 0xA00, 0xD80, 0xEC0, 0x390, 0x021,
+    0xEEB, 0xEDA, 0xEEA, 0xCB8, 0xA95, 0x973, 0x840, 0x620,
+    0xA52, 0xC74, 0xD96, 0xFCA, 0x449, 0x444, 0xDC9, 0x668,
+    0x33F, 0x888, 0xA60, 0xAAF, 0xBBB, 0xCCF, 0xDDD, 0xEEE
+]
+[palettes.blackcolors]
+colors = [
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+]
+[palettes.textcolors]
+colors = [
+    0x000, 0xFFF, 0xC00, 0xF60, 0x00f, 0xc0f, 0x090, 0xFF0,
+    0xf90, 0xf0c, 0xA50, 0xFDB, 0xEB7, 0xCCC, 0x888, 0x444,
+    0x000, 0xDB0, 0x740, 0xC7
+]
+
+[billboards]
+[billboards.titletext]
+lines = [
+    # {x = 56, y = 33, text = "\"The Faery Tale Adventure\""},
+    # {x = 40, y = 79, text = "Animation, Programming & Music"},
+    # {x = 152, y = 90, text = "by"},
+    # {x = 112, y = 101, text = "David Joiner"},
+    # {x = 40, y = 160, text = "Copyright 1986 MicroIllusions "}
+
+    # The below lines seem to be from an earlier version, I'm using them
+    # because they align properly when rendered to a 640x400 texture
+    # They still don't match the hero screen, notably the '&' is "and"
+    # on the screenshot <shrug>
+
+    {x = 168, y = 33, text = "\"The Faery Tale Adventure\""},
+    {x = 153, y = 74, text = "Animation, Programming & Music"},
+    {x = 292, y = 90, text = "by"},
+    {x = 250, y = 101, text = "David Joiner"},
+    {x = 168, y = 160, text = "Copyright (C) 1986 MicroIllusions "}
+]
+
+[billboards.msg1]
+placard = true
+lines = [
+    {x = 20, y = 28, text = "   \"Rescue the Talisman!\""},
+    {x = 20, y = 39, text = "was the Mayor's plea." },
+    {x = 20, y = 50, text = "\"Only the Talisman can" },
+    {x = 20, y = 61, text = "protect our village from" },
+    {x = 20, y = 72, text = "the evil forces of the" },
+    {x = 20, y = 83, text = "night.\" And so Julian" },
+    {x = 20, y = 94, text = "set out on his quest to" },
+    {x = 20, y = 105, text = "recover it." }
+]
+
+[billboards.msg2]
+lines = [
+    {x = 24, y = 44, text = "Unfortunately for Julian," },
+    {x = 24, y = 55, text = "his luck had run out." },
+    {x = 24, y = 66, text = "Many months passed and" },
+    {x = 24, y = 77, text = "Julian did not return..." }
+]
+
+[billboards.msg3]
+lines = [
+    {x = 40, y = 44, text = "So Phillip set out," },
+    {x = 40, y = 55, text = "determined to find his" },
+    {x = 40, y = 66, text = "brother and complete" },
+    {x = 40, y = 77, text = "the quest." }
+]
+
+[billboards.msg4]
+lines = [
+    {x = 24, y = 44, text = "But sadly, Phillip's" },
+    {x = 24, y = 55, text = "cleverness could not save" },
+    {x = 24, y = 66, text = "him from the same fate" },
+    {x = 24, y = 77, text = "as his older brother." }
+]
+
+[billboards.msg5]
+lines = [
+    {x = 30, y = 30, text = "So Kevin took up the" },
+    {x = 30, y = 41, text = "quest, risking all, for" },
+    {x = 30, y = 52, text = "the village had grown" },
+    {x = 30, y = 63, text = "desperate. Young and" },
+    {x = 30, y = 74, text = "inexperienced, his" },
+    {x = 30, y = 85, text = "chances did not look" },
+    {x = 30, y = 96, text = "good." }
+]
+
+[billboards.msg6]
+lines = [
+    {x = 20, y = 31, text = "And so ends our sad tale." },
+    {x = 25, y = 45, text = "The Lesson of the Story:" },
+    {x = 66, y = 88, text = "Stay at Home!" }
+]
+
+[billboards.msg7]
+lines = [
+    {x = 28, y = 32, text = "Having defeated the" },
+    {x = 28, y = 43, text = "villanous Necromancer" },
+    {x = 28, y = 54, text = "and recovered the" },
+    {x = 28, y = 65, text = "Talisman, %" },
+    {x = 28, y = 76, text = "returned to Marheim" },
+    {x = 28, y = 87, text = "where he wed the" },
+    {x = 28, y = 98, text = "princess..." }
+]
+
+[billboards.msg8]
+lines = [
+    {x = 21, y = 26, text = "% had rescued Katra," },
+    {x = 21, y = 37, text = "Princess of Marheim." },
+    {x = 21, y = 48, text = "Though they had pledged" },
+    {x = 21, y = 59, text = "their love for each, " },
+    {x = 21, y = 70, text = "other, % knew that" },
+    {x = 21, y = 81, text = " his quest could not" },
+    {x = 21, y = 92, text = "be forsaken." }
+]
+
+[billboards.msg9]
+lines = [
+    {x = 21, y = 33, text = "% had rescued Karla" },
+    {x = 21, y = 44, text = "(Katra's sister), Princess" },
+    {x = 21, y = 55, text = "of Marheim. Though they" },
+    {x = 21, y = 66, text = "had pledged their love" },
+    {x = 21, y = 77, text = "for each other, %" },
+    {x = 21, y = 88, text = "knew that his quest" },
+    {x = 21, y = 99, text = "could not be forsaken." }
+]
+
+[billboards.msg10]
+lines = [
+    {x = 21, y = 26, text = "% had rescued Kandy" },
+    {x = 21, y = 37, text = "(Katra's and Karla's" },
+    {x = 21, y = 48, text = "sister), Princess of" },
+    {x = 21, y = 59, text = "Marheim. Though they had" },
+    {x = 21, y = 70, text = "pledged their love for" },
+    {x = 21, y = 81, text = "each other, % knew " },
+    {x = 21, y = 92, text = "that his quest could" },
+    {x = 21, y = 103, text = "not be forsaken." }
+]
+
+[billboards.msg11]
+lines = [
+    {x = 71, y = 37, text = "After seeing the" },
+    {x = 35, y = 48, text = "princess safely to her" },
+    {x = 35, y = 59, text = "home city, and with a" },
+    {x = 35, y = 70, text = "king's gift in gold," },
+    {x = 35, y = 81, text = "% once more set" },
+    {x = 35, y = 92, text = "out on his quest." }
+]
+
+[billboards.msg12]
+lines = [
+    {x = 128, y = 19, text = "So..." },
+    {x = 34, y = 65, text = "You, game seeker, would guide the" },
+    {x = 10, y = 75, text = "brothers to their destiny? You would" },
+    {x = 10, y = 85, text = "aid them and give directions? Answer," },
+    {x = 10, y = 95, text = "then, these three questions and prove" },
+    {x = 10, y = 105, text = "your fitness to be their advisor:" }
+]
+
+[fonts]
+[fonts.amber]
+file = "game/fonts/amber.font"
+
+[fonts.topaz]
+file = "game/fonts/topaz.font"
+
+[images]
+
+# Book pages
+[images.page0]
+file = "game/page0"
+[images.p1a]
+file = "game/p1a"
+[images.p1b]
+file = "game/p1b"
+[images.p2a]
+file = "game/p2a"
+[images.p2b]
+file = "game/p2b"
+[images.p3a]
+file = "game/p3a"
+[images.p3b]
+file = "game/p3b"
+
+[images.hiscreen]
+file = "game/hiscreen"
+
+[images.winpic]
+file = "game/winpic"

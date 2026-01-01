@@ -1,0 +1,125 @@
+
+// IFF ILBM image loading
+
+use serde::Deserialize;
+
+use crate::game::byteops::*;
+use crate::game::gfx::Palette;
+use crate::game::gfx::RGB4;
+
+use std::path::Path;
+
+#[derive(Debug, Deserialize)]
+pub struct ImageAsset {
+    #[serde(rename = "file")]
+    pub path: String,
+
+    #[serde(skip)]
+    pub image: Option<IffImage>
+}
+
+/*
+ * IFF images are chunked files
+ * Each file starts with a 'FORM' chunk, which contains a type and other chunks
+ * An ILBM image is a FORM of type 'ILBM', containing BMHD, CMAP, and BODY chunks
+ */
+
+const FOURCC_FORM: u32 = 0x464F524D; // 'FORM'
+const FOURCC_ILBM: u32 = 0x494C424D; // 'ILBM'
+const FOURCC_BMHD: u32 = 0x424D4844; // 'BMHD'
+const FOURCC_CMAP: u32 = 0x434D4150; // 'CMAP'
+const FOURCC_BODY: u32 = 0x424F4459; // 'BODY'
+
+#[derive(Debug)]
+pub struct IffImage {
+    pub width: usize,
+    pub height: usize,
+    pub bitplanes: usize,
+    pub colormap: Option<Palette>,
+    pub pixels: Vec<u8>
+}
+
+impl IffImage {
+    pub fn load_from_file(path: &Path) -> Result<IffImage, String> {
+        // load the file data
+        let file_data = std::fs::read(path).map_err(|e| format!("Failed to read IFF image file {:?}: {}", path, e))?;
+
+        let result = IffImage::load_from_data(&file_data);
+        if result.is_err() {
+            return Err(format!("Failed to load IFF image from file {:?}: {}", path, result.err().unwrap()));
+        }
+        Ok(result.unwrap())
+    }
+
+    pub fn load_from_data(input_data: &Vec<u8>) -> Result<IffImage, String> {
+        let mut offset: usize = 0;
+
+        // read the FORM header
+        let form_id = read_u32(input_data, &mut offset);
+        if form_id != FOURCC_FORM {
+            return Err("Missing FORM header".to_string());
+        }
+        let _form_size = read_u32(input_data, &mut offset); // don't really care about this
+        let form_type = read_u32(input_data, &mut offset);
+        if form_type != FOURCC_ILBM {
+            return Err("FORM type is not ILBM".to_string());
+        }
+
+        let mut image = IffImage {
+            width: 0,
+            height: 0,
+            bitplanes: 0,
+            colormap: None,
+            pixels: Vec::new()
+        };
+
+        // now read chunks until we find BMHD, CMAP, and BODY, skipping any unknown chunks
+        while offset < input_data.len() {
+            let chunk_id = read_u32(&input_data, &mut offset);
+            let chunk_size = read_u32(&input_data, &mut offset) as usize;
+
+            match chunk_id {
+                FOURCC_BMHD => {
+                    // read bitmap header
+                    image.width = read_u16(&input_data, &mut offset) as usize;
+                    image.height = read_u16(&input_data, &mut offset) as usize;
+                    offset += 4; // skip x,y position
+                    image.bitplanes = input_data[offset] as usize;
+                    offset += chunk_size - 9; // we've already read 9 bytes
+                }
+                FOURCC_CMAP => {
+                    // read colormap
+                    let mut colormap = Palette { colors: Vec::new() };
+                    for _ in 0 .. (chunk_size / 3) {
+                        colormap.colors.push(RGB4::from((
+                            input_data[offset],
+                            input_data[offset + 1],
+                            input_data[offset + 2]
+                        )));
+                        offset += 3;
+                    }
+                    image.colormap = Some(colormap);
+                }
+                FOURCC_BODY => {
+                    // read body data
+                    let pixels = input_data.get(offset..offset+chunk_size);
+                    if pixels.is_none() {
+                        return Err("BODY chunk in ILBM is truncated".to_string());
+                    }
+                    image.pixels.clear();
+                    image.pixels.extend(pixels.unwrap());
+                }
+                _ => {
+                    // skip unknown chunks
+                    offset += chunk_size;
+                }
+            }
+            // offset should be on an even byte boundary
+            if offset % 2 != 0 {
+                offset += 1;
+            }
+        }
+
+        Ok(image)
+    }
+}

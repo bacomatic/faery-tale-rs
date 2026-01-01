@@ -1,17 +1,170 @@
-use core::str;
-use std::char;
 
 use crate::game::byteops::*;
 use crate::game::hunk::*;
 
-use sdl2::rect::Rect;
+use core::str;
+use std::char;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fs;
 use std::path::Path;
 
-// Amiga Font loader and renderer
-// A loaded font can be rendered directly to a SDL Texture
+use sdl2::rect::Rect;
 
-// I'm using u8 for character data because the Rust char type is
-// Unicode and it makes everything so much more complicated.
+use serde::Deserialize;
+
+// Amiga Font loader
+
+// Font styles
+
+pub const FS_NORMAL: u8 = 0x00;
+
+pub const FSF_UNDERLINED: u8 = 0x01;
+pub const FSF_BOLD: u8 = 0x02;
+pub const FSF_ITALIC: u8 = 0x04;
+pub const FSF_EXTENDED: u8 = 0x08;
+
+// Font flags
+pub const FPF_ROMFONT: u8 = 0x01;
+pub const FPF_DISKFONT: u8 = 0x02;
+pub const FPF_REVPATH: u8 = 0x04; // font for RTL languages
+pub const FPF_TALLDOT: u8 = 0x08; // designed for 640x200 (hires non-interlaced) mode
+pub const FPF_WIDEDOT: u8 = 0x10; // designed for 320x400 (lores interlaced) mode
+pub const FPF_PROPORTIONAL: u8 = 0x20;
+pub const FPF_DESIGNED: u8 = 0x40;
+
+// asset type used by GameLibrary
+// This only considers font size, not styles, because I don't need to do otherwise
+#[derive(Debug, Deserialize)]
+pub struct FontAsset {
+    pub file: String,
+
+    #[serde(skip)]
+    loaded: bool,
+
+    #[serde(skip)]
+    pub fonts: HashMap<usize, DiskFont>
+}
+
+impl Default for FontAsset {
+    fn default() -> Self {
+        FontAsset {
+            file: String::new(),
+            loaded: false,
+            fonts: HashMap::new()
+        }
+    }
+}
+
+impl FontAsset {
+    pub fn get_font(&self, size: usize) -> Option<&DiskFont> {
+        if self.loaded == false {
+            println!("FontAsset is not yet loaded: {}", self.file);
+            return None;
+        }
+        self.fonts.get(&size)
+    }
+
+    pub fn get_sizes(&self) -> Vec<usize> {
+        let mut sizes: Vec<usize> = Vec::new();
+        for (size, _) in &self.fonts {
+            sizes.push(*size);
+        }
+        sizes
+    }
+
+    pub fn load(&mut self) -> Result<(), Box<dyn Error>> {
+        // parse the .font file and load all sizes
+        let fontfile = load_font_file(Path::new(&self.file)).unwrap();
+        let basepath = Path::new(&self.file).parent().unwrap();
+
+        for fc in fontfile.contents {
+            // load each font size
+            // font path is relative to the .font file
+            let fontpath = basepath.join(Path::new(&fc.path));
+            // some entries might be missing, warn and skip those
+            if fontpath.exists() == false {
+                println!("Warning: font file {:?} does not exist!", fontpath);
+                continue;
+            }
+
+            let diskfont = load_font(&fontpath, &fc.name).unwrap();
+            self.fonts.insert(diskfont.y_size, diskfont);
+        }
+        self.loaded = true;
+
+        Ok(())
+    }
+}
+
+/*
+ * A .font file is just a FontContentsHeader struct followed by either an array of FontContents
+ * or TFontContents, depending on the value of header.fch_FileID. I'm only parsing FontContents here.
+ */
+#[derive(Debug, Clone)]
+pub struct FontFile {
+    file_id: u16,   // should be either 0x0F00 or 0x0F02
+    contents: Vec<FontContents>
+}
+
+impl Default for FontFile {
+    fn default() -> Self {
+        FontFile {
+            file_id: 0,
+            contents: Vec::new()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FontContents {
+    pub name: String,
+    pub path: String,
+    pub y_size: usize,
+    pub style: u8,
+    pub flags: u8
+}
+
+pub fn load_font_file(path: &Path) -> Option<FontFile> {
+    let file_data: Vec<u8> = fs::read(path).unwrap();
+    let mut offset: usize = 0;
+
+    let mut fontfile = FontFile::default();
+
+    fontfile.file_id = read_u16(&file_data, &mut offset);
+    if fontfile.file_id != 0x0F00 /*&& fontfile.file_id != 0x0F02*/ {
+        // unsupported font file type
+        return None;
+    }
+
+    let font_count = read_u16(&file_data, &mut offset);
+
+    for _ in 0 .. font_count {
+        // read_string won't skip the unused bytes after the string, so we need to track that ourselves
+        let start_offset = offset;
+        let font_path = read_string(&file_data, &mut offset);
+        offset = start_offset + 256; // MAXFONTPATH is 256 bytes
+
+        let y_size = read_u16(&file_data, &mut offset) as usize;
+        let style = read_u8(&file_data, &mut offset);
+        let flags = read_u8(&file_data, &mut offset);
+
+        // Build the name from the path components
+        let name: String = Path::new(&font_path).iter()
+            .map(|p| p.to_str().unwrap_or(""))
+            .collect::<Vec<&str>>().join("");
+
+        fontfile.contents.push( FontContents {
+            name: name,
+            path: font_path,
+            y_size,
+            style,
+            flags
+        });
+    }
+
+    Some(fontfile)
+}
 
 #[derive(Debug, Clone)]
 pub struct DiskFont {
@@ -21,6 +174,7 @@ pub struct DiskFont {
     pub style: u8,       // font style
     pub flags: u8,       // font flags
     pub baseline: usize, // # of pixel from top to use as text baseline
+    pub boldsmear: usize,// # of pixels to smear for bold effect
     pub lo_char: u8,     // first ASCII character in font
     pub hi_char: u8,     // last ASCII character in font
 
@@ -30,15 +184,112 @@ pub struct DiskFont {
     pub char_loc: Vec<(usize,usize)>,   // for each char (offset, len)
                                         // offset is bit count from start of row
                                         // len is number of bits wide
+
+        // these two will be empty for monospace fonts
     pub char_space: Vec<isize>,         // pixel width for each character, this could be negative for RTL
     pub char_kern: Vec<isize>,          // kerning (pixel gap to next char) for each character, could be negative
 }
 
-
-// TODO: Break the texture functions out into a separate class to keep DiskFont self-contained
-
-
 impl DiskFont {
+    pub fn new() -> DiskFont {
+        DiskFont {
+            name: "".to_string(),
+            y_size: 0,
+            x_size: 0,
+            style: 0,
+            flags: 0,
+            baseline: 0,
+            boldsmear: 0,
+            lo_char: 0,
+            hi_char: 0,
+            modulo: 0,
+            char_data: Vec::new(),
+            char_loc: Vec::new(),
+            char_space: Vec::new(),
+            char_kern: Vec::new()
+        }
+    }
+
+    // Style accessors
+    pub fn is_underlined(&self) -> bool {
+        (self.style & FSF_UNDERLINED) != 0
+    }
+
+    pub fn is_bold(&self) -> bool {
+        (self.style & FSF_BOLD) != 0
+    }
+
+    pub fn is_italic(&self) -> bool {
+        (self.style & FSF_ITALIC) != 0
+    }
+
+    pub fn is_extended(&self) -> bool {
+        (self.style & FSF_EXTENDED) != 0
+    }
+
+    // flag accessors
+    pub fn is_revpath(&self) -> bool {
+        (self.flags & FPF_REVPATH) != 0
+    }
+
+    pub fn is_talldot(&self) -> bool {
+        (self.flags & FPF_TALLDOT) != 0
+    }
+
+    pub fn is_widedot(&self) -> bool {
+        (self.flags & FPF_WIDEDOT) != 0
+    }
+
+    pub fn is_proportional(&self) -> bool {
+        (self.flags & FPF_PROPORTIONAL) != 0
+    }
+
+    pub fn print_style(&self) {
+        let mut styles: Vec<&str> = Vec::new();
+        if self.is_underlined() {
+            styles.push("underlined");
+        }
+        if self.is_bold() {
+            styles.push("bold");
+        }
+        if self.is_italic() {
+            styles.push("italic");
+        }
+        if self.is_extended() {
+            styles.push("extended");
+        }
+
+        if styles.len() == 0 {
+            println!("Font style: normal");
+        } else {
+            println!("Font style: {}", styles.join(", "));
+        }
+    }
+
+    pub fn print_flags(&self) {
+        let mut flags: Vec<&str> = Vec::new();
+        if self.is_revpath() {
+            flags.push("revpath");
+        }
+        if self.is_talldot() {
+            flags.push("talldot");
+        }
+        if self.is_widedot() {
+            flags.push("widedot");
+        }
+        if self.is_proportional() {
+            flags.push("proportional");
+        }
+        if self.flags & FPF_DESIGNED != 0 {
+            flags.push("designed");
+        }
+
+        if flags.len() == 0 {
+            println!("Font flags: none");
+        } else {
+            println!("Font flags: {}", flags.join(", "));
+        }
+    }
     // Calculate the minimum size needed to store this font as a texture
     // This is likely not what the actual texture size will be
     pub fn get_font_bounds(&self) -> Rect {
@@ -130,25 +381,14 @@ impl DiskFont {
     }
 }
 
-pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
-    let mut disk_font: DiskFont = DiskFont {
-        name: "".to_string(),
-        y_size: 0,
-        x_size: 0,
-        style: 0,
-        flags: 0,
-        baseline: 0,
-        lo_char: 0,
-        hi_char: 0,
-        modulo: 0,
-        char_data: Vec::new(),
-        char_loc: Vec::new(),
-        char_space: Vec::new(),
-        char_kern: Vec::new(),
-    };
+pub fn load_font(fontfile: &Path, name: &str) -> Result<DiskFont, String> {
+    let mut disk_font = DiskFont::new();
 
-    let hunk = load_hunkfile(fontfile).unwrap();
-    assert!(hunk.header.table_size == 1);
+    let hunk = load_hunkfile(fontfile)
+        .map_err(|e| format!("Failed to load font file {:?}: {}", fontfile, e))?;
+    if hunk.header.table_size != 1 {
+        return Err(format!("Font file {:?} has more than one hunk, unsupported", fontfile));
+    }
 
     // There should be one hunk loaded
     let ref hunk_data= hunk.hunks[0].data;
@@ -159,36 +399,46 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
     // Link node
     _ = read_u32(hunk_data, &mut offset); // ln_Succ
     _ = read_u32(hunk_data, &mut offset); // ln_Prev
-    let ln_type = read_u8(hunk_data, &mut offset); // ln_Type
-    assert_eq!(ln_type, 12); // NT_FONT = 12
+    let mut ln_type = read_u8(hunk_data, &mut offset); // ln_Type
+    if ln_type != 12 { // NT_FONT = 12
+        return Err(format!("Font file {:?} has invalid Node type (DiskFont) {ln_type}", fontfile));
+    }
 
-    _ = read_u8(hunk_data, &mut offset); // ln_Pri
-    _ = read_u32(hunk_data, &mut offset); // ln_Name -> offset to font name in memory (don't care)
+    offset += 1; // ln_Pri
+    offset += 4; // ln_Name -> offset to font name in memory (don't care)
 
     // Start of actual DiskFont data
     let file_id = read_u16(hunk_data, &mut offset);
-    assert_eq!(file_id, 0x0F80);
-    _ = read_u16(hunk_data, &mut offset); // dfh_Revision, don't care
-    _ = read_u32(hunk_data, &mut offset); // dfh_Segment, we don't really care because hunks don't need to be relocated (for now)
+    if file_id != 0x0F80 {
+        return Err(format!("Font file {:?} has invalid DiskFont ID {file_id:X}", fontfile));
+    }
+    offset += 2; // dfh_Revision, don't care
+    offset += 4; // dfh_Segment, we don't really care because hunks don't need to be relocated (for now)
+
+    // this is usually empty, or some marker like "FED" for fonts made with FED
+    // this will get set after loading when reading the .font file
     let mut name_offset = offset;
-
-    // FIXME: font loading should be done by loading the .font file, on AmigaOS, this would also fill in the name field after LoadSeg
-    //        is called to load the font data into memory
-
-    disk_font.name = read_string(hunk_data, &mut name_offset); // read my hacked names in
+    disk_font.name = read_string(hunk_data, &mut name_offset);
     offset += 32;   // dfh_Name[MAXFONTNAME] -> MAXFONTNAME = 32 (always skip 32 bytes here)
+
+    // if name is empty, use the provided name
+    if disk_font.name.len() == 0 {
+        disk_font.name = name.to_string();
+    }
 
     // struct TextFont dfh_TF
         // another Node...
-    _ = read_u32(hunk_data, &mut offset); // ln_Succ
-    _ = read_u32(hunk_data, &mut offset); // ln_Prev
-    let _ln_type = read_u8(hunk_data, &mut offset); // ln_Type
-    assert_eq!(ln_type, 12); // NT_FONT = 12, double check
+    offset += 4; // ln_Succ
+    offset += 4; // ln_Prev
+    ln_type = read_u8(hunk_data, &mut offset); // ln_Type
+    if ln_type != 12 { // NT_FONT = 12, double check
+        return Err(format!("Font file {:?} has invalid Node type (TextFont) {ln_type}", fontfile));
+    }
 
-    _ = read_u8(hunk_data, &mut offset); // ln_Pri
-    _ = read_u32(hunk_data, &mut offset); // ln_Name
-    _ = read_u32(hunk_data, &mut offset); // mn_ReplyPort
-    _ = read_u16(hunk_data, &mut offset); // reserved for 1.4
+    offset += 1; // ln_Pri
+    offset += 4; // ln_Name
+    offset += 4; // mn_ReplyPort
+    offset += 2; // reserved for 1.4
 
     // Finally, actual font information
     disk_font.y_size = read_i16(hunk_data, &mut offset) as usize;
@@ -196,8 +446,8 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
     disk_font.flags = read_u8(hunk_data, &mut offset);
     disk_font.x_size = read_i16(hunk_data, &mut offset) as usize;
     disk_font.baseline = read_i16(hunk_data, &mut offset) as usize;
-    _ = read_i16(hunk_data, &mut offset); // tf_BoldSmear (don't care ?)
-    _ = read_i16(hunk_data, &mut offset); // tf_Accessors (don't care)
+    disk_font.boldsmear = read_i16(hunk_data, &mut offset) as usize;
+    offset += 2; // tf_Accessors (N/A)
     disk_font.lo_char = read_u8(hunk_data, &mut offset);
     disk_font.hi_char = read_u8(hunk_data, &mut offset);
 
@@ -217,7 +467,7 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
     // copy the character data to disk_font
     // disk_font.char_data.extend_from_slice(&hunk_data[font_data_offset .. font_data_offset + data_len]);
 
-    // this could be done programmatically, but whatever. I'm sure a million codebros will tell me I'm doing it wrong anyways.
+    // table to quickly expand packed bitmaps to 8 bit alpha values, a nibble at a time
     let foo: [&[u8; 4]; 16] = [
         &[0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8],// b"    ",
         &[0x00_u8, 0x00_u8, 0x00_u8, 0xFF_u8],// b"   *",
@@ -239,6 +489,7 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
 
     // Convert the bitmap into an 8 bit alpha map
     // This will be used later as a mask when rendering to a texture
+    let char_data: &mut Vec<u8> = &mut disk_font.char_data;
     for yy in 0 .. disk_font.y_size {
         // modulo is already bytes per row, so just use it
         let row_offset = font_data_offset + (yy * disk_font.modulo);
@@ -246,8 +497,8 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
             let cc = hunk_data[row_offset + xx] as usize;
 
             // extend 4 bits at a time, balance between stupid large LUT and processing individual bits
-            disk_font.char_data.extend_from_slice(foo[cc >> 4]);
-            disk_font.char_data.extend_from_slice(foo[cc & 0xF]);
+            char_data.extend_from_slice(foo[cc >> 4]);
+            char_data.extend_from_slice(foo[cc & 0xF]);
         }
     }
 
@@ -261,22 +512,21 @@ pub fn load_font(fontfile: &Path) -> Result<DiskFont, HunkError> {
         let char_len = read_u16(hunk_data, &mut offset) as usize;
         disk_font.char_loc.push((char_off, char_len));
 
-        // Load font spacing
-        let mut char_space: isize = disk_font.x_size as isize;
-        let mut char_kern: isize = 0;
+        // These are only for proportional fonts, for monospace they should be zero
 
+        // Load font spacing
         if font_space_offset > 0 {
             offset = font_space_offset + (index * 2);
-            char_space = read_i16(hunk_data, &mut offset) as isize;
+            let char_space = read_i16(hunk_data, &mut offset) as isize;
+            disk_font.char_space.push(char_space);
         }
-        disk_font.char_space.push(char_space);
 
         // Load font kerning
         if font_kern_offset > 0 {
             offset = font_kern_offset + (index * 2);
-            char_kern = read_i16(hunk_data, &mut offset) as isize;
+            let char_kern = read_i16(hunk_data, &mut offset) as isize;
+            disk_font.char_kern.push(char_kern);
         }
-        disk_font.char_kern.push(char_kern);
 
         // println!("char {} : loc ({}, {}), space {}, kern {}", disk_font.lo_char as usize + index, char_off, char_len, char_space, char_kern);
     }

@@ -2,7 +2,7 @@
 
 #include "ftale.h"
 
-/****** this section defines the variables used to communicate with the 
+/****** this section defines the variables used to communicate with the
 		graphics routines */
 
 #define PAGE_DEPTH 5
@@ -371,7 +371,7 @@ struct extent {
 
 #define EXT_COUNT 22
 
-unsigned char stone_list[] = 
+unsigned char stone_list[] =
 {	54,43, 71,77, 78,102, 66,121, 12,85, 79,40,
 	107,38, 73,21, 12,26, 26,53, 84,60 };
 
@@ -462,7 +462,7 @@ extern UBYTE hinor, hivar;
 
 struct SimpleSprite pointer = { 0,16,0,0,0 };
 
-long *sprite_data, _sprite_data[] = 
+long *sprite_data, _sprite_data[] =
 {	0,
 	0x80060000, 0x60010002, 0x40012000, 0x10030000,
 	0x08FE0001, 0x0581007F, 0x03000081, 0x06010101,
@@ -548,7 +548,7 @@ letter_list[] = {
 
 char	hit;	/* which menu we hit */
 
-/***** this section defines some variables that are used in maintaining 
+/***** this section defines some variables that are used in maintaining
 	   the playing map */
 
 extern UBYTE place_tbl[], inside_tbl[];
@@ -649,9 +649,9 @@ struct	DiskFontHeader *font;
 struct  TextFont *tfont, *afont;
 struct  TextAttr topaz_ta = { "topaz.font", 8, 0, FPF_ROMFONT };
 
-unsigned char 
+unsigned char
 	*into_chip(),
-	*image_mem, *sector_mem, *map_mem, *shadow_mem, 
+	*image_mem, *sector_mem, *map_mem, *shadow_mem,
 	*shape_mem,
 	*bmask_mem, *queue_mem,
 	*sample_mem,
@@ -666,9 +666,9 @@ unsigned char *nextshape, *tempshape;
 #define SCORE_SZ	5900
 
 unsigned char  *wavmem, *volmem, *scoremem;
-short new_wave[] = 
+short new_wave[] =
 { 	0x0000, 0x0000, 0x0000, 0x0000, 0x0005,
-	0x0202, 0x0101, 0x0103, 0x0004, 0x0504, 
+	0x0202, 0x0101, 0x0103, 0x0004, 0x0504,
 	0x0100, 0x0500 };
 
 UWORD	openflags;
@@ -686,7 +686,7 @@ long seed1 = 19837325, seed2 = 23098324;
 	others: slippery, fiery, changing, climbable, pit trap, danger,
 		noisy, magnetic, stinks, slides, slopes, whirlpool, etc.
 
-	mask applications : 
+	mask applications :
 		0 = never, 1 = when down, 2 = when right, 3 = always unless flying,
 		4 = only if below normal level, etc.
 */
@@ -805,6 +805,12 @@ open_all()
 	vp_text.Next = &vp_page;	/* make links to additional viewports */
 	vp_page.Next = NULL;
 
+	/*
+	 * vp_page is the playfield
+	 * it is offset by 16 pixels and 288 pixels wide by 143 pixels high
+	 * vp_text is the text window with the scrolling text, UI buttons and the compass
+	 * it is 640 pixels wide by 57 pixels high
+     */
 	vp_page.DWidth = 288;		/* lo-res screen is 36 bytes wide */
 	vp_text.DWidth = 640;		/* hi-res screen */
 
@@ -838,7 +844,7 @@ open_all()
 
 	ri_page1.BitMap = bm_page1;
 	ri_page2.BitMap = bm_page2;
-	ri_page1.RxOffset = ri_page2.RxOffset = 
+	ri_page1.RxOffset = ri_page2.RxOffset =
 		ri_page1.RyOffset = ri_page2.RyOffset = 0;
 	ri_page1.Next = ri_page2.Next = NULL;
 
@@ -967,7 +973,7 @@ close_all()
 	FreeCprList(fp_page1.savecop);
 	FreeCprList(fp_page2.savecop);
 	FreeCprList(v.SHFCprList);
-	
+
 	if (vp_page.ColorMap) FreeColorMap(vp_page.ColorMap);
 	if (vp_text.ColorMap) FreeColorMap(vp_text.ColorMap);
 	for(i=0; i<PAGE_DEPTH; i++)
@@ -1132,7 +1138,7 @@ void main(int argc,char argv[])
 	short dif_x, dif_y, xstart, ystart, xstop, ystop;
 	unsigned short	xtest, ytest;
 	struct shape *an;
-		
+
 	if (argc == 0)
 	{	extern struct WBStartup *WBenchMsg;
 
@@ -1147,9 +1153,15 @@ void main(int argc,char argv[])
 
 	vp_page.RasInfo = &ri_page1;
 	fp_page2.ri_page = &ri_page2;
+
+	// clear fp_viewing and fp_drawing
 	rp_map.BitMap =  fp_viewing->ri_page->BitMap; SetRast(&rp_map,0);
 	rp_map.BitMap =  fp_drawing->ri_page->BitMap; SetRast(&rp_map,0);
+
+	// set rp_map as current rastport
 	rp = &rp_map;
+	// resize rp to 156x97 (y = x*5/8) -> rp will be centered in the 320x200 screen
+	// rp bounds are (82,51) to (236,148)
 	screen_size(156);
 	SetRGB4(&vp_page,0,0,0,6);
 	SetRGB4(&vp_page,1,15,15,15);
@@ -1237,7 +1249,7 @@ no_intro:
 	k = TRUE;
 	if (copy_protect_junk()==0) goto quit_all;
 	Delay(20);
-	
+
 	ri_page1.RxOffset = ri_page2.RxOffset =
 		ri_page1.RyOffset = ri_page2.RyOffset = 0;
 
@@ -1276,7 +1288,7 @@ no_intro:
 		flasher++;
 
 		key = getkey();
-			
+
 		/* debug keys */
 
 		notpause = !(menus[GAME].enabled[5] & 1);
@@ -1362,7 +1374,7 @@ no_intro:
 			}
 		}
 
-		if (viewstatus == 2) 
+		if (viewstatus == 2)
 		{	Delay(200); viewstatus = 99; }
 		else if (viewstatus == 1 || viewstatus == 4)
 		{	if ((flasher & 16) && viewstatus == 1)
@@ -1640,7 +1652,7 @@ no_intro:
 				if (an->race == 4) dex = (cycle&2)+((d & 0xfe)<<2)+0x24;
 				if (k > 2)
 				{	if ( (j == 0) || ((j == 3) && (k > 5)) ||
-						((j == 4) && (k > 10)) ) 
+						((j == 4) && (k > 10)) )
 					{	if (hero_sector != 181) k--; goto raise; }
 				}
 				an->vel_x = ((short)(xtest - an->abs_x))*4;
@@ -1896,7 +1908,7 @@ no_intro:
 
 		xtest = hero_x & 0xfff0;
 		ytest = hero_y & 0xffe0;
-		
+
 		if (riding) goto nodoor3;
 		if (region_num < 8)
 		{	while (k >= i)
@@ -1911,7 +1923,7 @@ no_intro:
 						i = j+1;
 				else if (d->yc1 > ytest) k = j-1;
 				else if (d->yc1 < ytest) i = j+1;
-				else 
+				else
 				{	if (d->type & 1)
 					{	if (hero_y & 0x10) goto nodoor; }
 					else if ((hero_x & 15) >6 ) goto nodoor;
@@ -1932,10 +1944,10 @@ no_intro:
 				if (i >= DOORCOUNT || k < 0) break;
 			}
 		}
-		else 
+		else
 		{	for (j=0; j<DOORCOUNT; j++)
 			{	struct door *d; d = &(doorlist[j]);
-				if (d->yc2==ytest && 
+				if (d->yc2==ytest &&
 					( d->xc2==xtest || (d->xc2==xtest-16 && d->type & 1)))
 				{	if (d->type & 1)
 					{	if ((hero_y & 0x10)==0) goto nodoor2; }
@@ -2110,7 +2122,7 @@ no_intro:
 				{	short xd, yd, mode, tactic, r;
 
 					if (goodfairy && goodfairy < 120) break;
-					an = &(anim_list[i]);					
+					an = &(anim_list[i]);
 					if (an->type == CARRIER)
 					{	if ((daynight & 15) == 0)
 							set_course(i,hero_x,hero_y,5);
@@ -2190,7 +2202,7 @@ no_intro:
 					!actors_loading && !witchflag &&
 					anim_list[0].environ == 0 && safe_flag == 0 &&
 					anim_list[0].state != DEAD)
-					{	safe_r = region_num; 
+					{	safe_r = region_num;
 						safe_x = hero_x; safe_y = hero_y;
 						if (hunger > 30 && stuff[24])
 						{	stuff[24]--; hunger -= 30; event(37);  }
@@ -2397,7 +2409,7 @@ no_intro:
 
 			/* if offscreen, should we skip?? */
 
-			if (an->weapon>0 && an->weapon<8 && 
+			if (an->weapon>0 && an->weapon<8 &&
 				(an->state<DEAD || an->state>=SHOOT1 || xtype>80))
 			{	if ((an->facing - 2) & 4) passmode = (pass^1);
 				else passmode = pass;
@@ -2806,7 +2818,7 @@ load_carrier(n) short n;
 struct bro {
 	char	brave,luck,kind,wealth;
 	UBYTE	*stuff;
-} blist[] = 
+} blist[] =
 {	{ 35,20,15,20,julstuff },	/* julian's attributes */
 	{ 20,35,15,15,philstuff },	/* phillip's attributes */
 	{ 15,20,35,10,kevstuff } };	/* kevin's attributes */
@@ -2858,7 +2870,7 @@ revive(new) short new;
 
 		map_message();
 		SetFont(rp,afont);
-		if (brother == 1) 
+		if (brother == 1)
 		{	placard_text(0);
 			rp_map.BitMap =  fp_drawing->ri_page->BitMap; SetRast(&rp_map,0);
 			rp_map.BitMap =  fp_viewing->ri_page->BitMap;
@@ -2889,7 +2901,7 @@ revive(new) short new;
 			if (brother == 1) print_cont(".");
 			else if (brother == 2) event(10);
 			else if (brother == 3) event(11);
-		}	
+		}
 	}
 	else fade_down();
 
@@ -2911,11 +2923,22 @@ revive(new) short new;
 	fiery_death = xtype = 0;
 }
 
-screen_size(x) register long x;
-{	register long y;
+void screen_size(register long x)
+{
+	register long y = (x*5)/8;
 
-	y = (x*5)/8;
-
+	/*
+	 * example:
+	 * x = 156
+	 * y = 97 (156*5=780/8=97 truncated)
+	 * then DxOffset = 160-156=4, DWidth=312
+	 *      DyOffset = 100-97=3, DHeight=194
+	 *
+	 * so, page is now 312x194 centered horizontally on screen
+	 *
+	 * this grows the "page" viewport to fill most of the screen, and
+	 * the text viewport is effectively gone
+	 */
 	Delay(2);
 
 	ri_page2.RxOffset = ri_page1.RxOffset = vp_page.DxOffset = 160-x;
@@ -2933,8 +2956,9 @@ screen_size(x) register long x;
 	pagechange();
 }
 
-setmood(now) char now;
-{	register long off;
+void setmood(char now)
+{
+	register long off;
 	if (anim_list[0].vitality == 0) off = (6*4);
 	else if (hero_x > 0x2400 && hero_x < 0x3100 &&
 			hero_y > 0x8200 && hero_y < 0x8a00)
@@ -2956,8 +2980,9 @@ setmood(now) char now;
 	else stopscore();
 }
 
-gen_mini()
-{	register unsigned long xr,yr; register long xs, ys;
+void gen_mini()
+{
+	register unsigned long xr,yr; register long xs, ys;
 
 	/* lregion is what region are supposed to be in */
 
@@ -2990,8 +3015,9 @@ gen_mini()
 	genmini(img_x,img_y);
 }
 
-pagechange()
-{	register struct fpage *temp;
+void pagechange()
+{
+	register struct fpage *temp;
 
 	temp = fp_drawing; fp_drawing = fp_viewing; fp_viewing = temp;
 	vp_page.RasInfo = temp->ri_page;
@@ -3124,7 +3150,7 @@ do_option(hit) short hit;
 			pagea.Planes[2] = data+64;
 			pagea.Planes[3] = data+96;
 			pagea.Planes[4] = data+128;
-		
+
 			for (j=0; j<GOLDBASE; j++)
 			{	num = stuff[j];
 				if (num>inv_list[j].maxshown) num = inv_list[j].maxshown;
@@ -3268,7 +3294,7 @@ do_option(hit) short hit;
 					anim_list[nearest].weapon = -1;
 					j = anim_list[nearest].race;
 					if (j & 0x80) j = 0;	/* setfigs have no treasure */
-					else 
+					else
 					{	j = (encounter_chart[j].treasure * 8) + rand8();
 						j = treasure_probs[j];
 					}
@@ -3309,7 +3335,7 @@ do_option(hit) short hit;
 		case 9:
 			if (cheat1==0 && region_num > 7) return;
 			bm_draw = fp_drawing->ri_page->BitMap;
-			planes = bm_draw->Planes; 
+			planes = bm_draw->Planes;
 			bigdraw(map_x,map_y);
 
 			i = (hero_x>>4) - ((secx + xreg)<<4) - 4;
@@ -3392,7 +3418,7 @@ do_option(hit) short hit;
 						prq(4);
 					}
 					break;
-			case 2: 
+			case 2:
 			case 3: speak(15); break;	/* guard */
 			case 4: if (ob_list8[9].ob_stat) speak(16); break;	/* princess - change speech */
 			case 5: if (ob_list8[9].ob_stat) speak(17); break;	/* king - change speech */
@@ -3418,7 +3444,7 @@ do_option(hit) short hit;
 		else if (an->type == CARRIER && active_carrier == 5)
 		{	if (stuff[6]) speak(57); /* check if has shell */
 			else { stuff[6] = 1; speak(56); }
-		}	
+		}
 		else if (an->type == ENEMY) { speak(an->race); }
 		break;
 	case BUY:
@@ -3440,7 +3466,7 @@ do_option(hit) short hit;
 			else print("Not enough money!");
 		}
 		break;
-	case GAME: 
+	case GAME:
 		if (hit==6) setmood(TRUE);
 		if (hit==8) gomenu(SAVEX);
 		if (hit==9) { svflag = FALSE; gomenu(FILE); }

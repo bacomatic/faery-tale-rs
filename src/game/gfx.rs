@@ -1,10 +1,12 @@
 use sdl2::pixels::Color;
+use serde::Deserialize;
 
 use std::convert::From;
 
 // Game graphics library
 
 // type alias to be consistent with original code
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub struct RGB4 {
     pub color: u16
 }
@@ -87,6 +89,56 @@ impl RGB4 {
     }
 }
 
-pub type Palette4 = [RGB4; 4];
-pub type Palette16 = [RGB4; 16];
-pub type Palette32 = [RGB4; 32];
+#[derive(Deserialize, Debug)]
+pub struct Palette {
+    #[serde(deserialize_with = "deserialize_rgb4_vec")]
+    pub colors: Vec<RGB4>
+}
+
+impl Palette {
+    pub fn get_color(&self, index: usize) -> Option<&RGB4> {
+        self.colors.get(index)
+    }
+}
+
+fn deserialize_rgb4_vec<'de, D>(deserializer: D) -> Result<Vec<RGB4>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw_colors: Vec<u16> = Vec::deserialize(deserializer)?;
+    Ok(raw_colors.into_iter().map(|c| RGB4::from(c)).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rgb4_conversion() {
+        let c1 = RGB4::from((0xAB, 0xCD, 0xEF));
+        assert_eq!(c1.color, 0x0ACE); // conversion will truncate the lower nibble
+    }
+
+    #[test]
+    fn test_rgb4_to_color() {
+        let c1 = RGB4::from((0xAB, 0xCD, 0xEF));
+        let color: Color = c1.to_color();
+        assert_eq!(color.r, 0xAA);
+        assert_eq!(color.g, 0xCC);
+        assert_eq!(color.b, 0xEE);
+    }
+
+    #[test]
+    fn test_palette_deserialization() {
+        let toml_data = r#"
+            colors = [0x0ACE, 0xA50, 0x0FFF, 0xABCD]
+        "#;
+
+        let palette: Palette = toml::from_str(toml_data).unwrap();
+        assert_eq!(palette.colors.len(), 3);
+        assert_eq!(palette.colors[0].color, 0x0ACE);
+        assert_eq!(palette.colors[1].color, 0x0A50);
+        assert_eq!(palette.colors[2].color, 0x0FFF);
+        assert_eq!(palette.colors[3].color, 0x0BCD); // top nibble of 0xABCD is truncated
+    }
+}

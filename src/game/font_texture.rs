@@ -106,6 +106,15 @@ impl<'a> FontTexture<'a> {
         }
     }
 
+    /*
+     * From the AmigaOS docs:
+     * For each glyph the system renders, it has to do several things:
+     *
+     *      1. Get the value from the kerning table that corresponds to this glyph and begin the rendering that number of pixels to the right.
+     *      2. Find this glyph's bitmap using the CharLoc table and blit the glyph to the rastport.
+     *      3. If this is a proportional font, look in the spacing table and figure how many pixels to advance the rastport's horizontal position.
+     *         For a monospaced font, the horizontal position advance comes from the TextFont's tf_XSize field.
+     */
     fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
         let cstr = s.as_bytes();
 
@@ -115,18 +124,21 @@ impl<'a> FontTexture<'a> {
                 let cc_index = (cc - self.font.lo_char) as usize;
                 let cc_loc = self.font.char_loc[cc_index];
 
+                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
+                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+
                 // Don't do anything for spaces, just skip ahead to the next coordinates
                 if cc_loc.1 > 0 {
                     // grab glyph width and adjust glyph_rect, making sure to adjust the origin to our shared texture bounds
                     glyph_rect.set_width(cc_loc.1 as u32);
-                    let src_rect = Rect::new(self.bounds.x + cc_loc.0 as i32, self.bounds.y, cc_loc.1 as u32, self.font.y_size as u32);
+                    let src_rect = Rect::new(self.bounds.x + cc_loc.0 as i32 + kern, self.bounds.y, cc_loc.1 as u32, self.font.y_size as u32);
 
                     // copy the glyph
                     canvas.copy(texture, Some(src_rect), Some(glyph_rect)).unwrap();
                 }
 
                 // advance to the next glyph location
-                glyph_rect.set_x(glyph_rect.x() + self.font.char_space[cc_index] as i32);
+                glyph_rect.set_x(glyph_rect.x() + space);
             }
         }
     }

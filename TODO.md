@@ -6,8 +6,9 @@ tracker), here's a damn ToDo list, in no particular order.
 * Basic Infrastructure
     * Set up core engine (SDL based)
     * Set up game data (characters, objects, maps, etc)
-    * IFF loading
-    * Font rendering
+        * sprite data
+        * map data
+        * tilesets
     * Set mouse cursor
     * Core game FSM
     * Implement scenes
@@ -42,7 +43,14 @@ tracker), here's a damn ToDo list, in no particular order.
 
 Completed tasks:
 * Basic Infrastructure
+    * Set up game data (characters, objects, maps, etc)
+        * color palettes
+        * font loading
+        * billboard loading
+        * IFF image loading
     * Amber font loading
+    * Font rendering
+    * IFF loading
     * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
 * Core Game Mechanics
 * Audio
