@@ -8,12 +8,17 @@ use game::game_library;
 use sdl2::event::Event;
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
-use sdl2::pixels::Color;
+use sdl2::mouse::Cursor;
+use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
+use sdl2::surface::Surface;
 
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
+
+use crate::game::cursor::CursorAsset;
+use crate::game::gfx::Palette;
 
 #[derive(Debug, Clone, Copy)]
 struct CycleInt {
@@ -98,6 +103,34 @@ impl NameCycler {
     }
 }
 
+fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
+    // build RGBA32 pixel data from cursor and palette
+    let result = cursor.bitmap.generate_rgb32(color, Some(0));
+    if result.is_err() {
+        println!("Error generating RGB32 data for cursor: {}", result.err().unwrap());
+        return None;
+    }
+
+    let (mut pixels, stride) = result.unwrap();
+
+    // create RGB surface from pixels, we need to use a Surface to create a color cursor
+    let surface = Surface::from_data(
+        &mut pixels,
+        cursor.bitmap.width as u32,
+        cursor.bitmap.height as u32,
+        stride as u32,
+        PixelFormatEnum::RGBA32).unwrap();
+
+    // create and set the cursor
+    let pointer = Cursor::from_surface(
+        surface,
+        cursor.hotspot.x as i32,
+        cursor.hotspot.y as i32).unwrap();
+    pointer.set();
+
+    Some(pointer)
+}
+
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -129,6 +162,12 @@ pub fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
 
+    let mut mouse_cursor: Option<Cursor> = None;
+
+    let pointer = game_lib.get_cursor("bow");
+    if pointer.is_some() {
+        mouse_cursor = set_mouse(pointer.unwrap(), &sys_palette);
+    }
 
     let billboard_names = game_lib.get_billboard_names();
     let mut billboard_cycler = NameCycler::new(billboard_names);
@@ -291,6 +330,18 @@ pub fn main() -> Result<(), String> {
                             // Cycle text color
                             text_color.modify(keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD));
                             dirty = true;
+                        }
+
+                        Scancode::M => {
+                            // toggle mouse cursor
+                            if mouse_cursor.is_some() {
+                                mouse_cursor = None;
+                            } else {
+                                let pointer = game_lib.get_cursor("bow");
+                                if pointer.is_some() {
+                                    mouse_cursor = set_mouse(pointer.unwrap(), &sys_palette);
+                                }
+                            }
                         }
 
                         Scancode::Num1 | Scancode::Num2 | Scancode::Num3 | Scancode::Num4

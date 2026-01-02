@@ -5,11 +5,13 @@ tracker), here's a damn ToDo list, in no particular order.
 
 * Basic Infrastructure
     * Set up core engine (SDL based)
+        * SDL code is piling up in main.rs, it needs to be abstracted out properly
+        * System (configuration) state machine
+        * Persistent settings for things like window size/loc, etc.
+        * Game state machine
     * Set up game data (characters, objects, maps, etc)
-        * sprite data
         * map data
         * tilesets
-    * Set mouse cursor
     * Core game FSM
     * Implement scenes
         * Static text
@@ -48,6 +50,8 @@ Completed tasks:
         * font loading
         * billboard loading
         * IFF image loading
+        * sprite data (cursor)
+    * Set mouse cursor
     * Amber font loading
     * Font rendering
     * IFF loading

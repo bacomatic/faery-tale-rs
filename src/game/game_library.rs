@@ -1,9 +1,6 @@
 
 use crate::game::{
-    font::{DiskFont, FontAsset},
-    gfx::Palette,
-    iff_image::{ImageAsset, IffImage},
-    billboard::Billboard
+    billboard::Billboard, cursor::CursorAsset, font::{DiskFont, FontAsset}, gfx::Palette, iff_image::{IffImage, ImageAsset}
 };
 
 use serde::Deserialize;
@@ -30,10 +27,28 @@ pub struct GameLibrary {
     palettes: HashMap<String, Palette>,
     billboards: HashMap<String, Billboard>,
     fonts: HashMap<String, FontAsset>,
-    images: HashMap<String, ImageAsset>
+    images: HashMap<String, ImageAsset>,
+    cursors: HashMap<String, CursorAsset>
 }
 
 impl GameLibrary {
+    // images
+    pub fn get_image_count(&self) -> usize {
+        self.images.len()
+    }
+
+    pub fn get_image_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for (name, _) in &self.images {
+            names.push(name.clone());
+        }
+        names
+    }
+
+    pub fn find_image(&self, name: &str) -> Option<&ImageAsset> {
+        self.images.get(name)
+    }
+
     // color palettes
     pub fn get_palette_count(&self) -> usize {
         self.palettes.len()
@@ -82,6 +97,11 @@ impl GameLibrary {
         let font = self.fonts.get(name).unwrap();
         font.get_font(size)
     }
+
+    pub fn get_cursor(&self, name: &str) -> Option<&CursorAsset> {
+        self.cursors.get(name)
+    }
+
 }
 
 pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>> {

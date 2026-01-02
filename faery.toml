@@ -20,6 +20,75 @@ colors = [
     0x000, 0xDB0, 0x740, 0xC7
 ]
 
+[cursors]
+
+# mouse cursor data
+[cursors.bow]
+hotspot = { x = 0, y = 0 }
+# grudge: TOML 1.1.0 supports mutliline inline tables but it's not well supported yet
+[cursors.bow.bitmap]
+width = 16
+height = 16
+depth = 2
+stride = 2 # bytes per row
+    # copied from sprite_data with SimpleSprite control fields removed and de-interleaved
+planes = [
+    [   # plane 0
+        0x80, 0x06,
+        0x60, 0x01,
+        0x40, 0x01,
+        0x10, 0x03,
+        0x08, 0xFE,
+        0x05, 0x81,
+        0x03, 0x00,
+        0x06, 0x01,
+        0x0C, 0x80,
+        0x08, 0x41,
+        0x08, 0x20,
+        0x08, 0x11,
+        0x08, 0x0C,
+        0x88, 0x0F,
+        0x98, 0x07,
+        0x75, 0x56
+    ],
+    [   # plane 1
+        0x00, 0x00,
+        0x00, 0x02,
+        0x20, 0x00,
+        0x00, 0x00,
+        0x00, 0x01,
+        0x00, 0x7F,
+        0x00, 0x81,
+        0x01, 0x01,
+        0x02, 0x01,
+        0x04, 0x01,
+        0x04, 0x01,
+        0x04, 0x01,
+        0x04, 0x01,
+        0x04, 0x01,
+        0x44, 0x00,
+        0x0F, 0xFC
+    ]
+]
+# bitmap data in binary for reference
+# plane 0             plane 1
+# 0b1000000000000110, 0b0000000000000000,
+# 0b0110000000000001, 0b0000000000000010,
+# 0b0100000000000001, 0b0010000000000000,
+# 0b0001000000000011, 0b0000000000000000,
+# 0b0000100011111110, 0b0000000000000001,
+# 0b0000010110000001, 0b0000000001111111,
+# 0b0000001100000000, 0b0000000010000001,
+# 0b0000011000000001, 0b0000000100000001,
+# 0b0000110010000000, 0b0000001000000001,
+# 0b0000100001000001, 0b0000010000000001,
+# 0b0000100000100000, 0b0000010000000001,
+# 0b0000100000010001, 0b0000010000000001,
+# 0b0000100000001100, 0b0000010000000001,
+# 0b1000100000001111, 0b0000010000000001,
+# 0b1001100000000111, 0b0100010000000000,
+# 0b0111010101010110, 0b0000111111111100,
+
 [billboards]
 [billboards.titletext]
 lines = [

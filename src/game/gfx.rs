@@ -99,6 +99,33 @@ impl Palette {
     pub fn get_color(&self, index: usize) -> Option<&RGB4> {
         self.colors.get(index)
     }
+
+    /**
+     * Create a lookup table converting palette indices to RGBA32 colors, but only
+     * to the specified depth.
+     */
+    pub fn to_rgba32_table(&self, depth: usize) -> Result<Vec<u32>, String> {
+        if depth < 1 || depth > 5 {
+            return Err("Palette depth must be 1 to 5 inclusive".to_string());
+        }
+
+        let mut table: Vec<u32> = Vec::with_capacity(1 << depth);
+        let color_count = self.colors.len();
+        for i in 0..(1 << depth) {
+            if i < color_count {
+                let c = &self.colors[i];
+                let color: u32 =
+                    ((c.r() as u32) << 24) |
+                    ((c.g() as u32) << 16) |
+                    ((c.b() as u32) << 8)  |
+                    (0xFF);
+                table.push(color);
+            } else {
+                table.push(0); // transparent
+            }
+        }
+        Ok(table)
+    }
 }
 
 fn deserialize_rgb4_vec<'de, D>(deserializer: D) -> Result<Vec<RGB4>, D::Error>
