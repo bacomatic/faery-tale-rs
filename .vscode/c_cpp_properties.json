@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${default}",
+                "${workspaceFolder}/original/include_h"
+            ],
+            "forcedInclude": [
+                "${workspaceFolder}/original/fincludes.c"
+            ]
+        }
+    ],
+    "version": 4
+}

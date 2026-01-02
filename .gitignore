@@ -1,6 +1,9 @@
 # Ignore build artifacts
 build/
 
+# Ignore Amiga NDK header files I copy locally I won't distribute them due to copyright
+original/include_h
+
 ############################################################################################
 # Copied from https://github.com/github/gitignore/blob/main/Rust.gitignore
 ############################################################################################
@@ -32,6 +35,7 @@ Cargo.lock
 ############################################################################################
 
 .vscode/*
+!.vscode/c_cpp_properties.json
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
