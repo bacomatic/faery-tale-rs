@@ -118,7 +118,10 @@ impl<'a> FontTexture<'a> {
     fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
         let cstr = s.as_bytes();
 
-        let mut glyph_rect = Rect::new(x, y, 0, self.font.y_size as u32);
+        // y coordinate is for the baseline of the font, so adjust for that
+        let y_adjusted = y - self.font.baseline as i32;
+
+        let mut glyph_rect = Rect::new(x, y_adjusted, 0, self.font.y_size as u32);
         for cc in cstr {
             if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
                 let cc_index = (cc - self.font.lo_char) as usize;

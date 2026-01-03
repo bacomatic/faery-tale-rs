@@ -17,6 +17,7 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::game::placard::*;
 use crate::game::cursor::CursorAsset;
 use crate::game::gfx::Palette;
 
@@ -157,7 +158,7 @@ pub fn main() -> Result<(), String> {
 
     let tex_maker = canvas.texture_creator();
 
-    let sys_palette = game_lib.find_palette("introcolors").unwrap();
+    let sys_palette = game_lib.find_palette("pagecolors").unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
@@ -169,9 +170,9 @@ pub fn main() -> Result<(), String> {
         mouse_cursor = set_mouse(pointer.unwrap(), &sys_palette);
     }
 
-    let billboard_names = game_lib.get_billboard_names();
-    let mut billboard_cycler = NameCycler::new(billboard_names);
-    billboard_cycler.set("titletext");
+    let placard_names = game_lib.get_placard_names();
+    let mut placard_cycler = NameCycler::new(placard_names);
+    placard_cycler.set("titletext");
 
     let font_names = game_lib.get_font_names();
     let mut font_cycler = NameCycler::new(font_names);
@@ -194,7 +195,7 @@ pub fn main() -> Result<(), String> {
     let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
     let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
 
-    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 640, 200).unwrap();
+    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 320, 200).unwrap();
 
     let mut dirty: bool = true;
     let mut mode: i32 = 1;
@@ -229,11 +230,12 @@ pub fn main() -> Result<(), String> {
 
                 match mode {
                     1 => {
-                        let result = game_lib.find_billboard(billboard_cycler.get_current().unwrap());
+                        let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
                         if result.is_some() {
-                            let billboard = result.unwrap();
-                            billboard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                            // billboard.print();
+                            let placard = result.unwrap();
+                            placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+                            draw_placard_border(&mut play_canvas, &sys_palette);
+                            // placard.print();
                         }
                     }
                     2 => {
@@ -296,7 +298,7 @@ pub fn main() -> Result<(), String> {
                             let increase = sc == Scancode::Right;
                             match mode {
                                 0 => { } // no action in mode 0 yet
-                                1 => { billboard_cycler.modify(increase) }
+                                1 => { placard_cycler.modify(increase) }
                                 _ => {}
                             }
                             dirty = true;

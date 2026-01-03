@@ -15,7 +15,6 @@ tracker), here's a damn ToDo list, in no particular order.
     * Core game FSM
     * Implement scenes
         * Static text
-        * Swirly bordered text ("placard")
         * Storybook, page turning
     * Implement opening sequence
         * Credits
@@ -35,6 +34,8 @@ tracker), here's a damn ToDo list, in no particular order.
     * Parse music file, build song list
     * Play selected song
 * Graphics Effects
+    * viewport based drawing
+    * animated/timed effects, e.g., swirly border drawn over time
     * Parse copper lists
     * Day/Night cycle
     * Witch effect
@@ -48,7 +49,7 @@ Completed tasks:
     * Set up game data (characters, objects, maps, etc)
         * color palettes
         * font loading
-        * billboard loading
+        * placard loading
         * IFF image loading
         * sprite data (cursor)
     * Set mouse cursor
@@ -56,6 +57,8 @@ Completed tasks:
     * Font rendering
     * IFF loading
     * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
+    * Implement scenes
+        * Swirly bordered text (placards)
 * Core Game Mechanics
 * Audio
 * Graphics Effects

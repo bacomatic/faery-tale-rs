@@ -9,4 +9,4 @@ pub mod game_library;
 pub mod gfx;
 pub mod hunk;
 pub mod iff_image;
-pub mod billboard;
+pub mod placard;

@@ -1,6 +1,6 @@
 
 use crate::game::{
-    billboard::Billboard, cursor::CursorAsset, font::{DiskFont, FontAsset}, gfx::Palette, iff_image::{IffImage, ImageAsset}
+    placard::Placard, cursor::CursorAsset, font::{DiskFont, FontAsset}, gfx::Palette, iff_image::{IffImage, ImageAsset}
 };
 
 use serde::Deserialize;
@@ -23,12 +23,19 @@ use std::{
  */
 
 #[derive(Deserialize, Debug)]
+pub struct CopyProtectQuestion {
+    pub question: String,
+    pub answer: String
+}
+
+#[derive(Deserialize, Debug)]
 pub struct GameLibrary {
     palettes: HashMap<String, Palette>,
-    billboards: HashMap<String, Billboard>,
+    placards: HashMap<String, Placard>,
     fonts: HashMap<String, FontAsset>,
     images: HashMap<String, ImageAsset>,
-    cursors: HashMap<String, CursorAsset>
+    cursors: HashMap<String, CursorAsset>,
+    copy_protect_junk: Vec<CopyProtectQuestion>
 }
 
 impl GameLibrary {
@@ -58,21 +65,21 @@ impl GameLibrary {
         self.palettes.get(name)
     }
 
-    // billboards
-    pub fn get_billboard_count(&self) -> usize {
-        self.billboards.len()
+    // placards
+    pub fn get_placard_count(&self) -> usize {
+        self.placards.len()
     }
 
-    pub fn get_billboard_names(&self) -> Vec<String> {
+    pub fn get_placard_names(&self) -> Vec<String> {
         let mut names: Vec<String> = Vec::new();
-        for (name, _) in &self.billboards {
+        for (name, _) in &self.placards {
             names.push(name.clone());
         }
         names
     }
 
-    pub fn find_billboard(&self, name: &str) -> Option<&Billboard> {
-        self.billboards.get(name)
+    pub fn find_placard(&self, name: &str) -> Option<&Placard> {
+        self.placards.get(name)
     }
 
     // fonts
