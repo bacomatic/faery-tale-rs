@@ -10,3 +10,4 @@ pub mod gfx;
 pub mod hunk;
 pub mod iff_image;
 pub mod placard;
+pub mod render_task;
