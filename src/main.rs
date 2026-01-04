@@ -10,7 +10,7 @@ use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::mouse::Cursor;
 use sdl2::pixels::{Color, PixelFormatEnum};
-use sdl2::rect::Rect;
+use sdl2::rect::{Point, Rect};
 use sdl2::surface::Surface;
 
 use std::cell::RefCell;
@@ -20,6 +20,7 @@ use std::rc::Rc;
 use crate::game::placard::*;
 use crate::game::cursor::CursorAsset;
 use crate::game::gfx::Palette;
+use crate::game::render_task::RenderTask;
 
 #[derive(Debug, Clone, Copy)]
 struct CycleInt {
@@ -138,6 +139,7 @@ pub fn main() -> Result<(), String> {
 
     let mut fps_man = FPSManager::new();
     fps_man.set_framerate(60)?;
+    let mut last_frame_count: i32 = fps_man.get_frame_count();
 
     let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
         .resizable()
@@ -145,9 +147,11 @@ pub fn main() -> Result<(), String> {
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let mut canvas = window.into_canvas()
+        .accelerated()
+        .build().unwrap();
     // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio
-    canvas.set_logical_size(640, 480).unwrap();
+    // canvas.set_logical_size(640, 480).unwrap();
 
     // load the game library
     let game_lib = game_library::load_game_library(Path::new("faery.toml"));
@@ -172,7 +176,7 @@ pub fn main() -> Result<(), String> {
 
     let placard_names = game_lib.get_placard_names();
     let mut placard_cycler = NameCycler::new(placard_names);
-    placard_cycler.set("titletext");
+    placard_cycler.set("msg1");
 
     let font_names = game_lib.get_font_names();
     let mut font_cycler = NameCycler::new(font_names);
@@ -195,68 +199,72 @@ pub fn main() -> Result<(), String> {
     let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
     let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
 
-    let mut play_tex = tex_maker.create_texture_target(tex_maker.default_pixel_format(), 320, 200).unwrap();
+    let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::BGRA8888, 320, 200).unwrap();
 
     let mut dirty: bool = true;
-    let mut mode: i32 = 1;
 
     let mut text_color: CycleInt = CycleInt::new(sys_palette.colors.len() - 1);
-    text_color.set(1);
+    text_color.set(24);
 
     // use a weak reference here because we need to be able to swap fonts
     let mut text_font = Rc::downgrade(&amber_text);
 
+    let mut placard_task: Option<Box<dyn RenderTask>> = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
+    let mut update_text = true;
+    let mut clear_flag = true;
+
     'running: loop {
         if dirty {
+            let mut still_dirty = false;
+            let current_frame = fps_man.get_frame_count();
+            let frame_count = current_frame - last_frame_count;
+            last_frame_count = current_frame;
+
+            let clear_canvas = clear_flag;
+
             let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
-                play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
-                play_canvas.clear();
 
-                // set text color
-                {
-                    let color = &sys_palette.colors[text_color.value];
+                if clear_flag == true {
+                    play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
+                    play_canvas.clear();
+                    clear_flag = false;
+                }
 
-                    let mut result = font_texture.try_borrow_mut();
-                    match result {
-                        Err(e) => {
-                            println!("Error borrowing font texture: {}", e);
-                        },
-                        Ok(ref mut texture) => {
-                            texture.set_color_mod(color.r(), color.g(), color.b());
-                            texture.set_blend_mode(sdl2::render::BlendMode::Blend);
-                        }
+                if placard_task.is_some() {
+                    let result = placard_task.as_mut().unwrap().update(&mut play_canvas, frame_count, None);
+                    if result == false {
+                        placard_task = None;
+                    } else {
+                        still_dirty = true;
                     }
                 }
 
-                match mode {
-                    1 => {
-                        let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
-                        if result.is_some() {
-                            let placard = result.unwrap();
-                            placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                            draw_placard_border(&mut play_canvas, &sys_palette);
-                            // placard.print();
-                        }
+                if update_text {
+                    {
+                        let mut tex_borrow = font_texture.borrow_mut();
+                        let color = sys_palette.get_color(text_color.value).unwrap();
+                        tex_borrow.set_color_mod(color.r(), color.g(), color.b());
                     }
-                    2 => {
-                        amber_text.borrow().render_string("\"No need to shout, son!\" he said.",
-                            &mut play_canvas,
-                            50,
-                            50);
+                    let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
+                    if result.is_some() {
+                        let placard = result.unwrap();
+                        placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
                     }
-                    _ => {}
+                    update_text = false;
                 }
             });
 
-            canvas.set_draw_color(Color::BLACK);
-            canvas.clear();
+            if clear_canvas {
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+            }
 
             let screen_dest = Rect::new(0, 40, 640, 400);
             canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
 
             canvas.present();
 
-            dirty = false;
+            dirty = still_dirty;
         }
 
         let mut kill_flag = false;
@@ -273,7 +281,7 @@ pub fn main() -> Result<(), String> {
                 => {
                     kill_flag = true;
                 },
-                Event::KeyDown {keycode, scancode, keymod, repeat: false, ..}
+                Event::KeyDown {scancode, keymod, repeat: false, .. }
                 => {
                     // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
@@ -296,11 +304,10 @@ pub fn main() -> Result<(), String> {
                         }
                         Scancode::Left | Scancode::Right => {
                             let increase = sc == Scancode::Right;
-                            match mode {
-                                0 => { } // no action in mode 0 yet
-                                1 => { placard_cycler.modify(increase) }
-                                _ => {}
-                            }
+                            placard_cycler.modify(increase);
+                            clear_flag = true;
+                            update_text = true;
+                            placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
                             dirty = true;
                         }
 
@@ -325,12 +332,14 @@ pub fn main() -> Result<(), String> {
                             } else {
                                 text_font = Rc::downgrade(&amber_text);
                             }
+                            update_text = true;
                             dirty = true;
                         }
 
                         Scancode::C => {
                             // Cycle text color
                             text_color.modify(keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD));
+                            update_text = true;
                             dirty = true;
                         }
 
@@ -350,7 +359,7 @@ pub fn main() -> Result<(), String> {
                         | Scancode::Num5 | Scancode::Num6 | Scancode::Num7 | Scancode::Num8
                         | Scancode::Num9 | Scancode::Num0 => {
                             // keycode is i32 containing ASCII '0'+code, so NUM_0 == '0'
-                            mode = keycode.unwrap_or_else(|| Keycode::NUM_0).into_i32() - '0' as i32;
+                            // mode = keycode.unwrap_or_else(|| Keycode::NUM_0).into_i32() - '0' as i32;
                             dirty = true;
                         }
                         _ => {}
