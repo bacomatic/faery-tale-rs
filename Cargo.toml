@@ -10,4 +10,4 @@ toml = "0.9.10"
 
 [dependencies.sdl2]
 version = "0.37.0"
-features = ["gfx", "mixer"]
+features = ["mixer"]

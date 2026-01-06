@@ -6,7 +6,6 @@ use game::font_texture::FontTexture;
 use game::game_library;
 
 use sdl2::event::Event;
-use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::mouse::Cursor;
 use sdl2::pixels::{Color, PixelFormatEnum};
@@ -138,12 +137,14 @@ pub fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
     let timer_subsystem = sdl_context.timer().expect("Could not initialize SDL2 timer subsystem");
 
-    let timer_frequency = timer_subsystem.performance_frequency();
-    println!("Performance timer frequency: {} ticks per second", timer_frequency);
+    let timer_frequency: f64 = timer_subsystem.performance_frequency() as f64;
 
-    let mut fps_man = FPSManager::new();
-    fps_man.set_framerate(60)?;
-    let mut last_frame_count: i32 = fps_man.get_frame_count();
+    // Use HP timer for game clock
+    // TODO: break out a real game clock class
+    let fps_ticks: f64 = 1.0 / 60.0;    // duration of 1/60 second game tick
+    let mut fps_accumulator: f64 = 0.0; // will use this to trigger the next game update
+                                        // this decouples us from the vsync (or lack thereof)
+    let mut last_frame_time = timer_subsystem.performance_counter() as f64;
 
     let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
         .resizable()
@@ -154,9 +155,10 @@ pub fn main() -> Result<(), String> {
     let mut canvas = window.into_canvas()
         .accelerated()
         .target_texture()
+        .present_vsync()
         .build().unwrap();
     // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio
-    // canvas.set_logical_size(640, 480).unwrap();
+    canvas.set_logical_size(640, 480).unwrap();
 
     // load the game library
     let game_lib = game_library::load_game_library(Path::new("faery.toml"));
@@ -218,18 +220,11 @@ pub fn main() -> Result<(), String> {
     let mut update_text = true;
     let mut clear_flag = true;
 
-    let mut render_count: usize = 0;
-    let mut render_elapsed_total: u64 = 0;
-    let mut event_elapsed_total: u64 = 0;
-    let mut delay_elapsed_total: u64 = 0;
-
     let mut kill_flag = false;
 
     let mut walker: Point = Point::new(0,20);
 
     'running: loop {
-        let start_event_counter = timer_subsystem.performance_counter();
-
         for event in event_pump.poll_iter() {
             match event {
                 // handle window events
@@ -269,6 +264,7 @@ pub fn main() -> Result<(), String> {
                             clear_flag = true;
                             update_text = true;
                             placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
+                            // FIXME: push placard render task, which will kick off the border renderer
                             dirty = true;
                         }
 
@@ -335,109 +331,88 @@ pub fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-        event_elapsed_total += timer_subsystem.performance_counter() - start_event_counter;
 
-        let start_render_counter = timer_subsystem.performance_counter();
+        // always do this, so even if we have no updates the accumulator keeps getting fed
+        let current_frame_time: f64 = timer_subsystem.performance_counter() as f64;
+        let mut frame_time = (current_frame_time - last_frame_time) / timer_frequency;
+        if frame_time > 0.25 {
+            // if we've lost more than 1/4 second, just drop the rest otherwise we'll cause ugly "catchup" effects
+            frame_time = 0.25;
+        }
+        last_frame_time = current_frame_time;
+        fps_accumulator += frame_time;
 
-        if dirty {
-            let mut still_dirty = false;
-            let current_frame = fps_man.get_frame_count();
-            let frame_count = current_frame - last_frame_count;
-            last_frame_count = current_frame;
+        while fps_accumulator >= fps_ticks {
+            fps_accumulator -= fps_ticks;
 
-            if frame_count > 1 {
-                println!("Frame skip detected: {}", frame_count);
-            }
-            let clear_canvas = clear_flag;
+            if dirty {
+                // FIXME: move render tasks to an object to track them and poll that instead
+                let mut still_dirty = false;
+                let clear_canvas = clear_flag;
 
-            let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
+                let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
 
-                if clear_flag == true {
-                    play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
-                    play_canvas.clear();
-                    clear_flag = false;
-                }
-
-                if placard_task.is_some() {
-                    let result = placard_task.as_mut().unwrap().update(&mut play_canvas, frame_count, None);
-                    if result == false {
-                        placard_task = None;
-                    } else {
-                        still_dirty = true;
+                    if clear_flag == true {
+                        play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
+                        play_canvas.clear();
+                        clear_flag = false;
                     }
-                }
 
-                if update_text {
-                    {
-                        let mut tex_borrow = font_texture.borrow_mut();
-                        let color = sys_palette.get_color(text_color.value).unwrap();
-                        tex_borrow.set_color_mod(color.r(), color.g(), color.b());
+                    if placard_task.is_some() {
+                        let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
+                        if result == false {
+                            placard_task = None;
+                        } else {
+                            still_dirty = true;
+                        }
                     }
-                    let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
-                    if result.is_some() {
-                        let placard = result.unwrap();
-                        placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+
+                    if update_text {
+                        {
+                            let mut tex_borrow = font_texture.borrow_mut();
+                            let color = sys_palette.get_color(text_color.value).unwrap();
+                            tex_borrow.set_color_mod(color.r(), color.g(), color.b());
+                        }
+                        let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
+                        if result.is_some() {
+                            let placard = result.unwrap();
+                            placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+                        }
+                        update_text = false;
                     }
-                    update_text = false;
-                }
-            });
+                });
 
-            if clear_canvas {
-                canvas.set_draw_color(Color::BLACK);
-                canvas.clear();
-            }
-
-            let screen_dest = Rect::new(0, 40, 640, 400);
-            canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
-
-            // The walker indicates active rendering, when it stops, there is nothing being drawn
-            {
-                canvas.set_draw_color(Color::BLACK);
-                canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
-
-                walker.x += 4;
-                if walker.x >= 640 {
-                    walker.x = 0;
+                if clear_canvas {
+                    canvas.set_draw_color(Color::BLACK);
+                    canvas.clear();
                 }
 
-                canvas.set_draw_color(Color::RED);
-                canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
-                // still_dirty = true;
+                let screen_dest = Rect::new(0, 40, 640, 400);
+                canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
+
+                // The walker indicates active rendering, when it stops, there is nothing being drawn
+                {
+                    canvas.set_draw_color(Color::BLACK);
+                    canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
+
+                    walker.x += 4;
+                    if walker.x >= 640 {
+                        walker.x = 0;
+                    }
+
+                    canvas.set_draw_color(Color::RED);
+                    canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
+                    // still_dirty = true;
+                }
+
+                canvas.present();
+
+                dirty = still_dirty;
             }
-
-            canvas.present();
-
-            dirty = still_dirty;
-        } else {
-            // keep this updated even if we are not redrawing
-            last_frame_count = fps_man.get_frame_count();
         }
 
-        render_elapsed_total += timer_subsystem.performance_counter() - start_render_counter;
-
-        // Game loop goes here
-
-        let start_delay_counter = timer_subsystem.performance_counter();
         if kill_flag {
             break 'running
-        } else {
-            fps_man.delay();
-        }
-        delay_elapsed_total += timer_subsystem.performance_counter() - start_delay_counter;
-
-
-        render_count += 1;
-        if render_count >= 60 {
-            let avg_render_time = (render_elapsed_total as f64 / render_count as f64) *1000.0 / timer_frequency as f64;
-            let avg_event_time = (event_elapsed_total as f64 / render_count as f64) *1000.0 / timer_frequency as f64;
-            let avg_delay_time = (delay_elapsed_total as f64 / render_count as f64) *1000.0 / timer_frequency as f64;
-
-            println!("Average loop times over {} frames: render {:.2} ms, event {:.2} ms, delay {:.2} ms", render_count,
-                avg_render_time, avg_event_time, avg_delay_time);
-            render_count = 0;
-            render_elapsed_total = 0;
-            event_elapsed_total = 0;
-            delay_elapsed_total = 0;
         }
     }
 
