@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::game::game_clock::GameClock;
 use crate::game::placard::*;
 use crate::game::cursor::CursorAsset;
 use crate::game::gfx::Palette;
@@ -135,16 +136,6 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
-    let timer_subsystem = sdl_context.timer().expect("Could not initialize SDL2 timer subsystem");
-
-    let timer_frequency: f64 = timer_subsystem.performance_frequency() as f64;
-
-    // Use HP timer for game clock
-    // TODO: break out a real game clock class
-    let fps_ticks: f64 = 1.0 / 60.0;    // duration of 1/60 second game tick
-    let mut fps_accumulator: f64 = 0.0; // will use this to trigger the next game update
-                                        // this decouples us from the vsync (or lack thereof)
-    let mut last_frame_time = timer_subsystem.performance_counter() as f64;
 
     let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
         .resizable()
@@ -183,7 +174,7 @@ pub fn main() -> Result<(), String> {
 
     let placard_names = game_lib.get_placard_names();
     let mut placard_cycler = NameCycler::new(placard_names);
-    placard_cycler.set("msg1");
+    placard_cycler.set("julian_start");
 
     let font_names = game_lib.get_font_names();
     let mut font_cycler = NameCycler::new(font_names);
@@ -223,6 +214,9 @@ pub fn main() -> Result<(), String> {
     let mut kill_flag = false;
 
     let mut walker: Point = Point::new(0,20);
+
+    let mut clock: GameClock = GameClock::new();
+    let mut last_minute: u32 = 0;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -265,6 +259,21 @@ pub fn main() -> Result<(), String> {
                             update_text = true;
                             placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
                             // FIXME: push placard render task, which will kick off the border renderer
+                            dirty = true;
+                        }
+
+                        Scancode::A => {
+                            if keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD) {
+                                // advance to 4:00 AM
+                                clock.advance_game_wall_clock_to(4, 0);
+                            } else {
+                                // jump ahead 2 hours
+                                clock.advance_game_wall_clock_by(2, 0);
+                            }
+                        }
+
+                        Scancode::B => {
+                            clear_flag = true;
                             dirty = true;
                         }
 
@@ -312,6 +321,15 @@ pub fn main() -> Result<(), String> {
                             }
                         }
 
+                        Scancode::Pause => {
+                            // toggle pause
+                            if clock.paused {
+                                clock.resume();
+                            } else {
+                                clock.pause();
+                            }
+                        }
+
                         Scancode::Num1 | Scancode::Num2 | Scancode::Num3 | Scancode::Num4
                         | Scancode::Num5 | Scancode::Num6 | Scancode::Num7 | Scancode::Num8
                         | Scancode::Num9 | Scancode::Num0 => {
@@ -332,83 +350,87 @@ pub fn main() -> Result<(), String> {
             }
         }
 
-        // always do this, so even if we have no updates the accumulator keeps getting fed
-        let current_frame_time: f64 = timer_subsystem.performance_counter() as f64;
-        let mut frame_time = (current_frame_time - last_frame_time) / timer_frequency;
-        if frame_time > 0.25 {
-            // if we've lost more than 1/4 second, just drop the rest otherwise we'll cause ugly "catchup" effects
-            frame_time = 0.25;
+        clock.update();
+        let (_day, _hour, minute) = clock.get_game_wall_clock();
+        if minute != last_minute {
+            last_minute = minute;
+            dirty = true;
         }
-        last_frame_time = current_frame_time;
-        fps_accumulator += frame_time;
 
-        while fps_accumulator >= fps_ticks {
-            fps_accumulator -= fps_ticks;
+        if dirty {
+            // FIXME: move render tasks to an object to track them and poll that instead
+            let mut still_dirty = false;
+            let clear_canvas = clear_flag;
 
-            if dirty {
-                // FIXME: move render tasks to an object to track them and poll that instead
-                let mut still_dirty = false;
-                let clear_canvas = clear_flag;
+            let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
 
-                let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
-
-                    if clear_flag == true {
-                        play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
-                        play_canvas.clear();
-                        clear_flag = false;
-                    }
-
-                    if placard_task.is_some() {
-                        let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
-                        if result == false {
-                            placard_task = None;
-                        } else {
-                            still_dirty = true;
-                        }
-                    }
-
-                    if update_text {
-                        {
-                            let mut tex_borrow = font_texture.borrow_mut();
-                            let color = sys_palette.get_color(text_color.value).unwrap();
-                            tex_borrow.set_color_mod(color.r(), color.g(), color.b());
-                        }
-                        let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
-                        if result.is_some() {
-                            let placard = result.unwrap();
-                            placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                        }
-                        update_text = false;
-                    }
-                });
-
-                if clear_canvas {
-                    canvas.set_draw_color(Color::BLACK);
-                    canvas.clear();
+                if clear_flag == true {
+                    play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
+                    play_canvas.clear();
+                    clear_flag = false;
                 }
 
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
-
-                // The walker indicates active rendering, when it stops, there is nothing being drawn
-                {
-                    canvas.set_draw_color(Color::BLACK);
-                    canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
-
-                    walker.x += 4;
-                    if walker.x >= 640 {
-                        walker.x = 0;
+                if placard_task.is_some() {
+                    let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
+                    if result == false {
+                        placard_task = None;
+                    } else {
+                        still_dirty = true;
                     }
-
-                    canvas.set_draw_color(Color::RED);
-                    canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
-                    // still_dirty = true;
                 }
 
-                canvas.present();
+                if update_text {
+                    {
+                        let mut tex_borrow = font_texture.borrow_mut();
+                        let color = sys_palette.get_color(text_color.value).unwrap();
+                        tex_borrow.set_color_mod(color.r(), color.g(), color.b());
+                    }
+                    let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
+                    if result.is_some() {
+                        let placard = result.unwrap();
+                        placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+                    }
+                    update_text = false;
+                }
+            });
 
-                dirty = still_dirty;
+            if clear_canvas {
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
             }
+
+            let screen_dest = Rect::new(0, 40, 640, 400);
+            canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
+
+            // The walker indicates active rendering, when it stops, there is nothing being drawn
+            {
+                canvas.set_draw_color(Color::BLACK);
+                canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
+
+                walker.x += 4;
+                if walker.x >= 640 {
+                    walker.x = 0;
+                }
+
+                canvas.set_draw_color(Color::RED);
+                canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
+            }
+
+            {
+                // draw game clock
+                let (day, hour, minute) = clock.get_game_wall_clock();
+                let time_str = format!("Day {:02} - Time {:02}:{:02}", day, hour, minute);
+                topaz_text.borrow().render_string(
+                    &time_str,
+                    &mut canvas,
+                    20,
+                    10
+                );
+            }
+
+            canvas.present();
+
+            dirty = still_dirty;
         }
 
         if kill_flag {

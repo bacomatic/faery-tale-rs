@@ -30,6 +30,15 @@ const FOURCC_BMHD: u32 = 0x424D4844; // 'BMHD'
 const FOURCC_CMAP: u32 = 0x434D4150; // 'CMAP'
 const FOURCC_BODY: u32 = 0x424F4459; // 'BODY'
 
+const MASK_NONE: u8 = 0;
+const MASK_HAS_MASK: u8 = 1;
+const MASK_HAS_TRANSPARENCY: u8 = 2;
+const MASK_LASSO: u8 = 3;
+
+const COMPRESSION_NONE: u8 = 0;
+const COMPRESSION_BYTE_RUN1: u8 = 1;
+
+
 #[derive(Debug)]
 pub struct IffImage {
     pub width: usize,

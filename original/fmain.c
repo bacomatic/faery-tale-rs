@@ -2396,6 +2396,7 @@ no_intro:
 
                 day_fade();
 
+                // if player is damaged, heal every 1024 ticks, roughly half an hour in game
                 if ((daynight & 0x3ff) == 0) {
                     if (anim_list[0].vitality < (15 + brave / 4) &&
                         anim_list[0].state != DEAD) {

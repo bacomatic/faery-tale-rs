@@ -11,6 +11,7 @@ copy_protect_junk = [
 ]
 
 [palettes]
+
 [palettes.introcolors]
 colors = [
     0x000, 0xFFF, 0xE00, 0xA00, 0xD80, 0xEC0, 0x390, 0x021,
@@ -37,6 +38,10 @@ colors = [
     0x223, 0x445, 0x889, 0xBBC, 0x521, 0x941, 0xF82, 0xFC7,
     0x040, 0x070, 0x0B0, 0x6F6, 0x005, 0x009, 0x00D, 0x37F,
     0xC00, 0xF50, 0xFA0, 0xFF6, 0xEB6, 0xEA5, 0x00F, 0xBDF
+]
+[palettes.copyjunk]
+colors = [
+    0x006, 0xFFF, 0x390, 0x000
 ]
 
 [cursors]
@@ -110,6 +115,8 @@ planes = [
 
 [placards]
 
+### hires 640x200 placards
+
 [placards.titletext]
 lines = [
     # {x = 56, y = 33, text = "\"The Faery Tale Adventure\""},
@@ -119,7 +126,7 @@ lines = [
     # {x = 40, y = 160, text = "Copyright 1986 MicroIllusions "}
 
     # The below lines seem to be from an earlier version, I'm using them
-    # because they align properly when rendered to a 640x400 texture
+    # because they align properly when rendered to a 640x200 texture
     # They still don't match the hero screen, notably the '&' is "and"
     # on the screenshot <shrug>
 
@@ -130,7 +137,19 @@ lines = [
     {x = 168, y = 160, text = "Copyright (C) 1986 MicroIllusions "}
 ]
 
-[placards.msg1]
+[placards.copy_junk]
+lines = [
+    {x = 128, y = 19, text = "So..." },
+    {x = 34, y = 65, text = "You, game seeker, would guide the" },
+    {x = 10, y = 75, text = "brothers to their destiny? You would" },
+    {x = 10, y = 85, text = "aid them and give directions? Answer," },
+    {x = 10, y = 95, text = "then, these three questions and prove" },
+    {x = 10, y = 105, text = "your fitness to be their advisor:" }
+]
+
+### lores 320x200 placards
+
+[placards.julian_start]
 lines = [
     {x = 20, y = 28, text = "   \"Rescue the Talisman!\""},
     {x = 20, y = 39, text = "was the Mayor's plea." },
@@ -142,7 +161,7 @@ lines = [
     {x = 20, y = 105, text = "recover it." }
 ]
 
-[placards.msg2]
+[placards.julian_dead]
 lines = [
     {x = 24, y = 44, text = "Unfortunately for Julian," },
     {x = 24, y = 55, text = "his luck had run out." },
@@ -150,7 +169,7 @@ lines = [
     {x = 24, y = 77, text = "Julian did not return..." }
 ]
 
-[placards.msg3]
+[placards.phillip_start]
 lines = [
     {x = 40, y = 44, text = "So Phillip set out," },
     {x = 40, y = 55, text = "determined to find his" },
@@ -158,7 +177,7 @@ lines = [
     {x = 40, y = 77, text = "the quest." }
 ]
 
-[placards.msg4]
+[placards.phillip_dead]
 lines = [
     {x = 24, y = 44, text = "But sadly, Phillip's" },
     {x = 24, y = 55, text = "cleverness could not save" },
@@ -166,7 +185,7 @@ lines = [
     {x = 24, y = 77, text = "as his older brother." }
 ]
 
-[placards.msg5]
+[placards.kevin_start]
 lines = [
     {x = 30, y = 30, text = "So Kevin took up the" },
     {x = 30, y = 41, text = "quest, risking all, for" },
@@ -177,14 +196,14 @@ lines = [
     {x = 30, y = 96, text = "good." }
 ]
 
-[placards.msg6]
+[placards.kevin_dead]
 lines = [
     {x = 20, y = 31, text = "And so ends our sad tale." },
     {x = 25, y = 45, text = "The Lesson of the Story:" },
     {x = 66, y = 88, text = "Stay at Home!" }
 ]
 
-[placards.msg7]
+[placards.player_win]
 lines = [
     {x = 28, y = 32, text = "Having defeated the" },
     {x = 28, y = 43, text = "villanous Necromancer" },
@@ -195,7 +214,7 @@ lines = [
     {x = 28, y = 98, text = "princess..." }
 ]
 
-[placards.msg8]
+[placards.rescue_katra]
 lines = [
     {x = 21, y = 26, text = "% had rescued Katra," },
     {x = 21, y = 37, text = "Princess of Marheim." },
@@ -206,7 +225,7 @@ lines = [
     {x = 21, y = 92, text = "be forsaken." }
 ]
 
-[placards.msg9]
+[placards.rescue_karla]
 lines = [
     {x = 21, y = 33, text = "% had rescued Karla" },
     {x = 21, y = 44, text = "(Katra's sister), Princess" },
@@ -217,7 +236,7 @@ lines = [
     {x = 21, y = 99, text = "could not be forsaken." }
 ]
 
-[placards.msg10]
+[placards.rescue_kandy]
 lines = [
     {x = 21, y = 26, text = "% had rescued Kandy" },
     {x = 21, y = 37, text = "(Katra's and Karla's" },
@@ -229,7 +248,7 @@ lines = [
     {x = 21, y = 103, text = "not be forsaken." }
 ]
 
-[placards.msg11]
+[placards.princess_home]
 lines = [
     {x = 71, y = 37, text = "After seeing the" },
     {x = 35, y = 48, text = "princess safely to her" },
@@ -239,17 +258,9 @@ lines = [
     {x = 35, y = 92, text = "out on his quest." }
 ]
 
-[placards.msg12]
-lines = [
-    {x = 128, y = 19, text = "So..." },
-    {x = 34, y = 65, text = "You, game seeker, would guide the" },
-    {x = 10, y = 75, text = "brothers to their destiny? You would" },
-    {x = 10, y = 85, text = "aid them and give directions? Answer," },
-    {x = 10, y = 95, text = "then, these three questions and prove" },
-    {x = 10, y = 105, text = "your fitness to be their advisor:" }
-]
 
 [fonts]
+
 [fonts.amber]
 file = "game/fonts/amber.font"
 
@@ -259,23 +270,38 @@ file = "game/fonts/topaz.font"
 [images]
 
 # Book pages
+# book background image
 [images.page0]
 file = "game/page0"
+
+# Julian's portrait
 [images.p1a]
 file = "game/p1a"
+
+# Julian bio
 [images.p1b]
 file = "game/p1b"
+
+# Phillip's portrait
 [images.p2a]
 file = "game/p2a"
+
+# Phillip bio
 [images.p2b]
 file = "game/p2b"
+
+# Kevin's portrait
 [images.p3a]
 file = "game/p3a"
+
+# Kevin bio
 [images.p3b]
 file = "game/p3b"
 
+# Background image for text scroll area
 [images.hiscreen]
 file = "game/hiscreen"
 
+# You can only see this if you win!
 [images.winpic]
 file = "game/winpic"

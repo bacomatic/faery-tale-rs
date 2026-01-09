@@ -5,6 +5,7 @@ pub mod byteops;
 pub mod cursor;
 pub mod font;
 pub mod font_texture;
+pub mod game_clock;
 pub mod game_library;
 pub mod gfx;
 pub mod hunk;
