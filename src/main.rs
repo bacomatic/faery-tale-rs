@@ -5,7 +5,7 @@ mod game;
 use game::font_texture::FontTexture;
 use game::game_library;
 
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::mouse::Cursor;
 use sdl2::pixels::{Color, PixelFormatEnum};
@@ -17,6 +17,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::game::game_clock::GameClock;
+use crate::game::settings::{self, GameSettings};
 use crate::game::placard::*;
 use crate::game::cursor::CursorAsset;
 use crate::game::gfx::Palette;
@@ -134,12 +135,30 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
 }
 
 pub fn main() -> Result<(), String> {
+    let mut settings: GameSettings = settings::GameSettings::load();
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
 
-    let window = video_subsystem.window("The Faery Tale Adventure", 640, 480)
-        .resizable()
-        .position_centered()
+
+    let mut width = 640;
+    let mut height = 480;
+    if settings.window_size.is_some() {
+        (width, height) = settings.window_size.unwrap();
+    }
+
+    let mut window_builder = video_subsystem.window("The Faery Tale Adventure", width, height);
+    window_builder.resizable();
+
+    // TODO: full screen mode, use window size for screen resolution
+    if settings.window_position.is_some() {
+        let (x, y) = settings.window_position.unwrap();
+        window_builder.position(x, y);
+    } else {
+        window_builder.position_centered();
+    }
+
+    let window = window_builder
         .build()
         .unwrap();
 
@@ -222,8 +241,17 @@ pub fn main() -> Result<(), String> {
         for event in event_pump.poll_iter() {
             match event {
                 // handle window events
-                Event::Window { .. } => {
-                    // just redraw the window
+                Event::Window { win_event, window_id, .. } => {
+                    if window_id != canvas.window().id() {
+                        // ignore events for other windows
+                        continue;
+                    }
+
+                    if let WindowEvent::Moved(x, y) = win_event {
+                        settings.set_window_position((x, y));
+                    } else if let WindowEvent::Resized(w, h) = win_event {
+                        settings.set_window_size((w as u32, h as u32));
+                    }
                     dirty = true;
                 },
                 Event::Quit { .. } |
@@ -348,6 +376,13 @@ pub fn main() -> Result<(), String> {
                 },
                  */
                 _ => {}
+            }
+        }
+
+        if settings.dirty {
+            let result = settings.save();
+            if result.is_err() {
+                println!("Error saving settings: {}", result.err().unwrap());
             }
         }
 
