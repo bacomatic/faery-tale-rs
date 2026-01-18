@@ -321,7 +321,8 @@ pub fn main() -> Result<(), String> {
                             }
                         }
 
-                        Scancode::Pause => {
+                        Scancode::Pause |
+                        Scancode::P => {
                             // toggle pause
                             if clock.paused {
                                 clock.resume();
@@ -363,6 +364,8 @@ pub fn main() -> Result<(), String> {
             let clear_canvas = clear_flag;
 
             let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
+
+                play_canvas.set_viewport(Rect::new(16, 0, 288, 400));
 
                 if clear_flag == true {
                     play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));

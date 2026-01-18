@@ -11,7 +11,9 @@ pub struct GameClock {
     // game clock
     ticker: GameTicker,
 
-    pub total_ticks: u64, // total number of ticks since start
+    mono_base: Instant, // time when the game clock was started
+    pub mono_ticks: u64, // total number of ticks since start, monotonic, not affected by pauses
+
     pub game_ticks: u64, // number of game ticks passed total, resets on death/start
     pub paused: bool,
 }
@@ -63,7 +65,7 @@ pub enum DayPhase {
 }
 
 /*
-    * Original game clock update logic (from fmain.c):
+    Original game clock update logic (from fmain.c):
 
     if (!freeze_timer) /* no time in timestop */
         if ((daynight++) >= 24000)
@@ -112,7 +114,8 @@ impl GameClock {
     pub fn new() -> GameClock {
         GameClock {
             ticker: GameTicker::new(),
-            total_ticks: 0,
+            mono_base: Instant::now(),
+            mono_ticks: 0,
             game_ticks: 0,
             paused: false,
         }
@@ -123,6 +126,10 @@ impl GameClock {
      * Call this periodically to keep the clock accurate, generally once per frame.
      */
     pub fn update(&mut self) {
+        // always update mono ticks, since Instant is monotonic, this is easy
+        let mono_duration = Instant::now().duration_since(self.mono_base).as_nanos();
+        self.mono_ticks = (mono_duration / NANOS_PER_TICK) as u64;
+
         if self.paused {
             return;
         }
@@ -130,7 +137,7 @@ impl GameClock {
 
         let elapsed_ticks = self.ticker.get_elapsed_ticks();
         if elapsed_ticks > 0 {
-            self.total_ticks += elapsed_ticks;
+            self.mono_ticks += elapsed_ticks;
             self.game_ticks += elapsed_ticks;
         }
     }
@@ -150,7 +157,7 @@ impl GameClock {
         // make sure we're up to date before pausing
         self.update();
         self.paused = true;
-        println!("Game clock paused at {} total ticks, {} game ticks", self.total_ticks, self.game_ticks);
+        println!("Game clock paused at {} total ticks, {} game ticks", self.mono_ticks, self.game_ticks);
     }
 
     /**
@@ -159,7 +166,7 @@ impl GameClock {
     pub fn resume(&mut self) {
         self.ticker.reset();
         self.paused = false;
-        println!("Game clock resumed at {} total ticks, {} game ticks", self.total_ticks, self.game_ticks);
+        println!("Game clock resumed at {} total ticks, {} game ticks", self.mono_ticks, self.game_ticks);
     }
 
     /**
