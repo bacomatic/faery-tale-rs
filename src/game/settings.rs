@@ -144,16 +144,15 @@ mod tests {
     }
 
     #[test]
-    fn test_window_frame() {
+    fn test_window_settings() {
         let mut settings = GameSettings::new();
-        let rect = sdl2::rect::Rect::new(100, 100, 800, 600);
-        settings.set_window_frame(rect);
-        assert_eq!(settings.get_window_frame(), Some(rect));
+        settings.set_window_size((1024, 768));
+        assert_eq!(settings.window_size, Some((1024, 768)));
         assert!(settings.dirty);
         settings.dirty = false; // reset dirty flag
 
-        settings.set_fullscreen(true);
-        assert!(settings.fullscreen);
+        settings.set_window_position((100, 100));
+        assert_eq!(settings.window_position, Some((100, 100)));
         assert!(settings.dirty);
     }
 }

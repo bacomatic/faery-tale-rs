@@ -1,6 +1,6 @@
 
 use crate::game::{
-    placard::Placard, cursor::CursorAsset, font::{DiskFont, FontAsset}, gfx::Palette, iff_image::{IffImage, ImageAsset}
+    placard::Placard, cursor::CursorAsset, font::{DiskFont, FontAsset}, colors::Palette, iff_image::{IffImage, ImageAsset}
 };
 
 use serde::Deserialize;
@@ -50,6 +50,14 @@ impl GameLibrary {
             names.push(name.clone());
         }
         names
+    }
+
+    pub fn get_image(&self, index: usize) -> Option<&ImageAsset> {
+        if index >= self.images.len() {
+            return None;
+        }
+        let key = self.images.keys().nth(index).unwrap();
+        self.images.get(key)
     }
 
     pub fn find_image(&self, name: &str) -> Option<&ImageAsset> {

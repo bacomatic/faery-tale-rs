@@ -1,6 +1,6 @@
 
 use crate::game::font_texture::FontTexture;
-use crate::game::gfx::Palette;
+use crate::game::colors::Palette;
 use crate::game::render_task::RenderTask;
 
 use sdl2::pixels::Color;

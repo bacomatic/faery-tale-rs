@@ -33,7 +33,7 @@ impl From<[u8; 3]> for RGB4 {
 
 impl From<u16> for RGB4 {
     fn from(c: u16) -> RGB4 {
-        RGB4 { color: c }
+        RGB4 { color: c & 0x0FFF } // mask to 12 bits
     }
 }
 
@@ -162,10 +162,100 @@ mod tests {
         "#;
 
         let palette: Palette = toml::from_str(toml_data).unwrap();
-        assert_eq!(palette.colors.len(), 3);
+        assert_eq!(palette.colors.len(), 4);
         assert_eq!(palette.colors[0].color, 0x0ACE);
         assert_eq!(palette.colors[1].color, 0x0A50);
         assert_eq!(palette.colors[2].color, 0x0FFF);
         assert_eq!(palette.colors[3].color, 0x0BCD); // top nibble of 0xABCD is truncated
+
+        // make sure colors are in the expected places
+        assert_eq!(palette.colors[0].r(), 0xAA);
+        assert_eq!(palette.colors[0].g(), 0xCC);
+        assert_eq!(palette.colors[0].b(), 0xEE);
     }
+
+    #[test]
+    fn test_palette_to_rgba32_table() {
+        let toml_data = r#"
+            colors = [
+                0x000, 0xFFF, 0xE00, 0xA00, 0xD80, 0xEC0, 0x390, 0x021,
+                0xEEB, 0xEDA, 0xEEA, 0xCB8, 0xA95, 0x973, 0x840, 0x620,
+                0xA52, 0xC74, 0xD96, 0xFCA, 0x449, 0x444, 0xDC9, 0x668,
+                0x33F, 0x888, 0xA60, 0xAAF, 0xBBB, 0xCCF, 0xDDD, 0xEEE
+            ]
+        "#;
+        let palette: Palette = toml::from_str(toml_data).unwrap();
+        let four_table = palette.to_rgba32_table(2).unwrap();
+        assert_eq!(four_table.len(), 4);
+        assert_eq!(four_table[0], 0x000000FF);
+        assert_eq!(four_table[1], 0xFFFFFFFF);
+        assert_eq!(four_table[2], 0xEE0000FF);
+        assert_eq!(four_table[3], 0xAA0000FF);
+
+        let eight_table = palette.to_rgba32_table(3).unwrap();
+        assert_eq!(eight_table.len(), 8);
+        assert_eq!(eight_table[0], 0x000000FF);
+        assert_eq!(eight_table[1], 0xFFFFFFFF);
+        assert_eq!(eight_table[2], 0xEE0000FF);
+        assert_eq!(eight_table[3], 0xAA0000FF);
+        assert_eq!(eight_table[4], 0xDD8800FF);
+        assert_eq!(eight_table[5], 0xEECC00FF);
+        assert_eq!(eight_table[6], 0x339900FF);
+        assert_eq!(eight_table[7], 0x002211FF);
+
+        let sixteen_table = palette.to_rgba32_table(4).unwrap();
+        assert_eq!(sixteen_table.len(), 16);
+        assert_eq!(sixteen_table[0], 0x000000FF);
+        assert_eq!(sixteen_table[1], 0xFFFFFFFF);
+        assert_eq!(sixteen_table[2], 0xEE0000FF);
+        assert_eq!(sixteen_table[3], 0xAA0000FF);
+        assert_eq!(sixteen_table[4], 0xDD8800FF);
+        assert_eq!(sixteen_table[5], 0xEECC00FF);
+        assert_eq!(sixteen_table[6], 0x339900FF);
+        assert_eq!(sixteen_table[7], 0x002211FF);
+        assert_eq!(sixteen_table[8], 0xEEEEBBFF);
+        assert_eq!(sixteen_table[9], 0xEEDDAAFF);
+        assert_eq!(sixteen_table[10], 0xEEEEAAFF);
+        assert_eq!(sixteen_table[11], 0xCCBB88FF);
+        assert_eq!(sixteen_table[12], 0xAA9955FF);
+        assert_eq!(sixteen_table[13], 0x997733FF);
+        assert_eq!(sixteen_table[14], 0x884400FF);
+        assert_eq!(sixteen_table[15], 0x662200FF);
+
+        let thirtytwo_table = palette.to_rgba32_table(5).unwrap();
+        assert_eq!(thirtytwo_table.len(), 32);
+        assert_eq!(thirtytwo_table[0], 0x000000FF);
+        assert_eq!(thirtytwo_table[1], 0xFFFFFFFF);
+        assert_eq!(thirtytwo_table[2], 0xEE0000FF);
+        assert_eq!(thirtytwo_table[3], 0xAA0000FF);
+        assert_eq!(thirtytwo_table[4], 0xDD8800FF);
+        assert_eq!(thirtytwo_table[5], 0xEECC00FF);
+        assert_eq!(thirtytwo_table[6], 0x339900FF);
+        assert_eq!(thirtytwo_table[7], 0x002211FF);
+        assert_eq!(thirtytwo_table[8], 0xEEEEBBFF);
+        assert_eq!(thirtytwo_table[9], 0xEEDDAAFF);
+        assert_eq!(thirtytwo_table[10], 0xEEEEAAFF);
+        assert_eq!(thirtytwo_table[11], 0xCCBB88FF);
+        assert_eq!(thirtytwo_table[12], 0xAA9955FF);
+        assert_eq!(thirtytwo_table[13], 0x997733FF);
+        assert_eq!(thirtytwo_table[14], 0x884400FF);
+        assert_eq!(thirtytwo_table[15], 0x662200FF);
+        assert_eq!(thirtytwo_table[16], 0xAA5522FF);
+        assert_eq!(thirtytwo_table[17], 0xCC7744FF);
+        assert_eq!(thirtytwo_table[18], 0xDD9966FF);
+        assert_eq!(thirtytwo_table[19], 0xFFCCAAFF);
+        assert_eq!(thirtytwo_table[20], 0x444499FF);
+        assert_eq!(thirtytwo_table[21], 0x444444FF);
+        assert_eq!(thirtytwo_table[22], 0xDDCC99FF);
+        assert_eq!(thirtytwo_table[23], 0x666688FF);
+        assert_eq!(thirtytwo_table[24], 0x3333FFFF);
+        assert_eq!(thirtytwo_table[25], 0x888888FF);
+        assert_eq!(thirtytwo_table[26], 0xAA6600FF);
+        assert_eq!(thirtytwo_table[27], 0xAAAAFFFF);
+        assert_eq!(thirtytwo_table[28], 0xBBBBBBFF);
+        assert_eq!(thirtytwo_table[29], 0xCCCCFFFF);
+        assert_eq!(thirtytwo_table[30], 0xDDDDDDFF);
+        assert_eq!(thirtytwo_table[31], 0xEEEEEEFF);
+    }
+
 }

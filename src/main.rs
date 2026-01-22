@@ -18,9 +18,9 @@ use std::rc::Rc;
 
 use crate::game::game_clock::GameClock;
 use crate::game::settings::{self, GameSettings};
-use crate::game::placard::*;
+use crate::game::{image_texture, placard::*};
 use crate::game::cursor::CursorAsset;
-use crate::game::gfx::Palette;
+use crate::game::colors::Palette;
 use crate::game::render_task::RenderTask;
 
 #[derive(Debug, Clone, Copy)]
@@ -179,7 +179,7 @@ pub fn main() -> Result<(), String> {
 
     let tex_maker = canvas.texture_creator();
 
-    let sys_palette = game_lib.find_palette("pagecolors").unwrap();
+    let sys_palette = game_lib.find_palette("introcolors").unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut color_index = 0;
@@ -216,6 +216,53 @@ pub fn main() -> Result<(), String> {
     let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
     let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
 
+
+    // Build the image textures, using a shared texture
+    let image_atlas_bounds = Rect::new(0, 0, 4096, 4096);
+    let image_texture = Rc::new(RefCell::new(tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::RGBA32), image_atlas_bounds.width(), image_atlas_bounds.height()).unwrap()));
+
+    let mut next_x: u32 = 0;
+    let mut next_y: u32 = 0;
+    let mut max_y: u32 = 0; // track tallest image in the row, we won't bother packing tightly
+    let mut image_textures: Vec<image_texture::ImageTexture> = Vec::new();
+
+    for index in 0 .. game_lib.get_image_count() {
+        let img = game_lib.get_image(index).unwrap();
+        let iff_image = &img.image;
+        if iff_image.is_none() {
+            println!("Warning: ImageAsset {} has no IffImage data", img.path);
+            continue;
+        }
+        let iff_image = iff_image.as_ref().unwrap();
+
+        // calculate position in texture atlas
+        if next_x + iff_image.width as u32 > image_atlas_bounds.width() {
+            // move to next row
+            next_x = 0;
+            next_y += max_y;
+            max_y = 0;
+        }
+        let image_texture_bounds = Rect::new(
+            next_x as i32,
+            next_y as i32,
+            iff_image.width as u32,
+            iff_image.height as u32
+        );
+        let mut img_tex = image_texture::ImageTexture::new(
+            iff_image,
+            &image_texture_bounds,
+            Rc::downgrade(&image_texture)
+        );
+        img_tex.update(&sys_palette, iff_image.transparent_color);
+
+        next_x += iff_image.width as u32;
+        if iff_image.height as u32 > max_y {
+            max_y = iff_image.height as u32;
+        }
+        image_textures.push(img_tex);
+    }
+    let mut image_cycler = CycleInt::new(image_textures.len() - 1);
+
     let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::BGRA8888, 320, 200).unwrap();
 
     let mut dirty: bool = true;
@@ -236,6 +283,8 @@ pub fn main() -> Result<(), String> {
 
     let mut clock: GameClock = GameClock::new();
     let mut last_minute: u32 = 0;
+
+    let mut mode = 0;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -259,7 +308,7 @@ pub fn main() -> Result<(), String> {
                 => {
                     kill_flag = true;
                 },
-                Event::KeyDown {scancode, keymod, repeat: false, .. }
+                Event::KeyDown {scancode, keymod, repeat: false, keycode, .. }
                 => {
                     // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
@@ -282,11 +331,25 @@ pub fn main() -> Result<(), String> {
                         }
                         Scancode::Left | Scancode::Right => {
                             let increase = sc == Scancode::Right;
-                            placard_cycler.modify(increase);
-                            clear_flag = true;
-                            update_text = true;
-                            placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
-                            // FIXME: push placard render task, which will kick off the border renderer
+                            match mode {
+                                1 => {
+                                    // placard mode
+                                    placard_cycler.modify(increase);
+                                    clear_flag = true;
+                                    update_text = true;
+                                    placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
+                                },
+                                2 => {
+                                    // image mode
+                                    if increase {
+                                        image_cycler.inc();
+                                    } else {
+                                        image_cycler.dec();
+                                    }
+                                    clear_flag = true;
+                                },
+                                _ => {}
+                            }
                             dirty = true;
                         }
 
@@ -363,7 +426,12 @@ pub fn main() -> Result<(), String> {
                         | Scancode::Num5 | Scancode::Num6 | Scancode::Num7 | Scancode::Num8
                         | Scancode::Num9 | Scancode::Num0 => {
                             // keycode is i32 containing ASCII '0'+code, so NUM_0 == '0'
-                            // mode = keycode.unwrap_or_else(|| Keycode::NUM_0).into_i32() - '0' as i32;
+                            mode = keycode.unwrap_or_else(|| Keycode::NUM_0).into_i32() - '0' as i32;
+                            if mode == 1 {
+                                update_text = true;
+                                placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
+                            }
+                            clear_flag = true;
                             dirty = true;
                         }
                         _ => {}
@@ -408,27 +476,38 @@ pub fn main() -> Result<(), String> {
                     clear_flag = false;
                 }
 
-                if placard_task.is_some() {
-                    let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
-                    if result == false {
-                        placard_task = None;
-                    } else {
-                        still_dirty = true;
-                    }
-                }
+                match mode {
+                    1 => {
+                        // Draw placards
+                        if placard_task.is_some() {
+                            let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
+                            if result == false {
+                                placard_task = None;
+                            } else {
+                                still_dirty = true;
+                            }
+                        }
 
-                if update_text {
-                    {
-                        let mut tex_borrow = font_texture.borrow_mut();
-                        let color = sys_palette.get_color(text_color.value).unwrap();
-                        tex_borrow.set_color_mod(color.r(), color.g(), color.b());
-                    }
-                    let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
-                    if result.is_some() {
-                        let placard = result.unwrap();
-                        placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                    }
-                    update_text = false;
+                        if update_text {
+                            {
+                                let mut tex_borrow = font_texture.borrow_mut();
+                                let color = sys_palette.get_color(text_color.value).unwrap();
+                                tex_borrow.set_color_mod(color.r(), color.g(), color.b());
+                            }
+                            let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
+                            if result.is_some() {
+                                let placard = result.unwrap();
+                                placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
+                            }
+                            update_text = false;
+                        }
+                    },
+                    2 => {
+                        // draw images
+                        let img_tex = &image_textures[image_cycler.value];
+                        img_tex.draw(&mut play_canvas, 0, 0);
+                    },
+                    _ => {}
                 }
             });
 
