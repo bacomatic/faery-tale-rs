@@ -13,6 +13,7 @@ pub struct GameClock {
 
     mono_base: Instant, // time when the game clock was started
     pub mono_ticks: u64, // total number of ticks since start, monotonic, not affected by pauses
+    last_mono_ticks: u64, // mono_ticks at the previous update() call, for computing delta
 
     pub game_ticks: u64, // number of game ticks passed total, resets on death/start
     pub paused: bool,
@@ -116,6 +117,7 @@ impl GameClock {
             ticker: GameTicker::new(),
             mono_base: Instant::now(),
             mono_ticks: 0,
+            last_mono_ticks: 0,
             game_ticks: 0,
             paused: false,
         }
@@ -124,22 +126,27 @@ impl GameClock {
     /**
      * Update the game clock, calculating elapsed ticks since last update.
      * Call this periodically to keep the clock accurate, generally once per frame.
+     * Returns the number of monotonic ticks elapsed since the last call to update().
      */
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> u32 {
         // always update mono ticks, since Instant is monotonic, this is easy
         let mono_duration = Instant::now().duration_since(self.mono_base).as_nanos();
         self.mono_ticks = (mono_duration / NANOS_PER_TICK) as u64;
 
+        let delta = (self.mono_ticks - self.last_mono_ticks) as u32;
+        self.last_mono_ticks = self.mono_ticks;
+
         if self.paused {
-            return;
+            return delta;
         }
         self.ticker.update();
 
         let elapsed_ticks = self.ticker.get_elapsed_ticks();
         if elapsed_ticks > 0 {
-            self.mono_ticks += elapsed_ticks;
             self.game_ticks += elapsed_ticks;
         }
+
+        delta
     }
 
     /**

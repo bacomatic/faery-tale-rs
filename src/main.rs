@@ -2,8 +2,12 @@ extern crate sdl2;
 
 mod game;
 
+use clap::Parser;
+
 use game::font_texture::FontTexture;
 use game::game_library;
+
+use std::collections::HashMap;
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Scancode};
@@ -16,94 +20,23 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::game::debug_window::{DebugWindow, DebugState};
 use crate::game::game_clock::GameClock;
 use crate::game::settings::{self, GameSettings};
-use crate::game::{image_texture, placard::*};
+use crate::game::image_texture;
 use crate::game::cursor::CursorAsset;
 use crate::game::colors::Palette;
-use crate::game::render_task::RenderTask;
+use crate::game::scene::{Scene, SceneResources, SceneResult};
+use crate::game::intro_scene::IntroScene;
+use crate::game::copy_protect_scene::CopyProtectScene;
+use crate::game::placard_scene::PlacardScene;
 
-#[derive(Debug, Clone, Copy)]
-struct CycleInt {
-    pub value: usize,
-    pub max: usize
-}
-
-impl CycleInt {
-    pub fn new(max: usize) -> CycleInt {
-        CycleInt {value: 0, max: max}
-    }
-
-    pub fn modify(&mut self, increase: bool) {
-        if increase {
-            self.inc();
-        } else {
-            self.dec();
-        }
-    }
-
-    pub fn set(&mut self, value: usize) -> usize {
-        if value > self.max {
-            self.value = self.max;
-        } else {
-            self.value = value;
-        }
-        self.value
-    }
-
-    pub fn inc(&mut self) -> usize {
-        self.value += 1;
-        if self.value > self.max {
-            self.value = 0;
-        }
-        self.value
-    }
-
-    pub fn dec(&mut self) -> usize {
-        if self.value == 0 {
-            self.value = self.max;
-        } else {
-            self.value -= 1;
-        }
-        self.value
-    }
-}
-
-pub struct NameCycler {
-    names: Vec<String>,
-    index: CycleInt
-}
-
-impl NameCycler {
-    pub fn new(names: Vec<String>) -> NameCycler {
-        let max = if names.len() == 0 { 0 } else { names.len() - 1 };
-        NameCycler {
-            names,
-            index: CycleInt::new(max)
-        }
-    }
-
-    pub fn get_current(&self) -> Option<&String> {
-        if self.names.len() == 0 {
-            None
-        } else {
-            Some(&self.names[self.index.value])
-        }
-    }
-
-    pub fn modify(&mut self, increase: bool) {
-        self.index.modify(increase);
-    }
-
-    pub fn set(&mut self, name: &str) -> Option<usize> {
-        for (i, n) in self.names.iter().enumerate() {
-            if n == name {
-                self.index.set(i);
-                return Some(i);
-            }
-        }
-        None
-    }
+#[derive(Parser, Debug)]
+#[command(name = "fmainrs", about = "The Faery Tale Adventure")]
+struct Cli {
+    /// Activate debug mode (opens a separate debug window)
+    #[arg(long, short)]
+    debug: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -135,6 +68,8 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
 }
 
 pub fn main() -> Result<(), String> {
+    let cli = Cli::parse();
+
     let mut settings: GameSettings = settings::GameSettings::load();
 
     let sdl_context = sdl2::init().unwrap();
@@ -182,7 +117,6 @@ pub fn main() -> Result<(), String> {
     let sys_palette = game_lib.find_palette("introcolors").unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut color_index = 0;
 
     let mut mouse_cursor: Option<Cursor> = None;
 
@@ -190,14 +124,6 @@ pub fn main() -> Result<(), String> {
     if pointer.is_some() {
         mouse_cursor = set_mouse(pointer.unwrap(), &sys_palette);
     }
-
-    let placard_names = game_lib.get_placard_names();
-    let mut placard_cycler = NameCycler::new(placard_names);
-    placard_cycler.set("julian_start");
-
-    let font_names = game_lib.get_font_names();
-    let mut font_cycler = NameCycler::new(font_names);
-    font_cycler.set("amber");
 
     // TODO: Move somewhere else....
     let amber = game_lib.find_font("amber", 9).unwrap();
@@ -211,13 +137,16 @@ pub fn main() -> Result<(), String> {
     let atlas_bounds = amber_bounds.union(topaz_bounds);
 
     // Build font textures, create a single shared texture for all font atlases
-    let font_texture = Rc::new(RefCell::new(tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::BGRA8888), atlas_bounds.width(), atlas_bounds.height()).unwrap()));
+    let mut ft = tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::RGBA32), atlas_bounds.width(), atlas_bounds.height()).unwrap();
+    ft.set_blend_mode(sdl2::render::BlendMode::Blend);
+    let font_texture = Rc::new(RefCell::new(ft));
 
-    let amber_text = Rc::new(RefCell::new(FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture))));
-    let topaz_text = Rc::new(RefCell::new(FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture))));
+    let amber_font = FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture));
+    let topaz_font = FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture));
 
 
-    // Build the image textures, using a shared texture
+    // Build the image textures, using a shared texture.
+    // Also build a name-to-index map so scenes can look up images by name.
     let image_atlas_bounds = Rect::new(0, 0, 4096, 4096);
     let image_texture = Rc::new(RefCell::new(tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::RGBA32), image_atlas_bounds.width(), image_atlas_bounds.height()).unwrap()));
 
@@ -225,9 +154,11 @@ pub fn main() -> Result<(), String> {
     let mut next_y: u32 = 0;
     let mut max_y: u32 = 0; // track tallest image in the row, we won't bother packing tightly
     let mut image_textures: Vec<image_texture::ImageTexture> = Vec::new();
+    let mut image_name_map: HashMap<String, usize> = HashMap::new();
 
-    for index in 0 .. game_lib.get_image_count() {
-        let img = game_lib.get_image(index).unwrap();
+    let image_names = game_lib.get_image_names();
+    for name in &image_names {
+        let img = game_lib.find_image(name).unwrap();
         let iff_image = &img.image;
         if iff_image.is_none() {
             println!("Warning: ImageAsset {} has no IffImage data", img.path);
@@ -253,28 +184,25 @@ pub fn main() -> Result<(), String> {
             &image_texture_bounds,
             Rc::downgrade(&image_texture)
         );
-        img_tex.update(&sys_palette, iff_image.transparent_color);
+        if iff_image.colormap.is_some() {
+            let colormap = iff_image.colormap.as_ref().unwrap();
+            img_tex.update(colormap, iff_image.transparent_color);
+        } else {
+            img_tex.update(&sys_palette, iff_image.transparent_color);
+        }
 
         next_x += iff_image.width as u32;
         if iff_image.height as u32 > max_y {
             max_y = iff_image.height as u32;
         }
+        image_name_map.insert(name.clone(), image_textures.len());
         image_textures.push(img_tex);
     }
-    let mut image_cycler = CycleInt::new(image_textures.len() - 1);
 
-    let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::BGRA8888, 320, 200).unwrap();
+    let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
 
     let mut dirty: bool = true;
 
-    let mut text_color: CycleInt = CycleInt::new(sys_palette.colors.len() - 1);
-    text_color.set(24);
-
-    // use a weak reference here because we need to be able to swap fonts
-    let mut text_font = Rc::downgrade(&amber_text);
-
-    let mut placard_task: Option<Box<dyn RenderTask>> = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
-    let mut update_text = true;
     let mut clear_flag = true;
 
     let mut kill_flag = false;
@@ -284,10 +212,66 @@ pub fn main() -> Result<(), String> {
     let mut clock: GameClock = GameClock::new();
     let mut last_minute: u32 = 0;
 
-    let mut mode = 0;
+    // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
+    // The scene_phase tracks what to start next when a scene completes.
+    enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay }
+    let mut scene_phase = ScenePhase::Intro;
+    let mut active_scene: Option<Box<dyn Scene>> = Some(Box::new(IntroScene::new()));
+
+    // Debug window (separate SDL2 window), created only when --debug is passed
+    let mut debug_window: Option<DebugWindow> = if cli.debug {
+        let game_pos = settings.window_position;
+        let game_size = settings.window_size.unwrap_or((width, height));
+        match DebugWindow::new(&video_subsystem, &topaz, &settings, game_pos, game_size) {
+            Ok(dw) => {
+                println!("Debug window opened");
+                Some(dw)
+            }
+            Err(e) => {
+                println!("Warning: could not create debug window: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Game-side FPS tracking
+    let mut game_frame_count: u64 = 0;
+    let mut game_fps_time = std::time::Instant::now();
+    let mut game_fps: f64 = 0.0;
+
+    // Pre-compute sorted name lists for the debug window tabs
+    let debug_placard_names = game_lib.get_placard_names();
+    let debug_image_names = game_lib.get_image_names();
 
     'running: loop {
+        let delta_ticks = clock.update();
+
+        // Update game FPS counter
+        game_frame_count += 1;
+        let fps_elapsed = game_fps_time.elapsed().as_secs_f64();
+        if fps_elapsed >= 1.0 {
+            game_fps = game_frame_count as f64 / fps_elapsed;
+            game_frame_count = 0;
+            game_fps_time = std::time::Instant::now();
+        }
+
         for event in event_pump.poll_iter() {
+            // Let the debug window consume its own events first
+            if let Some(ref mut dw) = debug_window {
+                if dw.handle_event(&event, &mut settings) {
+                    continue;
+                }
+            }
+
+            // Let the active scene consume events first
+            if let Some(ref mut scene) = active_scene {
+                if scene.handle_event(&event) {
+                    continue; // scene consumed this event
+                }
+            }
+
             match event {
                 // handle window events
                 Event::Window { win_event, window_id, .. } => {
@@ -308,7 +292,7 @@ pub fn main() -> Result<(), String> {
                 => {
                     kill_flag = true;
                 },
-                Event::KeyDown {scancode, keymod, repeat: false, keycode, .. }
+                Event::KeyDown {scancode, keymod, repeat: false, .. }
                 => {
                     // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
@@ -317,42 +301,6 @@ pub fn main() -> Result<(), String> {
 
                     let sc = scancode.unwrap();
                     match sc {
-                        Scancode::Up => {
-                            color_index = (color_index + 1) % 4;
-                            dirty = true;
-                        }
-                        Scancode::Down => {
-                            if color_index == 0 {
-                                color_index = 3;
-                            } else {
-                                color_index -= 1;
-                            }
-                            dirty = true;
-                        }
-                        Scancode::Left | Scancode::Right => {
-                            let increase = sc == Scancode::Right;
-                            match mode {
-                                1 => {
-                                    // placard mode
-                                    placard_cycler.modify(increase);
-                                    clear_flag = true;
-                                    update_text = true;
-                                    placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
-                                },
-                                2 => {
-                                    // image mode
-                                    if increase {
-                                        image_cycler.inc();
-                                    } else {
-                                        image_cycler.dec();
-                                    }
-                                    clear_flag = true;
-                                },
-                                _ => {}
-                            }
-                            dirty = true;
-                        }
-
                         Scancode::A => {
                             if keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD) {
                                 // advance to 4:00 AM
@@ -361,43 +309,6 @@ pub fn main() -> Result<(), String> {
                                 // jump ahead 2 hours
                                 clock.advance_game_wall_clock_by(2, 0);
                             }
-                        }
-
-                        Scancode::B => {
-                            clear_flag = true;
-                            dirty = true;
-                        }
-
-                        Scancode::F => {
-                            font_cycler.modify(true);
-                            match font_cycler.get_current() {
-                                Some(fname) => {
-                                    match fname.as_str() {
-                                        "amber" => {
-                                            text_font = Rc::downgrade(&amber_text);
-                                        },
-                                        "topaz" => {
-                                            text_font = Rc::downgrade(&topaz_text);
-                                        },
-                                        _ => {}
-                                    }
-                                },
-                                None => {}
-                            }
-                            if text_font.upgrade().unwrap().borrow().name() == amber_text.borrow().name() {
-                                text_font = Rc::downgrade(&topaz_text);
-                            } else {
-                                text_font = Rc::downgrade(&amber_text);
-                            }
-                            update_text = true;
-                            dirty = true;
-                        }
-
-                        Scancode::C => {
-                            // Cycle text color
-                            text_color.modify(keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD));
-                            update_text = true;
-                            dirty = true;
                         }
 
                         Scancode::M => {
@@ -422,18 +333,6 @@ pub fn main() -> Result<(), String> {
                             }
                         }
 
-                        Scancode::Num1 | Scancode::Num2 | Scancode::Num3 | Scancode::Num4
-                        | Scancode::Num5 | Scancode::Num6 | Scancode::Num7 | Scancode::Num8
-                        | Scancode::Num9 | Scancode::Num0 => {
-                            // keycode is i32 containing ASCII '0'+code, so NUM_0 == '0'
-                            mode = keycode.unwrap_or_else(|| Keycode::NUM_0).into_i32() - '0' as i32;
-                            if mode == 1 {
-                                update_text = true;
-                                placard_task = Some(Box::new(start_placard_renderer(&Point::new(0,0), sys_palette)));
-                            }
-                            clear_flag = true;
-                            dirty = true;
-                        }
                         _ => {}
                     }
                 },
@@ -454,19 +353,74 @@ pub fn main() -> Result<(), String> {
             }
         }
 
-        clock.update();
         let (_day, _hour, minute) = clock.get_game_wall_clock();
         if minute != last_minute {
             last_minute = minute;
             dirty = true;
         }
 
-        if dirty {
-            // FIXME: move render tasks to an object to track them and poll that instead
-            let mut still_dirty = false;
+        // Scene rendering takes priority when active
+        if let Some(ref mut scene) = active_scene {
+            // Build rendering resources for the scene
+            let resources = SceneResources {
+                image_textures: &image_textures,
+                image_name_map: &image_name_map,
+                amber_font: &amber_font,
+                topaz_font: &topaz_font,
+            };
+            let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &resources);
+            match result {
+                SceneResult::Done => {
+                    scene.on_exit();
+
+                    // Chain to next scene based on current phase
+                    match scene_phase {
+                        ScenePhase::Intro => {
+                            // After intro, start copy protection
+                            // Pass `true` for skip to bypass during development
+                            let skip_copy_protect = false;
+                            let q_count = game_lib.get_copy_protect_count();
+                            active_scene = Some(Box::new(CopyProtectScene::new(skip_copy_protect, q_count)));
+                            scene_phase = ScenePhase::CopyProtect;
+                        }
+                        ScenePhase::CopyProtect => {
+                            // Copy protection finished — quit if failed
+                            let passed = scene.as_any()
+                                .downcast_ref::<CopyProtectScene>()
+                                .map_or(false, |cp| cp.passed());
+                            if !passed {
+                                println!("Copy protection failed — exiting.");
+                                break 'running;
+                            }
+                            active_scene = Some(Box::new(PlacardScene::new(
+                                "julian_start",
+                                "introcolors",
+                            )));
+                            scene_phase = ScenePhase::PlacardStart;
+                        }
+                        ScenePhase::PlacardStart => {
+                            // Placard shown — transition to gameplay
+                            active_scene = None;
+                            scene_phase = ScenePhase::Gameplay;
+                            dirty = true;
+                            clear_flag = true;
+                        }
+                        ScenePhase::Gameplay => {
+                            active_scene = None;
+                            dirty = true;
+                            clear_flag = true;
+                        }
+                    }
+                }
+                SceneResult::Continue => {
+                    // Scene handles its own rendering and canvas.present()
+                    canvas.present();
+                }
+            }
+        } else if dirty {
             let clear_canvas = clear_flag;
 
-            let _ = canvas.with_texture_canvas(&mut play_tex, |mut play_canvas| {
+            let _ = canvas.with_texture_canvas(&mut play_tex, |play_canvas| {
 
                 play_canvas.set_viewport(Rect::new(16, 0, 288, 400));
 
@@ -474,40 +428,6 @@ pub fn main() -> Result<(), String> {
                     play_canvas.set_draw_color(Color::from(&sys_palette.colors[0]));
                     play_canvas.clear();
                     clear_flag = false;
-                }
-
-                match mode {
-                    1 => {
-                        // Draw placards
-                        if placard_task.is_some() {
-                            let result = placard_task.as_mut().unwrap().update(&mut play_canvas, 1, None);
-                            if result == false {
-                                placard_task = None;
-                            } else {
-                                still_dirty = true;
-                            }
-                        }
-
-                        if update_text {
-                            {
-                                let mut tex_borrow = font_texture.borrow_mut();
-                                let color = sys_palette.get_color(text_color.value).unwrap();
-                                tex_borrow.set_color_mod(color.r(), color.g(), color.b());
-                            }
-                            let result = game_lib.find_placard(placard_cycler.get_current().unwrap());
-                            if result.is_some() {
-                                let placard = result.unwrap();
-                                placard.draw(&text_font.upgrade().unwrap().borrow(), &mut play_canvas);
-                            }
-                            update_text = false;
-                        }
-                    },
-                    2 => {
-                        // draw images
-                        let img_tex = &image_textures[image_cycler.value];
-                        img_tex.draw(&mut play_canvas, 0, 0);
-                    },
-                    _ => {}
                 }
             });
 
@@ -520,7 +440,7 @@ pub fn main() -> Result<(), String> {
             canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
 
             // The walker indicates active rendering, when it stops, there is nothing being drawn
-            {
+            if debug_window.is_some() {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
 
@@ -533,21 +453,52 @@ pub fn main() -> Result<(), String> {
                 canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
             }
 
-            {
-                // draw game clock
-                let (day, hour, minute) = clock.get_game_wall_clock();
-                let time_str = format!("Day {:02} - Time {:02}:{:02}", day, hour, minute);
-                topaz_text.borrow().render_string(
-                    &time_str,
-                    &mut canvas,
-                    20,
-                    10
-                );
-            }
-
             canvas.present();
 
-            dirty = still_dirty;
+            dirty = false;
+        }
+
+        // Render the debug window (separate from game canvas)
+        if let Some(ref mut dw) = debug_window {
+            let scene_name: Option<&str> = if active_scene.is_some() {
+                Some("IntroScene")
+            } else {
+                None
+            };
+
+            let placard_idx = dw.placard_index();
+            let current_placard = if placard_idx < debug_placard_names.len() {
+                game_lib.find_placard(&debug_placard_names[placard_idx])
+            } else {
+                None
+            };
+
+            let img_idx = dw.image_index();
+            let image_dims = if img_idx < image_textures.len() {
+                let b = image_textures[img_idx].get_bounds();
+                Some((b.width(), b.height()))
+            } else {
+                None
+            };
+
+            let (gday, ghour, gminute) = clock.get_game_wall_clock();
+            let state = DebugState {
+                game_day: gday,
+                game_hour: ghour,
+                game_minute: gminute,
+                day_phase: clock.get_day_phase(),
+                game_ticks: clock.game_ticks,
+                mono_ticks: clock.mono_ticks,
+                paused: clock.paused,
+                scene_name,
+                fps: game_fps,
+                placard_names: &debug_placard_names,
+                current_placard,
+                sys_palette: &sys_palette,
+                image_names: &debug_image_names,
+                image_dimensions: image_dims,
+            };
+            dw.render(&state);
         }
 
         if kill_flag {

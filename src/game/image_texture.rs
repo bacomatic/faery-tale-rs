@@ -131,4 +131,24 @@ impl<'a> ImageTexture<'a> {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
         }
     }
+
+    /// Draw a sub-region of the image to the canvas at the specified position.
+    /// `region` defines the source rectangle within the image's own coordinate space
+    /// (i.e., relative to the image's top-left corner, not the atlas).
+    pub fn draw_region<T: RenderTarget>(&self, canvas: &mut Canvas<T>, region: Rect, x: i32, y: i32) {
+        if let Some(strong_texture) = self.texture.upgrade() {
+            let texture = strong_texture.borrow();
+            // Translate from image-local coordinates to atlas coordinates
+            let src_rect = Rect::new(
+                self.texture_bounds.x() + region.x(),
+                self.texture_bounds.y() + region.y(),
+                region.width(),
+                region.height(),
+            );
+            let dest_rect = Rect::new(x, y, region.width(), region.height());
+            canvas.copy(&*texture, Some(src_rect), Some(dest_rect)).unwrap();
+        } else {
+            println!("Error upgrading weak reference to shared texture in ImageTexture::draw_region");
+        }
+    }
 }

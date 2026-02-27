@@ -60,3 +60,67 @@ More or less how things flow through the game
     * Delay(120) -> 2.4 seconds
 * fade to black
 * fade in to play start in the Village of Tambry
+
+
+## Game States
+```mermaid
+stateDiagram-v2
+    state Startup <<start>>
+    state Exit <<end>>
+
+    Startup --> StoryMode
+    StoryMode --> CopyJunk
+
+    CopyJunk --> GameLoop
+
+    state exit_fork <<fork>>
+        GameLoop --> exit_fork
+        exit_fork --> WinPic
+        exit_fork --> DeathMsg
+
+    state exit_join <<join>>
+        exit_fork --> exit_join : Exit Command
+        WinPic --> exit_join
+        DeathMsg --> exit_join
+
+    exit_join --> Exit
+
+
+    state Startup {
+        direction LR
+
+        [*] --> Initialize
+        Initialize --> LoadAssets
+        LoadAssets --> LoadShaders
+        LoadShaders --> TitleScreen
+        TitleScreen --> [*] : Fade To Black
+    }
+
+    state StoryMode {
+        direction LR
+
+        [*] --> Page0 : Load
+        Page0 --> Page1 : Page Flip
+        Page1 --> Page2 : Page Flip
+        Page2 --> Page3 : Page Flip
+        Page3 --> [*] : Fade To Black
+    }
+
+    state CopyJunk {
+        direction LR
+
+        state check_response <<choice>>
+        state is_last <<choice>>
+
+        [*] --> DrawCopyJunk
+        DrawCopyJunk --> AskQuestion
+        AskQuestion --> check_response
+        check_response --> is_last : Right
+        check_response --> ExitNow : Wrong
+
+        is_last --> AskQuestion : Not Last
+        is_last --> [*] : Last
+    }
+
+```
+

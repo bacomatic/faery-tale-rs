@@ -5,6 +5,8 @@ use serde::{Serialize, Deserialize};
 pub struct GameSettings {
     pub window_position: Option<(i32, i32)>,
     pub window_size: Option<(u32, u32)>,
+    pub debug_window_position: Option<(i32, i32)>,
+    pub debug_window_size: Option<(u32, u32)>,
     pub fullscreen: bool,
     pub volume: f32,
     pub music_volume: f32,
@@ -20,6 +22,8 @@ impl Default for GameSettings {
         GameSettings {
             window_position: None,
             window_size: None,
+            debug_window_position: None,
+            debug_window_size: None,
             fullscreen: false,
             volume: 1.0,
             music_volume: 1.0,
@@ -104,6 +108,20 @@ impl GameSettings {
     pub fn set_window_position(&mut self, position: (i32, i32)) {
         if self.window_position != Some(position) {
             self.window_position = Some(position);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_debug_window_size(&mut self, size: (u32, u32)) {
+        if self.debug_window_size != Some(size) {
+            self.debug_window_size = Some(size);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_debug_window_position(&mut self, position: (i32, i32)) {
+        if self.debug_window_position != Some(position) {
+            self.debug_window_position = Some(position);
             self.dirty = true;
         }
     }

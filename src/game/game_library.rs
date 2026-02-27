@@ -117,6 +117,14 @@ impl GameLibrary {
         self.cursors.get(name)
     }
 
+    // copy protection
+    pub fn get_copy_protect_questions(&self) -> &[CopyProtectQuestion] {
+        &self.copy_protect_junk
+    }
+
+    pub fn get_copy_protect_count(&self) -> usize {
+        self.copy_protect_junk.len()
+    }
 }
 
 pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>> {

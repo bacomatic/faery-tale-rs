@@ -60,6 +60,13 @@ Completed tasks:
     * Correct aspect ratio, it's too wide on my 32:9 monitor (requires scaling output rects :sadface:)
     * Implement scenes
         * Swirly bordered text (placards)
+        * Static text (title text)
+        * Storybook, page turning
+    * Implement opening sequence
+        * Credits (title text with fade)
+        * Story (zoom in, 3 page compositing, zoom out)
+        * Make haste but take ... (julian_start placard)
+    * Copy protection scene
 * Core Game Mechanics
 * Audio
 * Graphics Effects

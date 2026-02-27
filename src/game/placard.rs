@@ -41,6 +41,26 @@ impl Placard {
             font.render_string(&line.text, canvas, line.x as i32, line.y as i32);
         }
     }
+
+    /// Draw the placard text with a pixel offset applied to all line positions.
+    /// Useful for positioning the text within different screen regions (e.g.,
+    /// title text centered vertically on a 640x480 canvas).
+    pub fn draw_offset<'a, T: RenderTarget>(
+        &self,
+        font: &FontTexture<'a>,
+        canvas: &mut Canvas<T>,
+        x_offset: i32,
+        y_offset: i32,
+    ) {
+        for line in &self.lines {
+            font.render_string(
+                &line.text,
+                canvas,
+                line.x as i32 + x_offset,
+                line.y as i32 + y_offset,
+            );
+        }
+    }
 }
 
 /**

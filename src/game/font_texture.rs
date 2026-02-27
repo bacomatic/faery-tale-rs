@@ -89,6 +89,24 @@ impl<'a> FontTexture<'a> {
         }
     }
 
+    /// Calculate the pixel width of a rendered string.
+    pub fn string_width(&self, s: &str) -> i32 {
+        let cstr = s.as_bytes();
+        let mut width: i32 = 0;
+        for cc in cstr {
+            if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
+                let cc_index = (cc - self.font.lo_char) as usize;
+                let space: i32 = if self.font.is_proportional() {
+                    self.font.char_space[cc_index] as i32
+                } else {
+                    self.font.x_size as i32
+                };
+                width += space;
+            }
+        }
+        width
+    }
+
     // render a string to the given canvas
     // this does not handle newlines, it assumes the string will reside on a single line
     pub fn render_string<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, x: i32, y: i32) {
