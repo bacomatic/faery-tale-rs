@@ -31,7 +31,7 @@ pub enum SceneResult {
  * Created each frame in main.rs and passed to Scene::update().
  */
 pub struct SceneResources<'a, 'tex> {
-    pub image_textures: &'a [ImageTexture<'tex>],
+    pub image_textures: &'a mut [ImageTexture<'tex>],
     pub image_name_map: &'a HashMap<String, usize>,
     pub amber_font: &'a FontTexture<'tex>,
     pub topaz_font: &'a FontTexture<'tex>,
@@ -41,6 +41,11 @@ impl<'a, 'tex> SceneResources<'a, 'tex> {
     /// Look up an image texture by its name (as defined in faery.toml).
     pub fn find_image(&self, name: &str) -> Option<&ImageTexture<'tex>> {
         self.image_name_map.get(name).map(|&idx| &self.image_textures[idx])
+    }
+
+    /// Look up a mutable image texture by name, for palette re-rasterization.
+    pub fn find_image_mut(&mut self, name: &str) -> Option<&mut ImageTexture<'tex>> {
+        self.image_name_map.get(name).copied().map(move |idx| &mut self.image_textures[idx])
     }
 }
 
@@ -80,7 +85,7 @@ pub trait Scene {
         play_tex: &mut Texture,
         delta_ticks: u32,
         game_lib: &GameLibrary,
-        resources: &SceneResources<'_, '_>,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult;
 
     /**

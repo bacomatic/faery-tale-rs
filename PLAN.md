@@ -4,41 +4,40 @@
 
 ### Completed
 
-1. **Scene system** — `Scene` trait in `src/game/scene.rs` with `handle_event()` + `update(canvas, play_tex, delta_ticks, game_lib) -> SceneResult`. Wired into `main.rs` as `active_scene: Option<Box<dyn Scene>>`. Debug modes (1=placards, 2=images) still accessible via number keys.
+1. **Scene system** — `Scene` trait in `src/game/scene.rs` with `handle_event()` + `update(canvas, play_tex, delta_ticks, game_lib, resources) -> SceneResult`. `SceneResources` bundles `&mut [ImageTexture]`, `&HashMap<String, usize>`, and font textures. Both `find_image()` (read) and `find_image_mut()` (write, for palette re-rasterization) are available. Scenes chain via `ScenePhase` enum in `main.rs`: Intro → CopyProtect → PlacardStart → Gameplay.
 
-2. **Palette fading** — `PaletteFader` in `src/game/palette_fader.rs`. Lerps between two `Palette`s over a configurable tick duration. 4 unit tests.
+2. **Palette fading** — Hybrid system in `src/game/palette_fader.rs`:
+   - **`fade_page()`**: Port of the original C `fade_page()` from `fmain2.c`. Per-channel multiplicative scaling (0–100%), night-time floor limits (r≥10, g≥25, b≥60), blue tint injection for moonlight, vegetation color boost (indices 16–24), and torch/spell illumination (light_timer boosts red to green's level). Returns a new `Palette`.
+   - **`FadeController`**: Time-based wrapper that interpolates RGB percentages over a duration. Returns `FadeResult::ColorMod(r,g,b)` for uniform fades (cheap SDL2 `set_color_mod`) or `FadeResult::PaletteUpdate(Palette)` for non-uniform fades (per-frame `ImageTexture::update()` re-rasterization). Convenience constructors: `fade_down()`, `fade_normal()`, `zoom_fade()`, `zoom_percentages()`.
+   - **`PaletteFader`**: Simple linear interpolation between two palettes (retained for cases where lerp is sufficient).
+   - 10 tests covering fade_page behavior, FadeController dispatch, zoom fading, and PaletteFader lerp.
 
-3. **Viewport zoom** — `ViewportZoom` in `src/game/viewport_zoom.rs`. Port of `screen_size()` — computes centered sub-rect for zoom-in (0→160) and zoom-out (156→0). 4 unit tests.
+3. **Viewport zoom** — `ViewportZoom` in `src/game/viewport_zoom.rs`. Port of `screen_size()` — computes centered sub-rect for zoom-in (0→160) and zoom-out (156→0). `half_width()` accessor exposes raw zoom position for zoom-position-dependent palette fading. 5 unit tests.
 
 4. **Page flip animation** — `PageFlip` in `src/game/page_flip.rs`. Port of `flipscan()` + `page_det()` with the original 22-step lookup tables. `draw_region()` added to `ImageTexture`.
 
-5. **IntroScene** — `IntroScene` in `src/game/intro_scene.rs`. 7-phase FSM: TitleText → TitleFadeOut → ZoomIn → ShowPage → FlipPage → ZoomOut → Done. Space to skip. Wired as initial scene.
+5. **IntroScene** — `IntroScene` in `src/game/intro_scene.rs`. 7-phase FSM: TitleText → TitleFadeOut → ZoomIn → ShowPage → FlipPage → ZoomOut → Done. Space to skip.
+   - **TitleFadeOut**: Uses `FadeController::fade_down()` → `FadeResult::ColorMod` applied via `play_tex.set_color_mod()`.
+   - **ZoomIn/ZoomOut**: Uses `FadeController::zoom_fade(introcolors, half_width)` per frame to compute a zoom-position-dependent palette with staggered channel ramp-up (red leads, green follows, blue lags — matching original `screen_size()` formula). Re-rasterizes all intro images via `resources.find_image_mut(name).update(&faded_palette, None)`. Restores full-brightness palette when zoom completes.
+   - Font, image, and placard rendering wire directly through `SceneResources`.
 
-6. **delta_ticks** — `GameClock::update()` now returns monotonic delta. Frame delta passed to scenes instead of hardcoded `1`.
+6. **delta_ticks** — `GameClock::update()` returns monotonic delta. Frame delta passed to scenes instead of hardcoded `1`.
 
-7. **Wire image textures into IntroScene** — `SceneResources<'a, 'tex>` struct provides named image lookup via `find_image()`. `ZoomIn` draws `page0` to play_tex; page compositing overlays portraits at (4,24) and bios at page-specific positions (from original `copypage()` calls). Pages accumulate on play_tex matching original behavior. `image_name_map: HashMap<String, usize>` built in main.rs image loading loop.
-
-8. **Title text rendering in IntroScene** — `titletext` placard rendered directly to 640x480 canvas (not play_tex) during TitleText phase using amber font. Y offset of 140px centers text vertically. Dark blue background (0x006) matches original `textcolors` palette. `draw_offset()` method added to Placard.
-
-9. **Copy protection scene** — `CopyProtectScene` in `src/game/copy_protect_scene.rs`. 3 random questions from pool of 8 (without replacement). Typed input via KeyDown events, case-insensitive answer matching. `submit_pending` flag bridges handle_event/update. Topaz font on dark blue background. Skip flag for development.
-
-10. **Character start placard** — `PlacardScene` in `src/game/placard_scene.rs`. Generic scene for any placard with swirly border. Instant border via `draw_placard_border()`. Configurable placard name, palette, and hold duration (default 144 ticks = 2.4s). Space to skip. Scene chaining via `ScenePhase` enum: Intro → CopyProtect → PlacardStart → Gameplay.
-
-7. **Wire image textures into IntroScene** — `SceneResources<'a, 'tex>` struct provides named image lookup via `find_image()`. `ZoomIn` draws `page0` to play_tex; page compositing overlays portraits at (4,24) and bios at page-specific positions (from original `copypage()` calls). Pages accumulate on play_tex matching original behavior. `image_name_map: HashMap<String, usize>` built in main.rs image loading loop.
+7. **Wire image textures into IntroScene** — `SceneResources<'a, 'tex>` struct provides named image lookup via `find_image()` and `find_image_mut()`. `ZoomIn` draws `page0` to play_tex; page compositing overlays portraits at (4,24) and bios at page-specific positions (from original `copypage()` calls). Pages accumulate on play_tex matching original behavior. `image_name_map: HashMap<String, usize>` built in main.rs image loading loop.
 
 8. **Title text rendering in IntroScene** — `titletext` placard rendered directly to 640x480 canvas (not play_tex) during TitleText phase using amber font. Y offset of 140px centers text vertically. Dark blue background (0x006) matches original `textcolors` palette. `draw_offset()` method added to Placard.
 
-9. **Copy protection scene** — `CopyProtectScene` in `src/game/copy_protect_scene.rs`. 3 random questions from pool of 8 (without replacement). Typed input via KeyDown events, case-insensitive answer matching. `submit_pending` flag bridges handle_event/update. Topaz font on dark blue background. Skip flag for development.
+9. **Copy protection scene** — `CopyProtectScene` in `src/game/copy_protect_scene.rs`. 3 random questions from pool of 8 (without replacement). Typed input via KeyDown events, case-insensitive answer matching. `submit_pending` flag bridges handle_event/update. Topaz font on dark blue background. `passed()` method checked via `as_any()` downcast after scene completes. Skip flag for development.
 
-10. **Character start placard** — `PlacardScene` in `src/game/placard_scene.rs`. Generic scene for any placard with swirly border. Instant border via `draw_placard_border()`. Configurable placard name, palette, and hold duration (default 144 ticks = 2.4s). Space to skip. Scene chaining via `ScenePhase` enum: Intro → CopyProtect → PlacardStart → Gameplay.
+10. **Character start placard** — `PlacardScene` in `src/game/placard_scene.rs`. Generic scene for any placard with swirly border. Instant border via `draw_placard_border()` using palette index 24 for both border and text color. `FontTexture::set_color_mod()` tints the amber font to the palette's color 24 (red in `pagecolors`) before drawing, then resets to white. Configurable placard name, palette, and hold duration (default 144 ticks = 2.4s). Space to skip. Uses `pagecolors` palette (matching original `map_message()` which calls `LoadRGB4(&vp_page, pagecolors, 32)`).
+
+11. **Copy protection failure**: Wrong answer quits the game
 
 ### Future Refinements (Intro)
 
 - **Animated page flip**: Strip-based column-by-column animation using PageFlip + two scratch textures (currently instant transition)
 - **Animated placard border**: Progressive border drawing over time (currently drawn all at once)
-- **Palette fading during zoom**: Images currently show at full color; needs per-frame palette interpolation or SDL2 color modulation
 - **Audio integration**: Intro music (tracks 12-15) during TitleText phase
-- **Copy protection failure**: Should quit the game (currently always proceeds to next scene)
 
 ### Decisions
 
@@ -171,7 +170,7 @@ Port the NPC behavior system — goals, tactics, movement, and interaction.
 
 ## Plan: Graphics Effects
 
-**Status:** Not started
+**Status:** Partially started (palette fading infrastructure complete)
 
 ### Overview
 Visual effects that enhance the game atmosphere.
@@ -180,8 +179,9 @@ Visual effects that enhance the game atmosphere.
 
 1. **Day/Night cycle**
    - `GameClock` already tracks day phases (Midnight/Morning/Midday/Evening)
-   - Palette manipulation based on `lightlevel = daynight / 40`
-   - Darken palette at night, brighten during day
+   - `fade_page()` with `limit=true` already supports night floor limits, blue tint injection, vegetation boost, and light_timer torch illumination — matching the original `day_fade()` from `fmain2.c`
+   - `FadeController` can drive day/night transitions over time
+   - Remaining: wire `day_fade()` into the gameplay loop using `lightlevel = daynight / 40` with the staggered RGB offsets (r-80, g-61, b-62) from the original
 
 2. **Copper list parsing**
    - Amiga copper lists define per-scanline palette changes (sky gradients, water effects)

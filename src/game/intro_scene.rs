@@ -8,7 +8,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
-use crate::game::palette_fader::PaletteFader;
+use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::viewport_zoom::ViewportZoom;
 use crate::game::game_library::GameLibrary;
@@ -42,11 +42,10 @@ enum IntroPhase {
     /// Display title/legal text, hold for a delay.
     TitleText { ticks_remaining: u32 },
     /// Fade to black and set up for story pages.
-    TitleFadeOut { fader: PaletteFader },
+    TitleFadeOut { fader: FadeController },
     /// Zoom in from black, revealing page0.
     ZoomIn {
         zoom: ViewportZoom,
-        fader: PaletteFader,
         page_drawn: bool,
     },
     /// Display a story page for a fixed duration.
@@ -63,7 +62,7 @@ enum IntroPhase {
         drawn: bool,
     },
     /// Zoom out from the last page to black.
-    ZoomOut { zoom: ViewportZoom, fader: PaletteFader },
+    ZoomOut { zoom: ViewportZoom },
     /// Sequence complete.
     Done,
 }
@@ -134,17 +133,13 @@ impl IntroScene {
             IntroPhase::TitleText { .. } => {
                 // Fade to black before starting the story pages
                 let text_palette = game_lib.find_palette("textcolors").unwrap();
-                let black_palette = game_lib.find_palette("blackcolors").unwrap();
                 IntroPhase::TitleFadeOut {
-                    fader: PaletteFader::new(text_palette, black_palette, 24),
+                    fader: FadeController::fade_down(text_palette, 24),
                 }
             }
             IntroPhase::TitleFadeOut { .. } => {
-                let black_palette = game_lib.find_palette("blackcolors").unwrap();
-                let intro_palette = game_lib.find_palette("introcolors").unwrap();
                 IntroPhase::ZoomIn {
                     zoom: ViewportZoom::zoom_in(),
-                    fader: PaletteFader::new(black_palette, intro_palette, FADE_DURATION_TICKS),
                     page_drawn: false,
                 }
             }
@@ -164,11 +159,8 @@ impl IntroScene {
                     }
                 } else {
                     // Last page shown, now zoom out
-                    let intro_palette = game_lib.find_palette("introcolors").unwrap();
-                    let black_palette = game_lib.find_palette("blackcolors").unwrap();
                     IntroPhase::ZoomOut {
                         zoom: ViewportZoom::zoom_out(),
-                        fader: PaletteFader::new(intro_palette, black_palette, FADE_DURATION_TICKS),
                     }
                 }
             }
@@ -237,7 +229,7 @@ impl Scene for IntroScene {
         play_tex: &mut Texture,
         delta_ticks: u32,
         game_lib: &GameLibrary,
-        resources: &SceneResources<'_, '_>,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         let delta = delta_ticks;
 
@@ -279,39 +271,71 @@ impl Scene for IntroScene {
             }
 
             IntroPhase::TitleFadeOut { fader } => {
-                // Brief fade to black
-                fader.tick(delta);
+                // Brief fade to black using SDL2 color modulation
+                let result = fader.tick(delta);
 
-                // Draw black screen during fade
-                canvas.set_draw_color(Color::BLACK);
+                // Apply the color modulation to the canvas output
+                match result {
+                    FadeResult::ColorMod(r, g, b) => {
+                        play_tex.set_color_mod(r, g, b);
+                    }
+                    _ => {}
+                }
+
+                // Draw the title screen content to play_tex, then blit with modulation
+                canvas.set_draw_color(Color::RGB(0, 0, 0x66));
                 canvas.clear();
 
+                if let Some(placard) = game_lib.find_placard("titletext") {
+                    placard.draw_offset(
+                        resources.amber_font,
+                        canvas,
+                        0,
+                        TITLE_Y_OFFSET,
+                    );
+                }
+
                 if fader.is_done() {
+                    // Reset color modulation for subsequent phases
+                    play_tex.set_color_mod(255, 255, 255);
                     self.advance(game_lib);
                 }
 
                 SceneResult::Continue
             }
 
-            IntroPhase::ZoomIn { zoom, fader, page_drawn } => {
-                // Draw page0 to play_tex once at the start of the zoom
-                if !*page_drawn {
-                    let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
-                        // Draw the book background
-                        if let Some(page0) = resources.find_image("page0") {
-                            page0.draw(play_canvas, 0, 0);
-                        } else {
-                            // Fallback: dark background
-                            play_canvas.set_draw_color(Color::RGB(0x33, 0x22, 0x11));
-                            play_canvas.clear();
-                        }
-                    });
-                    *page_drawn = true;
+            IntroPhase::ZoomIn { zoom, page_drawn } => {
+                // Get the intro palette for the zoom fade
+                let intro_palette = game_lib.find_palette("introcolors").unwrap();
+
+                // Compute the zoom-position-dependent faded palette and
+                // re-rasterize all relevant images with it. This replicates
+                // the original's screen_size() → fade_page(y*2-40, y*2-70, y*2-100, 0, introcolors)
+                let hw = zoom.half_width();
+                let faded_palette = FadeController::zoom_fade(intro_palette, hw);
+
+                // Re-rasterize the page images with the faded palette
+                // We need to update all images that use the intro palette
+                let intro_images = ["page0", "p1a", "p1b", "p2a", "p2b", "p3a", "p3b"];
+                for name in &intro_images {
+                    if let Some(img) = resources.find_image_mut(name) {
+                        img.update(&faded_palette, None);
+                    }
                 }
 
-                // Advance both zoom and fade
+                // Draw page0 to play_tex (re-drawn each frame since palette changes)
+                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                    if let Some(page0) = resources.find_image("page0") {
+                        page0.draw(play_canvas, 0, 0);
+                    } else {
+                        play_canvas.set_draw_color(Color::RGB(0x33, 0x22, 0x11));
+                        play_canvas.clear();
+                    }
+                });
+                *page_drawn = true;
+
+                // Advance zoom
                 let viewport = zoom.tick(delta);
-                fader.tick(delta);
 
                 // Clear the screen canvas
                 canvas.set_draw_color(Color::BLACK);
@@ -329,6 +353,18 @@ impl Scene for IntroScene {
                 }
 
                 if zoom.is_done() {
+                    // Restore full-brightness palette for the ShowPage phase
+                    for name in &intro_images {
+                        if let Some(img) = resources.find_image_mut(name) {
+                            img.update(intro_palette, None);
+                        }
+                    }
+                    // Redraw page0 at full brightness
+                    let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                        if let Some(page0) = resources.find_image("page0") {
+                            page0.draw(play_canvas, 0, 0);
+                        }
+                    });
                     self.advance(game_lib);
                 }
 
@@ -384,9 +420,33 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
-            IntroPhase::ZoomOut { zoom, fader } => {
+            IntroPhase::ZoomOut { zoom } => {
+                // Compute zoom-position-dependent fade and re-rasterize
+                let intro_palette = game_lib.find_palette("introcolors").unwrap();
+                let hw = zoom.half_width();
+                let faded_palette = FadeController::zoom_fade(intro_palette, hw);
+
+                // Re-rasterize the page images with the faded palette
+                let intro_images = ["page0", "p1a", "p1b", "p2a", "p2b", "p3a", "p3b"];
+                for name in &intro_images {
+                    if let Some(img) = resources.find_image_mut(name) {
+                        img.update(&faded_palette, None);
+                    }
+                }
+
+                // Redraw the current page content with faded palette
+                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                    // Redraw page0 background
+                    if let Some(page0) = resources.find_image("page0") {
+                        page0.draw(play_canvas, 0, 0);
+                    }
+                    // Redraw all accumulated page overlays (pages 1-3)
+                    for pi in 1..=3 {
+                        draw_page_overlays(pi, play_canvas, resources);
+                    }
+                });
+
                 let viewport = zoom.tick(delta);
-                fader.tick(delta);
 
                 // Draw black and show shrinking viewport
                 canvas.set_draw_color(Color::BLACK);
@@ -403,6 +463,12 @@ impl Scene for IntroScene {
                 }
 
                 if zoom.is_done() {
+                    // Restore full-brightness palette
+                    for name in &intro_images {
+                        if let Some(img) = resources.find_image_mut(name) {
+                            img.update(intro_palette, None);
+                        }
+                    }
                     self.advance(game_lib);
                 }
 

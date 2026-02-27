@@ -95,7 +95,7 @@ impl Scene for PlacardScene {
         play_tex: &mut Texture,
         delta_ticks: u32,
         game_lib: &GameLibrary,
-        resources: &SceneResources<'_, '_>,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         if self.skip_requested {
             self.phase = PlacardPhase::Done;
@@ -108,6 +108,15 @@ impl Scene for PlacardScene {
 
                 // Draw everything to play_tex
                 let placard_name = self.placard_name.clone();
+                // Set the font color to palette index 24 (red in pagecolors).
+                // The original game uses SetAPen(rp, 24) in map_message() for
+                // placard text, matching the border color.
+                if let Some(pal) = palette {
+                    if let Some(c) = pal.get_color(24) {
+                        resources.amber_font.set_color_mod(c.r(), c.g(), c.b());
+                    }
+                }
+
                 let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                     // Black background
                     play_canvas.set_draw_color(Color::BLACK);
@@ -123,6 +132,9 @@ impl Scene for PlacardScene {
                         placard::draw_placard_border(play_canvas, pal);
                     }
                 });
+
+                // Reset font color to white for subsequent rendering
+                resources.amber_font.set_color_mod(255, 255, 255);
 
                 // Blit to screen
                 canvas.set_draw_color(Color::BLACK);

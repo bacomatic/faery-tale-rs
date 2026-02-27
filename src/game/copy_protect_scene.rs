@@ -208,7 +208,7 @@ impl Scene for CopyProtectScene {
         play_tex: &mut Texture,
         delta_ticks: u32,
         game_lib: &GameLibrary,
-        resources: &SceneResources<'_, '_>,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         match &mut self.phase {
             CopyProtectPhase::ShowPreamble { ticks_remaining, drawn } => {

@@ -362,13 +362,13 @@ pub fn main() -> Result<(), String> {
         // Scene rendering takes priority when active
         if let Some(ref mut scene) = active_scene {
             // Build rendering resources for the scene
-            let resources = SceneResources {
-                image_textures: &image_textures,
+            let mut resources = SceneResources {
+                image_textures: &mut image_textures,
                 image_name_map: &image_name_map,
                 amber_font: &amber_font,
                 topaz_font: &topaz_font,
             };
-            let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &resources);
+            let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &mut resources);
             match result {
                 SceneResult::Done => {
                     scene.on_exit();
@@ -394,7 +394,7 @@ pub fn main() -> Result<(), String> {
                             }
                             active_scene = Some(Box::new(PlacardScene::new(
                                 "julian_start",
-                                "introcolors",
+                                "pagecolors",
                             )));
                             scene_phase = ScenePhase::PlacardStart;
                         }

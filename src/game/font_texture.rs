@@ -52,6 +52,16 @@ impl<'a> FontTexture<'a> {
         &self.font
     }
 
+    /// Set the color modulation on the backing font texture.
+    /// This tints all rendered glyphs by multiplying each pixel's RGB by (r/255, g/255, b/255).
+    /// Call with (255, 255, 255) to reset to normal white rendering.
+    pub fn set_color_mod(&self, r: u8, g: u8, b: u8) {
+        if let Some(strong_texture) = self.texture.upgrade() {
+            let mut tex = strong_texture.borrow_mut();
+            tex.set_color_mod(r, g, b);
+        }
+    }
+
     // Draw all the font glyphs into the provided texture within the rect provided
     fn init_texture(&mut self) {
         // build the pixel cache if needed

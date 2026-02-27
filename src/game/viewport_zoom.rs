@@ -113,6 +113,12 @@ impl ViewportZoom {
     pub fn current_rect(&self) -> Rect {
         zoom_rect(self.current)
     }
+
+    /// Get the current half-width value (0 = closed, 160 = full open).
+    /// This is the raw zoom position used by the original's screen_size() function.
+    pub fn half_width(&self) -> i32 {
+        self.current
+    }
 }
 
 #[cfg(test)]
