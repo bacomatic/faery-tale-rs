@@ -89,8 +89,16 @@ const MOD: i32 = 4;
 const XMOD: [i32; 16] = [-MOD,-MOD,-MOD,  0,  0,  0,MOD,MOD,   0,-MOD,   0,MOD,MOD,  0,  0,  0];
 const YMOD: [i32; 16] = [   0,   0,   0,MOD,MOD,MOD,  0,  0,-MOD,   0,-MOD,  0,  0,MOD,MOD,MOD];
 
-impl RenderTask for PlacardRenderer {
-    fn update(&mut self, canvas: &mut Canvas<Window>, delta_ticks: i32, _area: Option<sdl2::rect::Rect>) -> bool {
+impl PlacardRenderer {
+    /// Returns true when the border animation is complete.
+    pub fn is_done(&self) -> bool {
+        self.block_index >= 17
+    }
+
+    /// Draw border segments for this frame onto any canvas.
+    /// Advances the animation by `delta_ticks` worth of segments.
+    /// Returns true if still animating, false if complete.
+    pub fn draw_segments<T: RenderTarget>(&mut self, canvas: &mut Canvas<T>, delta_ticks: i32) -> bool {
         // loop to catch up if we are behind
         let count = delta_ticks * 3; // multiple iterations per frame, otherwise it's too slow
 
@@ -103,7 +111,7 @@ impl RenderTask for PlacardRenderer {
             let dx = self.xorg + XMOD[self.segment_index];
             let dy = self.yorg + YMOD[self.segment_index];
 
-            canvas.set_draw_color(self.colors[1]); // white
+            canvas.set_draw_color(self.colors[1]); // border color
             if self.block_index < 7 {
                     // Left
                 canvas.draw_line(
@@ -169,6 +177,12 @@ impl RenderTask for PlacardRenderer {
         }
 
         true
+    }
+}
+
+impl RenderTask for PlacardRenderer {
+    fn update(&mut self, canvas: &mut Canvas<Window>, delta_ticks: i32, _area: Option<sdl2::rect::Rect>) -> bool {
+        self.draw_segments(canvas, delta_ticks)
     }
 }
 

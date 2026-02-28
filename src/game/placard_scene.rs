@@ -8,7 +8,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
-use crate::game::placard;
+use crate::game::placard::{PlacardRenderer, start_placard_renderer};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::game_library::GameLibrary;
 
@@ -19,16 +19,14 @@ use crate::game::game_library::GameLibrary;
  * and other in-game messages that use the placard border animation.
  *
  * The scene clears the 320x200 play texture, draws the placard text
- * using the amber font, draws the decorative border, holds for a
- * specified duration, then completes.
+ * using the amber font, then progressively draws the decorative border
+ * over ~4.5 seconds using PlacardRenderer. After the border completes,
+ * holds for a specified duration, then completes.
  *
  * In the original game:
  * - placard_text(N) draws the text
  * - placard() draws the animated border
  * - Delay(120) holds for 2.4 seconds (at 50Hz)
- *
- * The border animation is drawn instantly for now. The full progressive
- * animation can be added by using PlacardRenderer as a RenderTask.
  */
 
 /// Default hold duration after border is drawn (ticks at 60Hz).
@@ -36,8 +34,10 @@ use crate::game::game_library::GameLibrary;
 const DEFAULT_HOLD_TICKS: u32 = 144;
 
 enum PlacardPhase {
-    /// First frame: draw everything to play_tex.
+    /// First frame: draw text to play_tex, then start border animation.
     Draw,
+    /// Progressive border animation drawn to play_tex each frame.
+    AnimateBorder { renderer: PlacardRenderer },
     /// Hold the placard on screen for a duration.
     Hold { ticks_remaining: u32 },
     /// Scene complete.
@@ -106,7 +106,7 @@ impl Scene for PlacardScene {
                 // Get the palette for border colors
                 let palette = game_lib.find_palette(&self.palette_name);
 
-                // Draw everything to play_tex
+                // Draw text to play_tex (border will be animated separately)
                 let placard_name = self.placard_name.clone();
                 // Set the font color to palette index 24 (red in pagecolors).
                 // The original game uses SetAPen(rp, 24) in map_message() for
@@ -126,11 +126,6 @@ impl Scene for PlacardScene {
                     if let Some(plac) = game_lib.find_placard(&placard_name) {
                         plac.draw(resources.amber_font, play_canvas);
                     }
-
-                    // Draw the decorative border using the palette
-                    if let Some(pal) = palette {
-                        placard::draw_placard_border(play_canvas, pal);
-                    }
                 });
 
                 // Reset font color to white for subsequent rendering
@@ -142,9 +137,40 @@ impl Scene for PlacardScene {
                 let screen_dest = Rect::new(0, 40, 640, 400);
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
-                self.phase = PlacardPhase::Hold {
-                    ticks_remaining: self.hold_ticks,
+                // Start the progressive border animation
+                let renderer = if let Some(pal) = palette {
+                    start_placard_renderer(&sdl2::rect::Point::new(0, 0), pal)
+                } else {
+                    // Fallback: skip to hold if no palette
+                    self.phase = PlacardPhase::Hold {
+                        ticks_remaining: self.hold_ticks,
+                    };
+                    return SceneResult::Continue;
                 };
+                self.phase = PlacardPhase::AnimateBorder { renderer };
+                SceneResult::Continue
+            }
+
+            PlacardPhase::AnimateBorder { renderer } => {
+                // Draw more border segments onto the persistent play_tex
+                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                    renderer.draw_segments(play_canvas, delta_ticks as i32);
+                });
+
+                let done = renderer.is_done();
+
+                // Blit to screen
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+                let screen_dest = Rect::new(0, 40, 640, 400);
+                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+
+                if done {
+                    self.phase = PlacardPhase::Hold {
+                        ticks_remaining: self.hold_ticks,
+                    };
+                }
+
                 SceneResult::Continue
             }
 
