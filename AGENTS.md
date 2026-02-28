@@ -1,12 +1,14 @@
 # AGENTS.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
+This file provides guidance to all AI agents when working with code in this repository.
 
 ## Project Overview
 
 Rust port of "The Faery Tale Adventure" (1987 Amiga game by MicroIllusions). This is a personal learning project — PRs are not accepted. The goal is faithful recreation of the original game mechanics and behavior, not modernization. Original C/ASM source lives in `original/` for reference.
 
 Key directive: **be true to the original game** — no enhancements or bug fixes unless the original bug would require extra work to reproduce.
+
+**NTSC-only**: The Faery Tale Adventure was developed exclusively for NTSC Amigas (60Hz). There was never a PAL version. All timing — `Delay()` values, tick counts, animation rates, frame durations — must be interpreted as NTSC 60Hz. Any comments in `original/` that mention PAL or 50Hz are incorrect and must be ignored.
 
 ## Build & Run
 
@@ -20,6 +22,9 @@ cargo run
 
 # Run with debug window (separate SDL2 window showing clock, palettes, etc.)
 cargo run -- --debug
+
+# Run the terminal music visualizer (group 0-6, default 3 = intro)
+cargo run --bin music_viz [-- <group>]
 
 # Run tests
 cargo test
@@ -70,29 +75,39 @@ All game modules live under `src/game/` with `mod.rs` as the public module list.
 - `viewport_zoom.rs` — Port of `screen_size()`, computes centered sub-rect for zoom animations
 - `page_flip.rs` — Port of `flipscan()`/`page_det()` with original 22-step lookup tables
 
+**Audio system**:
+- `songs.rs` — Parses `game/songs` into 28 tracks across 7 song groups × 4 Paula voices. `TrackEvent` enum models all commands from `gdriver.asm`. Exposes `PTABLE` (84 period/wave-offset entries), `NOTE_DURATIONS` (64 tick counts), `AMIGA_CLOCK_NTSC`, `VBL_RATE_HZ` (60), and `DEFAULT_TEMPO` (150). `SongLibrary::intro_tracks()` returns tracks 12–15.
+- `audio.rs` — SDL2 audio callback running a VBL sequencer at 60 Hz. `Instruments` loads waveforms and ADSR envelopes from `game/v6`. `SequencerState` drives 4 `Voice`s with timeclock stepping. PCM synthesis uses linear interpolation and a 1-pole IIR low-pass (~4800 Hz, approximating the Amiga A500 RC filter). `AudioSystem` exposes `play_score()`, `stop_score()`, `play_group()`.
+
 **Other modules**:
 - `game_clock.rs` — 60Hz tick-based clock. Game day = 24,000 ticks (~6m40s real time). Tracks day phases (Midnight/Morning/Midday/Evening) matching original `daynight` variable
 - `settings.rs` — Persists to `~/.config/faery/settings.toml` via serde/TOML
 - `hunk.rs` — Amiga HUNK executable loader (for extracting embedded game data from `game/fmain`)
 - `render_task.rs` — `RenderTask` trait for periodic rendering (used by placard border animation)
-- `debug_window.rs` — Optional second SDL2 window (`--debug` flag) showing game clock, palette viewer, placard/image browser
+- `debug_window.rs` — Optional second SDL2 window (`--debug` flag) showing game clock, palette viewer, placard/image browser, and song group player (Songs tab)
 - `placard.rs` — Text rendering with swirly border animation (segment offset tables from original)
 
 ### Data Files
 
 - `faery.toml` — Master game data: palettes (12-bit Amiga RGB4 values), placard text, font/image paths, cursor bitmaps, copy protection Q&A
+- `game/songs` — Music score data: 28 tracks × 2-byte events, parsed by `songs.rs`. See `DECODE.md` for format details.
+- `game/v6` — Music voice data: 8 waveforms × 128 bytes + 10 ADSR envelopes × 256 bytes, loaded by `audio.rs`. See `DECODE.md`.
 - `game/` — Original Amiga game assets: IFF images, fonts, song data, `fmain` executable (contains embedded map/NPC/object data)
 - `original/` — Original C/ASM source code (MIT licensed by David "Talin" Joiner). Reference only, not compiled
+- `DECODE.md` — Reverse-engineering notes for binary asset files (`songs`, `v6`)
 
 ### Patterns & Conventions
 
 - Enum-based FSM *within* scenes (phase enums), trait-based FSM *across* scenes (`Box<dyn Scene>`)
 - Colors use Amiga 12-bit RGB4 format (0xRGB) throughout; conversion to 24-bit happens at the rendering boundary
 - The original game's variable names and magic numbers are preserved in comments (e.g. `daynight`, `lightlevel`, `letter_list[]`)
-- Time values reference the original's 50Hz Amiga tick rate, converted to 60Hz for the port (multiply by 1.2)
 - `println!()` is used for warnings/debug output (no logging framework)
 - All byte-level operations for binary file parsing go through `byteops.rs` helpers (`read_u8`, `read_u16`, `read_u32`, `read_string`)
 
+**Binaries**:
+- `src/main.rs` — main game binary (`fmainrs`)
+- `src/bin/music_viz.rs` — standalone terminal music visualizer. Plays any of the 7 song groups through SDL2 audio while rendering a scrolling piano-roll via crossterm. Self-contained: includes `songs.rs` directly and keeps a private copy of the synth logic.
+
 ## Current State & Roadmap
 
-The intro sequence (title → story pages → copy protection → character placard) is fully implemented. See `PLAN.md` for detailed status and future plans covering: audio system, game world/map, player/movement, NPC system, graphics effects, key bindings, and persistence.
+The intro sequence (title → story pages → copy protection → character placard) is fully implemented, with intro music (tracks 12–15) playing from `TitleFadeOut` through the end of `PlacardStart`. See `PLAN.md` for detailed status and future plans covering: audio system, game world/map, player/movement, NPC system, graphics effects, key bindings, and persistence.

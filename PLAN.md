@@ -19,7 +19,7 @@
 5. **IntroScene** — `IntroScene` in `src/game/intro_scene.rs`. 7-phase FSM: TitleText → TitleFadeOut → ZoomIn → ShowPage → FlipPage → ZoomOut → Done. Space to skip.
    - **TitleFadeOut**: Uses `FadeController::fade_down()` → `FadeResult::ColorMod` applied via `play_tex.set_color_mod()`.
    - **ZoomIn/ZoomOut**: Uses `FadeController::zoom_fade(introcolors, half_width)` per frame to compute a zoom-position-dependent palette with staggered channel ramp-up (red leads, green follows, blue lags — matching original `screen_size()` formula). Re-rasterizes all intro images via `resources.find_image_mut(name).update(&faded_palette, None)`. Restores full-brightness palette when zoom completes.
-   - **FlipPage**: Animated strip-based page flip via `PageFlip`. On enter, snapshots `play_tex` → scratch (old page), draws new overlays onto `play_tex` (new page). Each frame, `PageFlip::update()` composites strips from scratch (old) and `play_tex` (new) directly onto the window canvas at 2× scale with 40 px vertical offset. Timing matches original Delay() values scaled 50 Hz → 60 Hz.
+   - **FlipPage**: Animated strip-based page flip via `PageFlip`. On enter, snapshots `play_tex` → scratch (old page), draws new overlays onto `play_tex` (new page). Each frame, `PageFlip::update()` composites strips from scratch (old) and `play_tex` (new) directly onto the window canvas at 2× scale with 40 px vertical offset. Timing uses original NTSC 60Hz `Delay()` values directly from the `FLIP3` table.
    - Font, image, and placard rendering wire directly through `SceneResources`.
 
 6. **delta_ticks** — `GameClock::update()` returns monotonic delta. Frame delta passed to scenes instead of hardcoded `1`.
@@ -36,8 +36,8 @@
 
 ### Future Refinements (Intro)
 
-- **Animated placard border**: Progressive border drawing over time (currently drawn all at once)
-- **Audio integration**: Intro music (tracks 12-15) during TitleText phase
+- ~~**Animated placard border**: Progressive border drawing over time (currently drawn all at once)~~ Done
+- ~~**Audio integration**: Intro music (tracks 12–15) during TitleText phase~~ Done (music starts on TitleFadeOut, matching original `playscore()` placement)
 
 ### Decisions
 
@@ -45,35 +45,43 @@
 - `PaletteFader` is a standalone utility, not a scene — it's composed into scenes that need it
 - Page flip is a `RenderTask` (fits the existing pattern), intro phases are *not* RenderTasks (they need richer control flow)
 - Copy protection is included but can be gated with a skip flag for development convenience
-- Audio is stubbed (no-op calls) — song playback is a separate workstream
 
 ---
 
 ## Plan: Audio System
 
-**Status:** Not started
+**Status:** In progress (steps 1–2, 4 complete; step 3 deferred)
 
 ### Overview
 Parse the music file (`game/songs`), build a song list, and play tracks via SDL2 mixer. Sound effects loaded from the game data.
 
 ### Steps
 
-1. **Parse music/song data**
-   - Investigate `game/songs` file format (likely Amiga MOD or custom tracker format)
-   - Build a song list with track indices matching the original (`track[12]`..`track[15]` for intro music)
+1. ~~**Parse music/song data**~~ Done — `SongLibrary` in `src/game/songs.rs`. Custom 4-voice tracker format parsed from `game/songs` (28 tracks). `TrackEvent` enum models all commands from `gdriver.asm`: Note, Rest, SetInstrument, SetTempo, End (with loop flag). Lookup tables `PTABLE` (84 period/wave-offset entries) and `NOTE_DURATIONS` (64 timing values) ported verbatim. NTSC Paula clock (3,579,545 Hz). 12 unit tests including real-file parsing.
 
-2. **SDL2 mixer integration**
-   - The `mixer` feature is already enabled in `Cargo.toml` but unused
-   - Initialize mixer, set up audio channels
-   - Play/stop/fade songs by index
+2. ~~**SDL2 mixer integration**~~ Done — `AudioSystem` in `src/game/audio.rs`. Pure-Rust, no `unsafe`, 4-voice software synthesizer porting `gdriver.asm` note-trigger + envelope logic. `Instruments` loads waveforms and ADSR envelopes from `game/v6` (envelopes at byte 2048, matching the original `Seek(+S_WAVBUF, OFFSET_CURRENT)` load sequence). `SequencerState` drives 4 `Voice`s with timeclock stepping (150 tempo, 60 Hz NTSC VBL). `SynthCallback` fires a VBL tick every 735 samples (~44100/60) and mixes voices into a 44100 Hz f32 mono stream. Per-voice rendering uses linear interpolation with correct modulo loop-wrap (avoids click on every waveform cycle) and a 1-pole IIR low-pass at ~4800 Hz approximating the A500 hardware RC filter. Voices mixed at ¼ scale to match four-channel headroom. Intro music (tracks 12–15) plays automatically at startup. 13 tests.
 
-3. **Sound effects**
-   - Identify and load sound effect data
-   - Trigger effects from game events
+3. **Sound effects** *(deferred to game implementation phase)*
+   - Identify and load sound effect data from `game/` (sample bank referenced in `gdriver.asm` as `sample_mem`, 5632 bytes from `dh0:z/samples`)
+   - Trigger effects from game events via a dedicated effects channel
+   - **Do NOT replicate the Amiga's voice-stealing behavior**: the original `_playsample()` hijacks Paula voice 2 (silencing that music channel) because the hardware only has 4 channels total. We have no such limitation — sound effects should mix into a separate channel alongside the 4 music voices, leaving music uninterrupted.
 
-4. **Wire into scenes**
-   - IntroScene: play intro music (tracks 12-15) during TitleText phase
-   - Game loop: ambient/combat music, day/night transitions trigger different tracks
+4. ~~**Wire into scenes**~~ Done — `IntroScene::new()` takes `Option<[Arc<Track>; 4]>` and starts music (`play_score`) on the first frame of `TitleFadeOut`, matching the original `playscore()` placement (before zoom-in). Music stops (`stop_score`) in `main.rs` when `PlacardStart` completes and gameplay begins. All Amiga `Delay()` constants corrected to NTSC 60Hz native values (removed the erroneous ×1.2 PAL conversion factor that had inflated `PAGE_DISPLAY_TICKS` 420→350, `LAST_PAGE_HOLD_TICKS` 228→190, `TITLE_HOLD_TICKS` 120→100, and `PageFlip` step delays).
+
+5. **Implement `setmood()` — in-game music context switching** *(deferred to game implementation phase)*
+   - Port `setmood()` from `fmain.c`: select the active song group (tracks 0–3, 4–7, … 24–27) based on hero state and call `play_score` / `set_score` / `stop_score` accordingly.
+   - Group selection logic (in priority order):
+     1. Hero vitality = 0 → group 6 (death/game-over, tracks 24–27)
+     2. Palace zone coordinates (`hero_x` 0x2400–0x3100, `hero_y` 0x8200–0x8a00) → group 4 (tracks 16–19)
+     3. `battleflag` set → group 1 (battle, tracks 4–7)
+     4. `region_num > 7` → group 5 (indoor/dungeon, tracks 20–23)
+     5. `lightlevel > 120` → group 0 (outdoor daytime, tracks 0–3)
+     6. Otherwise → group 2 (outdoor night, tracks 8–11)
+   - **Cave instrument swap**: region 9 (caves) uses group 5 tracks but must swap instrument slot 10 in `new_wave[]` to `0x0307` before calling `play_score`; all other indoor regions use `0x0100`. This changes the timbre of voice 2 without altering any note data. Reset to `0x0100` on leaving region 9.
+   - `set_score` (vs `playscore`) is used when the new score should take effect at the next loop boundary rather than immediately (avoids an abrupt cut mid-phrase).
+
+**Known issues:**
+- Occasional click at note onset. Likely a phase discontinuity when `trigger_note()` resets `phase` to 0.0 mid-cycle without crossfading to the new waveform, or a misaligned VBL boundary when the sequencer fires inside a partially-rendered chunk. Needs investigation.
 
 ---
 
