@@ -19,6 +19,7 @@ use sdl2::surface::Surface;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::game::debug_window::{DebugWindow, DebugState};
 use crate::game::game_clock::GameClock;
@@ -30,6 +31,8 @@ use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::intro_scene::IntroScene;
 use crate::game::copy_protect_scene::CopyProtectScene;
 use crate::game::placard_scene::PlacardScene;
+use crate::game::audio::{AudioSystem, Instruments};
+use crate::game::songs::{SongLibrary, Track};
 
 #[derive(Parser, Debug)]
 #[command(name = "fmainrs", about = "The Faery Tale Adventure")]
@@ -37,6 +40,9 @@ struct Cli {
     /// Activate debug mode (opens a separate debug window)
     #[arg(long, short)]
     debug: bool,
+    /// Disable linear interpolation in the PCM mixer (use nearest-neighbor instead)
+    #[arg(long)]
+    no_interpolation: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -117,6 +123,23 @@ pub fn main() -> Result<(), String> {
     let sys_palette = game_lib.find_palette("introcolors").unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
+
+    // Audio system — load songs and waveforms, init the software synthesizer.
+    // Music playback is started by IntroScene (matching original: playscore() is
+    // called mid-intro, not at startup) and stopped before gameplay begins.
+    let song_library: Option<SongLibrary> = SongLibrary::load(Path::new("game/songs"));
+    let intro_tracks: Option<[Arc<Track>; 4]> = song_library
+        .as_ref()
+        .and_then(|songs| songs.intro_tracks().map(|t| t.map(|tr| Arc::new(tr.clone()))));
+    let audio_system: Option<AudioSystem> = {
+        match Instruments::load(Path::new("game/v6")) {
+            Some(inst) => match AudioSystem::new(&sdl_context, inst, cli.no_interpolation) {
+                Ok(sys) => Some(sys),
+                Err(e) => { println!("Warning: could not open audio device: {}", e); None }
+            },
+            None => { println!("Warning: could not load game/v6 (instruments file missing)"); None }
+        }
+    };
 
     let mut mouse_cursor: Option<Cursor> = None;
 
@@ -217,7 +240,7 @@ pub fn main() -> Result<(), String> {
     // The scene_phase tracks what to start next when a scene completes.
     enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay }
     let mut scene_phase = ScenePhase::Intro;
-    let mut active_scene: Option<Box<dyn Scene>> = Some(Box::new(IntroScene::new()));
+    let mut active_scene: Option<Box<dyn Scene>> = Some(Box::new(IntroScene::new(intro_tracks)));
 
     // Debug window (separate SDL2 window), created only when --debug is passed
     let mut debug_window: Option<DebugWindow> = if cli.debug {
@@ -369,6 +392,7 @@ pub fn main() -> Result<(), String> {
                 amber_font: &amber_font,
                 topaz_font: &topaz_font,
                 scratch: &mut scratch_tex,
+                audio: audio_system.as_ref(),
             };
             let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &mut resources);
             match result {
@@ -401,7 +425,11 @@ pub fn main() -> Result<(), String> {
                             scene_phase = ScenePhase::PlacardStart;
                         }
                         ScenePhase::PlacardStart => {
-                            // Placard shown — transition to gameplay
+                            // Placard shown — stop music before gameplay begins.
+                            // Original: stopscore() called after copy protection, before main loop.
+                            if let Some(ref a) = audio_system {
+                                a.stop_score();
+                            }
                             active_scene = None;
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
@@ -483,6 +511,12 @@ pub fn main() -> Result<(), String> {
                 None
             };
 
+            let song_group_count = song_library
+                .as_ref()
+                .map(|l| l.tracks.len() / SongLibrary::VOICES)
+                .unwrap_or(0);
+            let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
+
             let (gday, ghour, gminute) = clock.get_game_wall_clock();
             let state = DebugState {
                 game_day: gday,
@@ -499,8 +533,24 @@ pub fn main() -> Result<(), String> {
                 sys_palette: &sys_palette,
                 image_names: &debug_image_names,
                 image_dimensions: image_dims,
+                song_group_count,
+                current_song_group,
             };
             dw.render(&state);
+
+            // Handle song play/stop requests from the Songs tab
+            if let Some(group) = dw.take_song_request() {
+                if let (Some(ref a), Some(ref lib)) = (audio_system.as_ref(), song_library.as_ref()) {
+                    if !a.play_group(group, lib) {
+                        println!("Debug: song group {} not available", group);
+                    }
+                }
+            }
+            if dw.take_stop_request() {
+                if let Some(ref a) = audio_system {
+                    a.stop_score();
+                }
+            }
         }
 
         if kill_flag {

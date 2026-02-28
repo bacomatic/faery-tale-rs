@@ -6,6 +6,7 @@ use sdl2::event::Event;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
+use crate::game::audio::AudioSystem;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_library::GameLibrary;
 use crate::game::image_texture::ImageTexture;
@@ -38,6 +39,8 @@ pub struct SceneResources<'a, 'tex> {
     /// Scratch texture (320×200 render target) for page flip animation.
     /// Used by IntroScene to snapshot the old page content before flipping.
     pub scratch: &'a mut Texture<'tex>,
+    /// Audio system, for scenes that need to start or stop music.
+    pub audio: Option<&'a AudioSystem>,
 }
 
 impl<'a, 'tex> SceneResources<'a, 'tex> {

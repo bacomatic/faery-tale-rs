@@ -1,5 +1,6 @@
 
 use std::any::Any;
+use std::sync::Arc;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -13,6 +14,7 @@ use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::viewport_zoom::ViewportZoom;
 use crate::game::game_library::GameLibrary;
+use crate::game::songs::Track;
 
 /**
  * The intro scene plays the complete opening sequence:
@@ -91,19 +93,20 @@ const PORTRAIT_X: i32 = 32;
 const PORTRAIT_Y: i32 = 24;
 
 /// How long to display each story page before flipping (ticks at 60Hz).
-/// Original uses Delay(350) at 50Hz = 7 seconds.
-const PAGE_DISPLAY_TICKS: u32 = 420;
+/// Original: Delay(350) inside copypage() at NTSC 60Hz = 5.8s.
+const PAGE_DISPLAY_TICKS: u32 = 350;
 
 /// How long to hold page0 after zoom in before flipping.
-const PAGE0_DISPLAY_TICKS: u32 = 420;
+/// Original: same Delay(350) as other pages.
+const PAGE0_DISPLAY_TICKS: u32 = 350;
 
 /// How long to hold the last page after display before zooming out.
-/// Original: Delay(190) at 50Hz = 3.8s.
-const LAST_PAGE_HOLD_TICKS: u32 = 228;
+/// Original: Delay(190) at NTSC 60Hz = 3.17s.
+const LAST_PAGE_HOLD_TICKS: u32 = 190;
 
 /// How long to hold the title text before proceeding.
-/// Original: Delay(50) x2 at 50Hz ≈ 2 seconds.
-const TITLE_HOLD_TICKS: u32 = 120;
+/// Original: Delay(50) × 2 at NTSC 60Hz = 1.67s total.
+const TITLE_HOLD_TICKS: u32 = 100;
 
 /// Duration of palette fades in ticks (zoom in/out includes a fade).
 /// The zoom itself runs 40 steps x 2 ticks = 80 ticks. The fade runs in parallel.
@@ -117,15 +120,23 @@ const TITLE_Y_OFFSET: i32 = 140;
 pub struct IntroScene {
     phase: IntroPhase,
     skip_requested: bool,
+    /// Intro music tracks (tracks 12-15), to be started when the scene begins
+    /// its visual sequence.  Mirrors the original: playscore() is called after
+    /// the title text delay but before the zoom-in.
+    intro_tracks: Option<[Arc<Track>; 4]>,
+    /// True once play_score() has been called (avoids calling it again on skip).
+    music_started: bool,
 }
 
 impl IntroScene {
-    pub fn new() -> IntroScene {
+    pub fn new(intro_tracks: Option<[Arc<Track>; 4]>) -> IntroScene {
         IntroScene {
             phase: IntroPhase::TitleText {
                 ticks_remaining: TITLE_HOLD_TICKS,
             },
             skip_requested: false,
+            intro_tracks,
+            music_started: false,
         }
     }
 
@@ -274,6 +285,16 @@ impl Scene for IntroScene {
             }
 
             IntroPhase::TitleFadeOut { fader } => {
+                // Start music on the first frame of TitleFadeOut.
+                // Mirrors original: playscore(track[12..15]) is called right before
+                // LoadRGB4(blackcolors) and screen_size(0) — i.e. before zoom-in.
+                if !self.music_started {
+                    if let (Some(tracks), Some(audio)) = (self.intro_tracks.take(), resources.audio) {
+                        audio.play_score(tracks);
+                    }
+                    self.music_started = true;
+                }
+
                 // Brief fade to black using SDL2 color modulation
                 let result = fader.tick(delta);
 
