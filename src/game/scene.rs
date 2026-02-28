@@ -35,6 +35,9 @@ pub struct SceneResources<'a, 'tex> {
     pub image_name_map: &'a HashMap<String, usize>,
     pub amber_font: &'a FontTexture<'tex>,
     pub topaz_font: &'a FontTexture<'tex>,
+    /// Scratch texture (320×200 render target) for page flip animation.
+    /// Used by IntroScene to snapshot the old page content before flipping.
+    pub scratch: &'a mut Texture<'tex>,
 }
 
 impl<'a, 'tex> SceneResources<'a, 'tex> {

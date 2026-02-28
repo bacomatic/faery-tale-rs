@@ -14,11 +14,12 @@
 
 3. **Viewport zoom** — `ViewportZoom` in `src/game/viewport_zoom.rs`. Port of `screen_size()` — computes centered sub-rect for zoom-in (0→160) and zoom-out (156→0). `half_width()` accessor exposes raw zoom position for zoom-position-dependent palette fading. 5 unit tests.
 
-4. **Page flip animation** — `PageFlip` in `src/game/page_flip.rs`. Port of `flipscan()` + `page_det()` with the original 22-step lookup tables. `draw_region()` added to `ImageTexture`.
+4. **Page flip animation** — `PageFlip` in `src/game/page_flip.rs`. Port of `flipscan()` + `page_det()` with the original 22-step lookup tables. Draws directly to the window canvas at display scale using `copy_region()` / `copy_full()` helpers with `&Texture` sources (no `ImageTexture` dependency). `SceneResources` carries a 320×200 scratch render-target texture for the old-page snapshot.
 
 5. **IntroScene** — `IntroScene` in `src/game/intro_scene.rs`. 7-phase FSM: TitleText → TitleFadeOut → ZoomIn → ShowPage → FlipPage → ZoomOut → Done. Space to skip.
    - **TitleFadeOut**: Uses `FadeController::fade_down()` → `FadeResult::ColorMod` applied via `play_tex.set_color_mod()`.
    - **ZoomIn/ZoomOut**: Uses `FadeController::zoom_fade(introcolors, half_width)` per frame to compute a zoom-position-dependent palette with staggered channel ramp-up (red leads, green follows, blue lags — matching original `screen_size()` formula). Re-rasterizes all intro images via `resources.find_image_mut(name).update(&faded_palette, None)`. Restores full-brightness palette when zoom completes.
+   - **FlipPage**: Animated strip-based page flip via `PageFlip`. On enter, snapshots `play_tex` → scratch (old page), draws new overlays onto `play_tex` (new page). Each frame, `PageFlip::update()` composites strips from scratch (old) and `play_tex` (new) directly onto the window canvas at 2× scale with 40 px vertical offset. Timing matches original Delay() values scaled 50 Hz → 60 Hz.
    - Font, image, and placard rendering wire directly through `SceneResources`.
 
 6. **delta_ticks** — `GameClock::update()` returns monotonic delta. Frame delta passed to scenes instead of hardcoded `1`.
@@ -35,7 +36,6 @@
 
 ### Future Refinements (Intro)
 
-- **Animated page flip**: Strip-based column-by-column animation using PageFlip + two scratch textures (currently instant transition)
 - **Animated placard border**: Progressive border drawing over time (currently drawn all at once)
 - **Audio integration**: Intro music (tracks 12-15) during TitleText phase
 

@@ -1,8 +1,6 @@
 
-use crate::game::image_texture::ImageTexture;
-
 use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget};
+use sdl2::render::{Canvas, RenderTarget, Texture};
 
 /**
  * Page flip animation - port of the original flipscan() function.
@@ -15,6 +13,11 @@ use sdl2::render::{Canvas, RenderTarget};
  * new page (pageb) to simulate a physical page turning from right to left.
  *
  * The page_det() function defines a curved page edge shape.
+ *
+ * The animation draws directly to the provided canvas using display-scale
+ * coordinates:  dest_x = src_x * scale,  dest_y = y_offset + src_y * scale.
+ * This allows rendering onto the 640×480 window canvas from 320×200 source
+ * textures without an intermediate offscreen composite.
  */
 
 // rate: how many pixels to advance per strip
@@ -44,15 +47,50 @@ fn page_det(col: i32) -> i32 {
     3 // default for 11..71
 }
 
-/// Manages the animated page flip sequence between two images.
+/// Copy a sub-region from `texture` to `canvas` with display scaling.
+///
+/// `src` is the source rect in native (320×200) coordinates.
+/// The destination is scaled by `scale` and offset vertically by `y_offset`.
+fn copy_region<T: RenderTarget>(
+    canvas: &mut Canvas<T>,
+    texture: &Texture,
+    src: Rect,
+    dst_x: i32,
+    dst_y: i32,
+    scale: u32,
+    y_offset: i32,
+) {
+    let dst = Rect::new(
+        dst_x * scale as i32,
+        y_offset + dst_y * scale as i32,
+        src.width() * scale,
+        src.height() * scale,
+    );
+    canvas.copy(texture, Some(src), Some(dst)).unwrap();
+}
+
+/// Copy the full texture (320×200) to `canvas` with display scaling.
+fn copy_full<T: RenderTarget>(
+    canvas: &mut Canvas<T>,
+    texture: &Texture,
+    scale: u32,
+    y_offset: i32,
+) {
+    let dst = Rect::new(0, y_offset, 320 * scale, 200 * scale);
+    canvas.copy(texture, None, Some(dst)).unwrap();
+}
+
+/// Manages the animated page flip sequence between two textures.
+///
+/// Source textures are expected to be 320×200.  The animation is drawn
+/// directly to the provided canvas using the given display `scale` and
+/// vertical `y_offset`.
 pub struct PageFlip {
     /// Current step index (0..21).
     step: usize,
-    /// Tick accumulator for timing between steps.
-    tick_accum: u32,
     /// Delay remaining for the current step (from FLIP3).
     step_delay: u32,
-    /// Whether this step has been drawn yet.
+    /// Whether this step has been drawn (and its delay computed).
     step_drawn: bool,
 }
 
@@ -60,7 +98,6 @@ impl PageFlip {
     pub fn new() -> PageFlip {
         PageFlip {
             step: 0,
-            tick_accum: 0,
             step_delay: 0,
             step_drawn: false,
         }
@@ -73,54 +110,60 @@ impl PageFlip {
 
     /// Advance the animation by `delta` ticks and draw the current frame.
     ///
-    /// `old_page` and `new_page` are the source images. Drawing happens onto
-    /// the provided canvas. The images are expected to be 320x200 and are
-    /// drawn starting at position (0, 0) in the canvas.
+    /// `old_page` and `new_page` are 320×200 source textures.
+    /// `scale` and `y_offset` map native coordinates to the canvas:
+    ///   dest_x = src_x * scale, dest_y = y_offset + src_y * scale.
     ///
-    /// Returns true if the animation is still running, false when complete.
+    /// Every call draws the current step to the canvas (required because
+    /// the window canvas is cleared each frame).
+    ///
+    /// Returns true while the animation is running, false when complete.
     pub fn update<T: RenderTarget>(
         &mut self,
         canvas: &mut Canvas<T>,
-        old_page: &ImageTexture,
-        new_page: &ImageTexture,
+        old_page: &Texture,
+        new_page: &Texture,
         delta: u32,
+        scale: u32,
+        y_offset: i32,
     ) -> bool {
         if self.is_done() {
             return false;
         }
 
-        // Handle delay between steps
+        // Count down the hold-delay for the current step.
         if self.step_drawn && self.step_delay > 0 {
             if delta >= self.step_delay {
                 self.step_delay = 0;
             } else {
                 self.step_delay -= delta;
-                return true;
             }
         }
 
-        // Time to advance to next step?
-        if self.step_drawn {
+        // When hold-delay expires, advance to the next step.
+        if self.step_drawn && self.step_delay == 0 {
             self.step += 1;
             if self.is_done() {
                 // Draw the final new page
-                new_page.draw(canvas, 0, 0);
+                copy_full(canvas, new_page, scale, y_offset);
                 return false;
             }
             self.step_drawn = false;
         }
 
-        // Draw the current step
-        self.draw_step(canvas, old_page, new_page);
-        self.step_drawn = true;
+        // First time seeing this step — compute its hold-delay.
+        // A minimum delay of 2 ticks (~33ms) approximates the CPU/blitter
+        // overhead on the original Amiga, where even zero-delay steps took
+        // real time to execute flipscan().
+        if !self.step_drawn {
+            let delay_50hz = FLIP3[self.step] as u32;
+            let scaled = (delay_50hz as f32 * 1.2) as u32;
+            self.step_delay = scaled.max(2);
+            self.step_drawn = true;
+        }
 
-        // Convert original Delay(n) at 50Hz to ticks at 60Hz: multiply by 1.2
-        let delay_50hz = FLIP3[self.step] as u32;
-        self.step_delay = (delay_50hz as f32 * 1.2) as u32;
-
-        // Consume one tick for the step itself (each step takes ~1 frame in the original)
-        self.tick_accum = 0;
-
+        // Draw the current step (every frame, since the canvas is cleared).
+        self.draw_step(canvas, old_page, new_page, scale, y_offset);
         true
     }
 
@@ -128,8 +171,10 @@ impl PageFlip {
     fn draw_step<T: RenderTarget>(
         &self,
         canvas: &mut Canvas<T>,
-        old_page: &ImageTexture,
-        new_page: &ImageTexture,
+        old_page: &Texture,
+        new_page: &Texture,
+        scale: u32,
+        y_offset: i32,
     ) {
         let i = self.step;
         let rate = FLIP1[i];
@@ -138,10 +183,9 @@ impl PageFlip {
         if i < 11 {
             // Right half phase: reveal new page on the right, old page strips retreating
 
-            // Draw the right half of the new page (x=160, w=135)
-            // But first draw old page as the base for the left half
-            old_page.draw_region(canvas, Rect::new(0, 0, 160, 200), 0, 0);
-            new_page.draw_region(canvas, Rect::new(160, 0, 135, 200), 160, 0);
+            // Draw the left half from old page and right half from new page
+            copy_region(canvas, old_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
+            copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
 
             if rate == 0 {
                 // No strips to draw, just the base composition
@@ -158,11 +202,11 @@ impl PageFlip {
                 h = page_det(scol);
                 let strip_height = (200 - h - h).max(0);
                 if strip_height > 0 && wide > 0 {
-                    old_page.draw_region(
-                        canvas,
+                    copy_region(
+                        canvas, old_page,
                         Rect::new(bcol + scol, h, wide as u32, strip_height as u32),
-                        161 + dcol,
-                        h,
+                        161 + dcol, h,
+                        scale, y_offset,
                     );
                 }
                 dcol += wide;
@@ -171,11 +215,11 @@ impl PageFlip {
 
             // Draw the spine edge from old page
             if dcol > 0 {
-                old_page.draw_region(
-                    canvas,
+                copy_region(
+                    canvas, old_page,
                     Rect::new(296, 7, 1, 186),
-                    161 + dcol,
-                    h,
+                    161 + dcol, h,
+                    scale, y_offset,
                 );
             }
         } else {
@@ -183,16 +227,15 @@ impl PageFlip {
             let bcol = 160;
 
             if rate == 0 {
-                // Just copy the left half of the new page
-                new_page.draw_region(canvas, Rect::new(24, 0, 135, 200), 24, 0);
-                // Right half is already the new page
-                new_page.draw_region(canvas, Rect::new(160, 0, 135, 200), 160, 0);
+                // Just copy both halves from new page
+                copy_region(canvas, new_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
+                copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
                 return;
             }
 
             // Draw the left half of old page as base, right half is new page
-            old_page.draw_region(canvas, Rect::new(24, 0, 135, 200), 24, 0);
-            new_page.draw_region(canvas, Rect::new(160, 0, 135, 200), 160, 0);
+            copy_region(canvas, old_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
+            copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
 
             // Overlay strips from new page expanding leftward
             let mut dcol: i32 = 0;
@@ -204,11 +247,11 @@ impl PageFlip {
                 dcol += wide;
                 let strip_height = (200 - h - h).max(0);
                 if strip_height > 0 && wide > 0 {
-                    new_page.draw_region(
-                        canvas,
+                    copy_region(
+                        canvas, new_page,
                         Rect::new(bcol - scol, h, wide as u32, strip_height as u32),
-                        bcol - dcol,
-                        h,
+                        bcol - dcol, h,
+                        scale, y_offset,
                     );
                 }
                 scol += rate;
@@ -217,11 +260,11 @@ impl PageFlip {
             // Draw the spine edge from new page
             let h = 7;
             if dcol > 0 {
-                new_page.draw_region(
-                    canvas,
+                copy_region(
+                    canvas, new_page,
                     Rect::new(24, h, 1, (200 - h - h) as u32),
-                    159 - dcol,
-                    h,
+                    159 - dcol, h,
+                    scale, y_offset,
                 );
             }
         }

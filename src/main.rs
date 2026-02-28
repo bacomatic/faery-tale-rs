@@ -200,6 +200,7 @@ pub fn main() -> Result<(), String> {
     }
 
     let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
+    let mut scratch_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
 
     let mut dirty: bool = true;
 
@@ -367,6 +368,7 @@ pub fn main() -> Result<(), String> {
                 image_name_map: &image_name_map,
                 amber_font: &amber_font,
                 topaz_font: &topaz_font,
+                scratch: &mut scratch_tex,
             };
             let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &mut resources);
             match result {

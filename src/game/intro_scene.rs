@@ -8,6 +8,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
+use crate::game::page_flip::PageFlip;
 use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::viewport_zoom::ViewportZoom;
@@ -54,12 +55,13 @@ enum IntroPhase {
         ticks_remaining: u32,
     },
     /// Animate the page flip between two pages.
-    /// For now this is an instant transition; proper strip animation is a
-    /// future enhancement requiring two scratch textures.
+    /// `scratch` holds a snapshot of the old page; `play_tex` holds the new
+    /// page.  PageFlip draws strips from both directly to the window canvas.
     FlipPage {
         from_index: usize,
         to_index: usize,
-        drawn: bool,
+        flipper: PageFlip,
+        initialized: bool,
     },
     /// Zoom out from the last page to black.
     ZoomOut { zoom: ViewportZoom },
@@ -155,7 +157,8 @@ impl IntroScene {
                     IntroPhase::FlipPage {
                         from_index: pi,
                         to_index: pi + 1,
-                        drawn: false,
+                        flipper: PageFlip::new(),
+                        initialized: false,
                     }
                 } else {
                     // Last page shown, now zoom out
@@ -393,30 +396,39 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
-            IntroPhase::FlipPage { to_index, drawn, .. } => {
-                // Instant page transition: draw new page overlays onto play_tex.
-                // play_tex already contains the previous page content (page0 bg +
-                // previous overlays). We simply overlay the new page's portrait
-                // and bio on top, matching the original game's accumulative drawing.
-                //
-                // TODO: Implement proper strip-based page flip animation using
-                // two scratch textures (PageFlip::update).
-                if !*drawn {
+            IntroPhase::FlipPage { to_index, flipper, initialized, .. } => {
+                // On the first frame, snapshot the current play_tex (old page)
+                // into the scratch texture, then draw the new page's overlays
+                // onto play_tex so it becomes the new page.
+                if !*initialized {
+                    // 1. Snapshot play_tex → scratch (old page)
+                    let _ = canvas.with_texture_canvas(resources.scratch, |scratch_canvas| {
+                        scratch_canvas.copy(&*play_tex, None, None).unwrap();
+                    });
+
+                    // 2. Draw new page overlays onto play_tex (new page)
                     let page_idx = *to_index;
                     let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                         draw_page_overlays(page_idx, play_canvas, resources);
                     });
-                    *drawn = true;
+
+                    *initialized = true;
                 }
 
-                // Show the new page briefly then advance
+                // Draw the flip animation: strips from scratch (old) and
+                // play_tex (new) are composited directly onto the window canvas.
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
 
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Reborrow as immutable for canvas.copy() inside PageFlip
+                let old_tex: &Texture = &*resources.scratch;
+                let new_tex: &Texture = &*play_tex;
+                let still_running = flipper.update(canvas, old_tex, new_tex, delta, 2, 40);
 
-                self.advance(game_lib);
+                if !still_running {
+                    self.advance(game_lib);
+                }
+
                 SceneResult::Continue
             }
 
