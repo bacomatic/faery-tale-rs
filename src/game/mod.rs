@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod audio;
 pub mod bitmap;
 pub mod byteops;
 pub mod colors;
@@ -21,4 +22,5 @@ pub mod placard_scene;
 pub mod render_task;
 pub mod scene;
 pub mod settings;
+pub mod songs;
 pub mod viewport_zoom;
