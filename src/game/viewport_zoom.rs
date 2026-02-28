@@ -14,7 +14,7 @@ use sdl2::rect::Rect;
  * Original: for (i = 0; i <= 160; i += 4) screen_size(i)  -> zoom in (40 steps)
  * Original: for (i = 156; i >= 0; i -= 4) screen_size(i)  -> zoom out (40 steps)
  *
- * Each step has a Delay(2) = ~33ms, so the full zoom takes ~1.3 seconds.
+ * Each step has a Delay(2) at NTSC 60Hz = 2 ticks = 33ms, full zoom ≈ 1.3s.
  */
 
 /// The step size used in the original zoom loops.
@@ -48,7 +48,7 @@ pub struct ViewportZoom {
     step: i32,
     /// Tick accumulator for timing. Original uses Delay(2) per step = ~2 ticks at 60Hz.
     tick_accum: u32,
-    /// Ticks per zoom step. Original is ~2 ticks (Delay(2) at 50Hz ≈ 2.4 ticks at 60Hz).
+    /// Ticks per zoom step. Original: Delay(2) at NTSC 60Hz = 2 ticks.
     ticks_per_step: u32,
 }
 

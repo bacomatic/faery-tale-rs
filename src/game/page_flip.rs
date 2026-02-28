@@ -156,9 +156,10 @@ impl PageFlip {
         // overhead on the original Amiga, where even zero-delay steps took
         // real time to execute flipscan().
         if !self.step_drawn {
-            let delay_50hz = FLIP3[self.step] as u32;
-            let scaled = (delay_50hz as f32 * 1.2) as u32;
-            self.step_delay = scaled.max(2);
+            // FLIP3 values are NTSC 60Hz ticks directly — no conversion needed.
+            // A minimum of 2 ticks approximates the blitter/CPU overhead on
+            // the original Amiga even for zero-delay steps.
+            self.step_delay = (FLIP3[self.step] as u32).max(2);
             self.step_drawn = true;
         }
 
