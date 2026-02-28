@@ -19,8 +19,8 @@ use crate::game::placard::{self, Placard};
 use crate::game::render_task::RenderTask;
 use crate::game::settings::GameSettings;
 
-const DEBUG_WINDOW_WIDTH: u32 = 400;
-const DEBUG_WINDOW_HEIGHT: u32 = 500;
+const DEBUG_WINDOW_WIDTH: u32 = 660;
+const DEBUG_WINDOW_HEIGHT: u32 = 520;
 const TAB_BAR_HEIGHT: i32 = 18;
 
 // ── Tab definitions ──────────────────────────────────────────────────
@@ -32,14 +32,16 @@ enum DebugTab {
     Images,
     Tilemap,
     Map,
+    Songs,
 }
 
-const ALL_TABS: [DebugTab; 5] = [
+const ALL_TABS: [DebugTab; 6] = [
     DebugTab::Info,
     DebugTab::Placards,
     DebugTab::Images,
     DebugTab::Tilemap,
     DebugTab::Map,
+    DebugTab::Songs,
 ];
 
 impl DebugTab {
@@ -50,6 +52,7 @@ impl DebugTab {
             DebugTab::Images => "Images",
             DebugTab::Tilemap => "Tilemap",
             DebugTab::Map => "Map",
+            DebugTab::Songs => "Songs",
         }
     }
 
@@ -60,6 +63,7 @@ impl DebugTab {
             DebugTab::Images => "3",
             DebugTab::Tilemap => "4",
             DebugTab::Map => "5",
+            DebugTab::Songs => "6",
         }
     }
 }
@@ -90,6 +94,10 @@ pub struct DebugState<'a> {
     // Image tab data (metadata only; textures can't cross SDL2 renderers)
     pub image_names: &'a [String],
     pub image_dimensions: Option<(u32, u32)>,
+
+    // Songs tab data
+    pub song_group_count: usize,
+    pub current_song_group: Option<usize>,
 }
 
 // ── Per-tab state ────────────────────────────────────────────────────
@@ -102,6 +110,11 @@ struct PlacardTabState {
 
 struct ImageTabState {
     current_index: usize,
+}
+
+struct SongTabState {
+    /// Highlighted (but not necessarily playing) group index (0-based).
+    highlighted_group: usize,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -131,6 +144,13 @@ pub struct DebugWindow<'a> {
     // Per-tab state
     placard_tab: PlacardTabState,
     image_tab: ImageTabState,
+    song_tab: SongTabState,
+
+    /// Song group requested by the user from the Songs tab.
+    /// Consumed by the main loop via `take_song_request()`.
+    song_group_requested: Option<usize>,
+    /// Stop-music request from the Songs tab.
+    stop_requested: bool,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -215,6 +235,9 @@ impl<'a> DebugWindow<'a> {
                 needs_redraw: true,
             },
             image_tab: ImageTabState { current_index: 0 },
+            song_tab: SongTabState { highlighted_group: 0 },
+            song_group_requested: None,
+            stop_requested: false,
             placard_texture: placard_tex,
         })
     }
@@ -232,6 +255,18 @@ impl<'a> DebugWindow<'a> {
     /// Returns the image index currently selected in the debug window's Images tab.
     pub fn image_index(&self) -> usize {
         self.image_tab.current_index
+    }
+
+    /// Consumes and returns a pending play-group request (group index 0–6), if any.
+    pub fn take_song_request(&mut self) -> Option<usize> {
+        self.song_group_requested.take()
+    }
+
+    /// Consumes and returns a pending stop-music request.
+    pub fn take_stop_request(&mut self) -> bool {
+        let v = self.stop_requested;
+        self.stop_requested = false;
+        v
     }
 
     /// Push a log message that will be shown in the debug window.
@@ -268,7 +303,7 @@ impl<'a> DebugWindow<'a> {
                 ..
             } if *window_id == self.window_id => {
                 match sc {
-                    // Tab switching with F1..F5
+                    // Tab switching with F1..F6
                     Scancode::F1 => { self.active_tab = DebugTab::Info; true }
                     Scancode::F2 => {
                         self.active_tab = DebugTab::Placards;
@@ -278,6 +313,7 @@ impl<'a> DebugWindow<'a> {
                     Scancode::F3 => { self.active_tab = DebugTab::Images; true }
                     Scancode::F4 => { self.active_tab = DebugTab::Tilemap; true }
                     Scancode::F5 => { self.active_tab = DebugTab::Map; true }
+                    Scancode::F6 => { self.active_tab = DebugTab::Songs; true }
 
                     // Left/Right to cycle items in content tabs
                     Scancode::Left | Scancode::Right => {
@@ -308,6 +344,32 @@ impl<'a> DebugWindow<'a> {
                         true
                     }
 
+                    // Number keys 1-7 in Songs tab: select/play a group (0-6)
+                    Scancode::Num1 | Scancode::Num2 | Scancode::Num3 | Scancode::Num4 |
+                    Scancode::Num5 | Scancode::Num6 | Scancode::Num7
+                    if self.active_tab == DebugTab::Songs => {
+                        let group = match sc {
+                            Scancode::Num1 => 0,
+                            Scancode::Num2 => 1,
+                            Scancode::Num3 => 2,
+                            Scancode::Num4 => 3,
+                            Scancode::Num5 => 4,
+                            Scancode::Num6 => 5,
+                            Scancode::Num7 => 6,
+                            _ => unreachable!(),
+                        };
+                        self.song_tab.highlighted_group = group;
+                        self.song_group_requested = Some(group);
+                        true
+                    }
+
+                    // Key 0 or S in Songs tab: stop music
+                    Scancode::Num0 | Scancode::S
+                    if self.active_tab == DebugTab::Songs => {
+                        self.stop_requested = true;
+                        true
+                    }
+
                     _ => true, // consume all other keys when debug window focused
                 }
             }
@@ -327,28 +389,32 @@ impl<'a> DebugWindow<'a> {
             self.last_fps_time = Instant::now();
         }
 
+        // Use actual window size so content scales when the window is resized.
+        let (win_w, win_h) = self.canvas.window().size();
+
         // Clear background
         self.canvas.set_draw_color(Color::RGB(30, 30, 30));
         self.canvas.clear();
         self.canvas
-            .set_viewport(Rect::new(0, 0, DEBUG_WINDOW_WIDTH, DEBUG_WINDOW_HEIGHT));
+            .set_viewport(Rect::new(0, 0, win_w, win_h));
 
         // Draw tab bar
-        self.draw_tab_bar();
+        self.draw_tab_bar(win_w);
 
         // Set the content viewport below the tab bar
         let content_y = TAB_BAR_HEIGHT + 2;
-        let content_h = DEBUG_WINDOW_HEIGHT as i32 - content_y;
+        let content_h = win_h as i32 - content_y;
         self.canvas
-            .set_viewport(Rect::new(0, content_y, DEBUG_WINDOW_WIDTH, content_h as u32));
+            .set_viewport(Rect::new(0, content_y, win_w, content_h as u32));
 
         // Render the active tab
         match self.active_tab {
-            DebugTab::Info => self.render_info_tab(state),
-            DebugTab::Placards => self.render_placard_tab(state),
+            DebugTab::Info => self.render_info_tab(state, win_w, win_h),
+            DebugTab::Placards => self.render_placard_tab(state, win_w),
             DebugTab::Images => self.render_image_tab(state),
             DebugTab::Tilemap => self.render_stub_tab("Character / NPC Tilemap", "Not yet implemented"),
             DebugTab::Map => self.render_stub_tab("Map View", "Not yet implemented"),
+            DebugTab::Songs => self.render_songs_tab(state, win_w, win_h),
         }
 
         self.canvas.present();
@@ -356,14 +422,14 @@ impl<'a> DebugWindow<'a> {
 
     // ── Tab bar ──────────────────────────────────────────────────────
 
-    fn draw_tab_bar(&mut self) {
+    fn draw_tab_bar(&mut self, win_w: u32) {
         self.canvas
-            .set_viewport(Rect::new(0, 0, DEBUG_WINDOW_WIDTH, TAB_BAR_HEIGHT as u32));
+            .set_viewport(Rect::new(0, 0, win_w, TAB_BAR_HEIGHT as u32));
 
         // Background
         self.canvas.set_draw_color(Color::RGB(50, 50, 50));
         self.canvas
-            .fill_rect(Rect::new(0, 0, DEBUG_WINDOW_WIDTH, TAB_BAR_HEIGHT as u32))
+            .fill_rect(Rect::new(0, 0, win_w, TAB_BAR_HEIGHT as u32))
             .ok();
 
         let font_ref = self.font_text.borrow();
@@ -400,14 +466,14 @@ impl<'a> DebugWindow<'a> {
         self.canvas
             .draw_line(
                 sdl2::rect::Point::new(0, TAB_BAR_HEIGHT - 1),
-                sdl2::rect::Point::new(DEBUG_WINDOW_WIDTH as i32, TAB_BAR_HEIGHT - 1),
+                sdl2::rect::Point::new(win_w as i32, TAB_BAR_HEIGHT - 1),
             )
             .ok();
     }
 
     // ── Info tab (original debug view) ───────────────────────────────
 
-    fn render_info_tab(&mut self, state: &DebugState) {
+    fn render_info_tab(&mut self, state: &DebugState, _win_w: u32, win_h: u32) {
         let font_ref = self.font_text.borrow();
         let line_height: i32 = font_ref.get_font().y_size as i32 + 2;
         let left: i32 = 10;
@@ -466,7 +532,7 @@ impl<'a> DebugWindow<'a> {
         for line in &self.log_lines {
             font_ref.render_string(line, &mut self.canvas, left, y);
             y += line_height;
-            if y > DEBUG_WINDOW_HEIGHT as i32 - TAB_BAR_HEIGHT - line_height {
+            if y > win_h as i32 - TAB_BAR_HEIGHT - line_height {
                 break;
             }
         }
@@ -474,7 +540,7 @@ impl<'a> DebugWindow<'a> {
 
     // ── Placard tab ──────────────────────────────────────────────────
 
-    fn render_placard_tab(&mut self, state: &DebugState) {
+    fn render_placard_tab(&mut self, state: &DebugState, win_w: u32) {
         let num_placards = state.placard_names.len();
         if num_placards == 0 {
             self.render_stub_tab("Placards", "No placards loaded");
@@ -521,8 +587,8 @@ impl<'a> DebugWindow<'a> {
         }
 
         // Blit the offscreen texture into the debug window canvas, scaled
-        let dest_w = DEBUG_WINDOW_WIDTH;
-        let dest_h = (200.0 * (DEBUG_WINDOW_WIDTH as f64 / 320.0)) as u32;
+        let dest_w = win_w;
+        let dest_h = (200.0 * (win_w as f64 / 320.0)) as u32;
         let dest_y = 30;
         self.canvas
             .copy(
@@ -588,6 +654,87 @@ impl<'a> DebugWindow<'a> {
         font_ref.render_string("Left/Right to browse", &mut self.canvas, left, y);
     }
 
+    // ── Songs tab ────────────────────────────────────────────────────
+
+    fn render_songs_tab(&mut self, state: &DebugState, win_w: u32, win_h: u32) {
+        let font_ref = self.font_text.borrow();
+        let line_height = font_ref.get_font().y_size as i32 + 2;
+        let left = 10;
+        let mut y = 6;
+
+        set_font_color(&self.font_texture, 180, 220, 255);
+        font_ref.render_string("Songs", &mut self.canvas, left, y);
+        y += line_height + 4;
+
+        draw_separator(&mut self.canvas, y - 4);
+
+        let n = state.song_group_count;
+        if n == 0 {
+            set_font_color(&self.font_texture, 140, 140, 140);
+            font_ref.render_string("No songs loaded", &mut self.canvas, left, y);
+            return;
+        }
+
+        // Show current playback status
+        let status = match state.current_song_group {
+            Some(g) => format!("Playing: Group {} ({})", g + 1, song_group_label(g)),
+            None    => "Stopped".to_string(),
+        };
+        set_font_color(&self.font_texture, 100, 220, 100);
+        font_ref.render_string(&status, &mut self.canvas, left, y);
+        y += line_height + 6;
+
+        draw_separator(&mut self.canvas, y - 4);
+
+        // List all groups; highlight the currently-playing one and the
+        // highlighted (cursor) one.
+        let highlighted = self.song_tab.highlighted_group;
+        for g in 0..n {
+            let is_playing  = state.current_song_group == Some(g);
+            let is_cursor   = highlighted == g;
+
+            // Background highlight for selected row
+            if is_cursor || is_playing {
+                let bg = if is_playing {
+                    Color::RGB(40, 80, 40)
+                } else {
+                    Color::RGB(50, 50, 80)
+                };
+                self.canvas.set_draw_color(bg);
+                self.canvas
+                    .fill_rect(Rect::new(left - 2, y - 1, win_w.saturating_sub(14), line_height as u32 + 2))
+                    .ok();
+            }
+
+            // Row text color
+            if is_playing {
+                set_font_color(&self.font_texture, 80, 255, 80);
+            } else if is_cursor {
+                set_font_color(&self.font_texture, 255, 255, 160);
+            } else {
+                set_font_color(&self.font_texture, 200, 200, 200);
+            }
+
+            let marker = if is_playing { ">" } else { " " };
+            let row = format!("{} [{}] Group {} – {}", marker, g + 1, g + 1, song_group_label(g));
+            font_ref.render_string(&row, &mut self.canvas, left, y);
+            y += line_height;
+
+            if y > win_h as i32 - TAB_BAR_HEIGHT - line_height {
+                break;
+            }
+        }
+
+        y += line_height;
+        set_font_color(&self.font_texture, 140, 140, 140);
+        font_ref.render_string(
+            "1-7: play group  0/S: stop",
+            &mut self.canvas,
+            left,
+            y,
+        );
+    }
+
     // ── Stub tab (for unimplemented tabs) ────────────────────────────
 
     fn render_stub_tab(&mut self, title: &str, message: &str) {
@@ -633,10 +780,29 @@ fn set_font_color(font_texture: &Rc<RefCell<sdl2::render::Texture>>, r: u8, g: u
 
 fn draw_separator(canvas: &mut Canvas<Window>, y: i32) {
     canvas.set_draw_color(Color::RGB(80, 80, 80));
+    // Use the current viewport width (output_size tracks the active viewport).
+    let (vp_w, _) = canvas.output_size().unwrap_or((660, 520));
     canvas
         .draw_line(
             sdl2::rect::Point::new(5, y),
-            sdl2::rect::Point::new(DEBUG_WINDOW_WIDTH as i32 - 5, y),
+            sdl2::rect::Point::new(vp_w as i32 - 5, y),
         )
         .ok();
+}
+
+/// Human-readable label for a song group index.
+///
+/// Group 3 is the intro music; the rest are identified by their track-slot
+/// offset so they can be cross-referenced with the original source.
+fn song_group_label(group: usize) -> &'static str {
+    match group {
+        0 => "Outdoor daytime",
+        1 => "Battle",
+        2 => "Outdoor nighttime",
+        3 => "Intro sequence",
+        4 => "Palace zone",
+        5 => "Indoor / dungeon",
+        6 => "Death / game over",
+        _ => "Unknown",
+    }
 }
