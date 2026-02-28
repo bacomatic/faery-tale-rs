@@ -2,6 +2,7 @@
 name = "fmainrs"
 version = "0.1.0"
 edition = "2021"
+default-run = "fmainrs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -14,3 +15,11 @@ toml = "0.9.10"
 [dependencies.sdl2]
 version = "0.37.0"
 features = ["mixer"]
+
+[[bin]]
+name = "music_viz"
+path = "src/bin/music_viz.rs"
+
+[[bin]]
+name = "vkbd"
+path = "src/bin/vkbd.rs"
