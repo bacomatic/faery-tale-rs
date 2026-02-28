@@ -16,7 +16,7 @@ Key directive: **be true to the original game** — no enhancements or bug fixes
 # Linux prerequisites (apt-based)
 sudo apt install rust libsdl2-dev libsdl2-gfx-dev libsdl2-mixer-dev
 
-# Build and run
+# Build and run (fmainrs is the default-run binary)
 cargo build
 cargo run
 
@@ -25,6 +25,9 @@ cargo run -- --debug
 
 # Run the terminal music visualizer (group 0-6, default 3 = intro)
 cargo run --bin music_viz [-- <group>]
+
+# Run the terminal virtual keyboard / instrument tuning tool
+cargo run --bin vkbd
 
 # Run tests
 cargo test
@@ -79,6 +82,25 @@ All game modules live under `src/game/` with `mod.rs` as the public module list.
 - `songs.rs` — Parses `game/songs` into 28 tracks across 7 song groups × 4 Paula voices. `TrackEvent` enum models all commands from `gdriver.asm`. Exposes `PTABLE` (84 period/wave-offset entries), `NOTE_DURATIONS` (64 tick counts), `AMIGA_CLOCK_NTSC`, `VBL_RATE_HZ` (60), and `DEFAULT_TEMPO` (150). `SongLibrary::intro_tracks()` returns tracks 12–15.
 - `audio.rs` — SDL2 audio callback running a VBL sequencer at 60 Hz. `Instruments` loads waveforms and ADSR envelopes from `game/v6`. `SequencerState` drives 4 `Voice`s with timeclock stepping. PCM synthesis uses linear interpolation and a 1-pole IIR low-pass (~4800 Hz, approximating the Amiga A500 RC filter). `AudioSystem` exposes `play_score()`, `stop_score()`, `play_group()`.
 
+**PTABLE layout and frequency formula**:
+
+The `PTABLE` holds 84 `(period, wave_offset)` pairs (7 rows × 12 pitches). Each row of 12 covers one chromatic octave **starting at A** (not C). C is always at index +3 within a row.
+
+The correct Amiga audio frequency formula (per hardware reference):
+```
+frequency = AMIGA_CLOCK_NTSC / (sample_bytes × period)
+          = 3,579,545 / (wave_len × period)
+```
+where `wave_len = (32 - wave_offset) × 2` bytes (= `AUDxLEN` words × 2). This is replicated in `audio.rs` as `phase_inc = AMIGA_CLOCK / (period × SAMPLE_RATE)`, giving `frequency = SAMPLE_RATE × phase_inc / wave_len`.
+
+`wave_offset` controls which sub-portion of the 128-byte waveform is looped:
+- `wave_offset=0`: start=0, len=64 bytes (lowest octave for this waveform)
+- `wave_offset=16`: start=64, len=32 bytes (one octave higher — same period, half the loop)
+- `wave_offset=24`: start=96, len=16 bytes (two octaves higher)
+- `wave_offset=28`: start=112, len=8 bytes (three octaves higher)
+
+`v6` file layout: bytes 0–1023 = 8 waveforms × 128 signed bytes; bytes 1024–2047 = skipped (matching original `Seek(+S_WAVBUF, OFFSET_CURRENT)`); bytes 2048–4607 = 10 ADSR envelopes × 256 bytes.
+
 **Other modules**:
 - `game_clock.rs` — 60Hz tick-based clock. Game day = 24,000 ticks (~6m40s real time). Tracks day phases (Midnight/Morning/Midday/Evening) matching original `daynight` variable
 - `settings.rs` — Persists to `~/.config/faery/settings.toml` via serde/TOML
@@ -105,8 +127,9 @@ All game modules live under `src/game/` with `mod.rs` as the public module list.
 - All byte-level operations for binary file parsing go through `byteops.rs` helpers (`read_u8`, `read_u16`, `read_u32`, `read_string`)
 
 **Binaries**:
-- `src/main.rs` — main game binary (`fmainrs`)
+- `src/main.rs` — main game binary (`fmainrs`). `default-run = "fmainrs"` in `Cargo.toml` so `cargo run` launches this.
 - `src/bin/music_viz.rs` — standalone terminal music visualizer. Plays any of the 7 song groups through SDL2 audio while rendering a scrolling piano-roll via crossterm. Self-contained: includes `songs.rs` directly and keeps a private copy of the synth logic.
+- `src/bin/vkbd.rs` — standalone terminal virtual keyboard and instrument tuning tool. Renders a two-row piano keyboard (ASDF = white keys, QWERTY = black keys, standard DAW layout). 4-voice polyphony using the game instruments from `game/v6`. Features: latch mode (`Shift`+key), arrow-key pitch bending on latched notes, octave shift (`Z`/`X`), instrument switching (`1`–`9`, `[`/`]`), sine-wave mode (`Tab`) with adjustable H2/H3 harmonics, live PTABLE period editing (numpad `2`/`8` fine ±1, `Shift`+numpad ±10), and PTABLE export to stdout on quit. Self-contained private synth copy (no changes to `game::audio`).
 
 ## Current State & Roadmap
 

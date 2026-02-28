@@ -85,6 +85,124 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
 
 ---
 
+## Plan: Virtual Keyboard & Sine Wave Tuning Tool
+
+**Status:** Complete
+
+**Implementation notes (divergences from original plan):**
+- Period tuning uses **numpad `2`/`8`** (fine ±1) and **`Shift`+numpad** (coarse ±10) instead of F5/F6.
+- Frequency formula corrected per Amiga hardware reference: `AMIGA_CLOCK / (wave_len × period)` where `wave_len = (32 - wave_offset) × 2`. Prior display used just `AMIGA_CLOCK / period` (8–64× too high).
+- Pitch offset fixed: PTABLE rows start at **A**, not C. `pitch_for_key` adds +3 so that the 'A' key sounds C at the selected octave. White key note labels use the same corrected formula.
+
+**TL;DR:** Add a new `src/bin/vkbd.rs` standalone binary (following the `music_viz` pattern) that renders a terminal piano keyboard via crossterm. The bottom ASDF row maps to white keys, the QWERTY row to black keys (standard DAW layout). A sine wave instrument mode with configurable H2/H3 harmonics lives inside the same tool for PTABLE frequency tuning. Instrument switching uses both `1`–`9` number keys and `[`/`]`. The synth is a private copy (same as `music_viz`) to avoid modifying `game::audio`.
+
+### Steps
+
+1. **Register the binary in `Cargo.toml`** — add `[[bin]] name = "vkbd" path = "src/bin/vkbd.rs"` alongside the `music_viz` entry.
+
+2. **Define the keyboard → pitch mapping** in a `const` array at the top of the file. Standard two-row DAW layout:
+   - White keys (ASDF row): `A`=C, `S`=D, `D`=E, `F`=F, `G`=G, `H`=A, `J`=B, `K`=C+1, `L`=D+1, `;`=E+1
+   - Black keys (QWERTY row): `W`=C#, `E`=D#, `T`=F#, `Y`=G#, `U`=A#, `O`=C#+1, `P`=D#+1
+   - Each char maps to a semitone offset 0–16; add `base_octave * 12` to get the absolute `PTABLE` index, clamped 0–83.
+
+3. **Private synth copy** following the `music_viz` pattern:
+   - Pull in `songs.rs` with `#[path = "../game/songs.rs"] mod songs;`
+   - Copy `Instruments`, `Voice`, and a stripped-down `SynthCallback` from `music_viz`/`audio.rs`
+   - **Extend `Voice` for manual sustain**: add a `manual: bool` field. When `true`, the voice ignores all event-based timing and renders continuously until `Voice::silence()` is called explicitly — no `event_stop` processing
+   - Replace `SequencerState` with a simpler `struct ManualState { voices: [Voice; 4], instruments: Instruments, current_instrument: usize, sine_mode: bool, sine_config: SineConfig }` — no track/timeclock machinery
+   - Expose `fn trigger_voice(voice_idx: usize, pitch: u8)` and `fn release_voice(voice_idx: usize)` on `ManualState` for direct keydown/keyup control
+   - SDL2 audio callback only calls `mix_stereo()` per voice — no VBL tick or sequencer stepping
+
+4. **Polyphony and sustain**: track `held_keys: HashMap<char, (u8, usize)>` mapping key char → `(pitch, voice_idx)`. On keydown, assign the next free voice (round-robin 0–3); on keyup, release only that voice. Up to 4 simultaneous keys sustained.
+   - **Latch mode** (`Shift`+key): pressing `Shift`+piano-key latches the note — it sustains indefinitely after key release. The keyboard display marks latched keys distinctly (e.g. bold/underline). Pressing the same key again (with or without `Shift`) unlatches and silences it. Multiple keys can be latched simultaneously (up to 4 voices).
+   - **Arrow-key pitch bending on latched notes**: while one or more notes are latched, arrow keys re-pitch the most-recently-latched voice:
+     - `→` — move to the next higher semitone (pitch + 1, clamped to 83)
+     - `←` — move to the next lower semitone (pitch − 1, clamped to 0)
+     - `↑` — jump to the nearest black key (sharp/flat) above current pitch
+     - `↓` — jump to the nearest white key (natural) below current pitch
+     - The voice is re-triggered at the new pitch without releasing first (seamless glide). The held_keys entry and keyboard display update to reflect the new note.
+
+5. **Sine wave instrument mode**:
+   - `struct SineConfig { harmonic2: f32, harmonic3: f32 }` — additive amplitudes for harmonics relative to fundamental (each clamped 0.0–1.0)
+   - `fn generate_sine_waveform(config: &SineConfig) -> [i8; 128]`: sum `sin(2πi/128)` + `h2 * sin(4πi/128)` + `h3 * sin(6πi/128)`, normalize peak to ±127
+   - `Tab` toggles sine mode: swaps the current instrument's waveform slot with the generated sine (or restores the original). Update happens under the audio mutex — latency-free, no restart
+   - `F2`/`F3` selects which harmonic to adjust; `+`/`-` adjusts its amplitude by ±0.05, regenerates and re-uploads the waveform immediately
+
+6. **Live PTABLE editing**:
+   - While a note is sounding (held or latched), the user can fine-tune the period value for that pitch's PTABLE entry in real time:
+     - `F5`/`F6` — decrease/increase the period by 1 (fine tuning)
+     - `Shift`+`F5`/`Shift`+`F6` — decrease/increase the period by 10 (coarse tuning)
+   - Period changes apply to the currently sounding pitch index in a mutable copy of `PTABLE` (the original is const). The active voice's `phase_inc` is recalculated immediately so the frequency shift is audible while the note sustains.
+   - The status bar shows the current pitch's PTABLE entry: `Pitch: 36  Period: 428 → 425  Freq: 8362.7 Hz`
+   - A `ptable_dirty` flag tracks whether any entry has been modified.
+
+7. **PTABLE export on exit**:
+   - If `ptable_dirty` is true when the user quits (`Q`/Esc), print the full modified PTABLE to stdout as a Rust `const` array (copy-pasteable into `songs.rs`):
+     ```
+     // Modified PTABLE — paste into src/game/songs.rs
+     pub const PTABLE: [(u16, u16); 84] = [
+         (1440, 0), (1360, 0), ...
+         (428, 16), (404, 16), ...  // ← modified entries marked with comment
+     ];
+     ```
+   - Only entries that differ from the original are annotated with `// was <old_period>`.
+   - This output appears after crossterm cleanup so terminal formatting is clean.
+
+8. **Key input handling** (crossterm raw mode):
+   - Piano key press → `trigger_voice(next_free, pitch)`; release → `release_voice(idx)`
+   - `Shift`+piano-key → latch/unlatch note (toggle)
+   - `←`/`→`/`↑`/`↓` → re-pitch most-recently-latched voice (see step 4)
+   - `Z`/`X` → decrement/increment `base_octave` (0–6), re-display
+   - `1`–`9` → set `current_instrument` directly; `[`/`]` → decrement/increment, both wrap around 0–11
+   - `Tab` → toggle sine mode
+   - `F2`/`F3` + `+`/`-` → harmonic amplitude control (only active in sine mode)
+   - `F5`/`F6` → fine-tune period (±1); `Shift`+`F5`/`F6` → coarse-tune period (±10)
+   - `Q`/Esc → if ptable dirty, print modified PTABLE; cleanup crossterm, quit
+
+9. **Terminal rendering** (refresh on every state change):
+   - **Two-row ASCII piano keyboard** — ~5 chars per white-key section. Pressed keys highlighted (inverted background via crossterm styling). Latched keys shown with a distinct style (e.g. bold + underline). Each key labelled with its note name (C, C#, …) below:
+     ```
+     |   |W |   |E |   |   |T |   |Y |   |U |   |
+     | A | S | D | F | G | H | J | K | L | ; |
+     | C | D | E | F | G | A | B | C | D | E |
+     ```
+   - **Status bar** above the keyboard:
+     ```
+     Instrument: 3 (Flute)  |  Octave: 3  |  Sine: ON  |  H2: 0.30  H3: 0.10
+     Pitch: 36  Period: 428 → 425  Freq: 8362.7 Hz  [MODIFIED]
+     [1-9]/[/]=instr  Z/X=oct  Tab=sine  Shift+key=latch  Arrows=bend  F5/F6=tune  Q=quit
+     ```
+   - When no note is active, the pitch/period line shows `(no active note)`.
+   - Reuse `INSTRUMENT_NAMES` array from `music_viz` verbatim for the status display.
+
+### Decisions
+
+- Self-contained private synth (no changes to `game::audio`) — consistent with `music_viz`, zero risk to game code
+- Crossterm terminal rendering — matches `music_viz` aesthetic
+- Sine wave mode lives inside the keyboard tool — no separate binary needed
+- Configurable H2 + H3 harmonics — richer tuning signal than pure sine alone
+- Both `1`–`9` and `[`/`]` for instrument switching
+- Round-robin polyphony across 4 voices — matches Paula hardware voice count
+- Latch (Shift+key) rather than a global sustain toggle — allows selective per-key sustain
+- Arrow keys re-pitch the most-recently-latched voice — natural for single-note tuning workflows
+- PTABLE edits are exported as a Rust const on exit — zero-friction workflow for testing changes in-game
+
+### Verification
+
+- `cargo build --bin vkbd` compiles cleanly
+- Pressing `A` plays C at the selected octave; releasing silences it
+- Up to 4 keys held simultaneously each sustain independently
+- `Shift`+`A` latches C — it keeps sounding after release; pressing `A` again unlatches and silences it
+- While C is latched, `→` shifts to C#, `→` again to D; `↑` jumps to nearest black key, `↓` to nearest white key
+- `Z`/`X` shifts the octave and note labels update
+- `1`–`9` and `[`/`]` both switch instruments with audible timbre change
+- `Tab` switches to sine mode; key C plays a pure sine at the correct PTABLE frequency
+- `F2` + `+`/`-` adjusts H2 amplitude; tone changes in real time without clicking
+- While a note sustains, `F5`/`F6` adjusts the period and the pitch shifts audibly; status bar shows old → new period and frequency
+- On quit with modified PTABLE, a valid Rust `const PTABLE` array is printed to stdout with change annotations
+
+---
+
 ## Plan: Game World & Map System
 
 **Status:** Not started
