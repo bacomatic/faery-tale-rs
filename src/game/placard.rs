@@ -78,8 +78,12 @@ pub struct PlacardRenderer {
     block_index: usize, // outer loop: current block index 0..17
     segment_index: usize, // inner loop: current segment index 0..16
 
-    xorg: i32, // current x origin for drawing
-    yorg: i32, // current y origin for drawing
+    xorg: i32, // current x origin for drawing (border-local)
+    yorg: i32, // current y origin for drawing (border-local)
+
+    /// Horizontal pixel offset applied to all drawn x coordinates.
+    /// Set to (canvas_width - 284) / 2 for horizontal centering.
+    x_offset: i32,
 
     colors: [Color; 2], // colors to use for drawing, based on the palette provided when starting
 }
@@ -115,24 +119,24 @@ impl PlacardRenderer {
             if self.block_index < 7 {
                     // Left
                 canvas.draw_line(
-                    Point::new(self.xorg, self.yorg),
-                    Point::new(dx, dy)
+                    Point::new(self.xorg + self.x_offset, self.yorg),
+                    Point::new(dx + self.x_offset, dy)
                 ).unwrap();
                     // Right
                 canvas.draw_line(
-                    Point::new(284 - self.xorg, 124 - self.yorg),
-                    Point::new(284 - dx, 124 - dy)
+                    Point::new(284 - self.xorg + self.x_offset, 124 - self.yorg),
+                    Point::new(284 - dx + self.x_offset, 124 - dy)
                 ).unwrap();
             }
                 // Top
             canvas.draw_line(
-                Point::new(16 + self.yorg, 12 - self.xorg),
-                Point::new(16 + dy, 12 - dx)
+                Point::new(16 + self.yorg + self.x_offset, 12 - self.xorg),
+                Point::new(16 + dy + self.x_offset, 12 - dx)
             ).unwrap();
                 // Bottom
             canvas.draw_line(
-                Point::new(268 - self.yorg, 112 + self.xorg),
-                Point::new(268 - dy, 112 + dx)
+                Point::new(268 - self.yorg + self.x_offset, 112 + self.xorg),
+                Point::new(268 - dy + self.x_offset, 112 + dx)
             ).unwrap();
 
             self.xorg = dx;
@@ -155,24 +159,24 @@ impl PlacardRenderer {
             if self.block_index < 7 {
                     // Left
                 canvas.draw_line(
-                    Point::new(self.xorg, self.yorg),
-                    Point::new(dx, dy)
+                    Point::new(self.xorg + self.x_offset, self.yorg),
+                    Point::new(dx + self.x_offset, dy)
                 ).unwrap();
                     // Right
                 canvas.draw_line(
-                    Point::new(284 - self.xorg, 124 - self.yorg),
-                    Point::new(284 - dx, 124 - dy)
+                    Point::new(284 - self.xorg + self.x_offset, 124 - self.yorg),
+                    Point::new(284 - dx + self.x_offset, 124 - dy)
                 ).unwrap();
             }
                 // Top
             canvas.draw_line(
-                Point::new(16 + self.yorg, 12 - self.xorg),
-                Point::new(16 + dy, 12 - dx)
+                Point::new(16 + self.yorg + self.x_offset, 12 - self.xorg),
+                Point::new(16 + dy + self.x_offset, 12 - dx)
             ).unwrap();
                 // Bottom
             canvas.draw_line(
-                Point::new(268 - self.yorg, 112 + self.xorg),
-                Point::new(268 - dy, 112 + dx)
+                Point::new(268 - self.yorg + self.x_offset, 112 + self.xorg),
+                Point::new(268 - dy + self.x_offset, 112 + dx)
             ).unwrap();
         }
 
@@ -203,8 +207,9 @@ pub fn start_placard_renderer(
     PlacardRenderer {
         block_index: 0,
         segment_index: 0,
-        xorg: origin.x + 12,
-        yorg: origin.y + 0,
+        xorg: 12, // border-local starting position
+        yorg: 0,
+        x_offset: origin.x,
         colors: [color1, color2]
     }
 }

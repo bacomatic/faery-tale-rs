@@ -208,33 +208,111 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
 **Status:** Not started
 
 ### Overview
-Load and render the game world from the `fmain` binary. This includes map tiles, terrain data, scrolling viewport, and the main play UI.
+
+Load and render the game world from the `game/image` ADF disk image. This includes the tile graphics, map sector data, terrain data, scrolling viewport, and the main play UI frame. The data pipeline closely mirrors the original Amiga code in `fmain.c`, `fsubs.asm`, and `hdrive.c`.
+
+### Data Format Reference
+
+All game world data lives in `game/image`, an Amiga 880KB floppy disk image accessed as a flat file. `load_track_range(block, count, buf)` reads `count × 512` bytes from offset `block × 512`.
+
+**Memory regions loaded from `game/image`:**
+
+| Buffer | ADF source | Size | Description |
+|---|---|---|---|
+| `sector_mem` | `nd->sector`, 64 blocks | 32 768 B | 128 sectors × 256 bytes; tile indices |
+| `map_mem` | `nd->region`, 8 blocks | 4 096 B | Region map; maps `(secx, secy)` → sector number |
+| `terra_mem[0..512]` | `TERRA_BLOCK + nd->terra1`, 1 block | 512 B | Terrain type table, layer 1 |
+| `terra_mem[512..1024]` | `TERRA_BLOCK + nd->terra2`, 1 block | 512 B | Terrain type table, layer 2 |
+| `image_mem` | 4 tilesets × (5 planes × 8 blocks) | 81 920 B | Tile graphics; 4 groups × 64 tiles × 5 bitplanes × 64 B |
+
+**Tile format:**
+- 16 × 32 pixels, 5 bitplanes (→ 32 colours from a 32-entry palette)
+- 64 bytes per plane per tile (2 bytes/row × 32 rows)
+- `image_mem` layout: plane stride = `IPLAN_SZ` = 16 384 B; tileset stride within each plane = `QPLAN_SZ` = 4 096 B
+- Tile `n` in group `g`, plane `p`: byte offset = `p × IPLAN_SZ + g × QPLAN_SZ + n × 64`
+
+**Viewport and coordinate system:**
+- World: up to `MAXCOORD = 32 768` units each axis (pixel coordinates)
+- Image units: 16 px wide × 32 px tall per tile
+- Sectors: 16 × 8 image units = 256 × 256 pixels (128 sectors per axis via `map_mem` grid)
+- Screen playfield: 288 × 140 lores px, x-offset 16 px from left edge
+- Viewport tile grid: `minimap[114]` = 19 columns × 6 rows (each short = tile index)
+- `map_x = hero_x − 144`, `map_y = hero_y − 90` (hero centred)
+- `img_x = map_x >> 4`, `img_y = map_y >> 5`
+
+**Region table (`file_index[10]`):** Ten outdoor/indoor regions (F1–F10); each `struct need` holds: `image[4]` (4 tileset ADF block numbers), `terra1`, `terra2`, `sector`, `region`, `setchar`. Region 0–7 = outdoor, 8–9 = indoor/dungeon. `region_num` selects the active region.
+
+**`genmini(img_x, img_y)`** (asm in `fsubs.asm`): Fills `minimap[114]` by walking the 19×6 tile grid, looking up each tile's sector via `map_mem`, then its byte value from `sector_mem`. Used as the tile index for rendering.
+
+**`map_draw()`** (asm in `fsubs.asm`): Blits all 114 minimap tiles to the 5-plane screen bitplanes, column by column (19 strips × 6 tiles each). Tile `image_mem` offset = `plane_base + char_idx × 64`.
 
 ### Steps
 
-1. **Decode `fmain` binary**
-   - The Amiga executable (`game/fmain`) contains embedded game data: maps, object tables, NPC data, item lists
-   - Hunk loader exists (`src/game/hunk.rs`) — use it to extract data segments
-   - Map segment offsets are partially decoded; continue reverse-engineering
+1. **ADF reader module** (`src/game/adf.rs`)
+   - Struct `AdfDisk` wraps `Vec<u8>` (the 880 KB `game/image` bytes)
+   - `load_blocks(f_block: u32, count: u32) -> &[u8]`: returns a slice at `[f_block*512 .. (f_block+count)*512]`
+   - Parse `faery.toml` (or hard-code) the block offsets for region F3 as the starting region (region_num=3, `current_loads = {0,0,0,0,1,2,0,0,0}` = sector block 0, region block 0 which are placeholder defaults — actual starting values are in `file_index[3]`)
+   - Add `game/image` path to `GameLibrary` / `faery.toml`
 
-2. **Tileset loading**
-   - Extract tile graphics from the game data
-   - Build tile atlas texture (similar to image atlas pattern)
+2. **Load starting region data** (`src/game/world_data.rs`)
+   - `WorldData` struct: owns `sector_mem: [u8; 32768]`, `map_mem: [u8; 4096]`, `terra_mem: [u8; 1024]`, `image_mem: Box<[u8; 81920]>`
+   - `WorldData::load(adf, region_index)`: reads the 4 tilesets and associated map data for region `file_index[region_index]`
+   - Port the `load_new_region()` logic faithfully including the async-equivalent sequencing (all loads are synchronous in our Rust port)
 
-3. **Map loading and rendering**
-   - Parse map data into a 2D tile grid
-   - Render visible tiles to the offscreen texture
-   - Implement smooth pixel-level scrolling (original uses `RxOffset`/`RyOffset`)
+3. **Build tile atlas texture** (`src/game/tile_atlas.rs`)
+   - From `image_mem`, decode all 256 tiles (4 groups × 64 tiles) into RGBA32 pixels using the region's palette
+   - Pack them into an SDL2 texture atlas: 16 tiles per row × 16 rows = 256 tiles, each 16 × 32 px → atlas = 256 × 512 px
+   - `TileAtlas::tile_src_rect(tile_idx: u8) -> Rect` for SDL2 `copy()` calls
+   - `TileAtlas::rebuild(image_mem, palette)` for re-palette on region transition
 
-4. **Main viewport UI**
-   - Play field (scrolling map view)
-   - Scroll text area (message output)
-   - UI buttons
-   - Compass
+4. **`genmini` port** (`src/game/map_view.rs`)
+   - `fn genmini(img_x: u16, img_y: u16, map_mem: &[u8], sector_mem: &[u8]) -> [u16; 114]`
+   - Direct port of the asm logic: `secx = (img_x >> 4).wrapping_sub(xreg)` with wrapping/clamping, `secy = (img_y >> 5) - yreg` clamped 0–31, `sec_num = map_mem[secx + secy*128]`, then `tile_idx = sector_mem[sec_num*128 + (img_y&7)*16 + (img_x&15)]`
+   - Initially hard-code `xreg`/`yreg` as 0; proper region tracking comes later
 
-5. **HiScreen overlay**
-   - Load and display `hiscreen` IFF image as the UI frame
-   - Place viewport within the frame bounds
+5. **Map rendering** (`src/game/map_view.rs` or `gameplay_scene.rs`)
+   - Given `minimap[114]`, blit 19 × 6 tiles to `play_tex` using `TileAtlas`
+   - Each tile: dst rect = `Rect::new(col*16 + 16, row*32, 16, 32)` (x-offset 16 px to match original `vp_page.DxOffset`)
+   - Pixel-accurate scroll: sub-tile pixel offset from `map_x % 16` / `map_y % 32` shifts all blit destinations
+   - On each frame: recompute minimap from current hero position, blit tiles, draw `hiscreen` overlay
+
+6. **HiScreen overlay** (`src/game/gameplay_scene.rs`)
+   - Load `game/hiscreen` as an `IffImage` (640 × 57 px, already supported by `iff_image.rs`)
+   - Render it to the bottom strip of the 640 × 480 canvas below `play_tex` (at y = 480 − 57 = 423 or matching original `PAGE_HEIGHT = 143`)
+   - Exact y-position: `vp_page` starts at y=0 with height 143; `vp_text` at `PAGE_HEIGHT` = 143, height 57 → canvas rows 143–200 (at 1× lores scale) or equivalent at our 2× scale
+
+7. **Gameplay scene stub** (`src/game/gameplay_scene.rs`)
+   - Wire `WorldData`, `TileAtlas`, and tile rendering into the existing `Gameplay` phase in `main.rs` (currently renders directly in the loop)
+   - Implement `Scene` trait; place hero at starting coordinates from `file_index[3]`
+   - Static render first (no movement), confirm tiles appear correctly
+
+8. **Palette for regions**
+   - Each region uses a different palette (outdoor colours differ from dungeon/indoor)
+   - Identify palette block numbers from ADF or embed per-region palettes in `faery.toml`
+   - Hook `TileAtlas::rebuild()` into region transitions
+
+### Key constants and block addresses (region F4, region_num=3 is starting region)
+
+```
+file_index[3] = {320, 360, 400, 440, 2, 3, 32, 168, 21}
+  image[0]=320, image[1]=360, image[2]=400, image[3]=440
+  terra1=2, terra2=3, sector=32, region=168, setchar=21
+TERRA_BLOCK = 149
+```
+
+So starting map data (region 3):
+- sector_mem: ADF offset 32×512 = 16 384
+- map_mem: ADF offset 168×512 = 86 016
+- terra_mem[0]: ADF offset (149+2)×512 = 77 312
+- terra_mem[512]: ADF offset (149+3)×512 = 77 824
+- image[0] plane 0: ADF offset 320×512 = 163 840
+
+### Notes
+
+- The original renders via 5-plane Amiga bitplanes; we use RGBA32 SDL2 textures. The decode step (planar → packed pixel) is the same as used for IFF images in `bitmap.rs`.
+- `minimap` in the original is a `short[114]` (tile index as signed 16-bit); in our port use `u8[114]` since tile indices fit in one byte (0–255 from sector_mem).
+- Scroll: original uses Amiga copper-list `RxOffset`/`RyOffset` for sub-tile pixel scrolling; we achieve the same by shifting blit destination rects.
+- `xreg` and `yreg` track which 64×32 sector block is currently loaded into sector_mem. Initially 0. Updated by `load_new_region()` as hero moves.
 
 ---
 

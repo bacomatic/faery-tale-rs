@@ -108,11 +108,12 @@ impl Scene for PlacardScene {
                 // Get the palette for border colors
                 let palette = game_lib.find_palette(&self.palette_name);
 
+                // Horizontal centering: border is 284px wide, play_tex is 320px wide.
+                const BORDER_X_OFFSET: i32 = (320 - 284) / 2; // = 18
+
                 // Draw text to play_tex (border will be animated separately)
                 let placard_name = self.placard_name.clone();
                 // Set the font color to palette index 24 (red in pagecolors).
-                // The original game uses SetAPen(rp, 24) in map_message() for
-                // placard text, matching the border color.
                 if let Some(pal) = palette {
                     if let Some(c) = pal.get_color(24) {
                         resources.amber_font.set_color_mod(c.r(), c.g(), c.b());
@@ -124,9 +125,9 @@ impl Scene for PlacardScene {
                     play_canvas.set_draw_color(Color::BLACK);
                     play_canvas.clear();
 
-                    // Draw the placard text
+                    // Draw the placard text shifted right to align with centered border
                     if let Some(plac) = game_lib.find_placard(&placard_name) {
-                        plac.draw(resources.amber_font, play_canvas);
+                        plac.draw_offset(resources.amber_font, play_canvas, BORDER_X_OFFSET, 0);
                     }
                 });
 
@@ -139,9 +140,9 @@ impl Scene for PlacardScene {
                 let screen_dest = Rect::new(0, 40, 640, 400);
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
-                // Start the progressive border animation
+                // Start the progressive border animation, centered horizontally
                 let renderer = if let Some(pal) = palette {
-                    start_placard_renderer(&sdl2::rect::Point::new(0, 0), pal)
+                    start_placard_renderer(&sdl2::rect::Point::new(BORDER_X_OFFSET, 0), pal)
                 } else {
                     // Fallback: skip to hold if no palette
                     self.phase = PlacardPhase::Hold {
