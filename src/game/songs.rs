@@ -80,26 +80,25 @@ pub const TIMECLOCK_RATE: u32 = DEFAULT_TEMPO * VBL_RATE_HZ;
 /// `wave_offset` is an offset in 16-bit words into the instrument waveform.
 ///
 /// Frequency ≈ `AMIGA_CLOCK_NTSC / period` Hz.
-pub const PTABLE: [(u16, u16); 84] = [
-    // Row 0 – octave 0 low  (pitch 0–11)
+pub const PTABLE: [(u16, u16); 78] = [
+    // Row 0 – partial (pitch 0–5, D#1–G#1)
     (1440, 0),  (1356, 0),  (1280, 0),  (1208, 0),  (1140, 0),  (1076, 0),
-    (1016, 0),  (960,  0),  (906,  0),  (856,  0),  (808,  0),  (762,  0),
-    // Row 1 – octave 0 high (pitch 12–23)
+    // Row 1 – A1–G#2       (pitch 6–17)
     (1016, 0),  (960,  0),  (906,  0),  (856,  0),  (808,  0),  (762,  0),
     (720,  0),  (678,  0),  (640,  0),  (604,  0),  (570,  0),  (538,  0),
-    // Row 2 – octave 1      (pitch 24–35)
+    // Row 2 – A2–G#3       (pitch 18–29)
     (508,  0),  (480,  0),  (453,  0),  (428,  0),  (404,  0),  (381,  0),
     (360,  0),  (339,  0),  (320,  0),  (302,  0),  (285,  0),  (269,  0),
-    // Row 3 – octave 2      (pitch 36–47, wave_offset 16)
+    // Row 3 – A3–G#4       (pitch 30–41, wave_offset 16)
     (508, 16),  (480, 16),  (453, 16),  (428, 16),  (404, 16),  (381, 16),
     (360, 16),  (339, 16),  (320, 16),  (302, 16),  (285, 16),  (269, 16),
-    // Row 4 – octave 3      (pitch 48–59, wave_offset 24)
+    // Row 4 – A4–G#5       (pitch 42–53, wave_offset 24)
     (508, 24),  (480, 24),  (453, 24),  (428, 24),  (404, 24),  (381, 24),
     (360, 24),  (339, 24),  (320, 24),  (302, 24),  (285, 24),  (269, 24),
-    // Row 5 – octave 4      (pitch 60–71, wave_offset 28)
+    // Row 5 – A5–G#6       (pitch 54–65, wave_offset 28)
     (508, 28),  (480, 28),  (453, 28),  (428, 28),  (404, 28),  (381, 28),
     (360, 28),  (339, 28),  (320, 28),  (302, 28),  (285, 28),  (269, 28),
-    // Row 6 – octave 5 high (pitch 72–83, wave_offset 28)
+    // Row 6 – A6–G#7       (pitch 66–77, wave_offset 28)
     (254, 28),  (240, 28),  (226, 28),  (214, 28),  (202, 28),  (190, 28),
     (180, 28),  (170, 28),  (160, 28),  (151, 28),  (143, 28),  (135, 28),
 ];
@@ -418,14 +417,14 @@ mod tests {
 
     #[test]
     fn test_ptable_size() {
-        assert_eq!(PTABLE.len(), 84);
+        assert_eq!(PTABLE.len(), 78);
     }
 
     #[test]
     fn test_pitch_freq_range() {
-        // Pitch 30 → period 360 (row 2, index 6 within the row: 360,0)
-        // freq = 3579545 / 360 ≈ 9943 Hz
-        let freq = SongLibrary::pitch_freq(30).unwrap();
+        // Pitch 24 → period 360 (row 2, D#3, wave_offset 0)
+        // pitch_freq returns AMIGA_CLOCK / period (approximate, ignores wave_len)
+        let freq = SongLibrary::pitch_freq(24).unwrap();
         let expected = AMIGA_CLOCK_NTSC as f32 / 360.0;
         assert!((freq - expected).abs() < 1.0, "freq mismatch: {}", freq);
     }

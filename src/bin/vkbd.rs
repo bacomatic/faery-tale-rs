@@ -98,11 +98,6 @@ const INSTRUMENT_NAMES: [&str; 12] = [
 
 const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-/// Whether a semitone offset (0–11) is a black key.
-fn is_black_key(semitone: u8) -> bool {
-    matches!(semitone % 12, 1 | 3 | 6 | 8 | 10)
-}
-
 /// Convert a PTABLE pitch index to a note name string like "C#4".
 fn pitch_to_name(pitch: u8) -> String {
     if (pitch as usize) >= PTABLE.len() {
@@ -256,7 +251,7 @@ impl Voice {
         self.vol_num = vol as usize;
     }
 
-    fn trigger_note(&mut self, pitch: usize, ptable: &[(u16, u16); 84], inst: &Instruments) {
+    fn trigger_note(&mut self, pitch: usize, ptable: &[(u16, u16); 78], inst: &Instruments) {
         if pitch >= ptable.len() { return; }
         let (period, wave_offset) = ptable[pitch];
         if period == 0 { return; }
@@ -281,7 +276,7 @@ impl Voice {
     }
 
     /// Re-pitch without resetting phase (for live PTABLE editing / arrow keys).
-    fn retrigger_pitch(&mut self, pitch: usize, ptable: &[(u16, u16); 84]) {
+    fn retrigger_pitch(&mut self, pitch: usize, ptable: &[(u16, u16); 78]) {
         if pitch >= ptable.len() { return; }
         let (period, wave_offset) = ptable[pitch];
         if period == 0 { return; }
@@ -442,7 +437,7 @@ struct ManualState {
     sine_mode: bool,
     sine_config: SineConfig,
     /// Mutable copy of PTABLE for live editing.
-    ptable: [(u16, u16); 84],
+    ptable: [(u16, u16); 78],
     /// Backup of original waveform when sine mode is active.
     original_waveform: Option<[i8; WAVEFORM_BYTES]>,
     /// Fractional sample accumulator for VBL-rate envelope stepping.
@@ -451,7 +446,7 @@ struct ManualState {
 
 impl ManualState {
     fn new(instruments: Instruments) -> Self {
-        let mut ptable = [(0u16, 0u16); 84];
+        let mut ptable = [(0u16, 0u16); 78];
         ptable.copy_from_slice(&PTABLE);
         ManualState {
             voices: [Voice::new(), Voice::new(), Voice::new(), Voice::new()],
@@ -525,7 +520,7 @@ impl ManualState {
 
     /// Adjust the period for a given pitch index by delta. Returns new period.
     fn adjust_period(&mut self, pitch: usize, delta: i32) -> u16 {
-        if pitch >= 84 { return 0; }
+        if pitch >= 78 { return 0; }
         let (period, wo) = self.ptable[pitch];
         let new_period = (period as i32 + delta).clamp(1, 65535) as u16;
         self.ptable[pitch] = (new_period, wo);
@@ -646,10 +641,11 @@ impl KeyboardState {
 
     fn pitch_for_key(&self, c: char) -> Option<u8> {
         key_to_semitone(c).map(|semi| {
-            // PTABLE rows start at A, not C. Add 3 semitones so the 'a' key
-            // (semitone 0 = C) lands on the correct PTABLE pitch for C.
-            let pitch = self.base_octave as u8 * 12 + semi + 3;
-            pitch.min(83)
+            // Rows 1-6 of PTABLE start at A (pitch 6, 18, 30, ...).
+            // Subtract 3 so the 'a' key (DAW semitone 0 = C) lands on C
+            // rather than the A that begins each row.
+            let pitch = self.base_octave as i32 * 12 + semi as i32 - 3;
+            pitch.max(0).min(77) as u8
         })
     }
 
@@ -674,11 +670,19 @@ impl KeyboardState {
 // Arrow key pitch navigation helpers
 // ---------------------------------------------------------------------------
 
+/// Whether a PTABLE pitch index is a black key (sharp/flat).
+///
+/// All 78 PTABLE entries map to MIDI = pitch + 27 (D#1 = MIDI 27).
+/// Black keys in C-based MIDI: C#=1, D#=3, F#=6, G#=8, A#=10 (mod 12).
+fn pitch_is_black(pitch: u8) -> bool {
+    matches!((pitch as u32 + 27) % 12, 1 | 3 | 6 | 8 | 10)
+}
+
 /// Find the nearest black key at or above `pitch`.
 fn nearest_black_above(pitch: u8) -> u8 {
     let mut p = pitch;
-    while p <= 83 {
-        if is_black_key(p) { return p; }
+    while p <= 77 {
+        if pitch_is_black(p) { return p; }
         p += 1;
     }
     pitch // no black key found above, stay put
@@ -688,7 +692,7 @@ fn nearest_black_above(pitch: u8) -> u8 {
 fn nearest_white_below(pitch: u8) -> u8 {
     let mut p = pitch;
     loop {
-        if !is_black_key(p) { return p; }
+        if !pitch_is_black(p) { return p; }
         if p == 0 { return 0; }
         p -= 1;
     }
@@ -975,7 +979,7 @@ fn render(
     // Use pitch_to_name so the label matches the actual note played (C-correct).
     execute!(stdout, Print(&pad_left))?;
     for (i, &(semi, _key_char)) in white_keys.iter().enumerate() {
-        let pitch = (kbd.base_octave * 12 + semi as usize + 3).min(83) as u8;
+        let pitch = (kbd.base_octave as i32 * 12 + semi as i32 - 3).max(0).min(77) as u8;
         let note_label = pitch_to_name(pitch);
         execute!(stdout,
             SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor,
@@ -1033,35 +1037,35 @@ fn pad_or_clip(s: &str, width: usize) -> String {
 // PTABLE export
 // ---------------------------------------------------------------------------
 
-fn print_ptable(ptable: &[(u16, u16); 84]) {
+fn print_ptable(ptable: &[(u16, u16); 78]) {
     println!();
     println!("// Modified PTABLE — paste into src/game/songs.rs");
-    println!("pub const PTABLE: [(u16, u16); 84] = [");
+    println!("pub const PTABLE: [(u16, u16); 78] = [");
 
-    let row_labels = [
-        "Row 0 – octave 0 low  (pitch 0–11)",
-        "Row 1 – octave 0 high (pitch 12–23)",
-        "Row 2 – octave 1      (pitch 24–35)",
-        "Row 3 – octave 2      (pitch 36–47, wave_offset 16)",
-        "Row 4 – octave 3      (pitch 48–59, wave_offset 24)",
-        "Row 5 – octave 4      (pitch 60–71, wave_offset 28)",
-        "Row 6 – octave 5 high (pitch 72–83, wave_offset 28)",
+    // Row 0 is 6 entries; rows 1-6 are 12 entries each.
+    let rows: &[(usize, usize, &str)] = &[
+        (0,  6,  "Row 0 – D#1–G#1    (pitch 0–5)"),
+        (6,  12, "Row 1 – A1–G#2     (pitch 6–17)"),
+        (18, 12, "Row 2 – A2–G#3     (pitch 18–29)"),
+        (30, 12, "Row 3 – A3–G#4     (pitch 30–41, wave_offset 16)"),
+        (42, 12, "Row 4 – A4–G#5     (pitch 42–53, wave_offset 24)"),
+        (54, 12, "Row 5 – A5–G#6     (pitch 54–65, wave_offset 28)"),
+        (66, 12, "Row 6 – A6–G#7     (pitch 66–77, wave_offset 28)"),
     ];
 
-    for row in 0..7 {
-        let base = row * 12;
-        println!("    // {}", row_labels[row]);
+    for &(base, len, label) in rows {
+        println!("    // {}", label);
         print!("    ");
-        for i in 0..12 {
+        for i in 0..len {
             let idx = base + i;
             let (period, wo) = ptable[idx];
             let (orig_period, _) = PTABLE[idx];
             if period != orig_period {
                 print!("({:>4}, {:>2}), // was {}", period, wo, orig_period);
-                if i < 11 { print!("\n    "); }
+                if i < len - 1 { print!("\n    "); }
             } else {
                 print!("({:>4}, {:>2}),", period, wo);
-                if i < 11 { print!("  "); }
+                if i < len - 1 { print!("  "); }
             }
         }
         println!();
@@ -1293,7 +1297,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Right if is_press => {
                         if let Some(latch_char) = kbd.last_latched {
                             if let Some(hk) = kbd.held_keys.get_mut(&latch_char) {
-                                if hk.pitch < 83 {
+                                if hk.pitch < 77 {
                                     hk.pitch += 1;
                                     let pitch = hk.pitch;
                                     let vi = hk.voice_idx;
@@ -1324,7 +1328,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(latch_char) = kbd.last_latched {
                             if let Some(hk) = kbd.held_keys.get_mut(&latch_char) {
                                 let new_pitch = nearest_black_above(hk.pitch.saturating_add(1));
-                                if new_pitch != hk.pitch && new_pitch <= 83 {
+                                if new_pitch != hk.pitch && new_pitch <= 77 {
                                     hk.pitch = new_pitch;
                                     let vi = hk.voice_idx;
                                     kbd.active_pitch = Some(new_pitch);
