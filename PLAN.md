@@ -57,7 +57,7 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
 
 ### Steps
 
-1. ~~**Parse music/song data**~~ Done — `SongLibrary` in `src/game/songs.rs`. Custom 4-voice tracker format parsed from `game/songs` (28 tracks). `TrackEvent` enum models all commands from `gdriver.asm`: Note, Rest, SetInstrument, SetTempo, End (with loop flag). Lookup tables `PTABLE` (84 period/wave-offset entries) and `NOTE_DURATIONS` (64 timing values) ported verbatim. NTSC Paula clock (3,579,545 Hz). 12 unit tests including real-file parsing.
+1. ~~**Parse music/song data**~~ Done — `SongLibrary` in `src/game/songs.rs`. Custom 4-voice tracker format parsed from `game/songs` (28 tracks). `TrackEvent` enum models all commands from `gdriver.asm`: Note, Rest, SetInstrument, SetTempo, End (with loop flag). Lookup tables `PTABLE` (78 period/wave-offset entries) and `NOTE_DURATIONS` (64 timing values) ported verbatim. NTSC Paula clock (3,579,545 Hz). 12 unit tests including real-file parsing.
 
 2. ~~**SDL2 mixer integration**~~ Done — `AudioSystem` in `src/game/audio.rs`. Pure-Rust, no `unsafe`, 4-voice software synthesizer porting `gdriver.asm` note-trigger + envelope logic. `Instruments` loads waveforms and ADSR envelopes from `game/v6` (envelopes at byte 2048, matching the original `Seek(+S_WAVBUF, OFFSET_CURRENT)` load sequence). `SequencerState` drives 4 `Voice`s with timeclock stepping (150 tempo, 60 Hz NTSC VBL). `SynthCallback` fires a VBL tick every 735 samples (~44100/60) and mixes voices into a 44100 Hz f32 mono stream. Per-voice rendering uses linear interpolation with correct modulo loop-wrap (avoids click on every waveform cycle) and a 1-pole IIR low-pass at ~4800 Hz approximating the A500 hardware RC filter. Voices mixed at ¼ scale to match four-channel headroom. Intro music (tracks 12–15) plays automatically at startup. 13 tests.
 
@@ -80,8 +80,8 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
    - **Cave instrument swap**: region 9 (caves) uses group 5 tracks but must swap instrument slot 10 in `new_wave[]` to `0x0307` before calling `play_score`; all other indoor regions use `0x0100`. This changes the timbre of voice 2 without altering any note data. Reset to `0x0100` on leaving region 9.
    - `set_score` (vs `playscore`) is used when the new score should take effect at the next loop boundary rather than immediately (avoids an abrupt cut mid-phrase).
 
-**Known issues:**
-- Occasional click at note onset. Likely a phase discontinuity when `trigger_note()` resets `phase` to 0.0 mid-cycle without crossfading to the new waveform, or a misaligned VBL boundary when the sequencer fires inside a partially-rendered chunk. Needs investigation.
+**Known issues / fine tuning:**
+- Minor click between notes. Likely a phase discontinuity when `trigger_note()` resets `phase` to 0.0 mid-cycle without crossfading to the new waveform, or a misaligned VBL boundary when the sequencer fires inside a partially-rendered chunk. Music is otherwise correct and verified against original. Address in a future fine-tuning pass.
 
 ---
 

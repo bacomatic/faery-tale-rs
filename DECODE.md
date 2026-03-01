@@ -33,7 +33,7 @@ Every event is exactly two bytes `(command, value)`:
 
 | Command byte | Meaning |
 |---|---|
-| 0 – 127 | **Note** — pitch index into `PTABLE` (84 entries, 7 octave groups × 12 semitones) |
+| 0 – 127 | **Note** — pitch index into `PTABLE` (78 entries; see layout below) |
 | 128 (0x80) | **Rest** — silence for the given duration |
 | 129 (0x81) | **Set Instrument** — `value & 0x0f` selects a slot from the `new_wave[]` instrument table |
 | 144 (0x90) | **Set Tempo** — `value` is written directly to the tempo register (default 150) |
@@ -45,12 +45,32 @@ masked off), used as an index into `NOTE_DURATIONS[0..63]` — 64 tick counts
 covering 8 note-length groups (4/4, 6/8, 3/4, 7/8, 5/4, 3/4 alt, 9/8, and a
 duplicate 4/4).
 
-The **pitch** byte (0–83) indexes into `PTABLE`, which stores
+The **pitch** byte (0–77) indexes into `PTABLE`, which stores
 `(period, wave_offset)` pairs.  `period` is an Amiga Paula hardware period
-register value; frequency ≈ `3,579,545 / period` Hz (NTSC clock).
-`wave_offset` is a 16-bit–word offset into the 8-byte waveform stored in
-`wavmem` (from `v6`) that selects which portion of the instrument waveform
-Paula loops.
+register value.  The correct frequency formula is:
+```
+frequency = AMIGA_CLOCK_NTSC / (wave_len × period)
+           = 3,579,545 / (wave_len × period)
+```
+where `wave_len = (32 - wave_offset) × 2` bytes.
+`wave_offset` is a 16-bit–word offset into the 128-byte waveform in `wavmem`
+(from `v6`) that selects which portion Paula loops, halving the loop length
+each step to raise the pitch one octave.
+
+`PTABLE` layout (78 entries across 7 ASM rows):
+
+| Pitches | Entries | wave_offset | wave_len | Notes      | Frequency range |
+|---------|---------|-------------|----------|------------|-----------------|
+| 0–5     | 6       | 0           | 64       | D#1–G#1    | 38.9–51.9 Hz    |
+| 6–17    | 12      | 0           | 64       | A1–G#2     | 55.0–103.8 Hz   |
+| 18–29   | 12      | 0           | 64       | A2–G#3     | 110.0–207.7 Hz  |
+| 30–41   | 12      | 16          | 32       | A3–G#4     | 220.0–415.3 Hz  |
+| 42–53   | 12      | 24          | 16       | A4–G#5     | 440.0–830.6 Hz  |
+| 54–65   | 12      | 28          | 8        | A5–G#6     | 880.0–1661.2 Hz |
+| 66–77   | 12      | 28          | 8        | A6–G#7     | 1760.0–3322.4 Hz|
+
+Rows 1–6 (pitches 6–77) each start at A and cover a full chromatic octave.
+Row 0 (pitches 0–5) is a partial row covering only D#1 through G#1.
 
 ---
 

@@ -79,12 +79,24 @@ All game modules live under `src/game/` with `mod.rs` as the public module list.
 - `page_flip.rs` — Port of `flipscan()`/`page_det()` with original 22-step lookup tables
 
 **Audio system**:
-- `songs.rs` — Parses `game/songs` into 28 tracks across 7 song groups × 4 Paula voices. `TrackEvent` enum models all commands from `gdriver.asm`. Exposes `PTABLE` (84 period/wave-offset entries), `NOTE_DURATIONS` (64 tick counts), `AMIGA_CLOCK_NTSC`, `VBL_RATE_HZ` (60), and `DEFAULT_TEMPO` (150). `SongLibrary::intro_tracks()` returns tracks 12–15.
+- `songs.rs` — Parses `game/songs` into 28 tracks across 7 song groups × 4 Paula voices. `TrackEvent` enum models all commands from `gdriver.asm`. Exposes `PTABLE` (78 period/wave-offset entries), `NOTE_DURATIONS` (64 tick counts), `AMIGA_CLOCK_NTSC`, `VBL_RATE_HZ` (60), and `DEFAULT_TEMPO` (150). `SongLibrary::intro_tracks()` returns tracks 12–15.
 - `audio.rs` — SDL2 audio callback running a VBL sequencer at 60 Hz. `Instruments` loads waveforms and ADSR envelopes from `game/v6`. `SequencerState` drives 4 `Voice`s with timeclock stepping. PCM synthesis uses linear interpolation and a 1-pole IIR low-pass (~4800 Hz, approximating the Amiga A500 RC filter). `AudioSystem` exposes `play_score()`, `stop_score()`, `play_group()`.
 
 **PTABLE layout and frequency formula**:
 
-The `PTABLE` holds 84 `(period, wave_offset)` pairs (7 rows × 12 pitches). Each row of 12 covers one chromatic octave **starting at A** (not C). C is always at index +3 within a row.
+The `PTABLE` holds 78 `(period, wave_offset)` pairs across 7 ASM rows. Row 0 is
+a partial row of 6 entries (D#1–G#1); rows 1–6 are full chromatic octaves of 12
+entries each starting at A.
+
+| Pitches | Entries | wave_offset | Notes   | Frequency range  |
+|---------|---------|-------------|---------|------------------|
+| 0–5     | 6       | 0           | D#1–G#1 | 38.9–51.9 Hz     |
+| 6–17    | 12      | 0           | A1–G#2  | 55.0–103.8 Hz    |
+| 18–29   | 12      | 0           | A2–G#3  | 110.0–207.7 Hz   |
+| 30–41   | 12      | 16          | A3–G#4  | 220.0–415.3 Hz   |
+| 42–53   | 12      | 24          | A4–G#5  | 440.0–830.6 Hz   |
+| 54–65   | 12      | 28          | A5–G#6  | 880.0–1661.2 Hz  |
+| 66–77   | 12      | 28          | A6–G#7  | 1760.0–3322.4 Hz |
 
 The correct Amiga audio frequency formula (per hardware reference):
 ```
