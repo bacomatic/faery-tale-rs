@@ -47,7 +47,7 @@ voice2		equ	voice_sz
 voice3		equ	voice_sz*2
 voice4		equ	voice_sz*3
 
-; register usage - 
+; register usage -
 ;	a0 - pointer to sysregs
 ;	a1 - pointer to data area
 ;	a2 - score pickup
@@ -104,15 +104,15 @@ dovoice		tst.l	trak_ptr(a3)	; check read head for presence of trak
 			move.l	a2,vol_list(a3)	; reset pointer
 			bra.s	vocx			; next voice
 
-rest_env	
+rest_env
 			move.b	#0,$a8(a4)		; set volume register to zero
 			bra.s	vocx			; next trak
 
-dorestnote	
+dorestnote
 			move.b	#0,$a8(a4)		; clear volume
 			move.l	timeclock(a1),event_stop(a3)	; KLUGE!!
 			bra.s	vocx
- 
+
 newnote
 			move.l	trak_ptr(a3),a2	; read head
 			clr.l	d2				; clear top d2
@@ -187,11 +187,11 @@ nc1			add.l	event_start(a3),d4	; event stop
 			and.l	#$ffff,d2		; clear upper half d2
 			add.l	d2,d4			; add offset to d4 ( = wave)
 
-			move.w	d5,$a8(a4)		; set initial volume
-			move.l	d4,$a0(a4)		; move waveform to register
-			move.w	d3,$a4(a4)		; move wavelength to register
-			move.w	d1,$a6(a4)		; move period to register
-	
+			move.w	d5,$a8(a4)		; (ac_vol) set initial volume
+			move.l	d4,$a0(a4)		; (ac_wave) move waveform to register
+			move.w	d3,$a4(a4)		; (ac_wlen) move wavelength to register
+			move.w	d1,$a6(a4)		; (ac_per) move period to register
+
 ;			bra	vocx				; next note
 
 vocx		add.w	#voice_sz,a3	; next voice
@@ -200,26 +200,25 @@ vocx		add.w	#voice_sz,a3	; next voice
 			rts
 
 ptable
-*			dc.w	1016,00,960,00,906,00,856,00,808,00,762,00
-			dc.w	1440,00,1356,00,1280,00,1208,00,1140,00,1076,00
+			dc.w	1440,00,1356,00,1280,00,1208,00,1140,00,1076,00 ; D# (38.9), E (41.2), F (43.7), F# (46.2), G (49.0), G# (51.9)
 
-			dc.w	1016,00,960,00,906,00,856,00,808,00,762,00
-			dc.w	720,00,678,00,640,00,604,00,570,00,538,00
+			dc.w	1016,00,960,00,906,00,856,00,808,00,762,00 ; A (55.0), A# (58.3), B (61.7), C (65.4), C# (69.3), D (73.4)
+			dc.w	720,00,678,00,640,00,604,00,570,00,538,00 ; D# (77.8), E (82.4), F (87.3), F# (92.5), G (98.0), G# (103.8)
 
-			dc.w	508,00,480,00,453,00,428,00,404,00,381,00
-			dc.w	360,00,339,00,320,00,302,00,285,00,269,00
+			dc.w	508,00,480,00,453,00,428,00,404,00,381,00 ; A (110.0), A# (116.5), B (123.5), C (130.8), C# (138.6), D (146.8)
+			dc.w	360,00,339,00,320,00,302,00,285,00,269,00 ; D# (155.6), E (164.8), F (174.6), F# (185.0), G (196.0), G# (207.7)
 
-			dc.w	508,16,480,16,453,16,428,16,404,16,381,16
-			dc.w	360,16,339,16,320,16,302,16,285,16,269,16
-	
-			dc.w	508,24,480,24,453,24,428,24,404,24,381,24
-			dc.w	360,24,339,24,320,24,302,24,285,24,269,24
+			dc.w	508,16,480,16,453,16,428,16,404,16,381,16 ; A (220.0), A# (233.1), B (246.9), C (261.6), C# (277.2), D (293.7)
+			dc.w	360,16,339,16,320,16,302,16,285,16,269,16 ; D# (311.1), E (329.6), F (349.2), F# (370.0), G (392.0), G# (415.3)
 
-			dc.w	508,28,480,28,453,28,428,28,404,28,381,28
-			dc.w	360,28,339,28,320,28,302,28,285,28,269,28
+			dc.w	508,24,480,24,453,24,428,24,404,24,381,24 ; A (440.0), A# (466.2), B (493.9), C (523.3), C# (554.4), D (587.3)
+			dc.w	360,24,339,24,320,24,302,24,285,24,269,24 ; D# (622.3), E (659.3), F (698.5), F# (740.0), G (784.0), G# (830.6)
 
-			dc.w	254,28,240,28,226,28,214,28,202,28,190,28
-			dc.w	180,28,170,28,160,28,151,28,143,28,135,28
+			dc.w	508,28,480,28,453,28,428,28,404,28,381,28 ; A (880.0), A# (932.3), B (987.8), C (1046.5), C# (1108.7), D (1174.7)
+			dc.w	360,28,339,28,320,28,302,28,285,28,269,28 ; D# (1244.5), E (1318.5), F (1396.9), F# (~1480.0), G (1568.0), G# (1661.2)
+
+			dc.w	254,28,240,28,226,28,214,28,202,28,190,28 ; A (1760.0), A# (1864.7), B (1975.5), C (2093.0), C# (2217.5), D (2349.3)
+			dc.w	180,28,170,28,160,28,151,28,143,28,135,28 ; D# (2489.0), E (2637.0), F (2793.8), F# (~2960.0), G (3136.0), G# (3322.4)
 
 ; these are the timing values for interpreting an SMUS score.
 ;
@@ -241,7 +240,7 @@ set_voice
 			move.w	(a2,d2),wave_num(a3)
 			bra		newnote				; process more code
 
-set_tempo	
+set_tempo
 			and.l	#$00ff,d2			; clear top byte of word
 			move.w	d2,tempo(a1)
 			bra		newnote				; process more code
@@ -293,7 +292,7 @@ audx1
 
 ; playsample(effect,length,rate)
 
-_playsample	
+_playsample
 			move.l	d2,-(sp)
 			move.l	#$dff000,a0			; pointer to sysregs
 			move.w	#$0002,$96(a0)		; turn it off
@@ -321,7 +320,7 @@ _playsample
 
 			rts
 
-_stopsample	
+_stopsample
 			lea		_vblank_data,a1
 			and.b	#$fe,vce_stat+voice4(a1)
 			move.l	#$dff000,a0		; pointer to sysregs
@@ -329,7 +328,7 @@ _stopsample
 			move.w	#2,$b6(a0)		; move period to register
 			rts
 
-_set_tempo	
+_set_tempo
 			lea		_vblank_data,a1
 			move.l	4(sp),d0
 			move.w	d0,tempo(a1)
