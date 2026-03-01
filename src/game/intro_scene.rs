@@ -93,24 +93,30 @@ const PORTRAIT_X: i32 = 32;
 const PORTRAIT_Y: i32 = 24;
 
 /// How long to display each story page before flipping (ticks at 60Hz).
-/// Original: Delay(350) inside copypage() at NTSC 60Hz = 5.8s.
-const PAGE_DISPLAY_TICKS: u32 = 350;
+/// 8s = 480 ticks.
+const PAGE_DISPLAY_TICKS: u32 = 480;
 
 /// How long to hold page0 after zoom in before flipping.
-/// Original: same Delay(350) as other pages.
-const PAGE0_DISPLAY_TICKS: u32 = 350;
+const PAGE0_DISPLAY_TICKS: u32 = 480;
 
 /// How long to hold the last page after display before zooming out.
-/// Original: Delay(190) at NTSC 60Hz = 3.17s.
-const LAST_PAGE_HOLD_TICKS: u32 = 190;
+const LAST_PAGE_HOLD_TICKS: u32 = 480;
 
 /// How long to hold the title text before proceeding.
-/// Original: Delay(50) × 2 at NTSC 60Hz = 1.67s total.
-const TITLE_HOLD_TICKS: u32 = 100;
+/// 3s = 180 ticks at 60Hz.
+const TITLE_HOLD_TICKS: u32 = 180;
 
-/// Duration of palette fades in ticks (zoom in/out includes a fade).
-/// The zoom itself runs 40 steps x 2 ticks = 80 ticks. The fade runs in parallel.
-const FADE_DURATION_TICKS: u32 = 80;
+/// Duration of the title fade-out in ticks.
+/// 1.5s = 90 ticks at 60Hz.
+const TITLE_FADE_TICKS: u32 = 90;
+
+/// Total duration of zoom in/out in ticks.
+/// 3s = 180 ticks at 60Hz.
+const ZOOM_DURATION_TICKS: u32 = 180;
+
+/// Minimum ticks per page-flip step for ~5s total flip.
+/// 22 steps × 14 ticks/step ≈ 308 ticks ≈ 5.1s.
+const FLIP_MIN_STEP_TICKS: u32 = 14;
 
 /// Title text is rendered directly to the canvas (640x480 logical) because the
 /// original uses a 640-wide hires text viewport. The text y-coordinates are
@@ -147,12 +153,12 @@ impl IntroScene {
                 // Fade to black before starting the story pages
                 let text_palette = game_lib.find_palette("textcolors").unwrap();
                 IntroPhase::TitleFadeOut {
-                    fader: FadeController::fade_down(text_palette, 24),
+                    fader: FadeController::fade_down(text_palette, TITLE_FADE_TICKS),
                 }
             }
             IntroPhase::TitleFadeOut { .. } => {
                 IntroPhase::ZoomIn {
-                    zoom: ViewportZoom::zoom_in(),
+                    zoom: ViewportZoom::zoom_in_duration(ZOOM_DURATION_TICKS),
                     page_drawn: false,
                 }
             }
@@ -168,13 +174,13 @@ impl IntroScene {
                     IntroPhase::FlipPage {
                         from_index: pi,
                         to_index: pi + 1,
-                        flipper: PageFlip::new(),
+                        flipper: PageFlip::with_min_step(FLIP_MIN_STEP_TICKS),
                         initialized: false,
                     }
                 } else {
                     // Last page shown, now zoom out
                     IntroPhase::ZoomOut {
-                        zoom: ViewportZoom::zoom_out(),
+                        zoom: ViewportZoom::zoom_out_duration(ZOOM_DURATION_TICKS),
                     }
                 }
             }
@@ -254,14 +260,19 @@ impl Scene for IntroScene {
 
         match &mut self.phase {
             IntroPhase::TitleText { ticks_remaining } => {
-                // Draw dark blue background covering the full canvas
-                canvas.set_draw_color(Color::RGB(0, 0, 0x66));
+                // Draw black background, white text using the Amber font.
+                // Render title to play_tex so TitleFadeOut can fade it via color_mod.
+                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                    play_canvas.set_draw_color(Color::BLACK);
+                    play_canvas.clear();
+                });
+
+                canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
 
-                // Render the titletext placard directly onto the canvas.
-                // The placard coordinates are designed for a 640-wide display,
-                // which matches our logical canvas width. Y-coordinates are
-                // offset to center vertically in the 480-tall window.
+                // Render white title text directly onto the canvas.
+                // Set color_mod to white, draw, then reset to amber.
+                resources.amber_font.set_color_mod(255, 255, 255);
                 if let Some(placard) = game_lib.find_placard("titletext") {
                     placard.draw_offset(
                         resources.amber_font,
@@ -270,6 +281,7 @@ impl Scene for IntroScene {
                         TITLE_Y_OFFSET,
                     );
                 }
+                resources.amber_font.set_color_mod(0xFF, 0xAA, 0x00);
 
                 if delta >= *ticks_remaining {
                     *ticks_remaining = 0;
@@ -286,8 +298,6 @@ impl Scene for IntroScene {
 
             IntroPhase::TitleFadeOut { fader } => {
                 // Start music on the first frame of TitleFadeOut.
-                // Mirrors original: playscore(track[12..15]) is called right before
-                // LoadRGB4(blackcolors) and screen_size(0) — i.e. before zoom-in.
                 if !self.music_started {
                     if let (Some(tracks), Some(audio)) = (self.intro_tracks.take(), resources.audio) {
                         audio.play_score(tracks);
@@ -295,21 +305,31 @@ impl Scene for IntroScene {
                     self.music_started = true;
                 }
 
-                // Brief fade to black using SDL2 color modulation
+                // Render white title text to play_tex (black background) on the first
+                // frame so we can fade it out via color_mod.
                 let result = fader.tick(delta);
 
-                // Apply the color modulation to the canvas output
-                match result {
-                    FadeResult::ColorMod(r, g, b) => {
-                        play_tex.set_color_mod(r, g, b);
-                    }
-                    _ => {}
-                }
+                // Apply color_mod to play_tex for the fade.
+                let (r, g, b) = match result {
+                    FadeResult::ColorMod(r, g, b) => (r, g, b),
+                    _ => (255, 255, 255),
+                };
+                play_tex.set_color_mod(r, g, b);
 
-                // Draw the title screen content to play_tex, then blit with modulation
-                canvas.set_draw_color(Color::RGB(0, 0, 0x66));
+                // Draw black canvas, then blit fading title from play_tex.
+                canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
 
+                // Render white text onto play_tex each frame at full brightness,
+                // then let color_mod dim it.
+                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
+                    play_canvas.set_draw_color(Color::BLACK);
+                    play_canvas.clear();
+                });
+                // Draw title text to canvas with current fade modulation.
+                // We use draw_color_mod on the font itself to simulate the fade,
+                // interpolating from white (255,255,255) to black (0,0,0).
+                resources.amber_font.set_color_mod(r, g, b);
                 if let Some(placard) = game_lib.find_placard("titletext") {
                     placard.draw_offset(
                         resources.amber_font,
@@ -318,9 +338,9 @@ impl Scene for IntroScene {
                         TITLE_Y_OFFSET,
                     );
                 }
+                resources.amber_font.set_color_mod(0xFF, 0xAA, 0x00);
 
                 if fader.is_done() {
-                    // Reset color modulation for subsequent phases
                     play_tex.set_color_mod(255, 255, 255);
                     self.advance(game_lib);
                 }

@@ -8,6 +8,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
+use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::placard::{PlacardRenderer, start_placard_renderer};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::game_library::GameLibrary;
@@ -40,6 +41,8 @@ enum PlacardPhase {
     AnimateBorder { renderer: PlacardRenderer },
     /// Hold the placard on screen for a duration.
     Hold { ticks_remaining: u32 },
+    /// Fade to black before completing.
+    FadeOut { fader: FadeController },
     /// Scene complete.
     Done,
 }
@@ -69,7 +72,6 @@ impl PlacardScene {
     }
 
     /// Create a placard scene with a custom hold duration.
-    #[allow(dead_code)]
     pub fn with_hold_ticks(mut self, ticks: u32) -> PlacardScene {
         self.hold_ticks = ticks;
         self
@@ -182,11 +184,35 @@ impl Scene for PlacardScene {
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
-                    self.phase = PlacardPhase::Done;
+                    // Fade to black before completing
+                    let palette = game_lib.find_palette(&self.palette_name).unwrap();
+                    self.phase = PlacardPhase::FadeOut {
+                        fader: FadeController::fade_down(palette, 60), // 1s fade
+                    };
                 } else {
                     *ticks_remaining -= delta_ticks;
                 }
 
+                SceneResult::Continue
+            }
+
+            PlacardPhase::FadeOut { fader } => {
+                let result = fader.tick(delta_ticks);
+                let (r, g, b) = match result {
+                    FadeResult::ColorMod(r, g, b) => (r, g, b),
+                    _ => (255, 255, 255),
+                };
+                play_tex.set_color_mod(r, g, b);
+
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+                let screen_dest = Rect::new(0, 40, 640, 400);
+                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+
+                if fader.is_done() {
+                    play_tex.set_color_mod(255, 255, 255);
+                    self.phase = PlacardPhase::Done;
+                }
                 SceneResult::Continue
             }
 

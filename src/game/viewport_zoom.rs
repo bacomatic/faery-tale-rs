@@ -13,8 +13,6 @@ use sdl2::rect::Rect;
  *
  * Original: for (i = 0; i <= 160; i += 4) screen_size(i)  -> zoom in (40 steps)
  * Original: for (i = 156; i >= 0; i -= 4) screen_size(i)  -> zoom out (40 steps)
- *
- * Each step has a Delay(2) at NTSC 60Hz = 2 ticks = 33ms, full zoom ≈ 1.3s.
  */
 
 /// The step size used in the original zoom loops.
@@ -22,6 +20,13 @@ const ZOOM_STEP: i32 = 4;
 
 /// Maximum half-width for the zoom effect.
 const ZOOM_MAX: i32 = 160;
+
+/// Reduce a fraction n/d to lowest terms using Euclid's algorithm.
+fn reduce_fraction(n: u32, d: u32) -> (u32, u32) {
+    fn gcd(a: u32, b: u32) -> u32 { if b == 0 { a } else { gcd(b, a % b) } }
+    let g = gcd(n, d);
+    (n / g, d / g)
+}
 
 /// Compute the viewport rectangle for a given zoom level.
 /// `half_width` ranges from 0 (fully closed) to 160 (fully open).
@@ -38,6 +43,9 @@ pub fn zoom_rect(half_width: i32) -> Rect {
     Rect::new(left, top, width, height)
 }
 
+/// Number of zoom steps (0..ZOOM_MAX by ZOOM_STEP).
+const ZOOM_STEPS: u32 = (ZOOM_MAX / ZOOM_STEP) as u32; // 40
+
 /// Manages the animated zoom in/out sequence.
 pub struct ViewportZoom {
     /// Current half-width value (0 = closed, 160 = full open).
@@ -46,40 +54,58 @@ pub struct ViewportZoom {
     target: i32,
     /// Direction: +ZOOM_STEP for zoom in, -ZOOM_STEP for zoom out.
     step: i32,
-    /// Tick accumulator for timing. Original uses Delay(2) per step = ~2 ticks at 60Hz.
+    /// Rational tick accumulator (in units of 1/step_denom ticks).
     tick_accum: u32,
-    /// Ticks per zoom step. Original: Delay(2) at NTSC 60Hz = 2 ticks.
-    ticks_per_step: u32,
+    /// Step timing numerator: one step advances every (step_numer/step_denom) real ticks.
+    step_numer: u32,
+    /// Step timing denominator.
+    step_denom: u32,
 }
 
 impl ViewportZoom {
-    /// Create a zoom-in effect (0 -> 160).
-    pub fn zoom_in() -> ViewportZoom {
+    /// Create a zoom-in effect (0 -> 160) with a specified total duration.
+    pub fn zoom_in_duration(total_ticks: u32) -> ViewportZoom {
+        // Reduce total_ticks/ZOOM_STEPS to lowest terms for the rational accumulator.
+        let (n, d) = reduce_fraction(total_ticks, ZOOM_STEPS);
         ViewportZoom {
             current: 0,
             target: ZOOM_MAX,
             step: ZOOM_STEP,
             tick_accum: 0,
-            ticks_per_step: 2,
+            step_numer: n,
+            step_denom: d,
         }
     }
 
-    /// Create a zoom-out effect (156 -> 0).
-    pub fn zoom_out() -> ViewportZoom {
+    /// Create a zoom-in effect (0 -> 160).
+    pub fn zoom_in() -> ViewportZoom {
+        ViewportZoom::zoom_in_duration(2 * ZOOM_STEPS) // original: 2 ticks/step
+    }
+
+    /// Create a zoom-out effect (156 -> 0) with a specified total duration.
+    pub fn zoom_out_duration(total_ticks: u32) -> ViewportZoom {
+        let (n, d) = reduce_fraction(total_ticks, ZOOM_STEPS);
         ViewportZoom {
             current: ZOOM_MAX - ZOOM_STEP, // 156, matching the original
             target: 0,
             step: -ZOOM_STEP,
             tick_accum: 0,
-            ticks_per_step: 2,
+            step_numer: n,
+            step_denom: d,
         }
+    }
+
+    /// Create a zoom-out effect (156 -> 0).
+    pub fn zoom_out() -> ViewportZoom {
+        ViewportZoom::zoom_out_duration(2 * ZOOM_STEPS) // original: 2 ticks/step
     }
 
     /// Advance the zoom by `delta` ticks. Returns the current viewport rect.
     pub fn tick(&mut self, delta: u32) -> Rect {
-        self.tick_accum += delta;
-        while self.tick_accum >= self.ticks_per_step && !self.is_done() {
-            self.tick_accum -= self.ticks_per_step;
+        // Accumulate in units of (1/step_denom) ticks; advance a step per step_numer units.
+        self.tick_accum += delta * self.step_denom;
+        while self.tick_accum >= self.step_numer && !self.is_done() {
+            self.tick_accum -= self.step_numer;
             self.current += self.step;
             // Clamp to bounds
             if self.step > 0 {
@@ -130,8 +156,6 @@ mod tests {
         let r = zoom_rect(0);
         assert_eq!(r.x(), 160);
         assert_eq!(r.y(), 100);
-        // SDL2 Rect enforces minimum size of 1, so width/height won't be 0
-        // This is fine — the zoom loop starts at step 4, never actually blits a 0-size rect.
         assert!(r.width() <= 1);
         assert!(r.height() <= 1);
     }
@@ -155,14 +179,26 @@ mod tests {
     }
 
     #[test]
-    fn test_zoom_in_progression() {
+    fn test_zoom_in_progression_original() {
+        // Original timing: 2 ticks/step × 40 steps = 80 ticks total
         let mut zoom = ViewportZoom::zoom_in();
         assert!(!zoom.is_done());
         assert_eq!(zoom.current, 0);
-
-        // Advance through all 40 steps (each step = 2 ticks)
         for _ in 0..40 {
             zoom.tick(2);
+        }
+        assert!(zoom.is_done());
+        assert_eq!(zoom.current, 160);
+    }
+
+    #[test]
+    fn test_zoom_in_3s_progression() {
+        // 3s = 180 ticks total: 4.5 ticks/step × 40 steps
+        let mut zoom = ViewportZoom::zoom_in_duration(180);
+        assert!(!zoom.is_done());
+        // Feed exactly 180 ticks one at a time
+        for _ in 0..180 {
+            zoom.tick(1);
         }
         assert!(zoom.is_done());
         assert_eq!(zoom.current, 160);
@@ -172,12 +208,17 @@ mod tests {
     fn test_zoom_out_progression() {
         let mut zoom = ViewportZoom::zoom_out();
         assert!(!zoom.is_done());
-
-        // Advance through all steps
         for _ in 0..40 {
             zoom.tick(2);
         }
         assert!(zoom.is_done());
         assert_eq!(zoom.current, 0);
+    }
+
+    #[test]
+    fn test_reduce_fraction() {
+        assert_eq!(reduce_fraction(180, 40), (9, 2));
+        assert_eq!(reduce_fraction(80, 40), (2, 1));
+        assert_eq!(reduce_fraction(60, 40), (3, 2));
     }
 }

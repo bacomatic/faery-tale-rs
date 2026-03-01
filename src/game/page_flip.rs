@@ -92,14 +92,27 @@ pub struct PageFlip {
     step_delay: u32,
     /// Whether this step has been drawn (and its delay computed).
     step_drawn: bool,
+    /// Minimum delay per step in ticks (overrides FLIP3 when larger).
+    /// Increase to slow the overall flip animation.
+    min_step_ticks: u32,
 }
 
 impl PageFlip {
+    /// Create a page flip with the default (original) timing.
+    /// Minimum 2 ticks/step approximates Amiga blitter/CPU overhead.
     pub fn new() -> PageFlip {
+        PageFlip::with_min_step(2)
+    }
+
+    /// Create a page flip with a custom minimum ticks per step.
+    /// Total duration ≈ `max(FLIP3[i], min_step_ticks)` summed over 22 steps.
+    /// Example: `min_step_ticks = 14` → ~22×14 = 308 ticks ≈ 5.1s.
+    pub fn with_min_step(min_step_ticks: u32) -> PageFlip {
         PageFlip {
             step: 0,
             step_delay: 0,
             step_drawn: false,
+            min_step_ticks,
         }
     }
 
@@ -159,7 +172,7 @@ impl PageFlip {
             // FLIP3 values are NTSC 60Hz ticks directly — no conversion needed.
             // A minimum of 2 ticks approximates the blitter/CPU overhead on
             // the original Amiga even for zero-delay steps.
-            self.step_delay = (FLIP3[self.step] as u32).max(2);
+            self.step_delay = (FLIP3[self.step] as u32).max(self.min_step_ticks);
             self.step_drawn = true;
         }
 

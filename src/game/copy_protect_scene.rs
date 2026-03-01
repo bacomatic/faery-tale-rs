@@ -8,6 +8,7 @@ use sdl2::video::Window;
 
 use std::any::Any;
 
+use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::game_library::GameLibrary;
 
@@ -64,6 +65,8 @@ enum CopyProtectPhase {
     Passed { ticks_remaining: u32 },
     /// Answer was wrong — brief pause then done.
     Failed { ticks_remaining: u32 },
+    /// Fade to black before completing the scene.
+    FadeOut { fader: FadeController, success: bool },
     /// Scene complete.
     Done { success: bool },
 }
@@ -123,6 +126,7 @@ impl CopyProtectScene {
     pub fn passed(&self) -> bool {
         match &self.phase {
             CopyProtectPhase::Done { success } => *success,
+            CopyProtectPhase::FadeOut { success, .. } => *success,
             _ => false,
         }
     }
@@ -368,7 +372,12 @@ impl Scene for CopyProtectScene {
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
-                    self.phase = CopyProtectPhase::Done { success: true };
+                    // Transition to fade-out before completing
+                    let palette = game_lib.find_palette("copyjunk").unwrap();
+                    self.phase = CopyProtectPhase::FadeOut {
+                        fader: FadeController::fade_down(palette, 60), // 1s fade
+                        success: true,
+                    };
                 } else {
                     *ticks_remaining -= delta_ticks;
                 }
@@ -382,9 +391,34 @@ impl Scene for CopyProtectScene {
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
-                    self.phase = CopyProtectPhase::Done { success: false };
+                    let palette = game_lib.find_palette("copyjunk").unwrap();
+                    self.phase = CopyProtectPhase::FadeOut {
+                        fader: FadeController::fade_down(palette, 60),
+                        success: false,
+                    };
                 } else {
                     *ticks_remaining -= delta_ticks;
+                }
+                SceneResult::Continue
+            }
+
+            CopyProtectPhase::FadeOut { fader, success } => {
+                let result = fader.tick(delta_ticks);
+                let (r, g, b) = match result {
+                    FadeResult::ColorMod(r, g, b) => (r, g, b),
+                    _ => (255, 255, 255),
+                };
+                play_tex.set_color_mod(r, g, b);
+
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+                let screen_dest = Rect::new(0, 40, 640, 400);
+                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+
+                if fader.is_done() {
+                    play_tex.set_color_mod(255, 255, 255);
+                    let s = *success;
+                    self.phase = CopyProtectPhase::Done { success: s };
                 }
                 SceneResult::Continue
             }
