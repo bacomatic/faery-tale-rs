@@ -149,6 +149,7 @@ priority = "medium"
 depends_on = []
 notes = "Deferred to gameplay implementation phase."
 updated = "2026-03-01"
+issue = "#8"
 
 [[task]]
 id = "audio-104"
@@ -174,6 +175,7 @@ priority = "high"
 depends_on = ["world-001"]
 notes = "Deferred to gameplay implementation phase."
 updated = "2026-03-01"
+issue = "#9"
 
 [[task]]
 id = "vkbd-001"
@@ -251,6 +253,7 @@ priority = "high"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#10"
 
 [[task]]
 id = "world-102"
@@ -262,6 +265,7 @@ priority = "high"
 depends_on = ["world-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#11"
 
 [[task]]
 id = "world-103"
@@ -273,6 +277,7 @@ priority = "high"
 depends_on = ["world-102"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#12"
 
 [[task]]
 id = "world-104"
@@ -284,6 +289,7 @@ priority = "high"
 depends_on = ["world-102"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#13"
 
 [[task]]
 id = "world-105"
@@ -295,6 +301,7 @@ priority = "high"
 depends_on = ["world-103", "world-104"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#14"
 
 [[task]]
 id = "world-106"
@@ -306,6 +313,7 @@ priority = "medium"
 depends_on = ["world-105"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#15"
 
 [[task]]
 id = "world-107"
@@ -317,6 +325,7 @@ priority = "medium"
 depends_on = ["world-105"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#17"
 
 [[task]]
 id = "world-108"
@@ -328,6 +337,7 @@ priority = "high"
 depends_on = ["world-105"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#18"
 
 [[task]]
 id = "world-109"
@@ -339,6 +349,7 @@ priority = "medium"
 depends_on = ["world-103"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#16"
 
 [[task]]
 id = "player-001"
@@ -361,6 +372,7 @@ priority = "high"
 depends_on = ["world-108"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#23"
 
 [[task]]
 id = "player-102"
@@ -372,6 +384,7 @@ priority = "high"
 depends_on = ["world-105"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#19"
 
 [[task]]
 id = "player-103"
@@ -383,6 +396,7 @@ priority = "medium"
 depends_on = ["world-107"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#22"
 
 [[task]]
 id = "player-104"
@@ -394,6 +408,7 @@ priority = "medium"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#21"
 
 [[task]]
 id = "player-105"
@@ -405,6 +420,79 @@ priority = "high"
 depends_on = ["world-102"]
 notes = "Determine whether movement blocking is from terrain bitplane data or a dedicated mask/flag plane."
 updated = "2026-03-01"
+issue = "#20"
+
+[[task]]
+id = "player-106"
+parent = "player-001"
+title = "Implement swan flight requiring lasso"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-104"]
+notes = "Swan flight traversal is gated by lasso inventory possession."
+updated = "2026-03-01"
+issue = "#45"
+
+[[task]]
+id = "player-107"
+parent = "player-001"
+title = "Implement raft boarding and water traversal"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-101", "player-102"]
+notes = "Player must step onto raft before traversing water freely."
+updated = "2026-03-01"
+issue = "#43"
+
+[[task]]
+id = "player-108"
+parent = "player-001"
+title = "Implement turtle egg rescue and shell reward"
+area = "gameplay"
+state = "todo"
+priority = "medium"
+depends_on = ["npc-101", "player-103"]
+notes = "Saving eggs from snakes grants shell inventory item used for turtle summon."
+updated = "2026-03-01"
+issue = "#44"
+
+[[task]]
+id = "player-109"
+parent = "player-001"
+title = "Implement summoned turtle water traversal with exploit guardrails"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-107", "player-108", "npc-103"]
+notes = "Turtle is rideable on water like raft; prevent BRV farm while riding and prevent mountain/lava/palace sequence bypass via turtle pushing."
+updated = "2026-03-01"
+issue = "#42"
+
+[[task]]
+id = "player-110"
+parent = "player-001"
+title = "Implement hunger game mechanic"
+area = "gameplay"
+state = "todo"
+priority = "medium"
+depends_on = ["player-104"]
+notes = "Implement hunger progression and gameplay effects with original-faithful behavior."
+updated = "2026-03-01"
+issue = "#47"
+
+[[task]]
+id = "player-111"
+parent = "player-001"
+title = "Implement fatigue mechanic with sleep gate exploit guardrail"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-101", "player-104"]
+notes = "Implement fatigue and forced sleep; do not allow sleeping at locked gates/doors to wake on the opposite side and bypass locks."
+updated = "2026-03-01"
+issue = "#46"
 
 [[task]]
 id = "npc-001"
@@ -427,6 +515,7 @@ priority = "high"
 depends_on = ["world-108"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#24"
 
 [[task]]
 id = "npc-102"
@@ -438,6 +527,7 @@ priority = "high"
 depends_on = ["npc-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#26"
 
 [[task]]
 id = "npc-103"
@@ -449,6 +539,7 @@ priority = "medium"
 depends_on = ["npc-102", "player-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#25"
 
 [[task]]
 id = "gfx-001"
@@ -471,6 +562,7 @@ priority = "medium"
 depends_on = ["world-108"]
 notes = "Infrastructure complete; gameplay-loop integration pending."
 updated = "2026-03-01"
+issue = "#27"
 
 [[task]]
 id = "gfx-102"
@@ -482,6 +574,7 @@ priority = "medium"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#28"
 
 [[task]]
 id = "gfx-103"
@@ -493,6 +586,7 @@ priority = "low"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#30"
 
 [[task]]
 id = "gfx-104"
@@ -504,6 +598,7 @@ priority = "low"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#29"
 
 [[task]]
 id = "keys-001"
@@ -526,6 +621,7 @@ priority = "medium"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#33"
 
 [[task]]
 id = "keys-102"
@@ -537,6 +633,7 @@ priority = "medium"
 depends_on = ["keys-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#37"
 
 [[task]]
 id = "keys-103"
@@ -548,6 +645,7 @@ priority = "medium"
 depends_on = ["keys-102"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#34"
 
 [[task]]
 id = "keys-104"
@@ -559,6 +657,7 @@ priority = "high"
 depends_on = ["keys-102"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#31"
 
 [[task]]
 id = "keys-105"
@@ -570,6 +669,7 @@ priority = "low"
 depends_on = ["keys-104"]
 notes = "Future milestone."
 updated = "2026-03-01"
+issue = "#32"
 
 [[task]]
 id = "keys-106"
@@ -581,6 +681,7 @@ priority = "high"
 depends_on = ["keys-104"]
 notes = "Support original numpad 1-9 movement mapping as defaults."
 updated = "2026-03-01"
+issue = "#35"
 
 [[task]]
 id = "keys-107"
@@ -592,6 +693,7 @@ priority = "high"
 depends_on = ["keys-104"]
 notes = "Map controller inputs to existing GameAction graph while preserving one-fire baseline semantics."
 updated = "2026-03-01"
+issue = "#36"
 
 [[task]]
 id = "persist-001"
@@ -614,6 +716,7 @@ priority = "medium"
 depends_on = []
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#39"
 
 [[task]]
 id = "persist-102"
@@ -625,6 +728,7 @@ priority = "medium"
 depends_on = ["persist-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#38"
 
 [[task]]
 id = "persist-103"
@@ -636,3 +740,4 @@ priority = "medium"
 depends_on = ["persist-101"]
 notes = "Not started."
 updated = "2026-03-01"
+issue = "#40"
