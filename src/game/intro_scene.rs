@@ -271,7 +271,7 @@ impl Scene for IntroScene {
                 canvas.clear();
 
                 // Render white title text directly onto the canvas.
-                // Set color_mod to white, draw, then reset to amber.
+                // Font color is set explicitly before drawing.
                 resources.amber_font.set_color_mod(255, 255, 255);
                 if let Some(placard) = game_lib.find_placard("titletext") {
                     placard.draw_offset(
@@ -281,7 +281,6 @@ impl Scene for IntroScene {
                         TITLE_Y_OFFSET,
                     );
                 }
-                resources.amber_font.set_color_mod(0xFF, 0xAA, 0x00);
 
                 if delta >= *ticks_remaining {
                     *ticks_remaining = 0;
@@ -338,7 +337,6 @@ impl Scene for IntroScene {
                         TITLE_Y_OFFSET,
                     );
                 }
-                resources.amber_font.set_color_mod(0xFF, 0xAA, 0x00);
 
                 if fader.is_done() {
                     play_tex.set_color_mod(255, 255, 255);
