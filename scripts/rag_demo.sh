@@ -199,13 +199,15 @@ if ! curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! ollama list | awk '{print $1}' | grep -Eq "^${EMBED_MODEL}(:|$)"; then
+tags_json="$(curl -fsS "${OLLAMA_URL}/api/tags")"
+
+if ! echo "$tags_json" | grep -Eo '"name":"[^"]+"' | sed -E 's/"name":"([^"]+)"/\1/' | grep -Eq "^${EMBED_MODEL}(:|$)"; then
   echo "error: embedding model '${EMBED_MODEL}' is missing."
   echo "pull it with: ollama pull ${EMBED_MODEL}"
   exit 1
 fi
 
-if ! ollama list | awk '{print $1}' | grep -Eq "^${ASK_LLM_MODEL}(:|$)"; then
+if ! echo "$tags_json" | grep -Eo '"name":"[^"]+"' | sed -E 's/"name":"([^"]+)"/\1/' | grep -Eq "^${ASK_LLM_MODEL}(:|$)"; then
   echo "error: ask LLM model '${ASK_LLM_MODEL}' is missing."
   echo "pull it with: ollama pull ${ASK_LLM_MODEL}"
   exit 1
