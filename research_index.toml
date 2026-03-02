@@ -1,0 +1,33 @@
+version = 1
+last_updated = "2026-03-01"
+
+# Stable lookup keys for agents.
+# Each key maps to a human-readable section in RESEARCH.md.
+
+[[entry]]
+id = "world.data_format"
+title = "Game World & Map System: Data format"
+doc = "RESEARCH.md"
+anchor = "#game-world--map-system-data-format"
+tags = ["world", "map", "adf", "format"]
+
+[[entry]]
+id = "world.constants"
+title = "Game World & Map System: Constants, addresses, and implementation notes"
+doc = "RESEARCH.md"
+anchor = "#game-world--map-system-constants-addresses-and-implementation-notes"
+tags = ["world", "map", "constants", "offsets"]
+
+[[entry]]
+id = "keys.original_map"
+title = "Key Bindings: Original game key map"
+doc = "RESEARCH.md"
+anchor = "#key-bindings-original-game-key-map"
+tags = ["input", "keybindings", "original", "controls"]
+
+[[entry]]
+id = "keys.design_notes"
+title = "Key Bindings: Design and compatibility notes"
+doc = "RESEARCH.md"
+anchor = "#key-bindings-design-and-compatibility-notes"
+tags = ["input", "keybindings", "design", "compatibility"]

@@ -29,6 +29,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Build/run commands and developer setup: `README.md`
 - Reverse-engineering/file formats (`songs`, `v6`, etc.): `DECODE.md`
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
+- Local RAG usage and source-of-truth policy: `RAG.md`
 - Current architecture and implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 
 ## Planning files contract
@@ -37,4 +38,21 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - `plan_status.toml` is the machine-readable task state used by agents.
 - On task state changes, update both files in the same edit.
 - Validate consistency after edits with `bash scripts/plan_sync_check.sh`.
+
+## State update do/don't
+
+- Do treat `plan_status.toml` + `PLAN.md` as canonical project state.
+- Do update matching GitHub rollup issue references when task state meaningfully changes.
+- Do run `bash scripts/plan_sync_check.sh` before finishing state edits.
+- Don't use RAG output as source-of-truth for task status.
+- Don't update only one of the planning files when changing state.
+
+## Issue tracking memory
+
+- GitHub Issues are the live tracker for active rollup tasks (`*-001`).
+- For completed work that predates issue tracking, keep `issue = "pre-issues"`.
+- Do not invent/backfill synthetic issue numbers for historical completed tasks.
+- Refresh/sync workflow:
+	- `bash scripts/sync_plan_from_github.sh` (preferred one-liner)
+	- or manually: `sync_rollup_issue_states.sh --strict-open` → `refresh_issue_map.sh` → `plan_sync_check.sh`
 

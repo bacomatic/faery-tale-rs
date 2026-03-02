@@ -5,12 +5,16 @@ edition = "2021"
 default-run = "fmainrs"
 
 [dependencies]
+anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 dirs = "6.0.0"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 toml = "0.9.10"
+walkdir = "2"
 
 [dependencies.sdl2]
 version = "0.37.0"
@@ -23,3 +27,7 @@ path = "src/bin/music_viz.rs"
 [[bin]]
 name = "vkbd"
 path = "src/bin/vkbd.rs"
+
+[[bin]]
+name = "rag"
+path = "src/bin/rag.rs"
