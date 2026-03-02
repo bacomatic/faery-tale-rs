@@ -1,5 +1,11 @@
 # Game File Decoding Notes
 
+This document is the canonical reference for reverse-engineering notes and
+binary asset/file format details (`songs`, `v6`, and related data files).
+
+For build/run setup, use `README.md`. For roadmap/task tracking, use
+`PLAN.md` and `plan_status.toml`.
+
 ## `game/songs` — Music Score Data (5,984 bytes)
 
 Loaded by `read_score()` in `fmain2.c`. Holds up to 28 sequencer tracks
@@ -168,9 +174,9 @@ These two buffers are passed directly to `init_music()` in `gdriver.asm`, which 
 
 | Offset | Size | Name | Structure | Description |
 |--------|------|------|-----------|-------------|
-| 0x000 | 1,024 B | `wavmem` (wave buffer) | 128 waveforms × 8 bytes each | Signed 8-bit PCM sample data. Each 8-byte "waveform" is a short looping periodic waveform (sine-like, triangle, etc.) played by the Amiga's Paula DMA channels. The voice engine looks up `wave_num` per-voice and feeds the pointer/length into Paula's `$a0`/`$a4` registers. |
+| 0x000 | 1,024 B | `wavmem` (wave buffer) | 8 waveforms × 128 bytes each | Signed 8-bit PCM sample data. Each 128-byte waveform is a periodic shape (sine-like, triangle, etc.) played by the Amiga's Paula DMA channels. The voice engine looks up `wave_num` per-voice and feeds a sub-range of the 128-byte buffer into Paula's `$a0`/`$a4` (pointer/length) registers. The sub-range depends on the current octave: `wave_offset` from PTABLE selects the start (`wave_offset × 4` bytes in) and the loop length (`(32 − wave_offset) × 2` bytes). |
 | 0x400 | 1,024 B | *(skipped)* | — | Deliberately skipped by the `Seek(OFFSET_CURRENT)` call. Likely extra waveform data that isn't used by this version of the engine, or reserved space. The hex dump shows it is all zeros. |
-| 0x800 | 2,560 B | `volmem` (volume/envelope buffer) | 10 envelopes × 256 bytes each | Amplitude envelope tables. Each byte is a volume level (0–64 in Amiga terms). Voices index into these via `vol_num` and step through the table byte-by-byte each VBlank tick, creating ADSR-like shapes. When a voice hits the end of its envelope data, it zeroes the `$a8` volume register (silence). |
+| 0x800 | 2,560 B | `volmem` (volume/envelope buffer) | 10 envelopes × 256 bytes each | Amplitude envelope tables. Each byte is a volume level (0–64 in Amiga terms), except that any byte with the MSB set (≥ 0x80) is a **hold sentinel**: the envelope pointer stops advancing and the current volume is frozen until the next note event. Voices index into these via `vol_num` and step through the table byte-by-byte each VBlank tick, creating ADSR-like attack/decay/sustain/release shapes. When a voice advances past the last byte in its envelope, volume is zeroed (silence). |
 | 0x1200 | 20 B | *(trailing zeros)* | — | Padding at end of file, unused. |
 
 ### Role in the engine

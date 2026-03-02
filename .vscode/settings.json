@@ -9,6 +9,10 @@
     "chat.tools.terminal.autoApprove": {
         "cargo test": true,
         "cargo build": true,
-        "cargo run": true
+        "cargo run": true,
+        "/^bash scripts/plan_sync_check\\.sh$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

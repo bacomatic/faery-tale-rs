@@ -1,0 +1,638 @@
+version = 1
+last_updated = "2026-03-01"
+issue_tracking = "github"
+issues_enabled_on = "2026-03-01"
+
+[[task]]
+id = "intro-001"
+title = "Intro sequence end-to-end"
+area = "intro"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "Rollup: all intro steps complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/intro_scene.rs src/game/copy_protect_scene.rs src/game/placard_scene.rs"
+
+[[task]]
+id = "intro-101"
+parent = "intro-001"
+title = "Scene system and chaining"
+area = "intro"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "Scene trait and phase chaining complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/scene.rs src/main.rs"
+
+[[task]]
+id = "intro-102"
+parent = "intro-001"
+title = "Palette fade and zoom effects"
+area = "intro"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "FadeController + zoom palette behavior complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/palette_fader.rs src/game/viewport_zoom.rs"
+
+[[task]]
+id = "intro-103"
+parent = "intro-001"
+title = "Page flip animation"
+area = "intro"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "Original 22-step table behavior ported."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/page_flip.rs"
+
+[[task]]
+id = "intro-104"
+parent = "intro-001"
+title = "Copy protection scene"
+area = "intro"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "Three random questions and pass/fail flow complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/copy_protect_scene.rs"
+
+[[task]]
+id = "intro-105"
+parent = "intro-001"
+title = "Placard start scene"
+area = "intro"
+state = "done"
+priority = "medium"
+depends_on = []
+notes = "Character placard and border rendering complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/placard_scene.rs src/game/placard.rs"
+
+[[task]]
+id = "intro-106"
+parent = "intro-001"
+title = "Intro audio wiring"
+area = "intro"
+state = "done"
+priority = "medium"
+depends_on = ["audio-101", "audio-102"]
+notes = "Music starts at TitleFadeOut and stops at gameplay handoff."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/intro_scene.rs src/main.rs"
+
+[[task]]
+id = "audio-001"
+title = "Audio system"
+area = "audio"
+state = "in_progress"
+priority = "high"
+depends_on = []
+notes = "Rollup: core playback complete; deferred gameplay audio items remain."
+updated = "2026-03-01"
+issue = "#1"
+
+[[task]]
+id = "audio-101"
+parent = "audio-001"
+title = "Parse songs and events"
+area = "audio"
+state = "done"
+priority = "high"
+depends_on = []
+notes = "SongLibrary and event decode complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/songs.rs"
+
+[[task]]
+id = "audio-102"
+parent = "audio-001"
+title = "SDL audio synth and mixer"
+area = "audio"
+state = "done"
+priority = "high"
+depends_on = ["audio-101"]
+notes = "4-voice synth, stereo routing, filtering, and de-click complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/audio.rs"
+
+[[task]]
+id = "audio-103"
+parent = "audio-001"
+title = "Sound effects channel"
+area = "audio"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Deferred to gameplay implementation phase."
+updated = "2026-03-01"
+
+[[task]]
+id = "audio-104"
+parent = "audio-001"
+title = "Wire music into intro scenes"
+area = "audio"
+state = "done"
+priority = "high"
+depends_on = ["audio-102"]
+notes = "Intro scene start/stop integration complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/game/intro_scene.rs src/main.rs"
+
+[[task]]
+id = "audio-105"
+parent = "audio-001"
+title = "Implement gameplay setmood switching"
+area = "audio"
+state = "todo"
+priority = "high"
+depends_on = ["world-001"]
+notes = "Deferred to gameplay implementation phase."
+updated = "2026-03-01"
+
+[[task]]
+id = "vkbd-001"
+title = "Virtual keyboard & sine wave tuning tool"
+area = "tools"
+state = "done"
+priority = "medium"
+depends_on = []
+notes = "Rollup: vkbd implementation complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/bin/vkbd.rs"
+
+[[task]]
+id = "vkbd-101"
+parent = "vkbd-001"
+title = "Terminal keyboard and polyphony"
+area = "tools"
+state = "done"
+priority = "medium"
+depends_on = []
+notes = "4-voice input mapping and latch mode complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/bin/vkbd.rs"
+
+[[task]]
+id = "vkbd-102"
+parent = "vkbd-001"
+title = "Sine mode and harmonics"
+area = "tools"
+state = "done"
+priority = "medium"
+depends_on = []
+notes = "Tab sine mode and H2/H3 controls complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/bin/vkbd.rs"
+
+[[task]]
+id = "vkbd-103"
+parent = "vkbd-001"
+title = "Live PTABLE tuning and export"
+area = "tools"
+state = "done"
+priority = "medium"
+depends_on = []
+notes = "Realtime period edits and export-on-exit complete."
+updated = "2026-03-01"
+issue = "pre-issues"
+provenance = "completed-before-github-issues"
+evidence = "git log -- src/bin/vkbd.rs"
+
+[[task]]
+id = "world-001"
+title = "Game world & map system"
+area = "world"
+state = "in_progress"
+priority = "high"
+depends_on = []
+notes = "Rollup: map pipeline and gameplay scene work not started."
+updated = "2026-03-01"
+issue = "#3"
+
+[[task]]
+id = "world-101"
+parent = "world-001"
+title = "ADF reader module"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-102"
+parent = "world-001"
+title = "Load starting region data"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-101"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-103"
+parent = "world-001"
+title = "Build tile atlas texture"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-102"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-104"
+parent = "world-001"
+title = "Port genmini"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-102"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-105"
+parent = "world-001"
+title = "Map rendering"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-103", "world-104"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-106"
+parent = "world-001"
+title = "HiScreen overlay and compass"
+area = "world"
+state = "todo"
+priority = "medium"
+depends_on = ["world-105"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-107"
+parent = "world-001"
+title = "Scrolling text viewport"
+area = "world"
+state = "todo"
+priority = "medium"
+depends_on = ["world-105"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-108"
+parent = "world-001"
+title = "Gameplay scene stub"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-105"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "world-109"
+parent = "world-001"
+title = "Region palette transitions"
+area = "world"
+state = "todo"
+priority = "medium"
+depends_on = ["world-103"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "player-001"
+title = "Player & movement"
+area = "gameplay"
+state = "in_progress"
+priority = "high"
+depends_on = ["world-001"]
+notes = "Rollup: not started."
+updated = "2026-03-01"
+issue = "#4"
+
+[[task]]
+id = "player-101"
+parent = "player-001"
+title = "Player movement"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["world-108"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "player-102"
+parent = "player-001"
+title = "Terrain system"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["world-105"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "player-103"
+parent = "player-001"
+title = "Player commands"
+area = "gameplay"
+state = "todo"
+priority = "medium"
+depends_on = ["world-107"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "player-104"
+parent = "player-001"
+title = "Character state"
+area = "gameplay"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "player-105"
+parent = "player-001"
+title = "Research terrain collision mask source"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["world-102"]
+notes = "Determine whether movement blocking is from terrain bitplane data or a dedicated mask/flag plane."
+updated = "2026-03-01"
+
+[[task]]
+id = "npc-001"
+title = "NPC system"
+area = "npc"
+state = "in_progress"
+priority = "high"
+depends_on = ["world-001"]
+notes = "Rollup: not started."
+updated = "2026-03-01"
+issue = "#5"
+
+[[task]]
+id = "npc-101"
+parent = "npc-001"
+title = "NPC data loading"
+area = "npc"
+state = "todo"
+priority = "high"
+depends_on = ["world-108"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "npc-102"
+parent = "npc-001"
+title = "NPC behavior"
+area = "npc"
+state = "todo"
+priority = "high"
+depends_on = ["npc-101"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "npc-103"
+parent = "npc-001"
+title = "Combat"
+area = "npc"
+state = "todo"
+priority = "medium"
+depends_on = ["npc-102", "player-101"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "gfx-001"
+title = "Graphics effects"
+area = "graphics"
+state = "in_progress"
+priority = "medium"
+depends_on = []
+notes = "Rollup: palette infrastructure is in; remaining effects not started."
+updated = "2026-03-01"
+issue = "#2"
+
+[[task]]
+id = "gfx-101"
+parent = "gfx-001"
+title = "Day/night cycle gameplay wiring"
+area = "graphics"
+state = "in_progress"
+priority = "medium"
+depends_on = ["world-108"]
+notes = "Infrastructure complete; gameplay-loop integration pending."
+updated = "2026-03-01"
+
+[[task]]
+id = "gfx-102"
+parent = "gfx-001"
+title = "Copper list parsing"
+area = "graphics"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "gfx-103"
+parent = "gfx-001"
+title = "Witch effect"
+area = "graphics"
+state = "todo"
+priority = "low"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "gfx-104"
+parent = "gfx-001"
+title = "Teleport effect"
+area = "graphics"
+state = "todo"
+priority = "low"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-001"
+title = "Key bindings"
+area = "input"
+state = "in_progress"
+priority = "medium"
+depends_on = []
+notes = "Rollup: not started."
+updated = "2026-03-01"
+issue = "#6"
+
+[[task]]
+id = "keys-101"
+parent = "keys-001"
+title = "Define GameAction enum"
+area = "input"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-102"
+parent = "keys-001"
+title = "Define KeyBindings struct"
+area = "input"
+state = "todo"
+priority = "medium"
+depends_on = ["keys-101"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-103"
+parent = "keys-001"
+title = "Integrate into GameSettings"
+area = "input"
+state = "todo"
+priority = "medium"
+depends_on = ["keys-102"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-104"
+parent = "keys-001"
+title = "Wire into event handling"
+area = "input"
+state = "todo"
+priority = "high"
+depends_on = ["keys-102"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-105"
+parent = "keys-001"
+title = "Rebinding UI"
+area = "input"
+state = "todo"
+priority = "low"
+depends_on = ["keys-104"]
+notes = "Future milestone."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-106"
+parent = "keys-001"
+title = "Add numpad movement parity"
+area = "input"
+state = "todo"
+priority = "high"
+depends_on = ["keys-104"]
+notes = "Support original numpad 1-9 movement mapping as defaults."
+updated = "2026-03-01"
+
+[[task]]
+id = "keys-107"
+parent = "keys-001"
+title = "Add game controller logical mapping"
+area = "input"
+state = "todo"
+priority = "high"
+depends_on = ["keys-104"]
+notes = "Map controller inputs to existing GameAction graph while preserving one-fire baseline semantics."
+updated = "2026-03-01"
+
+[[task]]
+id = "persist-001"
+title = "Persistence"
+area = "save"
+state = "in_progress"
+priority = "medium"
+depends_on = []
+notes = "Rollup: not started."
+updated = "2026-03-01"
+issue = "#7"
+
+[[task]]
+id = "persist-101"
+parent = "persist-001"
+title = "Define save format"
+area = "save"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "persist-102"
+parent = "persist-001"
+title = "Save implementation"
+area = "save"
+state = "todo"
+priority = "medium"
+depends_on = ["persist-101"]
+notes = "Not started."
+updated = "2026-03-01"
+
+[[task]]
+id = "persist-103"
+parent = "persist-001"
+title = "Load implementation"
+area = "save"
+state = "todo"
+priority = "medium"
+depends_on = ["persist-101"]
+notes = "Not started."
+updated = "2026-03-01"

@@ -8,6 +8,13 @@ This project is an exercise in learning Rust. Please do not expect anything
 from it. This is a personal project, a labor of love really. Especially do not
 expect updates in a timely manner.
 
+# Canonical Sources
+
+- Build/run commands and developer setup: this file (`README.md`)
+- Reverse-engineering and asset format notes: `DECODE.md`
+- Roadmap/progress and task state: `PLAN.md` and `plan_status.toml`
+- Agent constraints and working contract: `AGENTS.md`
+
 # Build
 
 To build and run, just clone the repository and run "cargo run" from the root
@@ -67,6 +74,35 @@ be in any sort of working order.
 PRs will not be accepted, please do not submit any. As stated, this is *purely*
 a learning project and the source is being posted publicly for academic
 purposes only.
+
+## Git hooks
+
+This repository includes a `pre-push` hook in `.githooks/` that runs:
+
+1. `scripts/refresh_issue_map.sh` to regenerate the `Issue Map (Rollups)`
+    section in `PLAN.md` from `plan_status.toml`
+2. `scripts/plan_sync_check.sh` to validate PLAN/status consistency
+
+Pushes are blocked if either step fails.
+
+Optional maintenance command:
+
+    $ bash scripts/sync_plan_from_github.sh
+    $ bash scripts/sync_rollup_issue_states.sh
+    $ bash scripts/sync_rollup_issue_states.sh --strict-open
+
+This syncs rollup task states from GitHub issue state (`CLOSED` issues mark
+their rollup task as `done`; open issues leave local state unchanged).
+
+`sync_plan_from_github.sh` is the one-liner workflow: strict issue-state sync,
+Issue Map refresh, then PLAN/status consistency validation.
+
+With `--strict-open`, open rollup issues force local rollup task state to
+`in_progress`.
+
+Enable repo-local hooks once after cloning:
+
+    $ git config core.hooksPath .githooks
 
 
     .                         ######                         .

@@ -4,10 +4,7 @@ mod game;
 
 use clap::Parser;
 
-use game::font_texture::FontTexture;
 use game::game_library;
-
-use std::collections::HashMap;
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Scancode};
@@ -16,18 +13,16 @@ use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::{Point, Rect};
 use sdl2::surface::Surface;
 
-use std::cell::RefCell;
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::game::debug_window::{DebugWindow, DebugState};
 use crate::game::game_clock::GameClock;
 use crate::game::settings::{self, GameSettings};
-use crate::game::image_texture;
 use crate::game::cursor::CursorAsset;
 use crate::game::colors::Palette;
-use crate::game::scene::{Scene, SceneResources, SceneResult};
+use crate::game::render_resources::RenderResources;
+use crate::game::scene::{Scene, SceneResult};
 use crate::game::intro_scene::IntroScene;
 use crate::game::copy_protect_scene::CopyProtectScene;
 use crate::game::placard_scene::PlacardScene;
@@ -142,96 +137,20 @@ pub fn main() -> Result<(), String> {
     };
 
     let mut mouse_cursor: Option<Cursor> = None;
-
-    let pointer = game_lib.get_cursor("bow");
-    if pointer.is_some() {
-        mouse_cursor = set_mouse(pointer.unwrap(), &sys_palette);
+    if let Some(pointer) = game_lib.get_cursor("bow") {
+        mouse_cursor = set_mouse(pointer, &sys_palette);
     }
 
-    // TODO: Move somewhere else....
-    let amber = game_lib.find_font("amber", 9).unwrap();
-    let topaz = game_lib.find_font("topaz", 8).unwrap();
-
-    let amber_bounds = amber.get_font_bounds();
-    // leave a little space between the two font atlases
-    let mut topaz_bounds = topaz.get_font_bounds();
-    topaz_bounds.offset(0, amber_bounds.height() as i32 + 4);
-
-    let atlas_bounds = amber_bounds.union(topaz_bounds);
-
-    // Build font textures, create a single shared texture for all font atlases
-    let mut ft = tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::RGBA32), atlas_bounds.width(), atlas_bounds.height()).unwrap();
-    ft.set_blend_mode(sdl2::render::BlendMode::Blend);
-    let font_texture = Rc::new(RefCell::new(ft));
-
-    let amber_font = FontTexture::new(&amber, &amber_bounds, Rc::downgrade(&font_texture));
-    let topaz_font = FontTexture::new(&topaz, &topaz_bounds, Rc::downgrade(&font_texture));
-
-
-    // Build the image textures, using a shared texture.
-    // Also build a name-to-index map so scenes can look up images by name.
-    let image_atlas_bounds = Rect::new(0, 0, 4096, 4096);
-    let image_texture = Rc::new(RefCell::new(tex_maker.create_texture_static(Some(sdl2::pixels::PixelFormatEnum::RGBA32), image_atlas_bounds.width(), image_atlas_bounds.height()).unwrap()));
-
-    let mut next_x: u32 = 0;
-    let mut next_y: u32 = 0;
-    let mut max_y: u32 = 0; // track tallest image in the row, we won't bother packing tightly
-    let mut image_textures: Vec<image_texture::ImageTexture> = Vec::new();
-    let mut image_name_map: HashMap<String, usize> = HashMap::new();
-
-    let image_names = game_lib.get_image_names();
-    for name in &image_names {
-        let img = game_lib.find_image(name).unwrap();
-        let iff_image = &img.image;
-        if iff_image.is_none() {
-            println!("Warning: ImageAsset {} has no IffImage data", img.path);
-            continue;
-        }
-        let iff_image = iff_image.as_ref().unwrap();
-
-        // calculate position in texture atlas
-        if next_x + iff_image.width as u32 > image_atlas_bounds.width() {
-            // move to next row
-            next_x = 0;
-            next_y += max_y;
-            max_y = 0;
-        }
-        let image_texture_bounds = Rect::new(
-            next_x as i32,
-            next_y as i32,
-            iff_image.width as u32,
-            iff_image.height as u32
-        );
-        let mut img_tex = image_texture::ImageTexture::new(
-            iff_image,
-            &image_texture_bounds,
-            Rc::downgrade(&image_texture)
-        );
-        if iff_image.colormap.is_some() {
-            let colormap = iff_image.colormap.as_ref().unwrap();
-            img_tex.update(colormap, iff_image.transparent_color);
-        } else {
-            img_tex.update(&sys_palette, iff_image.transparent_color);
-        }
-
-        next_x += iff_image.width as u32;
-        if iff_image.height as u32 > max_y {
-            max_y = iff_image.height as u32;
-        }
-        image_name_map.insert(name.clone(), image_textures.len());
-        image_textures.push(img_tex);
-    }
+    // Build all SDL2 rendering resources (font atlas, image atlas, render targets).
+    let mut render_resources = RenderResources::build(&tex_maker, &game_lib, &sys_palette);
 
     let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
     let mut scratch_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
 
     let mut dirty: bool = true;
-
     let mut clear_flag = true;
-
     let mut kill_flag = false;
-
-    let mut walker: Point = Point::new(0,20);
+    let mut walker: Point = Point::new(0, 20);
 
     let mut clock: GameClock = GameClock::new();
     let mut last_minute: u32 = 0;
@@ -246,7 +165,7 @@ pub fn main() -> Result<(), String> {
     let mut debug_window: Option<DebugWindow> = if cli.debug {
         let game_pos = settings.window_position;
         let game_size = settings.window_size.unwrap_or((width, height));
-        match DebugWindow::new(&video_subsystem, &topaz, &settings, game_pos, game_size) {
+        match DebugWindow::new(&video_subsystem, game_lib.find_font("topaz", 8).unwrap(), &settings, game_pos, game_size) {
             Ok(dw) => {
                 println!("Debug window opened");
                 Some(dw)
@@ -385,15 +304,7 @@ pub fn main() -> Result<(), String> {
 
         // Scene rendering takes priority when active
         if let Some(ref mut scene) = active_scene {
-            // Build rendering resources for the scene
-            let mut resources = SceneResources {
-                image_textures: &mut image_textures,
-                image_name_map: &image_name_map,
-                amber_font: &amber_font,
-                topaz_font: &topaz_font,
-                scratch: &mut scratch_tex,
-                audio: audio_system.as_ref(),
-            };
+            let mut resources = render_resources.prepare(&mut scratch_tex, audio_system.as_ref());
             let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &mut resources);
             match result {
                 SceneResult::Done => {
@@ -504,12 +415,7 @@ pub fn main() -> Result<(), String> {
             };
 
             let img_idx = dw.image_index();
-            let image_dims = if img_idx < image_textures.len() {
-                let b = image_textures[img_idx].get_bounds();
-                Some((b.width(), b.height()))
-            } else {
-                None
-            };
+            let image_dims = render_resources.image_dimensions(img_idx);
 
             let song_group_count = song_library
                 .as_ref()

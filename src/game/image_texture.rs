@@ -9,123 +9,89 @@ use sdl2::render::{Canvas, RenderTarget, Texture};
 use std::cell::RefCell;
 use std::rc::Weak;
 
-/*
- * Texture that contains an IFF image. The backing texture
- * could be shared with other components so we define bounds
- * that can contain the image.
- */
-pub struct ImageTexture<'a> {
-    image: Option<&'a IffImage>,
-    bitmap: Option<BitMap>,
+/// An image view inside a shared SDL2 texture atlas.
+///
+/// `ImageTexture` converts an [`IffImage`] into a planar [`BitMap`] at
+/// construction time and from that point on is independent of the source
+/// asset — the `GameLibrary` lifetime does **not** propagate here.
+///
+/// The `'tex` lifetime tracks the [`sdl2::render::TextureCreator`] that
+/// allocated the backing atlas texture.
+pub struct ImageTexture<'tex> {
+    bitmap: BitMap,
 
-    // bounds within the provided texture
+    // Location of this image within the shared atlas texture.
     texture_bounds: Rect,
 
-    // cached pixel arrays used to generate textures, so we don't have to repeat
-    // expensive operations.
+    // Cached RGBA32 pixel buffer; populated on first `update()` call.
     pixels_32: Vec<u8>,
     stride: usize,
 
-    // Shared backing texture
-    texture: Weak<RefCell<Texture<'a>>>,
+    // Weak reference to the shared backing texture (owned by the atlas).
+    texture: Weak<RefCell<Texture<'tex>>>,
 }
 
-impl<'a> ImageTexture<'a> {
-    pub fn new(image: &'a IffImage, bounds: &Rect, texture: Weak<RefCell<Texture<'a>>>) -> ImageTexture<'a> {
-        let mut it = ImageTexture {
-            image: Some(image),
-            bitmap: None,
+impl<'tex> ImageTexture<'tex> {
+    /// Build an `ImageTexture` from an `IffImage`.
+    ///
+    /// The planar pixel data is decoded into a [`BitMap`] immediately;
+    /// after this call the `image` reference is no longer needed.
+    pub fn new(image: &IffImage, bounds: &Rect, texture: Weak<RefCell<Texture<'tex>>>) -> ImageTexture<'tex> {
+        let row_bytes = ((image.width + 15) / 16) * 2;
+        let bitmap = BitMap::with_interleaved_data(
+            image.pixels.clone(),
+            image.width,
+            image.height,
+            image.bitplanes,
+            row_bytes,
+        );
+        ImageTexture {
+            bitmap,
             texture_bounds: *bounds,
             pixels_32: Vec::new(),
             stride: 0,
-            texture: texture.clone()
-        };
-
-        it.init_bitmap();
-        // We need a palette to generate the pixel cache, which is provided later
-        it
-    }
-
-    /**
-     * Create an ImageTexture from a BitMap directly. The BitMap is cloned into the ImageTexture.
-     */
-    fn from_bitmap(bitmap: &BitMap, bounds: &Rect, texture: Weak<RefCell<Texture<'a>>>) -> ImageTexture<'a> {
-        let it = ImageTexture {
-            image: None,
-            bitmap: Some(bitmap.clone()),
-            texture_bounds: *bounds,
-            pixels_32: Vec::new(),
-            stride: 0,
-            texture: texture.clone()
-        };
-        it
+            texture,
+        }
     }
 
     pub fn get_bounds(&self) -> &Rect {
         &self.texture_bounds
     }
 
-    fn init_bitmap(&mut self) {
-        if self.bitmap.is_none() {
-            if let Some(ref img) = self.image {
-                let bitmap = BitMap::with_interleaved_data(img.pixels.clone(), img.width, img.height, img.bitplanes, ((img.width + 15) / 16) * 2);
-                self.bitmap = Some(bitmap);
-            } else {
-                println!("Error: ImageTexture has no image or bitmap to initialize from");
-            }
-        }
-    }
-
     pub fn update(&mut self, palette: &Palette, key_color: Option<usize>) {
         // build the pixel cache if needed
-        if self.pixels_32.len() == 0 {
-            if let Some(ref bitmap) = self.bitmap {
-                let result = bitmap.generate_rgb32(palette, key_color);
-                if result.is_err() {
-                    println!("Error generating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
-                    return;
-                }
-                let (pixels, stride) = result.unwrap();
-                self.pixels_32 = pixels;
-                self.stride = stride;
+        if self.pixels_32.is_empty() {
+            let result = self.bitmap.generate_rgb32(palette, key_color);
+            if result.is_err() {
+                println!("Error generating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
+                return;
             }
+            let (pixels, stride) = result.unwrap();
+            self.pixels_32 = pixels;
+            self.stride = stride;
         } else {
             // update existing pixel cache in case palette changed
-            if let Some(ref bitmap) = self.bitmap {
-                let result = bitmap.update_rgb32(&mut self.pixels_32, self.stride, palette, key_color);
-                if result.is_err() {
-                    println!("Error updating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
-                    return;
-                }
+            let result = self.bitmap.update_rgb32(&mut self.pixels_32, self.stride, palette, key_color);
+            if result.is_err() {
+                println!("Error updating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
+                return;
             }
         }
 
-        // we need a mutable borrow of the shared texture to draw the image into it
         if let Some(strong_texture) = self.texture.upgrade() {
             let mut texture = strong_texture.borrow_mut();
-            texture.update(
-                Some(self.texture_bounds),
-                &self.pixels_32,
-                self.stride
-            ).unwrap();
+            texture.update(Some(self.texture_bounds), &self.pixels_32, self.stride).unwrap();
         } else {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
         }
     }
 
     pub fn draw<T: RenderTarget>(&self, canvas: &mut Canvas<T>, x: i32, y: i32) {
-        // we need a mutable borrow of the shared texture to draw the image into it
         if let Some(strong_texture) = self.texture.upgrade() {
             let texture = strong_texture.borrow();
-            let src_rect = self.texture_bounds.clone();
-
-            let (width, height) = self.bitmap.as_ref().unwrap().get_size();
-            let dest_rect = Rect::new(
-                x,
-                y,
-                width as u32,
-                height as u32
-            );
+            let src_rect = self.texture_bounds;
+            let (width, height) = self.bitmap.get_size();
+            let dest_rect = Rect::new(x, y, width as u32, height as u32);
             canvas.copy(&*texture, Some(src_rect), Some(dest_rect)).unwrap();
         } else {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
@@ -133,12 +99,10 @@ impl<'a> ImageTexture<'a> {
     }
 
     /// Draw a sub-region of the image to the canvas at the specified position.
-    /// `region` defines the source rectangle within the image's own coordinate space
-    /// (i.e., relative to the image's top-left corner, not the atlas).
+    /// `region` is in image-local coordinates (relative to the image's own top-left).
     pub fn draw_region<T: RenderTarget>(&self, canvas: &mut Canvas<T>, region: Rect, x: i32, y: i32) {
         if let Some(strong_texture) = self.texture.upgrade() {
             let texture = strong_texture.borrow();
-            // Translate from image-local coordinates to atlas coordinates
             let src_rect = Rect::new(
                 self.texture_bounds.x() + region.x(),
                 self.texture_bounds.y() + region.y(),

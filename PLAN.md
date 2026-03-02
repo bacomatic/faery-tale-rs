@@ -1,3 +1,57 @@
+## Canonical Scope
+
+This document is the canonical human-readable roadmap and progress log.
+
+- Human status index and plan narrative: this file (`PLAN.md`)
+- Machine-readable task state mirror: `plan_status.toml`
+- Build/run setup and developer environment: `README.md`
+- Reverse-engineering and file format details: `DECODE.md`
+- Agent constraints and execution contract: `AGENTS.md`
+
+## Issue Tracking Provenance
+
+GitHub Issues were enabled for this project on **2026-03-01**.
+
+Status reporting conventions:
+- **Issue: #<number>** — task is tracked in GitHub Issues.
+- **Issue: pre-issues** — task was completed before Issues were enabled.
+- **Issue: n/a** — intentionally untracked housekeeping/meta work.
+
+For tasks marked `pre-issues`, use commit history as evidence (for example:
+`git log -- <path>`), and do not backfill synthetic issue numbers.
+
+## Issue Map (Rollups)
+
+- `intro-001` → pre-issues
+- `audio-001` → #1
+- `vkbd-001` → pre-issues
+- `world-001` → #3
+- `player-001` → #4
+- `npc-001` → #5
+- `gfx-001` → #2
+- `keys-001` → #6
+- `persist-001` → #7
+
+## Status Index (source of truth for humans)
+
+Machine-readable mirror: `plan_status.toml`
+
+### In Progress
+- [audio-001] Audio system (3/5 steps complete; 2 deferred; Issue: #1)
+- [gfx-001] Graphics effects (1/4 steps in progress; Issue: #2)
+- [world-001] Game world & map system (0/9 steps complete; Issue: #3)
+- [player-001] Player & movement (0/5 steps complete; Issue: #4)
+- [npc-001] NPC system (0/3 steps complete; Issue: #5)
+- [keys-001] Key bindings (0/7 steps complete; Issue: #6)
+- [persist-001] Persistence (0/3 steps complete; Issue: #7)
+
+### Todo
+- None currently
+
+### Done
+- [intro-001] Intro sequence end-to-end (6/6 steps complete; Issue: pre-issues)
+- [vkbd-001] Virtual keyboard & sine wave tuning tool (3/3 steps complete; Issue: pre-issues)
+
 ## Plan: Intro Sequence End-to-End
 
 **TL;DR:** Build just enough scene infrastructure to drive the full intro — from title text through story pages to copy protection and the first placard — then wire it into the existing event loop. This gives you a playable sequence and a reusable scene system for everything that follows.
@@ -59,7 +113,7 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
 
 1. ~~**Parse music/song data**~~ Done — `SongLibrary` in `src/game/songs.rs`. Custom 4-voice tracker format parsed from `game/songs` (28 tracks). `TrackEvent` enum models all commands from `gdriver.asm`: Note, Rest, SetInstrument, SetTempo, End (with loop flag). Lookup tables `PTABLE` (78 period/wave-offset entries) and `NOTE_DURATIONS` (64 timing values) ported verbatim. NTSC Paula clock (3,579,545 Hz). 12 unit tests including real-file parsing.
 
-2. ~~**SDL2 mixer integration**~~ Done — `AudioSystem` in `src/game/audio.rs`. Pure-Rust, no `unsafe`, 4-voice software synthesizer porting `gdriver.asm` note-trigger + envelope logic. `Instruments` loads waveforms and ADSR envelopes from `game/v6` (envelopes at byte 2048, matching the original `Seek(+S_WAVBUF, OFFSET_CURRENT)` load sequence). `SequencerState` drives 4 `Voice`s with timeclock stepping (150 tempo, 60 Hz NTSC VBL). `SynthCallback` fires a VBL tick every 735 samples (~44100/60) and mixes voices into a 44100 Hz f32 mono stream. Per-voice rendering uses linear interpolation with correct modulo loop-wrap (avoids click on every waveform cycle) and a 1-pole IIR low-pass at ~4800 Hz approximating the A500 hardware RC filter. Voices mixed at ¼ scale to match four-channel headroom. Intro music (tracks 12–15) plays automatically at startup. 13 tests.
+2. ~~**SDL2 mixer integration**~~ Done — `AudioSystem` in `src/game/audio.rs`. Pure-Rust, no `unsafe`, 4-voice software synthesizer porting `gdriver.asm` note-trigger + envelope logic. `Instruments` loads waveforms and ADSR envelopes from `game/v6` (envelopes at byte 2048, matching the original `Seek(+S_WAVBUF, OFFSET_CURRENT)` load sequence). `SequencerState` drives 4 `Voice`s with timeclock stepping (150 tempo, 60 Hz NTSC VBL). `SynthCallback` fires a VBL tick every 735 samples (~44100/60) and mixes voices into a **stereo i16 stream at 44100 Hz** with Amiga Paula DAC routing (voices 0+3 → left, 1+2 → right; 75%/25% primary/bleed). Per-voice rendering uses linear interpolation with correct modulo loop-wrap, a 1-pole IIR low-pass at ~4800 Hz, and a 64-sample de-click ramp to suppress note-transition pops. Intro music (tracks 12–15) plays automatically at startup. 13 tests.
 
 3. **Sound effects** *(deferred to game implementation phase)*
    - Identify and load sound effect data from `game/` (sample bank referenced in `gdriver.asm` as `sample_mem`, 5632 bytes from `dh0:z/samples`)
@@ -81,7 +135,7 @@ Parse the music file (`game/songs`), build a song list, and play tracks via SDL2
    - `set_score` (vs `playscore`) is used when the new score should take effect at the next loop boundary rather than immediately (avoids an abrupt cut mid-phrase).
 
 **Known issues / fine tuning:**
-- Minor click between notes. Likely a phase discontinuity when `trigger_note()` resets `phase` to 0.0 mid-cycle without crossfading to the new waveform, or a misaligned VBL boundary when the sequencer fires inside a partially-rendered chunk. Music is otherwise correct and verified against original. Address in a future fine-tuning pass.
+- ~~Minor click between notes~~ — Fixed by a 64-sample de-click ramp in `mix_stereo` that smooths the gain envelope on note start/stop. Stereo output also added (Amiga Paula DAC routing) at the same time. Music is correct and verified against original.
 
 ---
 
@@ -276,17 +330,25 @@ All game world data lives in `game/image`, an Amiga 880KB floppy disk image acce
    - Pixel-accurate scroll: sub-tile pixel offset from `map_x % 16` / `map_y % 32` shifts all blit destinations
    - On each frame: recompute minimap from current hero position, blit tiles, draw `hiscreen` overlay
 
-6. **HiScreen overlay** (`src/game/gameplay_scene.rs`)
+6. **HiScreen overlay and compass** (`src/game/gameplay_scene.rs`)
    - Load `game/hiscreen` as an `IffImage` (640 × 57 px, already supported by `iff_image.rs`)
    - Render it to the bottom strip of the 640 × 480 canvas below `play_tex` (at y = 480 − 57 = 423 or matching original `PAGE_HEIGHT = 143`)
    - Exact y-position: `vp_page` starts at y=0 with height 143; `vp_text` at `PAGE_HEIGHT` = 143, height 57 → canvas rows 143–200 (at 1× lores scale) or equivalent at our 2× scale
+   - **Compass animation**: the compass needle in the hiscreen rotates based on `hero_dir` and `compass_anim`. Load the compass sprite frames from game data and blit the appropriate frame each tick.
+   - **UI buttons**: the hiscreen contains clickable inventory/action button areas; wire these into the `KeyBindings` / `GameAction` dispatch (see Key Bindings plan)
 
-7. **Gameplay scene stub** (`src/game/gameplay_scene.rs`)
+7. **Scrolling text viewport** (`src/game/gameplay_scene.rs`)
+   - The `vp_text` region (below the play field) shows scrolling narrative text for look/talk/action results
+   - Port `scroll_message()` / `map_message()` from `fmain.c`: append text lines, scroll up on overflow, fade in/out via palette
+   - Text is rendered with the amber font into a dedicated render target and composited onto the canvas each frame
+
+8. **Gameplay scene stub** (`src/game/gameplay_scene.rs`)
    - Wire `WorldData`, `TileAtlas`, and tile rendering into the existing `Gameplay` phase in `main.rs` (currently renders directly in the loop)
    - Implement `Scene` trait; place hero at starting coordinates from `file_index[3]`
    - Static render first (no movement), confirm tiles appear correctly
+   - **Refactor `main.rs`**: SDL context, texture atlas setup, and asset loading have grown large in `main.rs`. Once `GameplayScene` exists, extract this boilerplate into a `GameEngine` or `App` struct to keep `main()` thin.
 
-8. **Palette for regions**
+9. **Palette for regions**
    - Each region uses a different palette (outdoor colours differ from dungeon/indoor)
    - Identify palette block numbers from ADF or embed per-region palettes in `faery.toml`
    - Hook `TileAtlas::rebuild()` into region transitions
@@ -332,18 +394,24 @@ Implement character movement, terrain interaction, and the basic player command 
 
 2. **Terrain system**
    - Terrain type lookup from map data
+   - Research and identify the original terrain collision mask source (tile bitplane vs separate mask plane) from `original/` and game data
    - Blocked tiles, water/swamp sinking, bush slowdown
    - Path validation
 
 3. **Player commands**
-   - Look, Give, Get, Yell, Ask, etc.
-   - Text output to scroll viewport
+   - Look, Give, Get, Yell, Ask, etc. — port `do_command()` from `fmain.c`
+   - Output strings via the scrolling text viewport (see Game World step 7)
    - Object/NPC interaction triggers
 
 4. **Character state**
    - Three brothers (Julian, Phillip, Kevin) with sequential lives
    - Health, inventory, quest flags
    - Death → revive as next brother → placard → map repositioning
+
+5. **Terrain collision mask research**
+   - Trace the original collision/blocking path in `fmain.c`/asm helpers to confirm exactly which data controls blocked movement
+   - Verify whether blocking uses one of the rendered terrain bitplanes or a dedicated mask/flag plane
+   - Document findings in `DECODE.md` (or the relevant world-data section) before finalizing movement collision implementation
 
 ---
 
@@ -414,6 +482,7 @@ From `fmain.c` `letter_list[]` and the main game loop:
 | Key (original) | Menu   | Action             |
 |-----------------|--------|--------------------|
 | Arrow keys      | —      | Movement (8 dirs)  |
+| Numpad `1`–`9` | —      | Movement (8 dirs + center) |
 | `0`             | —      | Fight / Attack     |
 | `I`             | ITEMS  | List inventory     |
 | `T`             | ITEMS  | Take / Pick up     |
@@ -453,6 +522,7 @@ From `fmain.c` `letter_list[]` and the main game loop:
    - `HashMap<GameAction, Vec<Keycode>>` — each action maps to one or more physical keys
    - `fn default_bindings() -> KeyBindings` — populate with the original mapping (see table above), using modern keyboard equivalents:
      - Arrow keys → movement (original used joystick dirs 20-29; map to `Up`/`Down`/`Left`/`Right`)
+   - Numpad `1`–`9` mapped to movement directions (original parity)
      - WASD as alternate movement keys (new convenience)
      - F-keys for magic spells
      - Letter keys for menu shortcuts
@@ -479,12 +549,20 @@ From `fmain.c` `letter_list[]` and the main game loop:
    - "Reset to Defaults" button
    - This is a later milestone; for now, users can edit `settings.toml` directly
 
+6. **Game controller support**
+   - Add a controller layer that maps physical pad inputs to existing logical `GameAction`s (no controller-only actions)
+   - Keep gameplay parity with original one-button joystick by treating one face button as primary `Fight/Use` and mapping extra buttons to existing keyboard actions (menu shortcuts, pause, map, etc.)
+   - Support D-pad and left stick for 8-direction movement, with configurable deadzone and digital/analog preference
+
 ### Design Notes
 
 - The original game's `letter_list[]` is a flat array scanned linearly on each keypress — we replace this with a `HashMap` reverse index for O(1) lookup
 - Direction keys need special handling: the original tracks key-down/key-up separately (`keydir` set on press, cleared on release), so we need to track held-key state
 - The KEYS menu (`SelectKey1`..`SelectKey6`) is only active when `cmode == KEYS` in the original; our implementation can context-gate these actions
 - Buy menu keys are only relevant when a shop interface is open — scene-level filtering handles this
+- Numpad movement (`1`–`9`) should be first-class defaults, not secondary aliases
+- Controller mapping should remain logical-action based so keyboard/controller rebinding share one action graph
+- Preserve original one-fire-button gameplay semantics as baseline; extra controller buttons are optional shortcuts to existing actions
 - Cheat keys from the original (B, '.', R, '=', arrows-teleport) are intentionally excluded from the rebindable system and handled separately as debug/cheat commands
 
 ---
