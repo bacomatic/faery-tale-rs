@@ -255,6 +255,13 @@ struct ActorsTabState {
 enum CheatBtn {
     HeroPack,
     MaxStats,
+    TeleportSafe,
+    StoneRing(u8),
+    CoordXPlus,
+    CoordXMinus,
+    CoordYPlus,
+    CoordYMinus,
+    CoordGo,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -300,6 +307,9 @@ pub struct DebugWindow<'a> {
     // Cheats tab state
     /// Button hit-areas rebuilt each frame; used by click handler.
     cheat_buttons: Vec<(Rect, CheatBtn)>,
+    /// Coordinate entry for TeleportCoords.
+    coord_x: u16,
+    coord_y: u16,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -396,6 +406,8 @@ impl<'a> DebugWindow<'a> {
             stop_requested: false,
             pending_commands: Vec::new(),
             cheat_buttons: Vec::new(),
+            coord_x: 0,
+            coord_y: 0,
             placard_texture: placard_tex,
         })
     }
@@ -634,6 +646,19 @@ impl<'a> DebugWindow<'a> {
                 self.pending_commands.push(DebugCommand::SetStat { stat: StatId::Hunger, value: 0 });
                 self.pending_commands.push(DebugCommand::SetStat { stat: StatId::Fatigue, value: 0 });
                 self.pending_commands.push(DebugCommand::AdjustStat { stat: StatId::Vitality, delta: 100 });
+            }
+            CheatBtn::TeleportSafe => {
+                self.pending_commands.push(DebugCommand::TeleportSafe);
+            }
+            CheatBtn::StoneRing(i) => {
+                self.pending_commands.push(DebugCommand::TeleportStoneRing { index: i });
+            }
+            CheatBtn::CoordXPlus  => { self.coord_x = self.coord_x.saturating_add(100); }
+            CheatBtn::CoordXMinus => { self.coord_x = self.coord_x.saturating_sub(100); }
+            CheatBtn::CoordYPlus  => { self.coord_y = self.coord_y.saturating_add(100); }
+            CheatBtn::CoordYMinus => { self.coord_y = self.coord_y.saturating_sub(100); }
+            CheatBtn::CoordGo => {
+                self.pending_commands.push(DebugCommand::TeleportCoords { x: self.coord_x, y: self.coord_y });
             }
         }
     }
@@ -1190,6 +1215,77 @@ impl<'a> DebugWindow<'a> {
         set_font_color(&self.font_texture, 120, 120, 120);
         { self.font_text.borrow().render_string("Fills weapons, magic, keys. No quest items.", &mut self.canvas, left, y); }
         y += line_h + 4;
+        draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── Teleport (debug-106) ──────────────────────────────────────
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("Teleport", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let r = draw_button(
+            &mut self.canvas, &self.font_text, &self.font_texture,
+            "To Safe", left, y, char_w, line_h, false,
+        );
+        self.cheat_buttons.push((r, CheatBtn::TeleportSafe));
+
+        if let Some((sx, sy, _)) = state.safe_pos {
+            let s = format!("  ({}, {})", sx, sy);
+            set_font_color(&self.font_texture, 140, 140, 140);
+            self.font_text.borrow().render_string(
+                &s, &mut self.canvas,
+                left + "To Safe".len() as i32 * char_w + 18, y + 2,
+            );
+        }
+        y += line_h + 6;
+
+        // Stone Ring buttons (0-10)
+        set_font_color(&self.font_texture, 160, 160, 160);
+        { self.font_text.borrow().render_string("Stone Ring:", &mut self.canvas, left, y + 2); }
+        let mut rx = left + "Stone Ring:".len() as i32 * char_w + 6;
+        for i in 0u8..=10 {
+            let label = format!("{}", i);
+            let r = draw_button(
+                &mut self.canvas, &self.font_text, &self.font_texture,
+                &label, rx, y, char_w, line_h, false,
+            );
+            self.cheat_buttons.push((r, CheatBtn::StoneRing(i)));
+            rx += label.len() as i32 * char_w + 14;
+        }
+        y += line_h + 6;
+
+        // Coordinate entry (X +/- display, Y +/- display, Go)
+        set_font_color(&self.font_texture, 160, 160, 160);
+        { self.font_text.borrow().render_string("Coords:", &mut self.canvas, left, y + 2); }
+        let mut cx = left + "Coords:".len() as i32 * char_w + 6;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "-", cx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::CoordXMinus));
+        cx += char_w + 14;
+
+        set_font_color(&self.font_texture, 220, 220, 220);
+        { self.font_text.borrow().render_string(&format!("X:{}", self.coord_x), &mut self.canvas, cx, y + 2); }
+        cx += 7 * char_w + 4;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "+", cx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::CoordXPlus));
+        cx += char_w + 16;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "-", cx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::CoordYMinus));
+        cx += char_w + 14;
+
+        set_font_color(&self.font_texture, 220, 220, 220);
+        { self.font_text.borrow().render_string(&format!("Y:{}", self.coord_y), &mut self.canvas, cx, y + 2); }
+        cx += 7 * char_w + 4;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "+", cx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::CoordYPlus));
+        cx += char_w + 14;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "Go", cx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::CoordGo));
+        y += line_h + 6;
         draw_separator(&mut self.canvas, y);
 
         let _ = (state, y);
