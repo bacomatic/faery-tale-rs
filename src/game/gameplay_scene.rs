@@ -1,4 +1,5 @@
 use crate::game::map_renderer::MapRenderer;
+use crate::game::message_queue::MessageQueue;
 use std::any::Any;
 
 use sdl2::event::Event;
@@ -43,6 +44,7 @@ impl Default for InputState {
 
 pub struct GameplayScene {
     pub state: Box<GameState>,
+    pub messages: MessageQueue,
     tick_accum: u32,
     autosave_enabled: bool,
     input: InputState,
@@ -56,12 +58,15 @@ pub struct GameplayScene {
     local_bindings: KeyBindings,
     last_region_num: u8,
     palette_transition: Option<crate::game::palette::PaletteTransition>,
+    last_indoor: bool,
+    pub in_encounter_zone: bool,
 }
 
 impl GameplayScene {
     pub fn new() -> Self {
         GameplayScene {
             state: Box::new(GameState::new()),
+            messages: MessageQueue::new(),
             tick_accum: 0,
             autosave_enabled: true,
             input: InputState::default(),
@@ -75,7 +80,14 @@ impl GameplayScene {
             local_bindings: KeyBindings::default_bindings(),
             last_region_num: u8::MAX,
             palette_transition: None,
+            last_indoor: false,
+            in_encounter_zone: false,
         }
+    }
+
+    /// Returns true when it is daytime (lightlevel > 60).
+    pub fn is_daytime(state: &GameState) -> bool {
+        state.lightlevel > 60
     }
 
     /// Decode 8-way direction from current input flags.
@@ -113,7 +125,7 @@ impl GameplayScene {
             let new_x = (self.state.hero_x as i32 + dx * 2).clamp(0, u16::MAX as i32) as u16;
             let new_y = (self.state.hero_y as i32 + dy * 2).clamp(0, u16::MAX as i32) as u16;
 
-            if self.state.flying != 0 || !collision::proxcheck(&self.state, new_x, new_y) {
+            if self.state.flying != 0 || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
             }
@@ -138,6 +150,7 @@ impl GameplayScene {
                     player.state = ActorState::Walking;
                 }
             }
+            self.state.facing = facing;
         } else if self.input.fight {
             if let Some(player) = self.state.actors.first_mut() {
                 player.state = ActorState::Fighting(0);
@@ -155,12 +168,13 @@ impl GameplayScene {
     }
 
     /// Clear and color the canvas according to the current viewstatus mode.
-    fn render_by_viewstatus(&self, canvas: &mut Canvas<Window>) {
+    fn render_by_viewstatus(&mut self, canvas: &mut Canvas<Window>) {
         match self.state.viewstatus {
             // Normal play or forced redraw
             0 | 98 | 99 => {
                 canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 64));
                 canvas.clear();
+                eprintln!("{}", crate::game::hiscreen::format_hiscreen(&self.state));
             }
             // Map view
             1 => {
@@ -201,10 +215,22 @@ impl GameplayScene {
             GameAction::Inventory => {
                 eprintln!("Inventory: {}", self.state.inventory_summary());
                 self.state.viewstatus = 4;
+                self.messages.push("Inventory opened");
             }
             GameAction::Rebind => {
                 self.rebinding.active = !self.rebinding.active;
                 eprintln!("Rebinding mode: {}", self.rebinding.active);
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle a game event produced by gameplay logic.
+    pub fn handle_game_event(&mut self, event: crate::game::game_event::GameEvent) {
+        use crate::game::game_event::GameEvent;
+        match event {
+            GameEvent::Message { text } => {
+                self.messages.push(text);
             }
             _ => {}
         }
@@ -382,7 +408,8 @@ impl Scene for GameplayScene {
         // Region palette transition (world-109)
         let region = self.state.region_num;
         if region != self.last_region_num {
-            eprintln!("region_num changed: {} -> {}", self.last_region_num, region);
+            eprintln!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
+                crate::game::game_event::GameEvent::RegionTransition { region });
             let from = self.palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
@@ -399,6 +426,20 @@ impl Scene for GameplayScene {
                 }
             }
         }
+
+        // Indoor/outdoor mode detection (world-108)
+        let indoor = self.state.region_num > 7;
+        if indoor != self.last_indoor {
+            if indoor {
+                eprintln!("{:?}", crate::game::game_event::GameEvent::EnterIndoor { door_index: self.state.region_num });
+            } else {
+                eprintln!("{:?}", crate::game::game_event::GameEvent::ExitIndoor);
+            }
+            self.last_indoor = indoor;
+        }
+
+        // Encounter zone stub (world-108): actual zone data wired later.
+        self.in_encounter_zone = false;
 
         // Autosave every 3600 ticks (~60s at 60Hz)
         if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {
