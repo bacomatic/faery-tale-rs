@@ -1,4 +1,5 @@
 
+use crate::game::key_bindings::KeyBindings;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,6 +12,9 @@ pub struct GameSettings {
     pub volume: f32,
     pub music_volume: f32,
     pub muted: bool,
+
+    #[serde(default)]
+    pub key_bindings: KeyBindings,
 
     // Non-persistent settings can be added here
     #[serde(skip)]
@@ -28,6 +32,7 @@ impl Default for GameSettings {
             volume: 1.0,
             music_volume: 1.0,
             muted: false,
+            key_bindings: KeyBindings::default(),
             dirty: false,
         }
     }

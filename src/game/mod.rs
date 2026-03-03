@@ -37,4 +37,6 @@ pub mod settings;
 pub mod songs;
 pub mod sprites;
 pub mod viewport_zoom;
+pub mod map_view;
+pub mod tile_atlas;
 pub mod world_data;
