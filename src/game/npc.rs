@@ -23,6 +23,8 @@ pub const RACE_UNDEAD: u8 = 1;
 pub const RACE_WRAITH: u8 = 2;
 pub const RACE_ENEMY: u8 = 3;
 pub const RACE_SNAKE: u8 = 4;
+/// Shopkeeper race code.
+pub const RACE_SHOPKEEPER: u8 = 0x88;
 
 /// An NPC/actor record.
 #[derive(Debug, Clone, Default)]
