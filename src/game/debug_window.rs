@@ -12,6 +12,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::game::colors::Palette;
+use crate::game::debug_command::DebugCommand;
 use crate::game::font::DiskFont;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_clock::DayPhase;
@@ -70,6 +71,49 @@ impl DebugTab {
 
 // ── State snapshot passed from main loop ─────────────────────────────
 
+/// Copied hero scalar stats for display in the debug window.
+#[derive(Debug, Clone, Default)]
+pub struct HeroStats {
+    pub vitality: i16,
+    pub max_vitality: i16,
+    pub brave: i16,
+    pub luck: i16,
+    pub kind: i16,
+    pub wealth: i16,
+    pub hunger: i16,
+    pub fatigue: i16,
+    pub brother: u8,
+    pub riding: i16,
+    pub flying: i16,
+    pub hero_x: u16,
+    pub hero_y: u16,
+    pub hero_sector: u16,
+    pub hero_place: u16,
+    pub region_num: u8,
+}
+
+/// Snapshot of gameplay timers for display in the debug window.
+#[derive(Debug, Clone, Default)]
+pub struct TimerSnapshot {
+    pub light_timer: i16,
+    pub secret_timer: i16,
+    pub freeze_timer: i16,
+    pub daynight: u16,
+    pub lightlevel: u16,
+}
+
+/// Compact actor info for display; avoids borrowing the full Actor.
+#[derive(Debug, Clone, Default)]
+pub struct ActorInfo {
+    pub kind: String,
+    pub state: String,
+    pub abs_x: u16,
+    pub abs_y: u16,
+    pub vitality: i16,
+    pub race: u8,
+    pub weapon: u8,
+}
+
 /// Info snapshot passed into the debug window each frame.
 /// Uses owned/copied values to avoid borrow conflicts in the main loop.
 pub struct DebugState<'a> {
@@ -98,6 +142,16 @@ pub struct DebugState<'a> {
     // Songs tab data
     pub song_group_count: usize,
     pub current_song_group: Option<usize>,
+
+    // Gameplay snapshot fields (None before gameplay begins)
+    pub hero_stats: Option<HeroStats>,
+    pub inventory: Option<[u8; 35]>,
+    pub actors: Option<Vec<ActorInfo>>,
+    pub timers: Option<TimerSnapshot>,
+    pub safe_pos: Option<(u16, u16, u8)>,
+    pub god_mode_flags: u8,
+    pub time_held: bool,
+    pub autosave_enabled: bool,
 }
 
 // ── Per-tab state ────────────────────────────────────────────────────
@@ -151,6 +205,9 @@ pub struct DebugWindow<'a> {
     song_group_requested: Option<usize>,
     /// Stop-music request from the Songs tab.
     stop_requested: bool,
+
+    /// Queued commands to apply to game state; consumed via `drain_commands()`.
+    pending_commands: Vec<DebugCommand>,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -238,6 +295,7 @@ impl<'a> DebugWindow<'a> {
             song_tab: SongTabState { highlighted_group: 0 },
             song_group_requested: None,
             stop_requested: false,
+            pending_commands: Vec::new(),
             placard_texture: placard_tex,
         })
     }

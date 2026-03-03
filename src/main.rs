@@ -441,6 +441,14 @@ pub fn main() -> Result<(), String> {
                 image_dimensions: image_dims,
                 song_group_count,
                 current_song_group,
+                hero_stats: None,
+                inventory: None,
+                actors: None,
+                timers: None,
+                safe_pos: None,
+                god_mode_flags: 0,
+                time_held: false,
+                autosave_enabled: false,
             };
             dw.render(&state);
 
