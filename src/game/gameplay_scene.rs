@@ -121,13 +121,36 @@ impl GameplayScene {
             Direction::None => ( 0,  0),
         };
 
+        let prev_x = self.state.hero_x;
+        let prev_y = self.state.hero_y;
+
         if dir != Direction::None {
-            let new_x = (self.state.hero_x as i32 + dx * 2).clamp(0, u16::MAX as i32) as u16;
-            let new_y = (self.state.hero_y as i32 + dy * 2).clamp(0, u16::MAX as i32) as u16;
+            // Speed: flying=4px, water terrain (type 2-5)=1px, default=2px.
+            let speed: i32 = if self.state.flying != 0 {
+                4
+            } else if let Some(ref world) = self.map_world {
+                let terrain = collision::px_to_terrain_type(
+                    world,
+                    self.state.hero_x as i32,
+                    self.state.hero_y as i32,
+                );
+                if (2..=5).contains(&terrain) { 1 } else { 2 }
+            } else {
+                2
+            };
+
+            let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
+            let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
 
             if self.state.flying != 0 || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
+                if let Some(door) = crate::game::doors::doorfind(self.state.region_num, new_x, new_y) {
+                    self.state.region_num = door.dst_region;
+                    self.state.hero_x = door.dst_x;
+                    self.state.hero_y = door.dst_y;
+                    eprintln!("{:?}", crate::game::game_event::GameEvent::RegionTransition { region: door.dst_region });
+                }
             }
 
             let facing: u8 = match dir {
@@ -142,8 +165,10 @@ impl GameplayScene {
                 Direction::None => 0,
             };
 
+            let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
             if let Some(player) = self.state.actors.first_mut() {
                 player.facing = facing;
+                player.moving = moved;
                 if self.input.fight {
                     player.state = ActorState::Fighting(0);
                 } else {
@@ -151,12 +176,15 @@ impl GameplayScene {
                 }
             }
             self.state.facing = facing;
-        } else if self.input.fight {
+        } else {
             if let Some(player) = self.state.actors.first_mut() {
-                player.state = ActorState::Fighting(0);
+                player.moving = false;
+                if self.input.fight {
+                    player.state = ActorState::Fighting(0);
+                } else {
+                    player.state = ActorState::Still;
+                }
             }
-        } else if let Some(player) = self.state.actors.first_mut() {
-            player.state = ActorState::Still;
         }
     }
 
@@ -438,8 +466,9 @@ impl Scene for GameplayScene {
             self.last_indoor = indoor;
         }
 
-        // Encounter zone stub (world-108): actual zone data wired later.
-        self.in_encounter_zone = false;
+        // Encounter zone check (world-111)
+        self.in_encounter_zone = crate::game::zones::in_encounter_zone(
+            self.state.region_num, self.state.hero_x, self.state.hero_y);
 
         // Autosave every 3600 ticks (~60s at 60Hz)
         if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {
