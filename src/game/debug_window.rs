@@ -272,6 +272,16 @@ enum CheatBtn {
     MagicSecret,
     MagicFreeze,
     SummonSwan,
+    TimeMidnight,
+    TimeMorning,
+    TimeMidday,
+    TimeEvening,
+    TimeHourPlus,
+    TimeHourMinus,
+    TimeMinPlus,
+    TimeMinMinus,
+    TimeSet,
+    TimeHold,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -326,6 +336,10 @@ pub struct DebugWindow<'a> {
     light_sticky: bool,
     secret_sticky: bool,
     freeze_sticky: bool,
+    /// Hour/minute values for SetGameTime; time_held tracks HoldTimeOfDay state.
+    time_hour: u8,
+    time_min: u8,
+    time_held: bool,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -428,6 +442,9 @@ impl<'a> DebugWindow<'a> {
             light_sticky: false,
             secret_sticky: false,
             freeze_sticky: false,
+            time_hour: 12,
+            time_min: 0,
+            time_held: false,
             placard_texture: placard_tex,
         })
     }
@@ -727,6 +744,21 @@ impl<'a> DebugWindow<'a> {
             }
             CheatBtn::SummonSwan => {
                 self.pending_commands.push(DebugCommand::SummonSwan);
+            }
+            CheatBtn::TimeMidnight => { self.pending_commands.push(DebugCommand::SetDayPhase { phase: 0 }); }
+            CheatBtn::TimeMorning  => { self.pending_commands.push(DebugCommand::SetDayPhase { phase: 6000 }); }
+            CheatBtn::TimeMidday   => { self.pending_commands.push(DebugCommand::SetDayPhase { phase: 12000 }); }
+            CheatBtn::TimeEvening  => { self.pending_commands.push(DebugCommand::SetDayPhase { phase: 18000 }); }
+            CheatBtn::TimeHourPlus  => { self.time_hour = (self.time_hour + 1) % 24; }
+            CheatBtn::TimeHourMinus => { self.time_hour = self.time_hour.checked_sub(1).unwrap_or(23); }
+            CheatBtn::TimeMinPlus   => { self.time_min = (self.time_min + 1) % 60; }
+            CheatBtn::TimeMinMinus  => { self.time_min = self.time_min.checked_sub(1).unwrap_or(59); }
+            CheatBtn::TimeSet => {
+                self.pending_commands.push(DebugCommand::SetGameTime { hour: self.time_hour, minute: self.time_min });
+            }
+            CheatBtn::TimeHold => {
+                self.time_held = !self.time_held;
+                self.pending_commands.push(DebugCommand::HoldTimeOfDay { hold: self.time_held });
             }
         }
     }
@@ -1428,6 +1460,74 @@ impl<'a> DebugWindow<'a> {
         self.cheat_buttons.push((r, CheatBtn::SummonSwan));
         y += line_h + 6;
         draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── Time Controls (debug-110) ─────────────────────────────────
+        // Current time display from state snapshot
+        if let Some(ref timers) = state.timers {
+            let dn = timers.daynight;
+            let h = dn / 1000;
+            let m = (dn % 1000) * 60 / 1000;
+            let held_str = if state.time_held { " [HELD]" } else { "" };
+            set_font_color(&self.font_texture, 255, 200, 80);
+            self.font_text.borrow().render_string(
+                &format!("Time: {:02}:{:02}{}", h, m, held_str),
+                &mut self.canvas, left, y,
+            );
+        } else {
+            set_font_color(&self.font_texture, 255, 200, 80);
+            self.font_text.borrow().render_string("Time Controls", &mut self.canvas, left, y);
+        }
+        y += line_h + 2;
+
+        // Day phase jump buttons
+        let phases: [(&str, CheatBtn); 4] = [
+            ("Midnight", CheatBtn::TimeMidnight),
+            ("Morning",  CheatBtn::TimeMorning),
+            ("Midday",   CheatBtn::TimeMidday),
+            ("Evening",  CheatBtn::TimeEvening),
+        ];
+        let mut px = left;
+        for (label, btn) in &phases {
+            let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, label, px, y, char_w, line_h, false);
+            self.cheat_buttons.push((r, btn.clone()));
+            px += label.len() as i32 * char_w + 16;
+        }
+        y += line_h + 6;
+
+        // Hour / minute setter with +/- buttons
+        set_font_color(&self.font_texture, 160, 160, 160);
+        { self.font_text.borrow().render_string("Set:", &mut self.canvas, left, y + 2); }
+        let mut tx = left + 5 * char_w + 6;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "-", tx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::TimeHourMinus));
+        tx += char_w + 14;
+        set_font_color(&self.font_texture, 220, 220, 220);
+        { self.font_text.borrow().render_string(&format!("{:02}h", self.time_hour), &mut self.canvas, tx, y + 2); }
+        tx += 4 * char_w + 4;
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "+", tx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::TimeHourPlus));
+        tx += char_w + 16;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "-", tx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::TimeMinMinus));
+        tx += char_w + 14;
+        set_font_color(&self.font_texture, 220, 220, 220);
+        { self.font_text.borrow().render_string(&format!("{:02}m", self.time_min), &mut self.canvas, tx, y + 2); }
+        tx += 4 * char_w + 4;
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "+", tx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::TimeMinPlus));
+        tx += char_w + 14;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "Set Time", tx, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::TimeSet));
+        y += line_h + 6;
+
+        // Hold Time toggle
+        let hold_lbl = if self.time_held { "Hold Time [HELD]" } else { "Hold Time" };
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, hold_lbl, left, y, char_w, line_h, self.time_held);
+        self.cheat_buttons.push((r, CheatBtn::TimeHold));
 
         let _ = (state, y);
     }
