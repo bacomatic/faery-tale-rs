@@ -1,0 +1,42 @@
+use bitflags::bitflags;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatId { Vitality, Brave, Luck, Kind, Wealth, Hunger, Fatigue }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrotherId { Julian, Phillip, Kevin }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MagicEffect { Light, Secret, Freeze }
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct GodModeFlags: u8 {
+        const NOCLIP       = 0b0001;
+        const INVINCIBLE   = 0b0010;
+        const ONE_HIT_KILL = 0b0100;
+        const INSANE_REACH = 0b1000;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DebugCommand {
+    SetStat { stat: StatId, value: i16 },
+    AdjustStat { stat: StatId, delta: i16 },
+    SetInventory { index: u8, value: u8 },
+    AdjustInventory { index: u8, delta: i8 },
+    TeleportSafe,
+    TeleportStoneRing { index: u8 },
+    TeleportCoords { x: u16, y: u16 },
+    ToggleMagicEffect { effect: MagicEffect },
+    HeroPack,
+    SetGodMode { flags: GodModeFlags },
+    SummonSwan,
+    /// daynight value: 0=Midnight, 6000=Morning, 12000=Midday, 18000=Evening
+    SetDayPhase { phase: u16 },
+    SetGameTime { hour: u8, minute: u8 },
+    HoldTimeOfDay { hold: bool },
+    ToggleAutosave { enable: bool },
+    RestartAsBrother { brother: BrotherId },
+    InstaKill,
+}

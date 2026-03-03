@@ -327,6 +327,11 @@ impl<'a> DebugWindow<'a> {
         v
     }
 
+    /// Drains and returns all pending debug commands queued since last call.
+    pub fn drain_commands(&mut self) -> Vec<DebugCommand> {
+        self.pending_commands.drain(..).collect()
+    }
+
     /// Push a log message that will be shown in the debug window.
     pub fn log(&mut self, msg: String) {
         self.log_lines.push(msg);

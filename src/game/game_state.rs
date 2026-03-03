@@ -1,4 +1,5 @@
 use crate::game::actor::Actor;
+use crate::game::debug_command::GodModeFlags;
 
 pub struct GameState {
     // Hero position
@@ -89,6 +90,7 @@ pub struct GameState {
     pub current_mood: u8,
 
     // God mode / debug sticky timers
+    pub god_mode: GodModeFlags,
     pub light_sticky: bool,
     pub secret_sticky: bool,
     pub freeze_sticky: bool,
@@ -168,6 +170,7 @@ impl GameState {
 
             current_mood: 0,
 
+            god_mode: GodModeFlags::empty(),
             light_sticky: false,
             secret_sticky: false,
             freeze_sticky: false,

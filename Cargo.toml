@@ -6,6 +6,7 @@ default-run = "fmainrs"
 
 [dependencies]
 anyhow = "1"
+bitflags = "2.11.0"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 dirs = "6.0.0"

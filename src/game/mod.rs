@@ -7,6 +7,7 @@ pub mod byteops;
 pub mod colors;
 pub mod copy_protect_scene;
 pub mod cursor;
+pub mod debug_command;
 pub mod debug_window;
 pub mod font;
 pub mod font_texture;
