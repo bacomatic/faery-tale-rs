@@ -19,6 +19,7 @@ pub mod iff_image;
 pub mod image_texture;
 pub mod intro_scene;
 pub mod page_flip;
+pub mod persist;
 pub mod palette_fader;
 pub mod placard;
 pub mod placard_scene;

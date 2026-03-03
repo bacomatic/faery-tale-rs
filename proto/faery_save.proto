@@ -1,0 +1,98 @@
+syntax = "proto3";
+package faery;
+
+// Per-brother inventory (35 item slots)
+message BrotherStuff {
+    repeated uint32 slots = 1; // 35 entries, values 0-255
+}
+
+// Compact actor snapshot for save (only what matters for restore)
+message SavedActor {
+    uint32 abs_x = 1;
+    uint32 abs_y = 2;
+    uint32 kind  = 3;  // ActorKind ordinal
+    uint32 race  = 4;
+    uint32 state = 5;  // ActorState ordinal
+    int32  vitality = 6;
+    uint32 weapon = 7;
+    uint32 facing = 8;
+}
+
+// Top-level save file message
+message SaveFile {
+    // File metadata
+    uint32 save_version = 1;  // bumped on breaking changes; current = 1
+
+    // Hero position
+    uint32 hero_x = 10;
+    uint32 hero_y = 11;
+    uint32 hero_sector = 12;
+    uint32 hero_place = 13;
+
+    // Hero stats
+    int32 vitality = 20;
+    int32 brave    = 21;
+    int32 luck     = 22;
+    int32 kind     = 23;
+    int32 wealth   = 24;
+    int32 hunger   = 25;
+    int32 fatigue  = 26;
+    uint32 brother = 27;  // 1=Julian, 2=Phillip, 3=Kevin
+    int32 riding   = 28;
+    int32 flying   = 29;
+
+    // Timers
+    int32  light_timer  = 30;
+    int32  secret_timer = 31;
+    int32  freeze_timer = 32;
+
+    // Cycle counters
+    uint32 daynight    = 40;
+    uint32 lightlevel  = 41;
+    uint32 cycle       = 42;
+    uint32 flasher     = 43;
+
+    // Flags
+    bool battleflag      = 50;
+    bool witchflag       = 51;
+    bool safe_flag       = 52;
+
+    // View state
+    uint32 viewstatus = 60;
+    uint32 cmode      = 61;
+
+    // Safe respawn
+    uint32 safe_x = 70;
+    uint32 safe_y = 71;
+    uint32 safe_r = 72;
+
+    // Region
+    uint32 region_num  = 80;
+    uint32 new_region  = 81;
+
+    // Per-brother inventories
+    BrotherStuff julstuff  = 90;
+    BrotherStuff philstuff = 91;
+    BrotherStuff kevstuff  = 92;
+    uint32 active_brother  = 93;  // 0=Julian, 1=Phillip, 2=Kevin
+
+    // Encounter state
+    uint32 xtype            = 100;
+    uint32 encounter_type   = 101;
+    uint32 encounter_number = 102;
+
+    // Carrier/special
+    int32 active_carrier = 110;
+    int32 actor_file     = 111;
+    int32 set_file       = 112;
+
+    // Quest state
+    uint32 princess  = 120;
+    uint32 dayperiod = 121;
+
+    // Music
+    uint32 current_mood = 130;
+
+    // Active actors snapshot (optional — can be omitted for initial impl)
+    repeated SavedActor actors = 140;
+}
