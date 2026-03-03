@@ -1,5 +1,5 @@
 version = 1
-last_updated = "2026-03-01"
+last_updated = "2026-03-02"
 
 # Stable lookup keys for agents.
 # Each key maps to a human-readable section in RESEARCH.md.
@@ -31,3 +31,115 @@ title = "Key Bindings: Design and compatibility notes"
 doc = "RESEARCH.md"
 anchor = "#key-bindings-design-and-compatibility-notes"
 tags = ["input", "keybindings", "design", "compatibility"]
+
+[[entry]]
+id = "player.stats"
+title = "Player Character Stats"
+doc = "RESEARCH.md"
+anchor = "#player-character-stats"
+tags = ["player", "stats", "brave", "luck", "kind", "wealth", "character"]
+
+[[entry]]
+id = "player.hunger_fatigue"
+title = "Hunger & Fatigue System"
+doc = "RESEARCH.md"
+anchor = "#hunger--fatigue-system"
+tags = ["player", "hunger", "fatigue", "survival", "sleep"]
+
+[[entry]]
+id = "world.day_night"
+title = "Day/Night Cycle"
+doc = "RESEARCH.md"
+anchor = "#daynight-cycle"
+tags = ["world", "daynight", "lightlevel", "time", "palette"]
+
+[[entry]]
+id = "world.doors"
+title = "Door / Portal System"
+doc = "RESEARCH.md"
+anchor = "#door--portal-system"
+tags = ["world", "doors", "portals", "regions", "indoor"]
+
+[[entry]]
+id = "world.terrain_collision"
+title = "Terrain Collision System"
+doc = "RESEARCH.md"
+anchor = "#terrain-collision-system"
+tags = ["world", "terrain", "collision", "sprites", "masking"]
+
+[[entry]]
+id = "combat.system"
+title = "Combat System"
+doc = "RESEARCH.md"
+anchor = "#combat-system"
+tags = ["combat", "weapons", "dohit", "hitbox", "missiles"]
+
+[[entry]]
+id = "npc.encounter_chart"
+title = "Enemy Types (Encounter Chart)"
+doc = "RESEARCH.md"
+anchor = "#enemy-types-encounter-chart"
+tags = ["npc", "enemies", "combat", "encounter"]
+
+[[entry]]
+id = "player.inventory"
+title = "Inventory System"
+doc = "RESEARCH.md"
+anchor = "#inventory-system"
+tags = ["player", "inventory", "items", "stuff", "weapons"]
+
+[[entry]]
+id = "audio.setmood"
+title = "setmood() — Music State Machine"
+doc = "RESEARCH.md"
+anchor = "#setmood--music-state-machine"
+tags = ["audio", "music", "setmood", "daynight", "battle"]
+
+[[entry]]
+id = "persist.save_format"
+title = "Save / Load Format"
+doc = "RESEARCH.md"
+anchor = "#save--load-format"
+tags = ["save", "load", "persistence", "format", "binary"]
+
+[[entry]]
+id = "audio.samples"
+title = "Sound Effects (game/samples)"
+doc = "RESEARCH.md"
+anchor = "#sound-effects-gamesamples"
+tags = ["audio", "sfx", "samples", "adf"]
+
+[[entry]]
+id = "gfx.sprite_files"
+title = "Sprite / Shape File Layout (ADF)"
+doc = "RESEARCH.md"
+anchor = "#sprite--shape-file-layout-adf"
+tags = ["graphics", "sprites", "shapes", "adf", "cfiles"]
+
+[[entry]]
+id = "npc.behavior"
+title = "NPC Behavior (Goal/Tactic System)"
+doc = "RESEARCH.md"
+anchor = "#npc-behavior-goaltactic-system"
+tags = ["npc", "ai", "goal", "tactic", "pathfinding"]
+
+[[entry]]
+id = "world.extents"
+title = "Extents and Encounter Zones"
+doc = "RESEARCH.md"
+anchor = "#extents-and-encounter-zones"
+tags = ["world", "extents", "encounters", "zones", "triggers"]
+
+[[entry]]
+id = "decode.songs"
+title = "game/songs — Music Score Data"
+doc = "DECODE.md"
+anchor = "#gamesongs--music-score-data-5984-bytes"
+tags = ["audio", "music", "songs", "format", "binary"]
+
+[[entry]]
+id = "decode.v6"
+title = "game/v6 — Music Voice/Waveform Data"
+doc = "DECODE.md"
+anchor = "#gamev6--music-voicewaveform-data-4628-bytes"
+tags = ["audio", "music", "v6", "waveform", "envelope"]

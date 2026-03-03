@@ -9,7 +9,7 @@ use crate::game::colors::{Palette, RGB4};
  * night-time corrections are applied: minimum floor values, blue tint injection,
  * and vegetation color boosting for palette indices 16–24.
  *
- * The `light_timer` flag simulates torch/spell illumination by boosting the red
+ * The `light_timer` flag simulates the Green Jewel light effect by boosting the red
  * channel of colors where red is less than green.
  */
 pub fn fade_page(
@@ -46,7 +46,7 @@ pub fn fade_page(
         let g1_raw = (color.color & 0x00F0) as i32;
         let b1_raw = (color.color & 0x000F) as i32;
 
-        // Torch/spell illumination: boost red to at least green's level
+        // Green Jewel light effect: boost red to at least green's level
         if light_timer && r1 < g1_raw {
             r1 = g1_raw;
         }
@@ -117,7 +117,7 @@ pub struct FadeController {
     to_rgb: (i16, i16, i16),
     /// Whether night limits apply
     limit: bool,
-    /// Whether torch/spell illumination is active
+    /// Whether the Green Jewel light effect is active
     light_timer: bool,
     /// Elapsed ticks since fade started
     elapsed_ticks: u32,

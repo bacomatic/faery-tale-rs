@@ -112,6 +112,707 @@ From `fmain.c` `letter_list[]` and the main game loop:
 | `K`             | USE    | Use special (key?) |
 | `1`–`6` (KEYS) | KEYS   | Select key color   |
 
+---
+
+## Player Character Stats
+
+Three playable brothers, each with distinct starting attributes (`blist[]` in `fmain.c`):
+
+| Character | `brave` | `luck` | `kind` | `wealth` | Starting weapon |
+|-----------|---------|--------|--------|----------|-----------------|
+| Julian    | 35      | 20     | 15     | 20       | Dirk (1)        |
+| Phillip   | 20      | 35     | 15     | 15       | Dirk (1)        |
+| Kevin     | 15      | 20     | 35     | 10       | Dirk (1)        |
+
+On spawn (`revive(TRUE)`):
+- `hero_x = safe_x = 19036`, `hero_y = safe_y = 15755`, `region_num = 3`
+- `anim_list[0].vitality = 15 + brave / 4` (Julian=23, Phillip=20, Kevin=18)
+- `daynight = 8000` (early morning), `lightlevel = 300` (computed from daynight)
+- `hunger = fatigue = 0`
+- Raft spawns at `(13668, 14470)`, goodfairy setfig at `(13668, 15000)`
+
+**`brave`** — melee weapon reach radius `bv = brave/20 + 5` (0–15 cap). Each enemy kill grants `brave++`. Hero death subtracts 5 from `luck`. Vitality cap = `15 + brave/4`.
+
+**`luck`** — modifies fairy spawning: fairy appears when `luck < 1 && goodfairy < 200`. Reduced by enemy hits to player (`luck -= 2` in some death paths, `-5` on hero death).
+
+**`kind`** — moral stat. Killing a non-evil `SETFIG` NPC: `kind -= 3` (floored at 0). Giving 2 gold to a beggar: if `rand64() > kind`, then `kind++`. Used to gate some dialogue/quest paths.
+
+**`wealth`** — gold. Starts from `blist[]`. Buy menu deducts; looting treasure adds; giving to beggars deducts 2.
+
+---
+
+## Hunger & Fatigue System
+
+Both counters tick simultaneously every 127 `daynight` ticks (`(daynight & 127) == 0`), i.e., approximately every 2.1 seconds of real time at 60 Hz when `daynight` increments by 1 per VBlank.
+
+**Auto-eat**: in safe zones, if `hunger > 30 && stuff[24] > 0` (has Fruit), one Fruit is consumed and `hunger -= 30`.
+
+**Hunger progression:**
+
+| `hunger` value | Event |
+|----------------|-------|
+| 35             | event(0) — "Getting hungry" message |
+| 60             | event(1) — "Very hungry" message |
+| 90             | event(4) — "Famished" message |
+| >100 (every 8 ticks, if vitality > 5) | `vitality -= 2` if also `fatigue > 160` |
+| >90 (every 8 ticks, if vitality > 5) | event(2) — starvation warning |
+| >140 (every 8 ticks) | event(24), `hunger` clamped to 130, `state = SLEEP` (collapse) |
+
+**Fatigue progression:**
+
+| `fatigue` value | Event |
+|-----------------|-------|
+| 70              | event(3) — "Weary" message |
+| >170 (every 8 ticks, vitality ≤ 5) | event(12), `state = SLEEP` (collapse from exhaustion) |
+
+`fatigue` decrements by 1 per daynight tick passively. Sleep in combat (battleflag) or very low fatigue triggers forced `SLEEP` state. Sleeping on interior tiles 161, 52, 162, or 53 after `sleepwait` reaches 30 also triggers sleep (if `fatigue > 50`).
+
+`eat(amt)`: `hunger -= amt; if hunger < 0 → hunger = 0, event(13)` ("Feeling better"). Used for Fruit (amt=30) and buying food at inns (amt=50).
+
+**Vitality recovery**: every 1024 `daynight` ticks (`(daynight & 0x3ff) == 0`), if `vitality < 15 + brave/4` and not DEAD: `vitality++`, prints HP display.
+
+---
+
+## Day/Night Cycle
+
+`daynight` is a `USHORT` counter [0..23999], incremented by 1 per VBlank (60 Hz):
+- 24000 ticks = one full in-game day ≈ 400 seconds real time (≈6.7 minutes)
+
+`lightlevel = daynight / 40` then if `lightlevel >= 300`: `lightlevel = 600 - lightlevel`.
+This makes a symmetric triangle wave: 0 → 300 → 0 over the day.
+
+| `lightlevel` | Condition |
+|---|---|
+| > 120 | Daytime (music group 0 or palace group 4) |
+| ≤ 120 | Nighttime (music group 2) |
+| < 40  | `ob_listg[5].ob_stat = 3` (night lit-object variant) |
+
+**Day periods** (`dayperiod = daynight / 2000`, 12 periods per day):
+
+| `dayperiod` value | Event |
+|---|---|
+| 0 | event(28) — midnight |
+| 4 | event(29) — dawn |
+| 6 | event(30) — noon |
+| 9 | event(31) — dusk |
+
+`fade_page(r, g, b, limit, colors)` applies per-frame colour scaling. Night limit floor: r≥10, g≥25, b≥60 (ensures blue-tinted night). `light_timer` (Green Jewel light effect) temporarily equalises R and G channels.
+
+---
+
+## Door / Portal System
+
+`doorlist[DOORCOUNT]` — 86 doors, sorted ascending by `xc1` for binary search (outdoor→indoor direction). Each door:
+
+```c
+struct door {
+    USHORT xc1, yc1;  // outdoor world coords
+    USHORT xc2, yc2;  // indoor world coords
+    char type;
+    char secs;         // 1=buildings (region 8), 2=caves (region 9)
+};
+```
+
+**Door types** (LSB = horizontal):
+
+| Constant | Value | Notes |
+|---|---|---|
+| HWOOD | 1 | Horizontal wood door |
+| VWOOD | 2 | Vertical wood door |
+| HSTONE | 3 | Horizontal stone door |
+| VSTONE | 4 | Vertical stone door |
+| HCITY | 5 | Horizontal city gate |
+| VCITY | 6 | Vertical city gate |
+| CRYST | 7 | Crystal palace gate |
+| SECRET | 8 | Secret passage |
+| BLACK | 9 | Black iron gate |
+| MARBLE | 10 | Marble archway |
+| LOG | 11 | Log cabin door |
+| HSTON2 | 13 | Heavy stone door |
+| VSTON2 | 14 | |
+| STAIR | 15 | Staircase portal |
+| DESERT | 17 | Oasis entrance (needs `stuff[STATBASE] >= 5`) |
+| CAVE / VLOG | 18 | Cave entrance / log cabin yard |
+
+**Entry/exit position logic:**
+- Horizontal door (`type & 1 == 1`): player enters only if `(hero_y & 0x10) == 0` (lower half of tile)
+- Vertical door (`type & 1 == 0`): player enters only if `(hero_x & 15) > 6`
+- Cave type: entry offset `(xc2+24, yc2+16)`, exit offset `(xc1-4, yc1+16)`
+- Horizontal non-cave: entry `(xc2+16, yc2)`, exit `(xc1+16, yc1+34)`
+- Vertical: entry `(xc2-1, yc2+16)`, exit `(xc1+20, yc1+16)`
+
+**`secs` field** sets `new_region` on crossing: `secs==1` → `new_region=8` (indoor), `secs==2` → `new_region=9` (cave/dungeon). Indoor regions use a linear scan of `doorlist`; outdoor uses binary search.
+
+**Locked doors (`doorfind`)**: called when player tries to walk through an impassable tile. The USE→KEYS menu calls `doorfind(newx(hero_x,i,16), newy(...), keytype)` for all 9 directions. Consumes one key from `stuff[KEYBASE + hit]` on success.
+
+---
+
+## Terrain Collision System
+
+`terra_mem[tile_idx * 4]` holds 4 bytes per tile index (from `sector_mem`/`minimap[]`):
+
+| Offset | Name | Description |
+|---|---|---|
+| +0 | `maptag` | Bitmask used by `maskit()` for sprite depth-sorting |
+| +1 | `terrain` | Low nibble = terrain block type (0–7); high nibble unused |
+| +2 | `tiles` | Terrain feature mask |
+| +3 | `big_colors` | Colour zone for lighting |
+
+This 4-byte-per-tile table is the compiled output of `terrain.c`'s `load_images()` run on the original raw tileset files. Each tileset contributes 64 tiles → 256 B to `terra_mem` (two tilesets per 512-byte ADF block).
+
+**Terrain block type** (`k = terra_mem[cm+1] & 0x0f`):
+
+| k | Name | Masking condition (skip masking if…) |
+|---|---|---|
+| 0 | Transparent | Always skip (fully passable) |
+| 1 | Right-half | `xm == 0` (left column only) |
+| 2 | Ground-level | `ystop > 35` (above ground line) |
+| 3 | Bridge | `hero_sector != 48 || i != 1` (bridge sector special) |
+| 4 | Right+Ground | `xm == 0 OR ystop > 35` |
+| 5 | Right OR Ground | `xm == 0 AND ystop > 35` |
+| 6 | Full-if-above | If `ym != 0`: substitute tile 64 as solid mask |
+| 7 | Near-top | `ystop > 20` |
+
+This table controls sprite-depth overlap (whether a sprite is drawn in front of or behind terrain tiles), not walking passability. Walking passability is handled separately by `proxcheck()`, which tests for hard collisions with tile geometry via `prox()`.
+
+---
+
+## Combat System
+
+Combat runs every VBlank in the main loop. All figures in `anim_list[0..anix-1]` that are not in `WALKING` or `DEAD` state and not index 1 (raft) attempt to attack.
+
+**Weapon strength (`wt`)**:
+```
+wt = anim_list[i].weapon   // weapon index
+if wt >= 8: wt = 5         // cap touch attack
+wt += bitrand(2)           // random bonus 0–2
+```
+
+Weapons map: 0=none, 1=Dirk, 2=Mace, 3=Sword, 4=Bow, 5=Wand, 6+=special/touch.
+
+**Hit detection (melee)**:
+```
+xs = newx(abs_x, facing, wt * 2) + rand8() - 3   // weapon tip X
+ys = newy(abs_y, facing, wt * 2) + rand8() - 3   // weapon tip Y
+bv = (player: brave/20+5) or (NPC: 2+rand4())     // hit box radius
+bv = min(bv, 15)
+hit_check: yd = max(|dx|, |dy|) for each target
+if yd < bv: dohit(attacker, target, facing, wt)
+if yd < bv+2 and wt != 5: effect(1)   // near-miss sound
+```
+
+**`dohit(i, j, fc, wt)`**:
+- Reduces `anim_list[j].vitality -= wt`; floor at 0
+- Special guard: Necromancer (race 9) or witch (race 0x89) immune unless `anim_list[0].weapon >= 4`
+- Sound: player hit → `effect(0, 800+bitrand(511))`; arrow→player → `effect(2, 500+rand64())`; monster hit → `effect(3, 400+rand256())`; special hit → `effect(5, 3200+bitrand(511))`
+- Pushback: `move_figure(j, fc, 2)` on target; if hits and attacker is player, also `move_figure(i, fc, 2)` (recoil)
+- `checkdead(j, dtype)` called after damage
+
+**`checkdead(i, dtype)`**:
+- If `vitality < 1` and not already DYING/DEAD: set DYING state
+- If killed enemy (i > 0): `brave++`
+- If killed friendly SETFIG (NPC): `kind -= 3` (floored at 0)
+- If hero (i == 0): `event(dtype)`, `luck -= 5`, `setmood(TRUE)` → death music
+
+**Missile / Arrow combat**:
+- 6 active missiles in `missile_list[]`; each has position, direction, speed, archer ID
+- Move `speed * 2` pixels per tick; expire after 40 ticks or hitting terrain (tile 1 or 15)
+- Damage: `rand8() + 4` per hit; magic bolt uses `effect(5)` (fireball), arrow uses `effect(2)` or `effect(4)`
+- Arrow hit box radius: 6 for arrow, 9 for magic bolt
+
+---
+
+## Enemy Types (Encounter Chart)
+
+From `encounter_chart[]` in `fmain.c`:
+
+| ID | Name | HP | Arms | Clever | Treasure | File |
+|----|------|----|------|--------|----------|------|
+| 0  | Ogre       | 18 | 2 | 0 | 2 | 6 |
+| 1  | Orcs       | 12 | 4 | 1 | 1 | 6 |
+| 2  | Wraith     | 16 | 6 | 1 | 4 | 7 |
+| 3  | Skeleton   | 8  | 3 | 0 | 3 | 7 |
+| 4  | Snake      | 16 | 6 | 1 | 0 | 8 |
+| 5  | Salamander | 9  | 3 | 0 | 0 | 7 |
+| 6  | Spider     | 10 | 6 | 1 | 0 | 8 |
+| 7  | DKnight    | 40 | 7 | 1 | 0 | 8 |
+| 8  | Loraii     | 12 | 6 | 1 | 0 | 9 |
+| 9  | Necromancer| 50 | 5  | 0 | 0 | 9 |
+| 10 | Woodcutter | 4  | 0 | 0 | 0 | 9 (friendly) |
+
+- `arms` selects weapon from `weapon_probs[arms * 4 + rand4()]` (4 possible weapons per enemy type)
+- `cleverness 0` → `ATTACK1` (simple pursue), `cleverness 1` → `ATTACK2` (clever pathfinding)
+- Archers: `ARCHER1` (clever=0) or `ARCHER2` (clever=1) if weapon has bow bit set (`weapon & 4`)
+- `file` maps to `cfiles[]` index for sprite loading (file 6=ogre, 7=ghost/wraith/skeleton/salamander, 8=dknight/spider/snake, 9=necromancer/loraii/woodcutter)
+- `mixflag & 2` enables enemy type blending: `race = (encounter_type & 0xfffe) + rand2()` (alternates between even/odd encounter IDs)
+
+---
+
+## Inventory System
+
+`stuff[]` is a `UBYTE[35]` array (one per character: `julstuff`, `philstuff`, `kevstuff`). Each element holds item quantity. Index ranges:
+
+| Range | Macro | Items |
+|-------|-------|-------|
+| 0–8 | — | Weapons and tools (Dirk=0, Mace=1, Sword=2, Bow=3, Magic Wand=4, Golden Lasso=5, Sea Shell=6, Sun Stone=7, Arrows=8) |
+| 9–15 | `MAGICBASE=9` | Magic consumables (Blue Stone, Green Jewel, Glass Vial, Crystal Orb, Bird Totem, Gold Ring, Jade Skull) |
+| 16–21 | `KEYBASE=16` | Keys (Gold Key, Green Key, Blue Key, Red Key, Grey Key, White Key) |
+| 22–24 | — | Special items (Talisman=22, Rose=23, Fruit=24) |
+| 25–30 | `STATBASE=25` | Quest items (Gold Statue, Book, Herb, Writ, Bone, Shard) |
+| 31–34 | `GOLDBASE=31` | Gold piles (2gp, 5gp, 10gp, 100gp) |
+
+`stuff[0]` = Dirk count, but `anim_list[0].weapon` holds the *equipped* weapon index (1=Dirk … 5=Wand); the two are separate. On spawn: `stuff[0] = anim_list[0].weapon = 1` (equip Dirk, count 1).
+
+`set_options()` refreshes all menu enable/disable flags from `stuff[]`.
+
+**Item display screen** (ITEMS menu, hit=5): renders all items from `seq_list[OBJECTS]` using `inv_list[]` layout metadata (xoff, yoff, ydelta, img_off, img_height, maxshown).
+
+**`inv_item` struct**:
+```c
+struct inv_item {
+    UBYTE image_number;        // sprite index in OBJECTS sequence
+    UBYTE xoff, yoff;          // position on inventory screen
+    UBYTE ydelta;              // y-spacing for stacked items
+    UBYTE img_off, img_height; // which rows of the sprite to blit
+    UBYTE maxshown;            // max displayed on-screen
+    char *name;
+};
+```
+
+### Item catalog: effects, type, and mechanics
+
+Every item is classified as **weapon**, **passive**, **active-use**, **magic** (consumable), or **quest** (plot-gate). Source references are to `fmain.c` and `fmain2.c`.
+
+#### Weapons (stuff 0–4)
+
+Equipped via USE menu (hit 0–4) → sets `anim_list[0].weapon = hit + 1`. Only one weapon active at a time.
+
+| Index | Name | weapon val | Type | Melee/Ranged | Notes |
+|-------|------|-----------|------|--------------|-------|
+| 0 | Dirk | 1 | Weapon | Melee | Starting weapon for all brothers. Reach = `wt + bitrand(2)` × 2 pixels |
+| 1 | Mace | 2 | Weapon | Melee | Same melee mechanics as Dirk, slightly longer base reach |
+| 2 | Sword | 3 | Weapon | Melee | Best melee weapon. Melee hit range = `wt + bitrand(2)` × 2, wt derived from weapon index |
+| 3 | Bow | 4 | Weapon | Ranged | Uses arrows (stuff[8]). On SHOOT3 state: decrements stuff[8], spawns missile_type=1 (arrow), speed=3 |
+| 4 | Magic Wand | 5 | Weapon | Ranged | Fires magic bolts (missile_type=2, speed=5). Does **not** consume arrows. Effect sound: 5 (1800+rand256). On SHOOT3 state, uses `diroffs[d+8]` animation but does NOT fire again (only SHOOT1 fires wand) |
+
+**Melee damage**: attacker weapon value `wt` (+ `bitrand(2)`) is subtracted from target `vitality` in `dohit()`. Hero bonus: `bv = brave/20 + 5` (capped at 15); enemies: `bv = 2 + rand4()`. Hit detection is max(|dx|,|dy|) < bv within weapon reach.
+
+**Ranged damage**: arrow/bolt hits deal `rand8() + 4` damage. Arrows blocked by terrain types 1 (wall) and 15 (furniture). Missiles travel max 40 ticks then expire.
+
+**Cannot damage Necromancer** (race 9) with weapons 1–3 (melee). Requires Bow or Wand. Also cannot damage the witch (race 0x89) with melee unless Sun Stone is held (stuff[7] > 0). `dohit()` speaks(58) "Your weapon has no effect!" and returns without damage in these cases.
+
+**Immune races**: race 0x8a and 0x8b (spectre/ghost setfigs) cannot be damaged at all — `dohit()` returns immediately.
+
+#### Arrows (stuff 8)
+
+| Index | Name | Type | Notes |
+|-------|------|------|-------|
+| 8 | Arrows | Ammo (consumable) | Consumed 1 per Bow shot. "No Arrows!" message if stuff[8]==0 and bow equipped. Quiver pickups (ob_id QUIVER=11) grant 10 arrows via `stuff[8] += stuff[ARROWBASE] * 10` on pickup. Can be bought from shopkeeper (10 arrows for 10 gold) |
+
+#### Tools (stuff 5–7)
+
+| Index | Name | Type | USE action | Passive effect |
+|-------|------|------|------------|----------------|
+| 5 | Golden Lasso | Passive | USE menu hit=5: no effect (falls through) | **Enables swan riding**: when near bird carrier (actor_file==11), proximity detected, and stuff[5] > 0 → sets `riding=11`. Without lasso, swan cannot be mounted. Obtained from killing the witch (race 0x89) (`leave_item(i, 27)` on death) |
+| 6 | Sea Shell | Active-use | USE menu hit=6: calls `get_turtle()` — summons turtle carrier near hero on water terrain (px_to_im==5). Blocked if hero is within coordinates (11194 < x < 21373, 10205 < y < 16208). | Talking to turtle when shell already owned: speak(57). Obtained by first talking to turtle: speak(56), stuff[6]=1 |
+| 7 | Sun Stone | Active-use + Passive | USE menu hit=8: if `witchflag` is set, speaks(60) to communicate with witch. | **Combat passive**: allows melee weapons (1–3) to damage the witch (race 0x89) (without it, melee bounces with speak(58)). **Stone Ring teleportation**: from MAGIC menu hit=5, if hero is on a stone ring tile (hero_sector==144, centered in tile), teleports hero to next stone ring in `stone_list[]` offset by `facing + 1` (wraps at 11). Consumes 1 charge like other magic items |
+
+`stone_list[]` contains 11 pairs of (x_sector, y_sector) coordinates:
+```
+{54,43}, {71,77}, {78,102}, {66,121}, {12,85}, {79,40}, {107,38}, {73,21}, {12,26}, {26,53}, {84,60}
+```
+
+#### Magic consumables (stuff 9–15, MAGICBASE=9)
+
+Accessed via MAGIC menu (hit 5–11 maps to stuff[9–15]). Each use **decrements** the item count by 1 (`--stuff[4 + hit]`). If count reaches 0, the menu option is disabled. Blocked if `extn->v3 == 9` (astral plane, speak(59)).
+
+| Index | Name | MAGIC hit | Timer/Mechanic | Duration/Value | Effect |
+|-------|------|-----------|----------------|----------------|--------|
+| 9 | Blue Stone | 5 | Stone Ring transport | — | `hero_sector==144` and hero centered in tile → teleports to next stone ring in `stone_list[]` (offset by facing direction + 1, wraps mod 11). If not on a stone ring, returns without consuming. Only works in overworld (region < 8); blocked in underworld unless `cheat1` |
+| 10 | Green Jewel | 6 | `light_timer += 760` | ~760 game ticks | **Illumination**: `day_fade()` boosts red channel (`r1 = g1` when `r1 < g1`), adds +200 to lightlevel calculation. Makes night as bright as day. Palette color 31 unaffected. Timer decrements each main-loop tick |
+| 11 | Glass Vial | 7 | Heal | Instant | Restores `rand8() + 4` vitality (4–11 HP). Capped at max vitality `15 + brave/4`. Prints "That feels a lot better!" if not already at max |
+| 12 | Crystal Orb | 8 | `secret_timer += 360` | ~360 game ticks | **Reveal secrets**: in region 9 (underworld/dungeons), changes palette color 31 from 0x0445 (dark) to 0x00F0 (bright green), revealing hidden passages. Timer decrements each tick |
+| 13 | Bird Totem | 9 | World map | Instant | **Minimap display**: draws the world map (`bigdraw(map_x, map_y)`) with hero position marked by "+" at computed pixel offset. Only works in overworld (`region_num < 8`); blocked while `riding > 1`. Sets `viewstatus=1`, waits for keypress |
+| 14 | Gold Ring | 10 | `freeze_timer += 100` | ~100 game ticks | **Time stop**: all non-hero figures skip movement updates (`freeze_timer && i > 0` → goto statc). Enemies cannot attack, missiles don't fire. `daynight` clock pauses. Hero can loot frozen enemies' bodies. Also prevents melee hit checks for non-hero figures |
+| 15 | Jade Skull | 11 | Mass kill | Instant | **Death spell**: iterates all figures `i=1..anix-1`; if enemy type with vitality > 0, race < 7 → sets vitality=0, calls `checkdead(i, 0)`, decrements `brave` by 1 per kill. Then triggers battle aftermath event(34) if battleflag set |
+
+#### Keys (stuff 16–21, KEYBASE=16)
+
+Accessed via KEYS submenu (USE → Key → color selection). Each use tests 9 positions around hero (8 compass directions + center) via `doorfind(x, y, hit+1)`. If a matching locked door is found, the key is consumed (`stuff[hit + KEYBASE]--`) and door opens. If no matching door: "% tried a [Key Name] but it didn't fit."
+
+| Index | Name | KEYS hit | `doorfind` keytype |
+|-------|------|----------|-------------------|
+| 16 | Gold Key | 0 | 1 |
+| 17 | Green Key | 1 | 2 |
+| 18 | Blue Key | 2 | 3 |
+| 19 | Red Key | 3 | 4 |
+| 20 | Grey Key | 4 | 5 |
+| 21 | White Key | 5 | 6 |
+
+#### Special items (stuff 22–24)
+
+| Index | Name | Type | Effect |
+|-------|------|------|--------|
+| 22 | Talisman | Quest (win-game) | **Passive, pickup-triggered**: when any item is picked up and stuff[22] > 0, sets `quitflag = TRUE`, `viewstatus = 2`, calls `map_message()` and `win_colors()` → triggers the win/ending sequence. Obtained from Necromancer (race 9) on death (`leave_item(i, 139)`) |
+| 23 | Rose | Passive | **Fire immunity**: in the volcanic/fiery death zone (8802 < map_x < 13562, 24744 < map_y < 29544), if hero has stuff[23] > 0, sets `environ=0` (safe) instead of taking fire damage. Without it, environ > 2 → vitality--, environ > 15 → instant death |
+| 24 | Fruit | Passive (auto-use) | **Auto-consumed food**: when hero is in a safe zone, no enemies active, environ==0, safe_flag==0, and `hunger > 30`: consumes one fruit (`stuff[24]--`), reduces hunger by 30, triggers event(37). Also picked up from MEAL objects (ob_id 148): if hunger < 15 → stored as stuff[24], else eaten immediately via `eat(30)` |
+
+#### Quest items (stuff 25–30, STATBASE=25)
+
+| Index | Name | Type | Effect |
+|-------|------|------|--------|
+| 25 | Gold Statue | Quest-gate | **Desert access**: 5 statues required (`stuff[STATBASE] >= 5`) to enter the desert region (region 4). Door type `DESERT` blocks entry if count < 5. Also blocks map data loading: desert map tiles are overwritten to impassable (tile 254) when count < 5. 6 statues exist in the world: seahold, ogre den, octal room, sorceress (revealed by talking), priest (revealed with Writ) |
+| 26 | Book | Quest (inert) | **No active use**. USE menu position 9 ("Book") is hardcoded disabled (`enabled[9] = 0`). GIVE menu position 6 ("Book") also hardcoded disabled (`enabled[6] = 8`). Inventory display only. May be related to witch/NPC dialogue triggers not fully implemented in source |
+| 27 | Herb | Quest (inert) | **No coded effect**. stuff[27] is never read in game logic. Display-only inventory item |
+| 28 | Writ | Quest (NPC trigger) | **Priest dialogue gate**: when talking to the Priest (setfig type 1) with stuff[28] > 0, and `ob_listg[10].ob_stat == 0`: speaks(39) and sets `ob_listg[10].ob_stat = 1`, revealing a Gold Statue location. If statue already revealed: speaks(19). GIVE menu shows Writ status but has no GIVE action in code |
+| 29 | Bone | Giveable (quest) | **Give to Spectre**: via GIVE menu hit=8. If nearest person is race 0x8a (spectre): speaks(48), consumes bone (`stuff[29] = 0`), `leave_item(nearest, 140)` — the spectre leaves behind item ob_id 140 (Shard). If target is not spectre: speaks(21) "Wrong person" |
+| 30 | Shard | Passive | **Phase through mountains**: when hero walks into terrain type 12 (mountain3) and stuff[30] > 0, terrain collision is bypassed (`goto newloc` instead of blocking). Allows accessing otherwise impassable mountain areas |
+
+#### Gold (stuff 31–34, GOLDBASE=31)
+
+Gold items aren't stored in `stuff[]` — they are added directly to the `wealth` variable on pickup:
+
+| Index | Name | maxshown | Wealth added |
+|-------|------|----------|-------------|
+| 31 | 2 Gold Pieces | 2 | +2 |
+| 32 | 5 Gold Pieces | 5 | +5 |
+| 33 | 10 Gold Pieces | 10 | +10 |
+| 34 | 100 Gold Pieces | 100 | +100 |
+
+Gold is spent via the BUY menu (shopkeeper, race 0x88) and GIVE menu (give 2gp to beggars, chance to increase `kind`).
+
+### World object types (`obytes` enum)
+
+Maps `ob_id` byte values in `ob_listg[]`/`ob_listN[]` to world-placed object identifiers. The `itrans[]` table translates ob_id → stuff[] index on pickup.
+
+| ob_id | Constant | stuff index | Notes |
+|-------|----------|-------------|-------|
+| 8 | — | 2 (Sword) | |
+| 9 | — | 1 (Mace) | |
+| 10 | — | 3 (Bow) | |
+| 11 | QUIVER | 35 (→ arrows ×10) | Grants 10 arrows |
+| 12 | — | 0 (Dirk) | |
+| 13 | MONEY | — | +50 gold (hardcoded in pickup) |
+| 14 | URN | — | Container (random treasure) |
+| 15 | CHEST | — | Container (random treasure) |
+| 16 | SACKS | — | Container (random treasure) |
+| 17 | G_RING | 14 (Gold Ring) | |
+| 18 | B_STONE | 9 (Blue Stone) | |
+| 19 | G_JEWEL | 10 (Green Jewel) | |
+| 20 | SCRAP | — | Scrap of paper; triggers event(17) + regional event (18 or 19) |
+| 21 | C_ORB | 12 (Crystal Orb) | |
+| 22 | VIAL | 11 (Glass Vial) | |
+| 23 | B_TOTEM | 13 (Bird Totem) | |
+| 24 | J_SKULL | 15 (Jade Skull) | |
+| 25 | GOLD_KEY | 16 (Gold Key) | |
+| 26 | GREY_KEY | 20 (Grey Key) | |
+| 27 | — | 5 (Golden Lasso) | Dropped by the witch (race 0x89) on death |
+| 28 | — | — | Dead brother's bones; absorbs dead brother's inventory |
+| 31 | FOOTSTOOL | — | Blocks pickup (break) |
+| 102 | TURTLE | — | Turtle eggs; blocks pickup (break) |
+| 114 | BLUE_KEY | 18 (Blue Key) | |
+| 136 | — | 27 (Herb) | |
+| 137 | — | 28 (Writ) | |
+| 138 | — | 29 (Bone) | |
+| 139 | — | 22 (Talisman) | Dropped by Necromancer on death |
+| 140 | — | 30 (Shard) | Left by spectre when given Bone |
+| 145 | M_WAND | 4 (Magic Wand) | |
+| 146 | MEAL | — | Food; if hunger<15 stored as Fruit, else eaten (−30 hunger) |
+| 147 | ROSE | 23 (Rose) | |
+| 148 | FRUIT | 24 (Fruit) | |
+| 149 | STATUE | 25 (Gold Statue) | |
+| 150 | BOOK | 26 (Book) | |
+| 151 | SHELL | 6 (Sea Shell) | |
+| 153 | GREEN_KEY | 17 (Green Key) | |
+| 154 | WHITE_KEY | 21 (White Key) | |
+| 155 | — | 7 (Sun Stone) | |
+| 242 | RED_KEY | 19 (Red Key) | |
+
+### Container treasure generation
+
+Containers (Chest, Urn, Sacks) use `rand4()` (0–3) to determine loot:
+
+| Roll | Result |
+|------|--------|
+| 0 | Nothing |
+| 1 | 1 random magic/key item (`rand8() + 8`; if index 8 → arrows instead) |
+| 2 | 2 different random items (same pool; if first is index 8 → 100gp instead) |
+| 3 | 3 copies of one item (same pool; if index 8 → 3 random keys instead) |
+
+### Random enemy loot
+
+On searching a dead enemy body, `encounter_chart[race].treasure` selects a loot table row from `treasure_probs[]` (8 entries per row × `rand8()` column):
+
+| treasure | Loot table row | Contents |
+|----------|---------------|----------|
+| 0 | all zeros | No treasure drops |
+| 1 | Blue Stone, Vial, Totem, 2×gold(5gp), 2×keys, gold(10gp) | Common magic/key |
+| 2 | Orb, Ring, 3×Grey Key, gold(5gp/10gp/2gp) | Mid-tier magic/keys |
+| 3 | Jewel×2, Gold Key, Skull, Jewel, keys (Green/Blue/Red) | Rare magic/keys |
+| 4 | Jade Skull, White Key, 6×nothing | Very rare; only Jade Skull and White Key |
+
+Enemy bodies also drop their equipped weapon (if weapon > 0): `stuff[weapon-1]++`. Auto-equips if better than current (`weapon > anim_list[0].weapon`). Bows additionally grant `rand8() + 2` arrows.
+
+### BUY menu (shopkeeper race 0x88)
+
+Items purchasable via `jtrans[]` cost table:
+
+| BUY hit | Item | stuff index | Cost (gold) |
+|---------|------|-------------|-------------|
+| 5 | Food | 0 (eat) | 3 |
+| 6 | Arrows | 8 (+10) | 10 |
+| 7 | Glass Vial | 11 | 15 |
+| 8 | Mace | 1 | 30 |
+| 9 | Sword | 2 | 45 |
+| 10 | Bow | 3 | 75 |
+| 11 | Bird Totem | 13 | 20 |
+
+Food (hit=5) is special: calls `eat(50)` directly (−50 hunger) + event(22), not stored in inventory.
+
+---
+
+## `setmood()` — Music State Machine
+
+Called on every state change, on player death, region cross, and periodically via `(daynight & 7) == 0`. Selects the active 4-track group from `track[]` (28 track pointers loaded by `read_score()`):
+
+```c
+// Priority order (highest first):
+if (hero vitality == 0)           → group 6  (tracks 24–27) death/game-over (no loop)
+else if (hero in palace zone*)    → group 4  (tracks 16–19) palace
+else if (battleflag)              → group 1  (tracks 4–7)   battle
+else if (region_num > 7)          → group 5  (tracks 20–23) indoor/dungeon
+  (region 9 uses new_wave[10]=0x0307; others use 0x0100)
+else if (lightlevel > 120)        → group 0  (tracks 0–3)   outdoor daytime
+else                              → group 2  (tracks 8–11)  outdoor nighttime
+```
+
+\* Palace zone: `0x2400 < hero_x < 0x3100` AND `0x8200 < hero_y < 0x8a00`
+
+Music is gated by `menus[GAME].enabled[6] & 1`. If music is off: `stopscore()`. `now=TRUE` → `playscore()` (restart from beginning); `now=FALSE` → `setscore()` (crossfade without restart). Setmood also polled every 7 daynight ticks via `(daynight & 7) == 0`.
+
+---
+
+## Save / Load Format
+
+`savegame(hit)` writes to a file named `savename[4] = 'A' + hit` (save slots A–?). `svflag=TRUE` = save, `FALSE` = load. `saveload(buf, len)` does the actual read/write.
+
+Sequential layout of the save file:
+
+| # | `saveload()` call | Content | Notes |
+|---|---|---|---|
+| 1 | `saveload(&map_x, 80)` | Main game-state block | Starts at `map_x`, covers ~40 `short`/`USHORT` fields: map_x/y, hero_x/y, safe_x/y/r, img_x/y, cheat1, riding, flying, wcarry, turtleprox, raftprox, brave, luck, kind, wealth, hunger, fatigue, brother, princess, hero_sector, hero_place, daynight, lightlevel, actor_file, set_file, active_carrier, xtype, leader, secret_timer, light_timer, freeze_timer, cmode, encounter_type, and padding |
+| 2 | `saveload(&region_num, 2)` | Active region | `UWORD` |
+| 3 | `saveload(&anix, 6)` | Figure count + misc | anix, anix2, mdex |
+| 4 | `saveload(anim_list, anix * 22)` | All active `shape` structs | 22 bytes each |
+| 5 | `saveload(julstuff, 35)` | Julian's inventory | `UBYTE[35]` |
+| 6 | `saveload(philstuff, 35)` | Phillip's inventory | `UBYTE[35]` |
+| 7 | `saveload(kevstuff, 35)` | Kevin's inventory | `UBYTE[35]` |
+| 8 | `saveload(missile_list, 6*14)` | Active missiles | 6 × `struct missile` |
+| 9 | `saveload(extent_list, 2*16)` | Bird & turtle extents | First 2 `struct extent` entries |
+| 10 | `saveload(ob_listg, glbobs*8)` | Global persistent objects | `struct object` = 8 bytes |
+| 11 | `saveload(mapobs, 20)` | Per-region object counts | `short[10]` |
+| 12 | `saveload(dstobs, 20)` | Per-region object offsets | `short[10]` |
+| 13–22 | `saveload(ob_table[i], mapobs[i]*8)` | Per-region object lists | For each of 10 regions |
+
+`struct shape` layout (22 bytes):
+```
+abs_x   : u16  (0)
+abs_y   : u16  (2)
+rel_x   : u16  (4)
+rel_y   : u16  (6)
+type    : i8   (8)
+race    : u8   (9)
+index   : i8   (10)
+visible : i8   (11)
+weapon  : i8   (12)
+environ : i8   (13)
+goal    : i8   (14)
+tactic  : i8   (15)
+state   : i8   (16)
+facing  : i8   (17)
+vitality: i16  (18)
+vel_x   : i8   (20)
+vel_y   : i8   (21)
+```
+
+`struct missile` layout:
+```
+abs_x          : u16
+abs_y          : u16
+missile_type   : i8   (0=none, 1=arrow, 2=fireball, 3=spent)
+time_of_flight : i8
+speed          : i8
+direction      : i8
+archer         : i8   (ID of firing figure)
+```
+
+`struct object` layout (8 bytes):
+```
+xc     : u16
+yc     : u16
+ob_id  : i8
+ob_stat: i8
+(2 bytes padding)
+```
+
+---
+
+## Sound Effects (`game/samples`)
+
+Loaded from ADF block 920 (11 blocks = 5,632 bytes, `SAMPLE_SZ`) into `sample_mem`. Six samples packed sequentially as length-prefixed raw signed 8-bit PCM:
+
+```
+[4-byte big-endian length][PCM bytes] × 6
+```
+
+`effect(num, speed)` calls `playsample(sample[num], sample_size[num]/2, speed)` where `speed` is an Amiga Paula period register value — higher = slower/lower pitch.
+
+| Index | Trigger | Speed range | Context |
+|-------|---------|-------------|---------|
+| 0 | Hero is hit by melee | 800 + bitrand(511) | `dohit` with j==0 |
+| 1 | Weapon near-miss | 150 + rand256() | Proximity ≤ bv+2, not wand |
+| 2 | Arrow/bolt hits player | 500 + rand64() | `dohit` with i==-1 |
+| 3 | Monster is hit by melee | 400 + rand256() | `dohit` with j>0 |
+| 4 | Arrow hits target | 400 + rand256() | Missile impact |
+| 5 | Magic/fireball hit or monster death | 3200 + bitrand(511) | `dohit` with i==-2, some deaths |
+
+---
+
+## Sprite / Shape File Layout (ADF)
+
+All character sprites stored as interleaved Amiga bitplanes. `cfiles[]` in `fmain2.c` maps logical sprite IDs to ADF locations:
+
+```c
+struct cfile_info {
+    UBYTE width;     // width in 16-pixel words
+    UBYTE height;    // height in pixels
+    UBYTE count;     // total animation frame count
+    UBYTE numblocks; // ADF blocks to read
+    UBYTE seq_num;   // which seq_list slot (PHIL/OBJECTS/RAFT/ENEMY/SETFIG/CARRIER/DRAGON)
+    USHORT file_id;  // ADF block number
+};
+```
+
+Frame byte size = `width * height * 2` (2 bytes = one row of one 16-wide bitplane). Total size per animation file = `width * height * 2 * count * 5` (5 bitplanes) + `width * height * 2 * count` (mask plane) = `size * 6`.
+
+| cfile | ADF block | Blocks | Width×Height | Frames | Slot | Notes |
+|-------|-----------|--------|--------------|--------|------|-------|
+| 0 | 1376 | 42 | 1×32 | 67 | PHIL | Julian player sprites |
+| 1 | 1418 | 42 | 1×32 | 67 | PHIL | Phillip player sprites |
+| 2 | 1460 | 42 | 1×32 | 67 | PHIL | Kevin player sprites |
+| 3 | 1312 | 36 | 1×16 | 116 | OBJECTS | World objects/items |
+| 4 | 1348 | 3  | 2×32 | 2   | RAFT | Raft sprite |
+| 5 | 1351 | 20 | 2×32 | 16  | CARRIER | Turtle |
+| 6 | 960  | 40 | 1×32 | 64  | ENEMY | Ogre / Orc |
+| 7 | 1080 | 40 | 1×32 | 64  | ENEMY | Ghost / Wraith / Skeleton / Salamander |
+| 8 | 1000 | 40 | 1×32 | 64  | ENEMY | DKnight / Spider |
+| 9 | 1040 | 40 | 1×32 | 64  | ENEMY | Necromancer / Loraii / Farmer |
+| 10 | 1160 | 12 | 3×40 | 5  | DRAGON | Dragon |
+| 11 | 1120 | 40 | 4×64 | 8  | CARRIER | Bird |
+| 12 | 1376 | 40 | 1×32 | 64 | ENEMY | Snake / Salamander |
+| 13 | 936  | 5  | 1×32 | 8  | SETFIG | Wizard / Priest |
+| 14 | 931  | 5  | 1×32 | 8  | SETFIG | Guards / Princess / King / Noble / Sorceress |
+| 15 | 941  | 5  | 1×32 | 8  | SETFIG | Bartender |
+| 16 | 946  | 5  | 1×32 | 8  | SETFIG | Witch / Spectre / Ghost |
+| 17 | 951  | 5  | 1×32 | 8  | SETFIG | Ranger / Beggar |
+
+**`setfig_table[]`** maps `setfig_type` (0–13) → `{cfile_entry, image_base, can_talk}`:
+
+| Type | Name | cfile | Base frame | Can talk |
+|------|------|-------|------------|----------|
+| 0 | Wizard    | 13 | 0 | Yes |
+| 1 | Priest    | 13 | 4 | Yes |
+| 2 | Guard     | 14 | 0 | No |
+| 3 | Guard (back) | 14 | 1 | No |
+| 4 | Princess  | 14 | 2 | No |
+| 5 | King      | 14 | 4 | Yes |
+| 6 | Noble     | 14 | 6 | No |
+| 7 | Sorceress | 14 | 7 | No |
+| 8 | Bartender | 15 | 0 | No |
+| 9 | Witch     | 16 | 0 | No |
+| 10 | Spectre  | 16 | 6 | No |
+| 11 | Ghost    | 16 | 7 | No |
+| 12 | Ranger   | 17 | 0 | Yes |
+| 13 | Beggar   | 17 | 4 | Yes |
+
+---
+
+## NPC Behavior (Goal/Tactic System)
+
+NPC AI runs on `anim_list[3..anix-1]` (figures beyond the 3 reserved for player, raft, setfig).
+
+**Goal modes** (`an->goal`):
+- `USER(0)` — player-controlled
+- `ATTACK1(1)` — dumb pursue
+- `ATTACK2(2)` — clever pursue (uses `set_course` smart seek, xdir/ydir filtering)
+- `ARCHER1(3)`, `ARCHER2(4)` — ranged attack styles
+- `FLEE(5)` — run directly away from hero
+- `STAND(6)` — face hero but don't move
+- `DEATH(7)` — dying state
+- `WAIT(8)` — wait to speak
+- `FOLLOWER(9)` — follow another figure
+- `CONFUSED(10)` — random movement
+
+**Tactic modes** (`an->tactic`, sub-goal within goal):
+- `FRUST(0)` — blocked, try something else
+- `PURSUE(1)` — move toward hero
+- `FOLLOW(2)` — go to another figure
+- `BUMBLE_SEEK(3)` — wander toward target
+- `RANDOM(4)` — random movement
+- `BACKUP(5)` — move opposite to current direction
+- `EVADE(6)` — move 90° from hero
+- `HIDE(7)` — seek cover
+- `SHOOT(8)` — fire ranged attack
+- `SHOOTFRUST(9)` — ranged blocked
+- `EGG_SEEK(10)` — snakes seeking turtle eggs
+- `DOOR_SEEK(11)` / `DOOR_LET(12)` — DKnight blocking/permitting door passage
+
+**`set_course(object, target_x, target_y, mode)`**:
+- `mode 1`: ATTACK1 (add deviation if dist < 40)
+- `mode 2`: ATTACK2 (add deviation if dist < 30)
+- `mode 3`: FLEE (reverse xdir/ydir)
+- `mode 4`: diagonal-ok (no 2:1 bias reduction)
+- `mode 5`: stand still after movement (no WALKING state)
+- `mode 6`: use target_x/y directly as delta instead of computing offset from figure
+- Direction LUT `com2[9] = {0,1,2,7,9,3,6,5,4}` maps `(xdir,ydir)` to the 8 compass directions; `j=9` → `STILL`
+
+**`proxcheck(x, y, i)`**:
+- Checks terrain collision via `prox(x, y)` (tile-based, returns non-zero for blocked)
+- Wraith (race 2) bypasses tile collision
+- Hero (i==0) can pass water/sink tiles (prox values 8, 9 are cleared)
+- Figure-to-figure collision: 11px horizontal, 9px vertical exclusion zone; dead figures and rafts (j==1) are walkable
+
+---
+
+## Extents and Encounter Zones
+
+`extent_list[EXT_COUNT]` (22 entries) — axis-aligned rectangles triggering encounters or events:
+
+```c
+struct extent {
+    UWORD x1, y1, x2, y2;
+    UBYTE etype;  // 0-49=random, 50=setgroup, 52=astral, 53=spiders, 60+=special, 70+=carriers
+    UBYTE v1;     // encounter count or carrier ID
+    UBYTE v2;     // spread/flags
+    UBYTE v3;     // encounter_type (enemy race index)
+};
+```
+
+Key entries:
+- `extent_list[0]` — bird location (xtype=70, v3=11=bird cfile)
+- `extent_list[1]` — turtle location (xtype=70, v3=5=turtle cfile)
+- `extent_list[2]` — dragon area (xtype=70, v3=10)
+- `extent_list[3]` — spider pit (xtype=53, encounter_type=4=snake? No, type=6=spider, spread=1)
+- `extent_list[4]` — necromancer (xtype=60, encounter_type=9)
+- `extent_list[5]` — turtle eggs rescue zone (xtype=61)
+- `extent_list[6]` — princess zone (xtype=83)
+- `extent_list[9]` — astral plane (xtype=52, type=8=Loraii)
+- `extent_list[21]` — whole-world catch-all for random encounters (type=3, spread=8)
+
+`xtype >= 50` triggers forced encounters; `xtype >= 60` triggers special carrier/NPC loads via `load_carrier()`.
+
+---
+
 ## Key Bindings: Design and compatibility notes
 
 - The original game's `letter_list[]` is a flat array scanned linearly on each keypress — we replace this with a `HashMap` reverse index for O(1) lookup.

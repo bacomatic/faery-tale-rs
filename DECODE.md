@@ -188,3 +188,108 @@ The `gdriver.asm` music engine runs as an Amiga interrupt server on **VBlank** (
 4. Steps through the envelope in `volmem`, writing each volume byte to Paula's `$a8` register
 
 The "v6" name likely refers to **Version 6** of the music voice data file — the `new_wave[]` array in `fmain.c` defines a 12-element default instrument table that maps tracks to waveform/envelope pairs, and there are in-game branches that swap entries depending on whether the player is indoors vs. outdoors (`new_wave[10] = 0x0307` or `0x0100`).
+
+---
+
+## `game/samples` — Sound Effect Data
+
+Loaded from **ADF block 920**, reading **11 blocks** (5,632 bytes, `SAMPLE_SZ`) into `sample_mem` via `read_sample()` in `fmain.c`.
+
+Six IFF-style length-prefixed sound effects packed sequentially:
+
+```
+for each of 6 samples:
+  [4 bytes big-endian] length N
+  [N bytes]            signed 8-bit PCM mono sample data
+```
+
+`effect(num, speed)` calls `playsample(sample[num], sample_size[num] / 2, speed)`.
+- `sample[num]` is a pointer into `sample_mem` past the length prefix
+- `sample_size[num] / 2` is the length in 16-bit words (Paula DMA uses word count)
+- `speed` is an Amiga Paula **period register** value (higher = slower, lower pitch); the `rand` jitter creates pitch variation per hit
+
+| Index | Trigger event | Speed base | Jitter |
+|-------|--------------|------------|--------|
+| 0 | Hero hit by melee | 800 | +bitrand(511) |
+| 1 | Weapon near-miss | 150 | +rand256() |
+| 2 | Arrow/bolt hits player | 500 | +rand64() |
+| 3 | Monster hit by melee | 400 | +rand256() |
+| 4 | Arrow hits a target | 400 | +rand256() |
+| 5 | Magic/fireball hit | 3200 | +bitrand(511) |
+
+---
+
+## `game/image` ADF — Sprite Shape Data
+
+All animated character sprites are stored in **ADF `game/image`** (the same 880 KB floppy image used for map data). Sprite data is loaded by `read_shapes()` / `load_track_range()` in `fmain2.c`.
+
+### `cfiles[]` — Sprite File Registry
+
+```c
+struct cfile_info {
+    UBYTE width;     // sprite width in 16-pixel interleaved words
+    UBYTE height;    // sprite height in pixels
+    UBYTE count;     // number of animation frames
+    UBYTE numblocks; // ADF 512-byte blocks to read
+    UBYTE seq_num;   // seq_list[] slot (PHIL=0, OBJECTS=1, ENEMY=2, RAFT=3, SETFIG=4, CARRIER=5, DRAGON=6)
+    USHORT file_id;  // starting ADF block number
+};
+```
+
+**Frame byte size** = `width × height × 2` (one row per word, one bitplane).
+**Total data per file** = `frame_bytes × count × 5` (5 bitplanes) + `frame_bytes × count` (mask plane) = `frame_bytes × count × 6`.
+`nextshape` advances by `frame_bytes × count × 5`; `seq_list[slot].maskloc` is stored at the 6th chunk.
+
+| cfile# | ADF block | Blocks | W×H | Frames | Slot | Contents |
+|--------|-----------|--------|-----|--------|------|----------|
+| 0 | 1376 | 42 | 1×32 | 67 | PHIL | Julian (all directions + fight) |
+| 1 | 1418 | 42 | 1×32 | 67 | PHIL | Phillip |
+| 2 | 1460 | 42 | 1×32 | 67 | PHIL | Kevin |
+| 3 | 1312 | 36 | 1×16 | 116 | OBJECTS | World items / loot objects |
+| 4 | 1348 | 3  | 2×32 | 2   | RAFT | Raft (two frames) |
+| 5 | 1351 | 20 | 2×32 | 16  | CARRIER | Turtle |
+| 6 | 960  | 40 | 1×32 | 64  | ENEMY | Ogre / Orc |
+| 7 | 1080 | 40 | 1×32 | 64  | ENEMY | Ghost / Wraith / Skeleton / Salamander |
+| 8 | 1000 | 40 | 1×32 | 64  | ENEMY | DKnight / Spider |
+| 9 | 1040 | 40 | 1×32 | 64  | ENEMY | Necromancer / Loraii / Farmer |
+| 10 | 1160 | 12 | 3×40 | 5  | DRAGON | Dragon |
+| 11 | 1120 | 40 | 4×64 | 8  | CARRIER | Bird |
+| 12 | 1376 | 40 | 1×32 | 64 | ENEMY | Snake / Salamander (shares ADF block with Julian) |
+| 13 | 936  | 5  | 1×32 | 8  | SETFIG | Wizard / Priest |
+| 14 | 931  | 5  | 1×32 | 8  | SETFIG | Guards / Princess / King / Noble / Sorceress |
+| 15 | 941  | 5  | 1×32 | 8  | SETFIG | Bartender |
+| 16 | 946  | 5  | 1×32 | 8  | SETFIG | Witch / Spectre / Ghost |
+| 17 | 951  | 5  | 1×32 | 8  | SETFIG | Ranger / Beggar |
+
+### Amiga interleaved bitplane layout
+
+Each animation frame is stored in **Amiga interleaved bitplane format**: the bitplanes are interleaved row-by-row within each frame. For a `1×32` (one word × 32 rows, 5 planes) frame:
+```
+row 0, plane 0: 2 bytes
+row 0, plane 1: 2 bytes
+row 0, plane 2: 2 bytes
+row 0, plane 3: 2 bytes
+row 0, plane 4: 2 bytes
+row 1, plane 0: 2 bytes
+...
+row 31, plane 4: 2 bytes   (total: 32 × 5 × 2 = 320 bytes per frame)
+```
+The mask plane (`maskloc`) follows immediately after all 5 bitplanes of all frames, in the same interleaved row layout but 1 plane only.
+
+### `statelist[]` — Animation Frame Index
+
+`statelist[87]` maps animation state+frame indices to `{figure_frame, weapon_frame, wpn_x, wpn_y}`:
+- Frames 0–7: south walk cycle
+- Frames 8–15: west walk cycle
+- Frames 16–23: north walk cycle
+- Frames 24–31: east walk cycle
+- Frames 32–43: south fight (9 transition states + 2 death/special)
+- Frames 44–55: west fight
+- Frames 56–67: north fight
+- Frames 68–79: east fight
+- Frames 80–82: death sequence
+- Frames 83–84: sinking sequence / oscillation
+- Frame 86: asleep
+
+`trans_list[9]` is the combat animation transition table: each state maps to the next state for each of the 4 compass directions.
+

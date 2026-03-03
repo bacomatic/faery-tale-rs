@@ -13,6 +13,7 @@
         "/^bash scripts/plan_sync_check\\.sh$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "git remote": true
     }
 }
