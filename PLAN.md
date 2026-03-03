@@ -26,6 +26,8 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 
 ## Issue Map (Rollups)
 
+- `gameloop-001` → #59
+- `debug-001` → #58
 - `intro-001` → pre-issues
 - `audio-001` → #1
 - `vkbd-001` → pre-issues
@@ -35,8 +37,6 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 - `gfx-001` → #2
 - `keys-001` → #6
 - `persist-001` → #7
-- `gameloop-001` → n/a
-- `debug-001` → n/a
 
 ## Status Index (source of truth for humans)
 
@@ -52,8 +52,8 @@ Machine-readable mirror: `plan_status.toml`
 - [persist-001] Persistence (0/3 steps complete; Issue: #7)
 
 ### Todo
-- [gameloop-001] Core game loop (0/15 steps complete; Issue: n/a)
-- [debug-001] Debug window enhancements (0/11 steps complete; Issue: n/a)
+- [gameloop-001] Core game loop (0/15 steps complete; Issue: #59)
+- [debug-001] Debug window enhancements (0/11 steps complete; Issue: #58)
 
 ### Done
 - [intro-001] Intro sequence end-to-end (6/6 steps complete; Issue: pre-issues)
