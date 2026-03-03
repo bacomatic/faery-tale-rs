@@ -293,3 +293,174 @@ The mask plane (`maskloc`) follows immediately after all 5 bitplanes of all fram
 
 `trans_list[9]` is the combat animation transition table: each state maps to the next state for each of the 4 compass directions.
 
+---
+
+## Terrain Collision
+
+Sources: `original/fmain.c`, `original/terrain.c`, `original/fsubs.asm`.
+
+### Overview
+
+Terrain collision is **tile-type-based**, not bitplane-based. There is no dedicated collision bitplane in the ADF. Instead, every image tile (world graphic tile) has an associated 4-byte terrain descriptor stored in `terra_mem`, which is consulted at runtime to determine whether a position is passable and what special behavior applies.
+
+---
+
+### Memory Buffers
+
+| Buffer | Size | Purpose |
+|--------|------|---------|
+| `sector_mem` | `128×256 + 4096` bytes | Maps (sector, tile-position) → image tile index. 256 sectors, 128 bytes each. |
+| `map_mem` | `8 ADF blocks` (4096 bytes) | Maps world region coordinates → sector numbers. |
+| `terra_mem` | 1024 bytes (chip RAM) | Terrain descriptor table. 256 entries × 4 bytes (two 512-byte halves, one per terrain file loaded). |
+
+`terra_mem` is loaded from ADF starting at block `TERRA_BLOCK` (149). Each region specifies two terrain file indices (`terra1` and `terra2`); they are loaded into the two 512-byte halves of `terra_mem`:
+
+```c
+load_track_range(TERRA_BLOCK + nd->terra1, 1, terra_mem,       1);
+load_track_range(TERRA_BLOCK + nd->terra2, 1, terra_mem + 512, 2);
+```
+
+---
+
+### Terrain Descriptor Layout (`terra_mem` entry, 4 bytes per tile)
+
+`terrain.c` extracts per-tile descriptor data from each landscape source file and writes 4 bytes per image tile:
+
+| Byte offset | Field | Description |
+|-------------|-------|-------------|
+| +0 | `maptag` | Bit mask for rendering: controls which sub-cells within a 32×64 tile get the feature blitted (`maskit()` call). |
+| +1 | `terrain` | **2 nibbles**: upper nibble = terrain type (returned by `px_to_im`); lower nibble = TODO: verify exact meaning. |
+| +2 | `tiles` | 4-bit feature presence mask. Controls which quadrant sub-cells within the tile carry the terrain feature (checked against the position bit `d4` derived from pixel x/y). If the relevant bit is zero, `px_to_im` returns 0 (open terrain) even if the image tile would otherwise have a type. |
+| +3 | `big_colors` | Palette index for minimap rendering. |
+
+Access pattern in C (used for masking logic):
+
+```c
+cm = minimap[cell] * 4;          // 4 bytes per entry
+k  = terra_mem[cm + 1] & 15;     // lower nibble (masking case selector)
+maskit(xm, ym, blitwide, terra_mem[cm]); // +0 = maptag bit mask
+```
+
+Access pattern in ASM (`px_to_im`):
+
+```asm
+and.b   2(a1,d1.w),d4   ; terra_mem[entry+2].tiles & position_bit
+beq.s   px99            ; zero = no feature at this sub-cell → return 0
+move.b  1(a1,d1.w),d0   ; terra_mem[entry+1].terrain
+lsr.b   #4,d0           ; upper nibble = terrain type
+```
+
+---
+
+### Coordinate-to-Terrain Lookup: `px_to_im(x, y)`
+
+Implemented in `fsubs.asm`. Converts absolute pixel coordinates to a terrain type (0–15):
+
+```
+1. Compute tile position bit (d4 = 0x80, then shifted):
+     if x & 8:  d4 >>= 4   (right half of tile)
+     if y & 8:  d4 >>= 1   (lower half within row)
+     if y & 16: d4 >>= 2   (second tile row)
+
+2. imx = x >> 4            (image x: tile column, 16 px/col)
+   imy = y >> 5            (image y: tile row,    32 px/row)
+
+3. secx = (imx >> 4) - xreg, clamped 0–63  (sector column)
+   secy = (imy >>  3) - yreg, clamped 0–31  (sector row)
+
+4. sec_num = map_mem[secy * 128 + secx + xreg]
+
+5. offset  = sec_num * 128 + (imy & 7) * 16 + (imx & 15)
+   image_n = sector_mem[offset]             (image tile index 0–255)
+
+6. entry   = image_n * 4                   (into terra_mem)
+   if (terra_mem[entry+2] & d4) == 0:
+       return 0                            (no feature at sub-cell)
+   return terra_mem[entry+1] >> 4          (upper nibble = terrain type)
+```
+
+---
+
+### Terrain Type Table
+
+Derived from the comment block at `fmain.c:727` and all `px_to_im`/`proxcheck` usage sites:
+
+| Type | Symbolic name | Behavior |
+|------|--------------|---------|
+| 0 | Open / land | Fully passable; no special effect. |
+| 1 | **Impassable** | Hard block (walls, solid mountains, buildings). `proxcheck` always blocks. |
+| 2 | Sink (shallow) | Character starts sinking; `environ` → 2. Water — wading possible. |
+| 3 | Sink (deep) | Faster sinking; `environ` → 5. |
+| 4 | Water (shallow) | Sinking threshold 10; triggers `SINK` state at depth 15; transition to `SINK` at 30. |
+| 5 | Water (deep / navigable by raft) | Sinking threshold 30; raft navigates here. |
+| 6 | Special A | Sets `environ` = −1. TODO: verify (ice/slippery?). |
+| 7 | Special B (lava?) | Sets `environ` = −2. Volcanic region tile; vultures (`xtype==52`) can spawn here. |
+| 8 | Special C | Sets `environ` = −3. Blocks left-foot `proxcheck` probe (≥8 threshold). |
+| 9 | Pit / fall trap | Triggers `FALL` state for the hero; reduces `luck` by 2. |
+| 10–11 | Hard block (high) | Blocks `proxcheck` right-foot probe (≥10 threshold). TODO: verify specific sub-types. |
+| 12 | Water passage | Normally blocking (≥10 for right, ≥8 for left), but `stuff[30]` (water-walk item?) allows passage. |
+| 13–14 | Hard block | Block both probes. TODO: verify specific sub-types. |
+| 15 | **Door** | Triggers `doorfind()` on the hero's attempted move; stops projectiles. |
+
+The comment in `fmain.c` also mentions planned-but-unclear types: "slippery, fiery, changing, climbable, pit trap, danger, noisy, magnetic, stinks, slides, slopes, whirlpool." Only types 0–9 and 15 have verified game behavior in the shipped code.
+
+---
+
+### Collision Check: `proxcheck(x, y, entity_index)` → `_prox` in `fsubs.asm`
+
+`proxcheck` samples **two points** straddling the character's feet (±4 pixels horizontally, +2 pixels vertically from the passed position). It returns 0 if passable, or the terrain type if blocked.
+
+```asm
+_prox:
+    ; Right foot: (x+4, y+2)
+    call px_to_im(x+4, y+2)
+    if result == 1:  goto blocked      ; impassable
+    if result >= 10: goto blocked      ; hard-block types
+
+    ; Left foot: (x-4, y+2)
+    call px_to_im(x-4, y+2)
+    if result == 1:  goto blocked      ; impassable
+    if result >= 8:  goto blocked      ; hard-block types (lower threshold)
+
+    clr d0                             ; both clear → return 0 (passable)
+blocked:
+    rts                                ; d0 = terrain type (non-zero = blocked)
+```
+
+The asymmetric thresholds (≥10 right, ≥8 left) mean types 8–9 only block the left-foot probe, which may be an artifact of the original code's heuristic collision. This is faithfully reproduced from the source.
+
+**Caller interpretation** of the return value:
+
+- `== 0` → fully passable → allow move
+- `== 15` → door tile → call `doorfind()`
+- `== 12` → water-walk check (passes if `stuff[30]` is set)
+- anything non-zero → blocked; try deviated direction (`checkdev1/2`)
+
+---
+
+### Special Terrain Behaviors
+
+| Condition | Effect |
+|-----------|--------|
+| Type 2–5 while walking | Increments `environ` (submersion depth); at depth 15 triggers `SINK` animation state. |
+| Type 4/5 at depth 30 | Full submersion → `SINK`; at `hero_sector==181` (river crossing) triggers `xfer` to region 9. |
+| Type 0 (open) | Resets `environ` toward 0 (character surfaces). |
+| `race == 2` (wraith) or `race == 4` (snake) | `px_to_im` result forced to 0 — immune to water sinking. |
+| `riding == 5` (on raft) | `raftprox` set; drowning suppressed (`k = 0`). Raft can only navigate type 5 tiles. |
+| Type 9 + hero on `xtype==52` (vulture) | Triggers `FALL` state; luck −2. |
+| Type 1 or 15 | Stops projectiles (arrows/fireballs) dead. |
+| `passmode` set (weapon pass-through) | Sprites rendered without masking; terrain masking skipped. |
+
+---
+
+### Terrain Source Files (`terrain.c`)
+
+The build tool `terrain.c` reads 17 named landscape image files and extracts 64 tile descriptors from each, writing them sequentially to the `terra` output file (which is then stored in the ADF at block 149+):
+
+```
+wild, build, rock, mountain1, tower, castle, field, swamp, palace,
+mountain2, doom, mountain3, under, cave, furnish, inside, astral
+```
+
+Each landscape file is structured as `5 × 64 × 64` bytes of image bitplane data (`IPLAN_SZ`), followed by four 64-byte descriptor arrays: `maptag[64]`, `terrain[64]`, `tiles[64]`, `big_colors[64]`. `terrain.c` seeks past the image planes and reads only the descriptor arrays.
+
