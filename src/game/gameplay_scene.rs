@@ -1,6 +1,27 @@
+use crate::game::magic::{use_magic, MagicTimers, ITEM_AMULET, ITEM_CROWN, ITEM_ORB, ITEM_POTION, ITEM_RING, ITEM_SCROLL, ITEM_WAND};
 use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
+
+/// Day/night phase derived from lightlevel triangle wave (0–300).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DayNightPhase {
+    Day,   // lightlevel < 60
+    Dawn,  // 60-120 (transition)
+    Dusk,  // 121-180 (transition)
+    Night, // >180
+}
+
+impl DayNightPhase {
+    pub fn from_lightlevel(level: u16) -> Self {
+        match level {
+            0..=59    => Self::Day,
+            60..=120  => Self::Dawn,
+            121..=180 => Self::Dusk,
+            _         => Self::Night,
+        }
+    }
+}
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -61,6 +82,8 @@ pub struct GameplayScene {
     last_indoor: bool,
     pub in_encounter_zone: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
+    day_night_phase: DayNightPhase,
+    magic_timers: MagicTimers,
 }
 
 impl GameplayScene {
@@ -84,6 +107,8 @@ impl GameplayScene {
             last_indoor: false,
             in_encounter_zone: false,
             npc_table: None,
+            day_night_phase: DayNightPhase::Day,
+            magic_timers: MagicTimers::default(),
         }
     }
 
@@ -142,6 +167,8 @@ impl GameplayScene {
             } else {
                 2
             };
+            // Speed boost: crown magic adds 1 to base speed.
+            let speed = if self.magic_timers.has_speed_boost() { speed + 1 } else { speed };
 
             let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
             let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
@@ -255,7 +282,21 @@ impl GameplayScene {
         eprintln!("do_option: {:?}", action);
         match action {
             GameAction::BuyFood => {
-                if self.state.eat_food() {
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let near_shop = self.npc_table.as_ref().map_or(false, |t| {
+                    crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
+                });
+                if near_shop {
+                    match crate::game::shop::buy_item(&mut self.state, 0) {
+                        Ok(cost) => {
+                            self.messages.push(format!("Bought food for {} gold.", cost));
+                        }
+                        Err(reason) => {
+                            self.messages.push(format!("Cannot buy: {}", reason));
+                        }
+                    }
+                } else if self.state.eat_food() {
                     eprintln!("eat_food: consumed food, hunger={}", self.state.hunger);
                 } else {
                     eprintln!("eat_food: no food in pack");
@@ -335,6 +376,48 @@ impl GameplayScene {
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
                 eprintln!("UseItem: stub");
+            }
+            GameAction::CastSpell1 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_WAND) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell2 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_ORB) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell3 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_POTION) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell4 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_CROWN) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell5 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_AMULET) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell6 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_RING) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::CastSpell7 => {
+                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_SCROLL) {
+                    Ok(msg) => self.messages.push(msg),
+                    Err(e)  => self.messages.push(e),
+                }
             }
             _ => {}
         }
@@ -505,6 +588,24 @@ impl Scene for GameplayScene {
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
         self.state.tick(delta_ticks);
+        self.magic_timers.tick();
+
+        // Day/night phase: recompute and log/transition on change.
+        let new_phase = DayNightPhase::from_lightlevel(self.state.lightlevel);
+        if new_phase != self.day_night_phase {
+            eprintln!("Day/night: {:?}", new_phase);
+            let from = self.palette_transition
+                .as_ref()
+                .map(|pt| pt.to)
+                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
+            let to = match new_phase {
+                DayNightPhase::Night => [crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE],
+                DayNightPhase::Day   => [0xFFFFFFFF_u32; crate::game::palette::PALETTE_SIZE],
+                _                   => from,
+            };
+            self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
+            self.day_night_phase = new_phase;
+        }
 
         // Fatigue: tick once per frame; forced sleep on exhaustion.
         if self.state.tick_fatigue() {
@@ -562,6 +663,21 @@ impl Scene for GameplayScene {
         // Encounter zone check (world-111)
         self.in_encounter_zone = crate::game::zones::in_encounter_zone(
             self.state.region_num, self.state.hero_x, self.state.hero_y);
+
+        // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
+        if self.in_encounter_zone && crate::game::encounter::should_encounter(self.state.tick_counter) {
+            if let Some(ref mut table) = self.npc_table {
+                if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+                    let zone_idx = self.state.region_num as usize;
+                    *slot = crate::game::encounter::spawn_encounter(
+                        zone_idx,
+                        self.state.hero_x as i16,
+                        self.state.hero_y as i16,
+                    );
+                    self.messages.push("You are ambushed!");
+                }
+            }
+        }
 
         // Autosave every 3600 ticks (~60s at 60Hz)
         if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {

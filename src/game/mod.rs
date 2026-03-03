@@ -48,5 +48,6 @@ pub mod npc;
 pub mod combat;
 pub mod doors;
 pub mod zones;
+pub mod magic;
 pub mod encounter;
 pub mod shop;
