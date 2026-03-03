@@ -1,3 +1,4 @@
+use sdl2::controller::Button;
 use sdl2::keyboard::Keycode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +73,12 @@ pub enum GameAction {
     SelectKey4,
     SelectKey5,
     SelectKey6,
+
+    // UI / meta
+    Confirm,
+    Cancel,
+    Menu,
+    Rebind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,14 +91,14 @@ impl KeyBindings {
     pub fn default_bindings() -> Self {
         let mut b: HashMap<GameAction, Vec<Keycode>> = HashMap::new();
         // Arrow keys for movement
-        b.insert(GameAction::MoveUp,        vec![Keycode::Up, Keycode::W]);
-        b.insert(GameAction::MoveDown,      vec![Keycode::Down, Keycode::S]);
-        b.insert(GameAction::MoveLeft,      vec![Keycode::Left, Keycode::A]);
-        b.insert(GameAction::MoveRight,     vec![Keycode::Right, Keycode::D]);
-        b.insert(GameAction::MoveUpLeft,    vec![Keycode::Q]);
-        b.insert(GameAction::MoveUpRight,   vec![Keycode::E]);
-        b.insert(GameAction::MoveDownLeft,  vec![Keycode::Z]);
-        b.insert(GameAction::MoveDownRight, vec![Keycode::C]);
+        b.insert(GameAction::MoveUp,        vec![Keycode::Up, Keycode::W, Keycode::Kp8]);
+        b.insert(GameAction::MoveDown,      vec![Keycode::Down, Keycode::S, Keycode::Kp2]);
+        b.insert(GameAction::MoveLeft,      vec![Keycode::Left, Keycode::A, Keycode::Kp4]);
+        b.insert(GameAction::MoveRight,     vec![Keycode::Right, Keycode::D, Keycode::Kp6]);
+        b.insert(GameAction::MoveUpLeft,    vec![Keycode::Q, Keycode::Kp7]);
+        b.insert(GameAction::MoveUpRight,   vec![Keycode::E, Keycode::Kp9]);
+        b.insert(GameAction::MoveDownLeft,  vec![Keycode::Z, Keycode::Kp1]);
+        b.insert(GameAction::MoveDownRight, vec![Keycode::C, Keycode::Kp3]);
         // Combat
         b.insert(GameAction::Fight, vec![Keycode::Space, Keycode::F]);
         // Menu/UI — original letter keys from letter_list[]
@@ -149,6 +156,32 @@ impl Default for KeyBindings {
     fn default() -> Self { Self::default_bindings() }
 }
 
+/// Maps SDL2 game controller buttons to game actions.
+#[derive(Debug, Clone)]
+pub struct ControllerBindings {
+    bindings: HashMap<Button, GameAction>,
+}
+
+impl ControllerBindings {
+    pub fn default_bindings() -> Self {
+        let mut m = HashMap::new();
+        use Button::*;
+        m.insert(DPadUp,    GameAction::MoveUp);
+        m.insert(DPadDown,  GameAction::MoveDown);
+        m.insert(DPadLeft,  GameAction::MoveLeft);
+        m.insert(DPadRight, GameAction::MoveRight);
+        m.insert(A,         GameAction::Confirm);
+        m.insert(B,         GameAction::Cancel);
+        m.insert(Start,     GameAction::Menu);
+        m.insert(Back,      GameAction::Inventory);
+        ControllerBindings { bindings: m }
+    }
+
+    pub fn action_for_button(&self, btn: Button) -> Option<GameAction> {
+        self.bindings.get(&btn).copied()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +191,11 @@ mod tests {
         assert_eq!(kb.action_for_key(Keycode::Up), Some(GameAction::MoveUp));
         assert_eq!(kb.action_for_key(Keycode::Space), Some(GameAction::Fight));
         assert_eq!(kb.action_for_key(Keycode::Return), None);
+    }
+    #[test]
+    fn test_numpad_kp8_maps_to_move_up() {
+        let kb = KeyBindings::default_bindings();
+        assert_eq!(kb.action_for_key(Keycode::Kp8), Some(GameAction::MoveUp));
     }
     #[test]
     fn test_set_binding() {

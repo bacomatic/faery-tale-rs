@@ -584,17 +584,18 @@ Reference notes moved to `RESEARCH.md`:
    - Direction keys: accumulate into a direction vector (original supports 8 directions via simultaneous key-down/key-up)
    - Fight key: press = start fighting, release = stop (key-down/key-up pair)
 
-5. **Rebinding UI** (future)
-   - Settings screen listing all actions with current key assignments
-   - Select an action → "Press a key…" prompt → capture next keypress → update binding
-   - Conflict detection: warn if key is already bound to another action
-   - "Reset to Defaults" button
-   - This is a later milestone; for now, users can edit `settings.toml` directly
+5. **Rebinding UI** ✅ (keys-105, #32)
+   - `RebindingState` added to `GameplayScene`; `GameAction::Rebind` toggles active mode
+   - Next keypress captured and wired to `local_bindings.set_binding()`; Escape exits rebind mode
+   - Settings screen / conflict detection deferred to a later milestone
 
-6. **Game controller support**
-   - Add a controller layer that maps physical pad inputs to existing logical `GameAction`s (no controller-only actions)
-   - Keep gameplay parity with original one-button joystick by treating one face button as primary `Fight/Use` and mapping extra buttons to existing keyboard actions (menu shortcuts, pause, map, etc.)
-   - Support D-pad and left stick for 8-direction movement, with configurable deadzone and digital/analog preference
+6. **Numpad movement parity** ✅ (keys-106, #35)
+   - NumPad 1/2/3/4/6/7/8/9 added to `KeyBindings::default_bindings()` for all 8 directions
+   - Matches original Amiga numpad movement support
+
+7. **Game controller support** ✅ stub (keys-107, #36)
+   - `ControllerBindings` struct maps SDL2 DPad + face buttons to `GameAction`s
+   - Full event wiring deferred pending SDL2 controller subsystem initialisation
 
 Reference notes moved to `RESEARCH.md`:
 - `Key Bindings: Design and compatibility notes`

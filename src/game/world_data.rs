@@ -35,6 +35,17 @@ pub struct WorldData {
 }
 
 impl WorldData {
+    /// Return an empty (zeroed) WorldData for use as a placeholder before real data is loaded.
+    pub fn empty() -> Self {
+        WorldData {
+            sector_mem: Box::new([0u8; 32768]),
+            map_mem:    Box::new([0u8; 4096]),
+            terra_mem:  Box::new([0u8; 1024]),
+            image_mem:  Box::new([0u8; 81920]),
+            region_num: 0,
+        }
+    }
+
     /// Load world data for the given region from the ADF disk.
     pub fn load(adf: &AdfDisk, region_num: u8) -> Result<Self> {
         let idx = region_num as usize;
