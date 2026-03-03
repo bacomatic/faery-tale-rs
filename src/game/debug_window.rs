@@ -34,15 +34,17 @@ enum DebugTab {
     Tilemap,
     Map,
     Songs,
+    Player,
 }
 
-const ALL_TABS: [DebugTab; 6] = [
+const ALL_TABS: [DebugTab; 7] = [
     DebugTab::Info,
     DebugTab::Placards,
     DebugTab::Images,
     DebugTab::Tilemap,
     DebugTab::Map,
     DebugTab::Songs,
+    DebugTab::Player,
 ];
 
 impl DebugTab {
@@ -54,6 +56,7 @@ impl DebugTab {
             DebugTab::Tilemap => "Tilemap",
             DebugTab::Map => "Map",
             DebugTab::Songs => "Songs",
+            DebugTab::Player => "Player",
         }
     }
 
@@ -65,6 +68,7 @@ impl DebugTab {
             DebugTab::Tilemap => "4",
             DebugTab::Map => "5",
             DebugTab::Songs => "6",
+            DebugTab::Player => "7",
         }
     }
 }
@@ -171,6 +175,67 @@ struct SongTabState {
     highlighted_group: usize,
 }
 
+/// Human-readable names for the 35 inventory slots (stuff[0..35]).
+/// Slot assignments deduced from the original fmain.c source.
+const ITEM_NAMES: [&str; 35] = [
+    "Weapon",     // 0  - currently equipped weapon (1=dirk initially)
+    "Item 1",     // 1
+    "Item 2",     // 2
+    "Item 3",     // 3
+    "Item 4",     // 4
+    "Raft",       // 5
+    "Item 6",     // 6
+    "Item 7",     // 7
+    "Arrows",     // 8  - consumed when bow fires
+    "Item 9",     // 9
+    "Item 10",    // 10
+    "Item 11",    // 11
+    "Item 12",    // 12
+    "Item 13",    // 13
+    "Item 14",    // 14
+    "Item 15",    // 15
+    "Key(Gold)",  // 16 - KEYBASE
+    "Key(Green)", // 17
+    "Key(Blue)",  // 18
+    "Key(Red)",   // 19
+    "Key(Grey)",  // 20
+    "Key(White)", // 21
+    "Item 22",    // 22
+    "Item 23",    // 23
+    "Food",       // 24 - decremented by hunger
+    "Item 25",    // 25 - STATBASE
+    "Item 26",    // 26
+    "Item 27",    // 27
+    "Item 28",    // 28
+    "Item 29",    // 29
+    "Item 30",    // 30
+    "Gold",       // 31 - GOLDBASE
+    "Item 32",    // 32
+    "Item 33",    // 33
+    "Item 34",    // 34
+];
+
+/// Stat IDs in order matching the 7 stat display lines.
+const STAT_LINE_IDS: [crate::game::debug_command::StatId; 7] = [
+    crate::game::debug_command::StatId::Vitality,
+    crate::game::debug_command::StatId::Brave,
+    crate::game::debug_command::StatId::Luck,
+    crate::game::debug_command::StatId::Kind,
+    crate::game::debug_command::StatId::Wealth,
+    crate::game::debug_command::StatId::Hunger,
+    crate::game::debug_command::StatId::Fatigue,
+];
+
+struct PlayerTabState {
+    inv_scroll: usize,
+    /// Window-space y of the first stat line (set during render, used for click detection).
+    stat_y_start_win: i32,
+    /// Window-space y of the first inventory slot (set during render).
+    inv_y_start_win: i32,
+    /// Line height in pixels (set during render).
+    line_h: i32,
+}
+
 // ── DebugWindow ──────────────────────────────────────────────────────
 
 /// A separate SDL2 window dedicated to debug/diagnostic output,
@@ -199,6 +264,7 @@ pub struct DebugWindow<'a> {
     placard_tab: PlacardTabState,
     image_tab: ImageTabState,
     song_tab: SongTabState,
+    player_tab: PlayerTabState,
 
     /// Song group requested by the user from the Songs tab.
     /// Consumed by the main loop via `take_song_request()`.
@@ -293,6 +359,12 @@ impl<'a> DebugWindow<'a> {
             },
             image_tab: ImageTabState { current_index: 0 },
             song_tab: SongTabState { highlighted_group: 0 },
+            player_tab: PlayerTabState {
+                inv_scroll: 0,
+                stat_y_start_win: 0,
+                inv_y_start_win: 0,
+                line_h: 0,
+            },
             song_group_requested: None,
             stop_requested: false,
             pending_commands: Vec::new(),
@@ -377,6 +449,7 @@ impl<'a> DebugWindow<'a> {
                     Scancode::F4 => { self.active_tab = DebugTab::Tilemap; true }
                     Scancode::F5 => { self.active_tab = DebugTab::Map; true }
                     Scancode::F6 => { self.active_tab = DebugTab::Songs; true }
+                    Scancode::F7 => { self.active_tab = DebugTab::Player; true }
 
                     // Left/Right to cycle items in content tabs
                     Scancode::Left | Scancode::Right => {
@@ -433,8 +506,60 @@ impl<'a> DebugWindow<'a> {
                         true
                     }
 
+                    // Up/Down to scroll inventory in Player tab
+                    Scancode::Up | Scancode::Down => {
+                        let down = *sc == Scancode::Down;
+                        match self.active_tab {
+                            DebugTab::Player => {
+                                if down {
+                                    if self.player_tab.inv_scroll + 1 < 35 {
+                                        self.player_tab.inv_scroll += 1;
+                                    }
+                                } else if self.player_tab.inv_scroll > 0 {
+                                    self.player_tab.inv_scroll -= 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                        true
+                    }
+
                     _ => true, // consume all other keys when debug window focused
                 }
+            }
+
+            // Mouse clicks in Player tab: adjust stats (left half) or inventory slots
+            Event::MouseButtonDown {
+                window_id,
+                x: _,
+                y,
+                mouse_btn,
+                ..
+            } if *window_id == self.window_id && self.active_tab == DebugTab::Player => {
+                use sdl2::mouse::MouseButton;
+                let lh = self.player_tab.line_h;
+                if lh > 0 {
+                    let stat_y = self.player_tab.stat_y_start_win;
+                    let inv_y  = self.player_tab.inv_y_start_win;
+                    let delta_i16 = if *mouse_btn == MouseButton::Left { 1i16 } else { -1i16 };
+                    let delta_i8  = if *mouse_btn == MouseButton::Left { 1i8  } else { -1i8  };
+                    if *y >= stat_y && *y < inv_y {
+                        let line = ((*y - stat_y) / lh) as usize;
+                        if line < STAT_LINE_IDS.len() {
+                            self.pending_commands.push(
+                                DebugCommand::AdjustStat { stat: STAT_LINE_IDS[line], delta: delta_i16 }
+                            );
+                        }
+                    } else if *y >= inv_y {
+                        let slot = ((*y - inv_y) / lh) as usize + self.player_tab.inv_scroll;
+                        if slot < 35 {
+                            self.pending_commands.push(
+                                DebugCommand::AdjustInventory { index: slot as u8, delta: delta_i8 }
+                            );
+                        }
+                    }
+                }
+                true
             }
 
             _ => false,
@@ -478,6 +603,7 @@ impl<'a> DebugWindow<'a> {
             DebugTab::Tilemap => self.render_stub_tab("Character / NPC Tilemap", "Not yet implemented"),
             DebugTab::Map => self.render_stub_tab("Map View", "Not yet implemented"),
             DebugTab::Songs => self.render_songs_tab(state, win_w, win_h),
+            DebugTab::Player => self.render_player_tab(state, win_h),
         }
 
         self.canvas.present();
@@ -798,10 +924,89 @@ impl<'a> DebugWindow<'a> {
         );
     }
 
+    // ── Player tab (F7) ──────────────────────────────────────────────
+
+    fn render_player_tab(&mut self, state: &DebugState, win_h: u32) {
+        let font_ref = self.font_text.borrow();
+        let line_h = font_ref.get_font().y_size as i32 + 2;
+        let left = 10;
+        let mut y = 6;
+        const CONTENT_Y: i32 = TAB_BAR_HEIGHT + 2;
+
+        set_font_color(&self.font_texture, 180, 220, 255);
+        font_ref.render_string("Player", &mut self.canvas, left, y);
+        y += line_h + 4;
+        draw_separator(&mut self.canvas, y - 4);
+
+        let Some(ref stats) = state.hero_stats else {
+            set_font_color(&self.font_texture, 140, 140, 140);
+            font_ref.render_string("Not in gameplay", &mut self.canvas, left, y);
+            return;
+        };
+        let inventory = state.inventory.unwrap_or([0u8; 35]);
+
+        // ── Stats panel ──
+        set_font_color(&self.font_texture, 255, 220, 100);
+        font_ref.render_string("Stats  (click to +1 / right-click to -1):", &mut self.canvas, left, y);
+        y += line_h + 2;
+
+        // Store window-space y of the first stat line for click detection.
+        self.player_tab.stat_y_start_win = CONTENT_Y + y;
+        self.player_tab.line_h = line_h;
+
+        let stat_lines: [(&str, String); 7] = [
+            ("VIT", format!("{}/{}", stats.vitality, stats.max_vitality)),
+            ("BRV", format!("{}", stats.brave)),
+            ("LCK", format!("{}", stats.luck)),
+            ("KND", format!("{}", stats.kind)),
+            ("WLT", format!("{}", stats.wealth)),
+            ("HGR", format!("{}", stats.hunger)),
+            ("FTG", format!("{}", stats.fatigue)),
+        ];
+        set_font_color(&self.font_texture, 200, 255, 200);
+        for (label, value) in &stat_lines {
+            let row = format!("  {:3}: {}", label, value);
+            font_ref.render_string(&row, &mut self.canvas, left, y);
+            y += line_h;
+        }
+
+        // Non-adjustable info lines
+        set_font_color(&self.font_texture, 180, 180, 255);
+        let bro_name = match stats.brother { 0 => "Julian", 1 => "Phillip", _ => "Kevin" };
+        let info1 = format!("  BRO: {}  RGN: {}", bro_name, stats.region_num);
+        font_ref.render_string(&info1, &mut self.canvas, left, y);
+        y += line_h;
+        let info2 = format!("  POS: ({}, {})  SEC: {}  PLACE: {}",
+            stats.hero_x, stats.hero_y, stats.hero_sector, stats.hero_place);
+        font_ref.render_string(&info2, &mut self.canvas, left, y);
+        y += line_h + 4;
+
+        draw_separator(&mut self.canvas, y - 4);
+
+        // ── Inventory panel ──
+        set_font_color(&self.font_texture, 255, 220, 100);
+        font_ref.render_string("Inventory  (click +1, right-click -1, Up/Down scroll):", &mut self.canvas, left, y);
+        y += line_h + 2;
+
+        // Store window-space y of inventory start for click detection.
+        self.player_tab.inv_y_start_win = CONTENT_Y + y;
+
+        set_font_color(&self.font_texture, 210, 210, 210);
+        let scroll = self.player_tab.inv_scroll;
+        for i in scroll..35 {
+            let count = inventory[i];
+            let row = format!("  [{:2}] {:12}: {}", i, ITEM_NAMES[i], count);
+            font_ref.render_string(&row, &mut self.canvas, left, y);
+            y += line_h;
+            if y > win_h as i32 - line_h {
+                break;
+            }
+        }
+    }
+
     // ── Stub tab (for unimplemented tabs) ────────────────────────────
 
-    fn render_stub_tab(&mut self, title: &str, message: &str) {
-        let font_ref = self.font_text.borrow();
+    fn render_stub_tab(&mut self, title: &str, message: &str) {        let font_ref = self.font_text.borrow();
         let line_height = font_ref.get_font().y_size as i32 + 2;
         let left = 10;
         let mut y = 14;
