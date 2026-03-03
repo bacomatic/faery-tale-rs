@@ -178,6 +178,7 @@ fn keycode_to_char(keycode: Keycode) -> Option<char> {
 
 impl Scene for CopyProtectScene {
     fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
     fn handle_event(&mut self, event: &Event) -> bool {
         match &self.phase {

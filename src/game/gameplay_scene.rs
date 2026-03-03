@@ -24,7 +24,7 @@ impl GameplayScene {
         }
     }
 
-    fn apply_command(&mut self, cmd: DebugCommand) {
+    pub fn apply_command(&mut self, cmd: DebugCommand) {
         use DebugCommand::*;
         match cmd {
             SetStat { stat, value } => {
@@ -121,6 +121,10 @@ impl Scene for GameplayScene {
     }
 
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 }

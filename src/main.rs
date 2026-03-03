@@ -26,6 +26,7 @@ use crate::game::scene::{Scene, SceneResult};
 use crate::game::intro_scene::IntroScene;
 use crate::game::copy_protect_scene::CopyProtectScene;
 use crate::game::placard_scene::PlacardScene;
+use crate::game::gameplay_scene::GameplayScene;
 use crate::game::audio::{AudioSystem, Instruments};
 use crate::game::songs::{SongLibrary, Track};
 
@@ -341,15 +342,15 @@ pub fn main() -> Result<(), String> {
                             if let Some(ref a) = audio_system {
                                 a.stop_score();
                             }
-                            active_scene = None;
+                            active_scene = Some(Box::new(GameplayScene::new()));
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
                             clear_flag = true;
                         }
                         ScenePhase::Gameplay => {
-                            active_scene = None;
+                            // Game over or restart — re-create GameplayScene
+                            active_scene = Some(Box::new(GameplayScene::new()));
                             dirty = true;
-                            clear_flag = true;
                         }
                     }
                 }
@@ -397,6 +398,16 @@ pub fn main() -> Result<(), String> {
             canvas.present();
 
             dirty = false;
+        }
+
+        // Feed debug commands from debug window into GameplayScene
+        if let (Some(ref mut dw), Some(ref mut scene)) = (debug_window.as_mut(), active_scene.as_mut()) {
+            let cmds = dw.drain_commands();
+            if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
+                for cmd in cmds {
+                    gs.apply_command(cmd);
+                }
+            }
         }
 
         // Render the debug window (separate from game canvas)
