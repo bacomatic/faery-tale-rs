@@ -2,6 +2,7 @@
 
 pub mod actor;
 pub mod audio;
+pub mod collision;
 pub mod bitmap;
 pub mod byteops;
 pub mod colors;
@@ -12,9 +13,11 @@ pub mod debug_window;
 pub mod font;
 pub mod font_texture;
 pub mod game_clock;
+pub mod game_event;
 pub mod game_state;
 pub mod game_library;
 pub mod hunk;
+pub mod key_bindings;
 pub mod iff_image;
 pub mod image_texture;
 pub mod intro_scene;
