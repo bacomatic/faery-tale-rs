@@ -35,9 +35,10 @@ enum DebugTab {
     Map,
     Songs,
     Player,
+    Actors,
 }
 
-const ALL_TABS: [DebugTab; 7] = [
+const ALL_TABS: [DebugTab; 8] = [
     DebugTab::Info,
     DebugTab::Placards,
     DebugTab::Images,
@@ -45,6 +46,7 @@ const ALL_TABS: [DebugTab; 7] = [
     DebugTab::Map,
     DebugTab::Songs,
     DebugTab::Player,
+    DebugTab::Actors,
 ];
 
 impl DebugTab {
@@ -57,6 +59,7 @@ impl DebugTab {
             DebugTab::Map => "Map",
             DebugTab::Songs => "Songs",
             DebugTab::Player => "Player",
+            DebugTab::Actors => "Actors",
         }
     }
 
@@ -69,6 +72,7 @@ impl DebugTab {
             DebugTab::Map => "5",
             DebugTab::Songs => "6",
             DebugTab::Player => "7",
+            DebugTab::Actors => "8",
         }
     }
 }
@@ -236,6 +240,10 @@ struct PlayerTabState {
     line_h: i32,
 }
 
+struct ActorsTabState {
+    scroll: usize,
+}
+
 // ── DebugWindow ──────────────────────────────────────────────────────
 
 /// A separate SDL2 window dedicated to debug/diagnostic output,
@@ -265,6 +273,7 @@ pub struct DebugWindow<'a> {
     image_tab: ImageTabState,
     song_tab: SongTabState,
     player_tab: PlayerTabState,
+    actors_tab: ActorsTabState,
 
     /// Song group requested by the user from the Songs tab.
     /// Consumed by the main loop via `take_song_request()`.
@@ -365,6 +374,7 @@ impl<'a> DebugWindow<'a> {
                 inv_y_start_win: 0,
                 line_h: 0,
             },
+            actors_tab: ActorsTabState { scroll: 0 },
             song_group_requested: None,
             stop_requested: false,
             pending_commands: Vec::new(),
@@ -450,6 +460,7 @@ impl<'a> DebugWindow<'a> {
                     Scancode::F5 => { self.active_tab = DebugTab::Map; true }
                     Scancode::F6 => { self.active_tab = DebugTab::Songs; true }
                     Scancode::F7 => { self.active_tab = DebugTab::Player; true }
+                    Scancode::F8 => { self.active_tab = DebugTab::Actors; true }
 
                     // Left/Right to cycle items in content tabs
                     Scancode::Left | Scancode::Right => {
@@ -506,7 +517,7 @@ impl<'a> DebugWindow<'a> {
                         true
                     }
 
-                    // Up/Down to scroll inventory in Player tab
+                    // Up/Down to scroll inventory in Player tab and actor list in Actors tab
                     Scancode::Up | Scancode::Down => {
                         let down = *sc == Scancode::Down;
                         match self.active_tab {
@@ -517,6 +528,13 @@ impl<'a> DebugWindow<'a> {
                                     }
                                 } else if self.player_tab.inv_scroll > 0 {
                                     self.player_tab.inv_scroll -= 1;
+                                }
+                            }
+                            DebugTab::Actors => {
+                                if down {
+                                    self.actors_tab.scroll = self.actors_tab.scroll.saturating_add(1);
+                                } else {
+                                    self.actors_tab.scroll = self.actors_tab.scroll.saturating_sub(1);
                                 }
                             }
                             _ => {}
@@ -604,6 +622,7 @@ impl<'a> DebugWindow<'a> {
             DebugTab::Map => self.render_stub_tab("Map View", "Not yet implemented"),
             DebugTab::Songs => self.render_songs_tab(state, win_w, win_h),
             DebugTab::Player => self.render_player_tab(state, win_h),
+            DebugTab::Actors => self.render_actors_tab(state, win_h),
         }
 
         self.canvas.present();
@@ -1002,6 +1021,63 @@ impl<'a> DebugWindow<'a> {
                 break;
             }
         }
+    }
+
+    // ── Actors tab (F8) ──────────────────────────────────────────────
+
+    fn render_actors_tab(&mut self, state: &DebugState, win_h: u32) {
+        let font_ref = self.font_text.borrow();
+        let line_h = font_ref.get_font().y_size as i32 + 2;
+        let left = 10;
+        let mut y = 6;
+
+        set_font_color(&self.font_texture, 180, 220, 255);
+        font_ref.render_string("Actors", &mut self.canvas, left, y);
+        y += line_h + 4;
+        draw_separator(&mut self.canvas, y - 4);
+
+        let Some(ref actors) = state.actors else {
+            set_font_color(&self.font_texture, 140, 140, 140);
+            font_ref.render_string("Not in gameplay", &mut self.canvas, left, y);
+            return;
+        };
+
+        if actors.is_empty() {
+            set_font_color(&self.font_texture, 140, 140, 140);
+            font_ref.render_string("No active actors", &mut self.canvas, left, y);
+            return;
+        }
+
+        let scroll = self.actors_tab.scroll.min(actors.len().saturating_sub(1));
+        self.actors_tab.scroll = scroll;
+
+        for (slot, actor) in actors.iter().enumerate().skip(scroll) {
+            // Color coding by actor kind
+            match actor.kind.as_str() {
+                "Player"  => set_font_color(&self.font_texture, 80, 255, 80),
+                "Enemy"   => set_font_color(&self.font_texture, 255, 80, 80),
+                "SetFig"  => set_font_color(&self.font_texture, 255, 255, 80),
+                "Object"  => set_font_color(&self.font_texture, 160, 160, 160),
+                "Carrier" => set_font_color(&self.font_texture, 80, 255, 255),
+                "Dragon"  => set_font_color(&self.font_texture, 255, 80, 255),
+                _         => set_font_color(&self.font_texture, 220, 220, 220),
+            }
+            let row = format!(
+                "[{:2}] {:8}  {:10}  ({:5},{:5})  VIT:{:4}  Race:{:2}  Wpn:{:2}",
+                slot,
+                actor.kind, actor.state,
+                actor.abs_x, actor.abs_y,
+                actor.vitality, actor.race, actor.weapon,
+            );
+            font_ref.render_string(&row, &mut self.canvas, left, y);
+            y += line_h;
+            if y > win_h as i32 - line_h * 2 {
+                break;
+            }
+        }
+
+        set_font_color(&self.font_texture, 140, 140, 140);
+        font_ref.render_string("Up/Down to scroll", &mut self.canvas, left, win_h as i32 - line_h - 4);
     }
 
     // ── Stub tab (for unimplemented tabs) ────────────────────────────
