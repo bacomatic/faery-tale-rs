@@ -4,6 +4,65 @@
 use crate::game::npc::{Npc, RACE_UNDEAD, RACE_WRAITH};
 use crate::game::game_state::GameState;
 
+/// Maximum concurrent projectiles (missile_list[6] from fmain.c).
+pub const MAX_MISSILES: usize = 6;
+
+/// A projectile (arrow, wand bolt, etc.).
+#[derive(Debug, Clone, Default)]
+pub struct Missile {
+    pub active: bool,
+    pub x: i32,
+    pub y: i32,
+    pub dx: i32, // velocity x (-2, 0, or 2)
+    pub dy: i32, // velocity y (-2, 0, or 2)
+    pub damage: i16,
+    pub is_friendly: bool, // true = fired by hero
+}
+
+impl Missile {
+    /// Advance one frame; returns true if this missile hit its target.
+    /// target_x, target_y = position to test for hit (16px tolerance).
+    pub fn tick(&mut self, target_x: i32, target_y: i32) -> bool {
+        if !self.active { return false; }
+        self.x += self.dx;
+        self.y += self.dy;
+        // Out of bounds check (world size ~32768)
+        if self.x < 0 || self.x > 32768 || self.y < 0 || self.y > 32768 {
+            self.active = false;
+            return false;
+        }
+        let hit = (self.x - target_x).abs() < 16 && (self.y - target_y).abs() < 16;
+        if hit { self.active = false; }
+        hit
+    }
+}
+
+/// Fire a missile from origin toward target direction.
+/// dir: 0=N, 2=E, 4=S, 6=W (and diagonals).
+/// Returns the index of the missile slot used, or None if full.
+pub fn fire_missile(
+    missiles: &mut [Missile; MAX_MISSILES],
+    x: i32, y: i32,
+    dir: u8,
+    damage: i16,
+    is_friendly: bool,
+) -> Option<usize> {
+    let slot = missiles.iter().position(|m| !m.active)?;
+    let (dx, dy) = match dir & 7 {
+        0 => (0, -2),  // N
+        1 => (2, -2),  // NE
+        2 => (2, 0),   // E
+        3 => (2, 2),   // SE
+        4 => (0, 2),   // S
+        5 => (-2, 2),  // SW
+        6 => (-2, 0),  // W
+        7 => (-2, -2), // NW
+        _ => (0, -2),
+    };
+    missiles[slot] = Missile { active: true, x, y, dx, dy, damage, is_friendly };
+    Some(slot)
+}
+
 /// Weapon type damage factors (from original weapon table).
 /// Index = weapon slot in stuff[], value = damage multiplier.
 pub const WEAPON_DAMAGE: &[u8] = &[
@@ -75,7 +134,6 @@ pub fn award_loot(state: &mut GameState, npc: &Npc) {
 mod tests {
     use super::*;
     use crate::game::npc::{Npc, NPC_TYPE_ORC, RACE_ENEMY};
-    use crate::game::game_state::GameState;
 
     fn make_orc() -> Npc {
         Npc {
@@ -117,5 +175,21 @@ mod tests {
         let orc = make_orc();
         award_loot(&mut state, &orc);
         assert_eq!(state.gold, 5);
+    }
+
+    #[test]
+    fn test_missile_ticks() {
+        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, damage: 5, is_friendly: true };
+        let hit = m.tick(50, 100); // too far
+        assert!(!hit);
+        assert_eq!(m.x, 2);
+    }
+
+    #[test]
+    fn test_fire_missile_slots() {
+        let mut missiles = std::array::from_fn(|_| Missile::default());
+        let slot = fire_missile(&mut missiles, 0, 0, 2, 5, true);
+        assert!(slot.is_some());
+        assert!(missiles[slot.unwrap()].active);
     }
 }

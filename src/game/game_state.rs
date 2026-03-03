@@ -7,6 +7,8 @@ pub const ITEM_LASSO: usize = 16;
 pub const CARRIER_SWAN: i16 = 1;
 /// Raft carrier type ID.
 pub const CARRIER_RAFT: i16 = 5;
+/// Turtle carrier type ID.
+pub const CARRIER_TURTLE: i16 = 6;
 /// Max hunger before starvation effects begin (original: 300).
 pub const MAX_HUNGER: i16 = 300;
 /// Item index for food in stuff[].
@@ -371,6 +373,19 @@ impl GameState {
     pub fn leave_raft(&mut self) {
         self.on_raft = false;
         self.active_carrier = 0;
+    }
+
+    /// Summon turtle using a shell item. Returns true if successful.
+    /// Turtle acts like raft for water traversal (on_raft=true) but cannot enter mountains.
+    pub fn summon_turtle(&mut self) -> bool {
+        if self.stuff()[ITEM_SHELL] > 0 {
+            self.stuff_mut()[ITEM_SHELL] -= 1;
+            self.active_carrier = CARRIER_TURTLE;
+            self.on_raft = true;
+            true
+        } else {
+            false
+        }
     }
 
     /// Attempt to rescue a turtle egg from a dead snake NPC.

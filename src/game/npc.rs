@@ -16,6 +16,8 @@ pub const NPC_TYPE_GHOST: u8 = 5;
 pub const NPC_TYPE_ORC: u8 = 6;
 pub const NPC_TYPE_WRAITH: u8 = 7;
 pub const NPC_TYPE_SKELETON: u8 = 8;
+/// Container NPC type (chest/barrel — drops items on defeat).
+pub const NPC_TYPE_CONTAINER: u8 = 0x80;
 
 /// NPC race/behavior codes.
 pub const RACE_NORMAL: u8 = 0;

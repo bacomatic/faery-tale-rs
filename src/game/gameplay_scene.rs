@@ -84,6 +84,7 @@ pub struct GameplayScene {
     pub npc_table: Option<crate::game::npc::NpcTable>,
     day_night_phase: DayNightPhase,
     magic_timers: MagicTimers,
+    pub missiles: [crate::game::combat::Missile; crate::game::combat::MAX_MISSILES],
 }
 
 impl GameplayScene {
@@ -109,6 +110,7 @@ impl GameplayScene {
             npc_table: None,
             day_night_phase: DayNightPhase::Day,
             magic_timers: MagicTimers::default(),
+            missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
         }
     }
 
@@ -173,7 +175,14 @@ impl GameplayScene {
             let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
             let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
 
-            if self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32) {
+            // Turtle guardrail: turtle rides water but cannot enter hard-block terrain (mountains).
+            let turtle_blocked = self.state.on_raft
+                && self.state.active_carrier == crate::game::game_state::CARRIER_TURTLE
+                && self.map_world.as_ref().map_or(false, |world| {
+                    collision::px_to_terrain_type(world, new_x as i32, new_y as i32) == 1
+                });
+
+            if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
                 if let Some(door) = crate::game::doors::doorfind(self.state.region_num, new_x, new_y) {
@@ -360,6 +369,11 @@ impl GameplayScene {
                             let result = crate::game::combat::resolve_combat(&mut self.state, npc, 0);
                             if result.enemy_defeated {
                                 crate::game::combat::award_loot(&mut self.state, npc);
+                                let drops = crate::game::loot::roll_loot(npc, self.state.tick_counter);
+                                crate::game::loot::award_drops(&mut self.state, &drops);
+                                if !drops.is_empty() {
+                                    self.messages.push(format!("{} items dropped!", drops.len()));
+                                }
                                 self.messages.push("Enemy defeated!");
                             } else {
                                 self.messages.push(format!("You hit for {}!", result.enemy_damage));
@@ -417,6 +431,25 @@ impl GameplayScene {
                 match use_magic(&mut self.state, &mut self.magic_timers, ITEM_SCROLL) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
+                }
+            }
+            GameAction::Shoot => {
+                use crate::game::combat::fire_missile;
+                fire_missile(
+                    &mut self.missiles,
+                    self.state.hero_x as i32,
+                    self.state.hero_y as i32,
+                    self.state.facing,
+                    5, // base arrow damage
+                    true,
+                );
+                self.messages.push("You shoot an arrow!");
+            }
+            GameAction::SummonTurtle => {
+                if self.state.summon_turtle() {
+                    self.messages.push("You summon the turtle!");
+                } else {
+                    self.messages.push("You have no shells to summon a turtle.");
                 }
             }
             _ => {}
@@ -703,6 +736,51 @@ impl Scene for GameplayScene {
         }
 
         self.apply_player_input();
+
+        // Tick missiles (npc-105): advance each active missile, check hits.
+        {
+            let hero_x = self.state.hero_x as i32;
+            let hero_y = self.state.hero_y as i32;
+            // Snapshot NPC positions to avoid simultaneous mutable borrow conflicts.
+            let npc_positions: Vec<(usize, i32, i32)> = self.npc_table.as_ref().map_or(vec![], |t| {
+                t.npcs.iter().enumerate()
+                    .filter(|(_, n)| n.active)
+                    .map(|(i, n)| (i, n.x as i32, n.y as i32))
+                    .collect()
+            });
+            let mut hero_missile_damage: i16 = 0;
+            let mut npc_hits: Vec<(usize, i16)> = vec![];
+            for missile in self.missiles.iter_mut() {
+                if !missile.active { continue; }
+                missile.x += missile.dx;
+                missile.y += missile.dy;
+                if missile.x < 0 || missile.x > 32768 || missile.y < 0 || missile.y > 32768 {
+                    missile.active = false;
+                    continue;
+                }
+                if missile.is_friendly {
+                    for &(npc_idx, nx, ny) in &npc_positions {
+                        if (missile.x - nx).abs() < 16 && (missile.y - ny).abs() < 16 {
+                            missile.active = false;
+                            npc_hits.push((npc_idx, missile.damage));
+                            break;
+                        }
+                    }
+                } else if (missile.x - hero_x).abs() < 16 && (missile.y - hero_y).abs() < 16 {
+                    missile.active = false;
+                    hero_missile_damage += missile.damage;
+                }
+            }
+            if let Some(ref mut table) = self.npc_table {
+                for (npc_idx, dmg) in npc_hits {
+                    table.npcs[npc_idx].vitality -= dmg;
+                    if table.npcs[npc_idx].vitality <= 0 {
+                        table.npcs[npc_idx].active = false;
+                    }
+                }
+            }
+            self.state.vitality -= hero_missile_damage;
+        }
         let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y);
         if shells > 0 {
             self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));

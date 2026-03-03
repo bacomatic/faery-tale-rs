@@ -51,3 +51,4 @@ pub mod zones;
 pub mod magic;
 pub mod encounter;
 pub mod shop;
+pub mod loot;

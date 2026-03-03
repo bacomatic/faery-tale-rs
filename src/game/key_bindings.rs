@@ -19,6 +19,7 @@ pub enum GameAction {
     // Combat
     Fight,
     Attack,
+    Shoot,
 
     // Menu / UI
     Pause,
@@ -63,6 +64,7 @@ pub enum GameAction {
     // Special
     UseSpecial,
     Board,
+    SummonTurtle,
 
     // Shop actions
     BuyFood,
