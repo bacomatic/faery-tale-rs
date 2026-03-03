@@ -94,6 +94,12 @@ pub struct GameState {
     pub light_sticky: bool,
     pub secret_sticky: bool,
     pub freeze_sticky: bool,
+
+    // Tick counter (cumulative ticks since start)
+    pub tick_counter: u32,
+
+    // Brother liveness (Julian=0, Phillip=1, Kevin=2)
+    pub brother_alive: [bool; 3],
 }
 
 impl GameState {
@@ -174,6 +180,9 @@ impl GameState {
             light_sticky: false,
             secret_sticky: false,
             freeze_sticky: false,
+
+            tick_counter: 0,
+            brother_alive: [true, true, true],
         }
     }
 
@@ -229,5 +238,85 @@ impl GameState {
             self.dayperiod = (self.daynight / 6000) as u8;
         }
         crossed
+    }
+
+    /// Advance game state by `delta` ticks.
+    pub fn tick(&mut self, delta: u32) {
+        const HUNGER_PERIOD: u32 = 300;
+        const HUNGER_MAX: i16 = 300;
+        const FATIGUE_PERIOD: u32 = 180;
+        const FATIGUE_MAX: i16 = 200;
+        const HEAL_PERIOD: u32 = 600;
+
+        // Decrement magic timers (clamped, unless sticky).
+        if !self.light_sticky {
+            self.light_timer = self.light_timer.saturating_sub(delta as i16).max(0);
+        }
+        if !self.secret_sticky {
+            self.secret_timer = self.secret_timer.saturating_sub(delta as i16).max(0);
+        }
+        if !self.freeze_sticky {
+            self.freeze_timer = self.freeze_timer.saturating_sub(delta as i16).max(0);
+        }
+
+        // Advance day/night cycle once per tick.
+        for _ in 0..delta {
+            self.daynight_tick();
+        }
+
+        let prev = self.tick_counter;
+        self.tick_counter = self.tick_counter.wrapping_add(delta);
+
+        // Hunger: +1 every HUNGER_PERIOD ticks.
+        let prev_hunger_phase = prev / HUNGER_PERIOD;
+        let next_hunger_phase = self.tick_counter / HUNGER_PERIOD;
+        if next_hunger_phase > prev_hunger_phase {
+            let increments = (next_hunger_phase - prev_hunger_phase) as i16;
+            self.hunger = (self.hunger + increments).min(HUNGER_MAX);
+        }
+
+        // Fatigue: +1 every FATIGUE_PERIOD ticks when walking.
+        if self.riding == 0 {
+            let prev_fatigue_phase = prev / FATIGUE_PERIOD;
+            let next_fatigue_phase = self.tick_counter / FATIGUE_PERIOD;
+            if next_fatigue_phase > prev_fatigue_phase {
+                let increments = (next_fatigue_phase - prev_fatigue_phase) as i16;
+                self.fatigue = (self.fatigue + increments).min(FATIGUE_MAX);
+            }
+        }
+
+        // Healing: +1 vitality every HEAL_PERIOD ticks when out of battle and injured.
+        if !self.battleflag && self.vitality > 0 && self.vitality < 100 {
+            let prev_heal_phase = prev / HEAL_PERIOD;
+            let next_heal_phase = self.tick_counter / HEAL_PERIOD;
+            if next_heal_phase > prev_heal_phase {
+                let increments = (next_heal_phase - prev_heal_phase) as i16;
+                self.vitality = (self.vitality + increments).min(100);
+            }
+        }
+    }
+
+    /// Returns the index of the next living brother after the current one, or None if all dead.
+    pub fn next_brother(&self) -> Option<usize> {
+        for offset in 1..=2 {
+            let idx = (self.active_brother + offset) % 3;
+            if self.brother_alive[idx] {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    /// Switch to the given brother: mark current as dead, swap inventory context.
+    pub fn activate_brother(&mut self, new_idx: usize) {
+        self.brother_alive[self.active_brother] = false;
+        self.active_brother = new_idx;
+        // brother field: 1=Julian, 2=Phillip, 3=Kevin
+        self.brother = (new_idx as u8) + 1;
+    }
+
+    /// Returns true if all three brothers are dead.
+    pub fn all_dead(&self) -> bool {
+        self.brother_alive.iter().all(|&alive| !alive)
     }
 }
