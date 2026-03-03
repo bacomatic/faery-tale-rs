@@ -6,6 +6,7 @@ use std::path::Path;
 use anyhow::Context;
 use prost::Message;
 
+use crate::game::actor::{Actor, ActorKind, ActorState};
 use crate::game::game_state::GameState;
 
 /// Generated protobuf types for the save format.
@@ -111,6 +112,150 @@ pub fn save_game(state: &GameState, slot: u8) -> anyhow::Result<()> {
     save_to_path(state, &path)
 }
 
+/// Load a save file from an explicit path. Exposed for testing.
+pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
+    let data = std::fs::read(path)
+        .map_err(|e| anyhow::anyhow!("failed to read save file {}: {}", path.display(), e))?;
+
+    if data.len() < 8 {
+        anyhow::bail!("invalid save file: too short");
+    }
+    if &data[0..4] != SAVE_MAGIC.as_ref() {
+        anyhow::bail!("invalid save file: bad magic");
+    }
+    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    if version != SAVE_VERSION {
+        anyhow::bail!(
+            "invalid save file: version mismatch (got {}, expected {})",
+            version,
+            SAVE_VERSION
+        );
+    }
+
+    let sf = proto::SaveFile::decode(&data[8..])
+        .map_err(|e| anyhow::anyhow!("failed to decode save file: {}", e))?;
+
+    let mut state = GameState::new();
+
+    state.hero_x = sf.hero_x as u16;
+    state.hero_y = sf.hero_y as u16;
+    state.hero_sector = sf.hero_sector as u16;
+    state.hero_place = sf.hero_place as u16;
+
+    state.vitality = sf.vitality as i16;
+    state.brave = sf.brave as i16;
+    state.luck = sf.luck as i16;
+    state.kind = sf.kind as i16;
+    state.wealth = sf.wealth as i16;
+    state.hunger = sf.hunger as i16;
+    state.fatigue = sf.fatigue as i16;
+    state.brother = sf.brother as u8;
+    state.riding = sf.riding as i16;
+    state.flying = sf.flying as i16;
+
+    state.light_timer = sf.light_timer as i16;
+    state.secret_timer = sf.secret_timer as i16;
+    state.freeze_timer = sf.freeze_timer as i16;
+
+    state.daynight = sf.daynight as u16;
+    state.lightlevel = sf.lightlevel as u16;
+    state.cycle = sf.cycle;
+    state.flasher = sf.flasher;
+
+    state.battleflag = sf.battleflag;
+    state.witchflag = sf.witchflag;
+    state.safe_flag = sf.safe_flag;
+
+    state.viewstatus = sf.viewstatus as u8;
+    state.cmode = sf.cmode as u8;
+
+    state.safe_x = sf.safe_x as u16;
+    state.safe_y = sf.safe_y as u16;
+    state.safe_r = sf.safe_r as u8;
+
+    state.region_num = sf.region_num as u8;
+    state.new_region = sf.new_region as u8;
+
+    if let Some(j) = sf.julstuff {
+        for (i, s) in j.slots.iter().take(35).enumerate() {
+            state.julstuff[i] = *s as u8;
+        }
+    }
+    if let Some(p) = sf.philstuff {
+        for (i, s) in p.slots.iter().take(35).enumerate() {
+            state.philstuff[i] = *s as u8;
+        }
+    }
+    if let Some(k) = sf.kevstuff {
+        for (i, s) in k.slots.iter().take(35).enumerate() {
+            state.kevstuff[i] = *s as u8;
+        }
+    }
+    state.active_brother = sf.active_brother as usize;
+
+    state.xtype = sf.xtype as u16;
+    state.encounter_type = sf.encounter_type as u16;
+    state.encounter_number = sf.encounter_number as u8;
+
+    state.active_carrier = sf.active_carrier as i16;
+    state.actor_file = sf.actor_file as i16;
+    state.set_file = sf.set_file as i16;
+
+    state.princess = sf.princess as u8;
+    state.dayperiod = sf.dayperiod as u8;
+
+    state.current_mood = sf.current_mood as u8;
+
+    if !sf.actors.is_empty() {
+        state.actors.clear();
+        for sa in &sf.actors {
+            let kind = match sa.kind {
+                0 => ActorKind::Player,
+                1 => ActorKind::Enemy,
+                2 => ActorKind::Object,
+                3 => ActorKind::Raft,
+                4 => ActorKind::SetFig,
+                5 => ActorKind::Carrier,
+                _ => ActorKind::Dragon,
+            };
+            let actor_state = match sa.state {
+                0 => ActorState::Still,
+                1 => ActorState::Walking,
+                2 => ActorState::Fighting(0),
+                3 => ActorState::Dying,
+                4 => ActorState::Dead,
+                5 => ActorState::Shooting(0),
+                6 => ActorState::Sinking,
+                7 => ActorState::Falling,
+                _ => ActorState::Sleeping,
+            };
+            state.actors.push(Actor {
+                abs_x: sa.abs_x as u16,
+                abs_y: sa.abs_y as u16,
+                kind,
+                race: sa.race as u8,
+                state: actor_state,
+                vitality: sa.vitality as i16,
+                weapon: sa.weapon as u8,
+                facing: sa.facing as u8,
+                ..Actor::default()
+            });
+        }
+    }
+
+    Ok(state)
+}
+
+/// Load `GameState` from slot `slot` under the platform config dir.
+pub fn load_game(slot: u8) -> anyhow::Result<GameState> {
+    let base = dirs::config_dir()
+        .context("could not determine config directory")?
+        .join("faery")
+        .join("saves");
+    let path = base.join(format!("save{slot:02}.sav"));
+    load_from_path(&path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +299,62 @@ mod tests {
         let jul = decoded.julstuff.unwrap();
         assert_eq!(jul.slots[0], 7);
         assert_eq!(jul.slots[34], 15);
+    }
+
+    #[test]
+    fn test_load_bad_magic() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bad_magic.sav");
+        let mut buf: Vec<u8> = b"XXXZ".to_vec();
+        buf.extend_from_slice(&SAVE_VERSION.to_le_bytes());
+        std::fs::write(&path, &buf).unwrap();
+        let err = load_from_path(&path).err().expect("expected Err for bad magic");
+        assert!(err.to_string().contains("bad magic"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_load_wrong_version() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("wrong_version.sav");
+        let mut buf: Vec<u8> = SAVE_MAGIC.to_vec();
+        buf.extend_from_slice(&99u32.to_le_bytes());
+        std::fs::write(&path, &buf).unwrap();
+        let err = load_from_path(&path).err().expect("expected Err for wrong version");
+        assert!(err.to_string().contains("version mismatch"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_load_missing_file() {
+        let path = std::path::Path::new("/tmp/faery_nonexistent_save_xyzzy.sav");
+        let err = load_from_path(path).err().expect("expected Err for missing file");
+        assert!(err.to_string().contains("failed to read"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_save_load_roundtrip() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("save00.sav");
+
+        let mut state = GameState::new();
+        state.hero_x = 19000;
+        state.hero_y = 15000;
+        state.vitality = 77;
+        state.brave = 50;
+        state.julstuff[3] = 9;
+        state.brother = 3;
+        state.daynight = 12345;
+        state.region_num = 4;
+
+        save_to_path(&state, &path).unwrap();
+        let loaded = load_from_path(&path).unwrap();
+
+        assert_eq!(loaded.hero_x, state.hero_x);
+        assert_eq!(loaded.hero_y, state.hero_y);
+        assert_eq!(loaded.vitality, state.vitality);
+        assert_eq!(loaded.brave, state.brave);
+        assert_eq!(loaded.julstuff[3], state.julstuff[3]);
+        assert_eq!(loaded.brother, state.brother);
+        assert_eq!(loaded.daynight, state.daynight);
+        assert_eq!(loaded.region_num, state.region_num);
     }
 }
