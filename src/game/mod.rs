@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod adf;
 pub mod actor;
 pub mod audio;
 pub mod collision;
