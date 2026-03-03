@@ -35,6 +35,8 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 - `gfx-001` → #2
 - `keys-001` → #6
 - `persist-001` → #7
+- `gameloop-001` → n/a
+- `debug-001` → n/a
 
 ## Status Index (source of truth for humans)
 
@@ -50,7 +52,8 @@ Machine-readable mirror: `plan_status.toml`
 - [persist-001] Persistence (0/3 steps complete; Issue: #7)
 
 ### Todo
-- None currently
+- [gameloop-001] Core game loop (0/15 steps complete; Issue: n/a)
+- [debug-001] Debug window enhancements (0/11 steps complete; Issue: n/a)
 
 ### Done
 - [intro-001] Intro sequence end-to-end (6/6 steps complete; Issue: pre-issues)
@@ -616,3 +619,407 @@ Save and load game state.
 3. **Load implementation**
    - Deserialize and restore game state
    - Validate save file integrity
+
+---
+
+## Plan: Core Game Loop
+
+**Status:** Not started
+
+### Overview
+
+The core game loop is the central orchestration layer that ties together all gameplay subsystems into a faithful port of the original `while (!quitflag)` main loop from `fmain.c`. It introduces two key structures:
+
+- **`GameState`** — the single source of truth for all mutable gameplay state (hero position, timers, counters, NPC list, flags). Mirrors the original's flat globals.
+- **`GameplayScene`** — implements the `Scene` trait and runs the per-frame update sequence in the exact order the original game executes it.
+
+Most subsystems (world loading, NPCs, combat, etc.) already have their own plans. This plan covers the **frame orchestration**, **game state container**, **entity list management**, **timer logic**, **death/revive cycle**, and the **stub/extension points** that later subsystems plug into.
+
+### Design Principles
+
+1. **Behavioral fidelity, not structural mimicry**: "faithful reproduction" means the game *plays* like the original — same timing, same observable outcomes, same feel. It does not mean copying the original's code structure. Where a cleaner or more efficient implementation achieves the same behavior, prefer it.
+2. **Frame-order fidelity**: the per-frame update sequence preserves the original's execution order where it affects observable behavior. The ordering matters for things like timer checks gating later checks within the same frame — reordering those would change gameplay.
+3. **Unified actor model**: all on-screen entities (hero, enemies, setfigs, NPCs, carriers, objects) share a single `Actor` struct. The original uses `struct shape` for everything in `anim_list[]`; we keep that uniformity rather than splitting into per-type structs. Behavioral differences come from the `ActorKind` enum and the goal/tactic system, not from different data layouts.
+4. **Stubbed subsystems**: systems not yet implemented (combat, NPC AI, encounters, etc.) are represented by no-op stub calls or empty match arms that can be filled in without restructuring the loop.
+5. **`GameState` is the save boundary**: every piece of data that `savegame()` serializes lives in `GameState`. This makes persistence a simple serialize/deserialize of `GameState`.
+6. **60 Hz tick-based**: the loop processes one logical tick per frame at 60 Hz (NTSC VBlank). `delta_ticks` from the existing `GameClock` drives frame advancement. Multiple ticks per frame are processed sequentially to handle catch-up.
+7. **Keep it simple**: avoid ECS frameworks, event buses, or other heavy abstractions. The game is small — direct calls and flat loops are easier to reason about and debug. Use Rust idioms (enums, traits, iterators) where they simplify the code, not as an end in themselves.
+
+### Frame Execution Order
+
+Each logical tick executes these steps in order, matching `fmain.c` lines 1382–3190:
+
+```
+ 1. cycle++; flasher++
+ 2. Process input → GameAction (via KeyBindings, stubbed initially)
+ 3. Process menu/command dispatch (do_option stub)
+ 4. Handle viewstatus modes (inventory screen, map view, message overlay)
+ 5. Decode direction from input → oldir
+ 6. Check pause (skip remainder if paused)
+ 7. Decrement timers: light_timer, secret_timer, freeze_timer
+ 8. Check fiery_death zone
+ 9. Player death check + fairy resurrection
+10. Player state machine: input → WALKING/FIGHTING/SHOOTING/STILL
+11. Entity update loop (i=0..anix): movement, terrain, collision, animation
+12. Sleep/bed detection
+13. Door transition check
+14. Update hero_x/hero_y from entity list
+15. Map scroll computation
+16. If stationary frame:
+    a. Sleep time acceleration (daynight += 63)
+    b. daynight++ → lightlevel recalc → day/night palette
+    c. Day period transition events
+    d. Healing tick (every 1024 ticks)
+    e. find_place() → extent/location check
+    f. Encounter loading + spawning
+    g. NPC proximity announcements
+    h. AI tactics loop
+    i. Battle start/end detection
+    j. Safe zone + auto-eat (every 128 ticks)
+    k. Music mood update (every 8 ticks)
+    l. Hunger/fatigue increment (every 128 ticks)
+17. Melee combat resolution
+18. Missile update
+19. do_objects() — place on-screen objects in entity list
+20. Bubble sort entities by Y
+21. Render: tiles → sprites → HiScreen overlay → text viewport
+22. Present frame (SDL2 canvas.present via VSync)
+```
+
+### Steps
+
+1. **`GameState` struct** (`src/game/game_state.rs`)
+   - Central container for all mutable gameplay state, replacing the original's scattered globals.
+   - **Hero fields**: `hero_x: u16`, `hero_y: u16`, `map_x: u16`, `map_y: u16`, `hero_sector: u16`, `hero_place: u16`, `vitality: i16`, `brave: i16`, `luck: i16`, `kind: i16`, `wealth: i16`, `hunger: i16`, `fatigue: i16`, `brother: u8` (1=Julian, 2=Phillip, 3=Kevin), `riding: i16`, `flying: i16`
+   - **Timers**: `light_timer: i16`, `secret_timer: i16`, `freeze_timer: i16`
+   - **Cycle counters**: `daynight: u16` (0–24000 wrapping), `lightlevel: u16` (derived triangle 0–300–0), `cycle: u32`, `flasher: u32`
+   - **Flags**: `battleflag: bool`, `quitflag: bool`, `witchflag: bool`, `safe_flag: bool`, `actors_on_screen: bool`, `actors_loading: bool`
+   - **View state**: `viewstatus: u8` (0=normal, 1=map, 2=message, 3=fade-in, 4=inventory, 98/99=redraw), `cmode: u8` (current menu mode)
+   - **Safe respawn**: `safe_x: u16`, `safe_y: u16`, `safe_r: u8`
+   - **Region**: `region_num: u8`, `new_region: u8`
+   - **Per-brother inventory**: `julstuff: [u8; 35]`, `philstuff: [u8; 35]`, `kevstuff: [u8; 35]`, `stuff: *const [u8; 35]` (pointer swapped on brother change; in Rust, use an index or enum to select the active array)
+   - **Actor list**: `actors: [Actor; 20]`, `anix: usize` (active combat actor count), `anix2: usize` (total including objects)
+   - **Encounter state**: `xtype: u16`, `encounter_type: u16`, `encounter_number: u8`
+   - **Carrier/special**: `active_carrier: i16`, `actor_file: i16`, `set_file: i16`
+   - **Princess/quest**: `princess: u8`, `dayperiod: u8`
+   - **Music**: `current_mood: u8` (current song group)
+   - `GameState::new()` initializes to Julian's starting state (matching `revive(TRUE)`)
+   - `GameState::daynight_tick(&mut self)` — increment `daynight`, recompute `lightlevel` (triangle wave), return whether a day-period boundary was crossed
+
+2. **`Actor` struct** (`src/game/actor.rs`)
+   - Unified data structure for **all** on-screen entities: player, enemies, setfigs, NPCs, raft, carriers, dragons, and placed objects. The original uses a single `struct shape` for every `anim_list[]` slot; we do the same.
+   - Fields: `abs_x: u16`, `abs_y: u16`, `rel_x: i16`, `rel_y: i16`, `kind: ActorKind`, `race: u8`, `state: ActorState`, `goal: Goal`, `tactic: Tactic`, `facing: u8` (0–7), `vitality: i16`, `weapon: u8`, `environ: i8`, `vel_x: i16`, `vel_y: i16`
+   - `ActorKind` enum: `Player, Enemy, Object, Raft, SetFig, Carrier, Dragon` — determines which update behavior applies, not the data layout
+   - `ActorState` enum: `Still, Walking, Fighting(u8)`, `Dying, Dead, Shooting(u8), Sinking, Falling, Sleeping` — the discriminant values match the original C constants where they affect save/load compatibility
+   - `Goal` enum: `User, Attack1, Attack2, Archer1, Flee, Follower, Leader, Stand, Guard, ...`
+   - `Tactic` enum: `Pursue, Shoot, Random, BumbleSeek, Backup, Follow, Evade, EggSeek, Frust, ...`
+   - `Actor::is_active(&self) -> bool` — not Dead/removed
+   - `Actor::clear(&mut self)` — reset to empty slot
+   - All entity types share the same movement, collision, and rendering pipeline. Behavioral differences are handled by matching on `kind` at decision points (e.g., input source for Player vs. AI for Enemy), not by separate code paths for each type.
+
+3. **`GameplayScene` struct** (`src/game/gameplay_scene.rs`)
+   - Implements `Scene` trait. Owns `GameState`. Receives `GameClock` reference from `main.rs`.
+   - `GameplayScene::new(game_state: GameState) -> Self`
+   - **`handle_event(&mut self, event: &Event) -> bool`**: translates SDL events to `GameAction` via `KeyBindings` (stubbed initially: arrow keys → direction, space → pause, escape → quit). Stores pending direction and action for processing in `update()`.
+   - **`update(...) -> SceneResult`**: runs the Frame Execution Order for each pending tick. If `quitflag` is set, returns `SceneResult::Done`.
+   - **Rendering**: after all ticks are processed, renders the current frame:
+     1. Blit tiles from `TileAtlas` via `genmini` (stubbed: solid color fill until world-001 is done)
+     2. Sort and blit entity sprites (stubbed: placeholder rectangle for hero)
+     3. Blit `hiscreen` overlay (stubbed: black bar)
+     4. Blit text viewport (stubbed: empty)
+   - The scene does NOT call `canvas.present()` — the existing `main.rs` loop handles that.
+
+4. **Wire `GameplayScene` into `main.rs`**
+   - When `ScenePhase::PlacardStart` completes, create `GameplayScene::new(GameState::new())` and set `active_scene = Some(Box::new(gameplay_scene))`.
+   - Pass `GameClock` information via `delta_ticks` (already provided by the `Scene::update` signature).
+   - The existing `main.rs` event pump, scene dispatch, and `canvas.present()` remain unchanged.
+   - Remove the current placeholder rendering in the `else if dirty` branch — `GameplayScene` takes over all rendering during the Gameplay phase.
+
+5. **Timer tick logic** (`GameState` methods)
+   - `tick_timers(&mut self)`: decrement `light_timer`, `secret_timer`, `freeze_timer` (clamped at 0). Called at step 7 of the frame order.
+   - `tick_daynight(&mut self) -> Option<DayPeriodEvent>`: increment `daynight` (skip if `freeze_timer > 0`), recompute `lightlevel`, detect `dayperiod` transitions, return event if boundary crossed. Called at step 16b.
+   - `tick_healing(&mut self)`: if `daynight & 0x3FF == 0` and hero alive and vitality below max (`15 + brave/4`), increment vitality. Called at step 16d.
+   - `tick_hunger_fatigue(&mut self) -> Vec<GameEvent>`: if `daynight & 127 == 0`, increment hunger/fatigue, check thresholds (messages at 35/60/90/100/130/140/160/170), apply vitality damage above thresholds, trigger forced sleep. Called at step 16l. Returns a list of events (messages, forced-sleep) for the scene to dispatch.
+   - `tick_safe_zone(&mut self)`: if `daynight & 127 == 0` and no enemies on screen and alive, update `safe_x/safe_y/safe_r`. Called at step 16j.
+   - All timer thresholds and modular-tick checks use the exact constants from the original.
+
+6. **Death and revive cycle** (`GameState` methods + `GameplayScene` logic)
+   - `GameState::check_death(&mut self) -> bool`: return true if hero vitality ≤ 0 and state ≠ Dead.
+   - `GameState::revive(&mut self, first_time: bool)`: port of `revive()` from `fmain.c`:
+     - If `first_time`: initialize Julian at starting coordinates (19036, 15755), set initial stats from `blist[0]`.
+     - Otherwise: Place dead brother's body and ghost in object list. Advance `brother` (1→2→3→game over). Reset inventory to Dirk only. Set new brother's stats from `blist[brother-1]`. Position at `safe_x/safe_y`.
+   - `GameplayScene` handles death by:
+     1. Setting hero state to Dying → Dead (animation countdown)
+     2. On Dead: if `brother < 3`, show placard ("Julian has fallen…"), then call `revive(false)`, set `viewstatus = 99` (full redraw)
+     3. If `brother > 3`: set `quitflag = true` (game over)
+   - The death placard reuses `PlacardScene` by temporarily swapping the active scene (or inlining a placard sub-phase within `GameplayScene`).
+
+7. **Input direction decoding** (`GameplayScene` method)
+   - `decode_direction(&self) -> Option<u8>`: convert pending input (keyboard arrows / numpad / mouse position relative to hero) to `oldir` (0–7 direction, or None for no input).
+   - 8 compass directions: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW (matching original).
+   - Fight button state tracked as `fighting: bool` (key-down sets true, key-up sets false).
+   - Initially wired to arrow keys + WASD. Full `KeyBindings` integration comes from keys-001.
+
+8. **Player input → actor state** (`GameplayScene` method)
+   - The player's `Actor` (slot 0) uses the same state machine as all other actors. The only difference is the *input source*: the player's direction and fight state come from user input rather than AI goals.
+   - Each frame, `decode_direction()` (step 7) and the fight button state are translated into the player actor's `facing`, `goal`, and `tactic` fields — the same fields that AI populates for enemies.
+   - The common actor update (step 9) then processes movement, collision, and state transitions identically for all actors.
+   - State transitions follow original precedence: Dead > Sleeping > Sinking > Fighting > Walking > Still.
+   - Walking: compute target position from facing and speed, call `proxcheck()` stub. If blocked, try ±1 direction deviation.
+   - Fighting: advance through `trans_list[]` state transitions (animation frames driven by `rand4()`). Stubbed initially with a simple cycle.
+
+9. **Actor update loop** (`GameplayScene` method)
+   - `update_actors(&mut self)`: iterate `actors[0..anix]`, processing every actor through the same pipeline:
+     1. Skip if `freeze_timer > 0` and actor is not the player (time-stop freezes all non-player actors)
+     2. Resolve input: for `ActorKind::Player`, input comes from step 8; for others, from goal/tactic AI (stubbed as no-op until npc-001)
+     3. Process state machine: Walking → movement + collision, Fighting → animation transitions, Dying → countdown, etc.
+     4. Compute `rel_x / rel_y` (screen position): `rel_x = abs_x - map_x`, `rel_y = abs_y - map_y`
+   - The loop body is the same for all actor kinds. AI-driven actors simply have their direction and actions set by the tactic system instead of user input.
+
+10. **Map scroll and camera tracking** (`GameplayScene` method)
+    - `update_camera(&mut self)`: recompute `map_x = hero_x - 144`, `map_y = hero_y - 90` (hero centered in viewport).
+    - Compute scroll delta `dif_x = new_map_x - old_map_x`, `dif_y = new_map_y - old_map_y`.
+    - If delta is zero → "stationary frame": run the step 16 sub-updates (day/night, encounters, hunger, etc.).
+    - If delta is nonzero → "scrolling frame": skip step 16 sub-updates (matching original behavior where timers only advance on stationary frames).
+    - Clamp camera to world bounds (`0..MAXCOORD - viewport_width`).
+
+11. **`viewstatus` mode handling** (`GameplayScene` method)
+    - `viewstatus` controls what's displayed:
+      - `0` — normal gameplay rendering
+      - `1` — world minimap (Bird Totem)
+      - `2` — scrolling message overlay
+      - `3` — fade-in after region transition
+      - `4` — inventory screen
+      - `98` — partial redraw
+      - `99` — full map redraw (on region change, revive, etc.)
+    - Each mode is a sub-state within `GameplayScene`. Initially only `0` and `99` are functional; others are stubbed as no-ops that immediately return to mode 0.
+    - `viewstatus = 99` triggers a full `genmini()` + `map_draw()` on the next frame.
+
+12. **Menu/command dispatch stub** (`GameplayScene` method)
+    - `process_command(&mut self, action: GameAction)`: maps `GameAction` variants to the original `do_option()` logic.
+    - Initially all commands print a debug message ("LOOK: not yet implemented") and return.
+    - The `cmode` field tracks current menu context (Items/Magic/Talk/Buy/Game/etc.).
+    - Filled in progressively as player-001 (commands), npc-001 (talk/give), and player-113 (inventory) are implemented.
+
+13. **`setmood()` integration point** (`GameplayScene` method)
+    - `update_mood(&mut self, audio: &AudioSystem)`: called every 8 ticks (step 16k).
+    - Evaluates mood priority chain (death → palace → battle → indoor → day → night) and calls `audio.play_group()` if mood changed.
+    - Initially stubbed to do nothing. Filled in when audio-105 is implemented.
+    - The priority chain and coordinates are documented in `RESEARCH.md` → `setmood()`.
+
+14. **Collision stub** (`src/game/collision.rs` or inline)
+    - `fn proxcheck(x: u16, y: u16, entity_idx: usize, state: &GameState) -> u8`: returns 0 (passable) for now.
+    - `fn px_to_im(x: u16, y: u16, state: &GameState) -> u8`: returns 0 (normal terrain) for now.
+    - Filled in when world-001 (terrain data) and player-102 (terrain system) are implemented.
+
+15. **`GameEvent` enum** (`src/game/game_event.rs`)
+    - Lightweight event type for intra-frame communication (avoids coupling subsystems).
+    - Variants: `Message(String)` (text viewport display), `PlaySound(u8)` (sound effect trigger), `DayPeriodChanged(DayPhase)`, `RegionTransition(u8)`, `BattleStart`, `BattleEnd`, `HeroDied`, `QuestUpdate(String)`, `ForcedSleep`
+    - `GameplayScene` collects events during the tick and processes them after the update sequence (display messages, trigger audio, etc.).
+    - Initially only `Message` is functional (prints to console until the text viewport is wired in).
+
+### Dependencies
+
+This plan depends on the existing infrastructure:
+- `Scene` trait and `SceneResult` from [src/game/scene.rs](src/game/scene.rs) — already complete
+- `GameClock` from [src/game/game_clock.rs](src/game/game_clock.rs) — already complete
+- `AudioSystem` from [src/game/audio.rs](src/game/audio.rs) — already complete
+- `PlacardScene` from [src/game/placard_scene.rs](src/game/placard_scene.rs) — already complete (reused for death/game-over placards)
+
+This plan is a **prerequisite** for:
+- world-108 (Gameplay scene stub) — superseded by step 3 of this plan
+- player-101 (Player movement) — fills in step 8
+- npc-001 (NPC system) — fills in step 9
+- keys-104 (Wire into event handling) — fills in step 7 and step 2
+- gfx-101 (Day/night gameplay wiring) — fills in step 16b/16c
+- audio-105 (setmood) — fills in step 13
+- persist-001 (Persistence) — serializes `GameState` from step 1
+
+### Verification
+
+- `cargo build` compiles cleanly with all new files
+- After intro + copy protection + placard, the game transitions to `GameplayScene`
+- A placeholder hero rectangle renders at starting coordinates (centered in viewport)
+- Arrow keys move the hero rectangle; position updates in debug window
+- Day/night timer advances (visible in debug window game clock)
+- Hunger/fatigue counters increment over time (logged to console)
+- Pressing Escape from gameplay quits the game
+- Death (setting vitality to 0 via debug) shows the brother placard and revives as next brother
+- Third death → game over
+
+---
+
+## Plan: Debug Window Enhancements
+
+**Status:** Not started
+
+### Overview
+
+Expand the existing debug window from a read-only diagnostic display into a full development console with live game state inspection, stat/inventory editing, and cheat controls. The debug window is gated behind `--debug` and has no effect on normal gameplay.
+
+All cheat operations modify `GameState` directly. The debug window reads a snapshot of `GameState` each frame (extending the existing `DebugState` pattern) and writes back mutations via a `DebugCommands` queue that `GameplayScene` drains at the start of each tick.
+
+### Design
+
+**Communication pattern**: The debug window cannot hold a mutable reference to `GameState` (it's a separate SDL2 window with its own renderer). Instead:
+- **Read path**: `DebugState` (already exists) is extended with gameplay fields. `main.rs` populates it each frame from `GameState` — cheap copies of scalars and small arrays.
+- **Write path**: `DebugWindow` accumulates `DebugCommand` values into a `Vec<DebugCommand>`. `main.rs` drains this vec and applies each command to `GameState` before the tick runs. This keeps the debug window decoupled from game internals.
+
+**Tab layout**: Add new tabs to the existing tab bar. The current tabs (Info, Placards, Images, Tilemap, Map, Songs) remain unchanged.
+
+| Tab | Key | Content |
+|-----|-----|---------|
+| Player | F7 | Hero stats, inventory, stat buttons, inventory buttons |
+| Actors | F8 | Active actor list with expandable detail |
+| Cheats | F9 | God mode, teleport, time control, hero pack, brother restart, insta-kill, autosave |
+
+### Steps
+
+1. **`DebugCommand` enum** (`src/game/debug_window.rs` or `src/game/debug_command.rs`)
+   - Represents a mutation request from the debug window to the game state.
+   - Variants:
+     - `SetStat { stat: StatId, value: i16 }` — set a specific stat (vitality, brave, luck, kind, wealth, hunger, fatigue)
+     - `AdjustStat { stat: StatId, delta: i16 }` — increment/decrement a stat
+     - `SetInventory { index: u8, value: u8 }` — set a specific `stuff[]` slot
+     - `AdjustInventory { index: u8, delta: i8 }` — increment/decrement an inventory slot
+     - `TeleportSafe` — move hero to `safe_x/safe_y/safe_r`
+     - `TeleportStoneRing { index: u8 }` — move hero to `stone_list[index]` (0–10)
+     - `TeleportCoords { x: u16, y: u16 }` — move hero to arbitrary map coordinates
+     - `ToggleMagicEffect { effect: MagicEffect }` — toggle a sticky magic effect (see step 8)
+     - `HeroPack` — fill inventory with a useful adventurer loadout
+     - `SetGodMode { flags: GodModeFlags }` — enable/disable god mode facets
+     - `SummonSwan` — place swan carrier near hero, grant lasso if missing
+     - `SetDayPhase { phase: DayPhase }` — jump `daynight` to the start of a day phase
+     - `SetGameTime { hour: u8, minute: u8 }` — set `daynight` to a specific time
+     - `HoldTimeOfDay { hold: bool }` — freeze `daynight` progression without pausing the game
+     - `ToggleAutosave { enable: bool }` — enable/disable rolling autosave
+     - `RestartAsBrother { brother: BrotherId }` — full game-state reset, start as the chosen brother
+     - `InstaKill` — kill the active hero immediately, trigger the death/transition scene
+   - `BrotherId` enum: `Julian, Phillip, Kevin`
+   - `StatId` enum: `Vitality, Brave, Luck, Kind, Wealth, Hunger, Fatigue`
+   - `MagicEffect` enum: `Light, Secret, Freeze` (maps to `light_timer`, `secret_timer`, `freeze_timer`)
+   - `GodModeFlags`: bitflags struct with `NOCLIP`, `INVINCIBLE`, `ONE_HIT_KILL`, `INSANE_REACH`
+   - `DebugWindow` exposes `fn drain_commands(&mut self) -> Vec<DebugCommand>`
+
+2. **Extend `DebugState` with gameplay fields**
+   - Add to the existing `DebugState<'a>` struct:
+     - `hero_stats: Option<HeroStats>` — copied scalars: vitality, max_vitality, brave, luck, kind, wealth, hunger, fatigue, brother, riding, flying, hero_x, hero_y, hero_sector, hero_place, region_num
+     - `inventory: Option<[u8; 35]>` — copy of the active brother's `stuff[]`
+     - `actors: Option<&'a [(ActorKind, ActorState, u16, u16, i16, u8, u8)]>` — compact tuple slice of (kind, state, abs_x, abs_y, vitality, race, weapon) for the active `actors[0..anix2]`
+     - `timers: Option<TimerSnapshot>` — light_timer, secret_timer, freeze_timer, daynight, lightlevel
+     - `safe_pos: Option<(u16, u16, u8)>` — safe_x, safe_y, safe_r
+     - `god_mode: GodModeFlags` — current god mode state
+     - `time_held: bool` — whether time-of-day is frozen
+     - `autosave_enabled: bool`
+   - These are `Option` so the debug window gracefully handles pre-gameplay phases (when `GameState` doesn't exist yet).
+   - `main.rs` populates these from `GameplayScene`'s `GameState` when in the Gameplay phase.
+
+3. **Player tab** (F7)
+   - **Stats panel** (top half):
+     - Display: `VIT: 12/16  BRV: 35  LCK: 20  KND: 15  WLT: 20`
+     - Display: `HGR: 45  FTG: 12  BRO: Julian  RGN: 3`
+     - Display: `POS: (19036, 15755)  SEC: 144  PLACE: Village`
+     - Each stat has a clickable button. Left-click emits `AdjustStat { delta: +1 }`, right-click emits `AdjustStat { delta: -1 }`. Shift+click emits `±10`.
+     - Keyboard shortcuts while Player tab is focused: `V`=vitality, `B`=brave, `L`=luck, `K`=kind, `W`=wealth, `H`=hunger, `F`=fatigue — then `+`/`-` or Up/Down to adjust.
+   - **Inventory panel** (bottom half):
+     - Grid of all 35 `stuff[]` slots with item names and counts.
+     - Each slot shows: `[idx] Name: count`
+     - Item names from a `const ITEM_NAMES: [&str; 35]` lookup table.
+     - Left-click emits `AdjustInventory { delta: +1 }`, right-click emits `AdjustInventory { delta: -1 }`. Value clamped 0–255.
+     - Scrollable if the window is too small to show all 35 items.
+
+4. **Actors tab** (F8)
+   - List all active actors (`actors[0..anix2]`), one row per actor:
+     - `[slot] Kind  State  Pos(x,y)  VIT  Race  Wpn`
+     - Example: `[0] Player  Walking  (19036,15755)  12  0  Sword`
+     - Example: `[3] Enemy   Fighting (19100,15700)   5  4  Mace`
+   - Color coding: Player=green, Enemy=red, SetFig=yellow, Object=grey, Carrier=cyan
+   - **Expandable detail**: press Enter or click on a row to expand it, showing:
+     - Full fields: goal, tactic, facing, environ, vel_x, vel_y
+     - For actors with inventory (e.g., dead brothers with lootable bodies): show their `stuff[]`
+   - Up/Down arrows to navigate the list, Enter to expand/collapse.
+
+5. **Cheats tab — stat and inventory shortcuts** (F9, top section)
+   - **Hero Pack button**: one-click fills inventory with a useful loadout:
+     - 1× each weapon (Dirk, Mace, Sword, Bow, Wand), 50 Arrows
+     - 1× Golden Lasso, Sea Shell, Sun Stone
+     - 3× each magic consumable (Blue Stone, Green Jewel, Glass Vial, Crystal Orb, Bird Totem, Gold Ring, Jade Skull)
+     - 1× each key (Gold, Green, Blue, Red, Grey, White)
+     - Sets wealth to 200
+     - Does NOT grant quest items (Talisman, Rose, Gold Statues) — those should be earned
+   - **Max Stats button**: sets vitality to max (15 + brave/4), zeroes hunger and fatigue
+
+6. **Cheats tab — teleport controls** (F9, middle section)
+   - **Teleport to Safe**: button emits `TeleportSafe`. Shows current safe coords.
+   - **Stone Ring dropdown**: numbered list 0–10 with sector coordinates from `stone_list[]`. Click a row to teleport there. Also handles region transition to overworld if currently indoors.
+   - **Coordinate entry**: text input field for `x,y` (e.g., `19036,15755`). Press Enter to teleport. Validates range 0–32767.
+
+7. **Cheats tab — god mode** (F9, middle-lower section)
+   - Four toggle buttons, each independently controllable:
+     - **Noclip**: walk through walls, across water, over lava without sinking or terrain damage. Bypasses `proxcheck()` terrain collision (entity-entity collision still applies).
+     - **Invincible**: hero vitality cannot decrease below 1. Damage events are ignored.
+     - **One-Hit Kill**: any hero melee or missile hit sets target vitality to 0 (instant kill). Applies **only** to actors with `kind == Enemy`. SetFigs, carriers, and objects are unaffected.
+     - **Insane Reach**: hero melee hit detection range extended to screen edge (~144px). Applies **only** to actors with `kind == Enemy`.
+   - Each button shows its current state (ON/OFF) with color (green/grey).
+   - A master **God Mode** toggle enables/disables all four at once.
+   - `GodModeFlags` is checked in `GameplayScene`'s collision, damage, and combat resolution code.
+
+8. **Cheats tab — magic effect toggles** (F9, right section)
+   - Three toggle buttons: **Light**, **Secret**, **Freeze**
+   - Left-click: apply the magic effect once (same as using the item: adds the standard timer increment)
+   - Right-click: decrement the timer by the same amount (for fine-tuning timer values)
+   - ALT+click (or keyboard ALT+L/S/F): **sticky toggle** — the timer is locked at its maximum value and does not decrement. The effect persists until toggled off. When toggled off, the timer resumes normal decrement from its current value.
+   - Display shows: `Light: 760 [STICKY]` or `Secret: OFF`
+   - Implementation: `GameState` gets three `bool` fields (`light_sticky`, `secret_sticky`, `freeze_sticky`). The timer decrement logic in `tick_timers()` skips decrement when the corresponding sticky flag is set.
+
+9. **Cheats tab — swan summon** (F9)
+   - **Summon Swan** button: places the bird carrier actor at hero position offset by +20px to the right (or left if rightward is blocked). Sets `active_carrier` to the swan file ID. If `stuff[5]` (Golden Lasso) is 0, automatically grants one.
+   - Emits `SummonSwan` command.
+
+10. **Cheats tab — brother restart** (F9)
+    - Three buttons: **Julian**, **Phillip**, **Kevin**.
+    - Click emits `RestartAsBrother { brother }`. `GameplayScene` performs a full `GameState` reset: clears all inventory, resets stats to the chosen brother's starting values, resets quest flags, clears all non-player actors, and positions the hero at the brother's starting location. No corpse or ghost is spawned — this is a clean restart, not a death transition.
+    - A confirmation prompt ("Restart as Julian? This resets all progress.") is shown before emitting the command.
+
+11. **Cheats tab — insta-kill** (F9)
+    - **Kill Hero** button. Click emits `InstaKill`. Sets the active hero's vitality to 0, then invokes the normal death scene and brother transition logic (same code path as a real death: corpse placed, ghost walks to Dorian's tomb, next brother takes over — or game over if Kevin dies).
+    - Useful for testing the death/revive cycle without needing to find an enemy.
+
+12. **Cheats tab — time controls** (F9, bottom section)
+    - **Day phase jump buttons**: Midnight, Morning, Midday, Evening — each emits `SetDayPhase` which sets `daynight` to the corresponding value (0, 8000, 12000, 18000). Left-click jumps forward to the next phase; right-click jumps backward to the previous phase.
+    - **Set time**: text input for `HH:MM` (24hr format). Enter emits `SetGameTime`.
+    - **Hold Time**: toggle button. When active, `daynight` is not incremented by the game loop (but the game otherwise runs normally — actors move, combat works, etc.). Emits `HoldTimeOfDay { hold: true/false }`.
+    - Display shows current time: `Time: Day 2 14:30 [HELD]` or `Time: Day 2 14:30`.
+
+13. **Autosave system** (Cheats tab toggle + `GameplayScene` logic)
+    - **Toggle button** in the Cheats tab: `Autosave: ON/OFF`.
+    - When enabled, `GameplayScene` saves the game state at a configurable interval (default: every 120 seconds of real time, or on region transition).
+    - **Rolling savefiles**: maintains up to N backup slots (default N=5). Files named `autosave_0.sav` through `autosave_4.sav`. On each autosave, rotate: `4→delete`, `3→4`, `2→3`, `1→2`, `0→1`, write new `0`.
+    - Save directory: `~/.config/faery/saves/` (same as manual saves from persist-001).
+    - Autosave triggers are logged to the debug window's log panel.
+    - **Consider promoting to a user-facing feature**: autosave with rolling backups is useful for all players, not just debugging. The implementation should be clean enough to expose via the Game menu (with a settings toggle) once persist-001 is complete. The debug toggle provides early access before the Game menu exists.
+    - Depends on persist-001 (save format and serialization) for the actual file I/O. Until persist-001 is done, the toggle exists but autosave is a no-op with a log message.
+
+### Dependencies
+
+- `GameState` from gameloop-001 step 1 — required for all read/write operations
+- `Actor` from gameloop-001 step 2 — required for the Actors tab
+- `GameplayScene` from gameloop-001 step 3 — processes `DebugCommand` queue
+- Death/revive cycle from gameloop-001 step 10 — required for `InstaKill` and `RestartAsBrother`
+- persist-001 — required for autosave file I/O (autosave is a no-op stub until then)
+- Existing `DebugWindow` infrastructure in [src/game/debug_window.rs](src/game/debug_window.rs) — extended, not replaced
+
+### Verification
+
+- New tabs (F7/F8/F9) render without crashing in pre-gameplay phases (show "Not in gameplay" placeholder)
+- Player tab shows live stats and inventory that update each frame
+- Clicking `[+]`/`[-]` on vitality changes the hero's HP visibly in-game
+- Hero Pack fills inventory; items appear in the inventory screen
+- God Mode Noclip: hero walks through walls
+- God Mode Invincible: hero takes no damage
+- God Mode One-Hit Kill: enemies die on first hit; setfigs and carriers are unaffected
+- Stone Ring teleport: hero appears at the correct overworld coordinates
+- Coordinate teleport: hero moves to typed location
+- Hold Time: day/night cycle freezes while actors continue to move
+- ALT+Light toggle: green jewel illumination persists indefinitely
+- Autosave toggle logs "autosave: not yet implemented" until persist-001 is done
