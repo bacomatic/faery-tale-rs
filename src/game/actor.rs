@@ -77,6 +77,7 @@ pub struct Actor {
     pub environ: i8,
     pub vel_x: i16,
     pub vel_y: i16,
+    pub moving: bool,
 }
 
 impl Actor {

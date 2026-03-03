@@ -60,6 +60,7 @@ pub struct GameplayScene {
     palette_transition: Option<crate::game::palette::PaletteTransition>,
     last_indoor: bool,
     pub in_encounter_zone: bool,
+    pub npc_table: Option<crate::game::npc::NpcTable>,
 }
 
 impl GameplayScene {
@@ -82,6 +83,7 @@ impl GameplayScene {
             palette_transition: None,
             last_indoor: false,
             in_encounter_zone: false,
+            npc_table: None,
         }
     }
 
