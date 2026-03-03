@@ -1,5 +1,5 @@
 version = 1
-last_updated = "2026-03-01"
+last_updated = "2026-03-02"
 issue_tracking = "github"
 issues_enabled_on = "2026-03-01"
 
@@ -240,7 +240,7 @@ state = "in_progress"
 priority = "high"
 depends_on = []
 notes = "Rollup: map pipeline and gameplay scene work not started."
-updated = "2026-03-01"
+updated = "2026-03-02"
 issue = "#3"
 
 [[task]]
@@ -359,7 +359,7 @@ state = "in_progress"
 priority = "high"
 depends_on = ["world-001"]
 notes = "Rollup: not started."
-updated = "2026-03-01"
+updated = "2026-03-02"
 issue = "#4"
 
 [[task]]
@@ -495,6 +495,18 @@ updated = "2026-03-01"
 issue = "#46"
 
 [[task]]
+id = "player-112"
+parent = "player-001"
+title = "Implement safe spawn tracking with luck-gated respawn"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-101", "player-102", "player-104"]
+notes = "Track the last safe non-liquid terrain coordinate and respawn there on death when the player has sufficient luck remaining."
+updated = "2026-03-01"
+issue = "#48"
+
+[[task]]
 id = "npc-001"
 title = "NPC system"
 area = "npc"
@@ -502,7 +514,7 @@ state = "in_progress"
 priority = "high"
 depends_on = ["world-001"]
 notes = "Rollup: not started."
-updated = "2026-03-01"
+updated = "2026-03-02"
 issue = "#5"
 
 [[task]]
@@ -549,7 +561,7 @@ state = "in_progress"
 priority = "medium"
 depends_on = []
 notes = "Rollup: palette infrastructure is in; remaining effects not started."
-updated = "2026-03-01"
+updated = "2026-03-02"
 issue = "#2"
 
 [[task]]
@@ -741,3 +753,111 @@ depends_on = ["persist-101"]
 notes = "Not started."
 updated = "2026-03-01"
 issue = "#40"
+
+[[task]]
+id = "world-110"
+parent = "world-001"
+title = "Door / portal system"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-102", "world-108"]
+notes = "86-door table, region transitions, locked door resolution via doorfind()."
+updated = "2026-03-02"
+issue = "#49"
+
+[[task]]
+id = "world-111"
+parent = "world-001"
+title = "Extents and encounter zones"
+area = "world"
+state = "todo"
+priority = "high"
+depends_on = ["world-108"]
+notes = "22 trigger rectangles for encounters, carriers, and special events."
+updated = "2026-03-02"
+issue = "#50"
+
+[[task]]
+id = "player-113"
+parent = "player-001"
+title = "Inventory system"
+area = "gameplay"
+state = "todo"
+priority = "high"
+depends_on = ["player-104"]
+notes = "stuff[35] array, itrans[] pickup, equip, set_options(), item display screen."
+updated = "2026-03-02"
+issue = "#51"
+
+[[task]]
+id = "player-114"
+parent = "player-001"
+title = "Magic item system"
+area = "gameplay"
+state = "todo"
+priority = "medium"
+depends_on = ["player-113"]
+notes = "7 consumable magic items via MAGIC menu with timers and effects."
+updated = "2026-03-02"
+issue = "#52"
+
+[[task]]
+id = "npc-104"
+parent = "npc-001"
+title = "Encounter spawning system"
+area = "npc"
+state = "todo"
+priority = "high"
+depends_on = ["npc-101", "world-111"]
+notes = "encounter_chart[11], weapon_probs[], enemy type selection and mixflag blending."
+updated = "2026-03-02"
+issue = "#53"
+
+[[task]]
+id = "npc-105"
+parent = "npc-001"
+title = "Missile / arrow combat"
+area = "npc"
+state = "todo"
+priority = "medium"
+depends_on = ["npc-103"]
+notes = "missile_list[6], projectile physics, ranged damage for Bow/Wand and NPC archers."
+updated = "2026-03-02"
+issue = "#55"
+
+[[task]]
+id = "npc-106"
+parent = "npc-001"
+title = "Enemy loot and treasure"
+area = "npc"
+state = "todo"
+priority = "medium"
+depends_on = ["npc-103", "player-113"]
+notes = "treasure_probs[] loot tables, container opening, weapon drops, auto-equip."
+updated = "2026-03-02"
+issue = "#56"
+
+[[task]]
+id = "npc-107"
+parent = "npc-001"
+title = "Shop / buy system"
+area = "npc"
+state = "todo"
+priority = "medium"
+depends_on = ["npc-102", "player-113"]
+notes = "Shopkeeper (race 0x88) BUY menu, jtrans[] cost table, beggar GIVE interaction."
+updated = "2026-03-02"
+issue = "#57"
+
+[[task]]
+id = "gfx-105"
+parent = "gfx-001"
+title = "Sprite / shape file loading"
+area = "graphics"
+state = "todo"
+priority = "high"
+depends_on = ["world-101"]
+notes = "cfiles[18] table, bitplane-to-RGBA32 decode, setfig_table[14], seq_list[] slots."
+updated = "2026-03-02"
+issue = "#54"

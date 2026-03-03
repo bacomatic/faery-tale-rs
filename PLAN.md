@@ -42,10 +42,10 @@ Machine-readable mirror: `plan_status.toml`
 
 ### In Progress
 - [audio-001] Audio system (3/5 steps complete; 2 deferred; Issue: #1)
-- [gfx-001] Graphics effects (1/4 steps in progress; Issue: #2)
-- [world-001] Game world & map system (0/9 steps complete; Issue: #3)
-- [player-001] Player & movement (0/11 steps complete; Issue: #4)
-- [npc-001] NPC system (0/3 steps complete; Issue: #5)
+- [gfx-001] Graphics effects (1/5 steps in progress; Issue: #2)
+- [world-001] Game world & map system (0/11 steps complete; Issue: #3)
+- [player-001] Player & movement (0/14 steps complete; Issue: #4)
+- [npc-001] NPC system (0/7 steps complete; Issue: #5)
 - [keys-001] Key bindings (0/7 steps complete; Issue: #6)
 - [persist-001] Persistence (0/3 steps complete; Issue: #7)
 
@@ -65,7 +65,7 @@ Machine-readable mirror: `plan_status.toml`
 1. **Scene system** — `Scene` trait in `src/game/scene.rs` with `handle_event()` + `update(canvas, play_tex, delta_ticks, game_lib, resources) -> SceneResult`. `SceneResources` bundles `&mut [ImageTexture]`, `&HashMap<String, usize>`, and font textures. Both `find_image()` (read) and `find_image_mut()` (write, for palette re-rasterization) are available. Scenes chain via `ScenePhase` enum in `main.rs`: Intro → CopyProtect → PlacardStart → Gameplay.
 
 2. **Palette fading** — Hybrid system in `src/game/palette_fader.rs`:
-   - **`fade_page()`**: Port of the original C `fade_page()` from `fmain2.c`. Per-channel multiplicative scaling (0–100%), night-time floor limits (r≥10, g≥25, b≥60), blue tint injection for moonlight, vegetation color boost (indices 16–24), and torch/spell illumination (light_timer boosts red to green's level). Returns a new `Palette`.
+   - **`fade_page()`**: Port of the original C `fade_page()` from `fmain2.c`. Per-channel multiplicative scaling (0–100%), night-time floor limits (r≥10, g≥25, b≥60), blue tint injection for moonlight, vegetation color boost (indices 16–24), and Green Jewel light illumination (light_timer boosts red to green's level). Returns a new `Palette`.
    - **`FadeController`**: Time-based wrapper that interpolates RGB percentages over a duration. Returns `FadeResult::ColorMod(r,g,b)` for uniform fades (cheap SDL2 `set_color_mod`) or `FadeResult::PaletteUpdate(Palette)` for non-uniform fades (per-frame `ImageTexture::update()` re-rasterization). Convenience constructors: `fade_down()`, `fade_normal()`, `zoom_fade()`, `zoom_percentages()`.
    - **`PaletteFader`**: Simple linear interpolation between two palettes (retained for cases where lerp is sufficient).
    - 10 tests covering fade_page behavior, FadeController dispatch, zoom fading, and PaletteFader lerp.
@@ -326,6 +326,24 @@ Reference notes moved to `RESEARCH.md`:
    - Identify palette block numbers from ADF or embed per-region palettes in `faery.toml`
    - Hook `TileAtlas::rebuild()` into region transitions
 
+10. **Door / portal system** (`src/game/doors.rs`)
+    - Parse `doorlist[86]` — 86 doors sorted ascending by `xc1`
+    - Binary search (outdoor→indoor) and linear scan (indoor→outdoor) lookups
+    - Entry/exit position calculation per door type (horizontal/vertical/cave)
+    - Region transition on door crossing (`secs==1` → region 8, `secs==2` → region 9)
+    - DESERT gate requiring 5 Gold Statues (`stuff[STATBASE] >= 5`)
+    - Locked door resolution via `doorfind()` with key type matching
+    - Reference: `RESEARCH.md` → Door / Portal System
+
+11. **Extents and encounter zones** (`src/game/extents.rs`)
+    - Parse `extent_list[22]` — axis-aligned trigger rectangles
+    - AABB point-in-rect hero position detection
+    - Random encounter spawning dispatch (etype < 50)
+    - Forced encounter loading (etype >= 50)
+    - Carrier loading (etype >= 60/70) for bird, turtle, dragon
+    - Special zone triggers: spider pit, necromancer, astral plane, princess
+    - Reference: `RESEARCH.md` → Extents and Encounter Zones
+
 Reference notes moved to `RESEARCH.md`:
 - `Game World & Map System: Constants, addresses, and implementation notes`
 
@@ -398,6 +416,33 @@ Implement character movement, terrain interaction, and the basic player command 
    - Apply explicit concession fix for known exploit:
      - Do not allow forced sleep at locked gates/doors to wake the player on the opposite side (no lock bypass via sleep transition)
 
+12. **Safe spawn tracking and luck-gated respawn**
+   - Track and update the player's last safe world position during movement
+   - Define safe position as the most recent non-liquid terrain coordinate
+   - On player death, if luck is sufficient, respawn at the tracked safe position
+
+13. **Inventory system** (`src/game/inventory.rs`)
+    - `stuff: [u8; 35]` per character (Julian, Phillip, Kevin)
+    - Port `itrans[]` translation table (ob_id → stuff[] index) for item pickup
+    - Weapon equip via USE menu → sets `anim_list[0].weapon`
+    - Port `set_options()` menu enable/disable refresh from `stuff[]`
+    - Item display screen rendering with `inv_list[]` layout metadata
+    - Gold pickup adds to `wealth` variable directly (not stuff[])
+    - Reference: `RESEARCH.md` → Inventory System
+
+14. **Magic item system** (`src/game/magic.rs`)
+    - 7 consumable magic items via MAGIC menu (stuff[9–15])
+    - Blue Stone: stone ring teleport (hero_sector==144, `stone_list[11]`)
+    - Green Jewel: `light_timer += 760`, illumination palette boost
+    - Glass Vial: heal `rand8()+4` vitality (capped at `15 + brave/4`)
+    - Crystal Orb: `secret_timer += 360`, reveal hidden passages (region 9 palette 31)
+    - Bird Totem: world minimap display (`bigdraw()`), overworld only
+    - Gold Ring: `freeze_timer += 100`, time stop for all non-hero figures
+    - Jade Skull: mass kill (race < 7), `brave--` per kill
+    - All blocked in astral plane (`extn->v3 == 9`)
+    - Timer tick management in gameplay loop
+    - Reference: `RESEARCH.md` → Inventory System (Magic consumables)
+
 ---
 
 ## Plan: NPC System
@@ -423,6 +468,39 @@ Port the NPC behavior system — goals, tactics, movement, and interaction.
    - NPC attack/response
    - Damage calculation, death handling
 
+4. **Encounter spawning system** (`src/game/encounters.rs`)
+   - `encounter_chart[11]` data table (hp, arms, cleverness, treasure, file)
+   - `weapon_probs[]` weapon selection table (4 possible weapons per enemy type)
+   - Enemy spawn logic: select type, arm with weapon, set goal/tactic
+   - `mixflag & 2` type blending for encounter variation
+   - Wire into extent zone triggers (from world-111)
+   - Set correct sprite file via cfiles[] index
+   - Reference: `RESEARCH.md` → Enemy Types (Encounter Chart)
+
+5. **Missile / arrow combat** (`src/game/missiles.rs`)
+   - `missile_list[6]` — 6 active missiles with position, type, speed, direction, archer
+   - Player Bow: consumes arrows (stuff[8]), spawns missile_type=1, speed=3
+   - Player Wand: missile_type=2, speed=5, no arrow consumption
+   - NPC archer AI firing via SHOOT tactic
+   - Movement: `speed * 2` pixels/tick, expire after 40 ticks or terrain collision (tiles 1, 15)
+   - Damage: `rand8() + 4`, hit radius 6 (arrow) or 9 (bolt)
+   - Reference: `RESEARCH.md` → Combat System (missile section)
+
+6. **Enemy loot and treasure** (`src/game/treasure.rs`)
+   - `treasure_probs[]` loot table (5 rows × 8 columns)
+   - Body search: loot selection via `encounter_chart[race].treasure`, weapon drop, arrow bonus
+   - Container opening: Chest/Urn/Sacks with `rand4()` loot rolls
+   - Auto-equip logic for better weapons from drops
+   - Reference: `RESEARCH.md` → Inventory System (loot sections)
+
+7. **Shop / buy system** (`src/game/shop.rs`)
+   - Shopkeeper (race 0x88) proximity detection triggers BUY menu
+   - `jtrans[]` cost table: Food(3), Arrows(10), Vial(15), Mace(30), Sword(45), Bow(75), Totem(20)
+   - Food purchase calls `eat(50)` directly instead of inventory storage
+   - Gold deduction from `wealth`, menu options gated by available gold
+   - GIVE menu for beggars: 2gp, chance to increase `kind`
+   - Reference: `RESEARCH.md` → Inventory System (BUY menu)
+
 ---
 
 ## Plan: Graphics Effects
@@ -436,7 +514,7 @@ Visual effects that enhance the game atmosphere.
 
 1. **Day/Night cycle**
    - `GameClock` already tracks day phases (Midnight/Morning/Midday/Evening)
-   - `fade_page()` with `limit=true` already supports night floor limits, blue tint injection, vegetation boost, and light_timer torch illumination — matching the original `day_fade()` from `fmain2.c`
+   - `fade_page()` with `limit=true` already supports night floor limits, blue tint injection, vegetation boost, and Green Jewel light illumination via `light_timer` — matching the original `day_fade()` from `fmain2.c`
    - `FadeController` can drive day/night transitions over time
    - Remaining: wire `day_fade()` into the gameplay loop using `lightlevel = daynight / 40` with the staggered RGB offsets (r-80, g-61, b-62) from the original
 
@@ -449,6 +527,15 @@ Visual effects that enhance the game atmosphere.
 
 4. **Teleport effect**
    - Visual transition when using teleport items/locations
+
+5. **Sprite / shape file loading** (`src/game/sprites.rs`)
+   - `cfiles[18]` table mapping logical sprite IDs to ADF block locations
+   - Bitplane-to-RGBA32 decode for sprite frames (5 planes + 1 mask plane)
+   - `setfig_table[14]` mapping 14 NPC types to sprite cfile/base frame/can_talk
+   - `seq_list[]` slot management (PHIL, OBJECTS, RAFT, ENEMY, SETFIG, CARRIER, DRAGON)
+   - On-demand sprite loading (enemy sprites change per encounter type)
+   - Multi-width sprites (dragon 3×40, bird 4×64)
+   - Reference: `RESEARCH.md` → Sprite / Shape File Layout (ADF)
 
 ---
 
