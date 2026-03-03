@@ -1,3 +1,4 @@
+use crate::game::map_renderer::MapRenderer;
 use std::any::Any;
 
 use sdl2::event::Event;
@@ -10,8 +11,14 @@ use crate::game::collision;
 use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
 use crate::game::game_library::GameLibrary;
 use crate::game::game_state::GameState;
-use crate::game::key_bindings::GameAction;
+use crate::game::key_bindings::{GameAction, KeyBindings};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
+
+/// State for the key rebinding mode (F2 to enter, Escape to exit).
+pub struct RebindingState {
+    pub active: bool,
+    pub waiting_for_action: Option<GameAction>,
+}
 
 /// 8-way movement direction decoded from input state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +50,10 @@ pub struct GameplayScene {
     map_y: u16,
     last_mood: u8,
     mood_tick: u32,
+    map_renderer: Option<MapRenderer>,
+    map_world: Option<crate::game::world_data::WorldData>,
+    rebinding: RebindingState,
+    local_bindings: KeyBindings,
 }
 
 impl GameplayScene {
@@ -56,6 +67,10 @@ impl GameplayScene {
             map_y: 0,
             last_mood: u8::MAX,
             mood_tick: 0,
+            map_renderer: None,
+            map_world: None,
+            rebinding: RebindingState { active: false, waiting_for_action: None },
+            local_bindings: KeyBindings::default_bindings(),
         }
     }
 
@@ -183,6 +198,10 @@ impl GameplayScene {
                 eprintln!("Inventory: {}", self.state.inventory_summary());
                 self.state.viewstatus = 4;
             }
+            GameAction::Rebind => {
+                self.rebinding.active = !self.rebinding.active;
+                eprintln!("Rebinding mode: {}", self.rebinding.active);
+            }
             _ => {}
         }
     }
@@ -276,6 +295,22 @@ impl GameplayScene {
 
 impl Scene for GameplayScene {
     fn handle_event(&mut self, event: &Event) -> bool {
+        // If rebinding mode is active and waiting for a key, capture the next keypress.
+        if self.rebinding.active {
+            if let Event::KeyDown { keycode: Some(kc), repeat: false, .. } = event {
+                if *kc == Keycode::Escape {
+                    self.rebinding.active = false;
+                    self.rebinding.waiting_for_action = None;
+                    eprintln!("Rebinding mode: false");
+                    return true;
+                }
+                if let Some(action) = self.rebinding.waiting_for_action.take() {
+                    self.local_bindings.set_binding(action, vec![*kc]);
+                    eprintln!("Rebound {:?} to {:?}", action, kc);
+                    return true;
+                }
+            }
+        }
         match event {
             Event::KeyDown { keycode: Some(kc), repeat: false, .. } => match *kc {
                 // Movement keys
@@ -366,6 +401,14 @@ impl Scene for GameplayScene {
         self.map_y = self.state.hero_y.saturating_sub(80);
         self.state.map_x = self.map_x;
         self.state.map_y = self.map_y;
+
+        // Compose map viewport when in normal play view (world-105)
+        if self.state.viewstatus == 0 {
+            if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
+                mr.compose(self.state.hero_x, self.state.hero_y, world);
+                eprintln!("map composed");
+            }
+        }
 
         self.render_by_viewstatus(canvas);
         canvas.present();
