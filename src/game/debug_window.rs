@@ -12,7 +12,8 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::game::colors::Palette;
-use crate::game::debug_command::DebugCommand;
+use crate::game::debug_command::{DebugCommand, StatId};
+use sdl2::mouse::MouseButton;
 use crate::game::font::DiskFont;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_clock::DayPhase;
@@ -36,9 +37,10 @@ enum DebugTab {
     Songs,
     Player,
     Actors,
+    Cheats,
 }
 
-const ALL_TABS: [DebugTab; 8] = [
+const ALL_TABS: [DebugTab; 9] = [
     DebugTab::Info,
     DebugTab::Placards,
     DebugTab::Images,
@@ -47,6 +49,7 @@ const ALL_TABS: [DebugTab; 8] = [
     DebugTab::Songs,
     DebugTab::Player,
     DebugTab::Actors,
+    DebugTab::Cheats,
 ];
 
 impl DebugTab {
@@ -60,6 +63,7 @@ impl DebugTab {
             DebugTab::Songs => "Songs",
             DebugTab::Player => "Player",
             DebugTab::Actors => "Actors",
+            DebugTab::Cheats => "Cheats",
         }
     }
 
@@ -73,6 +77,7 @@ impl DebugTab {
             DebugTab::Songs => "6",
             DebugTab::Player => "7",
             DebugTab::Actors => "8",
+            DebugTab::Cheats => "9",
         }
     }
 }
@@ -244,6 +249,14 @@ struct ActorsTabState {
     scroll: usize,
 }
 
+// ── Cheat button action tags (populated during render, checked on click) ──
+
+#[derive(Debug, Clone)]
+enum CheatBtn {
+    HeroPack,
+    MaxStats,
+}
+
 // ── DebugWindow ──────────────────────────────────────────────────────
 
 /// A separate SDL2 window dedicated to debug/diagnostic output,
@@ -283,6 +296,10 @@ pub struct DebugWindow<'a> {
 
     /// Queued commands to apply to game state; consumed via `drain_commands()`.
     pending_commands: Vec<DebugCommand>,
+
+    // Cheats tab state
+    /// Button hit-areas rebuilt each frame; used by click handler.
+    cheat_buttons: Vec<(Rect, CheatBtn)>,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -378,6 +395,7 @@ impl<'a> DebugWindow<'a> {
             song_group_requested: None,
             stop_requested: false,
             pending_commands: Vec::new(),
+            cheat_buttons: Vec::new(),
             placard_texture: placard_tex,
         })
     }
@@ -461,6 +479,7 @@ impl<'a> DebugWindow<'a> {
                     Scancode::F6 => { self.active_tab = DebugTab::Songs; true }
                     Scancode::F7 => { self.active_tab = DebugTab::Player; true }
                     Scancode::F8 => { self.active_tab = DebugTab::Actors; true }
+                    Scancode::F9 => { self.active_tab = DebugTab::Cheats; true }
 
                     // Left/Right to cycle items in content tabs
                     Scancode::Left | Scancode::Right => {
@@ -553,8 +572,7 @@ impl<'a> DebugWindow<'a> {
                 y,
                 mouse_btn,
                 ..
-            } if *window_id == self.window_id && self.active_tab == DebugTab::Player => {
-                use sdl2::mouse::MouseButton;
+            } if *window_id == self.window_id && self.active_tab == DebugTab::Player => {                use sdl2::mouse::MouseButton;
                 let lh = self.player_tab.line_h;
                 if lh > 0 {
                     let stat_y = self.player_tab.stat_y_start_win;
@@ -580,7 +598,43 @@ impl<'a> DebugWindow<'a> {
                 true
             }
 
+            // Mouse clicks in Cheats tab: dispatch via stored button regions
+            Event::MouseButtonDown {
+                window_id,
+                x,
+                y,
+                mouse_btn,
+                ..
+            } if *window_id == self.window_id && self.active_tab == DebugTab::Cheats => {
+                let adj_x = *x;
+                let adj_y = *y - (TAB_BAR_HEIGHT + 2);
+                let is_right = *mouse_btn == MouseButton::Right;
+                let buttons: Vec<(Rect, CheatBtn)> = self.cheat_buttons.clone();
+                for (rect, btn) in buttons {
+                    if rect.contains_point(sdl2::rect::Point::new(adj_x, adj_y)) {
+                        self.handle_cheat_click(btn, is_right);
+                        break;
+                    }
+                }
+                true
+            }
+
             _ => false,
+        }
+    }
+
+    // ── Cheats tab mouse click handler ───────────────────────────────
+
+    fn handle_cheat_click(&mut self, btn: CheatBtn, _right_click: bool) {
+        match btn {
+            CheatBtn::HeroPack => {
+                self.pending_commands.push(DebugCommand::HeroPack);
+            }
+            CheatBtn::MaxStats => {
+                self.pending_commands.push(DebugCommand::SetStat { stat: StatId::Hunger, value: 0 });
+                self.pending_commands.push(DebugCommand::SetStat { stat: StatId::Fatigue, value: 0 });
+                self.pending_commands.push(DebugCommand::AdjustStat { stat: StatId::Vitality, delta: 100 });
+            }
         }
     }
 
@@ -623,6 +677,7 @@ impl<'a> DebugWindow<'a> {
             DebugTab::Songs => self.render_songs_tab(state, win_w, win_h),
             DebugTab::Player => self.render_player_tab(state, win_h),
             DebugTab::Actors => self.render_actors_tab(state, win_h),
+            DebugTab::Cheats => self.render_cheats_tab(state, win_w),
         }
 
         self.canvas.present();
@@ -1101,6 +1156,44 @@ impl<'a> DebugWindow<'a> {
     fn draw_separator(&mut self, y: i32) {
         draw_separator(&mut self.canvas, y);
     }
+
+    // ── Cheats tab (F9) ──────────────────────────────────────────────
+
+    fn render_cheats_tab(&mut self, state: &DebugState, _win_w: u32) {
+        let (char_w, line_h) = {
+            let f = self.font_text.borrow();
+            (f.get_font().x_size as i32, f.get_font().y_size as i32 + 2)
+        };
+        let left = 10;
+        let mut y = 8;
+
+        self.cheat_buttons.clear();
+
+        // ── Inventory & Stats (debug-105) ────────────────────────────
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("Inventory & Stats", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let r = draw_button(
+            &mut self.canvas, &self.font_text, &self.font_texture,
+            "Hero Pack", left, y, char_w, line_h, false,
+        );
+        self.cheat_buttons.push((r, CheatBtn::HeroPack));
+
+        let r = draw_button(
+            &mut self.canvas, &self.font_text, &self.font_texture,
+            "Max Stats", left + "Hero Pack".len() as i32 * char_w + 18, y, char_w, line_h, false,
+        );
+        self.cheat_buttons.push((r, CheatBtn::MaxStats));
+        y += line_h + 8;
+
+        set_font_color(&self.font_texture, 120, 120, 120);
+        { self.font_text.borrow().render_string("Fills weapons, magic, keys. No quest items.", &mut self.canvas, left, y); }
+        y += line_h + 4;
+        draw_separator(&mut self.canvas, y);
+
+        let _ = (state, y);
+    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -1120,6 +1213,32 @@ fn find_placard_by_name<'a>(
 fn set_font_color(font_texture: &Rc<RefCell<sdl2::render::Texture>>, r: u8, g: u8, b: u8) {
     let mut tex = font_texture.borrow_mut();
     tex.set_color_mod(r, g, b);
+}
+
+/// Draw a simple button rectangle and return its Rect for click detection.
+/// `active` tints the background blue (for toggles that are ON).
+fn draw_button(
+    canvas: &mut Canvas<Window>,
+    font_text: &Rc<RefCell<FontTexture>>,
+    font_texture: &Rc<RefCell<sdl2::render::Texture>>,
+    label: &str,
+    x: i32,
+    y: i32,
+    char_w: i32,
+    line_h: i32,
+    active: bool,
+) -> Rect {
+    let w = (label.len() as i32 * char_w + 10) as u32;
+    let h = (line_h + 4) as u32;
+    let rect = Rect::new(x, y, w, h);
+    let bg = if active { Color::RGB(50, 90, 150) } else { Color::RGB(55, 55, 55) };
+    canvas.set_draw_color(bg);
+    canvas.fill_rect(rect).ok();
+    canvas.set_draw_color(Color::RGB(110, 110, 110));
+    canvas.draw_rect(rect).ok();
+    set_font_color(font_texture, 220, 220, 220);
+    font_text.borrow().render_string(label, canvas, x + 5, y + 2);
+    rect
 }
 
 fn draw_separator(canvas: &mut Canvas<Window>, y: i32) {
