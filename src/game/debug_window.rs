@@ -12,7 +12,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::game::colors::Palette;
-use crate::game::debug_command::{DebugCommand, GodModeFlags, StatId};
+use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
 use sdl2::mouse::MouseButton;
 use crate::game::font::DiskFont;
 use crate::game::font_texture::FontTexture;
@@ -268,6 +268,9 @@ enum CheatBtn {
     GodInsaneReach,
     GodAllOn,
     GodAllOff,
+    MagicLight,
+    MagicSecret,
+    MagicFreeze,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -318,6 +321,10 @@ pub struct DebugWindow<'a> {
     coord_y: u16,
     /// Local copy of god mode flags; updated on click.
     god_mode_flags: u8,
+    /// Sticky state for magic effects (right-click toggles; timer locked at max).
+    light_sticky: bool,
+    secret_sticky: bool,
+    freeze_sticky: bool,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -417,6 +424,9 @@ impl<'a> DebugWindow<'a> {
             coord_x: 0,
             coord_y: 0,
             god_mode_flags: 0,
+            light_sticky: false,
+            secret_sticky: false,
+            freeze_sticky: false,
             placard_texture: placard_tex,
         })
     }
@@ -646,7 +656,7 @@ impl<'a> DebugWindow<'a> {
 
     // ── Cheats tab mouse click handler ───────────────────────────────
 
-    fn handle_cheat_click(&mut self, btn: CheatBtn, _right_click: bool) {
+    fn handle_cheat_click(&mut self, btn: CheatBtn, right_click: bool) {
         match btn {
             CheatBtn::HeroPack => {
                 self.pending_commands.push(DebugCommand::HeroPack);
@@ -692,6 +702,27 @@ impl<'a> DebugWindow<'a> {
             CheatBtn::GodAllOff => {
                 self.god_mode_flags = 0;
                 self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::empty() });
+            }
+            CheatBtn::MagicLight => {
+                if right_click {
+                    self.light_sticky = !self.light_sticky;
+                } else {
+                    self.pending_commands.push(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Light });
+                }
+            }
+            CheatBtn::MagicSecret => {
+                if right_click {
+                    self.secret_sticky = !self.secret_sticky;
+                } else {
+                    self.pending_commands.push(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Secret });
+                }
+            }
+            CheatBtn::MagicFreeze => {
+                if right_click {
+                    self.freeze_sticky = !self.freeze_sticky;
+                } else {
+                    self.pending_commands.push(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Freeze });
+                }
             }
         }
     }
@@ -1349,6 +1380,34 @@ impl<'a> DebugWindow<'a> {
         let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "All Off",
             left + "All On".len() as i32 * char_w + 16, y, char_w, line_h, false);
         self.cheat_buttons.push((r, CheatBtn::GodAllOff));
+        y += line_h + 6;
+        draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── Magic Effects (debug-108) — left-click applies, right-click = sticky ──
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("Magic Effects  (right-click = sticky)", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let effect_defs: [(i16, bool, CheatBtn); 3] = [
+            (state.timers.as_ref().map(|t| t.light_timer).unwrap_or(0),  self.light_sticky,  CheatBtn::MagicLight),
+            (state.timers.as_ref().map(|t| t.secret_timer).unwrap_or(0), self.secret_sticky, CheatBtn::MagicSecret),
+            (state.timers.as_ref().map(|t| t.freeze_timer).unwrap_or(0), self.freeze_sticky, CheatBtn::MagicFreeze),
+        ];
+        let effect_names = ["Light", "Secret", "Freeze"];
+        let mut mx = left;
+        for ((timer, sticky, btn), name) in effect_defs.iter().zip(effect_names.iter()) {
+            let lbl = if *sticky {
+                format!("{}: {} [STICKY]", name, timer)
+            } else if *timer > 0 {
+                format!("{}: {}", name, timer)
+            } else {
+                format!("{}: OFF", name)
+            };
+            let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, &lbl, mx, y, char_w, line_h, *sticky);
+            self.cheat_buttons.push((r, btn.clone()));
+            mx += lbl.len() as i32 * char_w + 16;
+        }
         y += line_h + 6;
         draw_separator(&mut self.canvas, y);
 
