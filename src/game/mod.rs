@@ -38,6 +38,8 @@ pub mod settings;
 pub mod songs;
 pub mod sprites;
 pub mod viewport_zoom;
+pub mod hiscreen;
+pub mod message_queue;
 pub mod map_renderer;
 pub mod map_view;
 pub mod tile_atlas;
