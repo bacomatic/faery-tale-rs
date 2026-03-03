@@ -55,6 +55,35 @@ impl Npc {
             active: data[0] != NPC_TYPE_NONE,
         }
     }
+
+    /// Update NPC position for one frame tick.
+    /// Returns true if NPC is now adjacent to hero (triggers encounter).
+    pub fn tick(&mut self, hero_x: i16, hero_y: i16) -> bool {
+        if !self.active { return false; }
+
+        let dx = hero_x - self.x;
+        let dy = hero_y - self.y;
+        let dist_sq = (dx as i32).pow(2) + (dy as i32).pow(2);
+
+        let speed = self.speed as i16;
+        if dist_sq < 200 * 200 {
+            if dx.abs() > dy.abs() {
+                self.x += dx.signum() * speed;
+            } else {
+                self.y += dy.signum() * speed;
+            }
+        }
+
+        dist_sq < 16 * 16
+    }
+
+    /// Defeat this NPC (on encounter win).
+    pub fn defeat(&mut self) -> (i16, i16) {
+        self.active = false;
+        let loot = (self.gold, self.vitality);
+        self.vitality = 0;
+        loot
+    }
 }
 
 /// Load NPC records for a region from ADF block data.
@@ -119,5 +148,28 @@ mod tests {
         assert!(npc.active);
         assert_eq!(npc.npc_type, NPC_TYPE_HUMAN);
         assert_eq!(npc.x, 256);
+    }
+
+    #[test]
+    fn test_npc_tick_chase() {
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 0, y: 0,
+            vitality: 10,
+            gold: 5,
+            speed: 2,
+            active: true,
+        };
+        let _ = npc.tick(100, 0); // hero at x=100
+        assert!(npc.x > 0); // should have moved toward hero
+    }
+
+    #[test]
+    fn test_npc_defeat() {
+        let mut npc = Npc { active: true, gold: 50, vitality: 10, ..Default::default() };
+        let (gold, _) = npc.defeat();
+        assert!(!npc.active);
+        assert_eq!(gold, 50);
     }
 }

@@ -5,10 +5,19 @@ use crate::game::debug_command::GodModeFlags;
 pub const ITEM_LASSO: usize = 16;
 /// Swan carrier type ID (from original cfile/carrier tables).
 pub const CARRIER_SWAN: i16 = 1;
+/// Raft carrier type ID.
+pub const CARRIER_RAFT: i16 = 5;
 /// Max hunger before starvation effects begin (original: 300).
 pub const MAX_HUNGER: i16 = 300;
 /// Item index for food in stuff[].
 pub const ITEM_FOOD: usize = 0;
+/// Turtle egg item index in stuff[].
+pub const ITEM_TURTLE_EGG: usize = 17;
+/// Shell item index in stuff[].
+pub const ITEM_SHELL: usize = 18;
+/// Turtle nest coordinates (world-space, placeholder values).
+pub const TURTLE_NEST_X: u16 = 0x2000;
+pub const TURTLE_NEST_Y: u16 = 0x4000;
 
 pub struct GameState {
     // Hero position
@@ -88,6 +97,7 @@ pub struct GameState {
 
     // Carrier/special
     pub active_carrier: i16,
+    pub on_raft: bool,
     pub actor_file: i16,
     pub set_file: i16,
 
@@ -117,6 +127,9 @@ pub struct GameState {
 }
 
 impl GameState {
+    /// Max fatigue before forced sleep (original: 500).
+    pub const MAX_FATIGUE: i16 = 500;
+
     /// Initialize to Julian's starting state (mirrors `revive(TRUE)` in original).
     pub fn new() -> Self {
         let mut actors = Vec::with_capacity(20);
@@ -182,6 +195,7 @@ impl GameState {
             encounter_number: 0,
 
             active_carrier: 0,
+            on_raft: false,
             actor_file: 0,
             set_file: 0,
 
@@ -343,6 +357,46 @@ impl GameState {
         self.stuff()[ITEM_LASSO] != 0
     }
 
+    /// Board a raft carrier. Returns true if successful.
+    pub fn board_raft(&mut self) -> bool {
+        if self.active_carrier == CARRIER_RAFT {
+            self.on_raft = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Disembark from raft.
+    pub fn leave_raft(&mut self) {
+        self.on_raft = false;
+        self.active_carrier = 0;
+    }
+
+    /// Attempt to rescue a turtle egg from a dead snake NPC.
+    /// Returns true if an egg was found.
+    pub fn try_rescue_egg(&mut self) -> bool {
+        if self.luck > 50 {
+            self.stuff_mut()[ITEM_TURTLE_EGG] += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Return eggs to the turtle nest for shell reward.
+    /// Returns number of shells received.
+    pub fn return_eggs_to_nest(&mut self, hero_x: u16, hero_y: u16) -> u8 {
+        let at_nest = hero_x.abs_diff(TURTLE_NEST_X) < 32
+            && hero_y.abs_diff(TURTLE_NEST_Y) < 32;
+        if !at_nest { return 0; }
+        let eggs = self.stuff()[ITEM_TURTLE_EGG];
+        if eggs == 0 { return 0; }
+        self.stuff_mut()[ITEM_TURTLE_EGG] = 0;
+        self.stuff_mut()[ITEM_SHELL] += eggs;
+        eggs
+    }
+
     /// Attempt to start swan flight. Returns true if successful.
     /// Requires: has_lasso AND a swan carrier is nearby (active_carrier == CARRIER_SWAN).
     pub fn start_swan_flight(&mut self) -> bool {
@@ -418,6 +472,43 @@ impl GameState {
             items.join(", ")
         }
     }
+
+    /// Increment fatigue by 1. At MAX_FATIGUE, resets to 0 (forced sleep).
+    /// Returns true if forced sleep occurred.
+    pub fn tick_fatigue(&mut self) -> bool {
+        self.fatigue = (self.fatigue + 1).min(Self::MAX_FATIGUE);
+        if self.fatigue >= Self::MAX_FATIGUE {
+            self.fatigue = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Update safe spawn point if current terrain is passable (not water).
+    /// terrain_type: 0=open, 1=hard block edge; 2+ = water/impassable.
+    pub fn update_safe_spawn(&mut self, terrain_type: u8) {
+        if terrain_type < 2 {
+            self.safe_x = self.hero_x;
+            self.safe_y = self.hero_y;
+            self.safe_r = self.region_num;
+        }
+    }
+
+    /// Attempt luck-gated respawn. Returns true if respawned.
+    /// Requires luck >= 10; costs 10 luck per use.
+    pub fn try_respawn(&mut self) -> bool {
+        if self.luck >= 10 {
+            self.luck -= 10;
+            self.hero_x = self.safe_x;
+            self.hero_y = self.safe_y;
+            self.region_num = self.safe_r;
+            self.vitality = 10;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -446,5 +537,32 @@ mod tests {
         let vit_before = state.vitality;
         state.apply_hunger_effects();
         assert_eq!(state.vitality, vit_before - 1);
+    }
+
+    #[test]
+    fn test_tick_fatigue_max() {
+        let mut s = GameState::new();
+        s.fatigue = GameState::MAX_FATIGUE - 1;
+        let forced = s.tick_fatigue();
+        assert!(forced);
+        assert_eq!(s.fatigue, 0);
+    }
+
+    #[test]
+    fn test_update_safe_spawn() {
+        let mut s = GameState::new();
+        s.hero_x = 100; s.hero_y = 200; s.region_num = 3;
+        s.update_safe_spawn(0);
+        assert_eq!(s.safe_x, 100);
+        s.hero_x = 999;
+        s.update_safe_spawn(3); // water — should not update
+        assert_eq!(s.safe_x, 100);
+    }
+
+    #[test]
+    fn test_try_respawn_no_luck() {
+        let mut s = GameState::new();
+        s.luck = 5;
+        assert!(!s.try_respawn());
     }
 }

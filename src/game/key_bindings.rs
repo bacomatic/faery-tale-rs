@@ -18,19 +18,25 @@ pub enum GameAction {
 
     // Combat
     Fight,
+    Attack,
 
     // Menu / UI
     Pause,
     Inventory,
     Take,
     Look,
+    LookAround,
     UseItem,
     Give,
+    GetItem,
+    DropItem,
     Yell,
     Speak,
+    Talk,
     Ask,
     Map,
     Find,
+    Sleep,
     Quit,
     LoadGame,
     SaveGame,
@@ -56,6 +62,7 @@ pub enum GameAction {
 
     // Special
     UseSpecial,
+    Board,
 
     // Shop actions
     BuyFood,

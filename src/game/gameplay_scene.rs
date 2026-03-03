@@ -127,9 +127,11 @@ impl GameplayScene {
         let prev_y = self.state.hero_y;
 
         if dir != Direction::None {
-            // Speed: flying=4px, water terrain (type 2-5)=1px, default=2px.
+            // Speed: flying=4px, on_raft=2px (water passable), water terrain (type 2-5)=1px, default=2px.
             let speed: i32 = if self.state.flying != 0 {
                 4
+            } else if self.state.on_raft {
+                2
             } else if let Some(ref world) = self.map_world {
                 let terrain = collision::px_to_terrain_type(
                     world,
@@ -144,7 +146,7 @@ impl GameplayScene {
             let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
             let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
 
-            if self.state.flying != 0 || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32) {
+            if self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
                 if let Some(door) = crate::game::doors::doorfind(self.state.region_num, new_x, new_y) {
@@ -194,6 +196,16 @@ impl GameplayScene {
     fn update_actors(&mut self, _delta: u32) {
         for _actor in self.state.actors[0..self.state.anix].iter_mut() {
             // TODO: npc-002 will add AI here
+        }
+        if let Some(ref mut table) = self.npc_table {
+            let hero_x = self.state.hero_x as i16;
+            let hero_y = self.state.hero_y as i16;
+            for npc in &mut table.npcs {
+                let adjacent = npc.tick(hero_x, hero_y);
+                if adjacent && npc.active {
+                    self.messages.push(format!("An enemy approaches!"));
+                }
+            }
         }
     }
 
@@ -250,6 +262,13 @@ impl GameplayScene {
             GameAction::Rebind => {
                 self.rebinding.active = !self.rebinding.active;
                 eprintln!("Rebinding mode: {}", self.rebinding.active);
+            }
+            GameAction::Board => {
+                if self.state.board_raft() {
+                    self.messages.push("You board the raft.");
+                } else {
+                    self.messages.push("Nothing to board here.");
+                }
             }
             _ => {}
         }
@@ -493,6 +512,10 @@ impl Scene for GameplayScene {
         }
 
         self.apply_player_input();
+        let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y);
+        if shells > 0 {
+            self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
+        }
         self.update_actors(delta_ticks);
 
         // Camera: center hero in 288×160 viewport (gameloop-110)
