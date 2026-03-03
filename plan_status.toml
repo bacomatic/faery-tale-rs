@@ -7,11 +7,11 @@ issues_enabled_on = "2026-03-01"
 id = "gameloop-001"
 title = "Core game loop"
 area = "gameplay"
-state = "todo"
+state = "in_progress"
 priority = "high"
 depends_on = []
 notes = "Rollup: central orchestration for the main gameplay loop."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#59"
 
 [[task]]
@@ -19,11 +19,11 @@ id = "gameloop-101"
 parent = "gameloop-001"
 title = "GameState struct"
 area = "gameplay"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = []
 notes = "Central container for all mutable gameplay state."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#62"
 
 [[task]]
@@ -31,11 +31,11 @@ id = "gameloop-102"
 parent = "gameloop-001"
 title = "Actor struct"
 area = "gameplay"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = []
 notes = "Unified data structure for all on-screen entities (player, enemies, NPCs, objects)."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#60"
 
 [[task]]
@@ -198,11 +198,11 @@ issue = "#61"
 id = "debug-001"
 title = "Debug window enhancements"
 area = "tools"
-state = "todo"
+state = "in_progress"
 priority = "medium"
 depends_on = ["gameloop-001"]
 notes = "Rollup: expand debug window with live state inspection, stat/inventory editing, and cheat controls."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#58"
 
 [[task]]
@@ -210,11 +210,11 @@ id = "debug-101"
 parent = "debug-001"
 title = "DebugCommand enum"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = ["gameloop-101"]
 notes = "Mutation request types from debug window to game state."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#85"
 
 [[task]]
@@ -222,11 +222,11 @@ id = "debug-102"
 parent = "debug-001"
 title = "Extend DebugState with gameplay fields"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = ["gameloop-101", "gameloop-102"]
 notes = "Add hero stats, inventory, actor list, timers to DebugState snapshot."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#68"
 
 [[task]]
@@ -234,11 +234,11 @@ id = "debug-103"
 parent = "debug-001"
 title = "Player tab (F7)"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = ["debug-101", "debug-102"]
 notes = "Live hero stats and inventory display with inc/dec buttons."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#79"
 
 [[task]]
@@ -246,11 +246,11 @@ id = "debug-104"
 parent = "debug-001"
 title = "Actors tab (F8)"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-102"]
 notes = "Active actor list with expandable detail and color coding."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#83"
 
 [[task]]
@@ -258,11 +258,11 @@ id = "debug-105"
 parent = "debug-001"
 title = "Cheats: stat/inventory shortcuts"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-101"]
 notes = "Hero Pack button and Max Stats button."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#81"
 
 [[task]]
@@ -270,11 +270,11 @@ id = "debug-106"
 parent = "debug-001"
 title = "Cheats: teleport controls"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-101"]
 notes = "Teleport to safe, stone ring, or arbitrary coordinates."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#78"
 
 [[task]]
@@ -282,11 +282,11 @@ id = "debug-107"
 parent = "debug-001"
 title = "Cheats: god mode"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-101"]
 notes = "Noclip, invincible, one-hit kill (enemy only), insane reach (enemy only)."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#67"
 
 [[task]]
@@ -294,11 +294,11 @@ id = "debug-108"
 parent = "debug-001"
 title = "Cheats: magic effect toggles"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-101"]
 notes = "Light/Secret/Freeze toggles with ALT+click sticky mode."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#72"
 
 [[task]]
@@ -306,11 +306,11 @@ id = "debug-109"
 parent = "debug-001"
 title = "Cheats: swan summon"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "low"
 depends_on = ["debug-101"]
 notes = "Place swan at hero pos, grant lasso if missing."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#80"
 
 [[task]]
@@ -318,11 +318,11 @@ id = "debug-110"
 parent = "debug-001"
 title = "Cheats: time controls"
 area = "tools"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["debug-101"]
 notes = "Day phase jump, set time, hold time of day."
-updated = "2026-03-02"
+updated = "2026-03-03"
 issue = "#82"
 
 [[task]]
