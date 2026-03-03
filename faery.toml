@@ -1,3 +1,6 @@
+[paths]
+image = "game/image"
+
 # Top level stuff needs to go here
 copy_protect_junk = [
     { question = "To Quest for the...?", answer = "LIGHT" },
