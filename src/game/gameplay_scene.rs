@@ -155,6 +155,13 @@ impl GameplayScene {
                     self.state.hero_y = door.dst_y;
                     eprintln!("{:?}", crate::game::game_event::GameEvent::RegionTransition { region: door.dst_region });
                 }
+                // Track safe spawn point after successful movement.
+                if let Some(ref world) = self.map_world {
+                    let terrain = collision::px_to_terrain_type(
+                        world, self.state.hero_x as i32, self.state.hero_y as i32,
+                    );
+                    self.state.update_safe_spawn(terrain);
+                }
             }
 
             let facing: u8 = match dir {
@@ -243,7 +250,7 @@ impl GameplayScene {
         }
     }
 
-    /// Dispatch a game menu/command action (stub — will be fleshed out per-action later).
+    /// Dispatch a game menu/command action.
     fn do_option(&mut self, action: GameAction) {
         eprintln!("do_option: {:?}", action);
         match action {
@@ -269,6 +276,45 @@ impl GameplayScene {
                 } else {
                     self.messages.push("Nothing to board here.");
                 }
+            }
+            GameAction::Sleep => {
+                let at_door = crate::game::doors::doorfind(
+                    self.state.region_num, self.state.hero_x, self.state.hero_y
+                ).is_some();
+                if at_door {
+                    self.messages.push("Cannot sleep here.");
+                } else {
+                    self.state.fatigue = 0;
+                    self.state.hunger = (self.state.hunger + 50)
+                        .min(crate::game::game_state::MAX_HUNGER);
+                    self.messages.push("You sleep and rest.");
+                    eprintln!("Player slept: fatigue reset");
+                }
+            }
+            GameAction::GetItem => {
+                self.messages.push("Nothing here to take.");
+                eprintln!("GetItem: stub");
+            }
+            GameAction::DropItem => {
+                self.messages.push("Dropped item.");
+                eprintln!("DropItem: stub");
+            }
+            GameAction::LookAround => {
+                let region = self.state.region_num;
+                let msg = format!("Region {}. Vitality: {}. Gold: {}.",
+                    region, self.state.vitality, self.state.gold);
+                self.messages.push(msg);
+            }
+            GameAction::Talk => {
+                self.messages.push("There is no one to talk to.");
+            }
+            GameAction::Attack => {
+                self.messages.push("Nothing to attack.");
+                eprintln!("Attack: stub");
+            }
+            GameAction::UseItem => {
+                self.messages.push("Nothing to use.");
+                eprintln!("UseItem: stub");
             }
             _ => {}
         }
@@ -440,6 +486,12 @@ impl Scene for GameplayScene {
         self.tick_accum += delta_ticks;
         self.state.tick(delta_ticks);
 
+        // Fatigue: tick once per frame; forced sleep on exhaustion.
+        if self.state.tick_fatigue() {
+            self.messages.push("Exhausted! You fall asleep.");
+            eprintln!("Forced sleep: fatigue max reached");
+        }
+
         // setmood: check music group every 8 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
         if self.mood_tick >= 8 {
@@ -500,7 +552,10 @@ impl Scene for GameplayScene {
 
         // Death / revive cycle (gameloop-106)
         if self.state.vitality <= 0 && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE) {
-            if let Some(next) = self.state.next_brother() {
+            if self.state.try_respawn() {
+                self.messages.push("Lucky! You barely survive...");
+                eprintln!("try_respawn: luck-gated respawn succeeded");
+            } else if let Some(next) = self.state.next_brother() {
                 self.state.activate_brother(next);
                 // TODO: trigger brother-transition placard (gameloop-104 handles scene transition)
                 eprintln!("Brother died, switching to brother {}", next);

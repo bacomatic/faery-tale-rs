@@ -725,11 +725,11 @@ id = "player-103"
 parent = "player-001"
 title = "Player commands"
 area = "gameplay"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["world-107"]
-notes = "Not started."
-updated = "2026-03-01"
+notes = "do_option() handles Sleep (door-gate exploit guard), GetItem, DropItem, LookAround, Talk, Attack, UseItem."
+updated = "2026-07-14"
 issue = "#22"
 
 [[task]]
@@ -821,11 +821,11 @@ id = "player-111"
 parent = "player-001"
 title = "Implement fatigue mechanic with sleep gate exploit guardrail"
 area = "gameplay"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = ["player-101", "player-104"]
-notes = "Implement fatigue and forced sleep; do not allow sleeping at locked gates/doors to wake on the opposite side and bypass locks."
-updated = "2026-03-01"
+notes = "tick_fatigue() increments fatigue per frame; MAX_FATIGUE=500 triggers forced sleep. Sleep action gated by door check."
+updated = "2026-07-14"
 issue = "#46"
 
 [[task]]
@@ -833,11 +833,11 @@ id = "player-112"
 parent = "player-001"
 title = "Implement safe spawn tracking with luck-gated respawn"
 area = "gameplay"
-state = "todo"
+state = "done"
 priority = "high"
 depends_on = ["player-101", "player-102", "player-104"]
-notes = "Track the last safe non-liquid terrain coordinate and respawn there on death when the player has sufficient luck remaining."
-updated = "2026-03-01"
+notes = "update_safe_spawn() tracks last non-water position after movement; try_respawn() gates revival on luck>=10."
+updated = "2026-07-14"
 issue = "#48"
 
 [[task]]
