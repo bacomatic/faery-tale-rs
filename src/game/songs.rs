@@ -183,7 +183,7 @@ pub type Track = Vec<TrackEvent>;
 /// as `tracks[0..28]`, matching the original C `track[]` array.
 ///
 /// Tracks 12–15 are the intro music (voiced by the four Amiga Paula channels).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SongLibrary {
     /// All decoded tracks in file order.  Length ≤ 28.
     pub tracks: Vec<Track>,

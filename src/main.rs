@@ -137,6 +137,12 @@ pub fn main() -> Result<(), String> {
         }
     };
 
+    // Attach the song library to the audio system so set_score() can switch groups.
+    let mut audio_system = audio_system;
+    if let (Some(ref mut a), Some(lib)) = (audio_system.as_mut(), song_library.as_ref()) {
+        a.attach_library(lib.clone());
+    }
+
     let mut mouse_cursor: Option<Cursor> = None;
     if let Some(pointer) = game_lib.get_cursor("bow") {
         mouse_cursor = set_mouse(pointer, &sys_palette);

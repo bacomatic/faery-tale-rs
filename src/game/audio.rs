@@ -777,6 +777,7 @@ pub struct AudioSystem {
     instruments: Instruments,
     sfx: Arc<Mutex<SfxChannel>>,
     _device: AudioDevice<SynthCallback>,
+    song_library: Option<SongLibrary>,
 }
 
 impl AudioSystem {
@@ -809,7 +810,7 @@ impl AudioSystem {
 
         device.resume();
 
-        Ok(AudioSystem { state, instruments, sfx, _device: device })
+        Ok(AudioSystem { state, instruments, sfx, _device: device, song_library: None })
     }
 
     /// Start playing four tracks from the beginning (mirrors `_playscore`).
@@ -866,6 +867,28 @@ impl AudioSystem {
         } else {
             false
         }
+    }
+
+    /// Attach a [`SongLibrary`] to enable [`set_score`](Self::set_score).
+    pub fn attach_library(&mut self, library: SongLibrary) {
+        self.song_library = Some(library);
+    }
+
+    /// Switch to a song group (0–6) based on game mood.
+    ///
+    /// If the requested group is already playing, this is a no-op.
+    /// Mirrors the `setmood`→`playscore` path from `fmain.c`.
+    pub fn set_score(&self, group: u8) {
+        let group = group as usize;
+        if self.current_group() == Some(group) {
+            return;
+        }
+        if let Some(ref lib) = self.song_library {
+            if self.play_group(group, lib) {
+                return;
+            }
+        }
+        eprintln!("audio: set_score({}) — library not available or group missing", group);
     }
 
     /// Load the 6 sound effects from `path` (the `game/samples` file).

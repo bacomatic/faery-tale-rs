@@ -54,6 +54,8 @@ pub struct GameplayScene {
     map_world: Option<crate::game::world_data::WorldData>,
     rebinding: RebindingState,
     local_bindings: KeyBindings,
+    last_region_num: u8,
+    palette_transition: Option<crate::game::palette::PaletteTransition>,
 }
 
 impl GameplayScene {
@@ -71,6 +73,8 @@ impl GameplayScene {
             map_world: None,
             rebinding: RebindingState { active: false, waiting_for_action: None },
             local_bindings: KeyBindings::default_bindings(),
+            last_region_num: u8::MAX,
+            palette_transition: None,
         }
     }
 
@@ -368,8 +372,31 @@ impl Scene for GameplayScene {
             let mood = self.setmood();
             if mood != self.last_mood {
                 self.last_mood = mood;
-                eprintln!("setmood: {}", mood);
-                // audio.set_score(mood) wiring comes in audio-105
+                eprintln!("setmood: switching to group {}", mood);
+                if let Some(audio) = _resources.audio {
+                    audio.set_score(mood);
+                }
+            }
+        }
+
+        // Region palette transition (world-109)
+        let region = self.state.region_num;
+        if region != self.last_region_num {
+            eprintln!("region_num changed: {} -> {}", self.last_region_num, region);
+            let from = self.palette_transition
+                .as_ref()
+                .map(|pt| pt.to)
+                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
+            let to = [crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE];
+            self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
+            self.last_region_num = region;
+        }
+        if let Some(ref mut pt) = self.palette_transition {
+            if !pt.is_done() {
+                let palette = pt.tick();
+                if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
+                    mr.atlas.rebuild(world, &palette);
+                }
             }
         }
 
