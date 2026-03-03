@@ -107,6 +107,74 @@ pub const SAMPLE_RATE: u32 = 44100;
 const SAMPLES_PER_VBL: f64 = SAMPLE_RATE as f64 / VBL_RATE_HZ as f64;
 
 // ---------------------------------------------------------------------------
+// Sound effects
+// ---------------------------------------------------------------------------
+
+/// Number of sound effects packed in the `game/samples` file.
+const SFX_COUNT: usize = 6;
+
+/// Approximate playback rate of the original Amiga SFX in Hz.
+/// The original `playsample()` uses a Paula period; 8 000 Hz is a close
+/// approximation for these particular samples (period ≈ 443 at NTSC clock).
+const SFX_SAMPLE_RATE: u32 = 8000;
+
+/// Resampling step: SFX source samples consumed per 44 100 Hz output frame.
+const SFX_STEP: f64 = SFX_SAMPLE_RATE as f64 / SAMPLE_RATE as f64;
+
+/// Amplitude scale applied to SFX when mixing (equivalent to one full-volume
+/// music voice).
+const SFX_AMPLITUDE: f32 = 0.5;
+
+/// Playback cursor for the currently-active sound effect.
+struct SfxPlayback {
+    data: Arc<Vec<i8>>,
+    /// Fractional read position; advances by `SFX_STEP` per output frame.
+    pos: f64,
+}
+
+/// All SFX state shared between the main thread and the audio callback.
+pub struct SfxChannel {
+    /// Decoded PCM for each of the 6 effects; `None` until `load_samples`.
+    samples: [Option<Arc<Vec<i8>>>; SFX_COUNT],
+    /// The effect currently playing, if any.
+    active: Option<SfxPlayback>,
+}
+
+impl SfxChannel {
+    fn new() -> Self {
+        SfxChannel {
+            samples: Default::default(),
+            active: None,
+        }
+    }
+
+    /// Resample and mix the active SFX into `left` and `right` (both centred).
+    /// Uses nearest-neighbour interpolation to match the Amiga Paula hardware.
+    fn mix_into(&mut self, left: &mut [f32], right: &mut [f32], frames: usize) {
+        let pb = match &mut self.active {
+            Some(pb) => pb,
+            None => return,
+        };
+        let len = pb.data.len();
+        let mut finished = false;
+        for i in 0..frames {
+            let idx = pb.pos as usize;
+            if idx >= len {
+                finished = true;
+                break;
+            }
+            let s = pb.data[idx] as f32 / 128.0 * SFX_AMPLITUDE;
+            left[i]  += s;
+            right[i] += s;
+            pb.pos += SFX_STEP;
+        }
+        if finished {
+            self.active = None;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Instruments / voice data
 // ---------------------------------------------------------------------------
 
@@ -617,6 +685,7 @@ impl SequencerState {
 struct SynthCallback {
     state: Arc<Mutex<SequencerState>>,
     instruments: Instruments,
+    sfx: Arc<Mutex<SfxChannel>>,
     /// When true, use nearest-neighbor instead of linear interpolation in the PCM mixer.
     no_interpolation: bool,
 }
@@ -677,6 +746,11 @@ impl AudioCallback for SynthCallback {
             st.voices[1].mix_stereo(&mut right_buf, &mut left_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
             st.voices[2].mix_stereo(&mut right_buf, &mut left_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
 
+            // Mix any active SFX (independent of the 4 music voices; centred stereo).
+            if let Ok(mut sfx) = self.sfx.lock() {
+                sfx.mix_into(&mut left_buf, &mut right_buf, chunk_frames);
+            }
+
             // Interleave left/right into the stereo output buffer.
             // Scale f32 [-1.0, 1.0] → i16 [-32767, 32767]; SDL2 converts
             // to the device's native format if needed.
@@ -701,6 +775,7 @@ impl AudioCallback for SynthCallback {
 pub struct AudioSystem {
     state: Arc<Mutex<SequencerState>>,
     instruments: Instruments,
+    sfx: Arc<Mutex<SfxChannel>>,
     _device: AudioDevice<SynthCallback>,
 }
 
@@ -725,13 +800,16 @@ impl AudioSystem {
         // Clone instruments for the callback; the original is kept for play_score
         let instruments_cb = instruments.clone();
 
+        let sfx = Arc::new(Mutex::new(SfxChannel::new()));
+        let sfx_cb = Arc::clone(&sfx);
+
         let device = audio_subsystem.open_playback(None, &desired, |_spec| {
-            SynthCallback { state: state_cb, instruments: instruments_cb, no_interpolation }
+            SynthCallback { state: state_cb, instruments: instruments_cb, sfx: sfx_cb, no_interpolation }
         })?;
 
         device.resume();
 
-        Ok(AudioSystem { state, instruments, _device: device })
+        Ok(AudioSystem { state, instruments, sfx, _device: device })
     }
 
     /// Start playing four tracks from the beginning (mirrors `_playscore`).
@@ -787,6 +865,60 @@ impl AudioSystem {
             !st.nosound
         } else {
             false
+        }
+    }
+
+    /// Load the 6 sound effects from `path` (the `game/samples` file).
+    ///
+    /// Format (from `read_sample()` in `fmain.c`): six contiguous records,
+    /// each consisting of a 4-byte big-endian length followed by that many
+    /// bytes of signed 8-bit PCM at [`SFX_SAMPLE_RATE`] Hz.
+    ///
+    /// If the file is absent or unreadable, returns `Ok(())` with a warning;
+    /// SFX will silently not play while music continues unaffected.
+    pub fn load_samples(&mut self, path: &Path) -> Result<(), String> {
+        let data = match fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("audio: SFX file not found ({path:?}): {e}; SFX disabled");
+                return Ok(());
+            }
+        };
+
+        let mut sfx = self.sfx.lock().map_err(|e| format!("sfx lock poisoned: {e}"))?;
+        let mut cursor = 0usize;
+        for i in 0..SFX_COUNT {
+            if cursor + 4 > data.len() {
+                eprintln!("audio: SFX {i}: unexpected end of samples file; remaining SFX disabled");
+                break;
+            }
+            let len = u32::from_be_bytes([
+                data[cursor], data[cursor + 1], data[cursor + 2], data[cursor + 3],
+            ]) as usize;
+            cursor += 4;
+            if cursor + len > data.len() {
+                eprintln!("audio: SFX {i}: declared length {len} exceeds file size; remaining SFX disabled");
+                break;
+            }
+            let pcm: Vec<i8> = data[cursor..cursor + len].iter().map(|&b| b as i8).collect();
+            sfx.samples[i] = Some(Arc::new(pcm));
+            cursor += len;
+        }
+        Ok(())
+    }
+
+    /// Trigger sound effect `sfx_id` (0–5).  Plays alongside music voices
+    /// without interrupting them.  If `sfx_id` is out of range or samples
+    /// have not been loaded, this is a no-op.
+    pub fn play_sfx(&self, sfx_id: u8) {
+        let id = sfx_id as usize;
+        if id >= SFX_COUNT {
+            return;
+        }
+        if let Ok(mut sfx) = self.sfx.lock() {
+            if let Some(data) = sfx.samples[id].clone() {
+                sfx.active = Some(SfxPlayback { data, pos: 0.0 });
+            }
         }
     }
 }
