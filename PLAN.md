@@ -43,18 +43,18 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 Machine-readable mirror: `plan_status.toml`
 
 ### In Progress
-- [audio-001] Audio system (3/5 steps complete; 2 deferred; Issue: #1)
-- [gfx-001] Graphics effects (1/5 steps in progress; Issue: #2)
-- [world-001] Game world & map system (0/11 steps complete; Issue: #3)
-- [player-001] Player & movement (0/14 steps complete; Issue: #4)
-- [npc-001] NPC system (0/7 steps complete; Issue: #5)
-- [keys-001] Key bindings (0/7 steps complete; Issue: #6)
-- [gameloop-001] Core game loop (2/15 steps complete; Issue: #59)
-- [debug-001] Debug window enhancements (10/11 steps complete; debug-111 unblocked by persist-001; Issue: #58)
 
 ### Todo
 
 ### Done
+- [gameloop-001] Core game loop (15/15 steps complete; Issue: #59)
+- [debug-001] Debug window enhancements (11/11 steps complete; Issue: #58)
+- [audio-001] Audio system (5/5 steps complete; Issue: #1)
+- [gfx-001] Graphics effects (5/5 steps complete; Issue: #2)
+- [world-001] Game world & map system (11/11 steps complete; Issue: #3)
+- [player-001] Player & movement (14/14 steps complete; Issue: #4)
+- [npc-001] NPC system (7/7 steps complete; Issue: #5)
+- [keys-001] Key bindings (7/7 steps complete; Issue: #6)
 - [persist-001] Persistence (3/3 steps complete; Issue: #7)
 - [intro-001] Intro sequence end-to-end (6/6 steps complete; Issue: pre-issues)
 - [vkbd-001] Virtual keyboard & sine wave tuning tool (3/3 steps complete; Issue: pre-issues)
