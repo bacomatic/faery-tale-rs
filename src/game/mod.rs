@@ -35,4 +35,6 @@ pub mod render_task;
 pub mod scene;
 pub mod settings;
 pub mod songs;
+pub mod sprites;
 pub mod viewport_zoom;
+pub mod world_data;
