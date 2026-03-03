@@ -12,7 +12,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::game::colors::Palette;
-use crate::game::debug_command::{DebugCommand, StatId};
+use crate::game::debug_command::{DebugCommand, GodModeFlags, StatId};
 use sdl2::mouse::MouseButton;
 use crate::game::font::DiskFont;
 use crate::game::font_texture::FontTexture;
@@ -262,6 +262,12 @@ enum CheatBtn {
     CoordYPlus,
     CoordYMinus,
     CoordGo,
+    GodNoclip,
+    GodInvincible,
+    GodOneHit,
+    GodInsaneReach,
+    GodAllOn,
+    GodAllOff,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -310,6 +316,8 @@ pub struct DebugWindow<'a> {
     /// Coordinate entry for TeleportCoords.
     coord_x: u16,
     coord_y: u16,
+    /// Local copy of god mode flags; updated on click.
+    god_mode_flags: u8,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -408,6 +416,7 @@ impl<'a> DebugWindow<'a> {
             cheat_buttons: Vec::new(),
             coord_x: 0,
             coord_y: 0,
+            god_mode_flags: 0,
             placard_texture: placard_tex,
         })
     }
@@ -659,6 +668,30 @@ impl<'a> DebugWindow<'a> {
             CheatBtn::CoordYMinus => { self.coord_y = self.coord_y.saturating_sub(100); }
             CheatBtn::CoordGo => {
                 self.pending_commands.push(DebugCommand::TeleportCoords { x: self.coord_x, y: self.coord_y });
+            }
+            CheatBtn::GodNoclip => {
+                self.god_mode_flags ^= GodModeFlags::NOCLIP.bits();
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::from_bits_truncate(self.god_mode_flags) });
+            }
+            CheatBtn::GodInvincible => {
+                self.god_mode_flags ^= GodModeFlags::INVINCIBLE.bits();
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::from_bits_truncate(self.god_mode_flags) });
+            }
+            CheatBtn::GodOneHit => {
+                self.god_mode_flags ^= GodModeFlags::ONE_HIT_KILL.bits();
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::from_bits_truncate(self.god_mode_flags) });
+            }
+            CheatBtn::GodInsaneReach => {
+                self.god_mode_flags ^= GodModeFlags::INSANE_REACH.bits();
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::from_bits_truncate(self.god_mode_flags) });
+            }
+            CheatBtn::GodAllOn => {
+                self.god_mode_flags = GodModeFlags::all().bits();
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::all() });
+            }
+            CheatBtn::GodAllOff => {
+                self.god_mode_flags = 0;
+                self.pending_commands.push(DebugCommand::SetGodMode { flags: GodModeFlags::empty() });
             }
         }
     }
@@ -1285,6 +1318,37 @@ impl<'a> DebugWindow<'a> {
 
         let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "Go", cx, y, char_w, line_h, false);
         self.cheat_buttons.push((r, CheatBtn::CoordGo));
+        y += line_h + 6;
+        draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── God Mode (debug-107) ──────────────────────────────────────
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("God Mode", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let flags = GodModeFlags::from_bits_truncate(self.god_mode_flags);
+        let god_defs: [(GodModeFlags, &str, CheatBtn); 4] = [
+            (GodModeFlags::NOCLIP,       "Noclip",       CheatBtn::GodNoclip),
+            (GodModeFlags::INVINCIBLE,   "Invincible",   CheatBtn::GodInvincible),
+            (GodModeFlags::ONE_HIT_KILL, "One-Hit Kill", CheatBtn::GodOneHit),
+            (GodModeFlags::INSANE_REACH, "Insane Reach", CheatBtn::GodInsaneReach),
+        ];
+        let mut gx = left;
+        for (flag, label, btn) in &god_defs {
+            let is_on = flags.contains(*flag);
+            let lbl = format!("{} {}", label, if is_on { "ON" } else { "OFF" });
+            let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, &lbl, gx, y, char_w, line_h, is_on);
+            self.cheat_buttons.push((r, btn.clone()));
+            gx += lbl.len() as i32 * char_w + 16;
+        }
+        y += line_h + 6;
+
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "All On", left, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::GodAllOn));
+        let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, "All Off",
+            left + "All On".len() as i32 * char_w + 16, y, char_w, line_h, false);
+        self.cheat_buttons.push((r, CheatBtn::GodAllOff));
         y += line_h + 6;
         draw_separator(&mut self.canvas, y);
 
