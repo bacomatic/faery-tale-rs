@@ -1,6 +1,15 @@
 use crate::game::actor::Actor;
 use crate::game::debug_command::GodModeFlags;
 
+/// Lasso item index in stuff array (from original fmain.h).
+pub const ITEM_LASSO: usize = 16;
+/// Swan carrier type ID (from original cfile/carrier tables).
+pub const CARRIER_SWAN: i16 = 1;
+/// Max hunger before starvation effects begin (original: 300).
+pub const MAX_HUNGER: i16 = 300;
+/// Item index for food in stuff[].
+pub const ITEM_FOOD: usize = 0;
+
 pub struct GameState {
     // Hero position
     pub hero_x: u16,
@@ -273,6 +282,7 @@ impl GameState {
         if next_hunger_phase > prev_hunger_phase {
             let increments = (next_hunger_phase - prev_hunger_phase) as i16;
             self.hunger = (self.hunger + increments).min(HUNGER_MAX);
+            self.apply_hunger_effects();
         }
 
         // Fatigue: +1 every FATIGUE_PERIOD ticks when walking.
@@ -318,5 +328,115 @@ impl GameState {
     /// Returns true if all three brothers are dead.
     pub fn all_dead(&self) -> bool {
         self.brother_alive.iter().all(|&alive| !alive)
+    }
+
+    /// Returns true if the active brother has the lasso in inventory.
+    pub fn has_lasso(&self) -> bool {
+        self.stuff()[ITEM_LASSO] != 0
+    }
+
+    /// Attempt to start swan flight. Returns true if successful.
+    /// Requires: has_lasso AND a swan carrier is nearby (active_carrier == CARRIER_SWAN).
+    pub fn start_swan_flight(&mut self) -> bool {
+        if self.has_lasso() && self.active_carrier == CARRIER_SWAN {
+            self.flying = 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Stop swan flight (land).
+    pub fn stop_swan_flight(&mut self) {
+        self.flying = 0;
+    }
+
+    /// Eat food from inventory. Returns true if food was available.
+    pub fn eat_food(&mut self) -> bool {
+        if self.stuff()[ITEM_FOOD] > 0 {
+            self.stuff_mut()[ITEM_FOOD] -= 1;
+            self.hunger = (self.hunger - 100).max(0);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Apply hunger effects: if hunger >= MAX_HUNGER, drain vitality by 1.
+    /// Call this from tick() after hunger is incremented.
+    pub fn apply_hunger_effects(&mut self) {
+        if self.hunger >= MAX_HUNGER {
+            self.vitality = (self.vitality - 1).max(0);
+        }
+    }
+
+    /// Pick up an item (port of itrans[] logic from fmain.c).
+    /// item_id: item type (0-34). Returns true if picked up.
+    pub fn pickup_item(&mut self, item_id: usize) -> bool {
+        if item_id >= 35 { return false; }
+        let stuff = self.stuff_mut();
+        if stuff[item_id] < 255 {
+            stuff[item_id] += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Drop an item.
+    pub fn drop_item(&mut self, item_id: usize) -> bool {
+        if item_id >= 35 { return false; }
+        let stuff = self.stuff_mut();
+        if stuff[item_id] > 0 {
+            stuff[item_id] -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns a string description of the inventory for display.
+    pub fn inventory_summary(&self) -> String {
+        let stuff = self.stuff();
+        let mut items = Vec::new();
+        for (i, &count) in stuff.iter().enumerate() {
+            if count > 0 {
+                items.push(format!("slot{}: {}", i, count));
+            }
+        }
+        if items.is_empty() {
+            "Empty pack".to_string()
+        } else {
+            items.join(", ")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_has_lasso_false_by_default() {
+        let state = GameState::new();
+        assert!(!state.has_lasso());
+    }
+
+    #[test]
+    fn test_pickup_and_drop() {
+        let mut state = GameState::new();
+        assert!(state.pickup_item(5));
+        assert_eq!(state.stuff()[5], 1);
+        assert!(state.drop_item(5));
+        assert_eq!(state.stuff()[5], 0);
+    }
+
+    #[test]
+    fn test_hunger_effects() {
+        let mut state = GameState::new();
+        state.hunger = MAX_HUNGER;
+        let vit_before = state.vitality;
+        state.apply_hunger_effects();
+        assert_eq!(state.vitality, vit_before - 1);
     }
 }

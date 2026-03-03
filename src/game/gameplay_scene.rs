@@ -41,6 +41,8 @@ pub struct GameplayScene {
     input: InputState,
     map_x: u16,
     map_y: u16,
+    last_mood: u8,
+    mood_tick: u32,
 }
 
 impl GameplayScene {
@@ -52,6 +54,8 @@ impl GameplayScene {
             input: InputState::default(),
             map_x: 0,
             map_y: 0,
+            last_mood: u8::MAX,
+            mood_tick: 0,
         }
     }
 
@@ -90,7 +94,7 @@ impl GameplayScene {
             let new_x = (self.state.hero_x as i32 + dx * 2).clamp(0, u16::MAX as i32) as u16;
             let new_y = (self.state.hero_y as i32 + dy * 2).clamp(0, u16::MAX as i32) as u16;
 
-            if !collision::proxcheck(&self.state, new_x, new_y) {
+            if self.state.flying != 0 || !collision::proxcheck(&self.state, new_x, new_y) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
             }
@@ -167,6 +171,31 @@ impl GameplayScene {
     /// Dispatch a game menu/command action (stub — will be fleshed out per-action later).
     fn do_option(&mut self, action: GameAction) {
         eprintln!("do_option: {:?}", action);
+        match action {
+            GameAction::BuyFood => {
+                if self.state.eat_food() {
+                    eprintln!("eat_food: consumed food, hunger={}", self.state.hunger);
+                } else {
+                    eprintln!("eat_food: no food in pack");
+                }
+            }
+            GameAction::Inventory => {
+                eprintln!("Inventory: {}", self.state.inventory_summary());
+                self.state.viewstatus = 4;
+            }
+            _ => {}
+        }
+    }
+
+    /// Select music group 0-6 based on current game state (mirrors original setmood()).
+    fn setmood(&self) -> u8 {
+        let s = &self.state;
+        if s.vitality <= 0 { return 6; }
+        if s.hero_x >= 0x2400 && s.hero_x <= 0x3100 && s.hero_y >= 0x8200 && s.hero_y <= 0x8a00 { return 4; }
+        if s.battleflag { return 1; }
+        if s.region_num > 7 { return 5; }
+        if s.lightlevel > 120 { return 0; }
+        2
     }
 
     pub fn apply_command(&mut self, cmd: DebugCommand) {
@@ -263,7 +292,16 @@ impl Scene for GameplayScene {
                 Keycode::Y => { self.do_option(GameAction::Yell); true }
                 Keycode::K => { self.do_option(GameAction::Speak); true }
                 Keycode::M => { self.do_option(GameAction::Map); true }
-                _ => false,
+                _ => {
+                    // KeyBindings fallback for any unhandled keycode (keys-104)
+                    let kb = crate::game::key_bindings::KeyBindings::default_bindings();
+                    if let Some(action) = kb.action_for_key(*kc) {
+                        self.do_option(action);
+                        true
+                    } else {
+                        false
+                    }
+                }
             },
             Event::KeyUp { keycode: Some(kc), .. } => match *kc {
                 Keycode::Up | Keycode::W | Keycode::Kp8 => { self.input.up = false; true }
@@ -287,6 +325,18 @@ impl Scene for GameplayScene {
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
         self.state.tick(delta_ticks);
+
+        // setmood: check music group every 8 ticks (gameloop-113)
+        self.mood_tick += delta_ticks;
+        if self.mood_tick >= 8 {
+            self.mood_tick = 0;
+            let mood = self.setmood();
+            if mood != self.last_mood {
+                self.last_mood = mood;
+                eprintln!("setmood: {}", mood);
+                // audio.set_score(mood) wiring comes in audio-105
+            }
+        }
 
         // Autosave every 3600 ticks (~60s at 60Hz)
         if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {
