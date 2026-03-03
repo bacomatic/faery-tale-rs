@@ -271,6 +271,7 @@ enum CheatBtn {
     MagicLight,
     MagicSecret,
     MagicFreeze,
+    SummonSwan,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -723,6 +724,9 @@ impl<'a> DebugWindow<'a> {
                 } else {
                     self.pending_commands.push(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Freeze });
                 }
+            }
+            CheatBtn::SummonSwan => {
+                self.pending_commands.push(DebugCommand::SummonSwan);
             }
         }
     }
@@ -1408,6 +1412,20 @@ impl<'a> DebugWindow<'a> {
             self.cheat_buttons.push((r, btn.clone()));
             mx += lbl.len() as i32 * char_w + 16;
         }
+        y += line_h + 6;
+        draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── Swan Summon (debug-109) ───────────────────────────────────
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("Creatures", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let r = draw_button(
+            &mut self.canvas, &self.font_text, &self.font_texture,
+            "Summon Swan", left, y, char_w, line_h, false,
+        );
+        self.cheat_buttons.push((r, CheatBtn::SummonSwan));
         y += line_h + 6;
         draw_separator(&mut self.canvas, y);
 
