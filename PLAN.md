@@ -49,13 +49,13 @@ Machine-readable mirror: `plan_status.toml`
 - [player-001] Player & movement (0/14 steps complete; Issue: #4)
 - [npc-001] NPC system (0/7 steps complete; Issue: #5)
 - [keys-001] Key bindings (0/7 steps complete; Issue: #6)
-- [persist-001] Persistence (0/3 steps complete; Issue: #7)
 - [gameloop-001] Core game loop (2/15 steps complete; Issue: #59)
-- [debug-001] Debug window enhancements (10/11 steps complete; debug-111 blocked on persist-001; Issue: #58)
+- [debug-001] Debug window enhancements (10/11 steps complete; debug-111 unblocked by persist-001; Issue: #58)
 
 ### Todo
 
 ### Done
+- [persist-001] Persistence (3/3 steps complete; Issue: #7)
 - [intro-001] Intro sequence end-to-end (6/6 steps complete; Issue: pre-issues)
 - [vkbd-001] Virtual keyboard & sine wave tuning tool (3/3 steps complete; Issue: pre-issues)
 

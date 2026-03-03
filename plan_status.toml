@@ -1045,11 +1045,11 @@ issue = "#36"
 id = "persist-001"
 title = "Persistence"
 area = "save"
-state = "in_progress"
+state = "done"
 priority = "medium"
 depends_on = []
-notes = "Rollup: not started."
-updated = "2026-03-01"
+notes = "Rollup: 3/3 complete. Protobuf save/load via prost. Save dir: ~/.config/faery/saves/. Tests cover round-trip, bad magic, version mismatch, missing file."
+updated = "2025-07-16"
 issue = "#7"
 
 [[task]]
@@ -1057,11 +1057,11 @@ id = "persist-101"
 parent = "persist-001"
 title = "Define save format"
 area = "save"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = []
-notes = "Not started."
-updated = "2026-03-01"
+notes = "proto/faery_save.proto + build.rs + prost codegen. Done."
+updated = "2025-07-16"
 issue = "#39"
 
 [[task]]
@@ -1069,11 +1069,11 @@ id = "persist-102"
 parent = "persist-001"
 title = "Save implementation"
 area = "save"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["persist-101"]
-notes = "Not started."
-updated = "2026-03-01"
+notes = "save_game() + save_to_path() with FERY magic header. Tests pass. Done."
+updated = "2025-07-16"
 issue = "#38"
 
 [[task]]
@@ -1081,11 +1081,11 @@ id = "persist-103"
 parent = "persist-001"
 title = "Load implementation"
 area = "save"
-state = "todo"
+state = "done"
 priority = "medium"
 depends_on = ["persist-101"]
-notes = "Not started."
-updated = "2026-03-01"
+notes = "load_game() + load_from_path() with magic/version validation and full round-trip test. Done."
+updated = "2025-07-16"
 issue = "#40"
 
 [[task]]
