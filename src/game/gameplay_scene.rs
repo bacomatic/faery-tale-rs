@@ -309,8 +309,28 @@ impl GameplayScene {
                 self.messages.push("There is no one to talk to.");
             }
             GameAction::Attack => {
-                self.messages.push("Nothing to attack.");
-                eprintln!("Attack: stub");
+                // Find nearest active NPC and initiate combat
+                let mut attacked = false;
+                if let Some(ref mut table) = self.npc_table {
+                    for npc in table.npcs.iter_mut().filter(|n| n.active) {
+                        let dx = (npc.x - self.state.hero_x as i16).abs();
+                        let dy = (npc.y - self.state.hero_y as i16).abs();
+                        if dx < 32 && dy < 32 {
+                            let result = crate::game::combat::resolve_combat(&mut self.state, npc, 0);
+                            if result.enemy_defeated {
+                                crate::game::combat::award_loot(&mut self.state, npc);
+                                self.messages.push("Enemy defeated!");
+                            } else {
+                                self.messages.push(format!("You hit for {}!", result.enemy_damage));
+                            }
+                            attacked = true;
+                            break;
+                        }
+                    }
+                }
+                if !attacked {
+                    self.messages.push("Nothing to attack.");
+                }
             }
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
