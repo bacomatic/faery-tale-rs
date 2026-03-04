@@ -1,6 +1,28 @@
 
 use crate::game::colors::{Palette, RGB4};
 
+/// Scale an RGBA32 palette by a lightlevel percentage (0–100).
+///
+/// This is the day/night equivalent of `fade_page()` applied to the game's
+/// RGBA32 atlas palette.  Each channel is multiplied by `pct / 100`.
+///
+/// Called each tick when `lightlevel` changes to keep the tile atlas
+/// reflecting the current time-of-day brightness (gfx-101).
+pub fn apply_lightlevel_dim(
+    palette: &[u32; crate::game::palette::PALETTE_SIZE],
+    pct: i16,
+) -> [u32; crate::game::palette::PALETTE_SIZE] {
+    let pct = pct.clamp(0, 100) as u32;
+    let mut out = [0u32; crate::game::palette::PALETTE_SIZE];
+    for (i, &c) in palette.iter().enumerate() {
+        let r = (c >> 16 & 0xFF) * pct / 100;
+        let g = (c >> 8  & 0xFF) * pct / 100;
+        let b = (c        & 0xFF) * pct / 100;
+        out[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+    out
+}
+
 /**
  * Port of the original game's `fade_page()` function from fmain2.c.
  *

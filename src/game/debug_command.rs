@@ -39,4 +39,7 @@ pub enum DebugCommand {
     ToggleAutosave { enable: bool },
     RestartAsBrother { brother: BrotherId },
     InstaKill,
+    TriggerWitchEffect,
+    TriggerTeleportEffect,
+    TriggerPaletteTransition { to_black: bool },
 }

@@ -21,6 +21,19 @@ Install and run Ollama, then pull models:
     $ ollama pull nomic-embed-text
     $ ollama pull llama3.2
 
+## Quick Reindex
+
+Rebuild the full index from scratch:
+
+    $ make rag-index
+
+Incrementally update only changed/new files (no reset):
+
+    $ make rag-index-inc
+
+Both targets respect environment variables from `.env.local` or `.env`.
+See [Script Environment Variables](#script-environment-variables) for available overrides.
+
 ## Core Commands
 
 Index the repository (defaults to `.rs`, `.md`, `.toml`):

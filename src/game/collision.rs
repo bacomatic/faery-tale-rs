@@ -1,23 +1,56 @@
 //! Collision detection — terrain-aware proxcheck (player-102).
 //! Terrain lookup: hero pixel (x,y) → sector coords → map_mem → sector_mem → terra_mem.
+//! Ported from px_to_im (fsubs.asm) and prox (fsubs.asm).
 
 use crate::game::world_data::WorldData;
 
 /// Convert pixel position to terrain type using world data.
-/// terra_mem: 4 bytes per tile; byte +1 upper nibble = terrain type.
+///
+/// Mirrors px_to_im from fsubs.asm:
+/// 1. Compute tile bitmask selector d4 from sub-tile position (bits 3,3,4 of x,y,y).
+/// 2. imx = x/16, imy = y/32.
+/// 3. secx = imx/16, secy = imy/8 → look up map_mem[secy*128+secx] = sec_num.
+/// 4. tile_idx = sector_mem[sec_num*128 + (imy&7)*16 + (imx&15)].
+/// 5. If terra_mem[tile_idx*4+2] & d4 == 0 → passable (return 0).
+/// 6. Else return terra_mem[tile_idx*4+1] >> 4 (upper nibble = terrain type).
 pub fn px_to_terrain_type(world: &WorldData, x: i32, y: i32) -> u8 {
-    let sx = ((x >> 4) as usize).min(127);
-    let sy = ((y >> 5) as usize).min(31);
-    let sec_num = world.sector_at(sx, sy) as usize;
-    let sub_x = (x & 0xF) as usize;
-    let sub_y = (y & 0x7) as usize;
-    let tile_idx = world.tile_at(sec_num as u8, sub_x, sub_y) as usize;
-    let terra_offset = tile_idx * 4 + 1;
-    if terra_offset < world.terra_mem.len() {
-        (world.terra_mem[terra_offset] >> 4) & 0xF
-    } else {
-        0 // default passable
+    if x < 0 || y < 0 {
+        return 0; // out of world bounds → passable
     }
+
+    // Tile bitmask selector: from bits 3,3,4 of x,y,y (tested before coordinate shifts).
+    let mut d4: u8 = 0x80;
+    if x & 0x08 != 0 { d4 >>= 4; }
+    if y & 0x08 != 0 { d4 >>= 1; }
+    if y & 0x10 != 0 { d4 >>= 2; }
+
+    // Image tile coords: imx = x/16, imy = y/32.
+    let imx = (x >> 4) as usize;
+    let imy = (y >> 5) as usize;
+
+    // Sector coords: secx = imx/16 (0..127), secy = imy/8 (0..31).
+    let secx = (imx >> 4).min(127);
+    let secy = (imy >> 3).min(31);
+
+    // Local sub-tile coords within the sector's tile grid.
+    let local_x = imx & 15;
+    let local_y = imy & 7;
+
+    let sec_num = world.sector_at(secx, secy);
+    let tile_idx = world.tile_at(sec_num, local_x, local_y) as usize;
+
+    let base = tile_idx * 4;
+    if base + 2 >= world.terra_mem.len() {
+        return 0; // default passable
+    }
+
+    // Check per-sub-tile bitmask (tiles byte). If this bit is clear → passable here.
+    if world.terra_mem[base + 2] & d4 == 0 {
+        return 0;
+    }
+
+    // Return terrain type: upper nibble of terrain byte (terra_mem[base+1]).
+    (world.terra_mem[base + 1] >> 4) & 0xF
 }
 
 /// Hard-blocking terrain for right foot (x+4, y+2): type==1 or >=10.
@@ -57,8 +90,17 @@ mod tests {
     fn test_terrain_type_in_bounds() {
         let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
         let world = WorldData::load(&adf, 0).unwrap();
-        // Empty world has all-zero terra_mem → terrain type 0 (passable)
+        // Empty world → all-zero terra_mem → tiles byte 0 → d4 & 0 == 0 → passable (type 0)
         let t = px_to_terrain_type(&world, 0, 0);
+        assert_eq!(t, 0);
+    }
+
+    #[test]
+    fn test_terrain_type_negative_coords() {
+        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
+        let world = WorldData::load(&adf, 0).unwrap();
+        // Negative coords (e.g. left foot probe at x=0) should return 0 (passable).
+        let t = px_to_terrain_type(&world, -4, 2);
         assert_eq!(t, 0);
     }
 
@@ -69,5 +111,13 @@ mod tests {
         assert!(!is_hard_block_right(0));
         assert!(is_hard_block_left(8));
         assert!(!is_hard_block_left(7));
+    }
+
+    #[test]
+    fn test_proxcheck_empty_world() {
+        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
+        let world = WorldData::load(&adf, 0).unwrap();
+        // All-zero world: tiles bytes are 0, so every position is passable.
+        assert!(proxcheck(Some(&world), 256, 256));
     }
 }

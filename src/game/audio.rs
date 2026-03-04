@@ -505,6 +505,9 @@ pub struct SequencerState {
     samples_to_vbl: f64,
     /// Song group currently loaded (0–6), if any.
     pub current_group: Option<usize>,
+    /// When true, instrument slot 10 uses cave overrides (wave=3, vol=7).
+    /// Mirrors `new_wave[10] = 0x0307` from `fmain.c` cave handling.
+    pub cave_mode: bool,
 }
 
 impl SequencerState {
@@ -517,6 +520,7 @@ impl SequencerState {
             tracks: [None, None, None, None],
             samples_to_vbl: 0.0,
             current_group: None,
+            cave_mode: false,
         }
     }
 
@@ -647,7 +651,15 @@ impl SequencerState {
                     return;
                 }
                 TrackEvent::SetInstrument { slot } => {
-                    self.voices[vi].set_instrument_slot(*slot as usize);
+                    let slot = *slot as usize;
+                    // Cave override: slot 10 → (wave=3, vol=7) when in region 9.
+                    // Mirrors `new_wave[10] = 0x0307` from fmain.c.
+                    if slot == 10 && self.cave_mode {
+                        self.voices[vi].wave_num = 3;
+                        self.voices[vi].vol_num = 7;
+                    } else {
+                        self.voices[vi].set_instrument_slot(slot);
+                    }
                     // continue consuming events
                 }
                 TrackEvent::SetTempo { value } => {
@@ -891,7 +903,16 @@ impl AudioSystem {
         eprintln!("audio: set_score({}) — library not available or group missing", group);
     }
 
-    /// Load the 6 sound effects from `path` (the `game/samples` file).
+    /// Enable or disable cave instrument overrides.
+    ///
+    /// When `cave` is true, `SetInstrument` events for slot 10 use `(wave=3, vol=7)`
+    /// instead of the default `(wave=1, vol=0)`.  This mirrors the `new_wave[10] = 0x0307`
+    /// write that `fmain.c` performs on entering region 9 (cave).
+    pub fn set_cave_mode(&self, cave: bool) {
+        if let Ok(mut st) = self.state.lock() {
+            st.cave_mode = cave;
+        }
+    }
     ///
     /// Format (from `read_sample()` in `fmain.c`): six contiguous records,
     /// each consisting of a 4-byte big-endian length followed by that many

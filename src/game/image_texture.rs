@@ -98,6 +98,16 @@ impl<'tex> ImageTexture<'tex> {
         }
     }
 
+    /// Draw the image scaled to fill `dst` (no aspect-ratio enforcement).
+    pub fn draw_scaled<T: RenderTarget>(&self, canvas: &mut Canvas<T>, dst: Rect) {
+        if let Some(strong_texture) = self.texture.upgrade() {
+            let texture = strong_texture.borrow();
+            canvas.copy(&*texture, Some(self.texture_bounds), Some(dst)).unwrap();
+        } else {
+            println!("Error upgrading weak reference to shared texture in ImageTexture::draw_scaled");
+        }
+    }
+
     /// Draw a sub-region of the image to the canvas at the specified position.
     /// `region` is in image-local coordinates (relative to the image's own top-left).
     pub fn draw_region<T: RenderTarget>(&self, canvas: &mut Canvas<T>, region: Rect, x: i32, y: i32) {

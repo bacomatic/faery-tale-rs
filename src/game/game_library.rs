@@ -29,13 +29,100 @@ pub struct CopyProtectQuestion {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct StartConfig {
+    pub hero_x:   u16,
+    pub hero_y:   u16,
+    pub region:   u8,
+    pub vitality: i16,
+    pub brave:    i16,
+    pub luck:     i16,
+    pub kind:     i16,
+    pub wealth:   i16,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ItemsConfig {
+    pub costs: Vec<i32>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DoorConfig {
+    pub src_region: u8,
+    pub src_x:      u16,
+    pub src_y:      u16,
+    pub dst_region: u8,
+    pub dst_x:      u16,
+    pub dst_y:      u16,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ZoneConfig {
+    pub zone_type:      String,
+    pub x1:             u16,
+    pub y1:             u16,
+    pub x2:             u16,
+    pub y2:             u16,
+    pub region:         u8,
+    pub encounter_rate: u8,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DiskConfig {
+    pub adf: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AudioConfig {
+    pub instruments: String,
+    pub songs: String,
+    pub samples: String,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct RegionBlockConfig {
+    pub id: u8,
+    pub sector_block: u32,
+    pub map_block: u32,
+    pub terra_block: u32,
+    pub image_block: u32,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct WorldConfig {
+    #[serde(default)]
+    pub region: Vec<RegionBlockConfig>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct SpritesConfig {
+    pub cfile_block_count: u32,
+    pub cfile_blocks: Vec<u32>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct NpcsConfig {
+    pub cfile_start_block: u32,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct GameLibrary {
     palettes: HashMap<String, Palette>,
     placards: HashMap<String, Placard>,
     fonts: HashMap<String, FontAsset>,
     images: HashMap<String, ImageAsset>,
     cursors: HashMap<String, CursorAsset>,
-    copy_protect_junk: Vec<CopyProtectQuestion>
+    copy_protect_junk: Vec<CopyProtectQuestion>,
+    pub start: Option<StartConfig>,
+    pub items: Option<ItemsConfig>,
+    #[serde(default)]
+    pub doors: Vec<DoorConfig>,
+    #[serde(default)]
+    pub zones: Vec<ZoneConfig>,
+    pub disk: Option<DiskConfig>,
+    pub audio: Option<AudioConfig>,
+    pub world: Option<WorldConfig>,
+    pub sprites: Option<SpritesConfig>,
+    pub npcs: Option<NpcsConfig>,
 }
 
 impl GameLibrary {

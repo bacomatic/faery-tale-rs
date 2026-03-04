@@ -52,14 +52,13 @@ Machine-readable mirror: `plan_status.toml`
 
 ### Todo
 
-- [debug-effects-001] Debug window visual effects controls (0/5 steps; Issue: #88)
-- [faerytoml-001] Move hardcoded asset paths/tables to faery.toml (0/9 steps; Issue: #91)
-- [render-001] Render game view — map, HI bar, buttons, compass (0/6 steps; Issue: #92)
-- [rag-index-001] Add rag-index Makefile target (0/3 steps; Issue: #90)
-- [fix-colormod-001] Fix text renders black bug (0/2 steps; Issue: #87)
-- [fix-item-names-001] Fix wrong ITEM_NAMES in debug_window (0/1 steps; Issue: #89)
-
 ### Done
+- [debug-effects-001] Debug window visual effects controls (5/5 steps complete; Issue: #88)
+- [faerytoml-001] Move hardcoded asset paths/tables to faery.toml (9/9 steps complete; Issue: #91)
+- [render-001] Render game view — map, HI bar, buttons, compass (6/6 steps complete; Issue: #92)
+- [rag-index-001] Add rag-index Makefile target (3/3 steps complete; Issue: #90)
+- [fix-colormod-001] Fix text renders black bug (2/2 steps complete; Issue: #87)
+- [fix-item-names-001] Fix wrong ITEM_NAMES in debug_window (1/1 steps complete; Issue: #89)
 - [gameloop-001] Core game loop (15/15 steps complete; Issue: #59)
 - [debug-001] Debug window enhancements (11/11 steps complete; Issue: #58)
 - [audio-001] Audio system (5/5 steps complete; Issue: #1)

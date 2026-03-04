@@ -13,8 +13,9 @@ use std::time::Instant;
 
 use crate::game::colors::Palette;
 use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
-use sdl2::mouse::MouseButton;
+use crate::game::key_bindings::{GameAction, KeyBindings};
 use crate::game::font::DiskFont;
+use sdl2::mouse::MouseButton;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_clock::DayPhase;
 use crate::game::placard::{self, Placard};
@@ -38,9 +39,10 @@ enum DebugTab {
     Player,
     Actors,
     Cheats,
+    KeyBindings,
 }
 
-const ALL_TABS: [DebugTab; 9] = [
+const ALL_TABS: [DebugTab; 10] = [
     DebugTab::Info,
     DebugTab::Placards,
     DebugTab::Images,
@@ -50,6 +52,7 @@ const ALL_TABS: [DebugTab; 9] = [
     DebugTab::Player,
     DebugTab::Actors,
     DebugTab::Cheats,
+    DebugTab::KeyBindings,
 ];
 
 impl DebugTab {
@@ -64,6 +67,7 @@ impl DebugTab {
             DebugTab::Player => "Player",
             DebugTab::Actors => "Actors",
             DebugTab::Cheats => "Cheats",
+            DebugTab::KeyBindings => "KeyBindings",
         }
     }
 
@@ -78,6 +82,7 @@ impl DebugTab {
             DebugTab::Player => "7",
             DebugTab::Actors => "8",
             DebugTab::Cheats => "9",
+            DebugTab::KeyBindings => "10",
         }
     }
 }
@@ -165,6 +170,9 @@ pub struct DebugState<'a> {
     pub god_mode_flags: u8,
     pub time_held: bool,
     pub autosave_enabled: bool,
+
+    // Key bindings for the KeyBindings tab
+    pub key_bindings: Option<&'a KeyBindings>,
 }
 
 // ── Per-tab state ────────────────────────────────────────────────────
@@ -187,41 +195,41 @@ struct SongTabState {
 /// Human-readable names for the 35 inventory slots (stuff[0..35]).
 /// Slot assignments deduced from the original fmain.c source.
 const ITEM_NAMES: [&str; 35] = [
-    "Weapon",     // 0  - currently equipped weapon (1=dirk initially)
-    "Item 1",     // 1
-    "Item 2",     // 2
-    "Item 3",     // 3
-    "Item 4",     // 4
-    "Raft",       // 5
-    "Item 6",     // 6
-    "Item 7",     // 7
-    "Arrows",     // 8  - consumed when bow fires
-    "Item 9",     // 9
-    "Item 10",    // 10
-    "Item 11",    // 11
-    "Item 12",    // 12
-    "Item 13",    // 13
-    "Item 14",    // 14
-    "Item 15",    // 15
-    "Key(Gold)",  // 16 - KEYBASE
-    "Key(Green)", // 17
-    "Key(Blue)",  // 18
-    "Key(Red)",   // 19
-    "Key(Grey)",  // 20
-    "Key(White)", // 21
-    "Item 22",    // 22
-    "Item 23",    // 23
-    "Food",       // 24 - decremented by hunger
-    "Item 25",    // 25 - STATBASE
-    "Item 26",    // 26
-    "Item 27",    // 27
-    "Item 28",    // 28
-    "Item 29",    // 29
-    "Item 30",    // 30
-    "Gold",       // 31 - GOLDBASE
-    "Item 32",    // 32
-    "Item 33",    // 33
-    "Item 34",    // 34
+    "Dirk",           // 0
+    "Mace",           // 1
+    "Sword",          // 2
+    "Bow",            // 3
+    "Magic Wand",     // 4
+    "Golden Lasso",   // 5
+    "Sea Shell",      // 6
+    "Sun Stone",      // 7
+    "Arrows",         // 8  - MAGICBASE-1
+    "Blue Stone",     // 9
+    "Green Jewel",    // 10
+    "Glass Vial",     // 11
+    "Crystal Orb",    // 12
+    "Bird Totem",     // 13
+    "Gold Ring",      // 14
+    "Jade Skull",     // 15
+    "Gold Key",       // 16 - KEYBASE
+    "Green Key",      // 17
+    "Blue Key",       // 18
+    "Red Key",        // 19
+    "Grey Key",       // 20
+    "White Key",      // 21
+    "Talisman",       // 22
+    "Rose",           // 23
+    "Fruit",          // 24
+    "Gold Statue",    // 25
+    "Book",           // 26
+    "Herb",           // 27
+    "Writ",           // 28
+    "Bone",           // 29
+    "Shard",          // 30
+    "2 Gold Pieces",  // 31 - GOLDBASE
+    "5 Gold Pieces",  // 32
+    "10 Gold Pieces", // 33
+    "100 Gold Pieces",// 34
 ];
 
 /// Stat IDs in order matching the 7 stat display lines.
@@ -282,6 +290,10 @@ enum CheatBtn {
     TimeMinMinus,
     TimeSet,
     TimeHold,
+    WitchEffect,
+    TeleportEffect,
+    PaletteToBlack,
+    PaletteToDay,
 }
 
 // ── DebugWindow ──────────────────────────────────────────────────────
@@ -340,6 +352,14 @@ pub struct DebugWindow<'a> {
     time_hour: u8,
     time_min: u8,
     time_held: bool,
+
+    // KeyBindings tab state
+    /// Row hit-areas for the keybindings list, rebuilt each frame.
+    keybind_rows: Vec<(Rect, GameAction)>,
+    /// If Some, next keypress will rebind this action.
+    rebind_target: Option<GameAction>,
+    /// Scroll offset (in rows) for the keybindings list.
+    keybind_scroll: usize,
 
     // Offscreen texture for placard rendering (320×200)
     placard_texture: sdl2::render::Texture<'a>,
@@ -445,6 +465,9 @@ impl<'a> DebugWindow<'a> {
             time_hour: 12,
             time_min: 0,
             time_held: false,
+            keybind_rows: Vec::new(),
+            rebind_target: None,
+            keybind_scroll: 0,
             placard_texture: placard_tex,
         })
     }
@@ -511,9 +534,20 @@ impl<'a> DebugWindow<'a> {
             Event::KeyDown {
                 window_id,
                 scancode: Some(sc),
+                keycode: Some(kc),
                 repeat: false,
                 ..
             } if *window_id == self.window_id => {
+                // If rebind mode is armed, capture this key for the selected action
+                if self.active_tab == DebugTab::KeyBindings {
+                    if let Some(action) = self.rebind_target.take() {
+                        if *sc != Scancode::Escape {
+                            settings.key_bindings.rebind(action, *kc);
+                            settings.dirty = true;
+                        }
+                        return true;
+                    }
+                }
                 match sc {
                     // Tab switching with F1..F6
                     Scancode::F1 => { self.active_tab = DebugTab::Info; true }
@@ -529,6 +563,11 @@ impl<'a> DebugWindow<'a> {
                     Scancode::F7 => { self.active_tab = DebugTab::Player; true }
                     Scancode::F8 => { self.active_tab = DebugTab::Actors; true }
                     Scancode::F9 => { self.active_tab = DebugTab::Cheats; true }
+                    Scancode::F10 => {
+                        self.active_tab = DebugTab::KeyBindings;
+                        self.rebind_target = None;
+                        true
+                    }
 
                     // Left/Right to cycle items in content tabs
                     Scancode::Left | Scancode::Right => {
@@ -605,6 +644,14 @@ impl<'a> DebugWindow<'a> {
                                     self.actors_tab.scroll = self.actors_tab.scroll.saturating_sub(1);
                                 }
                             }
+                            DebugTab::KeyBindings => {
+                                let max = GameAction::all_actions().len().saturating_sub(1);
+                                if down {
+                                    self.keybind_scroll = (self.keybind_scroll + 1).min(max);
+                                } else {
+                                    self.keybind_scroll = self.keybind_scroll.saturating_sub(1);
+                                }
+                            }
                             _ => {}
                         }
                         true
@@ -621,7 +668,7 @@ impl<'a> DebugWindow<'a> {
                 y,
                 mouse_btn,
                 ..
-            } if *window_id == self.window_id && self.active_tab == DebugTab::Player => {                use sdl2::mouse::MouseButton;
+            } if *window_id == self.window_id && self.active_tab == DebugTab::Player => {
                 let lh = self.player_tab.line_h;
                 if lh > 0 {
                     let stat_y = self.player_tab.stat_y_start_win;
@@ -663,6 +710,27 @@ impl<'a> DebugWindow<'a> {
                     if rect.contains_point(sdl2::rect::Point::new(adj_x, adj_y)) {
                         self.handle_cheat_click(btn, is_right);
                         break;
+                    }
+                }
+                true
+            }
+
+            // Mouse clicks in KeyBindings tab: arm rebind for the clicked action row
+            Event::MouseButtonDown {
+                window_id,
+                x: _,
+                y,
+                mouse_btn,
+                ..
+            } if *window_id == self.window_id && self.active_tab == DebugTab::KeyBindings => {
+                if *mouse_btn == MouseButton::Left {
+                    let adj_y = *y - (TAB_BAR_HEIGHT + 2);
+                    let rows: Vec<(Rect, GameAction)> = self.keybind_rows.clone();
+                    for (rect, action) in rows {
+                        if rect.contains_point(sdl2::rect::Point::new(0, adj_y)) {
+                            self.rebind_target = Some(action);
+                            break;
+                        }
                     }
                 }
                 true
@@ -760,6 +828,18 @@ impl<'a> DebugWindow<'a> {
                 self.time_held = !self.time_held;
                 self.pending_commands.push(DebugCommand::HoldTimeOfDay { hold: self.time_held });
             }
+            CheatBtn::WitchEffect => {
+                self.pending_commands.push(DebugCommand::TriggerWitchEffect);
+            }
+            CheatBtn::TeleportEffect => {
+                self.pending_commands.push(DebugCommand::TriggerTeleportEffect);
+            }
+            CheatBtn::PaletteToBlack => {
+                self.pending_commands.push(DebugCommand::TriggerPaletteTransition { to_black: true });
+            }
+            CheatBtn::PaletteToDay => {
+                self.pending_commands.push(DebugCommand::TriggerPaletteTransition { to_black: false });
+            }
         }
     }
 
@@ -803,6 +883,7 @@ impl<'a> DebugWindow<'a> {
             DebugTab::Player => self.render_player_tab(state, win_h),
             DebugTab::Actors => self.render_actors_tab(state, win_h),
             DebugTab::Cheats => self.render_cheats_tab(state, win_w),
+            DebugTab::KeyBindings => self.render_keybindings_tab(state, win_h),
         }
 
         self.canvas.present();
@@ -1260,9 +1341,86 @@ impl<'a> DebugWindow<'a> {
         font_ref.render_string("Up/Down to scroll", &mut self.canvas, left, win_h as i32 - line_h - 4);
     }
 
+    // ── KeyBindings tab (F10) ─────────────────────────────────────────
+
+    fn render_keybindings_tab(&mut self, state: &DebugState, win_h: u32) {
+        let (char_w, line_h) = {
+            let f = self.font_text.borrow();
+            (f.get_font().x_size as i32, f.get_font().y_size as i32 + 2)
+        };
+        let left = 10;
+        let mut y = 6;
+
+        self.keybind_rows.clear();
+
+        set_font_color(&self.font_texture, 180, 220, 255);
+        { self.font_text.borrow().render_string("Key Bindings  (click row, then press new key)", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        if let Some(action) = self.rebind_target {
+            set_font_color(&self.font_texture, 255, 80, 80);
+            let msg = format!(">> Press a key for: {} <<", action.display_name());
+            self.font_text.borrow().render_string(&msg, &mut self.canvas, left, y);
+        } else {
+            set_font_color(&self.font_texture, 140, 140, 140);
+            self.font_text.borrow().render_string("ESC while armed cancels rebind", &mut self.canvas, left, y);
+        }
+        y += line_h + 2;
+        draw_separator(&mut self.canvas, y - 2);
+
+        let bindings_ref: Option<&KeyBindings> = state.key_bindings;
+        let all = GameAction::all_actions();
+        let scroll = self.keybind_scroll.min(all.len().saturating_sub(1));
+
+        for &action in &all[scroll..] {
+            if y > win_h as i32 - line_h {
+                break;
+            }
+
+            let is_armed = self.rebind_target == Some(action);
+            if is_armed {
+                set_font_color(&self.font_texture, 255, 80, 80);
+            } else {
+                set_font_color(&self.font_texture, 200, 210, 200);
+            }
+
+            let key_str = if let Some(kb) = bindings_ref {
+                kb.bindings()
+                    .get(&action)
+                    .and_then(|v| v.first())
+                    .map(|kc| kc.name())
+                    .unwrap_or_else(|| "---".to_string())
+            } else {
+                "---".to_string()
+            };
+
+            let row = format!("  {:20} {}", action.display_name(), key_str);
+            self.font_text.borrow().render_string(&row, &mut self.canvas, left, y);
+
+            // Store hit area for click detection (full-width row)
+            self.keybind_rows.push((
+                Rect::new(0, y, 9999, line_h as u32),
+                action,
+            ));
+
+            // Column header separator: draw a tick mark for the key column
+            let col_x = left + 21 * char_w;
+            self.canvas.set_draw_color(Color::RGB(60, 60, 60));
+            self.canvas
+                .draw_line(
+                    sdl2::rect::Point::new(col_x - 2, y),
+                    sdl2::rect::Point::new(col_x - 2, y + line_h - 1),
+                )
+                .ok();
+
+            y += line_h;
+        }
+    }
+
     // ── Stub tab (for unimplemented tabs) ────────────────────────────
 
-    fn render_stub_tab(&mut self, title: &str, message: &str) {        let font_ref = self.font_text.borrow();
+    fn render_stub_tab(&mut self, title: &str, message: &str) {
+        let font_ref = self.font_text.borrow();
         let line_height = font_ref.get_font().y_size as i32 + 2;
         let left = 10;
         let mut y = 14;
@@ -1528,6 +1686,27 @@ impl<'a> DebugWindow<'a> {
         let hold_lbl = if self.time_held { "Hold Time [HELD]" } else { "Hold Time" };
         let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, hold_lbl, left, y, char_w, line_h, self.time_held);
         self.cheat_buttons.push((r, CheatBtn::TimeHold));
+        y += line_h + 6;
+        draw_separator(&mut self.canvas, y);
+        y += 8;
+
+        // ── Visual Effects ────────────────────────────────────────────
+        set_font_color(&self.font_texture, 255, 200, 80);
+        { self.font_text.borrow().render_string("Effects", &mut self.canvas, left, y); }
+        y += line_h + 2;
+
+        let effect_btns: [(&str, CheatBtn); 4] = [
+            ("Witch Warp",     CheatBtn::WitchEffect),
+            ("Teleport Flash", CheatBtn::TeleportEffect),
+            ("Pal\u{2192}Black",     CheatBtn::PaletteToBlack),
+            ("Pal\u{2192}Day",       CheatBtn::PaletteToDay),
+        ];
+        let mut ex = left;
+        for (label, btn) in &effect_btns {
+            let r = draw_button(&mut self.canvas, &self.font_text, &self.font_texture, label, ex, y, char_w, line_h, false);
+            self.cheat_buttons.push((r, btn.clone()));
+            ex += label.len() as i32 * char_w + 16;
+        }
 
         let _ = (state, y);
     }

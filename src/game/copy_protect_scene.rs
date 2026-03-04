@@ -223,6 +223,7 @@ impl Scene for CopyProtectScene {
                         play_canvas.clear();
 
                         if let Some(placard) = game_lib.find_placard("copy_junk") {
+                            resources.topaz_font.set_color_mod(255, 255, 255);
                             placard.draw(resources.topaz_font, play_canvas);
                         }
                     });
@@ -283,6 +284,7 @@ impl Scene for CopyProtectScene {
 
                 let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                     if need_draw_question {
+                        resources.topaz_font.set_color_mod(255, 255, 255);
                         resources.topaz_font.render_string(
                             &question_text,
                             play_canvas,
@@ -297,6 +299,7 @@ impl Scene for CopyProtectScene {
 
                     // Draw typed text
                     if !current_input.is_empty() {
+                        resources.topaz_font.set_color_mod(255, 255, 255);
                         resources.topaz_font.render_string(
                             &current_input,
                             play_canvas,

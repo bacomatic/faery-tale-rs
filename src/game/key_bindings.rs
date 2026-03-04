@@ -90,6 +90,62 @@ pub enum GameAction {
     Rebind,
 }
 
+impl GameAction {
+    /// All variants in display order.
+    pub fn all_actions() -> &'static [GameAction] {
+        use GameAction::*;
+        &[
+            MoveUp, MoveDown, MoveLeft, MoveRight,
+            MoveUpLeft, MoveUpRight, MoveDownLeft, MoveDownRight,
+            Fight, Attack, Shoot,
+            Pause, Inventory, Take, Look, LookAround, UseItem, Give, GetItem,
+            DropItem, Yell, Speak, Talk, Ask, Map, Find, Sleep, Quit,
+            LoadGame, SaveGame, ExitMenu,
+            CastSpell1, CastSpell2, CastSpell3, CastSpell4,
+            CastSpell5, CastSpell6, CastSpell7,
+            UseSlot1, UseSlot2, UseSlot3, UseSlot4,
+            UseSlot5, UseSlot6, UseSlot7,
+            UseSpecial, Board, SummonTurtle,
+            BuyFood, BuyArrow, BuyVial, BuyMace, BuySword, BuyBow, BuyTotem,
+            SelectKey1, SelectKey2, SelectKey3, SelectKey4, SelectKey5, SelectKey6,
+            Confirm, Cancel, Menu, Rebind,
+        ]
+    }
+
+    pub fn display_name(self) -> &'static str {
+        use GameAction::*;
+        match self {
+            MoveUp => "Move Up", MoveDown => "Move Down",
+            MoveLeft => "Move Left", MoveRight => "Move Right",
+            MoveUpLeft => "Move Up-Left", MoveUpRight => "Move Up-Right",
+            MoveDownLeft => "Move Down-Left", MoveDownRight => "Move Down-Right",
+            Fight => "Fight", Attack => "Attack", Shoot => "Shoot",
+            Pause => "Pause", Inventory => "Inventory", Take => "Take",
+            Look => "Look", LookAround => "Look Around", UseItem => "Use Item",
+            Give => "Give", GetItem => "Get Item", DropItem => "Drop Item",
+            Yell => "Yell", Speak => "Speak", Talk => "Talk", Ask => "Ask",
+            Map => "Map", Find => "Find", Sleep => "Sleep", Quit => "Quit",
+            LoadGame => "Load Game", SaveGame => "Save Game", ExitMenu => "Exit Menu",
+            CastSpell1 => "Cast Spell 1", CastSpell2 => "Cast Spell 2",
+            CastSpell3 => "Cast Spell 3", CastSpell4 => "Cast Spell 4",
+            CastSpell5 => "Cast Spell 5", CastSpell6 => "Cast Spell 6",
+            CastSpell7 => "Cast Spell 7",
+            UseSlot1 => "Use Slot 1", UseSlot2 => "Use Slot 2",
+            UseSlot3 => "Use Slot 3", UseSlot4 => "Use Slot 4",
+            UseSlot5 => "Use Slot 5", UseSlot6 => "Use Slot 6",
+            UseSlot7 => "Use Slot 7",
+            UseSpecial => "Use Special", Board => "Board", SummonTurtle => "Summon Turtle",
+            BuyFood => "Buy Food", BuyArrow => "Buy Arrow", BuyVial => "Buy Vial",
+            BuyMace => "Buy Mace", BuySword => "Buy Sword", BuyBow => "Buy Bow",
+            BuyTotem => "Buy Totem",
+            SelectKey1 => "Select Key 1", SelectKey2 => "Select Key 2",
+            SelectKey3 => "Select Key 3", SelectKey4 => "Select Key 4",
+            SelectKey5 => "Select Key 5", SelectKey6 => "Select Key 6",
+            Confirm => "Confirm", Cancel => "Cancel", Menu => "Menu", Rebind => "Rebind",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyBindings {
     #[serde(skip)]
@@ -158,6 +214,18 @@ impl KeyBindings {
     /// Returns the current bindings map (read-only).
     pub fn bindings(&self) -> &HashMap<GameAction, Vec<Keycode>> {
         &self.bindings
+    }
+
+    /// Rebind an action to a single key, replacing all previous bindings for that action.
+    /// Also removes the key from any other action that had it.
+    pub fn rebind(&mut self, action: GameAction, keycode: Keycode) {
+        // Remove keycode from any other action's binding list
+        for (a, keys) in self.bindings.iter_mut() {
+            if *a != action {
+                keys.retain(|&k| k != keycode);
+            }
+        }
+        self.bindings.insert(action, vec![keycode]);
     }
 }
 

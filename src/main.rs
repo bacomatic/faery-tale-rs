@@ -123,17 +123,19 @@ pub fn main() -> Result<(), String> {
     // Audio system — load songs and waveforms, init the software synthesizer.
     // Music playback is started by IntroScene (matching original: playscore() is
     // called mid-intro, not at startup) and stopped before gameplay begins.
-    let song_library: Option<SongLibrary> = SongLibrary::load(Path::new("game/songs"));
+    let songs_path = game_lib.audio.as_ref().map(|a| a.songs.as_str()).unwrap_or("game/songs");
+    let instruments_path = game_lib.audio.as_ref().map(|a| a.instruments.as_str()).unwrap_or("game/v6");
+    let song_library: Option<SongLibrary> = SongLibrary::load(Path::new(songs_path));
     let intro_tracks: Option<[Arc<Track>; 4]> = song_library
         .as_ref()
         .and_then(|songs| songs.intro_tracks().map(|t| t.map(|tr| Arc::new(tr.clone()))));
     let audio_system: Option<AudioSystem> = {
-        match Instruments::load(Path::new("game/v6")) {
+        match Instruments::load(Path::new(instruments_path)) {
             Some(inst) => match AudioSystem::new(&sdl_context, inst, cli.no_interpolation) {
                 Ok(sys) => Some(sys),
                 Err(e) => { println!("Warning: could not open audio device: {}", e); None }
             },
-            None => { println!("Warning: could not load game/v6 (instruments file missing)"); None }
+            None => { println!("Warning: could not load {} (instruments file missing)", instruments_path); None }
         }
     };
 
@@ -466,6 +468,7 @@ pub fn main() -> Result<(), String> {
                 god_mode_flags: 0,
                 time_held: false,
                 autosave_enabled: false,
+                key_bindings: Some(&settings.key_bindings),
             };
             dw.render(&state);
 
