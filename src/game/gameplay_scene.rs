@@ -3,6 +3,27 @@ use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
 
+/// Return the 8-way facing direction (0=N..7=NW) from (sx,sy) toward (tx,ty).
+/// Mirrors fmain.c directional logic used when setting ms->direction.
+fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
+    let dx = tx - sx;
+    let dy = ty - sy;
+    let ax = dx.abs();
+    let ay = dy.abs();
+    if ax <= ay / 2 {
+        if dy > 0 { 4 } else { 0 }   // S or N
+    } else if ay <= ax / 2 {
+        if dx > 0 { 2 } else { 6 }   // E or W
+    } else {
+        match (dx > 0, dy > 0) {
+            (true,  true)  => 3, // SE
+            (true,  false) => 1, // NE
+            (false, true)  => 5, // SW
+            (false, false) => 7, // NW
+        }
+    }
+}
+
 /// Day/night phase derived from lightlevel triangle wave (0–300).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DayNightPhase {
@@ -94,6 +115,8 @@ pub struct GameplayScene {
     pub missiles: [crate::game::combat::Missile; crate::game::combat::MAX_MISSILES],
     /// Frames remaining before next melee swing can land (rate-limits continuous fight).
     fight_cooldown: u32,
+    /// Frames remaining before an archer NPC can fire again.
+    archer_cooldown: u32,
 }
 
 impl GameplayScene {
@@ -126,6 +149,7 @@ impl GameplayScene {
             teleport_effect: TeleportEffect::new(),
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
             fight_cooldown: 0,
+            archer_cooldown: 0,
         }
     }
 
@@ -390,9 +414,27 @@ impl GameplayScene {
                     npc.active = false;
                     // brave++ on enemy kill (original: if i != 0 { brave++; }).
                     self.state.brave = (self.state.brave + 1).min(100);
-                    self.messages.push(format!(
-                        "Enemy slain! Bravery: {}", self.state.brave
-                    ));
+                    // npc-106: roll treasure_probs[] drop on kill.
+                    let npc_snap = npc.clone();
+                    let tick = self.state.tick_counter;
+                    if let Some(drop) = crate::game::loot::roll_treasure(&npc_snap, tick) {
+                        let weapon_slot = crate::game::loot::award_treasure(&mut self.state, &drop);
+                        // Auto-equip dropped weapon if it's better than current (fmain.c body search).
+                        if let Some(w) = weapon_slot {
+                            let cur = self.state.actors.first().map_or(0, |a| a.weapon);
+                            if w > cur {
+                                if let Some(player) = self.state.actors.first_mut() {
+                                    player.weapon = w;
+                                }
+                                self.messages.push(format!("You found a better weapon (type {})!", w));
+                            }
+                        }
+                        self.messages.push(format!("Enemy slain! Bravery: {}", self.state.brave));
+                    } else {
+                        self.messages.push(format!(
+                            "Enemy slain! Bravery: {}", self.state.brave
+                        ));
+                    }
                 } else {
                     self.messages.push(format!("You hit for {}!", damage));
                 }
@@ -460,6 +502,30 @@ impl GameplayScene {
                 if adjacent && npc.active {
                     self.messages.push(format!("An enemy approaches!"));
                 }
+            }
+        }
+
+        // npc-105: Archer NPCs (Goal::Archer1/Archer2) fire missiles toward hero.
+        // Rate-limited: one shot per NPC group every 30 ticks (~0.5s at 60Hz),
+        // mirroring fmain.c state >= SHOOT1 with ms->speed = 3.
+        if self.archer_cooldown > 0 {
+            self.archer_cooldown -= 1;
+        } else {
+            let hero_x = self.state.hero_x as i32;
+            let hero_y = self.state.hero_y as i32;
+            let anix = self.state.anix;
+            for actor in self.state.actors[1..anix].iter() {
+                if !actor.is_active() { continue; }
+                if !matches!(actor.goal, Goal::Archer1 | Goal::Archer2) { continue; }
+                let ax = actor.abs_x as i32;
+                let ay = actor.abs_y as i32;
+                // Fire only when hero is within 150px (Chebyshev distance).
+                if (hero_x - ax).abs().max((hero_y - ay).abs()) > 150 { continue; }
+                let dir = facing_toward(ax, ay, hero_x, hero_y);
+                use crate::game::combat::fire_missile;
+                fire_missile(&mut self.missiles, ax, ay, dir, 3, false);
+                self.archer_cooldown = 30;
+                break; // one archer fires per cycle
             }
         }
     }
@@ -736,7 +802,25 @@ impl GameplayScene {
             // Fight (joystick fire / Space key): melee swing using direction-sensitive
             // proximity check (npc-103, mirrors fmain.c keyfight + dohit path).
             GameAction::Fight => {
-                self.apply_melee_combat();
+                use crate::game::game_state::{ITEM_BOW, ITEM_ARROWS};
+                let has_bow = self.state.stuff()[ITEM_BOW] > 0;
+                let has_arrows = self.state.stuff()[ITEM_ARROWS] > 0;
+                if has_bow && has_arrows {
+                    // Bow equipped: fire arrow instead of melee swing (fmain.c weapon==4 → SHOOT1).
+                    use crate::game::combat::fire_missile;
+                    fire_missile(
+                        &mut self.missiles,
+                        self.state.hero_x as i32,
+                        self.state.hero_y as i32,
+                        self.state.facing,
+                        5,
+                        true,
+                    );
+                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
+                    self.messages.push("You shoot an arrow!");
+                } else {
+                    self.apply_melee_combat();
+                }
                 self.fight_cooldown = 20;
             }
             GameAction::UseItem => {
@@ -787,16 +871,22 @@ impl GameplayScene {
                 }
             }
             GameAction::Shoot => {
-                use crate::game::combat::fire_missile;
-                fire_missile(
-                    &mut self.missiles,
-                    self.state.hero_x as i32,
-                    self.state.hero_y as i32,
-                    self.state.facing,
-                    5, // base arrow damage
-                    true,
-                );
-                self.messages.push("You shoot an arrow!");
+                use crate::game::game_state::ITEM_ARROWS;
+                if self.state.stuff()[ITEM_ARROWS] == 0 {
+                    self.messages.push("No Arrows!");
+                } else {
+                    use crate::game::combat::fire_missile;
+                    fire_missile(
+                        &mut self.missiles,
+                        self.state.hero_x as i32,
+                        self.state.hero_y as i32,
+                        self.state.facing,
+                        5, // base arrow damage
+                        true,
+                    );
+                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
+                    self.messages.push("You shoot an arrow!");
+                }
             }
             GameAction::SummonTurtle => {
                 if self.state.summon_turtle() {

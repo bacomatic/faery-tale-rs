@@ -13,10 +13,12 @@ pub const CARRIER_TURTLE: i16 = 6;
 pub const MAX_HUNGER: i16 = 300;
 /// Item index for food in stuff[].
 pub const ITEM_FOOD: usize = 0;
-/// Turtle egg item index in stuff[].
-pub const ITEM_TURTLE_EGG: usize = 17;
-/// Shell item index in stuff[].
-pub const ITEM_SHELL: usize = 18;
+/// Bow item index in stuff[] (inv_list[3] from fmain.c).
+pub const ITEM_BOW: usize = 3;
+/// Arrow item index in stuff[] (inv_list[8] from fmain.c; stored separately from ARROWBASE).
+pub const ITEM_ARROWS: usize = 8;
+/// Sea Shell item index in stuff[] (original: stuff[6]; used to summon turtle).
+pub const ITEM_SHELL: usize = 6;
 /// Turtle nest coordinates (world-space, placeholder values).
 pub const TURTLE_NEST_X: u16 = 0x2000;
 pub const TURTLE_NEST_Y: u16 = 0x4000;
@@ -100,6 +102,9 @@ pub struct GameState {
     // Carrier/special
     pub active_carrier: i16,
     pub on_raft: bool,
+    /// Proximity to raft actor: 0=none, 1=near (within 16px), 2=aboard (within 9px).
+    /// Mirrors raftprox from fmain.c (player-107).
+    pub raftprox: i16,
     pub actor_file: i16,
     pub set_file: i16,
 
@@ -198,6 +203,7 @@ impl GameState {
 
             active_carrier: 0,
             on_raft: false,
+            raftprox: 0,
             actor_file: 0,
             set_file: 0,
 
@@ -277,8 +283,6 @@ impl GameState {
     pub fn tick(&mut self, delta: u32) {
         const HUNGER_PERIOD: u32 = 300;
         const HUNGER_MAX: i16 = 300;
-        const FATIGUE_PERIOD: u32 = 180;
-        const FATIGUE_MAX: i16 = 200;
         const HEAL_PERIOD: u32 = 600;
 
         // Decrement magic timers (clamped, unless sticky).
@@ -307,16 +311,6 @@ impl GameState {
             let increments = (next_hunger_phase - prev_hunger_phase) as i16;
             self.hunger = (self.hunger + increments).min(HUNGER_MAX);
             self.apply_hunger_effects();
-        }
-
-        // Fatigue: +1 every FATIGUE_PERIOD ticks when walking.
-        if self.riding == 0 {
-            let prev_fatigue_phase = prev / FATIGUE_PERIOD;
-            let next_fatigue_phase = self.tick_counter / FATIGUE_PERIOD;
-            if next_fatigue_phase > prev_fatigue_phase {
-                let increments = (next_fatigue_phase - prev_fatigue_phase) as i16;
-                self.fatigue = (self.fatigue + increments).min(FATIGUE_MAX);
-            }
         }
 
         // Healing: +1 vitality every HEAL_PERIOD ticks when out of battle and injured.
@@ -390,26 +384,23 @@ impl GameState {
 
     /// Attempt to rescue a turtle egg from a dead snake NPC.
     /// Returns true if an egg was found.
+    /// Stub: try to rescue a turtle egg based on luck.
+    /// In the full game, turtle_eggs is a world-state flag not an inventory item.
     pub fn try_rescue_egg(&mut self) -> bool {
-        if self.luck > 50 {
-            self.stuff_mut()[ITEM_TURTLE_EGG] += 1;
-            true
-        } else {
-            false
-        }
+        // turtle_eggs is a world object counter in fmain.c, not an inventory slot.
+        // Stub: luck-gated chance; full implementation pending NPC object system.
+        self.luck > 50
     }
 
     /// Return eggs to the turtle nest for shell reward.
     /// Returns number of shells received.
-    pub fn return_eggs_to_nest(&mut self, hero_x: u16, hero_y: u16) -> u8 {
+    pub fn return_eggs_to_nest(&mut self, hero_x: u16, hero_y: u16, egg_count: u8) -> u8 {
         let at_nest = hero_x.abs_diff(TURTLE_NEST_X) < 32
             && hero_y.abs_diff(TURTLE_NEST_Y) < 32;
-        if !at_nest { return 0; }
-        let eggs = self.stuff()[ITEM_TURTLE_EGG];
-        if eggs == 0 { return 0; }
-        self.stuff_mut()[ITEM_TURTLE_EGG] = 0;
-        self.stuff_mut()[ITEM_SHELL] += eggs;
-        eggs
+        if !at_nest || egg_count == 0 { return 0; }
+        let award = egg_count.min(255 - self.stuff()[ITEM_SHELL]);
+        self.stuff_mut()[ITEM_SHELL] += award;
+        award
     }
 
     /// Attempt to start swan flight. Returns true if successful.
@@ -494,6 +485,34 @@ impl GameState {
         self.fatigue = (self.fatigue + 1).min(Self::MAX_FATIGUE);
         if self.fatigue >= Self::MAX_FATIGUE {
             self.fatigue = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Per-movement-step fatigue update (player-111).
+    /// +1 when moving, -1 when resting. Returns true if forced sleep triggered.
+    pub fn fatigue_step(&mut self, moved: bool) -> bool {
+        if moved {
+            self.fatigue = self.fatigue.saturating_add(1);
+        } else {
+            self.fatigue = self.fatigue.saturating_sub(1);
+        }
+        if self.fatigue >= Self::MAX_FATIGUE {
+            self.fatigue = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Award a sea shell when a snake guarding turtle eggs is defeated (player-108).
+    /// Stubs the full turtle egg rescue quest from fmain.c (race==4 + turtle_eggs flag).
+    /// Returns true if a shell was awarded.
+    pub fn check_turtle_eggs(&mut self, is_snake: bool) -> bool {
+        if is_snake && self.stuff()[ITEM_SHELL] < 255 {
+            self.stuff_mut()[ITEM_SHELL] += 1;
             true
         } else {
             false
