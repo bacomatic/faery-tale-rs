@@ -18,6 +18,8 @@ pub const NPC_TYPE_WRAITH: u8 = 7;
 pub const NPC_TYPE_SKELETON: u8 = 8;
 /// Container NPC type (chest/barrel — drops items on defeat).
 pub const NPC_TYPE_CONTAINER: u8 = 0x80;
+/// Raft carrier NPC type (player-107).
+pub const NPC_TYPE_RAFT: u8 = 9;
 
 /// NPC race/behavior codes.
 pub const RACE_NORMAL: u8 = 0;
@@ -27,6 +29,8 @@ pub const RACE_ENEMY: u8 = 3;
 pub const RACE_SNAKE: u8 = 4;
 /// Shopkeeper race code.
 pub const RACE_SHOPKEEPER: u8 = 0x88;
+/// Beggar race code (from fmain.c do_option GIVE case: race 0x8d).
+pub const RACE_BEGGAR: u8 = 0x8d;
 
 /// An NPC/actor record.
 #[derive(Debug, Clone, Default)]

@@ -5,20 +5,23 @@ use crate::game::game_state::GameState;
 
 /// Item cost table (jtrans[] from original). Index = item slot, value = gold cost.
 /// 0 = not for sale.
+/// Slots 11 and 13 correspond to ITEM_VIAL and ITEM_TOTEM (magic items available to buy).
 pub const ITEM_COSTS: &[i32] = &[
     5,   // 0: food
-    10,  // 1: torch
+    10,  // 1: arrows
     15,  // 2: rope
     20,  // 3: key
     25,  // 4: potion
     30,  // 5: armor (leather)
     50,  // 6: armor (chain)
     100, // 7: armor (plate)
-    30,  // 8: weapon (dagger)
-    50,  // 9: weapon (short sword)
+    30,  // 8: weapon (dagger / mace)
+    50,  // 9: weapon (sword / bow)
     80,  // 10: weapon (long sword)
-    100, // 11: weapon (axe)
-    0,   // 12-34: not for sale (pad with zeros)
+    25,  // 11: vial (ITEM_VIAL — healing potion)
+    0,   // 12: not for sale
+    50,  // 13: totem (ITEM_TOTEM)
+    0,   // 14+: not for sale
 ];
 
 /// Purchase an item from a shopkeeper.

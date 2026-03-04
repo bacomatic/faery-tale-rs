@@ -883,8 +883,8 @@ area = "npc"
 state = "done"
 priority = "medium"
 depends_on = ["npc-102", "player-101"]
-notes = "Not started."
-updated = "2026-03-01"
+notes = "Implemented: in_melee_range() + melee_rand() in combat.rs; apply_melee_combat() in gameplay_scene.rs; fight held fires every 20 ticks; ONE_HIT_KILL/INVINCIBLE/INSANE_REACH GodMode flags; checkdead awards brave++."
+updated = "2026-06-17"
 issue = "#25"
 
 [[task]]
@@ -1180,8 +1180,8 @@ area = "npc"
 state = "done"
 priority = "medium"
 depends_on = ["npc-102", "player-113"]
-notes = "Shopkeeper (race 0x88) BUY menu, jtrans[] cost table, beggar GIVE interaction."
-updated = "2026-03-02"
+notes = "Implemented: ITEM_COSTS extended (vial=11, totem=13); do_buy() helper; BuyArrow/Vial/Mace/Sword/Bow/Totem wired; Speak near shopkeeper shows menu; GIVE to beggar (RACE_BEGGAR=0x8d) decrements wealth, raises kind."
+updated = "2026-06-17"
 issue = "#57"
 
 [[task]]

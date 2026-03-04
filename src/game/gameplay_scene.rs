@@ -28,7 +28,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
-use crate::game::actor::ActorState;
+use crate::game::actor::{ActorState, Goal};
 use crate::game::collision;
 use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
 use crate::game::gfx_effects::{TeleportEffect, WitchEffect};
@@ -86,10 +86,14 @@ pub struct GameplayScene {
     pub in_encounter_zone: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
     day_night_phase: DayNightPhase,
+    /// Last lightlevel used for atlas dim — triggers rebuild when it changes.
+    last_lightlevel: u16,
 
     witch_effect: WitchEffect,
     teleport_effect: TeleportEffect,
     pub missiles: [crate::game::combat::Missile; crate::game::combat::MAX_MISSILES],
+    /// Frames remaining before next melee swing can land (rate-limits continuous fight).
+    fight_cooldown: u32,
 }
 
 impl GameplayScene {
@@ -116,10 +120,12 @@ impl GameplayScene {
             in_encounter_zone: false,
             npc_table: None,
             day_night_phase: DayNightPhase::Day,
+            last_lightlevel: u16::MAX,
 
             witch_effect: WitchEffect::new(),
             teleport_effect: TeleportEffect::new(),
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
+            fight_cooldown: 0,
         }
     }
 
@@ -241,12 +247,210 @@ impl GameplayScene {
                 }
             }
         }
+
+        // Actual movement result (computed after the branch above).
+        let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
+
+        // Melee combat when fight is held (npc-103).
+        // Rate-limited to one swing every 20 ticks (~1/3 s at 60 Hz), matching
+        // fmain.c's per-frame proximity check gated by weapon animation state.
+        if self.fight_cooldown > 0 {
+            self.fight_cooldown -= 1;
+        }
+        if self.input.fight && self.fight_cooldown == 0 {
+            self.apply_melee_combat();
+            self.fight_cooldown = 20;
+        }
+
+        // Raft proximity detection (player-107).
+        // Mirrors fmain.c: raftprox=1 within 16px, raftprox=2 within 9px of raft actor.
+        // Auto-boards when hero is adjacent to a raft NPC; auto-disembarks on dry land.
+        {
+            let hx = self.state.hero_x as i32;
+            let hy = self.state.hero_y as i32;
+            let raft_close = self.npc_table.as_ref().map_or(false, |t| {
+                t.npcs.iter().any(|n| {
+                    n.active
+                        && n.npc_type == crate::game::npc::NPC_TYPE_RAFT
+                        && (n.x as i32 - hx).abs() < 16
+                        && (n.y as i32 - hy).abs() < 16
+                })
+            });
+            let raft_aboard = self.npc_table.as_ref().map_or(false, |t| {
+                t.npcs.iter().any(|n| {
+                    n.active
+                        && n.npc_type == crate::game::npc::NPC_TYPE_RAFT
+                        && (n.x as i32 - hx).abs() < 9
+                        && (n.y as i32 - hy).abs() < 9
+                })
+            });
+            if raft_aboard {
+                self.state.raftprox = 2;
+                self.state.active_carrier = crate::game::game_state::CARRIER_RAFT;
+                self.state.on_raft = true;
+            } else if raft_close {
+                self.state.raftprox = 1;
+            } else {
+                self.state.raftprox = 0;
+                // Auto-disembark from raft when hero reaches dry land (player-107).
+                if self.state.on_raft
+                    && self.state.active_carrier == crate::game::game_state::CARRIER_RAFT
+                {
+                    let on_land = self.map_world.as_ref().map_or(false, |world| {
+                        collision::px_to_terrain_type(
+                            world,
+                            self.state.hero_x as i32,
+                            self.state.hero_y as i32,
+                        ) < 2
+                    });
+                    if on_land {
+                        self.state.leave_raft();
+                    }
+                }
+            }
+        }
+
+        // Fatigue: +1 per step when moving, -1 when resting (player-111).
+        // Forced sleep guardrail: cannot sleep at a door/gate (known exploit).
+        if self.state.fatigue_step(moved) {
+            let at_door = crate::game::doors::doorfind(
+                self.state.region_num, self.state.hero_x, self.state.hero_y,
+            ).is_some();
+            if !at_door {
+                self.messages.push("Exhausted! You fall asleep.");
+                eprintln!("Forced sleep: fatigue max reached");
+            } else {
+                // Restore fatigue to max - 1 to prevent sleep at locked gate.
+                self.state.fatigue = crate::game::game_state::GameState::MAX_FATIGUE - 1;
+                eprintln!("Forced sleep suppressed: hero at door/gate");
+            }
+        }
     }
 
-    /// Advance all active actors by one frame (AI stub).
+    /// Helper: buy one unit of item_idx from a nearby shopkeeper (npc-107).
+    /// Mirrors fmain.c BUY case: check race==0x88, wealth>j, stuff[i]++.
+    fn do_buy(
+        state: &mut GameState,
+        npc_table: &Option<crate::game::npc::NpcTable>,
+        item_idx: usize,
+        item_name: &str,
+        messages: &mut crate::game::message_queue::MessageQueue,
+    ) {
+        let hero_x = state.hero_x as i16;
+        let hero_y = state.hero_y as i16;
+        let near_shop = npc_table.as_ref().map_or(false, |t| {
+            crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
+        });
+        if near_shop {
+            match crate::game::shop::buy_item(state, item_idx) {
+                Ok(cost) => {
+                    messages.push(format!("Bought {} for {} gold.", item_name, cost));
+                }
+                Err(reason) => {
+                    messages.push(format!("Cannot buy {}: {}", item_name, reason));
+                }
+            }
+        } else {
+            messages.push("No shopkeeper nearby.");
+        }
+    }
+
+    /// Apply one melee swing against nearby enemy NPCs (npc-103).
+    /// Ports fmain.c sword proximity loop + dohit + checkdead.
+    fn apply_melee_combat(&mut self) {
+        use crate::game::combat::{in_melee_range, melee_rand};
+        use crate::game::debug_command::GodModeFlags;
+
+        // Hero weapon value from actor[0] (default 1 = fists).
+        let arms = self.state.actors.first().map_or(1u8, |a| a.weapon.max(1));
+        let brave = self.state.brave;
+        let facing = self.state.facing;
+        let hero_x = self.state.hero_x as i16;
+        let hero_y = self.state.hero_y as i16;
+        let one_hit_kill = self.state.god_mode.contains(GodModeFlags::ONE_HIT_KILL);
+        let insane_reach = self.state.god_mode.contains(GodModeFlags::INSANE_REACH);
+
+        let mut hit_any = false;
+        if let Some(ref mut table) = self.npc_table {
+            for npc in table.npcs.iter_mut().filter(|n| n.active) {
+                if !in_melee_range(hero_x, hero_y, facing, arms, brave,
+                                   npc.x, npc.y, insane_reach) {
+                    continue;
+                }
+                // damage = rand() % (arms + 1), min 1 (from task spec / dohit wt).
+                let damage: i16 = if one_hit_kill {
+                    npc.vitality
+                } else {
+                    (melee_rand(arms as u32 + 1) as i16).max(1)
+                };
+                npc.vitality -= damage;
+                if npc.vitality < 0 { npc.vitality = 0; }
+                // checkdead: vitality <= 0 → mark dead, award brave (fmain.c checkdead).
+                if npc.vitality == 0 {
+                    npc.active = false;
+                    // brave++ on enemy kill (original: if i != 0 { brave++; }).
+                    self.state.brave = (self.state.brave + 1).min(100);
+                    self.messages.push(format!(
+                        "Enemy slain! Bravery: {}", self.state.brave
+                    ));
+                } else {
+                    self.messages.push(format!("You hit for {}!", damage));
+                }
+                hit_any = true;
+                break; // one hit per swing (fmain.c breaks after first hit)
+            }
+        }
+        let _ = hit_any; // no "miss" message — matches original silent miss
+    }
+
+    /// Advance all active actors by one frame.
+    /// Actor 0 is always the player; actors 1..anix are NPCs with goal-based AI.
     fn update_actors(&mut self, _delta: u32) {
-        for _actor in self.state.actors[0..self.state.anix].iter_mut() {
-            // TODO: npc-002 will add AI here
+        let hero_x = self.state.hero_x as i32;
+        let hero_y = self.state.hero_y as i32;
+        // Skip actor 0 (player); apply goal-based movement to NPC actors.
+        let anix = self.state.anix;
+        for actor in self.state.actors[1..anix].iter_mut() {
+            if !actor.is_active() {
+                continue;
+            }
+            let ax = actor.abs_x as i32;
+            let ay = actor.abs_y as i32;
+            let dx = hero_x - ax;
+            let dy = hero_y - ay;
+            let (vx, vy): (i16, i16) = match actor.goal {
+                // Hostile: move toward hero (ATTACK1/ATTACK2/ARCHER1/ARCHER2/GUARD)
+                Goal::Attack1 | Goal::Attack2 | Goal::Archer1 | Goal::Archer2 | Goal::Guard => {
+                    if dx.abs() > dy.abs() {
+                        (dx.signum() as i16, 0)
+                    } else {
+                        (0, dy.signum() as i16)
+                    }
+                }
+                // Flee: move directly away from hero
+                Goal::Flee => {
+                    if dx.abs() > dy.abs() {
+                        (-(dx.signum() as i16), 0)
+                    } else {
+                        (0, -(dy.signum() as i16))
+                    }
+                }
+                // Follower/Leader: follow hero but stop when adjacent
+                Goal::Follower | Goal::Leader => {
+                    if dx.abs() > 32 || dy.abs() > 32 {
+                        (dx.signum() as i16, dy.signum() as i16)
+                    } else {
+                        (0, 0)
+                    }
+                }
+                // Stand, Wait, User, None: stationary
+                Goal::Stand | Goal::User | Goal::None => (0, 0),
+            };
+            actor.vel_x = vx;
+            actor.vel_y = vy;
+            actor.abs_x = actor.abs_x.wrapping_add_signed(vx);
+            actor.abs_y = actor.abs_y.wrapping_add_signed(vy);
+            actor.moving = vx != 0 || vy != 0;
         }
         if let Some(ref mut table) = self.npc_table {
             let hero_x = self.state.hero_x as i16;
@@ -261,7 +465,7 @@ impl GameplayScene {
     }
 
     /// Clear and color the canvas according to the current viewstatus mode.
-    fn render_by_viewstatus(&mut self, canvas: &mut Canvas<Window>) {
+    fn render_by_viewstatus(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
         match self.state.viewstatus {
             // Normal play or forced redraw
             0 | 98 | 99 => {
@@ -299,7 +503,60 @@ impl GameplayScene {
                         }
                     }
                 }
-                eprintln!("{}", crate::game::hiscreen::format_hiscreen(&self.state));
+
+                // HI bar: blit hiscreen image to bottom strip (render-hiscreen-bar / world-106).
+                const HIBAR_Y: i32 = 384;
+                const HIBAR_H: u32 = 96;
+                if let Some(hiscreen) = resources.find_image("hiscreen") {
+                    let dst = sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H);
+                    hiscreen.draw_scaled(canvas, dst);
+                } else {
+                    canvas.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
+                    canvas.fill_rect(sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H)).ok();
+                }
+
+                // Stat line in parchment area (render-hiscreen-bar).
+                let stat_line = format!(
+                    "Brv:{:3} Lck:{:3} Knd:{:3} Vit:{:3} Wlt:{:3}",
+                    self.state.brave, self.state.luck, self.state.kind,
+                    self.state.vitality, self.state.wealth,
+                );
+                resources.topaz_font.render_string(&stat_line, canvas, 8, HIBAR_Y + 14);
+
+                // Scrolling messages (render-msg-scroll / world-107).
+                for (i, msg) in self.messages.iter().enumerate() {
+                    let y = HIBAR_Y + 28 + (i as i32) * 11;
+                    if y + 11 > HIBAR_Y + HIBAR_H as i32 { break; }
+                    resources.topaz_font.render_string(msg, canvas, 8, y);
+                }
+
+                // Button grid (render-buttons): two columns of 5 buttons each.
+                // Original hi-res positions: left col x=430, right col x=482,
+                // rows at y=(j/2)*9+8 relative to hiscreen (scaled to canvas row*10+8).
+                // label1 = "ItemsMagicTalk Buy  Game " (5×5 chars, left column)
+                // label2 = "List Take Look Use  Give " (5×5 chars, right column)
+                const LABEL1: [&str; 5] = ["Items", "Magic", "Talk ", "Buy  ", "Game "];
+                const LABEL2: [&str; 5] = ["List ", "Take ", "Look ", "Use  ", "Give "];
+                resources.topaz_font.set_color_mod(255, 255, 255);
+                for row in 0..5usize {
+                    let y = HIBAR_Y + (row as i32) * 10 + 8;
+                    resources.topaz_font.render_string(LABEL1[row], canvas, 430, y);
+                    resources.topaz_font.render_string(LABEL2[row], canvas, 482, y);
+                }
+
+                // Compass (world-106): hero facing direction in rightmost portion of HI bar.
+                let compass_str = match self.state.facing & 7 {
+                    0 => "N", 1 => "NE", 2 => "E", 3 => "SE",
+                    4 => "S", 5 => "SW", 6 => "W", _ => "NW",
+                };
+                resources.topaz_font.render_string(compass_str, canvas, 600, 430);
+
+                // Tick visual effects and composite them over the map.
+                self.witch_effect.tick();
+                if let Some((r, g, b, a)) = self.teleport_effect.tick() {
+                    canvas.set_draw_color(sdl2::pixels::Color::RGBA(r, g, b, a));
+                    canvas.fill_rect(None).ok();
+                }
             }
             // Map view
             1 => {
@@ -327,9 +584,22 @@ impl GameplayScene {
     }
 
     /// Called when the hero transitions to a new region.
-    /// Stubs palette rebuild; extend when per-region palette data is available (world-109).
-    fn on_region_changed(&self, region: u8) {
+    /// Reloads world data and NPC table for the new region (npc-101, world-110).
+    fn on_region_changed(&mut self, region: u8) {
         eprintln!("on_region_changed: region changed to {}", region);
+        if let Some(ref adf) = self.adf {
+            match crate::game::world_data::WorldData::load(adf, region) {
+                Ok(world) => {
+                    let palette = [0xFF808080_u32; 32];
+                    self.map_renderer = Some(MapRenderer::new(&world, &palette));
+                    self.map_world = Some(world);
+                    eprintln!("on_region_changed: world reloaded for region {}", region);
+                }
+                Err(e) => eprintln!("on_region_changed: WorldData::load failed: {e}"),
+            }
+            self.npc_table = Some(crate::game::npc::NpcTable::load(adf, region));
+            eprintln!("on_region_changed: NPC table loaded for region {}", region);
+        }
     }
 
     /// Dispatch a game menu/command action.
@@ -356,6 +626,31 @@ impl GameplayScene {
                 } else {
                     eprintln!("eat_food: no food in pack");
                 }
+            }
+            // Shop BUY menu items (npc-107): mirrors fmain.c BUY case / jtrans[] table.
+            // label5 = "Food ArrowVial Mace SwordBow  Totem" — 7 items, hits 5-11.
+            GameAction::BuyArrow => {
+                Self::do_buy(&mut self.state, &self.npc_table, 1, "arrows", &mut self.messages);
+            }
+            GameAction::BuyVial => {
+                // ITEM_VIAL = 11 in stuff[] (magic healing potion).
+                Self::do_buy(&mut self.state, &self.npc_table, 11, "vial", &mut self.messages);
+            }
+            GameAction::BuyMace => {
+                // Mace → weapon slot 8 (dagger/mace, cheapest weapon).
+                Self::do_buy(&mut self.state, &self.npc_table, 8, "mace", &mut self.messages);
+            }
+            GameAction::BuySword => {
+                // Sword → weapon slot 10 (long sword).
+                Self::do_buy(&mut self.state, &self.npc_table, 10, "sword", &mut self.messages);
+            }
+            GameAction::BuyBow => {
+                // Bow → weapon slot 9 (short sword / bow).
+                Self::do_buy(&mut self.state, &self.npc_table, 9, "bow", &mut self.messages);
+            }
+            GameAction::BuyTotem => {
+                // ITEM_TOTEM = 13 in stuff[].
+                Self::do_buy(&mut self.state, &self.npc_table, 13, "totem", &mut self.messages);
             }
             GameAction::Inventory => {
                 eprintln!("Inventory: {}", self.state.inventory_summary());
@@ -420,6 +715,11 @@ impl GameplayScene {
                                 if !drops.is_empty() {
                                     self.messages.push(format!("{} items dropped!", drops.len()));
                                 }
+                                // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
+                                if self.state.check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE) {
+                                    self.messages.push("The turtle rewards you with a Sea Shell!");
+                                    eprintln!("check_turtle_eggs: shell awarded for snake kill");
+                                }
                                 self.messages.push("Enemy defeated!");
                             } else {
                                 self.messages.push(format!("You hit for {}!", result.enemy_damage));
@@ -432,6 +732,12 @@ impl GameplayScene {
                 if !attacked {
                     self.messages.push("Nothing to attack.");
                 }
+            }
+            // Fight (joystick fire / Space key): melee swing using direction-sensitive
+            // proximity check (npc-103, mirrors fmain.c keyfight + dohit path).
+            GameAction::Fight => {
+                self.apply_melee_combat();
+                self.fight_cooldown = 20;
             }
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
@@ -498,6 +804,100 @@ impl GameplayScene {
                 } else {
                     self.messages.push("You have no shells to summon a turtle.");
                 }
+            }
+            GameAction::Look => {
+                // Describe terrain at hero position (original: event 38 = item visible, event 20 = nothing special).
+                let terrain_name = if let Some(ref world) = self.map_world {
+                    match collision::px_to_terrain_type(world, self.state.hero_x as i32, self.state.hero_y as i32) {
+                        0 => "open ground",
+                        1 => "hard rock",
+                        2 => "shallow water",
+                        3 => "deep water",
+                        4 => "swamp",
+                        5 => "water",
+                        6 => "trees",
+                        7 => "rough terrain",
+                        _  => "unknown terrain",
+                    }
+                } else {
+                    "open ground"
+                };
+                self.messages.push(format!("You see: {}.", terrain_name));
+            }
+            GameAction::Take => {
+                // Item pickup — full implementation requires an object actor scan (npc-002 / loot system).
+                self.messages.push("Nothing here to take.");
+            }
+            GameAction::Give => {
+                // Give 2 gold to a nearby beggar (race 0x8d), raising kindness.
+                // Mirrors fmain.c GIVE case: hit==5 && wealth>2, kind++.
+                use crate::game::npc::RACE_BEGGAR;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let near_beggar = self.npc_table.as_ref().map_or(false, |t| {
+                    t.npcs.iter().any(|n| {
+                        n.active && n.race == RACE_BEGGAR
+                            && (n.x - hero_x).abs() < 32
+                            && (n.y - hero_y).abs() < 32
+                    })
+                });
+                if near_beggar && self.state.wealth > 2 {
+                    self.state.wealth -= 2;
+                    // kind++ chance (mirrors: if rand64() > kind { kind++; })
+                    if self.state.kind < 100 {
+                        self.state.kind += 1;
+                    }
+                    self.messages.push("You give gold to the beggar. They thank you.");
+                    eprintln!("give to beggar: wealth={}, kind={}", self.state.wealth, self.state.kind);
+                } else if near_beggar {
+                    self.messages.push("You have no gold to spare.");
+                } else {
+                    self.messages.push("Nothing to give to.");
+                }
+            }
+            GameAction::Yell => {
+                // Call missing brothers by name (original: hero yells to attract attention).
+                let name = match self.state.brother {
+                    1 => "Phillip",
+                    2 => "Kevin",
+                    _ => "Julian",
+                };
+                self.messages.push(format!("{}!", name));
+            }
+            GameAction::Speak | GameAction::Ask => {
+                // Show shopkeeper menu if near a shopkeeper (npc-107).
+                // Full NPC dialogue requires setfig table (npc-002).
+                use crate::game::npc::RACE_SHOPKEEPER;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let near_shop = self.npc_table.as_ref().map_or(false, |t| {
+                    crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
+                });
+                if near_shop {
+                    // Show buy menu: list items available for purchase with prices.
+                    // Mirrors fmain.c BUY menu (label5 = "Food ArrowVial Mace SwordBow  Totem").
+                    let items = [
+                        (0,  "Food"),
+                        (1,  "Arrows"),
+                        (11, "Vial"),
+                        (8,  "Mace"),
+                        (10, "Sword"),
+                        (9,  "Bow"),
+                        (13, "Totem"),
+                    ];
+                    let mut menu = String::from("Shopkeeper: What do you need?\n");
+                    for (idx, name) in &items {
+                        let cost = crate::game::shop::ITEM_COSTS.get(*idx).copied().unwrap_or(0);
+                        if cost > 0 {
+                            menu.push_str(&format!("  {} - {} gold\n", name, cost));
+                        }
+                    }
+                    menu.push_str(&format!("  (Your gold: {})", self.state.gold));
+                    self.messages.push(menu);
+                } else {
+                    self.messages.push("There is no one here to talk to.");
+                }
+                let _ = RACE_SHOPKEEPER;
             }
             _ => {}
         }
@@ -581,6 +981,15 @@ impl GameplayScene {
             }
             ToggleAutosave { enable } => {
                 self.autosave_enabled = enable;
+            }
+            TriggerWitchEffect => {
+                self.witch_effect.start();
+            }
+            TriggerTeleportEffect => {
+                self.teleport_effect.start();
+            }
+            TriggerPaletteTransition { to_black } => {
+                eprintln!("TriggerPaletteTransition: to_black={}", to_black);
             }
             cmd => {
                 eprintln!("debug command not yet wired: {:?}", cmd);
@@ -711,25 +1120,31 @@ impl Scene for GameplayScene {
         canvas: &mut Canvas<Window>,
         _play_tex: &mut Texture,
         delta_ticks: u32,
-        _game_lib: &GameLibrary,
-        _resources: &mut SceneResources<'_, '_>,
+        game_lib: &GameLibrary,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
         self.state.tick(delta_ticks);
 
         // Lazy-load ADF + world data on first tick (render-world-load).
+        // ADF path comes from faery.toml [disk].adf; falls back to the default filename.
         // Errors are logged to stderr; missing ADF is gracefully handled.
         if !self.adf_load_attempted {
             self.adf_load_attempted = true;
-            match crate::game::adf::AdfDisk::open(
-                std::path::Path::new("game/Faery Tale Adventure (MicroIllusions).adf"),
-            ) {
+            let adf_path = game_lib
+                .disk
+                .as_ref()
+                .map(|d| d.adf.as_str())
+                .unwrap_or("game/Faery Tale Adventure (MicroIllusions).adf");
+            match crate::game::adf::AdfDisk::open(std::path::Path::new(adf_path)) {
                 Ok(adf) => {
                     let region = self.state.region_num;
                     match crate::game::world_data::WorldData::load(&adf, region) {
                         Ok(world) => {
                             let palette = [0xFF808080_u32; 32]; // placeholder until region palettes decoded
                             let renderer = MapRenderer::new(&world, &palette);
+                            // npc-101: load NPC table for the starting region
+                            self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
                             self.adf = Some(adf);
@@ -759,11 +1174,7 @@ impl Scene for GameplayScene {
             self.day_night_phase = new_phase;
         }
 
-        // Fatigue: tick once per frame; forced sleep on exhaustion.
-        if self.state.tick_fatigue() {
-            self.messages.push("Exhausted! You fall asleep.");
-            eprintln!("Forced sleep: fatigue max reached");
-        }
+        // Fatigue is updated per movement step in apply_player_input (player-111).
 
         // setmood: check music group every 8 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
@@ -773,7 +1184,7 @@ impl Scene for GameplayScene {
             if mood != self.last_mood {
                 self.last_mood = mood;
                 eprintln!("setmood: switching to group {}", mood);
-                if let Some(audio) = _resources.audio {
+                if let Some(audio) = resources.audio {
                     audio.set_score(mood);
                 }
             }
@@ -785,6 +1196,10 @@ impl Scene for GameplayScene {
             self.on_region_changed(region);
             eprintln!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
                 crate::game::game_event::GameEvent::RegionTransition { region });
+            // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
+            if let Some(audio) = resources.audio {
+                audio.set_cave_mode(region == 9);
+            }
             let from = self.palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
@@ -799,6 +1214,22 @@ impl Scene for GameplayScene {
                 if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
                     mr.atlas.rebuild(world, &palette);
                 }
+            }
+        }
+
+        // Day/night continuous dimming: rebuild atlas whenever lightlevel changes (gfx-101).
+        let lightlevel = self.state.lightlevel;
+        if lightlevel != self.last_lightlevel {
+            self.last_lightlevel = lightlevel;
+            let pct = (lightlevel as i32 * 100 / 300) as i16;
+            eprintln!("daynight: lightlevel={} pct={}%", lightlevel, pct);
+            if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
+                let base = self.palette_transition
+                    .as_ref()
+                    .map(|pt| pt.to)
+                    .unwrap_or([0xFFFFFFFF_u32; crate::game::palette::PALETTE_SIZE]);
+                let faded = crate::game::palette_fader::apply_lightlevel_dim(&base, pct);
+                mr.atlas.rebuild(world, &faded);
             }
         }
 
@@ -901,7 +1332,7 @@ impl Scene for GameplayScene {
             }
             self.state.vitality -= hero_missile_damage;
         }
-        let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y);
+        let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y, 0);
         if shells > 0 {
             self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
         }
@@ -921,7 +1352,7 @@ impl Scene for GameplayScene {
             }
         }
 
-        self.render_by_viewstatus(canvas);
+        self.render_by_viewstatus(canvas, resources);
         canvas.present();
         SceneResult::Continue
     }

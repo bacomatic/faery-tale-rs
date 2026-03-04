@@ -127,7 +127,61 @@ pub fn resolve_combat(state: &mut GameState, npc: &mut Npc, hero_weapon_slot: us
 /// Award loot from a defeated NPC to the hero.
 pub fn award_loot(state: &mut GameState, npc: &Npc) {
     state.gold += npc.gold as i32;
+    // BRV farming guard (player-109): brave is not awarded while riding the turtle.
+    // When a future commit adds brave += N here, it must be wrapped:
+    //   if !(state.on_raft && state.active_carrier == CARRIER_TURTLE) { state.brave += N; }
     // Additional item drops handled by npc-106
+}
+
+/// Compute melee hit reach in pixels.
+/// Mirrors fmain.c: bv = (brave/20) + 5 for player, capped at 15.
+/// INSANE_REACH god-mode multiplies by 4.
+pub fn melee_reach(brave: i16, weapon: u8, insane_reach: bool) -> i16 {
+    let base = ((brave / 20) + 5).min(15).max(4) as i16;
+    // Weapon adds 2px per level, mirroring wt+wt offset in newx/newy.
+    let reach = base + (weapon as i16) * 2;
+    if insane_reach { reach * 4 } else { reach }
+}
+
+/// Direction-sensitive melee proximity check (ports fmain.c sword proximity loop).
+/// Returns true if the target is within reach of the hero's weapon tip.
+/// Uses Chebyshev distance (max(|dx|,|dy|) < reach) matching original `yd < bv`.
+pub fn in_melee_range(
+    hero_x: i16, hero_y: i16,
+    facing: u8, weapon: u8, brave: i16,
+    target_x: i16, target_y: i16,
+    insane_reach: bool,
+) -> bool {
+    let reach = melee_reach(brave, weapon, insane_reach);
+    // Project weapon tip ahead in facing direction (mirrors newx/newy offset by wt+wt).
+    let offset = reach;
+    let (ox, oy): (i16, i16) = match facing & 7 {
+        0 => (0, -offset),        // N
+        1 => (offset, -offset),   // NE
+        2 => (offset, 0),         // E
+        3 => (offset, offset),    // SE
+        4 => (0, offset),         // S
+        5 => (-offset, offset),   // SW
+        6 => (-offset, 0),        // W
+        7 => (-offset, -offset),  // NW
+        _ => (0, -offset),
+    };
+    let tip_x = hero_x + ox;
+    let tip_y = hero_y + oy;
+    let xd = (target_x - tip_x).abs();
+    let yd = (target_y - tip_y).abs();
+    xd.max(yd) < reach
+}
+
+/// Simple pseudo-random number for damage rolls (no external crate dependency).
+pub fn melee_rand(max: u32) -> u32 {
+    if max == 0 { return 0; }
+    use std::time::SystemTime;
+    let nanos = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    nanos % max
 }
 
 #[cfg(test)]
