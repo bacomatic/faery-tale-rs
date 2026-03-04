@@ -1,4 +1,4 @@
-use crate::game::magic::{use_magic, MagicTimers, ITEM_AMULET, ITEM_CROWN, ITEM_ORB, ITEM_POTION, ITEM_RING, ITEM_SCROLL, ITEM_WAND};
+use crate::game::magic::{use_magic, ITEM_LANTERN, ITEM_ORB, ITEM_RING, ITEM_SKULL, ITEM_STONE_RING, ITEM_TOTEM, ITEM_VIAL};
 use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
@@ -31,6 +31,7 @@ use sdl2::video::Window;
 use crate::game::actor::ActorState;
 use crate::game::collision;
 use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
+use crate::game::gfx_effects::{TeleportEffect, WitchEffect};
 use crate::game::game_library::GameLibrary;
 use crate::game::game_state::GameState;
 use crate::game::key_bindings::{GameAction, KeyBindings};
@@ -75,6 +76,8 @@ pub struct GameplayScene {
     mood_tick: u32,
     map_renderer: Option<MapRenderer>,
     map_world: Option<crate::game::world_data::WorldData>,
+    adf: Option<crate::game::adf::AdfDisk>,
+    adf_load_attempted: bool,
     rebinding: RebindingState,
     local_bindings: KeyBindings,
     last_region_num: u8,
@@ -83,7 +86,9 @@ pub struct GameplayScene {
     pub in_encounter_zone: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
     day_night_phase: DayNightPhase,
-    magic_timers: MagicTimers,
+
+    witch_effect: WitchEffect,
+    teleport_effect: TeleportEffect,
     pub missiles: [crate::game::combat::Missile; crate::game::combat::MAX_MISSILES],
 }
 
@@ -101,6 +106,8 @@ impl GameplayScene {
             mood_tick: 0,
             map_renderer: None,
             map_world: None,
+            adf: None,
+            adf_load_attempted: false,
             rebinding: RebindingState { active: false, waiting_for_action: None },
             local_bindings: KeyBindings::default_bindings(),
             last_region_num: u8::MAX,
@@ -109,7 +116,9 @@ impl GameplayScene {
             in_encounter_zone: false,
             npc_table: None,
             day_night_phase: DayNightPhase::Day,
-            magic_timers: MagicTimers::default(),
+
+            witch_effect: WitchEffect::new(),
+            teleport_effect: TeleportEffect::new(),
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
         }
     }
@@ -169,8 +178,7 @@ impl GameplayScene {
             } else {
                 2
             };
-            // Speed boost: crown magic adds 1 to base speed.
-            let speed = if self.magic_timers.has_speed_boost() { speed + 1 } else { speed };
+
 
             let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
             let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
@@ -259,6 +267,38 @@ impl GameplayScene {
             0 | 98 | 99 => {
                 canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 64));
                 canvas.clear();
+                // Blit composed map framebuf to canvas (world-105).
+                if let Some(ref mr) = self.map_renderer {
+                    if !mr.framebuf.is_empty() {
+                        // SAFETY: reinterpreting Vec<u32> as &[u8] — same memory, valid alignment.
+                        let pixels_u8: &[u8] = unsafe {
+                            std::slice::from_raw_parts(
+                                mr.framebuf.as_ptr() as *const u8,
+                                mr.framebuf.len() * 4,
+                            )
+                        };
+                        let mut pixels_copy = pixels_u8.to_vec();
+                        let tc = canvas.texture_creator();
+                        let surface_result = sdl2::surface::Surface::from_data(
+                            &mut pixels_copy,
+                            crate::game::map_renderer::MAP_DST_W,
+                            crate::game::map_renderer::MAP_DST_H,
+                            crate::game::map_renderer::MAP_DST_W * 4,
+                            sdl2::pixels::PixelFormatEnum::RGBA32,
+                        );
+                        if let Ok(surface) = surface_result {
+                            if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                                let dst = sdl2::rect::Rect::new(
+                                    crate::game::map_renderer::MAP_DST_X,
+                                    crate::game::map_renderer::MAP_DST_Y,
+                                    crate::game::map_renderer::MAP_DST_W,
+                                    crate::game::map_renderer::MAP_DST_H,
+                                );
+                                let _ = canvas.copy(&tex, None, Some(dst));
+                            }
+                        }
+                    }
+                }
                 eprintln!("{}", crate::game::hiscreen::format_hiscreen(&self.state));
             }
             // Map view
@@ -284,6 +324,12 @@ impl GameplayScene {
                 canvas.clear();
             }
         }
+    }
+
+    /// Called when the hero transitions to a new region.
+    /// Stubs palette rebuild; extend when per-region palette data is available (world-109).
+    fn on_region_changed(&self, region: u8) {
+        eprintln!("on_region_changed: region changed to {}", region);
     }
 
     /// Dispatch a game menu/command action.
@@ -391,44 +437,45 @@ impl GameplayScene {
                 self.messages.push("Nothing to use.");
                 eprintln!("UseItem: stub");
             }
+            // MAGIC menu items 5..=11 (stuff[9..=15], MAGICBASE=9 in fmain.c).
             GameAction::CastSpell1 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_WAND) {
+                match use_magic(&mut self.state, ITEM_STONE_RING) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell2 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_ORB) {
+                match use_magic(&mut self.state, ITEM_LANTERN) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell3 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_POTION) {
+                match use_magic(&mut self.state, ITEM_VIAL) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell4 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_CROWN) {
+                match use_magic(&mut self.state, ITEM_ORB) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell5 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_AMULET) {
+                match use_magic(&mut self.state, ITEM_TOTEM) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell6 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_RING) {
+                match use_magic(&mut self.state, ITEM_RING) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
             }
             GameAction::CastSpell7 => {
-                match use_magic(&mut self.state, &mut self.magic_timers, ITEM_SCROLL) {
+                match use_magic(&mut self.state, ITEM_SKULL) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
@@ -607,6 +654,54 @@ impl Scene for GameplayScene {
                 Keycode::Space | Keycode::F => { self.input.fight = false; true }
                 _ => false,
             },
+            // Controller axis motion: map left stick to movement input
+            Event::ControllerAxisMotion { axis, value, .. } => {
+                use sdl2::controller::Axis;
+                const THRESHOLD: i16 = 8000;
+                match axis {
+                    Axis::LeftX => {
+                        self.input.left  = *value < -THRESHOLD;
+                        self.input.right = *value >  THRESHOLD;
+                        true
+                    }
+                    Axis::LeftY => {
+                        self.input.up   = *value < -THRESHOLD;
+                        self.input.down = *value >  THRESHOLD;
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            // Controller button press: map to game actions via ControllerBindings
+            Event::ControllerButtonDown { button, .. } => {
+                use sdl2::controller::Button;
+                match button {
+                    Button::DPadUp    => { self.input.up    = true; true }
+                    Button::DPadDown  => { self.input.down  = true; true }
+                    Button::DPadLeft  => { self.input.left  = true; true }
+                    Button::DPadRight => { self.input.right = true; true }
+                    Button::A         => { self.do_option(GameAction::Fight);     true }
+                    Button::X         => { self.do_option(GameAction::Inventory); true }
+                    Button::Y         => { self.do_option(GameAction::Look);      true }
+                    Button::B         => { self.do_option(GameAction::UseItem);   true }
+                    Button::LeftShoulder  => { self.do_option(GameAction::CastSpell1); true }
+                    Button::RightShoulder => { self.do_option(GameAction::CastSpell2); true }
+                    Button::Start     => { self.do_option(GameAction::Pause);     true }
+                    Button::Back      => { self.do_option(GameAction::Map);       true }
+                    _ => false,
+                }
+            }
+            // Controller button release: clear movement inputs
+            Event::ControllerButtonUp { button, .. } => {
+                use sdl2::controller::Button;
+                match button {
+                    Button::DPadUp    => { self.input.up    = false; true }
+                    Button::DPadDown  => { self.input.down  = false; true }
+                    Button::DPadLeft  => { self.input.left  = false; true }
+                    Button::DPadRight => { self.input.right = false; true }
+                    _ => false,
+                }
+            }
             _ => false,
         }
     }
@@ -621,9 +716,33 @@ impl Scene for GameplayScene {
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
         self.state.tick(delta_ticks);
-        self.magic_timers.tick();
 
-        // Day/night phase: recompute and log/transition on change.
+        // Lazy-load ADF + world data on first tick (render-world-load).
+        // Errors are logged to stderr; missing ADF is gracefully handled.
+        if !self.adf_load_attempted {
+            self.adf_load_attempted = true;
+            match crate::game::adf::AdfDisk::open(
+                std::path::Path::new("game/Faery Tale Adventure (MicroIllusions).adf"),
+            ) {
+                Ok(adf) => {
+                    let region = self.state.region_num;
+                    match crate::game::world_data::WorldData::load(&adf, region) {
+                        Ok(world) => {
+                            let palette = [0xFF808080_u32; 32]; // placeholder until region palettes decoded
+                            let renderer = MapRenderer::new(&world, &palette);
+                            self.map_world = Some(world);
+                            self.map_renderer = Some(renderer);
+                            self.adf = Some(adf);
+                            eprintln!("render-world-load: world loaded for region {}", region);
+                        }
+                        Err(e) => eprintln!("render-world-load: WorldData::load failed: {e}"),
+                    }
+                }
+                Err(e) => eprintln!("render-world-load: AdfDisk::open failed (ADF may not be present): {e}"),
+            }
+        }
+
+
         let new_phase = DayNightPhase::from_lightlevel(self.state.lightlevel);
         if new_phase != self.day_night_phase {
             eprintln!("Day/night: {:?}", new_phase);
@@ -663,6 +782,7 @@ impl Scene for GameplayScene {
         // Region palette transition (world-109)
         let region = self.state.region_num;
         if region != self.last_region_num {
+            self.on_region_changed(region);
             eprintln!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
                 crate::game::game_event::GameEvent::RegionTransition { region });
             let from = self.palette_transition
