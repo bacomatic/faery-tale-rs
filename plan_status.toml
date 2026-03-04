@@ -1195,3 +1195,390 @@ depends_on = ["world-101"]
 notes = "cfiles[18] table, bitplane-to-RGBA32 decode, setfig_table[14], seq_list[] slots."
 updated = "2026-03-02"
 issue = "#54"
+# ── Debug Window Visual Effects Controls ──────────────────────────────
+
+[[task]]
+id = "dbg-effects-fields"
+parent = "debug-effects-001"
+title = "Add witch_effect + teleport_effect fields to GameplayScene"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Add WitchEffect and TeleportEffect fields (from gfx_effects.rs) initialized as Default::default() in GameplayScene::new()."
+updated = "2026-03-04"
+issue = "#88"
+
+[[task]]
+id = "dbg-effects-tick"
+parent = "debug-effects-001"
+title = "Tick effects in update() and apply to canvas"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = ["dbg-effects-fields"]
+notes = "Call witch_effect.tick() for scanline offsets; call teleport_effect.tick() for overlay rect."
+updated = "2026-03-04"
+issue = "#88"
+
+[[task]]
+id = "dbg-effects-commands"
+parent = "debug-effects-001"
+title = "Add TriggerWitchEffect/TriggerTeleportEffect/TriggerPaletteTransition to DebugCommand"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "3 new DebugCommand variants in debug_command.rs."
+updated = "2026-03-04"
+issue = "#88"
+
+[[task]]
+id = "dbg-effects-dispatch"
+parent = "debug-effects-001"
+title = "Handle new DebugCommands in GameplayScene::apply_command()"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = ["dbg-effects-fields", "dbg-effects-commands"]
+notes = "Match arms for TriggerWitchEffect, TriggerTeleportEffect, TriggerPaletteTransition."
+updated = "2026-03-04"
+issue = "#88"
+
+[[task]]
+id = "dbg-effects-ui"
+parent = "debug-effects-001"
+title = "Add Effects section to Cheats tab in debug window"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = ["dbg-effects-commands"]
+notes = "New CheatBtn variants, Effects section in render_cheats(), click wired to pending_commands."
+updated = "2026-03-04"
+issue = "#88"
+
+# ── faery.toml Asset Externalization ─────────────────────────────────
+
+[[task]]
+id = "faerytoml-audio-paths"
+parent = "faerytoml-001"
+title = "faery.toml: audio file paths"
+area = "config"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Add [audio] and [disk] sections to faery.toml; add structs to game_library.rs; update audio.rs/main.rs/songs.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-disk-adf"
+parent = "faerytoml-001"
+title = "faery.toml: ADF disk path"
+area = "config"
+state = "todo"
+priority = "high"
+depends_on = ["faerytoml-audio-paths"]
+notes = "Wire [disk].adf to world loading code."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-region-blocks"
+parent = "faerytoml-001"
+title = "faery.toml: world region ADF block layout"
+area = "config"
+state = "todo"
+priority = "high"
+depends_on = ["faerytoml-disk-adf"]
+notes = "Add [[world.region]] (9 entries); remove REGION_BLOCKS const from world_data.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-sprite-blocks"
+parent = "faerytoml-001"
+title = "faery.toml: sprite cfile ADF block offsets"
+area = "config"
+state = "todo"
+priority = "medium"
+depends_on = ["faerytoml-disk-adf"]
+notes = "Add [sprites] cfile_blocks=[18 values]; remove CFILE_BLOCKS from sprites.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-npc-blocks"
+parent = "faerytoml-001"
+title = "faery.toml: NPC cfile ADF block offset"
+area = "config"
+state = "todo"
+priority = "medium"
+depends_on = ["faerytoml-disk-adf"]
+notes = "Add [npcs].cfile_start_block; remove CFILE_START_BLOCK from npc.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-start-state"
+parent = "faerytoml-001"
+title = "faery.toml: hero starting state"
+area = "config"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Add [start] section; update GameState::new() to read from GameLibrary."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-doors"
+parent = "faerytoml-001"
+title = "faery.toml: door table"
+area = "config"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Add [[doors]] (86 entries from fmain.c); replace DOOR_TABLE static in doors.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-zones"
+parent = "faerytoml-001"
+title = "faery.toml: encounter zones"
+area = "config"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Add [[encounter.zones]]; replace ZONE_TABLE static in zones.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "faerytoml-item-costs"
+parent = "faerytoml-001"
+title = "faery.toml: item costs (jtrans[])"
+area = "config"
+state = "todo"
+priority = "low"
+depends_on = []
+notes = "Add item_costs=[35 values]; replace ITEM_COSTS const in shop.rs."
+updated = "2026-03-04"
+issue = "#91"
+
+# ── Game View Rendering ───────────────────────────────────────────────
+
+[[task]]
+id = "render-world-load"
+parent = "render-001"
+title = "Lazy-init WorldData + MapRenderer in GameplayScene"
+area = "rendering"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Open ADF, WorldData::load(), MapRenderer::new(). Store in GameplayScene fields."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "render-map-blit"
+parent = "render-001"
+title = "Upload framebuf and blit map to canvas"
+area = "rendering"
+state = "todo"
+priority = "high"
+depends_on = ["render-world-load"]
+notes = "Surface::from_data(RGBA32) -> texture -> canvas.copy() to map rect. Remove _play_tex underscore."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "render-hiscreen-bar"
+parent = "render-001"
+title = "Blit hiscreen IFF background to bottom strip"
+area = "rendering"
+state = "todo"
+priority = "high"
+depends_on = ["render-map-blit"]
+notes = "resources.find_image('hiscreen') -> canvas.copy to Rect at y≈384, 640x96."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "render-msg-scroll"
+parent = "render-001"
+title = "Render message queue + stats in parchment area"
+area = "rendering"
+state = "todo"
+priority = "medium"
+depends_on = ["render-hiscreen-bar"]
+notes = "Topaz font, up to 6 message lines + stat bar (Brv/Lck/Knd/Vit/Wlth)."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "render-buttons"
+parent = "render-001"
+title = "Render 2x5 action button grid in HI bar"
+area = "rendering"
+state = "todo"
+priority = "medium"
+depends_on = ["render-hiscreen-bar"]
+notes = "Items/Magic, Talk/Buy, Game/List, Take/Look, Use/Give at hi-res x=430, x=482 scaled to canvas."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "render-compass"
+parent = "render-001"
+title = "Render compass direction indicator"
+area = "rendering"
+state = "todo"
+priority = "low"
+depends_on = ["render-hiscreen-bar"]
+notes = "Overlay facing_char and N/S/E/W text over compass rose area of hiscreen bar."
+updated = "2026-03-04"
+issue = "#92"
+
+# ── RAG Index Makefile Target ─────────────────────────────────────────
+
+[[task]]
+id = "rag-index-script"
+parent = "rag-index-001"
+title = "Create scripts/rag_index.sh"
+area = "tooling"
+state = "todo"
+priority = "low"
+depends_on = []
+notes = "Env loading, Ollama reachability check, cargo run --bin rag -- index with --reset or incremental flags."
+updated = "2026-03-04"
+issue = "#90"
+
+[[task]]
+id = "rag-index-makefile"
+parent = "rag-index-001"
+title = "Add rag-index and rag-index-inc to Makefile"
+area = "tooling"
+state = "todo"
+priority = "low"
+depends_on = ["rag-index-script"]
+notes = "rag-index calls bash scripts/rag_index.sh. rag-index-inc passes INDEX_INCREMENTAL=true. Both in .PHONY."
+updated = "2026-03-04"
+issue = "#90"
+
+[[task]]
+id = "rag-index-docs"
+parent = "rag-index-001"
+title = "Update RAG.md with quick reindex section"
+area = "docs"
+state = "todo"
+priority = "low"
+depends_on = ["rag-index-makefile"]
+notes = "Add 'Quick Reindex' section documenting make rag-index and make rag-index-inc."
+updated = "2026-03-04"
+issue = "#90"
+
+# ── Bug Fixes ─────────────────────────────────────────────────────────
+
+[[task]]
+id = "fix-colormod-scene"
+parent = "fix-colormod-001"
+title = "Fix copy-protect text color"
+area = "bug"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Add topaz_font.set_color_mod(255,255,255) before both render_string() calls in copy_protect_scene.rs."
+updated = "2026-03-04"
+issue = "#87"
+
+[[task]]
+id = "fix-colormod-agents"
+parent = "fix-colormod-001"
+title = "Document font color mod rule in AGENTS.md"
+area = "docs"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Add rule: always call font.set_color_mod(255,255,255) before render_string() unless intentionally tinting."
+updated = "2026-03-04"
+issue = "#87"
+
+[[task]]
+id = "fix-item-names"
+parent = "fix-item-names-001"
+title = "Fix ITEM_NAMES in debug_window.rs with correct names from inv_list[]"
+area = "bug"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Replace 35 entries using inv_list[] from fmain.c. Add KEYBASE/GOLDBASE/MAGICBASE comments."
+updated = "2026-03-04"
+issue = "#89"
+
+[[task]]
+id = "debug-effects-001"
+title = "Debug window visual effects controls"
+area = "debug"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Rollup: wire WitchEffect/TeleportEffect into GameplayScene and debug window Cheats tab."
+updated = "2026-03-04"
+issue = "#88"
+
+[[task]]
+id = "faerytoml-001"
+title = "Move hardcoded asset paths/tables to faery.toml"
+area = "config"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Rollup: externalize binary file paths, ADF block offsets, and game data tables to faery.toml."
+updated = "2026-03-04"
+issue = "#91"
+
+[[task]]
+id = "render-001"
+title = "Render game view (map, HI bar, buttons, compass)"
+area = "rendering"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Rollup: fix solid-blue gameplay scene by wiring WorldData load and all render elements."
+updated = "2026-03-04"
+issue = "#92"
+
+[[task]]
+id = "rag-index-001"
+title = "Add rag-index Makefile target"
+area = "tooling"
+state = "todo"
+priority = "low"
+depends_on = []
+notes = "Rollup: script + Makefile target + docs for rebuilding the RAG index."
+updated = "2026-03-04"
+issue = "#90"
+
+[[task]]
+id = "fix-colormod-001"
+title = "Fix text renders black bug"
+area = "bug"
+state = "todo"
+priority = "high"
+depends_on = []
+notes = "Rollup: SDL2 color mod state persists across scenes causing black text."
+updated = "2026-03-04"
+issue = "#87"
+
+[[task]]
+id = "fix-item-names-001"
+title = "Fix wrong ITEM_NAMES in debug_window"
+area = "bug"
+state = "todo"
+priority = "medium"
+depends_on = []
+notes = "Rollup: replace placeholder names with correct inv_list[] names from fmain.c."
+updated = "2026-03-04"
+issue = "#89"

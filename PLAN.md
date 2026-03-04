@@ -37,6 +37,12 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 - `gfx-001` → #2
 - `keys-001` → #6
 - `persist-001` → #7
+- `debug-effects-001` → #88
+- `faerytoml-001` → #91
+- `render-001` → #92
+- `rag-index-001` → #90
+- `fix-colormod-001` → #87
+- `fix-item-names-001` → #89
 
 ## Status Index (source of truth for humans)
 
@@ -45,6 +51,13 @@ Machine-readable mirror: `plan_status.toml`
 ### In Progress
 
 ### Todo
+
+- [debug-effects-001] Debug window visual effects controls (0/5 steps; Issue: #88)
+- [faerytoml-001] Move hardcoded asset paths/tables to faery.toml (0/9 steps; Issue: #91)
+- [render-001] Render game view — map, HI bar, buttons, compass (0/6 steps; Issue: #92)
+- [rag-index-001] Add rag-index Makefile target (0/3 steps; Issue: #90)
+- [fix-colormod-001] Fix text renders black bug (0/2 steps; Issue: #87)
+- [fix-item-names-001] Fix wrong ITEM_NAMES in debug_window (0/1 steps; Issue: #89)
 
 ### Done
 - [gameloop-001] Core game loop (15/15 steps complete; Issue: #59)
@@ -1024,3 +1037,119 @@ All cheat operations modify `GameState` directly. The debug window reads a snaps
 - Hold Time: day/night cycle freezes while actors continue to move
 - ALT+Light toggle: green jewel illumination persists indefinitely
 - Autosave toggle logs "autosave: not yet implemented" until persist-001 is done
+
+## Plan: Debug Window Visual Effects Controls
+
+**Issue: #88**
+
+### Overview
+
+`WitchEffect` and `TeleportEffect` are fully implemented and tested in `gfx_effects.rs` but are completely unwired from `GameplayScene` and the debug window. This plan wires them in.
+
+### Steps
+
+1. **`dbg-effects-fields`** — Add `witch_effect: WitchEffect` and `teleport_effect: TeleportEffect` fields to `GameplayScene`; initialize as `Default` in `new()`. Add `gfx_effects` import.
+
+2. **`dbg-effects-tick`** — In `GameplayScene::update()`: call `witch_effect.tick()` and apply per-scanline x-offsets when blitting map. Call `teleport_effect.tick()` and draw `canvas.fill_rect()` overlay with returned `(r,g,b,a)`.
+
+3. **`dbg-effects-commands`** — Add `TriggerWitchEffect`, `TriggerTeleportEffect`, `TriggerPaletteTransition { to_black: bool }` variants to `DebugCommand` enum in `debug_command.rs`.
+
+4. **`dbg-effects-dispatch`** — Handle new commands in `GameplayScene::apply_command()`: `TriggerWitchEffect => self.witch_effect.start()`, etc.
+
+5. **`dbg-effects-ui`** — Add Effects section to Cheats tab (F9): `[Witch Warp]` `[Teleport Flash]` `[Pal→Black]` `[Pal→Day]` buttons. Add `CheatBtn` variants; wire through `pending_commands`.
+
+## Plan: faery.toml Asset Externalization
+
+**Issue: #91**
+
+### Overview
+
+Move hardcoded binary file paths, ADF block offsets, and game data tables from Rust source into `faery.toml` so they can be corrected without recompiling. All block offsets are currently placeholder values.
+
+### Phase 1 — File paths
+
+1. **`faerytoml-audio-paths`** — Add `[audio]` (instruments/songs/samples) and `[disk]` (adf) sections to `faery.toml`. Add `AudioConfig`/`DiskConfig` structs to `game_library.rs`. Update `audio.rs`, `main.rs`, `songs.rs` to read paths from `GameLibrary`.
+
+2. **`faerytoml-disk-adf`** — Wire `[disk].adf` path to world loading code (depends on faerytoml-audio-paths).
+
+### Phase 2 — ADF block layout
+
+3. **`faerytoml-region-blocks`** — Add `[[world.region]]` (9 entries); remove `REGION_BLOCKS` const from `world_data.rs`.
+
+4. **`faerytoml-sprite-blocks`** — Add `[sprites]` with `cfile_blocks=[18 values]`, `cfile_block_count=8`; remove `CFILE_BLOCKS` from `sprites.rs`.
+
+5. **`faerytoml-npc-blocks`** — Add `[npcs].cfile_start_block`; remove `CFILE_START_BLOCK` from `npc.rs`.
+
+### Phase 3 — Game data tables (independent)
+
+6. **`faerytoml-start-state`** — Add `[start]` (hero_x, hero_y, region, vitality, brave, luck, kind, wealth); update `GameState::new()`.
+
+7. **`faerytoml-doors`** — Add `[[doors]]` (86 entries from fmain.c); replace `DOOR_TABLE` static.
+
+8. **`faerytoml-zones`** — Add `[[encounter.zones]]`; replace `ZONE_TABLE` static.
+
+9. **`faerytoml-item-costs`** — Add `item_costs` array (jtrans[]); replace `ITEM_COSTS` const in `shop.rs`.
+
+### Design Notes
+
+- All new `GameLibrary` fields: `Option<T>` or `Vec<T>` for backward-compat during migration
+- Block offsets are placeholder — moving to TOML makes them easy to update without recompile
+- Phase 2 depends on Phase 1 (needs `[disk].adf`)
+
+## Plan: Game View Rendering
+
+**Issue: #92**
+
+### Overview
+
+The gameplay scene renders solid blue because `WorldData`/`MapRenderer` are never initialized and `render_by_viewstatus()` only calls `canvas.clear()`. Fix both root causes and render all HI elements.
+
+### Original Screen Layout (from fmain.c)
+
+- Map viewport: 288×140 lo-res at `x=16, y=0` (5 bitplanes)
+- HI bar: 640×57 hi-res at `y=143` (4 bitplanes)
+- Button labels: `label1="ItemsMagicTalk Buy  Game "`, `label2="List Take Look Use  Give "` (5 chars each)
+- Our SDL canvas: 640×480 logical; map framebuf = 304×192 RGBA32
+
+### Steps
+
+1. **`render-world-load`** — Lazy-init `AdfDisk`, `WorldData`, `MapRenderer` in `GameplayScene::update()` on first tick. Use ADF path from GameLibrary (or hardcoded path until faerytoml-001).
+
+2. **`render-map-blit`** — Convert `MapRenderer::framebuf Vec<u32>` → `&[u8]` → `Surface::from_data(RGBA32)` → texture → `canvas.copy()` to map rect. Remove underscore from `_play_tex`.
+
+3. **`render-hiscreen-bar`** — Blit `hiscreen` IFF (640×57) from `ImageTexture` to bottom strip of canvas (`y≈384`).
+
+4. **`render-msg-scroll`** — Render message queue + stat line in parchment area using topaz font.
+
+5. **`render-buttons`** — Render 2×5 action button grid at hi-res positions (`x=430`, `x=482`) scaled to canvas coords.
+
+6. **`render-compass`** — Overlay facing direction text/symbol on compass rose area (rightmost in HI bar).
+
+## Plan: RAG Index Makefile Target
+
+**Issue: #90**
+
+### Steps
+
+1. **`rag-index-script`** — Create `scripts/rag_index.sh`. Load `.env.local`/`.env`; check Ollama reachability; run `cargo run --bin rag -- index` with `--reset` or incremental flags based on `INDEX_RESET`/`INDEX_INCREMENTAL` env vars.
+
+2. **`rag-index-makefile`** — Add `rag-index` (calls `bash scripts/rag_index.sh`) and `rag-index-inc` (incremental variant) to `Makefile`. Add both to `.PHONY`.
+
+3. **`rag-index-docs`** — Add "Quick Reindex" section to `RAG.md` documenting both targets.
+
+## Plan: Bug Fixes
+
+### fix-colormod-001 (Issue: #87)
+
+Text in `copy_protect_scene.rs` (and potentially other scenes) renders black because SDL2 color mod state persists across scene transitions.
+
+**Fix:**
+- `fix-colormod-scene` — Add `topaz_font.set_color_mod(255, 255, 255)` before both `render_string()` calls in `copy_protect_scene.rs`
+- `fix-colormod-agents` — Document in `AGENTS.md`: always call `font.set_color_mod(r, g, b)` before `render_string()`
+
+### fix-item-names-001 (Issue: #89)
+
+`ITEM_NAMES` in `debug_window.rs` line 189 contains wrong placeholder names (e.g., slot 5 = "Raft" instead of "Golden Lasso", slot 24 = "Food" instead of "Fruit").
+
+**Fix:**
+- `fix-item-names` — Replace all 35 entries with correct names from `inv_list[]` in `fmain.c`. Add `KEYBASE`/`GOLDBASE`/`MAGICBASE` comments.
