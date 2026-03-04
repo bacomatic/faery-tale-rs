@@ -39,6 +39,9 @@ struct Cli {
     /// Disable linear interpolation in the PCM mixer (use nearest-neighbor instead)
     #[arg(long)]
     no_interpolation: bool,
+    /// Skip the intro sequence and jump straight to gameplay (requires --debug)
+    #[arg(long, requires = "debug")]
+    skip_intro: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -167,8 +170,12 @@ pub fn main() -> Result<(), String> {
     // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
     // The scene_phase tracks what to start next when a scene completes.
     enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay }
-    let mut scene_phase = ScenePhase::Intro;
-    let mut active_scene: Option<Box<dyn Scene>> = Some(Box::new(IntroScene::new(intro_tracks)));
+    let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
+        if cli.skip_intro {
+            (ScenePhase::Gameplay, Some(Box::new(GameplayScene::new())))
+        } else {
+            (ScenePhase::Intro, Some(Box::new(IntroScene::new(intro_tracks))))
+        };
 
     // Debug window (separate SDL2 window), created only when --debug is passed
     let mut debug_window: Option<DebugWindow> = if cli.debug {
@@ -409,11 +416,15 @@ pub fn main() -> Result<(), String> {
         }
 
         // Feed debug commands from debug window into GameplayScene
+        // and drain gameplay debug logs back to the debug window.
         if let (Some(ref mut dw), Some(ref mut scene)) = (debug_window.as_mut(), active_scene.as_mut()) {
             let cmds = dw.drain_commands();
             if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
                 for cmd in cmds {
                     gs.apply_command(cmd);
+                }
+                for msg in gs.drain_logs() {
+                    dw.log(msg);
                 }
             }
         }
