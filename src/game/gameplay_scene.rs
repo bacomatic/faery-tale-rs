@@ -680,7 +680,26 @@ impl GameplayScene {
                     let scale_y = |v: i32| -> i32 { v * HIBAR_H as i32 / HISCREEN_H };
                     let compass_y = HIBAR_Y + scale_y(COMPASS_SRC_Y);
                     let compass_h = scale_y(COMPASS_SRC_H) as u32;
-                    let dir = (self.state.facing & 0x0F) as usize;
+
+                    // Map our facing (N=0..NW=7) to original comptable index
+                    // (SW=0, S=1, SE=2, E=3, NE=4, N=5, NW=6, W=7, still=8/9).
+                    let player_moving = self.state.actors.first()
+                        .map_or(false, |p| p.moving);
+                    let comptable_dir: usize = if player_moving {
+                        match self.state.facing & 0x07 {
+                            0 => 5, // N
+                            1 => 4, // NE
+                            2 => 3, // E
+                            3 => 2, // SE
+                            4 => 1, // S
+                            5 => 0, // SW
+                            6 => 7, // W
+                            7 => 6, // NW
+                            _ => 9, // still
+                        }
+                    } else {
+                        9 // still — no highlight
+                    };
 
                     let dest = sdl2::rect::Rect::new(
                         COMPASS_X, compass_y, COMPASS_SRC_W as u32, compass_h,
@@ -688,16 +707,20 @@ impl GameplayScene {
                     if let Some(normal_tex) = resources.compass_normal {
                         canvas.copy(normal_tex, None, dest).ok();
                     }
-                    if dir < self.compass_regions.len() {
-                        let (rx, ry, rw, rh) = self.compass_regions[dir];
+                    if comptable_dir < self.compass_regions.len() {
+                        let (rx, ry, rw, rh) = self.compass_regions[comptable_dir];
                         if rw > 1 || rh > 1 {
                             if let Some(highlight_tex) = resources.compass_highlight {
                                 let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                                // Scale both top and bottom edges, then derive height
+                                // from the difference to avoid rounding gaps.
+                                let dst_top = compass_y + scale_y(ry);
+                                let dst_bot = compass_y + scale_y(ry + rh);
                                 let dst = sdl2::rect::Rect::new(
                                     COMPASS_X + rx,
-                                    compass_y + scale_y(ry),
+                                    dst_top,
                                     rw as u32,
-                                    scale_y(rh) as u32,
+                                    (dst_bot - dst_top) as u32,
                                 );
                                 canvas.copy(highlight_tex, src, dst).ok();
                             }
