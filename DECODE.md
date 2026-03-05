@@ -1,10 +1,130 @@
 # Game File Decoding Notes
 
-This document is the canonical reference for reverse-engineering notes and
-binary asset/file format details (`songs`, `v6`, and related data files).
+This document is the canonical reference for reverse-engineering notes,
+binary asset/file format details (`songs`, `v6`, and related data files),
+and original game mechanics derived from the manual and source code.
 
 For build/run setup, use `README.md`. For roadmap/task tracking, use
 `PLAN.md` and `plan_status.toml`.
+
+---
+
+## Input & Command Reference (from original manual)
+
+### Movement
+
+- **Numpad 1–9**: 8-way movement using physical key position (ignore numerals).
+  Numpad layout maps to directions:
+  ```
+  7=NW  8=N   9=NE
+  4=W   5=--  6=E
+  1=SW  2=S   3=SE
+  ```
+- **Joystick**: press in desired direction.
+- **Mouse**: hold left button over compass point in HI bar.
+- Release key/button to stop.
+
+### Combat
+
+- **Numpad 0**: attack (original fire button).
+- **Joystick fire button** / **Mouse right button**: attack.
+- Attacks are directional — must face the opponent.
+- Direction of attack controlled same as movement.
+
+### Command Menu System
+
+The HI bar has 5 category tabs, each revealing a sub-menu.
+Activated by mouse click on the labeled bar, or by keyboard shortcut.
+
+#### Items Menu
+| Label | Key | Action |
+|-------|-----|--------|
+| List  | `L` | Show all carried items |
+| Take  | `T` | Pick up item from ground / dead body |
+| Look  | `?` | Look for hidden items |
+| Give  | `G` | Give item to someone |
+| Use   | `U` | Opens weapon sub-menu (see below) |
+
+**Use sub-menu** (weapon selection):
+| Weapon | Key | Notes |
+|--------|-----|-------|
+| Dirk   | `1` | Draw dagger |
+| Mace   | `2` | Draw mace |
+| Sword  | `3` | Draw sword |
+| Bow    | `4` | Draw bow and arrow |
+| Wand   | `5` | Draw magic wand |
+| Key    | `K` | Opens key color sub-menu |
+
+**Key sub-menu** (via `K`):
+| Key Color | Shortcut |
+|-----------|----------|
+| Gold      | `K1`     |
+| Green     | `K2`     |
+| Blue      | `K3`     |
+| Red       | `K4`     |
+| Grey      | `K5`     |
+| White     | `K6`     |
+
+#### Magic Menu
+One-use magic items. Each use consumes one of that item type.
+
+| Label | Key  | Item |
+|-------|------|------|
+| Stone | `F1` | Blue stone |
+| Jewel | `F2` | Green jewel |
+| Vial  | `F3` | Glass vial (restorative) |
+| Orb   | `F4` | Crystal orb |
+| Totem | `F5` | Bird totem |
+| Ring  | `F6` | Gold ring |
+| Skull | `F7` | Jade skull |
+
+#### Talk Menu
+| Label | Key | Action |
+|-------|-----|--------|
+| Yell  | `Y` | Yell |
+| Say   | `S` | Say |
+| Ask   | `A` | Ask |
+
+#### Buy Menu
+Only works near a merchant character.
+
+| Item   | Key |
+|--------|-----|
+| Food   | `O` |
+| Arrow  | `R` |
+| Vial   | `8` |
+| Mace   | `C` |
+| Sword  | `W` |
+| Bow    | `B` |
+| Totem  | `E` |
+
+#### Game Menu
+| Label  | Key        | Action |
+|--------|------------|--------|
+| Pause  | `Spacebar` | Pause/unpause the game |
+| Music  | `M`        | Toggle music |
+| Sound  | `F`        | Toggle sound effects |
+| Quit   | `Q`        | Quit — sub-menu: exit or save |
+| Load   | `L`        | Load saved game — 8 slots A–H |
+
+### Player Stats (narration scroll)
+
+Five stats displayed on the HI bar scroll area:
+
+| Stat     | Abbr  | Description |
+|----------|-------|-------------|
+| Bravery  | `Brv` | Battle prowess |
+| Luck     | `Lck` | Fairy rescue chance on death |
+| Kindness | `Knd` | NPC communication threshold |
+| Vitality | `Vit` | Health (0 = death) |
+| Wealth   | `Wlt` | Coins carried |
+
+When a character dies with sufficient Luck, a fairy heals him and
+teleports him to the last safe location.
+
+### Map Size
+
+The world is 144 screens tall × 100 screens wide.
 
 ## `game/songs` — Music Score Data (5,984 bytes)
 
