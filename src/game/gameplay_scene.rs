@@ -1510,7 +1510,23 @@ impl Scene for GameplayScene {
             }
         }
         match event {
-            Event::KeyDown { keycode: Some(kc), repeat: false, .. } => match *kc {
+            Event::KeyDown { keycode: Some(kc), keymod, repeat: false, .. } => {
+                // ALT+F4 → immediate quit (OS convention, takes priority over everything).
+                use sdl2::keyboard::Mod;
+                let alt_held = keymod.intersects(Mod::LALTMOD | Mod::RALTMOD);
+                if alt_held && *kc == Keycode::F4 {
+                    self.do_option(GameAction::Quit);
+                    return true;
+                }
+                // ESC: close inventory (viewstatus 4) or map view (viewstatus 1) if open;
+                // otherwise do nothing (no quit on ESC — use ALT+F4 instead).
+                if *kc == Keycode::Escape {
+                    if self.state.viewstatus == 4 || self.state.viewstatus == 1 {
+                        self.state.viewstatus = 0;
+                    }
+                    return true;
+                }
+                match *kc {
                 // Movement keys: arrow keys + numpad (no WASD — those are commands)
                 Keycode::Up    | Keycode::Kp8 => { self.input.up = true; true }
                 Keycode::Down  | Keycode::Kp2 => { self.input.down = true; true }
@@ -1523,8 +1539,6 @@ impl Scene for GameplayScene {
                 Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
                 // Fight: numpad 0 (original)
                 Keycode::Kp0 => { self.input.fight = true; true }
-                // Escape → Quit (safe fallback not in letter_list)
-                Keycode::Escape => { self.do_option(GameAction::Quit); true }
                 // All letter_list keys → route through MenuState
                 _ => {
                     if let Some(menu_key) = keycode_to_menukey(*kc) {
@@ -1534,6 +1548,7 @@ impl Scene for GameplayScene {
                     } else {
                         false
                     }
+                }
                 }
             },
             Event::KeyUp { keycode: Some(kc), .. } => match *kc {
@@ -1596,8 +1611,13 @@ impl Scene for GameplayScene {
                     _ => false,
                 }
             }
-            // Mouse click: dispatch through MenuState button grid
+            // Mouse click: close overlay views, or dispatch through MenuState button grid
             Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+                // Any click dismisses inventory or map view.
+                if self.state.viewstatus == 4 || self.state.viewstatus == 1 {
+                    self.state.viewstatus = 0;
+                    return true;
+                }
                 const HIBAR_Y: i32 = 384;
                 const BTN_X_LEFT: i32 = 430;
                 const BTN_X_RIGHT: i32 = 482;
