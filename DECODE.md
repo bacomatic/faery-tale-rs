@@ -641,13 +641,13 @@ Each entry defines a rectangle `{xrect, yrect, xsize, ysize}` within the
 
 | Index | Direction | xrect | yrect | xsize | ysize |
 |-------|-----------|-------|-------|-------|-------|
-| 0     | SW        |  0    |  0    | 16    |  8    |
-| 1     | S         | 16    |  0    | 16    |  9    |
-| 2     | SE        | 32    |  0    | 16    |  8    |
+| 0     | NW        |  0    |  0    | 16    |  8    |
+| 1     | N         | 16    |  0    | 16    |  9    |
+| 2     | NE        | 32    |  0    | 16    |  8    |
 | 3     | E         | 30    |  8    | 18    |  8    |
-| 4     | NE        | 32    | 16    | 16    |  8    |
-| 5     | N         | 16    | 13    | 16    | 11    |
-| 6     | NW        |  0    | 16    | 16    |  8    |
+| 4     | SE        | 32    | 16    | 16    |  8    |
+| 5     | S         | 16    | 13    | 16    | 11    |
+| 6     | SW        |  0    | 16    | 16    |  8    |
 | 7     | W         |  0    |  8    | 18    |  8    |
 | 8     | still     |  0    |  0    |  1    |  1    |
 | 9     | still     |  0    |  0    |  1    |  1    |
@@ -684,4 +684,116 @@ converts both composites to RGBA textures using the `textcolors` palette.
 During gameplay, the normal compass texture is blitted first; if the player
 is moving, the active direction sub-region from the highlighted texture is
 overlaid on top.
+
+---
+
+## Input Decoding — `decode_mouse` / `decodekey` (`fsubs.asm:1490–1576`)
+
+All input (mouse, joystick, keyboard) is funnelled through `decode_mouse()`
+which produces a single direction value 0–9 stored in `oldir`.  This value
+indexes into `comptable[]` (compass highlight) and into the `xdir[]`/`ydir[]`
+movement tables.
+
+### Direction index convention
+
+```
+Index    Dir    xdir   ydir   Compass
+  0      NW      -2     -2    upper-left
+  1      N        0     -3    top-center
+  2      NE       2     -2    upper-right
+  3      E        3      0    right
+  4      SE       2      2    lower-right
+  5      S        0      3    bottom-center
+  6      SW      -2      2    lower-left
+  7      W       -3      0    left
+  8      still    0      0    (1×1 no-op)
+  9      still    0      0    (1×1 no-op)
+```
+
+Negative Y = up on screen = north.  The `newx(x,dir,speed)` / `newy(y,dir,speed)`
+functions in `fsubs.asm:1274–1319` apply `xdir[dir]*speed/2` and `ydir[dir]*speed/2`.
+
+### `keytrans` table (`fsubs.asm:221–226`)
+
+Maps Amiga raw scancodes (0x00–0x5F) to internal key codes.
+Movement-relevant entries:
+
+| Amiga scancode | Physical key | keytrans code | dir (code−20) |
+|----------------|--------------|---------------|---------------|
+| 0x3D           | Numpad 7     | 20            | 0 = NW        |
+| 0x3E           | Numpad 8     | 21            | 1 = N         |
+| 0x3F           | Numpad 9     | 22            | 2 = NE        |
+| 0x2D           | Numpad 4     | 27            | 7 = W         |
+| 0x2E           | Numpad 5     | 29            | 9 = still     |
+| 0x2F           | Numpad 6     | 23            | 3 = E         |
+| 0x1D           | Numpad 1     | 26            | 6 = SW        |
+| 0x1E           | Numpad 2     | 25            | 5 = S         |
+| 0x1F           | Numpad 3     | 24            | 4 = SE        |
+| 0x0F           | Numpad 0     | `'0'`         | fight (not dir)|
+
+Cursor keys (0x4C–0x4F) map to codes 1–4 which are **not** direction codes
+(they fall outside the 20–29 range); in the original they are cheat-only
+teleport keys gated by the `cheat1` flag (`fmain.c:1487–1498`).
+
+### `decodekey` path (`fsubs.asm:1565–1572`)
+
+```
+if keydir >= 20 && keydir < 30:
+    dir = keydir - 20
+else:
+    dir = 9   (no direction)
+```
+
+Key-down sets `keydir = key`; key-up clears it when `(key & 0x7F) == keydir`.
+
+### Joystick decoding (`fsubs.asm:1530–1563`)
+
+Reads `JOY1DAT` ($DFF00C) to extract two axes:
+
+```
+xjoy = right_indicator - left_indicator    ∈ {-1, 0, 1}
+yjoy = back_indicator  - forward_indicator ∈ {-1, 0, 1}
+```
+
+Where forward = joystick pushed away from player (up on screen, north).
+
+A formula produces a 0–8 index: `idx = 4 + yjoy*3 + xjoy`, then `com2[idx]`
+gives the direction value.
+
+**`com2` table** (`fsubs.asm:1487`): `0, 1, 2, 7, 9, 3, 6, 5, 4`
+
+```
+Joystick grid:        com2 remapping:
+ (L,Fwd)=0  (M,Fwd)=1  (R,Fwd)=2     dir 0=NW  dir 1=N   dir 2=NE
+ (L,Mid)=3  (Center)=4  (R,Mid)=5     dir 7=W   dir 9=—   dir 3=E
+ (L,Bck)=6  (M,Bck)=7  (R,Bck)=8     dir 6=SW  dir 5=S   dir 4=SE
+```
+
+### Mouse compass click (`fsubs.asm:1496–1528`)
+
+When the left mouse button is held and the pointer is in the compass area
+(x > 265), the pointer coordinates are divided into a 3×3 grid to produce
+a direction 0–9:
+
+```
+X: <292 = left column     292–300 = middle column     >300 = right column
+Y: <166 = top row         166–174 = middle row        >174 = bottom row
+```
+
+### Rust port mapping
+
+Our `Direction` enum uses a different order than the original:
+
+| Our facing | Direction | Original dir | comptable index |
+|------------|-----------|--------------|-----------------|
+| 0          | N         | 1            | 1               |
+| 1          | NE        | 2            | 2               |
+| 2          | E         | 3            | 3               |
+| 3          | SE        | 4            | 4               |
+| 4          | S         | 5            | 5               |
+| 5          | SW        | 6            | 6               |
+| 6          | W         | 7            | 7               |
+| 7          | NW        | 0            | 0               |
+
+Formula: `comptable_index = (facing + 1) & 7`.
 
