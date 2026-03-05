@@ -35,6 +35,24 @@ impl BitMap {
         }
     }
 
+    /// Build a BitMap from pre-separated plane data.
+    /// Each entry in `planes` is the raw bytes for one bitplane.
+    pub fn from_planes(planes: Vec<Vec<u8>>, width: usize, height: usize, depth: usize, stride: usize) -> BitMap {
+        BitMap {
+            width,
+            height,
+            depth,
+            stride,
+            planes,
+            index_buffer: RefCell::new(None),
+        }
+    }
+
+    /// Invalidate the cached index buffer (call after modifying plane data).
+    pub fn invalidate_cache(&self) {
+        *self.index_buffer.borrow_mut() = None;
+    }
+
     /**
      * Create a new BitMap from interleaved plane data.
      * Bitplane data is interleaved per row, e.g. for 2 planes:

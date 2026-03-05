@@ -43,6 +43,9 @@ pub struct SceneResources<'a, 'tex> {
     pub scratch: &'a mut Texture<'tex>,
     /// Audio system, for scenes that need to start or stop music.
     pub audio: Option<&'a AudioSystem>,
+    /// Pre-composited compass textures (normal and highlighted).
+    pub compass_normal: Option<&'a Texture<'tex>>,
+    pub compass_highlight: Option<&'a Texture<'tex>>,
 }
 
 impl<'a, 'tex> SceneResources<'a, 'tex> {

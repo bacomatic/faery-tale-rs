@@ -121,12 +121,7 @@ pub struct GameplayScene {
     log_buffer: Vec<String>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
-    /// Compass bitmap data (plane 2): hinor=normal, hivar=highlighted.
-    compass_hinor: Vec<u8>,
-    compass_hivar: Vec<u8>,
-    compass_stride: usize,
-    compass_width: usize,
-    compass_height: usize,
+    /// Compass direction sub-regions from comptable (for highlight overlay).
     compass_regions: Vec<(i32, i32, i32, i32)>,
 }
 
@@ -163,11 +158,6 @@ impl GameplayScene {
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             quit_requested: false,
-            compass_hinor: Vec::new(),
-            compass_hivar: Vec::new(),
-            compass_stride: 0,
-            compass_width: 0,
-            compass_height: 0,
             compass_regions: Vec::new(),
         }
     }
@@ -186,15 +176,6 @@ impl GameplayScene {
         }
 
         if let Some(compass) = game_lib.get_compass() {
-            if !compass.hinor.planes.is_empty() {
-                self.compass_hinor = compass.hinor.planes[0].clone();
-            }
-            if !compass.hivar.planes.is_empty() {
-                self.compass_hivar = compass.hivar.planes[0].clone();
-            }
-            self.compass_stride = compass.hinor.stride;
-            self.compass_width = compass.hinor.width;
-            self.compass_height = compass.hinor.height;
             self.compass_regions = compass.comptable.regions.iter()
                 .map(|r| (r.x, r.y, r.w, r.h))
                 .collect();
@@ -684,55 +665,34 @@ impl GameplayScene {
                     resources.topaz_font.render_string(LABEL2[row], canvas, 486, y);
                 }
 
-                // Compass (world-106): render from hinor/hivar bitmap data.
-                // Original drawcompass() blits hinor as base (plane 2), then
-                // overlays the active direction sub-region from hivar.
-                // Compass position in text bitmap: (567,15), 48×24 pixels.
+                // Compass: blit pre-composited normal texture, then overlay
+                // the active direction sub-region from the highlighted texture.
                 {
                     const COMPASS_X: i32 = 567;
                     const COMPASS_Y_OFF: i32 = 25;
+                    const COMPASS_W: u32 = 48;
+                    const COMPASS_H: u32 = 24;
                     let compass_y = HIBAR_Y + COMPASS_Y_OFF;
                     let dir = (self.state.facing & 0x0F) as usize;
 
-                    if !self.compass_hinor.is_empty() && !self.compass_hivar.is_empty() {
-                        // textcolors[4] = 0x00F (blue) — plane 2 set color
-                        let color_set = sdl2::pixels::Color::RGB(0x00, 0x00, 0xFF);
-
-                        // Get the active direction region from comptable
-                        let (rx, ry, rw, rh) = if dir < self.compass_regions.len() {
-                            self.compass_regions[dir]
-                        } else {
-                            (0, 0, 1, 1)
-                        };
-
-                        // Draw each pixel: use hivar for the active direction region,
-                        // hinor everywhere else. Only draw where bit is set (plane 2 = 1).
-                        let stride = self.compass_stride;
-                        let mut points: Vec<sdl2::rect::Point> = Vec::new();
-                        for py in 0..self.compass_height as i32 {
-                            for px in 0..self.compass_width as i32 {
-                                let byte_idx = (py as usize) * stride + (px as usize >> 3);
-                                let bit_mask = 0x80 >> (px & 7);
-
-                                // Use hivar data for pixels inside the active direction region
-                                let in_highlight = px >= rx && px < rx + rw
-                                    && py >= ry && py < ry + rh;
-                                let data = if in_highlight {
-                                    &self.compass_hivar
-                                } else {
-                                    &self.compass_hinor
-                                };
-
-                                if byte_idx < data.len() && (data[byte_idx] & bit_mask) != 0 {
-                                    points.push(sdl2::rect::Point::new(
-                                        COMPASS_X + px, compass_y + py,
-                                    ));
-                                }
+                    let dest = sdl2::rect::Rect::new(COMPASS_X, compass_y, COMPASS_W, COMPASS_H);
+                    if let Some(normal_tex) = resources.compass_normal {
+                        canvas.copy(normal_tex, None, dest).ok();
+                    }
+                    if dir < self.compass_regions.len() {
+                        let (rx, ry, rw, rh) = self.compass_regions[dir];
+                        if rw > 1 || rh > 1 {
+                            if let Some(highlight_tex) = resources.compass_highlight {
+                                let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                                let dst = sdl2::rect::Rect::new(
+                                    COMPASS_X + rx,
+                                    compass_y + ry,
+                                    rw as u32,
+                                    rh as u32,
+                                );
+                                canvas.copy(highlight_tex, src, dst).ok();
                             }
                         }
-
-                        canvas.set_draw_color(color_set);
-                        canvas.draw_points(points.as_slice()).ok();
                     }
                 }
 

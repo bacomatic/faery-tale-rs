@@ -33,6 +33,8 @@ use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
 
 use crate::game::audio::AudioSystem;
+use crate::game::bitmap::BitMap;
+use crate::game::bitblit;
 use crate::game::colors::Palette;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_library::GameLibrary;
@@ -54,6 +56,11 @@ pub struct RenderResources<'tex> {
     _image_backing: Rc<RefCell<Texture<'tex>>>,
     images: Vec<ImageTexture<'tex>>,
     image_map: HashMap<String, usize>,
+
+    // --- Compass textures ---
+    // Pre-composited from hiscreen background + hinor/hivar plane 2 data.
+    compass_normal: Option<Texture<'tex>>,
+    compass_highlight: Option<Texture<'tex>>,
 }
 
 impl<'tex> RenderResources<'tex> {
@@ -136,6 +143,13 @@ impl<'tex> RenderResources<'tex> {
             images.push(img_tex);
         }
 
+        // ── Compass textures ───────────────────────────────────────────────
+        // Extract the compass region from hiscreen, combine with hinor/hivar
+        // as plane 2, convert to RGBA using the textcolors palette.
+        let (compass_normal, compass_highlight) = Self::build_compass_textures(
+            tex_maker, game_lib,
+        );
+
         RenderResources {
             _font_backing: font_backing,
             amber,
@@ -143,6 +157,8 @@ impl<'tex> RenderResources<'tex> {
             _image_backing: image_backing,
             images,
             image_map,
+            compass_normal,
+            compass_highlight,
         }
     }
 
@@ -182,6 +198,90 @@ impl<'tex> RenderResources<'tex> {
             topaz_font: &self.topaz,
             scratch,
             audio,
+            compass_normal: self.compass_normal.as_ref(),
+            compass_highlight: self.compass_highlight.as_ref(),
         }
+    }
+
+    // ── Compass texture builder ───────────────────────────────────────────
+
+    /// Build pre-composited compass textures from hiscreen + hinor/hivar.
+    ///
+    /// Returns `(normal, highlight)` as `Option<(Texture, Texture)>` — `None`
+    /// if compass data or the hiscreen image is unavailable.
+    fn build_compass_textures(
+        tex_maker: &'tex TextureCreator<WindowContext>,
+        game_lib: &GameLibrary,
+    ) -> (Option<Texture<'tex>>, Option<Texture<'tex>>) {
+        let result = Self::try_build_compass(tex_maker, game_lib);
+        match result {
+            Some((n, h)) => (Some(n), Some(h)),
+            None => (None, None),
+        }
+    }
+
+    fn try_build_compass(
+        tex_maker: &'tex TextureCreator<WindowContext>,
+        game_lib: &GameLibrary,
+    ) -> Option<(Texture<'tex>, Texture<'tex>)> {
+        // Compass position and size within hiscreen.
+        const CX: usize = 567;
+        const CY: usize = 15;
+        const CW: usize = 48;
+        const CH: usize = 24;
+
+        let compass_cfg = game_lib.get_compass()?;
+        let hiscreen_iff = game_lib.find_image("hiscreen").and_then(|a| a.image.as_ref())?;
+        let textcolors = game_lib.find_palette("textcolors")?;
+
+        // Create a BitMap from the full hiscreen image.
+        let row_bytes = ((hiscreen_iff.width + 15) / 16) * 2;
+        let hiscreen_bm = BitMap::with_interleaved_data(
+            hiscreen_iff.pixels.clone(),
+            hiscreen_iff.width,
+            hiscreen_iff.height,
+            hiscreen_iff.bitplanes,
+            row_bytes,
+        );
+
+        // Extract the compass sub-region (handles non-byte-aligned x=567).
+        let compass_base = bitblit::extract_region(&hiscreen_bm, CX, CY, CW, CH);
+
+        // Build "normal" composite: base planes 0,1,3 + hinor as plane 2.
+        let mut normal_bm = compass_base.clone();
+        let hinor_bm = &compass_cfg.hinor;
+        bitblit::set_plane(&mut normal_bm, 2, &hinor_bm.planes[0]);
+        normal_bm.invalidate_cache();
+
+        // Build "highlight" composite: base planes 0,1,3 + hivar as plane 2.
+        let mut highlight_bm = compass_base;
+        let hivar_bm = &compass_cfg.hivar;
+        bitblit::set_plane(&mut highlight_bm, 2, &hivar_bm.planes[0]);
+        highlight_bm.invalidate_cache();
+
+        // Convert to RGBA pixel buffers.
+        let (normal_rgba, _) = normal_bm.generate_rgb32(textcolors, None).ok()?;
+        let (highlight_rgba, _) = highlight_bm.generate_rgb32(textcolors, None).ok()?;
+
+        // Create SDL2 textures from the RGBA buffers.
+        let mut normal_tex = tex_maker
+            .create_texture_static(
+                Some(PixelFormatEnum::RGBA32),
+                CW as u32,
+                CH as u32,
+            )
+            .ok()?;
+        normal_tex.update(None, &normal_rgba, CW * 4).ok()?;
+
+        let mut highlight_tex = tex_maker
+            .create_texture_static(
+                Some(PixelFormatEnum::RGBA32),
+                CW as u32,
+                CH as u32,
+            )
+            .ok()?;
+        highlight_tex.update(None, &highlight_rgba, CW * 4).ok()?;
+
+        Some((normal_tex, highlight_tex))
     }
 }

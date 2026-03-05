@@ -3,6 +3,7 @@
 pub mod adf;
 pub mod actor;
 pub mod audio;
+pub mod bitblit;
 pub mod collision;
 pub mod bitmap;
 pub mod byteops;
