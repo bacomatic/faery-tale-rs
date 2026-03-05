@@ -69,16 +69,16 @@ impl Npc {
     pub fn tick(&mut self, hero_x: i16, hero_y: i16) -> bool {
         if !self.active { return false; }
 
-        let dx = hero_x - self.x;
-        let dy = hero_y - self.y;
-        let dist_sq = (dx as i32).pow(2) + (dy as i32).pow(2);
+        let dx = hero_x as i32 - self.x as i32;
+        let dy = hero_y as i32 - self.y as i32;
+        let dist_sq = dx * dx + dy * dy;
 
         let speed = self.speed as i16;
         if dist_sq < 200 * 200 {
             if dx.abs() > dy.abs() {
-                self.x += dx.signum() * speed;
+                self.x += (dx.signum() as i16) * speed;
             } else {
-                self.y += dy.signum() * speed;
+                self.y += (dy.signum() as i16) * speed;
             }
         }
 

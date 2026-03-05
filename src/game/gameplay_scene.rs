@@ -121,6 +121,13 @@ pub struct GameplayScene {
     log_buffer: Vec<String>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
+    /// Compass bitmap data (plane 2): hinor=normal, hivar=highlighted.
+    compass_hinor: Vec<u8>,
+    compass_hivar: Vec<u8>,
+    compass_stride: usize,
+    compass_width: usize,
+    compass_height: usize,
+    compass_regions: Vec<(i32, i32, i32, i32)>,
 }
 
 impl GameplayScene {
@@ -156,6 +163,12 @@ impl GameplayScene {
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             quit_requested: false,
+            compass_hinor: Vec::new(),
+            compass_hivar: Vec::new(),
+            compass_stride: 0,
+            compass_width: 0,
+            compass_height: 0,
+            compass_regions: Vec::new(),
         }
     }
 
@@ -170,6 +183,21 @@ impl GameplayScene {
             self.state.init_first_brother(
                 bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
             );
+        }
+
+        if let Some(compass) = game_lib.get_compass() {
+            if !compass.hinor.planes.is_empty() {
+                self.compass_hinor = compass.hinor.planes[0].clone();
+            }
+            if !compass.hivar.planes.is_empty() {
+                self.compass_hivar = compass.hivar.planes[0].clone();
+            }
+            self.compass_stride = compass.hinor.stride;
+            self.compass_width = compass.hinor.width;
+            self.compass_height = compass.hinor.height;
+            self.compass_regions = compass.comptable.regions.iter()
+                .map(|r| (r.x, r.y, r.w, r.h))
+                .collect();
         }
     }
 
@@ -656,34 +684,56 @@ impl GameplayScene {
                     resources.topaz_font.render_string(LABEL2[row], canvas, 486, y);
                 }
 
-                // Compass (world-106): direction highlight overlay.
-                // The compass graphic is part of the hiscreen image. We overlay a
-                // semi-transparent highlight on the active direction segment.
-                // Original compass at (567,15) in text bitmap, 48×24 pixels.
-                // Scaled to canvas: x=567*(640/640)=567, y=HIBAR_Y+15*(96/57)≈HIBAR_Y+25.
-                // comptable direction regions (original coords within 48×24 compass area):
-                //   0(SW): (0,0,16,8)   1(S): (16,0,16,9)  2(SE): (32,0,16,8)
-                //   3(E):  (30,8,18,8)  4(NE): (32,16,16,8) 5(N): (16,13,16,11)
-                //   6(NW): (0,16,16,8)  7(W):  (0,8,18,8)
+                // Compass (world-106): render from hinor/hivar bitmap data.
+                // Original drawcompass() blits hinor as base (plane 2), then
+                // overlays the active direction sub-region from hivar.
+                // Compass position in text bitmap: (567,15), 48×24 pixels.
                 {
                     const COMPASS_X: i32 = 567;
                     const COMPASS_Y_OFF: i32 = 25;
                     let compass_y = HIBAR_Y + COMPASS_Y_OFF;
-                    let dir = self.state.facing & 7;
-                    let (rx, ry, rw, rh) = match dir {
-                        0 => (0, 0, 16, 8),    // SW
-                        1 => (16, 0, 16, 9),   // S
-                        2 => (32, 0, 16, 8),   // SE
-                        3 => (30, 8, 18, 8),   // E
-                        4 => (32, 16, 16, 8),  // NE
-                        5 => (16, 13, 16, 11), // N
-                        6 => (0, 16, 16, 8),   // NW
-                        _ => (0, 8, 18, 8),    // W
-                    };
-                    canvas.set_draw_color(sdl2::pixels::Color::RGBA(255, 255, 0, 128));
-                    canvas.fill_rect(sdl2::rect::Rect::new(
-                        COMPASS_X + rx, compass_y + ry, rw as u32, rh as u32,
-                    )).ok();
+                    let dir = (self.state.facing & 0x0F) as usize;
+
+                    if !self.compass_hinor.is_empty() && !self.compass_hivar.is_empty() {
+                        // textcolors[4] = 0x00F (blue) — plane 2 set color
+                        let color_set = sdl2::pixels::Color::RGB(0x00, 0x00, 0xFF);
+
+                        // Get the active direction region from comptable
+                        let (rx, ry, rw, rh) = if dir < self.compass_regions.len() {
+                            self.compass_regions[dir]
+                        } else {
+                            (0, 0, 1, 1)
+                        };
+
+                        // Draw each pixel: use hivar for the active direction region,
+                        // hinor everywhere else. Only draw where bit is set (plane 2 = 1).
+                        let stride = self.compass_stride;
+                        let mut points: Vec<sdl2::rect::Point> = Vec::new();
+                        for py in 0..self.compass_height as i32 {
+                            for px in 0..self.compass_width as i32 {
+                                let byte_idx = (py as usize) * stride + (px as usize >> 3);
+                                let bit_mask = 0x80 >> (px & 7);
+
+                                // Use hivar data for pixels inside the active direction region
+                                let in_highlight = px >= rx && px < rx + rw
+                                    && py >= ry && py < ry + rh;
+                                let data = if in_highlight {
+                                    &self.compass_hivar
+                                } else {
+                                    &self.compass_hinor
+                                };
+
+                                if byte_idx < data.len() && (data[byte_idx] & bit_mask) != 0 {
+                                    points.push(sdl2::rect::Point::new(
+                                        COMPASS_X + px, compass_y + py,
+                                    ));
+                                }
+                            }
+                        }
+
+                        canvas.set_draw_color(color_set);
+                        canvas.draw_points(points.as_slice()).ok();
+                    }
                 }
 
                 // Tick visual effects and composite them over the map.

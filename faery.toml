@@ -10,15 +10,38 @@ copy_protect_junk = [
     { question = "In black darker than...?", answer = "NIGHT" }
 ]
 
-[start]
-hero_x   = 19036
-hero_y   = 15755
-region   = 3
-vitality = 10
-brave    = 30
-luck     = 20
-kind     = 15
-wealth   = 5
+# Named locations (expandable as POIs are decoded from the ADF)
+[[locations]]
+name   = "tambry"
+x      = 19036
+y      = 15755
+region = 3
+
+# Per-brother starting attributes (from blist[] in fmain.c)
+# vitality on spawn = 15 + brave/4 (original formula)
+[[brothers]]
+name   = "Julian"
+brave  = 35
+luck   = 20
+kind   = 15
+wealth = 20
+spawn  = "tambry"
+
+[[brothers]]
+name   = "Phillip"
+brave  = 20
+luck   = 35
+kind   = 15
+wealth = 15
+spawn  = "tambry"
+
+[[brothers]]
+name   = "Kevin"
+brave  = 15
+luck   = 20
+kind   = 35
+wealth = 10
+spawn  = "tambry"
 
 [items]
 # Item cost table (jtrans[] from original). Index = item slot, value = gold cost. 0 = not for sale.
@@ -58,31 +81,67 @@ samples     = "game/samples"
 
 # ADF block layout for world regions (from REGION_BLOCKS in world_data.rs — placeholder values)
 [[world.region]]
-id = 0; sector_block = 0;   map_block = 0;  terra_block = 0;  image_block = 0
+id           = 0
+sector_block = 0
+map_block    = 0
+terra_block  = 0
+image_block  = 0
 
 [[world.region]]
-id = 1; sector_block = 64;  map_block = 8;  terra_block = 2;  image_block = 64
+id           = 1
+sector_block = 64
+map_block    = 8
+terra_block  = 2
+image_block  = 64
 
 [[world.region]]
-id = 2; sector_block = 128; map_block = 16; terra_block = 4;  image_block = 224
+id           = 2
+sector_block = 128
+map_block    = 16
+terra_block  = 4
+image_block  = 224
 
 [[world.region]]
-id = 3; sector_block = 192; map_block = 24; terra_block = 6;  image_block = 384
+id           = 3
+sector_block = 192
+map_block    = 24
+terra_block  = 6
+image_block  = 384
 
 [[world.region]]
-id = 4; sector_block = 256; map_block = 32; terra_block = 8;  image_block = 544
+id           = 4
+sector_block = 256
+map_block    = 32
+terra_block  = 8
+image_block  = 544
 
 [[world.region]]
-id = 5; sector_block = 320; map_block = 40; terra_block = 10; image_block = 704
+id           = 5
+sector_block = 320
+map_block    = 40
+terra_block  = 10
+image_block  = 704
 
 [[world.region]]
-id = 6; sector_block = 384; map_block = 48; terra_block = 12; image_block = 864
+id           = 6
+sector_block = 384
+map_block    = 48
+terra_block  = 12
+image_block  = 864
 
 [[world.region]]
-id = 7; sector_block = 448; map_block = 56; terra_block = 14; image_block = 1024
+id           = 7
+sector_block = 448
+map_block    = 56
+terra_block  = 14
+image_block  = 1024
 
 [[world.region]]
-id = 8; sector_block = 512; map_block = 64; terra_block = 16; image_block = 1184
+id           = 8
+sector_block = 512
+map_block    = 64
+terra_block  = 16
+image_block  = 1184
 
 [sprites]
 # ADF block start for each of the 18 shape files (from CFILE_BLOCKS in sprites.rs — placeholder values)
@@ -195,6 +254,103 @@ planes = [
 # 0b1000100000001111, 0b0000010000000001,
 # 0b1001100000000111, 0b0100010000000000,
 # 0b0111010101010110, 0b0000111111111100,
+
+# Compass rose bitmaps from fsubs.asm (_hinor, _hivar).
+# These are single-bitplane images (plane 2 of the text viewport).
+# drawcompass() blits hinor first (base), then overlays the active
+# direction region from hivar using comptable[].
+# Original source bitmap: InitBitMap(bm_source, 3, 64, 24) — stride 8 bytes/row.
+# Only the leftmost 48 pixels (6 bytes) are used; 2 padding bytes per row skipped.
+
+[compass]
+
+[compass.comptable]
+# { xrect, yrect, xsize, ysize } per direction index 0-9.
+# Pixel regions within the 48x24 compass area.
+# Dir 8 and 9 are "standing still" — 1x1 no-op blit.
+regions = [
+    { x = 0,  y = 0,  w = 16, h = 8 },   # 0  SW
+    { x = 16, y = 0,  w = 16, h = 9 },   # 1  S
+    { x = 32, y = 0,  w = 16, h = 8 },   # 2  SE
+    { x = 30, y = 8,  w = 18, h = 8 },   # 3  E
+    { x = 32, y = 16, w = 16, h = 8 },   # 4  NE
+    { x = 16, y = 13, w = 16, h = 11 },  # 5  N
+    { x = 0,  y = 16, w = 16, h = 8 },   # 6  NW
+    { x = 0,  y = 8,  w = 18, h = 8 },   # 7  W
+    { x = 0,  y = 0,  w = 1,  h = 1 },   # 8  still
+    { x = 0,  y = 0,  w = 1,  h = 1 },   # 9  still
+]
+
+# hinor — base compass with no direction highlighted (plane 2 data).
+[compass.hinor]
+width = 48
+height = 24
+depth = 1
+stride = 6
+planes = [
+    [   # plane 0 (the only plane — maps to bitplane 2 of text viewport)
+        0x01, 0xFF, 0xF8, 0xFF, 0xFC, 0x03,
+        0x01, 0xFF, 0x00, 0x07, 0xFC, 0x03,
+        0x07, 0xE0, 0xF0, 0x78, 0x3F, 0x03,
+        0x19, 0x0F, 0xE0, 0x3F, 0xC4, 0xC3,
+        0xFC, 0x7F, 0xC0, 0x1F, 0xF1, 0xFF,
+        0xF1, 0x9F, 0x80, 0x0F, 0xCC, 0x7F,
+        0xE7, 0xE7, 0x00, 0x07, 0x3F, 0x3F,
+        0xCF, 0xF9, 0x80, 0x0C, 0xFF, 0x9F,
+        0x9F, 0xFE, 0x60, 0x33, 0xFF, 0xCF,
+        0x3F, 0x07, 0x98, 0xCF, 0xC3, 0xE7,
+        0x70, 0x01, 0xE7, 0x9F, 0x00, 0x33,
+        0x00, 0x00, 0x78, 0x3C, 0x00, 0x03,
+        0x00, 0x00, 0x19, 0x30, 0x00, 0x00,
+        0x00, 0x00, 0x78, 0x0C, 0x00, 0x03,
+        0x78, 0x01, 0xC7, 0xF3, 0x00, 0x33,
+        0x3F, 0x87, 0x38, 0x3C, 0xC3, 0xE7,
+        0x9F, 0xFC, 0xF0, 0x1F, 0x3F, 0xCF,
+        0xCF, 0xF3, 0xC0, 0x0F, 0xCF, 0x9F,
+        0xE7, 0xCF, 0x80, 0x07, 0xF3, 0x3F,
+        0xF1, 0x3F, 0x80, 0x0F, 0xFC, 0x7F,
+        0xFC, 0x7F, 0xC0, 0x1F, 0xF1, 0x30,
+        0x33, 0x1F, 0xE0, 0x3F, 0xC7, 0xC0,
+        0x0F, 0xE0, 0xF0, 0x78, 0x3F, 0x00,
+        0x03, 0xFF, 0x00, 0x07, 0xFF, 0x00
+    ]
+]
+
+# hivar — compass with all directions highlighted (plane 2 data).
+# drawcompass() blits the region for the active direction from this image.
+[compass.hivar]
+width = 48
+height = 24
+depth = 1
+stride = 6
+planes = [
+    [   # plane 0
+        0x01, 0xFF, 0xF8, 0xFF, 0xFC, 0x03,
+        0x79, 0xFF, 0x02, 0x07, 0xFC, 0xF3,
+        0x67, 0xE0, 0xF2, 0x78, 0x3F, 0x33,
+        0x19, 0x0F, 0xE7, 0x3F, 0xC4, 0xC3,
+        0xFC, 0x7F, 0xCF, 0x9F, 0xF1, 0xFF,
+        0xF1, 0x9F, 0x9F, 0xCF, 0xCC, 0x7F,
+        0xE7, 0xE7, 0x3F, 0xE7, 0x3F, 0x3F,
+        0xCF, 0xF9, 0x9F, 0xCC, 0xFF, 0x9F,
+        0x9F, 0xFE, 0x67, 0x33, 0xFF, 0xCF,
+        0x3F, 0x07, 0x98, 0xCF, 0xC3, 0xE7,
+        0x70, 0xF9, 0xE7, 0x9F, 0x3C, 0x33,
+        0x0F, 0xFE, 0x78, 0x3C, 0xFF, 0xC3,
+        0xFF, 0xFF, 0x99, 0x33, 0xFF, 0xF8,
+        0x07, 0xFE, 0x78, 0x0C, 0xFF, 0xC3,
+        0x78, 0x79, 0xC7, 0xF3, 0x3C, 0x33,
+        0x3F, 0x87, 0x38, 0x3C, 0xC3, 0xE7,
+        0x9F, 0xFC, 0xF3, 0x9F, 0x3F, 0xCF,
+        0xCF, 0xF3, 0xCF, 0xCF, 0xCF, 0x9F,
+        0xE7, 0xCF, 0x9F, 0xE7, 0xF3, 0x3F,
+        0xF1, 0x3F, 0x9F, 0xCF, 0xFC, 0x7F,
+        0xFC, 0x7F, 0xCF, 0x9F, 0xF1, 0x30,
+        0x33, 0x1F, 0xE7, 0x3F, 0xC7, 0xCC,
+        0xCF, 0xE0, 0xF2, 0x78, 0x3F, 0x3C,
+        0xF3, 0xFF, 0x02, 0x07, 0xFF, 0x00
+    ]
+]
 
 [placards]
 

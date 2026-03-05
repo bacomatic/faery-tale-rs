@@ -137,7 +137,9 @@ impl GameState {
     /// Max fatigue before forced sleep (original: 500).
     pub const MAX_FATIGUE: i16 = 500;
 
-    /// Initialize to Julian's starting state (mirrors `revive(TRUE)` in original).
+    /// Initialize with Julian's default starting values (blist[0] from fmain.c).
+    /// The game should call `init_first_brother()` after construction to apply
+    /// config-driven stats from faery.toml.  Tests use the defaults directly.
     pub fn new() -> Self {
         let mut actors = Vec::with_capacity(20);
         for _ in 0..20 {
@@ -151,11 +153,11 @@ impl GameState {
             hero_sector: 0,
             hero_place: 0,
 
-            vitality: 10,
-            brave: 30,
+            vitality: 23, // 15 + brave(35)/4
+            brave: 35,
             luck: 20,
             kind: 15,
-            wealth: 5,
+            wealth: 20,
             hunger: 0,
             fatigue: 0,
             brother: 1,
@@ -181,11 +183,11 @@ impl GameState {
             viewstatus: 0,
             cmode: 0,
 
-            safe_x: 0,
-            safe_y: 0,
-            safe_r: 0,
+            safe_x: 19036,
+            safe_y: 15755,
+            safe_r: 3,
 
-            region_num: 0,
+            region_num: 3,
             new_region: 0,
 
             julstuff: [0u8; 35],
@@ -335,12 +337,94 @@ impl GameState {
         None
     }
 
-    /// Switch to the given brother: mark current as dead, swap inventory context.
+    /// Switch to the given brother: mark current as dead, load stats from config,
+    /// and teleport to spawn location.  Mirrors `revive(TRUE)` from fmain.c.
+    ///
+    /// If `brother` and `spawn` are None the method falls back to the legacy
+    /// behaviour of just swapping the index (for tests / code that doesn't have
+    /// the game library handy).
     pub fn activate_brother(&mut self, new_idx: usize) {
         self.brother_alive[self.active_brother] = false;
         self.active_brother = new_idx;
         // brother field: 1=Julian, 2=Phillip, 3=Kevin
         self.brother = (new_idx as u8) + 1;
+    }
+
+    /// Full brother activation with config-driven stats and spawn coordinates.
+    /// Mirrors fmain.c `revive(TRUE)`: load per-brother attrs, clear inventory,
+    /// give a dirk, set vitality = 15 + brave/4, teleport to spawn location,
+    /// and reset timers.
+    pub fn activate_brother_from_config(
+        &mut self,
+        new_idx: usize,
+        brave: i16,
+        luck: i16,
+        kind: i16,
+        wealth: i16,
+        spawn_x: u16,
+        spawn_y: u16,
+        spawn_region: u8,
+    ) {
+        self.brother_alive[self.active_brother] = false;
+        self.active_brother = new_idx;
+        self.brother = (new_idx as u8) + 1;
+
+        // Load per-brother stats (blist[] in original)
+        self.brave = brave;
+        self.luck = luck;
+        self.kind = kind;
+        self.wealth = wealth;
+
+        // Vitality formula from original revive(): 15 + brave/4
+        self.vitality = 15 + brave / 4;
+
+        // Clear inventory and give a dirk (stuff[0] = 1)
+        *self.stuff_mut() = [0u8; 35];
+        self.stuff_mut()[0] = 1;
+
+        // Teleport to spawn location
+        self.hero_x = spawn_x;
+        self.hero_y = spawn_y;
+        self.region_num = spawn_region;
+        self.safe_x = spawn_x;
+        self.safe_y = spawn_y;
+        self.safe_r = spawn_region;
+
+        // Reset timers (mirrors revive clearing these)
+        self.light_timer = 0;
+        self.secret_timer = 0;
+        self.freeze_timer = 0;
+        self.hunger = 0;
+        self.fatigue = 0;
+    }
+
+    /// Initialize this state from the first brother (Julian) using config data.
+    /// Called once at game start.  Spawn coordinates come from the named location.
+    pub fn init_first_brother(
+        &mut self,
+        brave: i16,
+        luck: i16,
+        kind: i16,
+        wealth: i16,
+        spawn_x: u16,
+        spawn_y: u16,
+        spawn_region: u8,
+    ) {
+        self.active_brother = 0;
+        self.brother = 1;
+        self.brave = brave;
+        self.luck = luck;
+        self.kind = kind;
+        self.wealth = wealth;
+        self.vitality = 15 + brave / 4;
+        self.hero_x = spawn_x;
+        self.hero_y = spawn_y;
+        self.region_num = spawn_region;
+        self.safe_x = spawn_x;
+        self.safe_y = spawn_y;
+        self.safe_r = spawn_region;
+        // Give a dirk
+        self.stuff_mut()[0] = 1;
     }
 
     /// Returns true if all three brothers are dead.

@@ -1,5 +1,6 @@
 
 use crate::game::{
+    bitmap::BitMap,
     placard::Placard, cursor::CursorAsset, font::{DiskFont, FontAsset}, colors::Palette, iff_image::{IffImage, ImageAsset}
 };
 
@@ -28,16 +29,26 @@ pub struct CopyProtectQuestion {
     pub answer: String
 }
 
-#[derive(Deserialize, Debug)]
-pub struct StartConfig {
-    pub hero_x:   u16,
-    pub hero_y:   u16,
-    pub region:   u8,
-    pub vitality: i16,
-    pub brave:    i16,
-    pub luck:     i16,
-    pub kind:     i16,
-    pub wealth:   i16,
+/// A named point-of-interest on the world map (village, landmark, etc.).
+/// Expandable: add new entries to [[locations]] in faery.toml as POIs are decoded.
+#[derive(Deserialize, Debug, Clone)]
+pub struct LocationConfig {
+    pub name:   String,
+    pub x:      u16,
+    pub y:      u16,
+    pub region: u8,
+}
+
+/// Per-brother starting attributes (mirrors blist[] from fmain.c).
+#[derive(Deserialize, Debug, Clone)]
+pub struct BrotherConfig {
+    pub name:   String,
+    pub brave:  i16,
+    pub luck:   i16,
+    pub kind:   i16,
+    pub wealth: i16,
+    /// Location name where this brother spawns at start and on revive.
+    pub spawn:  String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -104,6 +115,31 @@ pub struct NpcsConfig {
     pub cfile_start_block: u32,
 }
 
+/// A direction sub-region within the 48×24 compass bitmap.
+#[derive(Deserialize, Debug, Clone)]
+pub struct CompassRegion {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+/// The comptable: one entry per direction index (0-9).
+#[derive(Deserialize, Debug, Clone)]
+pub struct CompassTable {
+    pub regions: Vec<CompassRegion>,
+}
+
+/// Compass rose bitmap data extracted from fsubs.asm.
+/// `hinor` = normal (unhighlighted) compass; `hivar` = highlighted variant.
+/// Both are single-bitplane images (plane 2 of the text viewport).
+#[derive(Deserialize, Debug)]
+pub struct CompassConfig {
+    pub comptable: CompassTable,
+    pub hinor: BitMap,
+    pub hivar: BitMap,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct GameLibrary {
     palettes: HashMap<String, Palette>,
@@ -112,7 +148,10 @@ pub struct GameLibrary {
     images: HashMap<String, ImageAsset>,
     cursors: HashMap<String, CursorAsset>,
     copy_protect_junk: Vec<CopyProtectQuestion>,
-    pub start: Option<StartConfig>,
+    #[serde(default)]
+    pub locations: Vec<LocationConfig>,
+    #[serde(default)]
+    pub brothers: Vec<BrotherConfig>,
     pub items: Option<ItemsConfig>,
     #[serde(default)]
     pub doors: Vec<DoorConfig>,
@@ -123,6 +162,7 @@ pub struct GameLibrary {
     pub world: Option<WorldConfig>,
     pub sprites: Option<SpritesConfig>,
     pub npcs: Option<NpcsConfig>,
+    pub compass: Option<CompassConfig>,
 }
 
 impl GameLibrary {
@@ -212,6 +252,21 @@ impl GameLibrary {
     pub fn get_copy_protect_count(&self) -> usize {
         self.copy_protect_junk.len()
     }
+
+    // locations
+    pub fn find_location(&self, name: &str) -> Option<&LocationConfig> {
+        self.locations.iter().find(|l| l.name == name)
+    }
+
+    // brothers
+    pub fn get_brother(&self, index: usize) -> Option<&BrotherConfig> {
+        self.brothers.get(index)
+    }
+
+    // compass
+    pub fn get_compass(&self) -> Option<&CompassConfig> {
+        self.compass.as_ref()
+    }
 }
 
 pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>> {
@@ -229,4 +284,19 @@ pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>>
     }
 
     Ok(game_lib)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ensure faery.toml can be deserialized into GameLibrary without errors.
+    /// This catches TOML syntax issues and schema mismatches early.
+    #[test]
+    fn faery_toml_parses() {
+        let config = fs::read_to_string("faery.toml")
+            .expect("faery.toml should exist in the project root");
+        toml::from_str::<GameLibrary>(&config)
+            .expect("faery.toml should deserialize into GameLibrary without errors");
+    }
 }
