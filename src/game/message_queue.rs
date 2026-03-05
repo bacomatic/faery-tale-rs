@@ -1,7 +1,7 @@
 //! Message queue: scrolling text viewport for status/event messages.
 
-/// Maximum messages stored in the visible queue.
-pub const MSG_QUEUE_MAX: usize = 6;
+/// Maximum messages stored in the visible queue (original shows 4 lines).
+pub const MSG_QUEUE_MAX: usize = 4;
 /// Maximum characters per message line.
 pub const MSG_LINE_MAX: usize = 40;
 

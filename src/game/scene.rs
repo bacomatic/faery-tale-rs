@@ -19,6 +19,8 @@ pub enum SceneResult {
     Continue,
     /// Scene is finished, transition to the next scene (if any).
     Done,
+    /// Player requested to quit the application.
+    Quit,
 }
 
 /**

@@ -172,7 +172,9 @@ pub fn main() -> Result<(), String> {
     enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay }
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
-            (ScenePhase::Gameplay, Some(Box::new(GameplayScene::new())))
+            let mut gs = GameplayScene::new();
+            gs.init_from_library(&game_lib);
+            (ScenePhase::Gameplay, Some(Box::new(gs)))
         } else {
             (ScenePhase::Intro, Some(Box::new(IntroScene::new(intro_tracks))))
         };
@@ -357,17 +359,25 @@ pub fn main() -> Result<(), String> {
                             if let Some(ref a) = audio_system {
                                 a.stop_score();
                             }
-                            active_scene = Some(Box::new(GameplayScene::new()));
+                            let mut gs = GameplayScene::new();
+                            gs.init_from_library(&game_lib);
+                            active_scene = Some(Box::new(gs));
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
                             clear_flag = true;
                         }
                         ScenePhase::Gameplay => {
                             // Game over or restart — re-create GameplayScene
-                            active_scene = Some(Box::new(GameplayScene::new()));
+                            let mut gs = GameplayScene::new();
+                            gs.init_from_library(&game_lib);
+                            active_scene = Some(Box::new(gs));
                             dirty = true;
                         }
                     }
+                }
+                SceneResult::Quit => {
+                    scene.on_exit();
+                    break 'running;
                 }
                 SceneResult::Continue => {
                     // Scene handles its own rendering and canvas.present()

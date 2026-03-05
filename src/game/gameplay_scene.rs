@@ -117,6 +117,10 @@ pub struct GameplayScene {
     fight_cooldown: u32,
     /// Frames remaining before an archer NPC can fire again.
     archer_cooldown: u32,
+    /// Debug log lines buffered for the debug window. Drained each frame by main loop.
+    log_buffer: Vec<String>,
+    /// Set to true when the player requests to quit the game.
+    quit_requested: bool,
 }
 
 impl GameplayScene {
@@ -150,12 +154,38 @@ impl GameplayScene {
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
             fight_cooldown: 0,
             archer_cooldown: 0,
+            log_buffer: Vec::new(),
+            quit_requested: false,
+        }
+    }
+
+    /// Apply config-driven brother stats and spawn location from the game library.
+    /// Must be called once after construction so that the first brother (Julian)
+    /// gets the correct stats from faery.toml instead of hard-coded defaults.
+    pub fn init_from_library(&mut self, game_lib: &GameLibrary) {
+        if let Some(bro) = game_lib.get_brother(0) {
+            let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
+                .map(|loc| (loc.x, loc.y, loc.region))
+                .unwrap_or((self.state.hero_x, self.state.hero_y, self.state.region_num));
+            self.state.init_first_brother(
+                bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
+            );
         }
     }
 
     /// Returns true when it is daytime (lightlevel > 60).
     pub fn is_daytime(state: &GameState) -> bool {
         state.lightlevel > 60
+    }
+
+    /// Push a debug/status message to the log buffer (shown in debug window).
+    fn dlog(&mut self, msg: impl Into<String>) {
+        self.log_buffer.push(msg.into());
+    }
+
+    /// Drain buffered debug log lines. Called by the main loop to forward to the debug window.
+    pub fn drain_logs(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.log_buffer)
     }
 
     /// Decode 8-way direction from current input flags.
@@ -227,7 +257,7 @@ impl GameplayScene {
                     self.state.region_num = door.dst_region;
                     self.state.hero_x = door.dst_x;
                     self.state.hero_y = door.dst_y;
-                    eprintln!("{:?}", crate::game::game_event::GameEvent::RegionTransition { region: door.dst_region });
+                    self.dlog(format!("door: region transition to {}", door.dst_region));
                 }
                 // Track safe spawn point after successful movement.
                 if let Some(ref world) = self.map_world {
@@ -342,11 +372,11 @@ impl GameplayScene {
             ).is_some();
             if !at_door {
                 self.messages.push("Exhausted! You fall asleep.");
-                eprintln!("Forced sleep: fatigue max reached");
+                self.dlog("Forced sleep: fatigue max reached");
             } else {
                 // Restore fatigue to max - 1 to prevent sleep at locked gate.
                 self.state.fatigue = crate::game::game_state::GameState::MAX_FATIGUE - 1;
-                eprintln!("Forced sleep suppressed: hero at door/gate");
+                self.dlog("Forced sleep suppressed: hero at door/gate");
             }
         }
     }
@@ -452,7 +482,7 @@ impl GameplayScene {
         let hero_y = self.state.hero_y as i32;
         // Skip actor 0 (player); apply goal-based movement to NPC actors.
         let anix = self.state.anix;
-        for actor in self.state.actors[1..anix].iter_mut() {
+        for actor in self.state.actors[1..anix.max(1)].iter_mut() {
             if !actor.is_active() {
                 continue;
             }
@@ -514,7 +544,7 @@ impl GameplayScene {
             let hero_x = self.state.hero_x as i32;
             let hero_y = self.state.hero_y as i32;
             let anix = self.state.anix;
-            for actor in self.state.actors[1..anix].iter() {
+            for actor in self.state.actors[1..anix.max(1)].iter() {
                 if !actor.is_active() { continue; }
                 if !matches!(actor.goal, Goal::Archer1 | Goal::Archer2) { continue; }
                 let ax = actor.abs_x as i32;
@@ -581,41 +611,80 @@ impl GameplayScene {
                     canvas.fill_rect(sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H)).ok();
                 }
 
-                // Stat line in parchment area (render-hiscreen-bar).
+                // Stat line at bottom of HI bar (render-hiscreen-bar).
                 let stat_line = format!(
                     "Brv:{:3} Lck:{:3} Knd:{:3} Vit:{:3} Wlt:{:3}",
                     self.state.brave, self.state.luck, self.state.kind,
                     self.state.vitality, self.state.wealth,
                 );
-                resources.topaz_font.render_string(&stat_line, canvas, 8, HIBAR_Y + 14);
+                resources.topaz_font.set_color_mod(255, 255, 255);
+                resources.topaz_font.render_string(&stat_line, canvas, 8, HIBAR_Y + HIBAR_H as i32 - 14);
 
                 // Scrolling messages (render-msg-scroll / world-107).
-                for (i, msg) in self.messages.iter().enumerate() {
-                    let y = HIBAR_Y + 28 + (i as i32) * 11;
-                    if y + 11 > HIBAR_Y + HIBAR_H as i32 { break; }
-                    resources.topaz_font.render_string(msg, canvas, 8, y);
+                // Original uses Amber font, color 10 (0xA50 = brown).
+                // Messages print at the bottom and scroll upward; show up to 4 lines.
+                {
+                    let msg_count = self.messages.len().min(4);
+                    let msgs: Vec<&str> = self.messages.iter().collect();
+                    let start = msgs.len().saturating_sub(4);
+                    resources.amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                    for (i, msg) in msgs[start..].iter().enumerate() {
+                        // Bottom line is at the bottom of the scroll area, older lines above
+                        let line_from_bottom = (msg_count - 1 - i) as i32;
+                        let y = HIBAR_Y + 56 - line_from_bottom * 11;
+                        resources.amber_font.render_string(msg, canvas, 8, y);
+                    }
                 }
 
                 // Button grid (render-buttons): two columns of 5 buttons each.
-                // Original hi-res positions: left col x=430, right col x=482,
-                // rows at y=(j/2)*9+8 relative to hiscreen (scaled to canvas row*10+8).
-                // label1 = "ItemsMagicTalk Buy  Game " (5×5 chars, left column)
-                // label2 = "List Take Look Use  Give " (5×5 chars, right column)
+                // Original: black text (APen=0) over colored rectangle (BPen).
+                // For top-level category buttons, penb=4 (textcolors[4]=0x00F → blue).
                 const LABEL1: [&str; 5] = ["Items", "Magic", "Talk ", "Buy  ", "Game "];
                 const LABEL2: [&str; 5] = ["List ", "Take ", "Look ", "Use  ", "Give "];
-                resources.topaz_font.set_color_mod(255, 255, 255);
+                // textcolors[4] = 0x00F → RGB(0x00, 0x00, 0xFF) blue for category buttons
+                let btn_bg = sdl2::pixels::Color::RGB(0x00, 0x00, 0xFF);
                 for row in 0..5usize {
                     let y = HIBAR_Y + (row as i32) * 10 + 8;
-                    resources.topaz_font.render_string(LABEL1[row], canvas, 430, y);
-                    resources.topaz_font.render_string(LABEL2[row], canvas, 482, y);
+                    // Left column button
+                    canvas.set_draw_color(btn_bg);
+                    canvas.fill_rect(sdl2::rect::Rect::new(430, y, 48, 10)).ok();
+                    // Right column button
+                    canvas.fill_rect(sdl2::rect::Rect::new(482, y, 48, 10)).ok();
+                    // Render labels in black text over the colored rectangles
+                    resources.topaz_font.set_color_mod(0, 0, 0);
+                    resources.topaz_font.render_string(LABEL1[row], canvas, 434, y);
+                    resources.topaz_font.render_string(LABEL2[row], canvas, 486, y);
                 }
 
-                // Compass (world-106): hero facing direction in rightmost portion of HI bar.
-                let compass_str = match self.state.facing & 7 {
-                    0 => "N", 1 => "NE", 2 => "E", 3 => "SE",
-                    4 => "S", 5 => "SW", 6 => "W", _ => "NW",
-                };
-                resources.topaz_font.render_string(compass_str, canvas, 600, 430);
+                // Compass (world-106): direction highlight overlay.
+                // The compass graphic is part of the hiscreen image. We overlay a
+                // semi-transparent highlight on the active direction segment.
+                // Original compass at (567,15) in text bitmap, 48×24 pixels.
+                // Scaled to canvas: x=567*(640/640)=567, y=HIBAR_Y+15*(96/57)≈HIBAR_Y+25.
+                // comptable direction regions (original coords within 48×24 compass area):
+                //   0(SW): (0,0,16,8)   1(S): (16,0,16,9)  2(SE): (32,0,16,8)
+                //   3(E):  (30,8,18,8)  4(NE): (32,16,16,8) 5(N): (16,13,16,11)
+                //   6(NW): (0,16,16,8)  7(W):  (0,8,18,8)
+                {
+                    const COMPASS_X: i32 = 567;
+                    const COMPASS_Y_OFF: i32 = 25;
+                    let compass_y = HIBAR_Y + COMPASS_Y_OFF;
+                    let dir = self.state.facing & 7;
+                    let (rx, ry, rw, rh) = match dir {
+                        0 => (0, 0, 16, 8),    // SW
+                        1 => (16, 0, 16, 9),   // S
+                        2 => (32, 0, 16, 8),   // SE
+                        3 => (30, 8, 18, 8),   // E
+                        4 => (32, 16, 16, 8),  // NE
+                        5 => (16, 13, 16, 11), // N
+                        6 => (0, 16, 16, 8),   // NW
+                        _ => (0, 8, 18, 8),    // W
+                    };
+                    canvas.set_draw_color(sdl2::pixels::Color::RGBA(255, 255, 0, 128));
+                    canvas.fill_rect(sdl2::rect::Rect::new(
+                        COMPASS_X + rx, compass_y + ry, rw as u32, rh as u32,
+                    )).ok();
+                }
 
                 // Tick visual effects and composite them over the map.
                 self.witch_effect.tick();
@@ -652,25 +721,25 @@ impl GameplayScene {
     /// Called when the hero transitions to a new region.
     /// Reloads world data and NPC table for the new region (npc-101, world-110).
     fn on_region_changed(&mut self, region: u8) {
-        eprintln!("on_region_changed: region changed to {}", region);
+        self.log_buffer.push(format!("on_region_changed: region changed to {}", region));
         if let Some(ref adf) = self.adf {
             match crate::game::world_data::WorldData::load(adf, region) {
                 Ok(world) => {
                     let palette = [0xFF808080_u32; 32];
                     self.map_renderer = Some(MapRenderer::new(&world, &palette));
                     self.map_world = Some(world);
-                    eprintln!("on_region_changed: world reloaded for region {}", region);
+                    self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
                 }
-                Err(e) => eprintln!("on_region_changed: WorldData::load failed: {e}"),
+                Err(e) => self.log_buffer.push(format!("on_region_changed: WorldData::load failed: {e}")),
             }
             self.npc_table = Some(crate::game::npc::NpcTable::load(adf, region));
-            eprintln!("on_region_changed: NPC table loaded for region {}", region);
+            self.log_buffer.push(format!("on_region_changed: NPC table loaded for region {}", region));
         }
     }
 
     /// Dispatch a game menu/command action.
     fn do_option(&mut self, action: GameAction) {
-        eprintln!("do_option: {:?}", action);
+        self.dlog(format!("do_option: {:?}", action));
         match action {
             GameAction::BuyFood => {
                 let hero_x = self.state.hero_x as i16;
@@ -688,9 +757,11 @@ impl GameplayScene {
                         }
                     }
                 } else if self.state.eat_food() {
-                    eprintln!("eat_food: consumed food, hunger={}", self.state.hunger);
+                    self.messages.push("Yum!");
+                    self.dlog(format!("eat_food: consumed food, hunger={}", self.state.hunger));
                 } else {
-                    eprintln!("eat_food: no food in pack");
+                    self.messages.push("No food.");
+                    self.dlog("eat_food: no food in pack");
                 }
             }
             // Shop BUY menu items (npc-107): mirrors fmain.c BUY case / jtrans[] table.
@@ -719,13 +790,13 @@ impl GameplayScene {
                 Self::do_buy(&mut self.state, &self.npc_table, 13, "totem", &mut self.messages);
             }
             GameAction::Inventory => {
-                eprintln!("Inventory: {}", self.state.inventory_summary());
+                self.dlog(format!("Inventory: {}", self.state.inventory_summary()));
                 self.state.viewstatus = 4;
                 self.messages.push("Inventory opened");
             }
             GameAction::Rebind => {
                 self.rebinding.active = !self.rebinding.active;
-                eprintln!("Rebinding mode: {}", self.rebinding.active);
+                self.dlog(format!("Rebinding mode: {}", self.rebinding.active));
             }
             GameAction::Board => {
                 if self.state.board_raft() {
@@ -745,16 +816,16 @@ impl GameplayScene {
                     self.state.hunger = (self.state.hunger + 50)
                         .min(crate::game::game_state::MAX_HUNGER);
                     self.messages.push("You sleep and rest.");
-                    eprintln!("Player slept: fatigue reset");
+                    self.dlog("Player slept: fatigue reset");
                 }
             }
             GameAction::GetItem => {
                 self.messages.push("Nothing here to take.");
-                eprintln!("GetItem: stub");
+                self.dlog("GetItem: stub");
             }
             GameAction::DropItem => {
                 self.messages.push("Dropped item.");
-                eprintln!("DropItem: stub");
+                self.dlog("DropItem: stub");
             }
             GameAction::LookAround => {
                 let region = self.state.region_num;
@@ -784,7 +855,7 @@ impl GameplayScene {
                                 // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
                                 if self.state.check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE) {
                                     self.messages.push("The turtle rewards you with a Sea Shell!");
-                                    eprintln!("check_turtle_eggs: shell awarded for snake kill");
+                                    self.dlog("check_turtle_eggs: shell awarded for snake kill");
                                 }
                                 self.messages.push("Enemy defeated!");
                             } else {
@@ -825,7 +896,7 @@ impl GameplayScene {
             }
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
-                eprintln!("UseItem: stub");
+                self.dlog("UseItem: stub");
             }
             // MAGIC menu items 5..=11 (stuff[9..=15], MAGICBASE=9 in fmain.c).
             GameAction::CastSpell1 => {
@@ -938,7 +1009,7 @@ impl GameplayScene {
                         self.state.kind += 1;
                     }
                     self.messages.push("You give gold to the beggar. They thank you.");
-                    eprintln!("give to beggar: wealth={}, kind={}", self.state.wealth, self.state.kind);
+                    self.dlog(format!("give to beggar: wealth={}, kind={}", self.state.wealth, self.state.kind));
                 } else if near_beggar {
                     self.messages.push("You have no gold to spare.");
                 } else {
@@ -989,11 +1060,12 @@ impl GameplayScene {
                 }
                 let _ = RACE_SHOPKEEPER;
             }
+            GameAction::Quit => {
+                self.quit_requested = true;
+            }
             _ => {}
         }
     }
-
-    /// Handle a game event produced by gameplay logic.
     pub fn handle_game_event(&mut self, event: crate::game::game_event::GameEvent) {
         use crate::game::game_event::GameEvent;
         match event {
@@ -1047,7 +1119,7 @@ impl GameplayScene {
                 self.state.hero_y = y;
             }
             TeleportStoneRing { index } => {
-                eprintln!("debug command not yet wired: TeleportStoneRing {{ index: {} }}", index);
+                self.dlog(format!("debug command not yet wired: TeleportStoneRing {{ index: {} }}", index));
             }
             ToggleMagicEffect { effect } => match effect {
                 MagicEffect::Light => self.state.light_sticky = !self.state.light_sticky,
@@ -1079,10 +1151,10 @@ impl GameplayScene {
                 self.teleport_effect.start();
             }
             TriggerPaletteTransition { to_black } => {
-                eprintln!("TriggerPaletteTransition: to_black={}", to_black);
+                self.dlog(format!("TriggerPaletteTransition: to_black={}", to_black));
             }
             cmd => {
-                eprintln!("debug command not yet wired: {:?}", cmd);
+                self.dlog(format!("debug command not yet wired: {:?}", cmd));
             }
         }
     }
@@ -1108,12 +1180,12 @@ impl Scene for GameplayScene {
                 if *kc == Keycode::Escape {
                     self.rebinding.active = false;
                     self.rebinding.waiting_for_action = None;
-                    eprintln!("Rebinding mode: false");
+                    self.dlog("Rebinding mode: false");
                     return true;
                 }
                 if let Some(action) = self.rebinding.waiting_for_action.take() {
                     self.local_bindings.set_binding(action, vec![*kc]);
-                    eprintln!("Rebound {:?} to {:?}", action, kc);
+                    self.dlog(format!("Rebound {:?} to {:?}", action, kc));
                     return true;
                 }
             }
@@ -1131,9 +1203,11 @@ impl Scene for GameplayScene {
                 Keycode::L => { self.do_option(GameAction::Look); true }
                 Keycode::T => { self.do_option(GameAction::Take); true }
                 Keycode::G => { self.do_option(GameAction::Give); true }
+                Keycode::U => { self.do_option(GameAction::UseItem); true }
                 Keycode::Y => { self.do_option(GameAction::Yell); true }
                 Keycode::K => { self.do_option(GameAction::Speak); true }
                 Keycode::M => { self.do_option(GameAction::Map); true }
+                Keycode::Escape => { self.do_option(GameAction::Quit); true }
                 _ => {
                     // KeyBindings fallback for any unhandled keycode (keys-104)
                     let kb = crate::game::key_bindings::KeyBindings::default_bindings();
@@ -1201,6 +1275,49 @@ impl Scene for GameplayScene {
                     _ => false,
                 }
             }
+            // Mouse click: test against button grid in HI bar
+            Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+                const HIBAR_Y: i32 = 384;
+                const BTN_LEFT_X: i32 = 430;
+                const BTN_RIGHT_X: i32 = 482;
+                const BTN_W: i32 = 48;
+                const BTN_H: i32 = 10;
+                let mx = *x;
+                let my = *y;
+                // Check if click is in the button area
+                if my >= HIBAR_Y + 8 && my < HIBAR_Y + 8 + 5 * BTN_H {
+                    let row = ((my - HIBAR_Y - 8) / BTN_H) as usize;
+                    if row < 5 {
+                        // Left column (category labels — currently act as direct actions)
+                        if mx >= BTN_LEFT_X && mx < BTN_LEFT_X + BTN_W {
+                            // Items, Magic, Talk, Buy, Game
+                            let action = match row {
+                                0 => Some(GameAction::Inventory), // Items
+                                2 => Some(GameAction::Speak),     // Talk
+                                4 => Some(GameAction::Pause),     // Game
+                                _ => None,
+                            };
+                            if let Some(a) = action { self.do_option(a); }
+                            return true;
+                        }
+                        // Right column (immediate actions)
+                        if mx >= BTN_RIGHT_X && mx < BTN_RIGHT_X + BTN_W {
+                            // List, Take, Look, Use, Give
+                            let action = match row {
+                                0 => Some(GameAction::Inventory), // List
+                                1 => Some(GameAction::Take),
+                                2 => Some(GameAction::Look),
+                                3 => Some(GameAction::UseItem),
+                                4 => Some(GameAction::Give),
+                                _ => None,
+                            };
+                            if let Some(a) = action { self.do_option(a); }
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
             _ => false,
         }
     }
@@ -1238,19 +1355,19 @@ impl Scene for GameplayScene {
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
                             self.adf = Some(adf);
-                            eprintln!("render-world-load: world loaded for region {}", region);
+                            self.dlog(format!("render-world-load: world loaded for region {}", region));
                         }
-                        Err(e) => eprintln!("render-world-load: WorldData::load failed: {e}"),
+                        Err(e) => self.dlog(format!("render-world-load: WorldData::load failed: {e}")),
                     }
                 }
-                Err(e) => eprintln!("render-world-load: AdfDisk::open failed (ADF may not be present): {e}"),
+                Err(e) => self.dlog(format!("render-world-load: AdfDisk::open failed (ADF may not be present): {e}")),
             }
         }
 
 
         let new_phase = DayNightPhase::from_lightlevel(self.state.lightlevel);
         if new_phase != self.day_night_phase {
-            eprintln!("Day/night: {:?}", new_phase);
+            self.dlog(format!("Day/night: {:?}", new_phase));
             let from = self.palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
@@ -1273,7 +1390,7 @@ impl Scene for GameplayScene {
             let mood = self.setmood();
             if mood != self.last_mood {
                 self.last_mood = mood;
-                eprintln!("setmood: switching to group {}", mood);
+                self.dlog(format!("setmood: switching to group {}", mood));
                 if let Some(audio) = resources.audio {
                     audio.set_score(mood);
                 }
@@ -1284,8 +1401,8 @@ impl Scene for GameplayScene {
         let region = self.state.region_num;
         if region != self.last_region_num {
             self.on_region_changed(region);
-            eprintln!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
-                crate::game::game_event::GameEvent::RegionTransition { region });
+            self.dlog(format!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
+                crate::game::game_event::GameEvent::RegionTransition { region }));
             // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
             if let Some(audio) = resources.audio {
                 audio.set_cave_mode(region == 9);
@@ -1312,7 +1429,7 @@ impl Scene for GameplayScene {
         if lightlevel != self.last_lightlevel {
             self.last_lightlevel = lightlevel;
             let pct = (lightlevel as i32 * 100 / 300) as i16;
-            eprintln!("daynight: lightlevel={} pct={}%", lightlevel, pct);
+            self.dlog(format!("daynight: lightlevel={} pct={}%", lightlevel, pct));
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
                 let base = self.palette_transition
                     .as_ref()
@@ -1327,9 +1444,9 @@ impl Scene for GameplayScene {
         let indoor = self.state.region_num > 7;
         if indoor != self.last_indoor {
             if indoor {
-                eprintln!("{:?}", crate::game::game_event::GameEvent::EnterIndoor { door_index: self.state.region_num });
+                self.dlog(format!("{:?}", crate::game::game_event::GameEvent::EnterIndoor { door_index: self.state.region_num }));
             } else {
-                eprintln!("{:?}", crate::game::game_event::GameEvent::ExitIndoor);
+                self.dlog(format!("{:?}", crate::game::game_event::GameEvent::ExitIndoor));
             }
             self.last_indoor = indoor;
         }
@@ -1364,15 +1481,25 @@ impl Scene for GameplayScene {
         if self.state.vitality <= 0 && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE) {
             if self.state.try_respawn() {
                 self.messages.push("Lucky! You barely survive...");
-                eprintln!("try_respawn: luck-gated respawn succeeded");
+                self.dlog("try_respawn: luck-gated respawn succeeded");
             } else if let Some(next) = self.state.next_brother() {
-                self.state.activate_brother(next);
+                // Use config-driven brother activation if available
+                if let Some(bro) = game_lib.get_brother(next) {
+                    let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
+                        .map(|loc| (loc.x, loc.y, loc.region))
+                        .unwrap_or((19036, 15755, 3));
+                    self.state.activate_brother_from_config(
+                        next, bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
+                    );
+                } else {
+                    self.state.activate_brother(next);
+                }
                 // TODO: trigger brother-transition placard (gameloop-104 handles scene transition)
-                eprintln!("Brother died, switching to brother {}", next);
+                self.dlog(format!("Brother died, switching to brother {}", next));
             } else {
                 // All brothers dead — game over
                 // TODO: return SceneResult::Done to trigger game over scene
-                eprintln!("All brothers dead — GAME OVER");
+                self.dlog("All brothers dead — GAME OVER");
             }
         }
 
@@ -1438,13 +1565,16 @@ impl Scene for GameplayScene {
         if self.state.viewstatus == 0 {
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
                 mr.compose(self.state.hero_x, self.state.hero_y, world);
-                eprintln!("map composed");
             }
         }
 
         self.render_by_viewstatus(canvas, resources);
         canvas.present();
-        SceneResult::Continue
+        if self.quit_requested {
+            SceneResult::Quit
+        } else {
+            SceneResult::Continue
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
