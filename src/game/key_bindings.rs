@@ -155,39 +155,65 @@ pub struct KeyBindings {
 impl KeyBindings {
     pub fn default_bindings() -> Self {
         let mut b: HashMap<GameAction, Vec<Keycode>> = HashMap::new();
-        // Arrow keys for movement
-        b.insert(GameAction::MoveUp,        vec![Keycode::Up, Keycode::W, Keycode::Kp8]);
-        b.insert(GameAction::MoveDown,      vec![Keycode::Down, Keycode::S, Keycode::Kp2]);
-        b.insert(GameAction::MoveLeft,      vec![Keycode::Left, Keycode::A, Keycode::Kp4]);
-        b.insert(GameAction::MoveRight,     vec![Keycode::Right, Keycode::D, Keycode::Kp6]);
-        b.insert(GameAction::MoveUpLeft,    vec![Keycode::Q, Keycode::Kp7]);
-        b.insert(GameAction::MoveUpRight,   vec![Keycode::E, Keycode::Kp9]);
-        b.insert(GameAction::MoveDownLeft,  vec![Keycode::Z, Keycode::Kp1]);
-        b.insert(GameAction::MoveDownRight, vec![Keycode::C, Keycode::Kp3]);
-        // Combat
-        b.insert(GameAction::Fight, vec![Keycode::Space, Keycode::F]);
-        // Menu/UI — original letter keys from letter_list[]
-        b.insert(GameAction::Inventory, vec![Keycode::I]);
+        // Movement: numpad 1-9 (original) + arrow keys (modern convenience).
+        // Original did not use WASD; those letters have command meanings.
+        b.insert(GameAction::MoveUp,        vec![Keycode::Up, Keycode::Kp8]);
+        b.insert(GameAction::MoveDown,      vec![Keycode::Down, Keycode::Kp2]);
+        b.insert(GameAction::MoveLeft,      vec![Keycode::Left, Keycode::Kp4]);
+        b.insert(GameAction::MoveRight,     vec![Keycode::Right, Keycode::Kp6]);
+        b.insert(GameAction::MoveUpLeft,    vec![Keycode::Kp7]);
+        b.insert(GameAction::MoveUpRight,   vec![Keycode::Kp9]);
+        b.insert(GameAction::MoveDownLeft,  vec![Keycode::Kp1]);
+        b.insert(GameAction::MoveDownRight, vec![Keycode::Kp3]);
+        // Combat: numpad 0 (original), keep Space as alternate
+        b.insert(GameAction::Fight, vec![Keycode::Kp0]);
+        // Pause: Space (original)
+        b.insert(GameAction::Pause, vec![Keycode::Space]);
+        // Items menu — original letter keys from manual
+        b.insert(GameAction::Inventory, vec![Keycode::L]);       // List
         b.insert(GameAction::Take,      vec![Keycode::T]);
-        b.insert(GameAction::Look,      vec![Keycode::L]);
+        b.insert(GameAction::Look,      vec![Keycode::Slash]);   // '?' (Shift+/ on US)
         b.insert(GameAction::UseItem,   vec![Keycode::U]);
         b.insert(GameAction::Give,      vec![Keycode::G]);
+        // Talk menu
         b.insert(GameAction::Yell,      vec![Keycode::Y]);
-        b.insert(GameAction::Speak,     vec![Keycode::Period]);
-        b.insert(GameAction::Ask,       vec![Keycode::Question]);
+        b.insert(GameAction::Speak,     vec![Keycode::S]);       // Say
+        b.insert(GameAction::Ask,       vec![Keycode::A]);
+        // Game menu
+        b.insert(GameAction::Quit,      vec![Keycode::Q, Keycode::Escape]);
+        b.insert(GameAction::SaveGame,  vec![Keycode::F8]);
+        b.insert(GameAction::LoadGame,  vec![Keycode::F9]);
+        // Magic: F1-F7 (original function keys)
+        b.insert(GameAction::CastSpell1, vec![Keycode::F1]);     // Stone
+        b.insert(GameAction::CastSpell2, vec![Keycode::F2]);     // Jewel
+        b.insert(GameAction::CastSpell3, vec![Keycode::F3]);     // Vial
+        b.insert(GameAction::CastSpell4, vec![Keycode::F4]);     // Orb
+        b.insert(GameAction::CastSpell5, vec![Keycode::F5]);     // Totem
+        b.insert(GameAction::CastSpell6, vec![Keycode::F6]);     // Ring
+        b.insert(GameAction::CastSpell7, vec![Keycode::F7]);     // Skull
+        // Weapon selection (Use sub-menu): number keys 1-5
+        b.insert(GameAction::UseSlot1,  vec![Keycode::Num1]);    // Dirk
+        b.insert(GameAction::UseSlot2,  vec![Keycode::Num2]);    // Mace
+        b.insert(GameAction::UseSlot3,  vec![Keycode::Num3]);    // Sword
+        b.insert(GameAction::UseSlot4,  vec![Keycode::Num4]);    // Bow
+        b.insert(GameAction::UseSlot5,  vec![Keycode::Num5]);    // Wand
+        // Key selection: K prefix (K alone opens key sub-menu)
+        b.insert(GameAction::SelectKey1, vec![]);                 // Gold  (K1 modal)
+        b.insert(GameAction::SelectKey2, vec![]);                 // Green (K2 modal)
+        b.insert(GameAction::SelectKey3, vec![]);                 // Blue  (K3 modal)
+        b.insert(GameAction::SelectKey4, vec![]);                 // Red   (K4 modal)
+        b.insert(GameAction::SelectKey5, vec![]);                 // Grey  (K5 modal)
+        b.insert(GameAction::SelectKey6, vec![]);                 // White (K6 modal)
+        // Buy menu keys (original)
+        b.insert(GameAction::BuyFood,   vec![Keycode::O]);
+        b.insert(GameAction::BuyArrow,  vec![Keycode::R]);
+        b.insert(GameAction::BuyVial,   vec![Keycode::Num8]);
+        b.insert(GameAction::BuyMace,   vec![Keycode::C]);
+        b.insert(GameAction::BuySword,  vec![Keycode::W]);
+        b.insert(GameAction::BuyBow,    vec![Keycode::B]);
+        b.insert(GameAction::BuyTotem,  vec![Keycode::E]);
+        // Map
         b.insert(GameAction::Map,       vec![Keycode::M]);
-        b.insert(GameAction::Find,      vec![Keycode::Backslash]);
-        b.insert(GameAction::Quit,      vec![Keycode::Escape]);
-        b.insert(GameAction::SaveGame,  vec![Keycode::F2]);
-        b.insert(GameAction::LoadGame,  vec![Keycode::F3]);
-        // Spell keys — original: function keys F5–F9 or number keys
-        b.insert(GameAction::CastSpell1, vec![Keycode::Num1]);
-        b.insert(GameAction::CastSpell2, vec![Keycode::Num2]);
-        b.insert(GameAction::CastSpell3, vec![Keycode::Num3]);
-        b.insert(GameAction::CastSpell4, vec![Keycode::Num4]);
-        b.insert(GameAction::CastSpell5, vec![Keycode::Num5]);
-        b.insert(GameAction::CastSpell6, vec![Keycode::Num6]);
-        b.insert(GameAction::CastSpell7, vec![Keycode::Num7]);
         KeyBindings { bindings: b }
     }
 
@@ -266,7 +292,8 @@ mod tests {
     fn test_action_for_key() {
         let kb = KeyBindings::default_bindings();
         assert_eq!(kb.action_for_key(Keycode::Up), Some(GameAction::MoveUp));
-        assert_eq!(kb.action_for_key(Keycode::Space), Some(GameAction::Fight));
+        assert_eq!(kb.action_for_key(Keycode::Space), Some(GameAction::Pause));
+        assert_eq!(kb.action_for_key(Keycode::Kp0), Some(GameAction::Fight));
         assert_eq!(kb.action_for_key(Keycode::Return), None);
     }
     #[test]

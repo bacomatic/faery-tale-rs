@@ -121,6 +121,8 @@ pub struct GameplayScene {
     log_buffer: Vec<String>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
+    /// Game is paused (Space key toggles).
+    paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
     compass_regions: Vec<(i32, i32, i32, i32)>,
 }
@@ -158,6 +160,7 @@ impl GameplayScene {
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             quit_requested: false,
+            paused: false,
             compass_regions: Vec::new(),
         }
     }
@@ -1105,6 +1108,12 @@ impl GameplayScene {
             GameAction::Quit => {
                 self.quit_requested = true;
             }
+            GameAction::Pause => {
+                self.paused = !self.paused;
+                if self.paused {
+                    self.messages.push("Game paused. Press Space to continue.");
+                }
+            }
             _ => {}
         }
     }
@@ -1234,22 +1243,33 @@ impl Scene for GameplayScene {
         }
         match event {
             Event::KeyDown { keycode: Some(kc), repeat: false, .. } => match *kc {
-                // Movement keys
-                Keycode::Up | Keycode::W | Keycode::Kp8 => { self.input.up = true; true }
-                Keycode::Down | Keycode::S | Keycode::Kp2 => { self.input.down = true; true }
-                Keycode::Left | Keycode::A | Keycode::Kp4 => { self.input.left = true; true }
-                Keycode::Right | Keycode::D | Keycode::Kp6 => { self.input.right = true; true }
-                Keycode::Space | Keycode::F => { self.input.fight = true; true }
-                // Game command keys
-                Keycode::I => { self.do_option(GameAction::Inventory); true }
-                Keycode::L => { self.do_option(GameAction::Look); true }
+                // Movement keys: arrow keys + numpad (no WASD — those are commands)
+                Keycode::Up    | Keycode::Kp8 => { self.input.up = true; true }
+                Keycode::Down  | Keycode::Kp2 => { self.input.down = true; true }
+                Keycode::Left  | Keycode::Kp4 => { self.input.left = true; true }
+                Keycode::Right | Keycode::Kp6 => { self.input.right = true; true }
+                // Diagonal movement (numpad only)
+                Keycode::Kp7 => { self.input.up = true; self.input.left = true; true }
+                Keycode::Kp9 => { self.input.up = true; self.input.right = true; true }
+                Keycode::Kp1 => { self.input.down = true; self.input.left = true; true }
+                Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
+                // Fight: numpad 0 (original)
+                Keycode::Kp0 => { self.input.fight = true; true }
+                // Pause: Space (original)
+                Keycode::Space => { self.do_option(GameAction::Pause); true }
+                // Items menu keys
+                Keycode::L => { self.do_option(GameAction::Inventory); true }  // List
                 Keycode::T => { self.do_option(GameAction::Take); true }
-                Keycode::G => { self.do_option(GameAction::Give); true }
+                Keycode::Slash => { self.do_option(GameAction::Look); true }   // '?'
                 Keycode::U => { self.do_option(GameAction::UseItem); true }
+                Keycode::G => { self.do_option(GameAction::Give); true }
+                // Talk menu keys
                 Keycode::Y => { self.do_option(GameAction::Yell); true }
-                Keycode::K => { self.do_option(GameAction::Speak); true }
+                Keycode::S => { self.do_option(GameAction::Speak); true }      // Say
+                Keycode::A => { self.do_option(GameAction::Ask); true }
+                // Game menu keys
+                Keycode::Q | Keycode::Escape => { self.do_option(GameAction::Quit); true }
                 Keycode::M => { self.do_option(GameAction::Map); true }
-                Keycode::Escape => { self.do_option(GameAction::Quit); true }
                 _ => {
                     // KeyBindings fallback for any unhandled keycode (keys-104)
                     let kb = crate::game::key_bindings::KeyBindings::default_bindings();
@@ -1262,11 +1282,15 @@ impl Scene for GameplayScene {
                 }
             },
             Event::KeyUp { keycode: Some(kc), .. } => match *kc {
-                Keycode::Up | Keycode::W | Keycode::Kp8 => { self.input.up = false; true }
-                Keycode::Down | Keycode::S | Keycode::Kp2 => { self.input.down = false; true }
-                Keycode::Left | Keycode::A | Keycode::Kp4 => { self.input.left = false; true }
-                Keycode::Right | Keycode::D | Keycode::Kp6 => { self.input.right = false; true }
-                Keycode::Space | Keycode::F => { self.input.fight = false; true }
+                Keycode::Up    | Keycode::Kp8 => { self.input.up = false; true }
+                Keycode::Down  | Keycode::Kp2 => { self.input.down = false; true }
+                Keycode::Left  | Keycode::Kp4 => { self.input.left = false; true }
+                Keycode::Right | Keycode::Kp6 => { self.input.right = false; true }
+                Keycode::Kp7 => { self.input.up = false; self.input.left = false; true }
+                Keycode::Kp9 => { self.input.up = false; self.input.right = false; true }
+                Keycode::Kp1 => { self.input.down = false; self.input.left = false; true }
+                Keycode::Kp3 => { self.input.down = false; self.input.right = false; true }
+                Keycode::Kp0 => { self.input.fight = false; true }
                 _ => false,
             },
             // Controller axis motion: map left stick to movement input
@@ -1373,6 +1397,12 @@ impl Scene for GameplayScene {
         resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
+
+        // When paused, skip game logic but keep rendering.
+        if self.paused {
+            return SceneResult::Continue;
+        }
+
         self.state.tick(delta_ticks);
 
         // Lazy-load ADF + world data on first tick (render-world-load).
