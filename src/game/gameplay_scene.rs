@@ -667,15 +667,22 @@ impl GameplayScene {
 
                 // Compass: blit pre-composited normal texture, then overlay
                 // the active direction sub-region from the highlighted texture.
+                // hiscreen is 640×57 scaled to 640×96; vertical scale = 96/57.
                 {
                     const COMPASS_X: i32 = 567;
-                    const COMPASS_Y_OFF: i32 = 25;
-                    const COMPASS_W: u32 = 48;
-                    const COMPASS_H: u32 = 24;
-                    let compass_y = HIBAR_Y + COMPASS_Y_OFF;
+                    const COMPASS_SRC_Y: i32 = 15;
+                    const COMPASS_SRC_W: i32 = 48;
+                    const COMPASS_SRC_H: i32 = 24;
+                    // Scale Y position and height from hiscreen coords to HI bar coords.
+                    const HISCREEN_H: i32 = 57;
+                    let scale_y = |v: i32| -> i32 { v * HIBAR_H as i32 / HISCREEN_H };
+                    let compass_y = HIBAR_Y + scale_y(COMPASS_SRC_Y);
+                    let compass_h = scale_y(COMPASS_SRC_H) as u32;
                     let dir = (self.state.facing & 0x0F) as usize;
 
-                    let dest = sdl2::rect::Rect::new(COMPASS_X, compass_y, COMPASS_W, COMPASS_H);
+                    let dest = sdl2::rect::Rect::new(
+                        COMPASS_X, compass_y, COMPASS_SRC_W as u32, compass_h,
+                    );
                     if let Some(normal_tex) = resources.compass_normal {
                         canvas.copy(normal_tex, None, dest).ok();
                     }
@@ -686,9 +693,9 @@ impl GameplayScene {
                                 let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
                                 let dst = sdl2::rect::Rect::new(
                                     COMPASS_X + rx,
-                                    compass_y + ry,
+                                    compass_y + scale_y(ry),
                                     rw as u32,
-                                    rh as u32,
+                                    scale_y(rh) as u32,
                                 );
                                 canvas.copy(highlight_tex, src, dst).ok();
                             }
