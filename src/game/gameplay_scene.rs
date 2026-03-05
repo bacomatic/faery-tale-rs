@@ -685,21 +685,12 @@ impl GameplayScene {
                     let compass_h = scale_y(COMPASS_SRC_H) as u32;
 
                     // Map our facing (N=0..NW=7) to original comptable index
-                    // (SW=0, S=1, SE=2, E=3, NE=4, N=5, NW=6, W=7, still=8/9).
+                    // (NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7, still=8/9).
+                    // Formula: comptable_index = (facing + 1) & 7.
                     let player_moving = self.state.actors.first()
                         .map_or(false, |p| p.moving);
                     let comptable_dir: usize = if player_moving {
-                        match self.state.facing & 0x07 {
-                            0 => 5, // N
-                            1 => 4, // NE
-                            2 => 3, // E
-                            3 => 2, // SE
-                            4 => 1, // S
-                            5 => 0, // SW
-                            6 => 7, // W
-                            7 => 6, // NW
-                            _ => 9, // still
-                        }
+                        ((self.state.facing & 0x07) as usize + 1) & 7
                     } else {
                         9 // still — no highlight
                     };

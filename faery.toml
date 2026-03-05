@@ -269,13 +269,13 @@ planes = [
 # Pixel regions within the 48x24 compass area.
 # Dir 8 and 9 are "standing still" — 1x1 no-op blit.
 regions = [
-    { x = 0,  y = 0,  w = 16, h = 8 },   # 0  SW
-    { x = 16, y = 0,  w = 16, h = 9 },   # 1  S
-    { x = 32, y = 0,  w = 16, h = 8 },   # 2  SE
+    { x = 0,  y = 0,  w = 16, h = 8 },   # 0  NW
+    { x = 16, y = 0,  w = 16, h = 9 },   # 1  N
+    { x = 32, y = 0,  w = 16, h = 8 },   # 2  NE
     { x = 30, y = 8,  w = 18, h = 8 },   # 3  E
-    { x = 32, y = 16, w = 16, h = 8 },   # 4  NE
-    { x = 16, y = 13, w = 16, h = 11 },  # 5  N
-    { x = 0,  y = 16, w = 16, h = 8 },   # 6  NW
+    { x = 32, y = 16, w = 16, h = 8 },   # 4  SE
+    { x = 16, y = 13, w = 16, h = 11 },  # 5  S
+    { x = 0,  y = 16, w = 16, h = 8 },   # 6  SW
     { x = 0,  y = 8,  w = 18, h = 8 },   # 7  W
     { x = 0,  y = 0,  w = 1,  h = 1 },   # 8  still
     { x = 0,  y = 0,  w = 1,  h = 1 },   # 9  still
