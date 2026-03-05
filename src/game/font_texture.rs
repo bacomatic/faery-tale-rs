@@ -128,7 +128,32 @@ impl<'a> FontTexture<'a> {
                     return;
                 },
                 Ok(ref tex) => {
-                    self.render_string_internal(s, canvas, tex, x, y);
+                    self.render_string_internal(s, canvas, tex, x, y, None);
+                }
+            }
+        }
+    }
+
+    /// Render a string with a solid background color behind the entire character row,
+    /// matching Amiga pen-B behavior: the background fills `strlen × x_size` × `y_size`
+    /// pixels before any glyph is drawn. The `bg` color is (r, g, b).
+    pub fn render_string_with_bg<T: RenderTarget>(
+        &self,
+        s: &str,
+        canvas: &mut Canvas<T>,
+        x: i32,
+        y: i32,
+        bg: (u8, u8, u8),
+    ) {
+        if let Some(strong_texture) = self.texture.upgrade() {
+            let result = strong_texture.try_borrow();
+            match result {
+                Err(e) => {
+                    println!("Error borrowing font texture for rendering: {}", e);
+                    return;
+                },
+                Ok(ref tex) => {
+                    self.render_string_internal(s, canvas, tex, x, y, Some(bg));
                 }
             }
         }
@@ -143,11 +168,29 @@ impl<'a> FontTexture<'a> {
      *      3. If this is a proportional font, look in the spacing table and figure how many pixels to advance the rastport's horizontal position.
      *         For a monospaced font, the horizontal position advance comes from the TextFont's tf_XSize field.
      */
-    fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
+    fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32, bg: Option<(u8, u8, u8)>) {
         let cstr = s.as_bytes();
 
         // y coordinate is for the baseline of the font, so adjust for that
         let y_adjusted = y - self.font.baseline as i32;
+
+        // Fill background for the full character row before drawing any glyphs.
+        // Mirrors Amiga pen-B: every pixel in the text rectangle gets the background color.
+        if let Some((r, g, b)) = bg {
+            let bg_w = if self.font.is_proportional() {
+                // Sum char_space widths for each character in the string
+                cstr.iter().map(|cc| {
+                    if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
+                        let idx = (*cc - self.font.lo_char) as usize;
+                        self.font.char_space[idx].max(0) as u32
+                    } else { 0 }
+                }).sum()
+            } else {
+                (s.len() * self.font.x_size) as u32
+            };
+            canvas.set_draw_color(sdl2::pixels::Color::RGB(r, g, b));
+            canvas.fill_rect(Rect::new(x, y_adjusted, bg_w, self.font.y_size as u32)).ok();
+        }
 
         let mut glyph_rect = Rect::new(x, y_adjusted, 0, self.font.y_size as u32);
         for cc in cstr {

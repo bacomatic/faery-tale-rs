@@ -704,33 +704,26 @@ impl GameplayScene {
                 }
 
                 // Button grid: driven by MenuState.
-                let btn_baseline = resources.topaz_font.get_font().baseline as i32;
+                // Mirrors propt(): render 6 spaces with pen-B (bg) to fill the slot,
+                // then render the 5-char label with pen-A (fg) at x+4.
                 let buttons = self.menu.print_options();
                 for btn in &buttons {
                     let col = btn.display_slot & 1;
                     let row = btn.display_slot / 2;
                     let btn_x = if col == 0 { 430i32 } else { 482i32 };
-                    // Scale y from hiscreen source coords to screen coords
-                    let src_y = (row as i32) * 9 + 8;
-                    let btn_y = HIBAR_Y + src_y * 96 / 57;
-                    let btn_h = 9 * 96 / 57;  // ~15
-                    let btn_w = 48i32;
+                    // Amiga baseline: row*9+8, scaled from hiscreen (57px) to HI bar (96px).
+                    let btn_y = HIBAR_Y + ((row as i32) * 9 + 8) * 96 / 57;
 
-                    // Background color from textcolors palette
                     let bg_rgba = self.textcolors[btn.bg_color as usize];
-                    let bg_r = ((bg_rgba >> 16) & 0xFF) as u8;
-                    let bg_g = ((bg_rgba >> 8) & 0xFF) as u8;
-                    let bg_b = (bg_rgba & 0xFF) as u8;
-                    canvas.set_draw_color(sdl2::pixels::Color::RGB(bg_r, bg_g, bg_b));
-                    canvas.fill_rect(sdl2::rect::Rect::new(btn_x, btn_y, btn_w as u32, btn_h as u32)).ok();
-
-                    // Text color from textcolors palette
+                    let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
                     let fg_rgba = self.textcolors[btn.fg_color as usize];
-                    let fg_r = ((fg_rgba >> 16) & 0xFF) as u8;
-                    let fg_g = ((fg_rgba >> 8) & 0xFF) as u8;
-                    let fg_b = (fg_rgba & 0xFF) as u8;
+                    let (fg_r, fg_g, fg_b) = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
+
+                    // Step 1: 6 spaces fill the slot background (pen B).
                     resources.topaz_font.set_color_mod(fg_r, fg_g, fg_b);
-                    resources.topaz_font.render_string(&btn.text, canvas, btn_x + 4, btn_y + btn_baseline);
+                    resources.topaz_font.render_string_with_bg("      ", canvas, btn_x, btn_y, bg);
+                    // Step 2: label text at x+4 (pen A over already-filled background).
+                    resources.topaz_font.render_string(&btn.text, canvas, btn_x + 4, btn_y);
                 }
                 // Reset font color to white
                 resources.topaz_font.set_color_mod(255, 255, 255);
