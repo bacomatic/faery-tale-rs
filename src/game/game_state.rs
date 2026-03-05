@@ -264,11 +264,8 @@ impl GameState {
         }
 
         // Recompute lightlevel as a triangle wave.
-        self.lightlevel = if self.daynight < 12000 {
-            (self.daynight as u32 * 300 / 12000) as u16
-        } else {
-            ((24000u32 - self.daynight as u32) * 300 / 12000) as u16
-        };
+        // NOTE: day/night dimming disabled until scene rendering is complete.
+        self.lightlevel = 0;
 
         // Detect period boundary crossing (boundaries at 0, 6000, 12000, 18000).
         const BOUNDARIES: [u16; 4] = [0, 6000, 12000, 18000];
