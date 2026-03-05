@@ -166,11 +166,11 @@ pub fn in_melee_range(
         7 => (-offset, -offset),  // NW
         _ => (0, -offset),
     };
-    let tip_x = hero_x + ox;
-    let tip_y = hero_y + oy;
-    let xd = (target_x - tip_x).abs();
-    let yd = (target_y - tip_y).abs();
-    xd.max(yd) < reach
+    let tip_x = hero_x as i32 + ox as i32;
+    let tip_y = hero_y as i32 + oy as i32;
+    let xd = (target_x as i32 - tip_x).abs();
+    let yd = (target_y as i32 - tip_y).abs();
+    xd.max(yd) < reach as i32
 }
 
 /// Simple pseudo-random number for damage rolls (no external crate dependency).
