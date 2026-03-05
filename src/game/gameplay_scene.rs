@@ -621,13 +621,14 @@ impl GameplayScene {
                 }
 
                 // Stat line at bottom of HI bar (render-hiscreen-bar).
+                // Uses same Amber font and brown color as scrolling messages.
                 let stat_line = format!(
                     "Brv:{:3} Lck:{:3} Knd:{:3} Vit:{:3} Wlt:{:3}",
                     self.state.brave, self.state.luck, self.state.kind,
                     self.state.vitality, self.state.wealth,
                 );
-                resources.topaz_font.set_color_mod(255, 255, 255);
-                resources.topaz_font.render_string(&stat_line, canvas, 8, HIBAR_Y + HIBAR_H as i32 - 14);
+                resources.amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                resources.amber_font.render_string(&stat_line, canvas, 8, HIBAR_Y + HIBAR_H as i32 - 14);
 
                 // Scrolling messages (render-msg-scroll / world-107).
                 // Original uses Amber font, color 10 (0xA50 = brown).
@@ -652,6 +653,7 @@ impl GameplayScene {
                 const LABEL2: [&str; 5] = ["List ", "Take ", "Look ", "Use  ", "Give "];
                 // textcolors[4] = 0x00F → RGB(0x00, 0x00, 0xFF) blue for category buttons
                 let btn_bg = sdl2::pixels::Color::RGB(0x00, 0x00, 0xFF);
+                let btn_baseline = resources.topaz_font.get_font().baseline as i32;
                 for row in 0..5usize {
                     let y = HIBAR_Y + (row as i32) * 10 + 8;
                     // Left column button
@@ -659,10 +661,10 @@ impl GameplayScene {
                     canvas.fill_rect(sdl2::rect::Rect::new(430, y, 48, 10)).ok();
                     // Right column button
                     canvas.fill_rect(sdl2::rect::Rect::new(482, y, 48, 10)).ok();
-                    // Render labels in black text over the colored rectangles
+                    // Render labels in black text; Y is baseline (Amiga convention)
                     resources.topaz_font.set_color_mod(0, 0, 0);
-                    resources.topaz_font.render_string(LABEL1[row], canvas, 434, y);
-                    resources.topaz_font.render_string(LABEL2[row], canvas, 486, y);
+                    resources.topaz_font.render_string(LABEL1[row], canvas, 434, y + btn_baseline);
+                    resources.topaz_font.render_string(LABEL2[row], canvas, 486, y + btn_baseline);
                 }
 
                 // Compass: blit pre-composited normal texture, then overlay
