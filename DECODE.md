@@ -1062,3 +1062,32 @@ On mouse-up   : generates code  0x80 | (0x61 + index)  (button release)
 ```
 
 The Rust port maps SDL2 mouse coordinates directly without the Amiga lo-res scaling factor.
+
+---
+
+## Known Original Exploits
+
+These bugs exist in the original 1987 release. The port should avoid replicating them.
+
+### Pause-Take duplication (`fmain.c` — do_option / prq path)
+
+When the game is paused (Space), pressing `T` triggers the Take action. Because the game
+loop is suspended, the player can press `T` repeatedly to pick up the same ground item
+multiple times without it being consumed.
+
+**Fix**: Guard `MenuAction::Take` dispatch (and any other item-consuming immediate action)
+behind an `!is_paused()` check, similar to the existing `gomenu()` guard. The `handle_key`
+path in `menu.rs` already blocks all keys except Space while paused, so the exploit cannot
+occur via the menu key path. Verify that the `GameAction::Take` path in the direct key
+binding layer (`key_bindings.rs`) also checks the paused state before acting.
+
+### Key replenishment after save/reload within a session (`fmain.c` — save/load path)
+
+If the player enters an area, saves the game, uses keys to unlock doors, then reloads the
+save in the same session, the keys are restored from the save file but the door-unlocked
+state is not reset (door state is held in a runtime table, not persisted). The player
+effectively gets unlimited key uses.
+
+**Fix**: When implementing `LoadGame`, reset all in-memory door state (the runtime "door
+open" flags in `doors.rs`) before restoring from the save file. Alternatively, persist door
+state as part of the save file format so reload is fully consistent.

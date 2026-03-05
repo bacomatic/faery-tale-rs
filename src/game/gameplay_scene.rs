@@ -843,6 +843,9 @@ impl GameplayScene {
         use crate::game::menu::MenuAction;
         match action {
             MenuAction::Inventory    => self.do_option(GameAction::Inventory),
+            // EXPLOIT GUARD: original bug allows repeated Take while paused (T key).
+            // handle_key() already blocks non-Space keys when paused, but verify any
+            // direct GameAction::Take path (key_bindings) also checks paused state.
             MenuAction::Take         => self.do_option(GameAction::Take),
             MenuAction::Look         => self.do_option(GameAction::LookAround),
             MenuAction::Yell         => self.do_option(GameAction::Yell),
@@ -979,6 +982,8 @@ impl GameplayScene {
                 self.messages.push("Saving not yet implemented.".to_string());
             }
             MenuAction::LoadGame => {
+                // EXPLOIT FIX NEEDED: when implemented, reset all runtime door state
+                // before restoring save, otherwise keys replenish but doors stay unlocked.
                 self.messages.push("Loading not yet implemented.".to_string());
             }
             MenuAction::Quit     => self.do_option(GameAction::Quit),
