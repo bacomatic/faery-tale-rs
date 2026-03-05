@@ -53,3 +53,4 @@ pub mod magic;
 pub mod encounter;
 pub mod shop;
 pub mod loot;
+pub mod menu;

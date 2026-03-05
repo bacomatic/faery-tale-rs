@@ -3,6 +3,44 @@ use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
 
+/// Map an SDL Keycode to the corresponding menu key byte used by LETTER_LIST.
+/// Numpad movement keys (Kp8/7/9/1/3) are excluded; only top-row Num8 maps to b'8'.
+fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
+    match keycode {
+        Keycode::Space  => Some(b' '),
+        Keycode::I      => Some(b'I'),
+        Keycode::T      => Some(b'T'),
+        Keycode::Slash  => Some(b'?'),
+        Keycode::U      => Some(b'U'),
+        Keycode::G      => Some(b'G'),
+        Keycode::Y      => Some(b'Y'),
+        Keycode::S      => Some(b'S'),
+        Keycode::A      => Some(b'A'),
+        Keycode::M      => Some(b'M'),
+        Keycode::F      => Some(b'F'),
+        Keycode::Q      => Some(b'Q'),
+        Keycode::L      => Some(b'L'),
+        Keycode::O      => Some(b'O'),
+        Keycode::R      => Some(b'R'),
+        Keycode::Num8   => Some(b'8'),  // top-row 8 only; Kp8 = MoveUp
+        Keycode::C      => Some(b'C'),
+        Keycode::W      => Some(b'W'),
+        Keycode::B      => Some(b'B'),
+        Keycode::E      => Some(b'E'),
+        Keycode::V      => Some(b'V'),
+        Keycode::X      => Some(b'X'),
+        Keycode::Num1   => Some(b'1'),
+        Keycode::Num2   => Some(b'2'),
+        Keycode::Num3   => Some(b'3'),
+        Keycode::Num4   => Some(b'4'),
+        Keycode::Num5   => Some(b'5'),
+        Keycode::Num6   => Some(b'6'),
+        Keycode::Num7   => Some(b'7'),
+        Keycode::K      => Some(b'K'),
+        _ => None,
+    }
+}
+
 /// Return the 8-way facing direction (0=N..7=NW) from (sx,sy) toward (tx,ty).
 /// Mirrors fmain.c directional logic used when setting ms->direction.
 fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
@@ -125,6 +163,8 @@ pub struct GameplayScene {
     paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
     compass_regions: Vec<(i32, i32, i32, i32)>,
+    menu: crate::game::menu::MenuState,
+    textcolors: crate::game::palette::Palette,
 }
 
 impl GameplayScene {
@@ -162,6 +202,8 @@ impl GameplayScene {
             quit_requested: false,
             paused: false,
             compass_regions: Vec::new(),
+            menu: crate::game::menu::MenuState::new(),
+            textcolors: [0u32; 32],
         }
     }
 
@@ -183,6 +225,18 @@ impl GameplayScene {
                 .map(|r| (r.x, r.y, r.w, r.h))
                 .collect();
         }
+
+        if let Some(pal) = game_lib.find_palette("textcolors") {
+            for (i, color) in pal.colors.iter().enumerate().take(32) {
+                self.textcolors[i] = ((color.r() as u32) << 16)
+                    | ((color.g() as u32) << 8)
+                    | (color.b() as u32);
+            }
+        }
+
+        let stuff = self.state.stuff().clone();
+        let wealth = self.state.wealth;
+        self.menu.set_options(&stuff, wealth);
     }
 
     /// Returns true when it is daytime (lightlevel > 60).
@@ -649,26 +703,37 @@ impl GameplayScene {
                     }
                 }
 
-                // Button grid (render-buttons): two columns of 5 buttons each.
-                // Original: black text (APen=0) over colored rectangle (BPen).
-                // For top-level category buttons, penb=4 (textcolors[4]=0x00F → blue).
-                const LABEL1: [&str; 5] = ["Items", "Magic", "Talk ", "Buy  ", "Game "];
-                const LABEL2: [&str; 5] = ["List ", "Take ", "Look ", "Use  ", "Give "];
-                // textcolors[4] = 0x00F → RGB(0x00, 0x00, 0xFF) blue for category buttons
-                let btn_bg = sdl2::pixels::Color::RGB(0x00, 0x00, 0xFF);
+                // Button grid: driven by MenuState.
                 let btn_baseline = resources.topaz_font.get_font().baseline as i32;
-                for row in 0..5usize {
-                    let y = HIBAR_Y + (row as i32) * 10 + 8;
-                    // Left column button
-                    canvas.set_draw_color(btn_bg);
-                    canvas.fill_rect(sdl2::rect::Rect::new(430, y, 48, 10)).ok();
-                    // Right column button
-                    canvas.fill_rect(sdl2::rect::Rect::new(482, y, 48, 10)).ok();
-                    // Render labels in black text; Y is baseline (Amiga convention)
-                    resources.topaz_font.set_color_mod(0, 0, 0);
-                    resources.topaz_font.render_string(LABEL1[row], canvas, 434, y + btn_baseline);
-                    resources.topaz_font.render_string(LABEL2[row], canvas, 486, y + btn_baseline);
+                let buttons = self.menu.print_options();
+                for btn in &buttons {
+                    let col = btn.display_slot & 1;
+                    let row = btn.display_slot / 2;
+                    let btn_x = if col == 0 { 430i32 } else { 482i32 };
+                    // Scale y from hiscreen source coords to screen coords
+                    let src_y = (row as i32) * 9 + 8;
+                    let btn_y = HIBAR_Y + src_y * 96 / 57;
+                    let btn_h = 9 * 96 / 57;  // ~15
+                    let btn_w = 48i32;
+
+                    // Background color from textcolors palette
+                    let bg_rgba = self.textcolors[btn.bg_color as usize];
+                    let bg_r = ((bg_rgba >> 16) & 0xFF) as u8;
+                    let bg_g = ((bg_rgba >> 8) & 0xFF) as u8;
+                    let bg_b = (bg_rgba & 0xFF) as u8;
+                    canvas.set_draw_color(sdl2::pixels::Color::RGB(bg_r, bg_g, bg_b));
+                    canvas.fill_rect(sdl2::rect::Rect::new(btn_x, btn_y, btn_w as u32, btn_h as u32)).ok();
+
+                    // Text color from textcolors palette
+                    let fg_rgba = self.textcolors[btn.fg_color as usize];
+                    let fg_r = ((fg_rgba >> 16) & 0xFF) as u8;
+                    let fg_g = ((fg_rgba >> 8) & 0xFF) as u8;
+                    let fg_b = (fg_rgba & 0xFF) as u8;
+                    resources.topaz_font.set_color_mod(fg_r, fg_g, fg_b);
+                    resources.topaz_font.render_string(&btn.text, canvas, btn_x + 4, btn_y + btn_baseline);
                 }
+                // Reset font color to white
+                resources.topaz_font.set_color_mod(255, 255, 255);
 
                 // Compass: blit pre-composited normal texture, then overlay
                 // the active direction sub-region from the highlighted texture.
@@ -773,6 +838,176 @@ impl GameplayScene {
         }
     }
 
+    /// Dispatch a MenuAction returned by MenuState::handle_key / handle_click.
+    fn dispatch_menu_action(&mut self, action: crate::game::menu::MenuAction) {
+        use crate::game::menu::MenuAction;
+        match action {
+            MenuAction::Inventory    => self.do_option(GameAction::Inventory),
+            MenuAction::Take         => self.do_option(GameAction::Take),
+            MenuAction::Look         => self.do_option(GameAction::LookAround),
+            MenuAction::Yell         => self.do_option(GameAction::Yell),
+            MenuAction::Say          => self.do_option(GameAction::Speak),
+            MenuAction::Ask          => self.do_option(GameAction::Ask),
+            MenuAction::CastSpell(n) => {
+                let a = match n {
+                    0 => GameAction::CastSpell1,
+                    1 => GameAction::CastSpell2,
+                    2 => GameAction::CastSpell3,
+                    3 => GameAction::CastSpell4,
+                    4 => GameAction::CastSpell5,
+                    5 => GameAction::CastSpell6,
+                    _ => GameAction::CastSpell7,
+                };
+                self.do_option(a);
+            }
+            MenuAction::BuyItem(n) => {
+                let a = match n {
+                    0 => GameAction::BuyFood,
+                    1 => GameAction::BuyArrow,
+                    2 => GameAction::BuyVial,
+                    3 => GameAction::BuyMace,
+                    4 => GameAction::BuySword,
+                    5 => GameAction::BuyBow,
+                    _ => GameAction::BuyTotem,
+                };
+                self.do_option(a);
+            }
+            MenuAction::SetWeapon(slot) => {
+                use crate::game::menu::MenuMode;
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.weapon = slot + 1;
+                }
+                let name = match slot {
+                    0 => "Dirk",
+                    1 => "Mace",
+                    2 => "Sword",
+                    3 => "Bow",
+                    4 => "Wand",
+                    5 => "Lasso",
+                    _ => "Shell",
+                };
+                self.messages.push(format!("{} readied.", name));
+                self.menu.gomenu(MenuMode::Items);
+            }
+            MenuAction::TryKey(idx) => {
+                use crate::game::menu::MenuMode;
+                let key_slot = 16 + idx as usize;
+                if self.state.stuff()[key_slot] == 0 {
+                    self.messages.push("No such key.".to_string());
+                } else if crate::game::doors::doorfind(
+                    self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
+                {
+                    self.state.stuff_mut()[key_slot] -= 1;
+                    self.messages.push("Door opened.".to_string());
+                } else {
+                    self.messages.push("Key didn't fit.".to_string());
+                }
+                self.menu.gomenu(MenuMode::Items);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
+            }
+            MenuAction::GiveGold => {
+                use crate::game::menu::MenuMode;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
+                    t.npcs.iter().any(|n| {
+                        n.active
+                            && (n.x - hero_x).abs() < 32
+                            && (n.y - hero_y).abs() < 32
+                    })
+                });
+                if !npc_nearby {
+                    self.messages.push("There is no one nearby.".to_string());
+                } else if self.state.wealth <= 2 {
+                    self.messages.push("Not enough gold.".to_string());
+                } else {
+                    self.state.wealth -= 2;
+                    self.messages.push("You gave gold.".to_string());
+                }
+                self.menu.gomenu(MenuMode::Items);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
+            }
+            MenuAction::GiveWrit => {
+                use crate::game::menu::MenuMode;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
+                    t.npcs.iter().any(|n| {
+                        n.active
+                            && (n.x - hero_x).abs() < 32
+                            && (n.y - hero_y).abs() < 32
+                    })
+                });
+                if !npc_nearby {
+                    self.messages.push("There is no one nearby.".to_string());
+                } else if self.state.stuff()[28] == 0 {
+                    self.messages.push("You don't have one.".to_string());
+                } else {
+                    self.state.stuff_mut()[28] -= 1;
+                    self.messages.push("You gave the writ.".to_string());
+                }
+                self.menu.gomenu(MenuMode::Items);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
+            }
+            MenuAction::GiveBone => {
+                use crate::game::menu::MenuMode;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
+                    t.npcs.iter().any(|n| {
+                        n.active
+                            && (n.x - hero_x).abs() < 32
+                            && (n.y - hero_y).abs() < 32
+                    })
+                });
+                if !npc_nearby {
+                    self.messages.push("There is no one nearby.".to_string());
+                } else if self.state.stuff()[29] == 0 {
+                    self.messages.push("You don't have one.".to_string());
+                } else {
+                    self.state.stuff_mut()[29] -= 1;
+                    self.messages.push("You gave the bone.".to_string());
+                }
+                self.menu.gomenu(MenuMode::Items);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
+            }
+            MenuAction::SaveGame => {
+                self.messages.push("Saving not yet implemented.".to_string());
+            }
+            MenuAction::LoadGame => {
+                self.messages.push("Loading not yet implemented.".to_string());
+            }
+            MenuAction::Quit     => self.do_option(GameAction::Quit),
+            MenuAction::TogglePause => {
+                // MenuState already toggled the bit; sync paused field.
+                self.paused = self.menu.is_paused();
+                if self.paused {
+                    self.messages.push("Game paused. Press Space to continue.");
+                }
+            }
+            MenuAction::ToggleMusic => {
+                let on = self.menu.is_music_on();
+                self.messages.push(if on { "Music on." } else { "Music off." });
+                // TODO: call setmood/audio.set_score when audio integration is ready
+            }
+            MenuAction::ToggleSound => {
+                let on = self.menu.is_sound_on();
+                self.messages.push(if on { "Sound on." } else { "Sound off." });
+                // TODO: guard effect() calls with is_sound_on() when audio sample playback is added
+            }
+            MenuAction::RefreshMusic  => {}
+            MenuAction::SummonTurtle  => self.do_option(GameAction::SummonTurtle),
+            MenuAction::UseSunstone   => self.do_option(GameAction::UseSpecial),
+            MenuAction::SwitchMode(_) => {}
+            MenuAction::UseMenu | MenuAction::GiveMenu => {}
+            MenuAction::None          => {}
+        }
+    }
+
     /// Dispatch a game menu/command action.
     fn do_option(&mut self, action: GameAction) {
         self.dlog(format!("do_option: {:?}", action));
@@ -799,31 +1034,45 @@ impl GameplayScene {
                     self.messages.push("No food.");
                     self.dlog("eat_food: no food in pack");
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             // Shop BUY menu items (npc-107): mirrors fmain.c BUY case / jtrans[] table.
             // label5 = "Food ArrowVial Mace SwordBow  Totem" — 7 items, hits 5-11.
             GameAction::BuyArrow => {
                 Self::do_buy(&mut self.state, &self.npc_table, 1, "arrows", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::BuyVial => {
                 // ITEM_VIAL = 11 in stuff[] (magic healing potion).
                 Self::do_buy(&mut self.state, &self.npc_table, 11, "vial", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::BuyMace => {
                 // Mace → weapon slot 8 (dagger/mace, cheapest weapon).
                 Self::do_buy(&mut self.state, &self.npc_table, 8, "mace", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::BuySword => {
                 // Sword → weapon slot 10 (long sword).
                 Self::do_buy(&mut self.state, &self.npc_table, 10, "sword", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::BuyBow => {
                 // Bow → weapon slot 9 (short sword / bow).
                 Self::do_buy(&mut self.state, &self.npc_table, 9, "bow", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::BuyTotem => {
                 // ITEM_TOTEM = 13 in stuff[].
                 Self::do_buy(&mut self.state, &self.npc_table, 13, "totem", &mut self.messages);
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::Inventory => {
                 self.dlog(format!("Inventory: {}", self.state.inventory_summary()));
@@ -894,6 +1143,8 @@ impl GameplayScene {
                                     self.dlog("check_turtle_eggs: shell awarded for snake kill");
                                 }
                                 self.messages.push("Enemy defeated!");
+                                let wealth = self.state.wealth;
+                                self.menu.set_options(self.state.stuff(), wealth);
                             } else {
                                 self.messages.push(format!("You hit for {}!", result.enemy_damage));
                             }
@@ -925,6 +1176,8 @@ impl GameplayScene {
                     );
                     self.state.stuff_mut()[ITEM_ARROWS] -= 1;
                     self.messages.push("You shoot an arrow!");
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
                 } else {
                     self.apply_melee_combat();
                 }
@@ -940,42 +1193,56 @@ impl GameplayScene {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell2 => {
                 match use_magic(&mut self.state, ITEM_LANTERN) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell3 => {
                 match use_magic(&mut self.state, ITEM_VIAL) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell4 => {
                 match use_magic(&mut self.state, ITEM_ORB) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell5 => {
                 match use_magic(&mut self.state, ITEM_TOTEM) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell6 => {
                 match use_magic(&mut self.state, ITEM_RING) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::CastSpell7 => {
                 match use_magic(&mut self.state, ITEM_SKULL) {
                     Ok(msg) => self.messages.push(msg),
                     Err(e)  => self.messages.push(e),
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::Shoot => {
                 use crate::game::game_state::ITEM_ARROWS;
@@ -993,6 +1260,8 @@ impl GameplayScene {
                     );
                     self.state.stuff_mut()[ITEM_ARROWS] -= 1;
                     self.messages.push("You shoot an arrow!");
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
                 }
             }
             GameAction::SummonTurtle => {
@@ -1001,6 +1270,8 @@ impl GameplayScene {
                 } else {
                     self.messages.push("You have no shells to summon a turtle.");
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::Look => {
                 // Describe terrain at hero position (original: event 38 = item visible, event 20 = nothing special).
@@ -1100,7 +1371,8 @@ impl GameplayScene {
                 self.quit_requested = true;
             }
             GameAction::Pause => {
-                self.paused = !self.paused;
+                self.menu.toggle_pause();
+                self.paused = self.menu.is_paused();
                 if self.paused {
                     self.messages.push("Game paused. Press Space to continue.");
                 }
@@ -1246,26 +1518,13 @@ impl Scene for GameplayScene {
                 Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
                 // Fight: numpad 0 (original)
                 Keycode::Kp0 => { self.input.fight = true; true }
-                // Pause: Space (original)
-                Keycode::Space => { self.do_option(GameAction::Pause); true }
-                // Items menu keys
-                Keycode::L => { self.do_option(GameAction::Inventory); true }  // List
-                Keycode::T => { self.do_option(GameAction::Take); true }
-                Keycode::Slash => { self.do_option(GameAction::Look); true }   // '?'
-                Keycode::U => { self.do_option(GameAction::UseItem); true }
-                Keycode::G => { self.do_option(GameAction::Give); true }
-                // Talk menu keys
-                Keycode::Y => { self.do_option(GameAction::Yell); true }
-                Keycode::S => { self.do_option(GameAction::Speak); true }      // Say
-                Keycode::A => { self.do_option(GameAction::Ask); true }
-                // Game menu keys
-                Keycode::Q | Keycode::Escape => { self.do_option(GameAction::Quit); true }
-                Keycode::M => { self.do_option(GameAction::Map); true }
+                // Escape → Quit (safe fallback not in letter_list)
+                Keycode::Escape => { self.do_option(GameAction::Quit); true }
+                // All letter_list keys → route through MenuState
                 _ => {
-                    // KeyBindings fallback for any unhandled keycode (keys-104)
-                    let kb = crate::game::key_bindings::KeyBindings::default_bindings();
-                    if let Some(action) = kb.action_for_key(*kc) {
-                        self.do_option(action);
+                    if let Some(menu_key) = keycode_to_menukey(*kc) {
+                        let action = self.menu.handle_key(menu_key);
+                        self.dispatch_menu_action(action);
                         true
                     } else {
                         false
@@ -1332,45 +1591,26 @@ impl Scene for GameplayScene {
                     _ => false,
                 }
             }
-            // Mouse click: test against button grid in HI bar
+            // Mouse click: dispatch through MenuState button grid
             Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
                 const HIBAR_Y: i32 = 384;
-                const BTN_LEFT_X: i32 = 430;
-                const BTN_RIGHT_X: i32 = 482;
-                const BTN_W: i32 = 48;
-                const BTN_H: i32 = 10;
+                const BTN_X_LEFT: i32 = 430;
+                const BTN_X_RIGHT: i32 = 482;
+                const BTN_X_END: i32 = 530;
+                // Button rows span from HIBAR_Y+8 to HIBAR_Y+62 in source coords;
+                // scale factor 96/57 maps source pixels to screen pixels.
+                const BTN_Y_START: i32 = HIBAR_Y + 8 * 96 / 57;
+                const BTN_Y_END: i32 = HIBAR_Y + 62 * 96 / 57;
                 let mx = *x;
                 let my = *y;
-                // Check if click is in the button area
-                if my >= HIBAR_Y + 8 && my < HIBAR_Y + 8 + 5 * BTN_H {
-                    let row = ((my - HIBAR_Y - 8) / BTN_H) as usize;
-                    if row < 5 {
-                        // Left column (category labels — currently act as direct actions)
-                        if mx >= BTN_LEFT_X && mx < BTN_LEFT_X + BTN_W {
-                            // Items, Magic, Talk, Buy, Game
-                            let action = match row {
-                                0 => Some(GameAction::Inventory), // Items
-                                2 => Some(GameAction::Speak),     // Talk
-                                4 => Some(GameAction::Pause),     // Game
-                                _ => None,
-                            };
-                            if let Some(a) = action { self.do_option(a); }
-                            return true;
-                        }
-                        // Right column (immediate actions)
-                        if mx >= BTN_RIGHT_X && mx < BTN_RIGHT_X + BTN_W {
-                            // List, Take, Look, Use, Give
-                            let action = match row {
-                                0 => Some(GameAction::Inventory), // List
-                                1 => Some(GameAction::Take),
-                                2 => Some(GameAction::Look),
-                                3 => Some(GameAction::UseItem),
-                                4 => Some(GameAction::Give),
-                                _ => None,
-                            };
-                            if let Some(a) = action { self.do_option(a); }
-                            return true;
-                        }
+                if mx >= BTN_X_LEFT && mx <= BTN_X_END && my >= BTN_Y_START && my <= BTN_Y_END {
+                    let col = if mx < BTN_X_RIGHT { 0usize } else { 1usize };
+                    let row = ((my - BTN_Y_START) * 57 / 96 / 9) as usize;
+                    let slot = row * 2 + col;
+                    if slot < 12 {
+                        let action = self.menu.handle_click(slot);
+                        self.dispatch_menu_action(action);
+                        return true;
                     }
                 }
                 false
@@ -1390,7 +1630,7 @@ impl Scene for GameplayScene {
         self.tick_accum += delta_ticks;
 
         // When paused, skip game logic but keep rendering.
-        if self.paused {
+        if self.menu.is_paused() {
             return SceneResult::Continue;
         }
 
@@ -1455,7 +1695,9 @@ impl Scene for GameplayScene {
                 self.last_mood = mood;
                 self.dlog(format!("setmood: switching to group {}", mood));
                 if let Some(audio) = resources.audio {
-                    audio.set_score(mood);
+                    if self.menu.is_music_on() {
+                        audio.set_score(mood);
+                    }
                 }
             }
         }

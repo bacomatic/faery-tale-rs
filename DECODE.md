@@ -797,3 +797,268 @@ Our `Direction` enum uses a different order than the original:
 
 Formula: `comptable_index = (facing + 1) & 7`.
 
+
+---
+
+## Menu System (`fmain.c:538–589`, `3758–3820`, `4409–4441`; `fmain2.c:613–675`; `fsubs.asm:120–165`)
+
+### 10 Menu Modes
+
+```
+ITEMS = 0   MAGIC = 1   TALK = 2   BUY  = 3   GAME  = 4
+SAVEX = 5   KEYS  = 6   GIVE = 7   USE  = 8   FILE  = 9
+```
+
+| Mode  | Purpose                              | Label str | Color idx |
+|-------|--------------------------------------|-----------|-----------|
+| ITEMS | Inventory / object interaction       | `label1`  | 4         |
+| MAGIC | Cast spells (F-key driven)           | `label2`  | 5         |
+| TALK  | NPC communication                    | `label3`  | 6         |
+| BUY   | Purchase items from shops            | `label4`  | 7         |
+| GAME  | Pause / Music / Sound / nav          | `label5`  | 8         |
+| SAVEX | Save or quit                         | `label6`  | 9         |
+| KEYS  | Try a key type on a door             | `label7`  | 10        |
+| GIVE  | Give items to NPCs                   | `label8`  | 11        |
+| USE   | Equip weapon / use special items     | `label9`  | 12        |
+| FILE  | Load / save file slots               | `labelA`  | 13        |
+
+### `enabled[]` Bit Flags
+
+Each menu slot's `enabled[i]` byte encodes both visibility and behaviour:
+
+```
+bit 0      : selected / active  (1 = on for toggles)
+bit 1      : displayed / visible (must be set to appear in menu)
+bits 2–7   : action type
+  0x00 (0) : tab header — click switches cmode; always shown
+  0x04 (4) : toggle — click flips bit 0
+  0x08 (8) : immediate action — fires once on click
+  0x0C (12): radio button — sets bit 0 exclusively
+```
+
+Common combined values:
+
+| Value | Meaning                                           |
+|-------|---------------------------------------------------|
+| 0     | Not displayed, not active (empty slot)            |
+| 2     | Displayed, not selected, tab type (inactive tab)  |
+| 3     | Displayed, selected, tab type (active tab)        |
+| 6     | Displayed, not selected, toggle (Pause starts OFF)|
+| 7     | Displayed, selected, toggle (Music/Sound start ON)|
+| 8     | Immediate, not displayed (hidden until set_options)|
+| 10    | Displayed, immediate (standard menu item)         |
+
+### Label Strings (`fmain.c:538–549`)
+
+Each slot is exactly 5 characters (no null terminator; the renderer reads 5 bytes directly):
+
+```
+Slots 0–4:  tab labels (shared across all modes)
+  "Items" "Magic" "Talk " "Buy  " "Game "   (ITEMS…GAME tabs)
+  — extended tab row for SAVEX/KEYS/GIVE/USE/FILE uses per-mode label strings
+
+label1 (ITEMS) : "ItemsMagicTalk Buy  Game Save Keys Give Use  File"
+label2–labelB  : same 5-char-per-tab structure for each mode
+```
+
+Each `menus[k].label` points into the concatenated string; slots 0–4 are the 5 mode-tab names repeated in the active mode's color.
+
+### Settings Toggles (Critical for Game Behavior)
+
+```
+menus[GAME].enabled[5] & 1  → Pause   (1 = paused; freezes game loop)
+menus[GAME].enabled[6] & 1  → Music   (1 = on; setmood() plays/stops music)
+menus[GAME].enabled[7] & 1  → Sound   (1 = on; effect() plays samples)
+```
+
+- Pause starts at `6` (toggle, OFF); Music and Sound start at `7` (toggle, ON).
+- `gomenu()` returns immediately without changing mode when Pause is active.
+
+### `gomenu()` (`fmain.c:4409–4414`)
+
+```c
+void gomenu(short mode) {
+    if (menus[GAME].enabled[5] & 1) return;  // refuse if paused
+    cmode = mode;
+    handler_data.lastmenu = 0;
+    print_options();
+}
+```
+
+### `print_options()` → `real_options[]` Mapping (`fmain.c:3758–3782`)
+
+```
+j = 0   // display slot counter
+for i = 0 .. menus[cmode].num:
+    if (enabled[i] & 2) == 0: skip   // not visible
+    real_options[j] = i               // display slot j → menu index i
+    propt(j, enabled[i] & 1)
+    j++
+// remaining slots:
+real_options[j] = -1; draw blank button
+```
+
+`real_options[]` lets click/key dispatch translate a display-slot index back to the true `enabled[]` index.
+
+### `propt()` Button Rendering (`fmain.c:3785–3819`)
+
+**Background color** (`penb`):
+
+```
+cmode == USE   → 14  (grey,       textcolors[14] = 0x888)
+cmode == FILE  → 13  (light grey, textcolors[13] = 0xCCC)
+k < 5          →  4  (blue tab,   textcolors[4]  = 0x00F)
+cmode == KEYS  → keycolors[k-5]
+cmode == SAVEX → k   (slot index used directly as color index)
+else           → menus[cmode].color
+```
+
+**Foreground color** (`pena`):
+
+```
+0 = black (textcolors[0]) — normal / off state
+1 = white (textcolors[1]) — selected / on state (toggles)
+```
+
+**Screen position** (Amiga lo-res source coordinates):
+
+```
+x = 430  (even display slot)  or  482  (odd display slot)
+y = (slot / 2) * 9 + 8
+```
+
+### `set_options()` Inventory-Driven Visibility (`fmain.c:4417–4441`)
+
+`stuff_flag(x)` returns `8` (hidden/immediate) when `x == 0`, else `10` (displayed/immediate).
+
+| Mode  | Slot(s) | Rule                                               |
+|-------|---------|----------------------------------------------------|
+| MAGIC | 5–11    | `stuff_flag(stuff[i+9])` — owns magic item?        |
+| USE   | 0–6     | `stuff_flag(stuff[i])` — owns weapon `i`?          |
+| USE   | 7 (Keys)| 10 if any key type owned, else 8                   |
+| USE   | 8 (Sunstone)| `stuff_flag(stuff[7])`                         |
+| KEYS  | 5–10    | `stuff_flag(stuff[i+16])` — owns key type `i`?    |
+| GIVE  | 5 (Gold)| 10 if `wealth > 2`, else 8                         |
+| GIVE  | 6 (Book)| always 8 (permanently hidden)                      |
+| GIVE  | 7 (Writ)| `stuff_flag(stuff[28])`                            |
+| GIVE  | 8 (Bone)| `stuff_flag(stuff[29])`                            |
+
+`set_options()` is called after every `do_option()` action so the menu reflects the current inventory state.
+
+### `do_option()` Dispatch Table (`fmain.c:3830–3393`)
+
+| cmode | hit   | Action                                              |
+|-------|-------|-----------------------------------------------------|
+| ITEMS | 5     | Show inventory screen (`viewstatus = 4`)            |
+| ITEMS | 6     | Take nearest object                                 |
+| ITEMS | 7     | Look (print region / stats)                         |
+| ITEMS | 8     | `gomenu(USE)`                                       |
+| ITEMS | 9     | `gomenu(GIVE)`                                      |
+| MAGIC | 5–11  | Cast spell (if owned)                               |
+| TALK  | 5     | Yell                                                |
+| TALK  | 6     | Say (speak to nearest NPC)                          |
+| TALK  | 7     | Ask (query nearest NPC)                             |
+| BUY   | 5–11  | Buy item (via `jtrans[]` price table)               |
+| GAME  | 5     | Pause toggle (handled before `do_option`)           |
+| GAME  | 6     | Music toggle → `setmood(TRUE)`                      |
+| GAME  | 7     | Sound toggle (`effect()` checks `enabled[7] & 1`)  |
+| GAME  | 8     | `gomenu(SAVEX)`                                     |
+| GAME  | 9     | `gomenu(FILE)`                                      |
+| USE   | 0–4   | Set weapon (`anim_list[0].weapon = hit + 1`)        |
+| USE   | 6     | Summon turtle (`get_turtle()`)                      |
+| USE   | 7     | `gomenu(KEYS)`                                      |
+| USE   | 8     | Use Sunstone (if `witchflag`)                       |
+| SAVEX | 5     | Save game → `gomenu(FILE)`                          |
+| SAVEX | 6     | Quit (`quitflag = TRUE`)                            |
+| FILE  | 5–12  | Load/save slot → `savegame(hit)` → `gomenu(GAME)`  |
+| KEYS  | 5–10  | Try key type on door → `gomenu(ITEMS)`              |
+| GIVE  | 5     | Give gold to nearest NPC (if `wealth > 2`)          |
+| GIVE  | 7     | Give Writ of Passage                                |
+| GIVE  | 8     | Give Bone                                           |
+| All   | —     | Calls `set_options()` after every action            |
+
+### `letter_list[38]` Keyboard Shortcuts (`fmain.c:579–589`)
+
+```
+Key    Mode   Slot  Action
+'I'    ITEMS  5     List inventory
+'T'    ITEMS  6     Take
+'?'    ITEMS  7     Look
+'U'    ITEMS  8     → Use menu
+'G'    ITEMS  9     → Give menu
+'Y'    TALK   5     Yell
+'S'    TALK   6     Say
+'A'    TALK   7     Ask
+' '    GAME   5     Toggle Pause
+'M'    GAME   6     Toggle Music
+'F'    GAME   7     Toggle Sound
+'Q'    GAME   8     → Save/Exit menu
+'L'    GAME   9     → Load/File menu
+'O'    BUY    5     Buy Food
+'R'    BUY    6     Buy Arrows
+'8'    BUY    7     Buy Vial
+'C'    BUY    8     Buy Mace
+'W'    BUY    9     Buy Sword
+'B'    BUY    10    Buy Bow
+'E'    BUY    11    Buy Totem
+'V'    SAVEX  5     Save (only fires when cmode == SAVEX)
+'X'    SAVEX  6     Exit / Quit
+'1'    USE    0     Equip Dirk
+'2'    USE    1     Equip Mace
+'3'    USE    2     Equip Sword
+'4'    USE    3     Equip Bow
+'5'    USE    4     Equip Wand
+'6'    USE    5     Equip Lasso
+'7'    USE    6     Summon Turtle
+'K'    USE    7     → Keys menu
+F1–F7  MAGIC  5–11  Cast spells (separate F-key path, not letter_list)
+```
+
+**Notes:**
+- SAVEX entries (`'V'`, `'X'`) only fire when `cmode == SAVEX` (`fmain.c:1510–1511`).
+- MAGIC uses F-keys via a separate key-handling path, not `letter_list`.
+- KEYS sub-mode: digits `'1'`–`'6'` map directly to `do_option(key - '1' + 5)`.
+
+### `keycolors[6]` (`fmain.c:551`)
+
+```
+Index  textcolors idx  Color   Key Type
+0      8               0xF90   Gold key
+1      6               0x090   Green key
+2      4               0x00F   Blue key
+3      2               0xC00   Red key
+4      14              0x888   Grey key
+5      1               0xFFF   White key
+```
+
+Used by `propt()` as background color when `cmode == KEYS` and `k >= 5`.
+
+### `prq()` Deferred Action Queue (`fmain2.c:613–675`)
+
+The original engine uses a 32-entry circular buffer for deferred rendering requests:
+
+```
+prq(4)   → redraw vitality stat in HI bar
+prq(5)   → call print_options() (redraw all menu buttons)
+prq(7)   → redraw Brv/Lck/Knd/Wlth stats bar
+prq(10)  → print "Take What?" message
+```
+
+In the Rust port these are handled directly — no queue is needed because the screen is redrawn every frame.
+
+### Mouse Click → Button Slot Mapping (`fsubs.asm:136–165`)
+
+```
+Valid click X range (Amiga hi-res): 430–530
+  lo-res equivalent: 215–265
+
+Button index calculation (lo-res coordinates):
+  row   = (mouseY - 144) / 9
+  col   = (mouseX < 240) ? 0 : 1   // left column = even slots, right = odd
+  index = row * 2 + col             // 0–11; maps to display slot
+
+On mouse-down : generates code  0x61 + index  (button press)
+On mouse-up   : generates code  0x80 | (0x61 + index)  (button release)
+```
+
+The Rust port maps SDL2 mouse coordinates directly without the Amiga lo-res scaling factor.
