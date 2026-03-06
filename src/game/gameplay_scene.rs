@@ -1,3 +1,23 @@
+//! Main gameplay scene: game loop, input, rendering.
+//!
+//! # Screen layout
+//!
+//! The original Amiga game used two Copper-switched viewports stacked vertically:
+//! - `vp_page` (LORES, 288×140): the playfield
+//! - `vp_text` (HIRES, 640×57): the HI bar (buttons, compass, messages)
+//!
+//! Both are 2× line-doubled (NTSC 60 Hz non-interlaced → line-doubled to fill 400 lines)
+//! and centered in the SDL 640×480 logical canvas with 40px top/bottom margins:
+//!
+//! ```text
+//!  y=  0.. 39  black margin (40px)
+//!  y= 40..319  playfield   (576×280)  x=32..607 (DxOffset=16 LORES px × 2)
+//!  y=320..325  gap         (6px)      3 LORES rows × 2
+//!  y=326..439  HI bar      (640×114)  x=0..639  (57 HIRES rows × 2)
+//!  y=440..479  black margin (40px)
+//! ```
+//!
+//! See `RESEARCH.md § Screen Layout: Amiga Mixed-Resolution Viewports` for full details.
 use crate::game::magic::{use_magic, ITEM_LANTERN, ITEM_ORB, ITEM_RING, ITEM_SKULL, ITEM_STONE_RING, ITEM_TOTEM, ITEM_VIAL};
 use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
@@ -62,6 +82,23 @@ fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
     }
 }
 
+/// Canvas layout — original 640×200 game area line-doubled to 640×400,
+/// centered in 640×480 logical canvas with 40px margins top and bottom.
+///
+/// Playfield (vp_page, LORES 288×140 px): DxOffset=16 LORES × 2 = 32px left margin;
+/// 2× line-doubled to canvas rect (32, 40, MAP_DST_W*2, MAP_DST_H*2).
+///
+/// Gap: 3 original LORES rows × 2 = 6px at canvas y=320–325.
+///
+/// HI bar (vp_text, HIRES 640×57 px): also 2× line-doubled → 640×114;
+/// canvas rect (0, 326, 640, 114). Internal coords (buttons, compass) scale ×2 vertically.
+const CANVAS_MARGIN_Y: i32 = 40;
+const PLAYFIELD_X: i32 = 32;           // vp_page DxOffset=16 LORES px × 2
+const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y; // = 40
+const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
+const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
+const HIBAR_Y: i32 = CANVAS_MARGIN_Y + 280 + 6; // 40 + 280 playfield + 6 gap = 326
+
 /// Day/night phase derived from lightlevel triangle wave (0–300).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DayNightPhase {
@@ -115,11 +152,13 @@ struct InputState {
     left: bool,
     right: bool,
     fight: bool,
+    /// True while the player is holding a compass arrow (mouse-down); cleared on mouse-up.
+    compass_held: bool,
 }
 
 impl Default for InputState {
     fn default() -> Self {
-        InputState { up: false, down: false, left: false, right: false, fight: false }
+        InputState { up: false, down: false, left: false, right: false, fight: false, compass_held: false }
     }
 }
 
@@ -631,7 +670,7 @@ impl GameplayScene {
         match self.state.viewstatus {
             // Normal play or forced redraw
             0 | 98 | 99 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 64));
+                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
                 // Blit composed map framebuf to canvas (world-105).
                 if let Some(ref mr) = self.map_renderer {
@@ -654,11 +693,13 @@ impl GameplayScene {
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                                // 2× line-doubling of LORES playfield, offset by left margin.
+                                // Horizontal: DxOffset=16 LORES px → 32px canvas margin.
+                                // Vertical: centered in 640×480 with CANVAS_MARGIN_Y=40px top gap.
                                 let dst = sdl2::rect::Rect::new(
-                                    crate::game::map_renderer::MAP_DST_X,
-                                    crate::game::map_renderer::MAP_DST_Y,
-                                    crate::game::map_renderer::MAP_DST_W,
-                                    crate::game::map_renderer::MAP_DST_H,
+                                    PLAYFIELD_X, PLAYFIELD_Y,
+                                    crate::game::map_renderer::MAP_DST_W * 2,
+                                    crate::game::map_renderer::MAP_DST_H * 2,
                                 );
                                 let _ = canvas.copy(&tex, None, Some(dst));
                             }
@@ -666,118 +707,127 @@ impl GameplayScene {
                     }
                 }
 
-                // HI bar: blit hiscreen image to bottom strip (render-hiscreen-bar / world-106).
-                const HIBAR_Y: i32 = 384;
-                const HIBAR_H: u32 = 96;
-                if let Some(hiscreen) = resources.find_image("hiscreen") {
-                    let dst = sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H);
-                    hiscreen.draw_scaled(canvas, dst);
-                } else {
-                    canvas.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
-                    canvas.fill_rect(sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H)).ok();
-                }
-
-                // Stat line at bottom of HI bar (render-hiscreen-bar).
-                // Uses same Amber font and brown color as scrolling messages.
-                let stat_line = format!(
-                    "Brv:{:3} Lck:{:3} Knd:{:3} Vit:{:3} Wlt:{:3}",
-                    self.state.brave, self.state.luck, self.state.kind,
-                    self.state.vitality, self.state.wealth,
-                );
-                resources.amber_font.set_color_mod(0xAA, 0x55, 0x00);
-                resources.amber_font.render_string(&stat_line, canvas, 8, HIBAR_Y + HIBAR_H as i32 - 14);
-
-                // Scrolling messages (render-msg-scroll / world-107).
-                // Original uses Amber font, color 10 (0xA50 = brown).
-                // Messages print at the bottom and scroll upward; show up to 4 lines.
+                // HI bar: render all content into a native 640×57 offscreen texture,
+                // then blit it 2× vertically to canvas (640×114). This makes fonts,
+                // buttons, and the compass scale uniformly without per-element ×2 math.
                 {
+                    // Collect all render data before the with_texture_canvas closure.
+                    let brave    = self.state.brave;
+                    let luck     = self.state.luck;
+                    let kind     = self.state.kind;
+                    let vitality = self.state.vitality;
+                    let wealth   = self.state.wealth;
+                    let buttons = self.menu.print_options();
                     let msg_count = self.messages.len().min(4);
                     let msgs: Vec<&str> = self.messages.iter().collect();
-                    let start = msgs.len().saturating_sub(4);
-                    resources.amber_font.set_color_mod(0xAA, 0x55, 0x00);
-                    for (i, msg) in msgs[start..].iter().enumerate() {
-                        // Bottom line is at the bottom of the scroll area, older lines above
-                        let line_from_bottom = (msg_count - 1 - i) as i32;
-                        let y = HIBAR_Y + 56 - line_from_bottom * 11;
-                        resources.amber_font.render_string(msg, canvas, 8, y);
-                    }
-                }
-
-                // Button grid: driven by MenuState.
-                // Mirrors propt(): render 6 spaces with pen-B (bg) to fill the slot,
-                // then render the 5-char label with pen-A (fg) at x+4.
-                let buttons = self.menu.print_options();
-                for btn in &buttons {
-                    let col = btn.display_slot & 1;
-                    let row = btn.display_slot / 2;
-                    let btn_x = if col == 0 { 430i32 } else { 482i32 };
-                    // Amiga baseline: row*9+8, scaled from hiscreen (57px) to HI bar (96px).
-                    let btn_y = HIBAR_Y + ((row as i32) * 9 + 8) * 96 / 57;
-
-                    let bg_rgba = self.textcolors[btn.bg_color as usize];
-                    let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
-                    let fg_rgba = self.textcolors[btn.fg_color as usize];
-                    let (fg_r, fg_g, fg_b) = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
-
-                    // Step 1: 6 spaces fill the slot background (pen B).
-                    resources.topaz_font.set_color_mod(fg_r, fg_g, fg_b);
-                    resources.topaz_font.render_string_with_bg("      ", canvas, btn_x, btn_y, bg);
-                    // Step 2: label text at x+4 (pen A over already-filled background).
-                    resources.topaz_font.render_string(&btn.text, canvas, btn_x + 4, btn_y);
-                }
-                // Reset font color to white
-                resources.topaz_font.set_color_mod(255, 255, 255);
-
-                // Compass: blit pre-composited normal texture, then overlay
-                // the active direction sub-region from the highlighted texture.
-                // hiscreen is 640×57 scaled to 640×96; vertical scale = 96/57.
-                {
-                    const COMPASS_X: i32 = 567;
-                    const COMPASS_SRC_Y: i32 = 15;
-                    const COMPASS_SRC_W: i32 = 48;
-                    const COMPASS_SRC_H: i32 = 24;
-                    // Scale Y position and height from hiscreen coords to HI bar coords.
-                    const HISCREEN_H: i32 = 57;
-                    let scale_y = |v: i32| -> i32 { v * HIBAR_H as i32 / HISCREEN_H };
-                    let compass_y = HIBAR_Y + scale_y(COMPASS_SRC_Y);
-                    let compass_h = scale_y(COMPASS_SRC_H) as u32;
-
-                    // Map our facing (N=0..NW=7) to original comptable index
-                    // (NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7, still=8/9).
-                    // Formula: comptable_index = (facing + 1) & 7.
-                    let player_moving = self.state.actors.first()
-                        .map_or(false, |p| p.moving);
-                    let comptable_dir: usize = if player_moving {
-                        ((self.state.facing & 0x07) as usize + 1) & 7
-                    } else {
-                        9 // still — no highlight
+                    let msg_start = msgs.len().saturating_sub(4);
+                    let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
+                    let textcolors = &self.textcolors;
+                    let compass_regions = &self.compass_regions;
+                    // Compass highlight reflects current input, not player movement.
+                    // Same comptable order as propt: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7.
+                    let input_comptable_dir: usize = match self.current_direction() {
+                        Direction::NW   => 0,
+                        Direction::N    => 1,
+                        Direction::NE   => 2,
+                        Direction::E    => 3,
+                        Direction::SE   => 4,
+                        Direction::S    => 5,
+                        Direction::SW   => 6,
+                        Direction::W    => 7,
+                        Direction::None => 9,
                     };
+                    // Extract resource references before mutably borrowing canvas.
+                    let hiscreen_opt = resources.find_image("hiscreen");
+                    let amber_font = resources.amber_font;
+                    let topaz_font = resources.topaz_font;
+                    let compass_normal = resources.compass_normal;
+                    let compass_highlight = resources.compass_highlight;
 
-                    let dest = sdl2::rect::Rect::new(
-                        COMPASS_X, compass_y, COMPASS_SRC_W as u32, compass_h,
-                    );
-                    if let Some(normal_tex) = resources.compass_normal {
-                        canvas.copy(normal_tex, None, dest).ok();
-                    }
-                    if comptable_dir < self.compass_regions.len() {
-                        let (rx, ry, rw, rh) = self.compass_regions[comptable_dir];
-                        if rw > 1 || rh > 1 {
-                            if let Some(highlight_tex) = resources.compass_highlight {
-                                let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
-                                // Scale both top and bottom edges, then derive height
-                                // from the difference to avoid rounding gaps.
-                                let dst_top = compass_y + scale_y(ry);
-                                let dst_bot = compass_y + scale_y(ry + rh);
-                                let dst = sdl2::rect::Rect::new(
-                                    COMPASS_X + rx,
-                                    dst_top,
-                                    rw as u32,
-                                    (dst_bot - dst_top) as u32,
-                                );
-                                canvas.copy(highlight_tex, src, dst).ok();
+                    let tc = canvas.texture_creator();
+                    if let Ok(mut hibar_tex) = tc.create_texture_target(
+                        sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H,
+                    ) {
+                        let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
+                            hc.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                            hc.clear();
+
+                            // Background: hiscreen IFF at native 1:1 size (640×57).
+                            if let Some(hiscreen) = hiscreen_opt {
+                                hiscreen.draw_scaled(hc, sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
+                            } else {
+                                hc.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
+                                hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
                             }
-                        }
-                    }
+
+                            // Stat line: five separate fields matching fmain2.c case 7 + case 4.
+                            // Original: move(14,52) «Brv:», move(90,52) «Lck:», move(168,52) «Knd:»,
+                            //           move(245,52) «Vit:», move(321,52) «Wlth:» — all baseline y=52.
+                            amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                            amber_font.render_string(&format!("Brv:{:3}", brave),     hc, 14,  52);
+                            amber_font.render_string(&format!("Lck:{:3}", luck),      hc, 90,  52);
+                            amber_font.render_string(&format!("Knd:{:3}", kind),      hc, 168, 52);
+                            amber_font.render_string(&format!("Vit:{:3}", vitality),  hc, 245, 52);
+                            amber_font.render_string(&format!("Wlth:{:3}", wealth),   hc, 321, 52);
+
+                            // Scrolling messages: fmain2.c print() — TXMIN=16, newest at baseline y=42,
+                            // older lines ScrollRaster(0,10) → each prior line is 10px higher.
+                            for (i, msg) in msgs_visible.iter().enumerate() {
+                                let line_from_bottom = (msg_count - 1 - i) as i32;
+                                let y = 42 - line_from_bottom * 10;
+                                amber_font.render_string(msg, hc, 16, y);
+                            }
+
+                            // Button grid: propt() native formula y = row*9+8 (HIRES px).
+                            for btn in &buttons {
+                                let col = btn.display_slot & 1;
+                                let row = btn.display_slot / 2;
+                                let btn_x = if col == 0 { 430i32 } else { 482i32 };
+                                let btn_y = (row as i32) * 9 + 8;
+                                let bg_rgba = textcolors[btn.bg_color as usize];
+                                let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
+                                let fg_rgba = textcolors[btn.fg_color as usize];
+                                let fg = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
+                                topaz_font.render_string_with_bg("      ", hc, btn_x, btn_y, bg, fg);
+                                topaz_font.set_color_mod(fg.0, fg.1, fg.2);
+                                topaz_font.render_string(&btn.text, hc, btn_x + 4, btn_y);
+                                topaz_font.set_color_mod(255, 255, 255);
+                            }
+
+                            // Compass: native HIRES pixel coords within the 57px band.
+                            const COMPASS_X: i32 = 567;
+                            const COMPASS_SRC_Y: i32 = 15;
+                            const COMPASS_SRC_W: u32 = 48;
+                            const COMPASS_SRC_H: u32 = 24;
+                            let compass_dest = sdl2::rect::Rect::new(
+                                COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H,
+                            );
+                            if let Some(normal_tex) = compass_normal {
+                                hc.copy(normal_tex, None, compass_dest).ok();
+                            }
+                            if input_comptable_dir < compass_regions.len() {
+                                let (rx, ry, rw, rh) = compass_regions[input_comptable_dir];
+                                if rw > 1 || rh > 1 {
+                                    if let Some(highlight_tex) = compass_highlight {
+                                        let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                                        let dst = sdl2::rect::Rect::new(
+                                            COMPASS_X + rx,
+                                            COMPASS_SRC_Y + ry,
+                                            rw as u32,
+                                            rh as u32,
+                                        );
+                                        hc.copy(highlight_tex, src, dst).ok();
+                                    }
+                                }
+                            }
+                        });
+                        // Blit offscreen HI bar to canvas, stretched 2× vertically.
+                        canvas.copy(
+                            &hibar_tex,
+                            sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                            sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+                        ).ok();
+                    }; // semicolon: drops Result<Texture> temporary before tc is dropped
                 }
 
                 // Tick visual effects and composite them over the map.
@@ -806,7 +856,7 @@ impl GameplayScene {
                 // "INVENTORY" — text rendering pending font wiring
             }
             _ => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 64));
+                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
             }
         }
@@ -1482,6 +1532,41 @@ impl GameplayScene {
             StatId::Fatigue => &mut state.fatigue,
         }
     }
+    /// Hit-test canvas position (mx, my) against the 8 compass arrow regions.
+    /// If a region is found, updates directional input flags and returns true.
+    /// If outside all hitboxes, clears directional flags and returns false.
+    /// Does NOT touch compass_held — caller manages that.
+    fn apply_compass_input_from_canvas(&mut self, mx: i32, my: i32) -> bool {
+        const COMPASS_X_MIN: i32 = 567;
+        const COMPASS_X_MAX: i32 = 567 + 48;
+        let compass_y_min = HIBAR_Y + 30; // COMPASS_SRC_Y(15) × 2
+        let compass_y_max = HIBAR_Y + 78; // (COMPASS_SRC_Y+COMPASS_SRC_H)(39) × 2
+        if mx >= COMPASS_X_MIN && mx < COMPASS_X_MAX
+            && my >= compass_y_min && my < compass_y_max
+        {
+            let nx = mx - COMPASS_X_MIN;
+            let ny = (my - compass_y_min) / 2; // scale back to native 24px height
+            for (idx, &(rx, ry, rw, rh)) in self.compass_regions[..8.min(self.compass_regions.len())].iter().enumerate() {
+                if rw > 0 && rh > 0
+                    && nx >= rx && nx < rx + rw
+                    && ny >= ry && ny < ry + rh
+                {
+                    // comptable: NW=0,N=1,NE=2,E=3,SE=4,S=5,SW=6,W=7
+                    self.input.up    = matches!(idx, 0 | 1 | 2);
+                    self.input.down  = matches!(idx, 4 | 5 | 6);
+                    self.input.left  = matches!(idx, 0 | 6 | 7);
+                    self.input.right = matches!(idx, 2 | 3 | 4);
+                    return true;
+                }
+            }
+        }
+        // Outside all hitboxes — stop movement while held
+        self.input.up    = false;
+        self.input.down  = false;
+        self.input.left  = false;
+        self.input.right = false;
+        false
+    }
 }
 
 impl Scene for GameplayScene {
@@ -1611,19 +1696,20 @@ impl Scene for GameplayScene {
                     self.state.viewstatus = 0;
                     return true;
                 }
-                const HIBAR_Y: i32 = 384;
+                // HIBAR_Y=326, HIBAR_H=114 (2× line-doubled). Button click detection:
+                // convert canvas y → native 57px space, then apply propt row pitch (9px).
                 const BTN_X_LEFT: i32 = 430;
                 const BTN_X_RIGHT: i32 = 482;
                 const BTN_X_END: i32 = 530;
-                // Button rows span from HIBAR_Y+8 to HIBAR_Y+62 in source coords;
-                // scale factor 96/57 maps source pixels to screen pixels.
-                const BTN_Y_START: i32 = HIBAR_Y + 8 * 96 / 57;
-                const BTN_Y_END: i32 = HIBAR_Y + 62 * 96 / 57;
                 let mx = *x;
                 let my = *y;
-                if mx >= BTN_X_LEFT && mx <= BTN_X_END && my >= BTN_Y_START && my <= BTN_Y_END {
+                if mx >= BTN_X_LEFT && mx <= BTN_X_END
+                    && my >= HIBAR_Y && my < HIBAR_Y + HIBAR_H as i32
+                {
                     let col = if mx < BTN_X_RIGHT { 0usize } else { 1usize };
-                    let row = ((my - BTN_Y_START) * 57 / 96 / 9) as usize;
+                    // Native y within the 57px band; divide by propt row pitch (9) to get row.
+                    let native_y = (my - HIBAR_Y) / 2;
+                    let row = (native_y / 9) as usize;
                     let slot = row * 2 + col;
                     if slot < 12 {
                         let action = self.menu.handle_click(slot);
@@ -1631,7 +1717,35 @@ impl Scene for GameplayScene {
                         return true;
                     }
                 }
+
+                // Compass click: activate direction under pointer and begin tracking.
+                if self.apply_compass_input_from_canvas(mx, my) {
+                    self.input.compass_held = true;
+                    return true;
+                }
+
                 false
+            }
+            // Compass drag: while mouse is held inside compass, follow pointer direction.
+            Event::MouseMotion { x, y, .. } => {
+                if self.input.compass_held {
+                    self.apply_compass_input_from_canvas(*x, *y);
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::MouseButtonUp { mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+                if self.input.compass_held {
+                    self.input.up    = false;
+                    self.input.down  = false;
+                    self.input.left  = false;
+                    self.input.right = false;
+                    self.input.compass_held = false;
+                    true
+                } else {
+                    false
+                }
             }
             _ => false,
         }

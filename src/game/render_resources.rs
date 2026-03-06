@@ -96,6 +96,18 @@ impl<'tex> RenderResources<'tex> {
         let amber = FontTexture::new(amber_font, &amber_bounds, Rc::downgrade(&font_backing));
         let topaz = FontTexture::new(topaz_font, &topaz_bounds, Rc::downgrade(&font_backing));
 
+        // ── Stencil textures (inverted alpha for bg-color rendering) ──────
+        let mut amber = amber;
+        let mut topaz = topaz;
+        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), amber_bounds.width(), amber_bounds.height()) {
+            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+            amber.init_stencil(s);
+        }
+        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), topaz_bounds.width(), topaz_bounds.height()) {
+            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+            topaz.init_stencil(s);
+        }
+
         // ── Image atlas ───────────────────────────────────────────────────
         let image_atlas_rect = Rect::new(0, 0, IMAGE_ATLAS_W, IMAGE_ATLAS_H);
         let image_backing = Rc::new(RefCell::new(

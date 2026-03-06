@@ -11,6 +11,11 @@ use std::rc::Weak;
  * Texture that contains the glyphs rendered from a DiskFont. The backing texture
  * could be shared with other components so we define bounds that can contain
  * the glyph map.
+ *
+ * A second stencil texture (owned, not shared) holds inverted-alpha pixel data:
+ * glyph pixels are transparent, background pixels are opaque white. This enables
+ * background-color rendering via two texture passes with color mod — matching
+ * Amiga pen-B behavior with no rectangle drawing.
  */
 pub struct FontTexture<'a> {
     font: DiskFont,
@@ -20,9 +25,13 @@ pub struct FontTexture<'a> {
     pixels_32: Vec<u8>,
     // pixels_16 ... implement if/when needed
 
-    // Shared backing texture
+    // Shared backing texture (glyph atlas: glyph pixels opaque, bg transparent)
     texture: Weak<RefCell<Texture<'a>>>,
     bounds: Rect,
+
+    // Stencil texture (inverted alpha: glyph pixels transparent, bg opaque white).
+    // Wrapped in RefCell so set_color_mod can be called via &self.
+    stencil: Option<RefCell<Texture<'a>>>,
 }
 
 impl<'a> FontTexture<'a> {
@@ -31,13 +40,43 @@ impl<'a> FontTexture<'a> {
             font: font.clone(),
             bounds: *bounds,
             pixels_32: Vec::new(),
-            texture: texture.clone()
+            texture: texture.clone(),
+            stencil: None,
         };
 
 
         ft.init_texture();
 
         ft
+    }
+
+    /// Install a stencil texture for background-color rendering.
+    ///
+    /// The caller (render_resources) creates a same-size texture and passes it here.
+    /// This method builds inverted-alpha pixel data from `pixels_32` and uploads it.
+    /// Must be called after `new()` (which populates `pixels_32`).
+    pub fn init_stencil(&mut self, mut stencil_tex: Texture<'a>) {
+        // Build stencil pixels: R=G=B=0xFF, A=255-original_alpha.
+        // In pixels_32, every pixel is stored as (px, px, px, px) where px is the
+        // char_data byte. Glyph pixels have px=0xFF (opaque), bg pixels px=0 (transparent).
+        // Invert: glyph → alpha=0 (transparent), bg → alpha=0xFF (opaque).
+        let mut stencil_pixels: Vec<u8> = Vec::with_capacity(self.pixels_32.len());
+        let mut i = 0;
+        while i < self.pixels_32.len() {
+            let alpha = self.pixels_32[i + 3]; // original alpha channel
+            stencil_pixels.push(0xFF); // R
+            stencil_pixels.push(0xFF); // G
+            stencil_pixels.push(0xFF); // B
+            stencil_pixels.push(255 - alpha); // A inverted
+            i += 4;
+        }
+        stencil_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+        // Stencil is a standalone texture — upload starts at (0,0), not the atlas offset.
+        let stencil_rect = Rect::new(0, 0, self.bounds.width(), self.bounds.height());
+        stencil_tex
+            .update(stencil_rect, &stencil_pixels, self.font.modulo * 4)
+            .unwrap();
+        self.stencil = Some(RefCell::new(stencil_tex));
     }
 
     pub fn name(&self) -> &String {
@@ -128,15 +167,22 @@ impl<'a> FontTexture<'a> {
                     return;
                 },
                 Ok(ref tex) => {
-                    self.render_string_internal(s, canvas, tex, x, y, None);
+                    self.render_string_internal(s, canvas, tex, x, y);
                 }
             }
         }
     }
 
-    /// Render a string with a solid background color behind the entire character row,
-    /// matching Amiga pen-B behavior: the background fills `strlen × x_size` × `y_size`
-    /// pixels before any glyph is drawn. The `bg` color is (r, g, b).
+    /// Render a string with a solid background color, matching Amiga JAM2 mode.
+    ///
+    /// Amiga `Text()` in JAM2 fills the entire character cell rectangle
+    /// (full `space` width × `tf_YSize` height) with pen B, then draws glyph
+    /// pixels in pen A.  This produces solid background rows above and below
+    /// the glyph strokes (the empty rows within tf_YSize) and fills the full
+    /// advance width—including spaces and inter-character gaps.
+    ///
+    /// Implementation: one filled SDL rect covering the whole string extent,
+    /// then glyph rendering on top.
     pub fn render_string_with_bg<T: RenderTarget>(
         &self,
         s: &str,
@@ -144,17 +190,53 @@ impl<'a> FontTexture<'a> {
         x: i32,
         y: i32,
         bg: (u8, u8, u8),
+        fg: (u8, u8, u8),
     ) {
+        // Pass 1: filled rectangle for the full string extent (JAM2 background).
+        let total_w = self.string_width(s);
+        if total_w > 0 {
+            let y_top = y - self.font.baseline as i32;
+            let bg_rect = Rect::new(x, y_top, total_w as u32, self.font.y_size as u32);
+            canvas.set_draw_color(sdl2::pixels::Color::RGB(bg.0, bg.1, bg.2));
+            canvas.fill_rect(bg_rect).unwrap();
+        }
+        // Pass 2: glyph texture with fg color mod draws glyph pixels on top.
         if let Some(strong_texture) = self.texture.upgrade() {
-            let result = strong_texture.try_borrow();
-            match result {
-                Err(e) => {
-                    println!("Error borrowing font texture for rendering: {}", e);
-                    return;
-                },
-                Ok(ref tex) => {
-                    self.render_string_internal(s, canvas, tex, x, y, Some(bg));
+            strong_texture.borrow_mut().set_color_mod(fg.0, fg.1, fg.2);
+            if let Ok(ref tex) = strong_texture.try_borrow() {
+                self.render_string_with_texture(s, canvas, tex, self.bounds, x, y);
+            }
+            // Reset to white so the caller doesn't have to.
+            strong_texture.borrow_mut().set_color_mod(255, 255, 255);
+        }
+    }
+
+    /// Render a string using an arbitrary texture (shared glyph or stencil).
+    /// `src_origin` is the top-left offset into the texture where glyph data starts.
+    fn render_string_with_texture<T: RenderTarget>(
+        &self,
+        s: &str,
+        canvas: &mut Canvas<T>,
+        texture: &Texture,
+        src_origin: Rect,
+        x: i32,
+        y: i32,
+    ) {
+        let cstr = s.as_bytes();
+        let y_adjusted = y - self.font.baseline as i32;
+        let mut glyph_rect = Rect::new(x, y_adjusted, 0, self.font.y_size as u32);
+        for cc in cstr {
+            if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
+                let cc_index = (cc - self.font.lo_char) as usize;
+                let cc_loc = self.font.char_loc[cc_index];
+                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
+                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+                if cc_loc.1 > 0 {
+                    glyph_rect.set_width(cc_loc.1 as u32);
+                    let src_rect = Rect::new(src_origin.x + cc_loc.0 as i32 + kern, src_origin.y, cc_loc.1 as u32, self.font.y_size as u32);
+                    canvas.copy(texture, Some(src_rect), Some(glyph_rect)).unwrap();
                 }
+                glyph_rect.set_x(glyph_rect.x() + space);
             }
         }
     }
@@ -168,29 +250,11 @@ impl<'a> FontTexture<'a> {
      *      3. If this is a proportional font, look in the spacing table and figure how many pixels to advance the rastport's horizontal position.
      *         For a monospaced font, the horizontal position advance comes from the TextFont's tf_XSize field.
      */
-    fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32, bg: Option<(u8, u8, u8)>) {
+    fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
         let cstr = s.as_bytes();
 
         // y coordinate is for the baseline of the font, so adjust for that
         let y_adjusted = y - self.font.baseline as i32;
-
-        // Fill background for the full character row before drawing any glyphs.
-        // Mirrors Amiga pen-B: every pixel in the text rectangle gets the background color.
-        if let Some((r, g, b)) = bg {
-            let bg_w = if self.font.is_proportional() {
-                // Sum char_space widths for each character in the string
-                cstr.iter().map(|cc| {
-                    if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
-                        let idx = (*cc - self.font.lo_char) as usize;
-                        self.font.char_space[idx].max(0) as u32
-                    } else { 0 }
-                }).sum()
-            } else {
-                (s.len() * self.font.x_size) as u32
-            };
-            canvas.set_draw_color(sdl2::pixels::Color::RGB(r, g, b));
-            canvas.fill_rect(Rect::new(x, y_adjusted, bg_w, self.font.y_size as u32)).ok();
-        }
 
         let mut glyph_rect = Rect::new(x, y_adjusted, 0, self.font.y_size as u32);
         for cc in cstr {

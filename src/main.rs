@@ -54,19 +54,26 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
 
     let (mut pixels, stride) = result.unwrap();
 
+    let orig_w = cursor.bitmap.width as u32;
+    let orig_h = cursor.bitmap.height as u32;
+
     // create RGB surface from pixels, we need to use a Surface to create a color cursor
     let surface = Surface::from_data(
         &mut pixels,
-        cursor.bitmap.width as u32,
-        cursor.bitmap.height as u32,
+        orig_w,
+        orig_h,
         stride as u32,
         PixelFormatEnum::RGBA32).unwrap();
 
-    // create and set the cursor
+    // Scale 2× for better visual appearance (matches the 2× line-doubled canvas)
+    let mut scaled = Surface::new(orig_w * 2, orig_h * 2, PixelFormatEnum::RGBA32).unwrap();
+    surface.blit_scaled(None, &mut scaled, None).unwrap();
+
+    // create and set the cursor (hotspot also scaled 2×)
     let pointer = Cursor::from_surface(
-        surface,
-        cursor.hotspot.x as i32,
-        cursor.hotspot.y as i32).unwrap();
+        scaled,
+        (cursor.hotspot.x * 2) as i32,
+        (cursor.hotspot.y * 2) as i32).unwrap();
     pointer.set();
 
     Some(pointer)
