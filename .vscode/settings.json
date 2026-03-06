@@ -15,5 +15,6 @@
             "matchCommandLine": true
         },
         "git remote": true
-    }
+    },
+    "makefile.configureOnOpen": false
 }
