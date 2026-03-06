@@ -161,6 +161,13 @@ colors = [
     0xA52, 0xC74, 0xD96, 0xFCA, 0x449, 0x444, 0xDC9, 0x668,
     0x33F, 0x888, 0xA60, 0xAAF, 0xBBB, 0xCCF, 0xDDD, 0xEEE
 ]
+# Sprite 0 (bow cursor) color registers 16-19 — from vp_text textcolors[16..19].
+# p0=0,p1=0 → COLOR16=transparent; p0=1 → COLOR17=golden yellow;
+# p0=0,p1=1 → COLOR18=dark brown; p0=1,p1=1 → COLOR19=amber.
+[palettes.bowcolors]
+colors = [
+    0x000, 0xDB0, 0x740, 0xC70
+]
 [palettes.blackcolors]
 colors = [
     0, 0, 0, 0, 0, 0, 0, 0,

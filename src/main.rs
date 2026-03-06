@@ -157,7 +157,10 @@ pub fn main() -> Result<(), String> {
 
     let mut mouse_cursor: Option<Cursor> = None;
     if let Some(pointer) = game_lib.get_cursor("bow") {
-        mouse_cursor = set_mouse(pointer, &sys_palette);
+        // Use the dedicated bow sprite palette (textcolors[16..19]) rather than
+        // the general sys_palette; see ChangeSprite(&vp_text) in fmain.c.
+        let bow_palette = game_lib.find_palette("bowcolors").unwrap_or(sys_palette);
+        mouse_cursor = set_mouse(pointer, &bow_palette);
     }
 
     // Build all SDL2 rendering resources (font atlas, image atlas, render targets).
@@ -388,7 +391,6 @@ pub fn main() -> Result<(), String> {
                 }
                 SceneResult::Continue => {
                     // Scene handles its own rendering and canvas.present()
-                    canvas.present();
                 }
             }
         } else if dirty {

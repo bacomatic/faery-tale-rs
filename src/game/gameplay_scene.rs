@@ -93,11 +93,17 @@ fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
 /// HI bar (vp_text, HIRES 640×57 px): also 2× line-doubled → 640×114;
 /// canvas rect (0, 326, 640, 114). Internal coords (buttons, compass) scale ×2 vertically.
 const CANVAS_MARGIN_Y: i32 = 40;
-const PLAYFIELD_X: i32 = 32;           // vp_page DxOffset=16 LORES px × 2
+const PLAYFIELD_X: i32 = 32;              // vp_page DxOffset=16 LORES px × 2
 const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y; // = 40
+/// Visible LORES playfield dimensions — vp_page.DWidth/DHeight from fmain.c.
+/// The framebuf (MAP_DST_W×MAP_DST_H) is larger; only this sub-rect is shown.
+const PLAYFIELD_LORES_W: u32 = 288;    // vp_page.DWidth
+const PLAYFIELD_LORES_H: u32 = 140;    // vp_page.DHeight
+const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2; // 576
+const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2; // 280
 const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
 const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
-const HIBAR_Y: i32 = CANVAS_MARGIN_Y + 280 + 6; // 40 + 280 playfield + 6 gap = 326
+const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
 
 /// Day/night phase derived from lightlevel triangle wave (0–300).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -693,15 +699,20 @@ impl GameplayScene {
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                                // 2× line-doubling of LORES playfield, offset by left margin.
-                                // Horizontal: DxOffset=16 LORES px → 32px canvas margin.
-                                // Vertical: centered in 640×480 with CANVAS_MARGIN_Y=40px top gap.
+                                // Clip framebuf to the visible LORES viewport (vp_page.DWidth × DHeight)
+                                // then 2× scale to canvas. Framebuf may be wider/taller than visible
+                                // area due to tile-grid rounding; copper did the clipping on Amiga.
+                                let src = sdl2::rect::Rect::new(
+                                    0, 0,
+                                    PLAYFIELD_LORES_W,
+                                    PLAYFIELD_LORES_H,
+                                );
                                 let dst = sdl2::rect::Rect::new(
                                     PLAYFIELD_X, PLAYFIELD_Y,
-                                    crate::game::map_renderer::MAP_DST_W * 2,
-                                    crate::game::map_renderer::MAP_DST_H * 2,
+                                    PLAYFIELD_CANVAS_W,
+                                    PLAYFIELD_CANVAS_H,
                                 );
-                                let _ = canvas.copy(&tex, None, Some(dst));
+                                let _ = canvas.copy(&tex, Some(src), Some(dst));
                             }
                         }
                     }
@@ -1763,6 +1774,8 @@ impl Scene for GameplayScene {
 
         // When paused, skip game logic but keep rendering.
         if self.menu.is_paused() {
+            self.render_by_viewstatus(canvas, resources);
+            canvas.present();
             return SceneResult::Continue;
         }
 
@@ -1847,8 +1860,11 @@ impl Scene for GameplayScene {
             let from = self.palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
-                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
-            let to = [crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE];
+                .unwrap_or([0xFF808080_u32; crate::game::palette::PALETTE_SIZE]);
+            // TODO(palette): transition to real decoded region palette once available.
+            // Using placeholder gray instead of BLACK to keep playfield visible until
+            // region palette decoding is implemented.
+            let to = [0xFF808080_u32; crate::game::palette::PALETTE_SIZE];
             self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
             self.last_region_num = region;
         }
@@ -1862,10 +1878,12 @@ impl Scene for GameplayScene {
         }
 
         // Day/night continuous dimming: rebuild atlas whenever lightlevel changes (gfx-101).
+        // lightlevel is a *darkness* value: 0 = full day (bright), 300 = full night (dark).
+        // pct is brightness percentage passed to apply_lightlevel_dim, so it must be inverted.
         let lightlevel = self.state.lightlevel;
         if lightlevel != self.last_lightlevel {
             self.last_lightlevel = lightlevel;
-            let pct = (lightlevel as i32 * 100 / 300) as i16;
+            let pct = (100 - lightlevel as i32 * 100 / 300) as i16;
             self.dlog(format!("daynight: lightlevel={} pct={}%", lightlevel, pct));
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
                 let base = self.palette_transition
