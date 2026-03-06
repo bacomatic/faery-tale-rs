@@ -823,3 +823,93 @@ Key entries:
 - Controller mapping should remain logical-action based so keyboard/controller rebinding share one action graph.
 - Preserve original one-fire-button gameplay semantics as baseline; extra controller buttons are optional shortcuts to existing actions.
 - Cheat keys from the original (`B`, `.`, `R`, `=`, arrows-teleport) are intentionally excluded from the rebindable system and handled separately as debug/cheat commands.
+
+---
+
+## Screen Layout: Amiga Mixed-Resolution Viewports
+
+### Original Amiga display geometry
+
+The game opens a single 640×200 HIRES (non-interlaced) Amiga screen (`form.c:26`:
+`NewScreen = {0, 0, 640, 200, 3, 0, 1, HIRES, CUSTOMSCREEN, …}`). Two
+Copper-switched viewports with **different resolutions** tile it vertically.
+This is a standard Amiga technique — the Copper switches the display mode
+between scanlines, so each viewport can use its own pixel clock.
+
+| Viewport   | Field           | Value | Source (`fmain.c`) |
+|------------|-----------------|-------|--------------------|
+| `vp_page`  | `DxOffset`      | 16    | LO-RES, 2px = 1 physical px wide |
+| `vp_page`  | `DWidth`        | 288   | 288 lo-res px = 576 physical px |
+| `vp_page`  | `DyOffset`      | 0     | starts at top |
+| `vp_page`  | `DHeight`       | 140   | game playfield |
+| `vp_text`  | `DxOffset`      | 0     | HI-RES, 1px = 1 physical px |
+| `vp_text`  | `DWidth`        | 640   | full HIRES width |
+| `vp_text`  | `DyOffset`      | 143   | `PAGE_HEIGHT` — just below playfield |
+| `vp_text`  | `DHeight`       | 57    | `TEXT_HEIGHT` — HI bar |
+
+There is a 3 lo-res scanline gap between DyOffset=0+DHeight=140 and vp_text's
+DyOffset=143. This gap contains no display data and appears black on real
+hardware.
+
+The playfield bitmap is `InitBitMap(bm_page1, PAGE_DEPTH, PHANTA_WIDTH=320, RAST_HEIGHT=200)` — 320 lo-res columns, of which 288 are displayed (DxOffset=16 clips 16 px on the left). The HI bar bitmap is `InitBitMap(bm_text, 4, 640, TEXT_HEIGHT=57)` — native HIRES pixels.
+
+### SDL port mapping (640×480 logical canvas)
+
+The SDL canvas uses `set_logical_size(640, 480)`. The entire game area (both
+viewports) is **2× line-doubled** vertically, producing a 640×400 active
+region centered in the 640×480 canvas with 40px margins top and bottom.
+
+```
+Canvas (640×480)
+┌──────────────────────────────────────────────────────────┐  y=0
+│                    40px top margin                       │
+├──────────────────────────────────────────────────────────┤  y=40
+│  32px │         playfield (576×280)         │  32px      │
+│  left │                                     │  right     │
+│       │  vp_page, LO-RES 288×140 → 2×       │            │
+├──┬────┴─────────────────────────────────────┴────────────┤  y=320
+│  │                6px gap                                │
+├──┴────────────────────────────────────────────────────────┤  y=326
+│              HI bar (640×114)                             │
+│         vp_text, HIRES 640×57 → 2× line-doubled          │
+├──────────────────────────────────────────────────────────┤  y=440
+│                   40px bottom margin                     │
+└──────────────────────────────────────────────────────────┘  y=480
+```
+
+| Zone | Amiga geometry | SDL dest rect | Scale |
+|------|---------------|---------------|-------|
+| Playfield | LO-RES 288×140 px | `(32, 40, MAP_DST_W*2, MAP_DST_H*2)` | 2× both axes |
+| Gap | 3 lo-res scanlines | y=320–325, 6px | — |
+| HI bar | HIRES 640×57 px | `(0, 326, 640, 114)` | 2× vertical, 1× horizontal |
+
+`CANVAS_MARGIN_Y = 40`. `PLAYFIELD_X = 32` (DxOffset=16 lo-res × 2).
+`HIBAR_Y = 40 + 280 + 6 = 326`. `HIBAR_H = 57 × 2 = 114`.
+
+### HI bar coordinate system
+
+All UI elements inside the HI bar (`propt()`, compass, messages, stat line)
+use Amiga HIRES pixel coordinates within the 57px band. In the SDL port these
+are **scaled by 2** to match the 2× line-doubling — `HIBAR_Y = 326`,
+`HIBAR_H = 114`.
+
+| Element | Amiga source coords (within 57px band) | SDL canvas coords |
+|---------|----------------------------------------|-----------------|
+| Button column 0 (left) | x=430 | x=430 |
+| Button column 1 (right) | x=482 | x=482 |
+| Button row n baseline | y = n×9+8 | y = 326 + n×18+16 |
+| Compass top-left | (567, 15) | (567, 326+30=356) |
+| Compass size | 48×24 | 48×48 (2× tall) |
+| Messages bottom | y=56 | y = 326+112=438 |
+
+The `propt()` formula from `fmain.c:3812`: `y = ((j / 2) * 9) + 8` maps slot
+index j to HIRES pixel rows within `vp_text`; the SDL port doubles all y
+values: `HIBAR_Y + (j / 2) * 18 + 16`.
+
+### Key source references
+
+- `original/form.c:25–26` — `NewScreen` definition (640×200 HIRES)
+- `original/fmain.c:853–887` — `setup_screen()`: viewport init, `InitBitMap` calls, `vp_page`/`vp_text` field assignments
+- `original/fmain.c:10–15` — `#define` block: `SCREEN_WIDTH=288`, `PAGE_HEIGHT=143`, `RAST_HEIGHT=200`, `TEXT_HEIGHT=57`
+- `original/fmain.c:3785–3822` — `propt()`: button placement formula
+- `src/game/gameplay_scene.rs` — `CANVAS_MARGIN_Y`, `PLAYFIELD_X`, `PLAYFIELD_Y`, `HIBAR_H`, `HIBAR_Y` constants; `render_by_viewstatus()` for playfield 2× blit and HI bar 2×-vertical blit

@@ -498,6 +498,312 @@ lines = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Narrative strings from original/narr.asm
+#
+# Substitution keys (as in original source):
+#   % = character (brother) name
+#   dc.b 13 in source = line break, represented as \n here
+#
+# place_msg and inside_msg are cross-referenced by _place_tbl / _inside_tbl
+# which map world/interior tile-type ranges to message indices.
+# TODO: decode _place_tbl / _inside_tbl ranges to actual world map coordinates
+#       and use them to populate [[locations]] entries in faery.toml.
+# ---------------------------------------------------------------------------
+[narr]
+
+# event_msg from narr.asm — triggered by gameplay events
+event_msg = [
+    # 0
+    "% was getting rather hungry.",
+    "% was getting very hungry.",
+    "% was starving!",
+    "% was getting tired.",
+    "% was getting sleepy.",
+    # 5
+    "% was hit and killed!",
+    "% was drowned in the water!",
+    "% was burned in the lava.",
+    "% was turned to stone by the witch.",
+    "% started the journey in his home village of Tambry",
+    # 10
+    "as had his brother before him.",
+    "as had his brothers before him.",
+    "% just couldn't stay awake any longer!",
+    "% was feeling quite full.",
+    "% was feeling quite rested.",
+    # 15
+    "Even % would not be stupid enough to draw weapon in here.",
+    "A great calming influence comes over %, preventing him from drawing his weapon.",
+    "% picked up a scrap of paper.",
+    "It read: \"Find the turtle!\"",
+    "It read: \"Meet me at midnight at the Crypt. Signed, the Wraith Lord.\"",
+    # 20
+    "% looked around but discovered nothing.",
+    "% does not have that item.",
+    "% bought some food and ate it.",
+    "% bought some arrows.",
+    "% passed out from hunger!",
+    # 25
+    "% is not sleepy.",
+    "% was tired, so he decided to lie down and sleep.",
+    "% perished in the hot lava!",
+    "It was midnight.",
+    "It was morning.",
+    # 30
+    "It was midday.",
+    "Evening was drawing near.",
+    "Ground is too hot for swan to land.",
+    "Flying too fast to dismount.",
+    "\"They're all dead!\" he cried.",
+    # 35
+    "No time for that now!",
+    "% put an apple away for later.",
+    "% ate one of his apples.",
+    "% discovered a hidden object.",
+]
+
+# place_msg from narr.asm — shown when entering a POI on the world map.
+# Index 0 = no message, index 1 = do not change (reserved).
+# TODO: cross-reference _place_tbl (tile range → msg index) to work out
+#       world-map coordinates for each named location.
+place_msg = [
+    # 0 — no message
+    "",
+    # 1 — do not change (reserved)
+    "",
+    # 2 — village of Tambry
+    "% returned to the village of Tambry.",
+    # 3 — Vermillion Manor
+    "% came to Vermillion Manor.",
+    # 4 — Mountains of Frost
+    "% reached the Mountains of Frost",
+    # 5 — Plain of Grief
+    "% reached the Plain of Grief.",
+    # 6 — city of Marheim
+    "% came to the city of Marheim.",
+    # 7 — Witch's castle
+    "% came to the Witch's castle.",
+    # 8 — Graveyard
+    "% came to the Graveyard.",
+    # 9 — great stone ring
+    "% came to a great stone ring.",
+    # 10 — watchtower / lighthouse
+    "% came to a watchtower.",
+    # 11 — the great Bog / swamp
+    "% traveled to the great Bog.",
+    # 12 — Crystal Palace
+    "% came to the Crystal Palace.",
+    # 13 — Pixle Grove (pixie shrine)
+    "% came to mysterious Pixle Grove.",
+    # 14 — Citadel of Doom
+    "% entered the Citadel of Doom.",
+    # 15 — Burning Waste / desert
+    "% entered the Burning Waste.",
+    # 16 — oasis
+    "% found an oasis.",
+    # 17 — hidden city of Azal / desert city
+    "% came to the hidden city of Azal.",
+    # 18 — outlying desert fort
+    "% discovered an outlying fort.",
+    # 19 — small keep
+    "% came to a small keep.",
+    # 20 — old / small castle
+    "% came to an old castle.",
+    # 21 — log cabin
+    "% came to a log cabin.",
+    # 22 — dark stone tower / dark fort
+    "% came to a dark stone tower.",
+    # 23 — isolated cabin / swamp cabin
+    "% came to an isolated cabin.",
+    # 24 — Tombs of Hemsath / tomb
+    "% came to the Tombs of Hemsath.",
+    # 25 — Forbidden Keep (unreachable castle)
+    "% reached the Forbidden Keep.",
+    # 26 — dragon cave
+    "% found a cave in the hillside.",
+]
+
+# inside_msg from narr.asm — shown when entering an interior location.
+# Index 0 = no message, index 1 = do not change (reserved).
+# TODO: cross-reference _inside_tbl (tile range → msg index) to work out
+#       interior coordinates for each room/area type.
+inside_msg = [
+    # 0 — no message
+    "",
+    # 1 — do not change (reserved)
+    "",
+    # 2 — small chamber
+    "% came to a small chamber.",
+    # 3 — large chamber
+    "% came to a large chamber.",
+    # 4 — long passageway
+    "% came to a long passageway.",
+    # 5 — twisting tunnel
+    "% came to a twisting tunnel.",
+    # 6 — forked intersection
+    "% came to a forked intersection.",
+    # 7 — keep interior (itemize)
+    "He entered the keep.",
+    # 8 — castle interior (itemize)
+    "He entered the castle.",
+    # 9 — castle of King Mar
+    "He entered the castle of King Mar.",
+    # 10 — temple sanctuary
+    "He entered the sanctuary of the temple.",
+    # 11 — Spirit Plane
+    "% entered the Spirit Plane.",
+    # 12 — large room
+    "% came to a large room.",
+    # 13 — octagonal room
+    "% came to an octagonal room.",
+    # 14 — stone corridor
+    "% traveled along a stone corridor.",
+    # 15 — stone maze
+    "% came to a stone maze.",
+    # 16 — small building
+    "He entered a small building.",
+    # 17 — generic building
+    "He entered the building.",
+    # 18 — tavern
+    "He entered the tavern.",
+    # 19 — inn
+    "He went inside the inn.",
+    # 20 — crypt / tomb inside
+    "He entered the crypt.",
+    # 21 — cabin inside
+    "He walked into the cabin.",
+    # 22 — unlocked / lighthouse entered
+    "He unlocked the door and entered.",
+]
+
+# speeches from narr.asm — NPC dialogue triggered when talking to actors.
+# dc.b 13 in source = line break, represented as \n here.
+speeches = [
+    # 0 — ogre
+    "% attempted to communicate with the Ogre but a guttural snarl was the only response.",
+    # 1 — orc / goblin-man
+    "\"Human must die!\" said the goblin-man.",
+    # 2 — wraith
+    "\"Doom!\" wailed the wraith.",
+    # 3 — skeleton
+    "A clattering of bones was the only reply.",
+    # 4 — snake
+    "% knew that it is a waste of time to talk to a snake.",
+    # 5 — salamander
+    "...",
+    # 6 — loraii
+    "There was no reply.",
+    # 7 — necromancer
+    "\"Die, foolish mortal!\" he said.",
+    # 8 — generic messages
+    "\"No need to shout, son!\" he said.",
+    # 9 — woodcutter / ranger msg 1
+    "\"Nice weather we're having, isn't it?\" queried the ranger.",
+    # 10 — woodcutter / ranger msg 2
+    "\"Good luck, sonny!\" said the ranger. \"Hope you win!\"",
+    # 11 — woodcutter / ranger msg 3 (raft hint)
+    "\"If you need to cross the lake\" said the ranger, \"There's a raft just north of here.\"",
+    # 12 — bartender msg 1
+    "\"Would you like to buy something?\" said the tavern keeper. \"Or do you just need lodging for the night?\"",
+    # 13 — bartender msg 2
+    "\"Good Morning.\" said the tavern keeper. \"Hope you slept well.\"",
+    # 14 — bartender msg 3
+    "\"Have a drink!\" said the tavern keeper.\"",
+    # 15 — guard
+    "\"State your business!\" said the guard.\n\"My business is with the king.\" stated %, respectfully.",
+    # 16 — princess
+    "\"Please, sir, rescue me from this horrible prison!\" pleaded the princess.",
+    # 17 — king msg 1
+    "\"I cannot help you, young man.\" said the king. \"My armies are decimated, and I fear that with the loss of my children, I have lost all hope.\"",
+    # 18 — king msg 2 (writ)
+    "\"Here is a writ designating you as my official agent. Be sure and show this to the Priest before you leave Marheim.",
+    # 19 — king msg 3 (already gave statue)
+    "\"I'm afraid I cannot help you, young man. I already gave the golden statue to the other young man.",
+    # 20 — noble msg 1 (Lord Trane)
+    "\"If you could rescue the king's daughter,\" said Lord Trane, \"The King's courage would be restored.\"",
+    # 21 — give bone response
+    "\"Sorry, I have no use for it.\"",
+    # 22 — ranger (dragon north)
+    "\"The dragon's cave is directly north of here.\" said the ranger.\"",
+    # 23 — beggar msg 1
+    "\"Alms! Alms for the poor!\"",
+    # 24 — beggar msg 2 (prophecy)
+    "\"I have a prophecy for you, m'lord.\" said the beggar. \"You must seek two women, one Good, one Evil.\"",
+    # 25 — beggar msg 3 (jewels/sight)
+    "\"Lovely Jewels, glint in the night - give to us the gift of Sight!\" he said.",
+    # 26 — beggar msg 4 (hidden city)
+    "\"Where is the hidden city? How can you find it when you cannot even see it?\" said the beggar.",
+    # 27 — wizard msg 1 (friend from the sea)
+    "\"Kind deeds could gain thee a friend from the sea.\"",
+    # 28 — wizard msg 2 (darker than night)
+    "\"Seek the place that is darker than night - There you shall find your goal in sight!\" said the wizard, cryptically.",
+    # 29 — wizard msg 3 (crystal orb)
+    "\"Like the eye itself, a crystal Orb can help to find things concealed.\"",
+    # 30 — wizard msg 4 (the Witch)
+    "\"The Witch lives in the dim forest of Grimwood, where the very trees are warped to her will. Her gaze is Death!\"",
+    # 31 — wizard msg 5 (sunlight vs witch)
+    "\"Only the light of the Sun can destroy the Witch's Evil.\"",
+    # 32 — wizard msg 6 (unreachable castle)
+    "\"The maiden you seek lies imprisoned in an unreachable castle surrounded by unclimbable mountains.\"",
+    # 33 — wizard msg 7 (golden beast / swan)
+    "\"Tame the golden beast and no mountain may deny you! But what rope could hold such a creature?\"",
+    # 34 — wizard msg 8 (just what I needed)
+    "\"Just what I needed!\" he said.",
+    # 35 — wizard msg 9 (away with you)
+    "\"Away with you, young ruffian!\" said the Wizard. \"Perhaps you can find some small animal to torment if that pleases you!\"",
+    # 36 — cleric msg 1 (spirit plane)
+    "\"You must seek your enemy on the spirit plane. It is hazardous in the extreme. Space may twist, and time itself may run backwards!\"",
+    # 37 — cleric msg 2 (stones / travel)
+    "\"When you wish to travel quickly, seek the power of the Stones.\" he said.",
+    # 38 — cleric msg 3 (healing)
+    "\"Since you are brave of heart, I shall Heal all your wounds.\"\nInstantly % felt much better.",
+    # 39 — cleric msg 4 (writ → golden statue of Azal-Car-Ithil)
+    "\"Ah! You have a writ from the king. Here is one of the golden statues of Azal-Car-Ithil. Find all five and you'll find the vanishing city.\"",
+    # 40 — cleric msg 5 (repent sinner)
+    "\"Repent, Sinner! Thou art an uncouth brute and I have no interest in your conversation!\"",
+    # 41 — dreamknight msg 1 (none may enter)
+    "\"Ho there, young traveler!\" said the black figure. \"None may enter the sacred shrine of the People who came Before!\"",
+    # 42 — dreamknight msg 2 (earned the right)
+    "\"Your prowess in battle is great.\" said the Knight of Dreams. \"You have earned the right to enter and claim the prize.\"",
+    # 43 — necromancer msg 1 (so-called hero)
+    "\"So this is the so-called Hero who has been sent to hinder my plans. Simply Pathetic. Well, try this, young Fool!\"",
+    # 44 — necromancer msg 2 (transformed)
+    "% gasped. The Necromancer had been transformed into a normal man. All of his evil was gone.",
+    # 45 — sorceress (golden figurine)
+    "\"%\" said the Sorceress. \"Welcome. Here is one of the five golden figurines you will need.\"\n\"Thank you.\" said %.",
+    # 46 — witch (look into my eyes)
+    "\"Look into my eyes and Die!!\" hissed the witch.\n\"Not a chance!\" replied %",
+    # 47 — spectre msg (bring ancient bones)
+    "The Spectre spoke. \"HE has usurped my place as lord of undead. Bring me bones of the ancient King and I'll help you destroy him.\"",
+    # 48 — spectre msg (gave bones → crystal shard)
+    "% gave him the ancient bones.\n\"Good! That spirit now rests quietly in my halls. Take this crystal shard.\"",
+    # 49 — ghost of dead brother
+    "\"%...\" said the apparition. \"I am the ghost of your dead brother. Find my bones -- there you will find some things you need.",
+    # 50 — give gold response
+    "% gave him some gold coins. \n\"Why, thank you, young sir!\"",
+    # 51 — try to buy from non-seller
+    "\"Sorry, but I have nothing to sell.\"",
+    # 52 — try to buy with no-one present (null)
+    "",
+    # 53 — ranger (dragon east)
+    "\"The dragon's cave is east of here.\" said the ranger.\"",
+    # 54 — ranger (dragon west)
+    "\"The dragon's cave is west of here.\" said the ranger.\"",
+    # 55 — ranger (dragon south)
+    "\"The dragon's cave is south of here.\" said the ranger.\"",
+    # 56 — turtle msg 1 (saved eggs → seashell)
+    "\"Oh, thank you for saving my eggs, kind man!\" said the turtle. \"Take this seashell as a token of my gratitude.\"",
+    # 57 — turtle msg 2 (ride offer)
+    "\"Just hop on my back if you need a ride somewhere.\" said the turtle.",
+    # 58 — witch / necromancer (can't hurt me)
+    "\"Stupid fool, you can't hurt me with that!\"",
+    # 59 — necromancer defy (magic won't work)
+    "\"Your magic won't work here, fool!\"",
+    # 60 — witch powerless (sunstone)
+    "The Sunstone has made the witch vulnerable!",
+]
+
 [fonts]
 
 [fonts.amber]

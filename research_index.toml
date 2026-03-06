@@ -143,3 +143,10 @@ title = "game/v6 — Music Voice/Waveform Data"
 doc = "DECODE.md"
 anchor = "#gamev6--music-voicewaveform-data-4628-bytes"
 tags = ["audio", "music", "v6", "waveform", "envelope"]
+
+[[entry]]
+id = "screen.layout"
+title = "Screen Layout: Amiga Mixed-Resolution Viewports"
+doc = "RESEARCH.md"
+anchor = "#screen-layout-amiga-mixed-resolution-viewports"
+tags = ["screen", "viewport", "hires", "lores", "hibar", "scaling", "rendering"]
