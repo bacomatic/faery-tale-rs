@@ -1485,7 +1485,7 @@ impl GameplayScene {
         if s.hero_x >= 0x2400 && s.hero_x <= 0x3100 && s.hero_y >= 0x8200 && s.hero_y <= 0x8a00 { return 4; }
         if s.battleflag { return 1; }
         if s.region_num > 7 { return 5; }
-        if s.lightlevel > 120 { return 0; }
+        if s.dayperiod == 1 || s.dayperiod == 2 { return 0; }  // day music during morning/midday
         2
     }
 
