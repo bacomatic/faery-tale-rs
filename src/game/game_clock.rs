@@ -119,7 +119,7 @@ impl GameClock {
             mono_base: Instant::now(),
             mono_ticks: 0,
             last_mono_ticks: 0,
-            game_ticks: 0,
+            game_ticks: 6 * TICKS_PER_HOUR,  // start at dawn (6 AM); was 0 (midnight)
             paused: false,
         }
     }
@@ -151,10 +151,10 @@ impl GameClock {
     }
 
     /**
-     * Reset the game ticks to zero (e.g., on player death or new game).
+     * Reset the game ticks to dawn (6 AM) (e.g., on player death or new game).
      */
     pub fn reset_game_ticks(&mut self) {
-        self.game_ticks = 0;
+        self.game_ticks = 6 * TICKS_PER_HOUR;
         self.ticker.reset();
     }
 

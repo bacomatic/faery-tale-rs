@@ -168,7 +168,7 @@ impl GameState {
             secret_timer: 0,
             freeze_timer: 0,
 
-            daynight: 0,
+            daynight: 6000,  // start at 6 AM (dawn); was 0 (midnight)
             lightlevel: 0,
             cycle: 0,
             flasher: 0,
@@ -210,7 +210,7 @@ impl GameState {
             set_file: 0,
 
             princess: 0,
-            dayperiod: 0,
+            dayperiod: 1,    // morning period; was 0 (midnight)
 
             current_mood: 0,
 
