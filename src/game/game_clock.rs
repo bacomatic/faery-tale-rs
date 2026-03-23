@@ -57,8 +57,9 @@ impl GameTicker {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum DayPhase {
+    #[default]
     Midnight = 0,   // It was midnight. (00:00 - 5:59)
     Morning = 4,    // It was morning.  (06:00 - 11:59)
     Midday = 6,     // It was midday. (12:00 - 17:59)

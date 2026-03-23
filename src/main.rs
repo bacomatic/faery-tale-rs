@@ -16,7 +16,7 @@ use sdl2::surface::Surface;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::game::debug_window::{DebugWindow, DebugState};
+use crate::game::debug_console::{DebugConsole, DebugStatus};
 use crate::game::game_clock::GameClock;
 use crate::game::settings::{self, GameSettings};
 use crate::game::cursor::CursorAsset;
@@ -33,7 +33,7 @@ use crate::game::songs::{SongLibrary, Track};
 #[derive(Parser, Debug)]
 #[command(name = "fmainrs", about = "The Faery Tale Adventure")]
 struct Cli {
-    /// Activate debug mode (opens a separate debug window)
+    /// Activate debug console in terminal
     #[arg(long, short)]
     debug: bool,
     /// Disable linear interpolation in the PCM mixer (use nearest-neighbor instead)
@@ -42,6 +42,9 @@ struct Cli {
     /// Skip the intro sequence and jump straight to gameplay (requires --debug)
     #[arg(long, requires = "debug")]
     skip_intro: bool,
+    /// Echo every story-transcript message to the console as it is generated
+    #[arg(long)]
+    echo_transcript: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -184,22 +187,18 @@ pub fn main() -> Result<(), String> {
         if cli.skip_intro {
             let mut gs = GameplayScene::new();
             gs.init_from_library(&game_lib);
+            gs.set_echo_transcript(cli.echo_transcript);
             (ScenePhase::Gameplay, Some(Box::new(gs)))
         } else {
             (ScenePhase::Intro, Some(Box::new(IntroScene::new(intro_tracks))))
         };
 
-    // Debug window (separate SDL2 window), created only when --debug is passed
-    let mut debug_window: Option<DebugWindow> = if cli.debug {
-        let game_pos = settings.window_position;
-        let game_size = settings.window_size.unwrap_or((width, height));
-        match DebugWindow::new(&video_subsystem, game_lib.find_font("topaz", 8).unwrap(), &settings, game_pos, game_size) {
-            Ok(dw) => {
-                println!("Debug window opened");
-                Some(dw)
-            }
+    // Debug console (TUI in the launch terminal), active only when --debug is passed
+    let mut debug_console: Option<DebugConsole> = if cli.debug {
+        match DebugConsole::new() {
+            Ok(dc) => Some(dc),
             Err(e) => {
-                println!("Warning: could not create debug window: {}", e);
+                eprintln!("Warning: could not create debug console: {}", e);
                 None
             }
         }
@@ -211,10 +210,6 @@ pub fn main() -> Result<(), String> {
     let mut game_frame_count: u64 = 0;
     let mut game_fps_time = std::time::Instant::now();
     let mut game_fps: f64 = 0.0;
-
-    // Pre-compute sorted name lists for the debug window tabs
-    let debug_placard_names = game_lib.get_placard_names();
-    let debug_image_names = game_lib.get_image_names();
 
     'running: loop {
         let delta_ticks = clock.update();
@@ -228,13 +223,15 @@ pub fn main() -> Result<(), String> {
             game_fps_time = std::time::Instant::now();
         }
 
-        for event in event_pump.poll_iter() {
-            // Let the debug window consume its own events first
-            if let Some(ref mut dw) = debug_window {
-                if dw.handle_event(&event, &mut settings) {
-                    continue;
-                }
+        // Poll console input (non-blocking, crossterm)
+        if let Some(ref mut dc) = debug_console {
+            dc.poll_input();
+            if dc.take_quit_request() {
+                kill_flag = true;
             }
+        }
+
+        for event in event_pump.poll_iter() {
 
             // Let the active scene consume events first
             if let Some(ref mut scene) = active_scene {
@@ -371,6 +368,7 @@ pub fn main() -> Result<(), String> {
                             }
                             let mut gs = GameplayScene::new();
                             gs.init_from_library(&game_lib);
+                            gs.set_echo_transcript(cli.echo_transcript);
                             active_scene = Some(Box::new(gs));
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
@@ -380,6 +378,7 @@ pub fn main() -> Result<(), String> {
                             // Game over or restart — re-create GameplayScene
                             let mut gs = GameplayScene::new();
                             gs.init_from_library(&game_lib);
+                            gs.set_echo_transcript(cli.echo_transcript);
                             active_scene = Some(Box::new(gs));
                             dirty = true;
                         }
@@ -390,7 +389,7 @@ pub fn main() -> Result<(), String> {
                     break 'running;
                 }
                 SceneResult::Continue => {
-                    // Scene handles its own rendering and canvas.present()
+                    canvas.present();
                 }
             }
         } else if dirty {
@@ -416,7 +415,7 @@ pub fn main() -> Result<(), String> {
             canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
 
             // The walker indicates active rendering, when it stops, there is nothing being drawn
-            if debug_window.is_some() {
+            if debug_console.is_some() {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.draw_line(walker, walker.offset(4, 0)).unwrap();
 
@@ -434,87 +433,111 @@ pub fn main() -> Result<(), String> {
             dirty = false;
         }
 
-        // Feed debug commands from debug window into GameplayScene
-        // and drain gameplay debug logs back to the debug window.
-        if let (Some(ref mut dw), Some(ref mut scene)) = (debug_window.as_mut(), active_scene.as_mut()) {
-            let cmds = dw.drain_commands();
+        // Feed debug commands from console into GameplayScene
+        // and drain gameplay debug logs back to the console.
+        if let (Some(ref mut dc), Some(ref mut scene)) = (debug_console.as_mut(), active_scene.as_mut()) {
+            let cmds = dc.drain_commands();
             if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
                 for cmd in cmds {
                     gs.apply_command(cmd);
                 }
                 for msg in gs.drain_logs() {
-                    dw.log(msg);
+                    dc.log(msg);
+                }
+                // Build status snapshot
+                let song_group_count = song_library
+                    .as_ref()
+                    .map(|l| l.tracks.len() / SongLibrary::VOICES)
+                    .unwrap_or(0);
+                let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
+                let (gday, ghour, gminute) = clock.get_game_wall_clock();
+                let status = DebugStatus {
+                    fps: game_fps,
+                    game_day: gday,
+                    game_hour: ghour,
+                    game_minute: gminute,
+                    day_phase: clock.get_day_phase(),
+                    game_ticks: clock.game_ticks,
+                    paused: clock.paused,
+                    scene_name: Some("Gameplay".to_owned()),
+                    hero_x: gs.state.hero_x,
+                    hero_y: gs.state.hero_y,
+                    brother: gs.state.brother,
+                    region_num: gs.state.region_num,
+                    vitality: gs.state.vitality,
+                    hunger: gs.state.hunger,
+                    fatigue: gs.state.fatigue,
+                    god_mode_flags: gs.state.god_mode.bits(),
+                    time_held: gs.state.freeze_sticky,
+                    autosave_enabled: false, // field is private; toggled by command
+                    song_group_count,
+                    current_song_group,
+                };
+                dc.update_status(status);
+            } else {
+                // Not yet in gameplay (intro / copy-protect scene)
+                let (gday, ghour, gminute) = clock.get_game_wall_clock();
+                let song_group_count = song_library
+                    .as_ref()
+                    .map(|l| l.tracks.len() / SongLibrary::VOICES)
+                    .unwrap_or(0);
+                let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
+                let status = DebugStatus {
+                    fps: game_fps,
+                    game_day: gday,
+                    game_hour: ghour,
+                    game_minute: gminute,
+                    day_phase: clock.get_day_phase(),
+                    game_ticks: clock.game_ticks,
+                    paused: clock.paused,
+                    scene_name: Some("Intro".to_owned()),
+                    song_group_count,
+                    current_song_group,
+                    ..DebugStatus::default()
+                };
+                dc.update_status(status);
+                // Drain any leftover commands (no-op during intro)
+                for _ in cmds { }
+            }
+
+            // Handle song play/stop requests
+            if let Some(group) = dc.take_song_request() {
+                if let (Some(ref a), Some(ref lib)) = (audio_system.as_ref(), song_library.as_ref()) {
+                    if !a.play_group(group, lib) {
+                        dc.log(format!("Song group {} not available", group));
+                    }
                 }
             }
-        }
+            if dc.take_stop_request() {
+                if let Some(ref a) = audio_system {
+                    a.stop_score();
+                }
+            }
 
-        // Render the debug window (separate from game canvas)
-        if let Some(ref mut dw) = debug_window {
-            let scene_name: Option<&str> = if active_scene.is_some() {
-                Some("IntroScene")
-            } else {
-                None
-            };
-
-            let placard_idx = dw.placard_index();
-            let current_placard = if placard_idx < debug_placard_names.len() {
-                game_lib.find_placard(&debug_placard_names[placard_idx])
-            } else {
-                None
-            };
-
-            let img_idx = dw.image_index();
-            let image_dims = render_resources.image_dimensions(img_idx);
-
+            dc.render();
+        } else if let Some(ref mut dc) = debug_console {
+            // Console active but no scene yet
+            let (gday, ghour, gminute) = clock.get_game_wall_clock();
             let song_group_count = song_library
                 .as_ref()
                 .map(|l| l.tracks.len() / SongLibrary::VOICES)
                 .unwrap_or(0);
             let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
-
-            let (gday, ghour, gminute) = clock.get_game_wall_clock();
-            let state = DebugState {
+            let status = DebugStatus {
+                fps: game_fps,
                 game_day: gday,
                 game_hour: ghour,
                 game_minute: gminute,
                 day_phase: clock.get_day_phase(),
                 game_ticks: clock.game_ticks,
-                mono_ticks: clock.mono_ticks,
                 paused: clock.paused,
-                scene_name,
-                fps: game_fps,
-                placard_names: &debug_placard_names,
-                current_placard,
-                sys_palette: &sys_palette,
-                image_names: &debug_image_names,
-                image_dimensions: image_dims,
+                scene_name: None,
                 song_group_count,
                 current_song_group,
-                hero_stats: None,
-                inventory: None,
-                actors: None,
-                timers: None,
-                safe_pos: None,
-                god_mode_flags: 0,
-                time_held: false,
-                autosave_enabled: false,
-                key_bindings: Some(&settings.key_bindings),
+                ..DebugStatus::default()
             };
-            dw.render(&state);
-
-            // Handle song play/stop requests from the Songs tab
-            if let Some(group) = dw.take_song_request() {
-                if let (Some(ref a), Some(ref lib)) = (audio_system.as_ref(), song_library.as_ref()) {
-                    if !a.play_group(group, lib) {
-                        println!("Debug: song group {} not available", group);
-                    }
-                }
-            }
-            if dw.take_stop_request() {
-                if let Some(ref a) = audio_system {
-                    a.stop_score();
-                }
-            }
+            dc.update_status(status);
+            dc.render();
         }
 
         if kill_flag {

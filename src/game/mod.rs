@@ -12,7 +12,7 @@ pub mod copper;
 pub mod copy_protect_scene;
 pub mod cursor;
 pub mod debug_command;
-pub mod debug_window;
+pub mod debug_console;
 pub mod font;
 pub mod font_texture;
 pub mod game_clock;

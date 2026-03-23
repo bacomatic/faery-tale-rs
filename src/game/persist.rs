@@ -256,6 +256,43 @@ pub fn load_game(slot: u8) -> anyhow::Result<GameState> {
     load_from_path(&path)
 }
 
+// --------------------------------------------------------------------------
+// Transcript helpers
+// --------------------------------------------------------------------------
+
+/// Return the filesystem path for the story-transcript file of `slot`.
+fn transcript_path(slot: u8) -> anyhow::Result<std::path::PathBuf> {
+    let base = dirs::config_dir()
+        .context("could not determine config directory")?
+        .join("faery")
+        .join("saves");
+    Ok(base.join(format!("save{slot:02}.txt")))
+}
+
+/// Overwrite (or create) the transcript file for `slot` with `lines`.
+/// Each line is written as a UTF-8 text line.
+pub fn save_transcript(lines: &[String], slot: u8) -> anyhow::Result<()> {
+    use std::io::Write;
+    let path = transcript_path(slot)?;
+    std::fs::create_dir_all(path.parent().unwrap())
+        .with_context(|| format!("creating save directory for transcript"))?;
+    let mut f = std::fs::File::create(&path)
+        .with_context(|| format!("creating transcript {}", path.display()))?;
+    for line in lines {
+        writeln!(f, "{}", line)?;
+    }
+    Ok(())
+}
+
+/// Load the transcript for `slot`.  Returns an empty `Vec` if no file exists.
+pub fn load_transcript(slot: u8) -> Vec<String> {
+    transcript_path(slot)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .map(|data| data.lines().map(|l| l.to_string()).collect())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

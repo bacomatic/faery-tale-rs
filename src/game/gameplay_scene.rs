@@ -130,9 +130,9 @@ use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
-use crate::game::actor::{ActorState, Goal};
+use crate::game::actor::{ActorKind, ActorState, Goal};
 use crate::game::collision;
-use crate::game::debug_command::{DebugCommand, GodModeFlags, MagicEffect, StatId};
+use crate::game::debug_command::{BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId};
 use crate::game::gfx_effects::{TeleportEffect, WitchEffect};
 use crate::game::game_library::GameLibrary;
 use crate::game::game_state::GameState;
@@ -297,6 +297,11 @@ impl GameplayScene {
     /// Drain buffered debug log lines. Called by the main loop to forward to the debug window.
     pub fn drain_logs(&mut self) -> Vec<String> {
         std::mem::take(&mut self.log_buffer)
+    }
+
+    /// Enable or disable echoing every new message to stdout (--echo-transcript flag).
+    pub fn set_echo_transcript(&mut self, echo: bool) {
+        self.messages.set_echo(echo);
     }
 
     /// Decode 8-way direction from current input flags.
@@ -1033,12 +1038,36 @@ impl GameplayScene {
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             MenuAction::SaveGame => {
-                self.messages.push("Saving not yet implemented.".to_string());
+                match crate::game::persist::save_game(&self.state, 0) {
+                    Ok(()) => {
+                        if let Err(e) = crate::game::persist::save_transcript(
+                            self.messages.transcript(), 0,
+                        ) {
+                            eprintln!("save transcript failed: {e}");
+                        }
+                        self.messages.push("Game saved.");
+                    }
+                    Err(e) => {
+                        eprintln!("save failed: {e}");
+                        self.messages.push("Save failed!");
+                    }
+                }
             }
             MenuAction::LoadGame => {
-                // EXPLOIT FIX NEEDED: when implemented, reset all runtime door state
-                // before restoring save, otherwise keys replenish but doors stay unlocked.
-                self.messages.push("Loading not yet implemented.".to_string());
+                // EXPLOIT FIX NEEDED: reset all runtime door state before restoring
+                // save, otherwise keys replenish but doors stay unlocked.
+                match crate::game::persist::load_game(0) {
+                    Ok(new_state) => {
+                        *self.state = new_state;
+                        // Restore existing transcript so new messages are appended.
+                        let existing = crate::game::persist::load_transcript(0);
+                        self.messages.set_transcript(existing);
+                        self.messages.push("Game loaded.");
+                    }
+                    Err(e) => {
+                        self.messages.push(format!("Load failed: {}", e));
+                    }
+                }
             }
             MenuAction::Quit     => self.do_option(GameAction::Quit),
             MenuAction::TogglePause => {
@@ -1526,8 +1555,61 @@ impl GameplayScene {
             TriggerPaletteTransition { to_black } => {
                 self.dlog(format!("TriggerPaletteTransition: to_black={}", to_black));
             }
-            cmd => {
-                self.dlog(format!("debug command not yet wired: {:?}", cmd));
+            InstaKill => {
+                let mut killed = 0usize;
+                for actor in self.state.actors.iter_mut().skip(1) {
+                    if matches!(actor.kind, ActorKind::Enemy | ActorKind::Dragon)
+                        && !matches!(actor.state, ActorState::Dead | ActorState::Dying)
+                    {
+                        actor.vitality = 0;
+                        actor.state = ActorState::Dying;
+                        killed += 1;
+                    }
+                }
+                self.dlog(format!("InstaKill: killed {} enemies", killed));
+            }
+            HeroPack => {
+                // Fill a sensible selection: full weapon set, all magic, all keys, arrows
+                let stuff = self.state.stuff_mut();
+                // Weapons: dirk(0), mace(1), sword(2), bow(3), magic wand(4), golden lasso(5)
+                for i in 0..=5 { stuff[i] = 1; }
+                // Arrows: slot 8
+                stuff[8] = 99;
+                // Magic items: slots 9-15
+                for i in 9..=15 { stuff[i] = 1; }
+                // Keys: slots 16-21
+                for i in 16..=21 { stuff[i] = 1; }
+                self.dlog("HeroPack: weapons, magic, and keys filled".to_string());
+            }
+            SummonSwan => {
+                self.dlog("SummonSwan: not yet wired".to_string());
+            }
+            RestartAsBrother { brother } => {
+                let b = match brother {
+                    BrotherId::Julian => 1u8,
+                    BrotherId::Phillip => 2,
+                    BrotherId::Kevin => 3,
+                };
+                self.state.brother = b;
+                self.dlog(format!("RestartAsBrother: switched to brother {}", b));
+            }
+            QueryActors => {
+                let count = self.state.actors.len();
+                let lines: Vec<String> = std::iter::once(format!("Actors: {} total", count))
+                    .chain(self.state.actors.iter().enumerate().map(|(i, actor)| {
+                        format!(
+                            "  [{:2}] {:?} race={} vit={} @({},{}) {:?}",
+                            i, actor.kind, actor.race, actor.vitality,
+                            actor.abs_x, actor.abs_y, actor.state
+                        )
+                    }))
+                    .collect();
+                for line in lines {
+                    self.dlog(line);
+                }
+            }
+            QuerySongs => {
+                self.dlog("QuerySongs: song library info is in main loop; use /songs".to_string());
             }
         }
     }
@@ -1775,7 +1857,6 @@ impl Scene for GameplayScene {
         // When paused, skip game logic but keep rendering.
         if self.menu.is_paused() {
             self.render_by_viewstatus(canvas, resources);
-            canvas.present();
             return SceneResult::Continue;
         }
 
@@ -1929,6 +2010,10 @@ impl Scene for GameplayScene {
         if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {
             if let Err(e) = crate::game::persist::save_game(&self.state, 0) {
                 eprintln!("autosave failed: {e}");
+            } else if let Err(e) = crate::game::persist::save_transcript(
+                self.messages.transcript(), 0,
+            ) {
+                eprintln!("autosave transcript failed: {e}");
             }
         }
 
@@ -2024,7 +2109,6 @@ impl Scene for GameplayScene {
         }
 
         self.render_by_viewstatus(canvas, resources);
-        canvas.present();
         if self.quit_requested {
             SceneResult::Quit
         } else {

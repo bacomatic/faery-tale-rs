@@ -7,20 +7,48 @@ pub const MSG_LINE_MAX: usize = 40;
 
 pub struct MessageQueue {
     lines: Vec<String>,
+    /// Full ordered history of every message (the story transcript).
+    transcript: Vec<String>,
+    /// When true, each new message is also printed to stdout.
+    echo: bool,
 }
 
 impl MessageQueue {
     pub fn new() -> Self {
-        MessageQueue { lines: Vec::with_capacity(MSG_QUEUE_MAX + 1) }
+        MessageQueue {
+            lines: Vec::with_capacity(MSG_QUEUE_MAX + 1),
+            transcript: Vec::new(),
+            echo: false,
+        }
+    }
+
+    /// Enable or disable echoing each new message to stdout.
+    pub fn set_echo(&mut self, echo: bool) {
+        self.echo = echo;
+    }
+
+    /// Return the full story transcript (all messages ever pushed).
+    pub fn transcript(&self) -> &[String] {
+        &self.transcript
+    }
+
+    /// Replace the transcript with a previously saved one (call after loading a game).
+    pub fn set_transcript(&mut self, saved: Vec<String>) {
+        self.transcript = saved;
     }
 
     /// Push a new message; oldest is dropped when queue is full.
+    /// The message is always appended to the transcript.
     pub fn push(&mut self, msg: impl Into<String>) {
         let s = msg.into();
         // Truncate to MSG_LINE_MAX
         let s = if s.chars().count() > MSG_LINE_MAX {
             s.chars().take(MSG_LINE_MAX).collect()
         } else { s };
+        if self.echo {
+            println!("[transcript] {}", s);
+        }
+        self.transcript.push(s.clone());
         self.lines.push(s);
         if self.lines.len() > MSG_QUEUE_MAX {
             self.lines.remove(0);

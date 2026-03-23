@@ -42,4 +42,8 @@ pub enum DebugCommand {
     TriggerWitchEffect,
     TriggerTeleportEffect,
     TriggerPaletteTransition { to_black: bool },
+    /// Request actor list; gameplay scene will push to log buffer.
+    QueryActors,
+    /// Request song list; gameplay scene will push to log buffer.
+    QuerySongs,
 }
