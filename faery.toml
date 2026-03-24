@@ -79,69 +79,105 @@ instruments = "game/v6"
 songs       = "game/songs"
 samples     = "game/samples"
 
-# ADF block layout for world regions (from REGION_BLOCKS in world_data.rs — placeholder values)
-[[world.region]]
-id           = 0
-sector_block = 0
-map_block    = 0
-terra_block  = 0
-image_block  = 0
+# ADF block layout for world regions.
+# Values derived from file_index[] in original/fmain.c:
+#   struct need { USHORT image[4], terra1, terra2, sector, region, setchar; }
+# TERRA_BLOCK = 149 (from fmain.c:#define TERRA_BLOCK 149)
+# terra_block  = 149 + terra1
+# terra2_block = 149 + terra2
+# sector_block = file_index[n].sector
+# map_block    = file_index[n].region   (confusingly named in C)
+# image_blocks = file_index[n].image[0..4]
 
 [[world.region]]
-id           = 1
-sector_block = 64
-map_block    = 8
-terra_block  = 2
-image_block  = 64
+# [0] F1 - snowy region
+id            = 0
+sector_block  = 32
+map_block     = 160
+terra_block   = 149   # TERRA_BLOCK + 0
+terra2_block  = 150   # TERRA_BLOCK + 1
+image_blocks  = [320, 480, 520, 560]
 
 [[world.region]]
-id           = 2
-sector_block = 128
-map_block    = 16
-terra_block  = 4
-image_block  = 224
+# [1] F2 - witch wood
+id            = 1
+sector_block  = 32
+map_block     = 160
+terra_block   = 151   # TERRA_BLOCK + 2
+terra2_block  = 152   # TERRA_BLOCK + 3
+image_blocks  = [320, 360, 400, 440]
 
 [[world.region]]
-id           = 3
-sector_block = 192
-map_block    = 24
-terra_block  = 6
-image_block  = 384
+# [2] F3 - swampy region
+id            = 2
+sector_block  = 32
+map_block     = 168
+terra_block   = 151   # TERRA_BLOCK + 2
+terra2_block  = 150   # TERRA_BLOCK + 1
+image_blocks  = [320, 360, 520, 560]
 
 [[world.region]]
-id           = 4
-sector_block = 256
-map_block    = 32
-terra_block  = 8
-image_block  = 544
+# [3] F4 - plains and rocks (STARTING REGION)
+id            = 3
+sector_block  = 32
+map_block     = 168
+terra_block   = 151   # TERRA_BLOCK + 2
+terra2_block  = 152   # TERRA_BLOCK + 3
+image_blocks  = [320, 360, 400, 440]
 
 [[world.region]]
-id           = 5
-sector_block = 320
-map_block    = 40
-terra_block  = 10
-image_block  = 704
+# [4] F5 - desert area
+id            = 4
+sector_block  = 32
+map_block     = 176
+terra_block   = 149   # TERRA_BLOCK + 0
+terra2_block  = 153   # TERRA_BLOCK + 4
+image_blocks  = [320, 480, 520, 600]
 
 [[world.region]]
-id           = 6
-sector_block = 384
-map_block    = 48
-terra_block  = 12
-image_block  = 864
+# [5] F6 - bay / city / farms
+id            = 5
+sector_block  = 32
+map_block     = 176
+terra_block   = 154   # TERRA_BLOCK + 5
+terra2_block  = 155   # TERRA_BLOCK + 6
+image_blocks  = [320, 280, 240, 200]
 
 [[world.region]]
-id           = 7
-sector_block = 448
-map_block    = 56
-terra_block  = 14
-image_block  = 1024
+# [6] F7 - volcanic
+id            = 6
+sector_block  = 32
+map_block     = 184
+terra_block   = 156   # TERRA_BLOCK + 7
+terra2_block  = 153   # TERRA_BLOCK + 4
+image_blocks  = [320, 640, 520, 600]
 
 [[world.region]]
-id           = 8
-sector_block = 512
-map_block    = 64
-terra_block  = 16
-image_block  = 1184
+# [7] F8 - forest and wilderness
+id            = 7
+sector_block  = 32
+map_block     = 184
+terra_block   = 154   # TERRA_BLOCK + 5
+terra2_block  = 155   # TERRA_BLOCK + 6
+image_blocks  = [320, 280, 240, 200]
+
+[[world.region]]
+# [8] F9 - inside of buildings
+id            = 8
+sector_block  = 96
+map_block     = 192
+terra_block   = 157   # TERRA_BLOCK + 8
+terra2_block  = 158   # TERRA_BLOCK + 9
+image_blocks  = [680, 720, 800, 840]
+
+[[world.region]]
+# [9] F10 - dungeons and caves
+id            = 9
+sector_block  = 96
+map_block     = 192
+terra_block   = 159   # TERRA_BLOCK + 10
+terra2_block  = 158   # TERRA_BLOCK + 9
+image_blocks  = [680, 760, 800, 840]
 
 [sprites]
 # ADF block start for each of the 18 shape files (from CFILE_BLOCKS in sprites.rs — placeholder values)

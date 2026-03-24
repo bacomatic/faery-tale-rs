@@ -700,7 +700,9 @@ impl GameplayScene {
                             crate::game::map_renderer::MAP_DST_W,
                             crate::game::map_renderer::MAP_DST_H,
                             crate::game::map_renderer::MAP_DST_W * 4,
-                            sdl2::pixels::PixelFormatEnum::RGBA32,
+                            // ARGB8888 = 0xAARRGGBB as u32, matching amiga_color_to_rgba output.
+                            // RGBA32 is ABGR8888 on little-endian (0xAABBGGRR), which would swap R/B.
+                            sdl2::pixels::PixelFormatEnum::ARGB8888,
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
@@ -880,12 +882,22 @@ impl GameplayScene {
 
     /// Called when the hero transitions to a new region.
     /// Reloads world data and NPC table for the new region (npc-101, world-110).
-    fn on_region_changed(&mut self, region: u8) {
+    fn on_region_changed(&mut self, region: u8, game_lib: &GameLibrary) {
         self.log_buffer.push(format!("on_region_changed: region changed to {}", region));
         if let Some(ref adf) = self.adf {
-            match crate::game::world_data::WorldData::load(adf, region) {
+            let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
+                crate::game::world_data::WorldData::load(
+                    adf, region,
+                    cfg.sector_block, cfg.map_block,
+                    cfg.terra_block, cfg.terra2_block,
+                    &cfg.image_blocks,
+                )
+            } else {
+                Err(anyhow::anyhow!("no region config for region {}", region))
+            };
+            match world_result {
                 Ok(world) => {
-                    let palette = [0xFF808080_u32; 32];
+                    let palette = Self::region_palette(game_lib, region);
                     self.map_renderer = Some(MapRenderer::new(&world, &palette));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
@@ -1611,7 +1623,65 @@ impl GameplayScene {
             QuerySongs => {
                 self.dlog("QuerySongs: song library info is in main loop; use /songs".to_string());
             }
+            DumpAdfBlock { block, count } => {
+                match &self.adf {
+                    None => self.dlog("DumpAdfBlock: ADF not loaded".to_string()),
+                    Some(adf) => {
+                        let total = adf.num_blocks() as u32;
+                        let end = block + count;
+                        if end > total {
+                            self.dlog(format!(
+                                "DumpAdfBlock: range [{}, {}) exceeds ADF size ({} blocks)",
+                                block, end, total
+                            ));
+                        } else {
+                            let data = adf.load_blocks(block, count).to_vec();
+                            self.dlog(format!(
+                                "ADF block(s) {}..{} ({} bytes):",
+                                block, end, data.len()
+                            ));
+                            for (row_i, chunk) in data.chunks(16).enumerate() {
+                                let offset = block as usize * 512 + row_i * 16;
+                                let hex: String = chunk
+                                    .iter()
+                                    .map(|b| format!("{:02X}", b))
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                let ascii: String = chunk
+                                    .iter()
+                                    .map(|&b| if b >= 0x20 && b < 0x7F { b as char } else { '.' })
+                                    .collect();
+                                self.dlog(format!("{:06X}: {}  {}", offset, hex, ascii));
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Build the RGBA32 playfield palette for the given region.
+    ///
+    /// The base palette is `pagecolors[]` from fmain2.c — hardcoded in faery.toml.
+    /// Only color index 31 varies by region (from `fade_page()` in fmain2.c:526-535):
+    ///   - region 4 (desert):        0x0980
+    ///   - region 9 (dungeons/caves): 0x0445
+    ///   - all other regions:         0x0bdf  (already the default in pagecolors)
+    fn region_palette(game_lib: &GameLibrary, region: u8) -> crate::game::palette::Palette {
+        use crate::game::palette::{amiga_color_to_rgba, PALETTE_SIZE};
+        let mut palette = [0xFF808080_u32; PALETTE_SIZE];
+        if let Some(base) = game_lib.find_palette("pagecolors") {
+            for (i, entry) in base.colors.iter().enumerate().take(PALETTE_SIZE) {
+                palette[i] = amiga_color_to_rgba(entry.color);
+            }
+        }
+        let color31: u16 = match region {
+            4 => 0x0980, // F5 — desert area
+            9 => 0x0445, // F10 — dungeons/caves (0x00f0 when secret_timer active)
+            _ => 0x0bdf, // all other regions (already the default in pagecolors[31])
+        };
+        palette[31] = amiga_color_to_rgba(color31);
+        palette
     }
 
     fn stat_field_mut(state: &mut GameState, stat: StatId) -> &mut i16 {
@@ -1875,9 +1945,19 @@ impl Scene for GameplayScene {
             match crate::game::adf::AdfDisk::open(std::path::Path::new(adf_path)) {
                 Ok(adf) => {
                     let region = self.state.region_num;
-                    match crate::game::world_data::WorldData::load(&adf, region) {
+                    let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
+                        crate::game::world_data::WorldData::load(
+                            &adf, region,
+                            cfg.sector_block, cfg.map_block,
+                            cfg.terra_block, cfg.terra2_block,
+                            &cfg.image_blocks,
+                        )
+                    } else {
+                        Err(anyhow::anyhow!("no region config for region {}", region))
+                    };
+                    match world_result {
                         Ok(world) => {
-                            let palette = [0xFF808080_u32; 32]; // placeholder until region palettes decoded
+                            let palette = Self::region_palette(game_lib, region);
                             let renderer = MapRenderer::new(&world, &palette);
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
@@ -1931,7 +2011,7 @@ impl Scene for GameplayScene {
         // Region palette transition (world-109)
         let region = self.state.region_num;
         if region != self.last_region_num {
-            self.on_region_changed(region);
+            self.on_region_changed(region, game_lib);
             self.dlog(format!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
                 crate::game::game_event::GameEvent::RegionTransition { region }));
             // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
@@ -1941,11 +2021,8 @@ impl Scene for GameplayScene {
             let from = self.palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
-                .unwrap_or([0xFF808080_u32; crate::game::palette::PALETTE_SIZE]);
-            // TODO(palette): transition to real decoded region palette once available.
-            // Using placeholder gray instead of BLACK to keep playfield visible until
-            // region palette decoding is implemented.
-            let to = [0xFF808080_u32; crate::game::palette::PALETTE_SIZE];
+                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
+            let to = Self::region_palette(game_lib, region);
             self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
             self.last_region_num = region;
         }
@@ -2101,10 +2178,14 @@ impl Scene for GameplayScene {
         self.state.map_x = self.map_x;
         self.state.map_y = self.map_y;
 
-        // Compose map viewport when in normal play view (world-105)
+        // Compose map viewport when in normal play view (world-105).
+        // Pass img_x = map_x >> 4 and img_y = map_y >> 5 (tile-column and tile-row units),
+        // matching the original: img_x = map_x >> 4, img_y = map_y >> 5 (fmain.c:2306-2307).
         if self.state.viewstatus == 0 {
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                mr.compose(self.state.hero_x, self.state.hero_y, world);
+                let img_x = self.map_x >> 4;
+                let img_y = self.map_y >> 5;
+                mr.compose(img_x, img_y, self.state.region_num, world);
             }
         }
 

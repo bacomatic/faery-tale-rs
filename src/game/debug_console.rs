@@ -414,6 +414,7 @@ impl DebugConsole {
             "/fx" => self.cmd_fx(args),
             "/actors" => self.push_cmd(DebugCommand::QueryActors),
             "/songs" => self.cmd_songs(args),
+            "/adf" => self.cmd_adf(args),
             "/clear" | "/cls" => self.cmd_clear(),
             _ => {
                 self.log(format!("Unknown command: {}  (type /help for list)", cmd));
@@ -447,6 +448,7 @@ impl DebugConsole {
                 "/fx"   | "fx"      => "/fx <witch|teleport|fadeout|fadein>",
                 "/actors"           => "/actors — print actor list to log.",
                 "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop",
+                "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
                 _ => "No help for that topic.",
             };
@@ -475,6 +477,7 @@ impl DebugConsole {
             "  /fx <e>        trigger: witch/teleport/fadeout/fadein",
             "  /actors        list actors",
             "  /songs [cmd]   music: play <N> / stop",
+            "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
             "  /help [cmd]    show help",
             "——————————————————————————————————————",
@@ -707,6 +710,21 @@ impl DebugConsole {
                 }
             }
         }
+    }
+
+    fn cmd_adf(&mut self, args: &[&str]) {
+        let (block, count) = match args {
+            [b] => match b.parse::<u32>() {
+                Ok(b) => (b, 1u32),
+                Err(_) => { self.log("Usage: /adf <block> [count]"); return; }
+            },
+            [b, c] => match (b.parse::<u32>(), c.parse::<u32>()) {
+                (Ok(b), Ok(c)) if c >= 1 => (b, c),
+                _ => { self.log("Usage: /adf <block> [count]  (count must be >= 1)"); return; }
+            },
+            _ => { self.log("Usage: /adf <block> [count]"); return; }
+        };
+        self.push_cmd(DebugCommand::DumpAdfBlock { block, count });
     }
 
     fn cmd_clear(&mut self) {

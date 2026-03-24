@@ -79,7 +79,7 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::adf::AdfDisk;
+    use crate::game::world_data::WorldData;
 
     #[test]
     fn test_proxcheck_no_world() {
@@ -88,8 +88,7 @@ mod tests {
 
     #[test]
     fn test_terrain_type_in_bounds() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
+        let world = WorldData::empty();
         // Empty world → all-zero terra_mem → tiles byte 0 → d4 & 0 == 0 → passable (type 0)
         let t = px_to_terrain_type(&world, 0, 0);
         assert_eq!(t, 0);
@@ -97,8 +96,7 @@ mod tests {
 
     #[test]
     fn test_terrain_type_negative_coords() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
+        let world = WorldData::empty();
         // Negative coords (e.g. left foot probe at x=0) should return 0 (passable).
         let t = px_to_terrain_type(&world, -4, 2);
         assert_eq!(t, 0);
@@ -115,8 +113,7 @@ mod tests {
 
     #[test]
     fn test_proxcheck_empty_world() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
+        let world = WorldData::empty();
         // All-zero world: tiles bytes are 0, so every position is passable.
         assert!(proxcheck(Some(&world), 256, 256));
     }

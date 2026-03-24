@@ -46,4 +46,6 @@ pub enum DebugCommand {
     QueryActors,
     /// Request song list; gameplay scene will push to log buffer.
     QuerySongs,
+    /// Dump `count` ADF blocks starting at `block` as hex rows to the debug log.
+    DumpAdfBlock { block: u32, count: u32 },
 }

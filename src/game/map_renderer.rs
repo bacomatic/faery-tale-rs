@@ -1,7 +1,7 @@
 //! MapRenderer: combines TileAtlas and genmini() to blit the map viewport.
 
 use crate::game::tile_atlas::{TileAtlas, TILE_W, TILE_H};
-use crate::game::map_view::{genmini, ScrollRegs, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
+use crate::game::map_view::{genmini, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
 use crate::game::world_data::WorldData;
 
 /// Destination screen rect for the map viewport.
@@ -12,7 +12,6 @@ pub const MAP_DST_H: u32 = (TILE_H * VIEWPORT_TILES_H) as u32; // 192
 
 pub struct MapRenderer {
     pub atlas: TileAtlas,
-    pub scroll: ScrollRegs,
     /// RGBA32 pixel buffer for the composed map frame (MAP_DST_W × MAP_DST_H).
     pub framebuf: Vec<u32>,
 }
@@ -21,15 +20,17 @@ impl MapRenderer {
     pub fn new(world: &WorldData, palette: &[u32; 32]) -> Self {
         MapRenderer {
             atlas: TileAtlas::from_world_data(world, palette),
-            scroll: ScrollRegs::default(),
             framebuf: vec![0u32; (MAP_DST_W * MAP_DST_H) as usize],
         }
     }
 
-    /// Compose the map into `framebuf` for the given hero position.
-    /// img_x, img_y = hero pixel coordinates in the world.
-    pub fn compose(&mut self, img_x: u16, img_y: u16, world: &WorldData) {
-        let minimap = genmini(img_x, img_y, world, &self.scroll);
+    /// Compose the map into `framebuf` for the given viewport position.
+    ///
+    /// img_x = map_x >> 4  (viewport top-left X in tile-column units)
+    /// img_y = map_y >> 5  (viewport top-left Y in tile-row units)
+    /// region_num: current region (used to compute map sector offsets)
+    pub fn compose(&mut self, img_x: u16, img_y: u16, region_num: u8, world: &WorldData) {
+        let minimap = genmini(img_x, img_y, region_num, world);
         for ty in 0..VIEWPORT_TILES_H {
             for tx in 0..VIEWPORT_TILES_W {
                 let tile_idx = minimap[ty * VIEWPORT_TILES_W + tx] as usize;
@@ -51,15 +52,13 @@ impl MapRenderer {
 mod tests {
     use super::*;
     use crate::game::world_data::WorldData;
-    use crate::game::adf::AdfDisk;
 
     #[test]
     fn test_compose_no_panic() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
+        let world = WorldData::empty();
         let palette = [0xFF000000_u32; 32];
         let mut renderer = MapRenderer::new(&world, &palette);
-        renderer.compose(100, 200, &world);
+        renderer.compose(100, 200, 3, &world);
         assert_eq!(renderer.framebuf.len(), (MAP_DST_W * MAP_DST_H) as usize);
     }
 }

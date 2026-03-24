@@ -1,4 +1,6 @@
 //! Map view utilities: genmini viewport tile computation and rendering data.
+//!
+//! Ported from _genmini in fsubs.asm and gen_mini() in fmain.c.
 
 use crate::game::world_data::WorldData;
 
@@ -7,50 +9,60 @@ pub const VIEWPORT_TILES_W: usize = 19;
 pub const VIEWPORT_TILES_H: usize = 6;
 pub const VIEWPORT_TILES: usize = VIEWPORT_TILES_W * VIEWPORT_TILES_H; // 114
 
-/// Region/scroll register offsets (set per region, default 0).
-pub struct ScrollRegs {
-    pub xreg: u16,
-    pub yreg: u16,
-}
-
-impl Default for ScrollRegs {
-    fn default() -> Self { ScrollRegs { xreg: 0, yreg: 0 } }
-}
-
-/// Port of gen_mini() from fsubs.asm / fmain.c.
+/// Fill the 19×6 minimap tile index array for the given viewport position.
 ///
-/// Given hero position (img_x, img_y) and world data, fills a 19×6 array
-/// of tile indices for the current viewport.
+/// Parameters:
+///   img_x = map_x >> 4  (viewport top-left X in 16-pixel / tile-column units)
+///   img_y = map_y >> 5  (viewport top-left Y in 32-pixel / tile-row units)
+///   region_num: current region (0..9), used to compute xreg/yreg offsets
 ///
-/// Original algorithm:
-///   secx = (img_x >> 4).wrapping_sub(xreg)   — sector X (clamped 0..127)
-///   secy = (img_y >> 5) - yreg                 — sector Y (clamped 0..31)
-///   for each viewport tile (tx, ty):
-///     sx = secx + tx - VIEWPORT_TILES_W/2  (clamped to sector bounds)
-///     sy = secy + ty - VIEWPORT_TILES_H/2  (clamped to sector bounds)
-///     sec_num = map_mem[sx + sy*128]
-///     tile_idx = sector_mem[sec_num*128 + (img_y & 7)*16 + (img_x & 15)]
-///   But per-tile pixel offset uses the SAME img_x/img_y for sub-tile scrolling.
-pub fn genmini(img_x: u16, img_y: u16, world: &WorldData, regs: &ScrollRegs) -> [u16; VIEWPORT_TILES] {
+/// Algorithm ported directly from _genmini in original/fsubs.asm:
+///   for i in 0..19 (tile columns), for j in 0..6 (tile rows):
+///     x = (img_x + i) & 0x7fff
+///     y = (img_y + j) & 0x7fff
+///     xs = clamp((x>>4) - xreg, 0..63) + xreg  — absolute sector col (0..127)
+///     ys = clamp((y>>3) - yreg, 0..31)           — region-local sector row
+///     sec_num = map_mem[xs + ys * 128]
+///     tile = sector_mem[sec_num * 128 + (y & 7) * 16 + (x & 15)]
+///
+/// xreg = (region & 1) << 6  (0 or 64 — which half of the map horizontally)
+/// yreg = (region >> 1) << 5  (0, 32, 64, … — which band of the map vertically)
+pub fn genmini(img_x: u16, img_y: u16, region_num: u8, world: &WorldData) -> [u16; VIEWPORT_TILES] {
+    // Compute xreg/yreg from region_num (gen_mini() in fmain.c:3684-3690).
+    // Indoor regions (>= 8): xr = 0 as in original ("if (lregion > 7) xr = 0").
+    let xr: u16 = if region_num <= 7 { (region_num & 1) as u16 } else { 0 };
+    let yr: u16 = (region_num >> 1) as u16;
+    let xreg = xr << 6; // 0 or 64
+    let yreg = yr << 5; // 0, 32, 64, 96, …
+
     let mut minimap = [0u16; VIEWPORT_TILES];
 
-    let secx = (img_x >> 4).wrapping_sub(regs.xreg) as usize;
-    let secy = ((img_y >> 5) as usize).saturating_sub(regs.yreg as usize);
+    // Outer loop: 19 tile columns (each = 16 pixels wide)
+    for i in 0..VIEWPORT_TILES_W {
+        let x = img_x.wrapping_add(i as u16) & 0x7fff;
 
-    let sub_x = (img_x & 0xF) as usize; // 0..15 pixel offset within tile
-    let sub_y = (img_y & 0x7) as usize; // 0..7 pixel offset within tile
+        // xs: absolute sector column in map_mem (0..127).
+        // Subtract xreg to get region-local column, clamp 0..63, add xreg back.
+        let xs_raw = (x >> 4) as i16 - xreg as i16;
+        let xs = (xs_raw.max(0).min(63) as u16 + xreg) as usize;
 
-    for ty in 0..VIEWPORT_TILES_H {
-        for tx in 0..VIEWPORT_TILES_W {
-            // Compute sector coordinates for this viewport tile
-            let sx = (secx + tx).saturating_sub(VIEWPORT_TILES_W / 2).min(127);
-            let sy = (secy + ty).saturating_sub(VIEWPORT_TILES_H / 2).min(31);
+        // Inner loop: 6 tile rows (each = 32 pixels tall)
+        for j in 0..VIEWPORT_TILES_H {
+            let y = img_y.wrapping_add(j as u16) & 0x7fff;
 
-            let sec_num = world.sector_at(sx, sy);
-            let tile_idx = world.tile_at(sec_num, sub_x, sub_y);
-            minimap[ty * VIEWPORT_TILES_W + tx] = tile_idx as u16;
+            // ys: region-local sector row in map_mem (0..31).
+            let ys_raw = (y >> 3) as i32 - yreg as i32;
+            let ys = ys_raw.max(0).min(31) as usize;
+
+            let sec_num = world.sector_at(xs, ys);
+            let lx = (x & 0xF) as usize;  // tile column within sector (0..15)
+            let ly = (y & 0x7) as usize;  // tile row within sector (0..7)
+            let tile_idx = world.tile_at(sec_num, lx, ly);
+
+            minimap[j * VIEWPORT_TILES_W + i] = tile_idx as u16;
         }
     }
+
     minimap
 }
 
@@ -58,24 +70,19 @@ pub fn genmini(img_x: u16, img_y: u16, world: &WorldData, regs: &ScrollRegs) -> 
 mod tests {
     use super::*;
     use crate::game::world_data::WorldData;
-    use crate::game::adf::AdfDisk;
 
     #[test]
     fn test_genmini_size() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
-        let regs = ScrollRegs::default();
-        let minimap = genmini(0, 0, &world, &regs);
+        let world = WorldData::empty();
+        let minimap = genmini(0, 0, 0, &world);
         assert_eq!(minimap.len(), VIEWPORT_TILES);
     }
 
     #[test]
     fn test_genmini_no_panic_at_edges() {
-        let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        let world = WorldData::load(&adf, 0).unwrap();
-        let regs = ScrollRegs::default();
+        let world = WorldData::empty();
         // Max possible coordinates
-        let _ = genmini(0xFFFF, 0xFFFF, &world, &regs);
-        let _ = genmini(0, 0, &world, &regs);
+        let _ = genmini(0xFFFF, 0xFFFF, 0, &world);
+        let _ = genmini(0, 0, 0, &world);
     }
 }

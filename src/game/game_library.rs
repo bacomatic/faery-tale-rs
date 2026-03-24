@@ -92,10 +92,22 @@ pub struct AudioConfig {
 #[derive(Deserialize, Debug, Default, Clone)]
 pub struct RegionBlockConfig {
     pub id: u8,
+    /// ADF block for sector data (64 blocks = 32768 bytes).
+    /// Corresponds to `file_index[n].sector` in the original.
     pub sector_block: u32,
+    /// ADF block for region map data (8 blocks = 4096 bytes).
+    /// Corresponds to `file_index[n].region` in the original.
     pub map_block: u32,
+    /// ADF block for first terra layer (1 block = 512 bytes).
+    /// = TERRA_BLOCK (149) + file_index[n].terra1
     pub terra_block: u32,
-    pub image_block: u32,
+    /// ADF block for second terra layer (1 block = 512 bytes).
+    /// = TERRA_BLOCK (149) + file_index[n].terra2
+    #[serde(default)]
+    pub terra2_block: u32,
+    /// ADF block numbers for each of the 4 tile image groups (40 blocks each, 5 planes × 8).
+    /// Corresponds to `file_index[n].image[0..4]` in the original.
+    pub image_blocks: Vec<u32>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -251,6 +263,11 @@ impl GameLibrary {
 
     pub fn get_copy_protect_count(&self) -> usize {
         self.copy_protect_junk.len()
+    }
+
+    // region block config
+    pub fn find_region_config(&self, region_num: u8) -> Option<&RegionBlockConfig> {
+        self.world.as_ref()?.region.iter().find(|r| r.id == region_num)
     }
 
     // locations

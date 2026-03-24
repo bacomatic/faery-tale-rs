@@ -380,7 +380,6 @@ pub fn main() -> Result<(), String> {
                             gs.init_from_library(&game_lib);
                             gs.set_echo_transcript(cli.echo_transcript);
                             active_scene = Some(Box::new(gs));
-                            clock.set_game_wall_clock(0, 6, 0); // reset display clock to dawn
                             dirty = true;
                         }
                     }
