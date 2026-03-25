@@ -152,6 +152,19 @@ pub struct CompassConfig {
     pub hivar: BitMap,
 }
 
+/// Narrative strings from `narr.asm`, loaded from `faery.toml [narr]`.
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct NarrConfig {
+    #[serde(default)]
+    pub event_msg: Vec<String>,
+    #[serde(default)]
+    pub speeches: Vec<String>,
+    #[serde(default)]
+    pub place_msg: Vec<String>,
+    #[serde(default)]
+    pub inside_msg: Vec<String>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct GameLibrary {
     palettes: HashMap<String, Palette>,
@@ -175,6 +188,8 @@ pub struct GameLibrary {
     pub sprites: Option<SpritesConfig>,
     pub npcs: Option<NpcsConfig>,
     pub compass: Option<CompassConfig>,
+    #[serde(default)]
+    pub narr: NarrConfig,
 }
 
 impl GameLibrary {

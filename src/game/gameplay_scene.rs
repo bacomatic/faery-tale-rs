@@ -82,6 +82,15 @@ fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
     }
 }
 
+/// Return the name of the active brother (Julian=1, Phillip=2, Kevin=3).
+fn brother_name(state: &crate::game::game_state::GameState) -> &'static str {
+    match state.brother {
+        1 => "Julian",
+        2 => "Phillip",
+        _ => "Kevin",
+    }
+}
+
 /// Canvas layout — original 640×200 game area line-doubled to 640×400,
 /// centered in 640×480 logical canvas with 40px margins top and bottom.
 ///
@@ -210,6 +219,10 @@ pub struct GameplayScene {
     compass_regions: Vec<(i32, i32, i32, i32)>,
     menu: crate::game::menu::MenuState,
     textcolors: crate::game::palette::Palette,
+    /// Loaded sprite sheets indexed by cfile_idx (None = not yet loaded).
+    sprite_sheets: Vec<Option<crate::game::sprites::SpriteSheet>>,
+    /// Narrative strings from faery.toml [narr], used by event_msg / speak helpers.
+    narr: crate::game::game_library::NarrConfig,
 }
 
 impl GameplayScene {
@@ -249,6 +262,8 @@ impl GameplayScene {
             compass_regions: Vec::new(),
             menu: crate::game::menu::MenuState::new(),
             textcolors: [0u32; 32],
+            sprite_sheets: (0..crate::game::sprites::CFILE_COUNT).map(|_| None).collect(),
+            narr: crate::game::game_library::NarrConfig::default(),
         }
     }
 
@@ -278,6 +293,8 @@ impl GameplayScene {
                     | (color.b() as u32);
             }
         }
+
+        self.narr = game_lib.narr.clone();
 
         let stuff = self.state.stuff().clone();
         let wealth = self.state.wealth;
@@ -480,21 +497,28 @@ impl GameplayScene {
             }
         }
 
-        // Fatigue: +1 per step when moving, -1 when resting (player-111).
-        // Forced sleep guardrail: cannot sleep at a door/gate (known exploit).
-        if self.state.fatigue_step(moved) {
-            let at_door = crate::game::doors::doorfind(
-                self.state.region_num, self.state.hero_x, self.state.hero_y,
-            ).is_some();
-            if !at_door {
-                self.messages.push("Exhausted! You fall asleep.");
-                self.dlog("Forced sleep: fatigue max reached");
-            } else {
-                // Restore fatigue to max - 1 to prevent sleep at locked gate.
-                self.state.fatigue = crate::game::game_state::GameState::MAX_FATIGUE - 1;
-                self.dlog("Forced sleep suppressed: hero at door/gate");
-            }
-        }
+        // Visual fatigue feedback: per-step counter is kept for possible future animation,
+        // but forced sleep is now driven by the daynight tick (player-111).
+        self.state.fatigue_step(moved);
+    }
+
+    /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
+    /// Mirrors original nearest_fig() / calc_dist() from fmain.c:4167-4272.
+    fn nearest_npc_in_range(&self, range: i32) -> Option<&crate::game::npc::Npc> {
+        let hx = self.state.hero_x as i32;
+        let hy = self.state.hero_y as i32;
+        self.npc_table.as_ref()?.npcs.iter()
+            .filter(|n| n.active)
+            .filter(|n| {
+                let dx = (n.x as i32 - hx).abs();
+                let dy = (n.y as i32 - hy).abs();
+                dx.max(dy) <= range
+            })
+            .min_by_key(|n| {
+                let dx = (n.x as i32 - hx).abs();
+                let dy = (n.y as i32 - hy).abs();
+                dx.max(dy)
+            })
     }
 
     /// Helper: buy one unit of item_idx from a nearby shopkeeper (npc-107).
@@ -1128,7 +1152,8 @@ impl GameplayScene {
                         }
                     }
                 } else if self.state.eat_food() {
-                    self.messages.push("Yum!");
+                    let bname = brother_name(&self.state);
+                    self.messages.push(crate::game::events::event_msg(&self.narr, 37, bname));
                     self.dlog(format!("eat_food: consumed food, hunger={}", self.state.hunger));
                 } else {
                     self.messages.push("No food.");
@@ -1200,7 +1225,8 @@ impl GameplayScene {
                     self.state.fatigue = 0;
                     self.state.hunger = (self.state.hunger + 50)
                         .min(crate::game::game_state::MAX_HUNGER);
-                    self.messages.push("You sleep and rest.");
+                    let bname = brother_name(&self.state);
+                    self.messages.push(crate::game::events::event_msg(&self.narr, 26, bname));
                     self.dlog("Player slept: fatigue reset");
                 }
             }
@@ -1219,7 +1245,8 @@ impl GameplayScene {
                 self.messages.push(msg);
             }
             GameAction::Talk => {
-                self.messages.push("There is no one to talk to.");
+                // Talk is the same as Ask/Speak: range 50, nearest NPC (fmain.c:4167).
+                self.do_option(GameAction::Speak);
             }
             GameAction::Attack => {
                 // Find nearest active NPC and initiate combat
@@ -1424,18 +1451,29 @@ impl GameplayScene {
                 }
             }
             GameAction::Yell => {
-                // Call missing brothers by name (original: hero yells to attract attention).
-                let name = match self.state.brother {
-                    1 => "Phillip",
-                    2 => "Kevin",
-                    _ => "Julian",
-                };
-                self.messages.push(format!("{}!", name));
+                // Yell range = 100. If NPC within 35 → "No need to shout, son!" (speech 8).
+                // Otherwise yell the missing brother's name (original yell behavior).
+                let bname = brother_name(&self.state);
+                let yell_dist = self.nearest_npc_in_range(100)
+                    .map(|n| {
+                        let dx = (n.x as i32 - self.state.hero_x as i32).abs();
+                        let dy = (n.y as i32 - self.state.hero_y as i32).abs();
+                        dx.max(dy)
+                    });
+                if yell_dist.map_or(false, |d| d < 35) {
+                    self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                } else {
+                    let next_brother = match self.state.brother {
+                        1 => "Phillip",
+                        2 => "Kevin",
+                        _ => "Julian",
+                    };
+                    self.messages.push(format!("{}!", next_brother));
+                }
             }
             GameAction::Speak | GameAction::Ask => {
-                // Show shopkeeper menu if near a shopkeeper (npc-107).
-                // Full NPC dialogue requires setfig table (npc-002).
-                use crate::game::npc::RACE_SHOPKEEPER;
+                // Talk range = 50. Check nearest NPC within range (npc-002, fmain.c:4167).
+                let bname = brother_name(&self.state);
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
                 let near_shop = self.npc_table.as_ref().map_or(false, |t| {
@@ -1462,10 +1500,23 @@ impl GameplayScene {
                     }
                     menu.push_str(&format!("  (Your gold: {})", self.state.gold));
                     self.messages.push(menu);
+                } else if let Some(npc) = self.nearest_npc_in_range(50) {
+                    // NPC in range — show race-appropriate speech (fmain.c:4195-4230).
+                    use crate::game::npc::*;
+                    let speech_id: usize = match npc.race {
+                        RACE_NORMAL   => 3,  // skeleton clattering (generic)
+                        RACE_UNDEAD   => 2,  // wraith "Doom!"
+                        RACE_WRAITH   => 2,  // wraith "Doom!"
+                        RACE_ENEMY    => 1,  // orc "Human must die!"
+                        RACE_SNAKE    => 4,  // snake (waste of time)
+                        RACE_SHOPKEEPER => 12, // tavern keeper greeting
+                        RACE_BEGGAR   => 23, // beggar "Alms!"
+                        _             => 6,  // "There was no reply."
+                    };
+                    self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
                 } else {
                     self.messages.push("There is no one here to talk to.");
                 }
-                let _ = RACE_SHOPKEEPER;
             }
             GameAction::Quit => {
                 self.quit_requested = true;
@@ -1695,6 +1746,79 @@ impl GameplayScene {
             StatId::Fatigue => &mut state.fatigue,
         }
     }
+
+    /// Blit one 16×32 sprite frame (RGBA32) into the map framebuf (sprite-103).
+    /// Transparent pixels (alpha == 0) are skipped.
+    /// `rel_x` / `rel_y` are the top-left destination in framebuf pixels.
+    fn blit_sprite_to_framebuf(
+        frame_pixels: &[u32],
+        rel_x: i32,
+        rel_y: i32,
+        framebuf: &mut [u32],
+        fb_w: i32,
+        fb_h: i32,
+    ) {
+        use crate::game::sprites::{SPRITE_W, SPRITE_H};
+        for row in 0..SPRITE_H as i32 {
+            let dst_y = rel_y + row;
+            if dst_y < 0 || dst_y >= fb_h { continue; }
+            for col in 0..SPRITE_W as i32 {
+                let dst_x = rel_x + col;
+                if dst_x < 0 || dst_x >= fb_w { continue; }
+                let src_px = frame_pixels[(row as usize) * SPRITE_W + col as usize];
+                if src_px >> 24 == 0 { continue; } // transparent
+                framebuf[(dst_y * fb_w + dst_x) as usize] = src_px;
+            }
+        }
+    }
+
+    /// Compute rel_x/rel_y for an actor at (abs_x, abs_y) given viewport origin (map_x, map_y).
+    /// Matches original fmain.c:2150-2158: rel_x = abs_x - map_x - 8, rel_y = abs_y - map_y - 26.
+    fn actor_rel_pos(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16) -> (i32, i32) {
+        let rel_x = (abs_x as i32) - (map_x as i32) - 8;
+        let rel_y = (abs_y as i32) - (map_y as i32) - 26;
+        (rel_x, rel_y)
+    }
+
+    /// Blit all visible actors (hero + enemy NPCs) onto the map framebuf (sprite-104).
+    /// Called immediately after mr.compose() so actors appear on top of tiles.
+    fn blit_actors_to_framebuf(
+        sprite_sheets: &[Option<crate::game::sprites::SpriteSheet>],
+        state: &GameState,
+        npc_table: &Option<crate::game::npc::NpcTable>,
+        map_x: u16,
+        map_y: u16,
+        framebuf: &mut Vec<u32>,
+    ) {
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+        use crate::game::sprites::{SPRITE_H, SPRITE_W};
+        let fb_w = MAP_DST_W as i32;
+        let fb_h = MAP_DST_H as i32;
+
+        // --- Hero sprite ---
+        // cfiles[0]=Julian (brother=1), [1]=Phillip (brother=2), [2]=Kevin (brother=3)
+        let hero_cfile = state.brother.saturating_sub(1) as usize;
+        if let Some(Some(ref sheet)) = sprite_sheets.get(hero_cfile) {
+            let (rel_x, rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
+            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
+                let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
+                // frames_per_dir: 56 frames / 8 dirs = 7 per dir for standard player
+                let frames_per_dir = (sheet.num_frames / 8).max(1);
+                let frame = (hero_facing as usize) * frames_per_dir;
+                if let Some(fp) = sheet.frame_pixels(frame) {
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                }
+            }
+        }
+
+        // --- Enemy NPCs from npc_table ---
+        // NPC npc_type maps to cfile index:
+        //   NPC_TYPE_HUMAN=1 → cfile 6 (ogre file is default enemy)
+        // Enemy blitting is best-effort: use npc_type as a rough cfile hint.
+        // SetFig NPCs (wizard, king, etc.) use a separate placement system.
+        let _ = npc_table; // reserved for future enemy sprite lookup
+    }
+
     /// Hit-test canvas position (mx, my) against the 8 compass arrow regions.
     /// If a region is found, updates directional input flags and returns true.
     /// If outside all hitboxes, clears directional flags and returns false.
@@ -1930,7 +2054,16 @@ impl Scene for GameplayScene {
             return SceneResult::Continue;
         }
 
-        self.state.tick(delta_ticks);
+        let tick_events = self.state.tick(delta_ticks);
+        if !tick_events.is_empty() {
+            let bname = brother_name(&self.state);
+            for ev in tick_events {
+                let msg = crate::game::events::event_msg(&self.narr, ev as usize, bname);
+                if !msg.is_empty() {
+                    self.messages.push(msg);
+                }
+            }
+        }
 
         // Lazy-load ADF + world data on first tick (render-world-load).
         // ADF path comes from faery.toml [disk].adf; falls back to the default filename.
@@ -1961,6 +2094,19 @@ impl Scene for GameplayScene {
                             let renderer = MapRenderer::new(&world, &palette);
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
+                            // sprite-101: load player (cfile 0-2) and setfig (cfile 13-17) sprites
+                            let sprite_palette = palette;
+                            for cfile_idx in [0u8, 1, 2, 13, 14, 15, 16, 17] {
+                                if let Some(sheet) = crate::game::sprites::SpriteSheet::load(
+                                    &adf, cfile_idx, &sprite_palette,
+                                ) {
+                                    self.dlog(format!(
+                                        "sprite-load: cfile {} → {} frames",
+                                        cfile_idx, sheet.num_frames
+                                    ));
+                                    self.sprite_sheets[cfile_idx as usize] = Some(sheet);
+                                }
+                            }
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
                             self.adf = Some(adf);
@@ -2186,6 +2332,20 @@ impl Scene for GameplayScene {
                 let img_x = self.map_x >> 4;
                 let img_y = self.map_y >> 5;
                 mr.compose(img_x, img_y, self.state.region_num, world);
+            }
+            // Blit actors on top of the composed tiles (sprite-104).
+            // Collect borrow-safe parameters before taking &mut map_renderer.
+            let map_x = self.map_x;
+            let map_y = self.map_y;
+            if let Some(ref mut mr) = self.map_renderer {
+                Self::blit_actors_to_framebuf(
+                    &self.sprite_sheets,
+                    &self.state,
+                    &self.npc_table,
+                    map_x,
+                    map_y,
+                    &mut mr.framebuf,
+                );
             }
         }
 

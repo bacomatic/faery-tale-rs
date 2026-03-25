@@ -357,8 +357,14 @@ struct cfile_info {
 ```
 
 **Frame byte size** = `width × height × 2` (one row per word, one bitplane).
-**Total data per file** = `frame_bytes × count × 5` (5 bitplanes) + `frame_bytes × count` (mask plane) = `frame_bytes × count × 6`.
-`nextshape` advances by `frame_bytes × count × 5`; `seq_list[slot].maskloc` is stored at the 6th chunk.
+**ADF data per file** = `frame_bytes × count × 5` (5 bitplanes only) = `numblocks × 512` bytes.
+`nextshape` advances by `frame_bytes × count × 5`; `seq_list[slot].maskloc` points to the next `frame_bytes × count` bytes of the pre-allocated `shape_mem` buffer.
+
+**The mask is not stored on disk.** It is computed at runtime by `make_mask()` (`fsubs.asm:1614`):
+for each word position across all frames, it ORs all plane bits then inverts:
+`mask_word = NOT(plane0 AND plane1 AND plane2 AND plane3 AND plane4)`
+A pixel is **transparent** when all 5 plane bits are set (color index 31). All other color indices are opaque.
+Comment in `fsubs.asm:1617`: "assumes color 31 = transparent".
 
 | cfile# | ADF block | Blocks | W×H | Frames | Slot | Contents |
 |--------|-----------|--------|-----|--------|------|----------|
@@ -381,20 +387,21 @@ struct cfile_info {
 | 16 | 946  | 5  | 1×32 | 8  | SETFIG | Witch / Spectre / Ghost |
 | 17 | 951  | 5  | 1×32 | 8  | SETFIG | Ranger / Beggar |
 
-### Amiga interleaved bitplane layout
+### Bitplane layout
 
-Each animation frame is stored in **Amiga interleaved bitplane format**: the bitplanes are interleaved row-by-row within each frame. For a `1×32` (one word × 32 rows, 5 planes) frame:
+Each animation frame is stored in **plane-major format**: all rows of one plane are stored together, then all rows of the next plane. For a `1×32` (one word × 32 rows, 5 planes) frame:
 ```
-row 0, plane 0: 2 bytes
-row 0, plane 1: 2 bytes
-row 0, plane 2: 2 bytes
-row 0, plane 3: 2 bytes
-row 0, plane 4: 2 bytes
-row 1, plane 0: 2 bytes
+plane 0, row  0: 2 bytes
+plane 0, row  1: 2 bytes
 ...
-row 31, plane 4: 2 bytes   (total: 32 × 5 × 2 = 320 bytes per frame)
+plane 0, row 31: 2 bytes  (64 bytes total for plane 0)
+plane 1, row  0: 2 bytes
+...
+plane 4, row 31: 2 bytes  (total: 5 × 64 = 320 bytes per frame)
 ```
-The mask plane (`maskloc`) follows immediately after all 5 bitplanes of all frames, in the same interleaved row layout but 1 plane only.
+Offset formula: plane P, row R of frame F = `data[F*320 + P*64 + R*2]`.
+
+The mask is not stored after the frames — see the note above about `make_mask()`.
 
 ### `statelist[]` — Animation Frame Index
 

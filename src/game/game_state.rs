@@ -134,8 +134,8 @@ pub struct GameState {
 }
 
 impl GameState {
-    /// Max fatigue before forced sleep (original: 500).
-    pub const MAX_FATIGUE: i16 = 500;
+    /// Max fatigue (used only as a guard; original forced-sleep threshold is 171).
+    pub const MAX_FATIGUE: i16 = 200;
 
     /// Initialize with Julian's default starting values (blist[0] from fmain.c).
     /// The game should call `init_first_brother()` after construction to apply
@@ -279,10 +279,14 @@ impl GameState {
     }
 
     /// Advance game state by `delta` ticks.
-    pub fn tick(&mut self, delta: u32) {
-        const HUNGER_PERIOD: u32 = 300;
-        const HUNGER_MAX: i16 = 300;
+    ///
+    /// Returns a list of event IDs (matching `events::EVENT_MESSAGES` indices) that were
+    /// triggered this update — hunger/fatigue warnings, time-of-day announcements, etc.
+    /// The caller (gameplay_scene) is responsible for displaying the corresponding messages.
+    pub fn tick(&mut self, delta: u32) -> Vec<u8> {
         const HEAL_PERIOD: u32 = 600;
+
+        let mut events: Vec<u8> = Vec::new();
 
         // Decrement magic timers (clamped, unless sticky).
         if !self.light_sticky {
@@ -295,30 +299,82 @@ impl GameState {
             self.freeze_timer = self.freeze_timer.saturating_sub(delta as i16).max(0);
         }
 
-        // Advance day/night cycle once per tick.
+        // Advance day/night cycle once per tick, checking hunger/fatigue on each step.
         for _ in 0..delta {
-            self.daynight_tick();
+            let period_crossed = self.daynight_tick();
+
+            // Hunger + fatigue: fire every 128 daynight ticks, matching original fmain.c:2623.
+            // `(daynight & 127) == 0` triggers once per 128-tick window.
+            if (self.daynight & 127) == 0 && self.vitality > 0 {
+                self.hunger_fatigue_step(&mut events);
+            }
+
+            // Time-of-day announcements when dayperiod boundary is crossed (events 28-31).
+            if period_crossed {
+                let ev = match self.dayperiod {
+                    0 => 28u8, // midnight
+                    1 => 29,   // morning
+                    2 => 30,   // midday
+                    3 => 31,   // evening
+                    _ => u8::MAX,
+                };
+                if ev != u8::MAX {
+                    events.push(ev);
+                }
+            }
         }
 
-        let prev = self.tick_counter;
         self.tick_counter = self.tick_counter.wrapping_add(delta);
-
-        // Hunger: +1 every HUNGER_PERIOD ticks.
-        let prev_hunger_phase = prev / HUNGER_PERIOD;
-        let next_hunger_phase = self.tick_counter / HUNGER_PERIOD;
-        if next_hunger_phase > prev_hunger_phase {
-            let increments = (next_hunger_phase - prev_hunger_phase) as i16;
-            self.hunger = (self.hunger + increments).min(HUNGER_MAX);
-            self.apply_hunger_effects();
-        }
 
         // Healing: +1 vitality every HEAL_PERIOD ticks when out of battle and injured.
         if !self.battleflag && self.vitality > 0 && self.vitality < 100 {
-            let prev_heal_phase = prev / HEAL_PERIOD;
-            let next_heal_phase = self.tick_counter / HEAL_PERIOD;
-            if next_heal_phase > prev_heal_phase {
-                let increments = (next_heal_phase - prev_heal_phase) as i16;
+            let prev_heal = self.tick_counter.wrapping_sub(delta) / HEAL_PERIOD;
+            let next_heal = self.tick_counter / HEAL_PERIOD;
+            if next_heal > prev_heal {
+                let increments = (next_heal - prev_heal) as i16;
                 self.vitality = (self.vitality + increments).min(100);
+            }
+        }
+
+        events
+    }
+
+    /// Per-128-daynight-tick hunger and fatigue increment, matching fmain.c:2623-2652.
+    /// Pushes triggered event IDs into `events`.
+    fn hunger_fatigue_step(&mut self, events: &mut Vec<u8>) {
+        self.hunger += 1;
+        self.fatigue += 1;
+
+        // Hunger threshold messages.
+        if self.hunger == 35 {
+            events.push(0); // "was getting rather hungry"
+        } else if self.hunger == 60 {
+            events.push(1); // "was getting very hungry"
+        }
+
+        // Fatigue threshold messages.
+        if self.fatigue == 70 {
+            events.push(3); // "was getting tired"
+        } else if self.hunger == 90 {
+            events.push(4); // "was getting sleepy"
+        }
+
+        // Every 8 hunger increments: check for starvation damage and forced sleep.
+        if (self.hunger & 7) == 0 {
+            if self.vitality > 5 {
+                if self.hunger > 100 || self.fatigue > 160 {
+                    self.vitality = (self.vitality - 2).max(0);
+                }
+                if self.hunger > 90 {
+                    events.push(2); // "was starving!"
+                }
+            } else if self.fatigue > 170 {
+                events.push(12); // "just couldn't stay awake any longer!" → forced sleep
+                self.fatigue = 0;
+            } else if self.hunger > 140 {
+                events.push(24); // "passed out from hunger!" → forced sleep
+                self.hunger = 130;
+                self.fatigue = 0;
             }
         }
     }
