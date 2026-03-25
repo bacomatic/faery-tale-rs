@@ -5,7 +5,7 @@ use crate::game::adf::AdfDisk;
 
 /// Number of shape files (cfiles).
 pub const CFILE_COUNT: usize = 18;
-/// Pixels per sprite frame: 16 wide × 32 tall, 5 bitplanes + 1 mask.
+/// Pixels per sprite frame: 16 wide × 32 tall, 5 bitplanes (mask is computed at runtime).
 pub const SPRITE_W: usize = 16;
 pub const SPRITE_H: usize = 32;
 pub const SPRITE_PLANES: usize = 5;
@@ -62,14 +62,14 @@ pub const CFILE_BLOCK_COUNTS: [u32; CFILE_COUNT] = [
 
 /// Animation frame count per shape file (cfiles[].count from fmain2.c).
 ///
-/// This is the number of unique shape frames stored on disk.  The mask section
-/// immediately follows the shape section at offset count × SHAPE_FRAME_BYTES.
-/// Leftover bytes give the number of available mask frames (often 0 or 1).
+/// The mask is NOT stored on disk — it is computed at runtime by `make_mask()`
+/// (fsubs.asm:1614) and written into the `shape_mem` buffer beyond the shape data.
+/// Any extra bytes in the ADF allocation are block-alignment padding (512-byte blocks).
 ///
-/// Key observations from the original data:
-/// - Players (0-2):  count=67, numblocks=42 → 67×320=21440 shape + 64 mask = 21504 ✓
-/// - Enemies (6-9,12): count=64, numblocks=40 → 64×320=20480 shape + 0 mask = 20480 ✓
-/// - Setfig (13-17): count=8, numblocks=5 → 8×320=2560 shape + 0 mask = 2560 ✓
+/// Key observations from the original data (see commit 83511a3):
+/// - Players (0-2):  count=67, numblocks=42 → 67×320=21440 shape bytes (64 padding)
+/// - Enemies (6-9,12): count=64, numblocks=40 → 64×320=20480 shape bytes (no padding)
+/// - Setfig (13-17): count=8, numblocks=5 → 8×320=2560 shape bytes (no padding)
 pub const CFILE_FRAME_COUNTS: [usize; CFILE_COUNT] = [
     67,  // 0  julian
     67,  // 1  phillip
