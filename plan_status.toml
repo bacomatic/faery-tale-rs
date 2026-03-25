@@ -1441,44 +1441,6 @@ notes = "Overlay facing_char and N/S/E/W text over compass rose area of hiscreen
 updated = "2026-03-04"
 issue = "#92"
 
-# ── RAG Index Makefile Target ─────────────────────────────────────────
-
-[[task]]
-id = "rag-index-script"
-parent = "rag-index-001"
-title = "Create scripts/rag_index.sh"
-area = "tooling"
-state = "done"
-priority = "low"
-depends_on = []
-notes = "Env loading, Ollama reachability check, cargo run --bin rag -- index with --reset or incremental flags."
-updated = "2026-03-04"
-issue = "#90"
-
-[[task]]
-id = "rag-index-makefile"
-parent = "rag-index-001"
-title = "Add rag-index and rag-index-inc to Makefile"
-area = "tooling"
-state = "done"
-priority = "low"
-depends_on = ["rag-index-script"]
-notes = "rag-index calls bash scripts/rag_index.sh. rag-index-inc passes INDEX_INCREMENTAL=true. Both in .PHONY."
-updated = "2026-03-04"
-issue = "#90"
-
-[[task]]
-id = "rag-index-docs"
-parent = "rag-index-001"
-title = "Update RAG.md with quick reindex section"
-area = "docs"
-state = "done"
-priority = "low"
-depends_on = ["rag-index-makefile"]
-notes = "Add 'Quick Reindex' section documenting make rag-index and make rag-index-inc."
-updated = "2026-03-04"
-issue = "#90"
-
 # ── Bug Fixes ─────────────────────────────────────────────────────────
 
 [[task]]
@@ -1549,17 +1511,6 @@ depends_on = []
 notes = "Rollup: fix solid-blue gameplay scene by wiring WorldData load and all render elements."
 updated = "2026-03-04"
 issue = "#92"
-
-[[task]]
-id = "rag-index-001"
-title = "Add rag-index Makefile target"
-area = "tooling"
-state = "done"
-priority = "low"
-depends_on = []
-notes = "Rollup: script + Makefile target + docs for rebuilding the RAG index."
-updated = "2026-03-04"
-issue = "#90"
 
 [[task]]
 id = "fix-colormod-001"

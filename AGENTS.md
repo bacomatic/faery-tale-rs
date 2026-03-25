@@ -30,7 +30,6 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Build/run commands and developer setup: `README.md`
 - Reverse-engineering/file formats (`songs`, `v6`, etc.): `DECODE.md`
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
-- Local RAG usage and source-of-truth policy: `RAG.md`
 - Current architecture and implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 
 ## Planning files contract
@@ -45,7 +44,6 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Do treat `plan_status.toml` + `PLAN.md` as canonical project state.
 - Do update matching GitHub rollup issue references when task state meaningfully changes.
 - Do run `bash scripts/plan_sync_check.sh` before finishing state edits.
-- Don't use RAG output as source-of-truth for task status.
 - Don't update only one of the planning files when changing state.
 
 ## Issue tracking memory

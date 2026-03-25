@@ -33,7 +33,6 @@ cargo test -- --nocapture            # show println! output
 - Reverse-engineering and file formats (`songs`, `v6`, ADF layout, etc.): **always check `DECODE.md` before guessing at binary format details**
 - Architecture deep-dives (screen layout, Amiga rendering pipeline, palette handling, etc.): **always check `RESEARCH.md` before re-deriving implementation decisions**
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
-- Local RAG usage and source-of-truth policy: `RAG.md`
 
 ## Architecture
 

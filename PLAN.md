@@ -40,7 +40,6 @@ For tasks marked `pre-issues`, use commit history as evidence (for example:
 - `debug-effects-001` → #88
 - `faerytoml-001` → #91
 - `render-001` → #92
-- `rag-index-001` → #90
 - `fix-colormod-001` → #87
 - `fix-item-names-001` → #89
 
@@ -54,12 +53,11 @@ Machine-readable mirror: `plan_status.toml`
 
 ### Done
 
-> **All 17 rollup issues closed.** Open bugs: [#86 placard border tail artifact](https://github.com/bacomatic/faery-tale-rs/issues/86) (fidelity — not yet planned).
+> **All 16 rollup issues closed.** Open bugs: [#86 placard border tail artifact](https://github.com/bacomatic/faery-tale-rs/issues/86) (fidelity — not yet planned).
 
 - [debug-effects-001] Debug window visual effects controls (5/5 steps complete; Issue: #88)
 - [faerytoml-001] Move hardcoded asset paths/tables to faery.toml (9/9 steps complete; Issue: #91)
 - [render-001] Render game view — map, HI bar, buttons, compass (6/6 steps complete; Issue: #92)
-- [rag-index-001] Add rag-index Makefile target (3/3 steps complete; Issue: #90)
 - [fix-colormod-001] Fix text renders black bug (2/2 steps complete; Issue: #87)
 - [fix-item-names-001] Fix wrong ITEM_NAMES in debug_window (1/1 steps complete; Issue: #89)
 - [gameloop-001] Core game loop (15/15 steps complete; Issue: #59)
@@ -1126,18 +1124,6 @@ The gameplay scene renders solid blue because `WorldData`/`MapRenderer` are neve
 5. **`render-buttons`** — Render 2×5 action button grid at hi-res positions (`x=430`, `x=482`) scaled to canvas coords.
 
 6. **`render-compass`** — Overlay facing direction text/symbol on compass rose area (rightmost in HI bar).
-
-## Plan: RAG Index Makefile Target
-
-**Issue: #90**
-
-### Steps
-
-1. **`rag-index-script`** — Create `scripts/rag_index.sh`. Load `.env.local`/`.env`; check Ollama reachability; run `cargo run --bin rag -- index` with `--reset` or incremental flags based on `INDEX_RESET`/`INDEX_INCREMENTAL` env vars.
-
-2. **`rag-index-makefile`** — Add `rag-index` (calls `bash scripts/rag_index.sh`) and `rag-index-inc` (incremental variant) to `Makefile`. Add both to `.PHONY`.
-
-3. **`rag-index-docs`** — Add "Quick Reindex" section to `RAG.md` documenting both targets.
 
 ## Plan: Bug Fixes
 

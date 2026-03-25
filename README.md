@@ -13,7 +13,6 @@ expect updates in a timely manner.
 - Build/run commands and developer setup: this file (`README.md`)
 - Reverse-engineering and asset format notes: `DECODE.md`
 - Roadmap/progress and task state: `PLAN.md` and `plan_status.toml`
-- Local RAG setup and usage: `RAG.md`
 - Agent constraints and working contract: `AGENTS.md`
 
 # Build
@@ -105,20 +104,13 @@ Enable repo-local hooks once after cloning:
 
     $ git config core.hooksPath .githooks
 
-## Local RAG helper
-
-RAG setup, script environment variables, and all usage examples are documented in `RAG.md`.
-
 ## Common shortcuts
 
 If `make` is available, these shortcuts are provided:
 
     $ make plan-check
     $ make docs-check
-    $ make rag-demo Q="where is page flip handled"
-    $ make rag-demo-inc Q="what changed in map rendering"
     $ make sync-issues
-    $ make agent-bootstrap
 
 ##
 
