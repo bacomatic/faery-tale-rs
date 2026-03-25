@@ -284,7 +284,7 @@ impl GameState {
     /// triggered this update — hunger/fatigue warnings, time-of-day announcements, etc.
     /// The caller (gameplay_scene) is responsible for displaying the corresponding messages.
     pub fn tick(&mut self, delta: u32) -> Vec<u8> {
-        const HEAL_PERIOD: u32 = 600;
+        const HEAL_PERIOD: u32 = 300; // 10 s at 30 Hz
 
         let mut events: Vec<u8> = Vec::new();
 

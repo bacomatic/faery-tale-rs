@@ -357,7 +357,7 @@ pub fn main() -> Result<(), String> {
                             active_scene = Some(Box::new(PlacardScene::new(
                                 "julian_start",
                                 "pagecolors",
-                            ).with_hold_ticks(600))); // 10s at 60Hz
+                            ).with_hold_ticks(300))); // 10s at 30Hz
                             scene_phase = ScenePhase::PlacardStart;
                         }
                         ScenePhase::PlacardStart => {

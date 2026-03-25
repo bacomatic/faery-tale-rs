@@ -9,6 +9,11 @@ pub const VIEWPORT_TILES_W: usize = 19;
 pub const VIEWPORT_TILES_H: usize = 6;
 pub const VIEWPORT_TILES: usize = VIEWPORT_TILES_W * VIEWPORT_TILES_H; // 114
 
+/// Extended tile dimensions for sub-tile-offset scrolling (one extra column + row).
+pub const SCROLL_TILES_W: usize = 20;
+pub const SCROLL_TILES_H: usize = 7;
+pub const SCROLL_TILES: usize = SCROLL_TILES_W * SCROLL_TILES_H; // 140
+
 /// Fill the 19×6 minimap tile index array for the given viewport position.
 ///
 /// Parameters:
@@ -60,6 +65,41 @@ pub fn genmini(img_x: u16, img_y: u16, region_num: u8, world: &WorldData) -> [u1
             let tile_idx = world.tile_at(sec_num, lx, ly);
 
             minimap[j * VIEWPORT_TILES_W + i] = tile_idx as u16;
+        }
+    }
+
+    minimap
+}
+
+/// Fill the 20×7 minimap tile index array for sub-tile-offset scrolling.
+///
+/// Identical algorithm to `genmini` but covers one extra column and one extra row so
+/// `map_renderer::compose()` can shift the blit by up to 15 px (X) / 31 px (Y) without
+/// leaving an unfilled strip at the right or bottom edge of the framebuf.
+pub fn genmini_scrolled(img_x: u16, img_y: u16, region_num: u8, world: &WorldData) -> [u16; SCROLL_TILES] {
+    let xr: u16 = if region_num <= 7 { (region_num & 1) as u16 } else { 0 };
+    let yr: u16 = (region_num >> 1) as u16;
+    let xreg = xr << 6;
+    let yreg = yr << 5;
+
+    let mut minimap = [0u16; SCROLL_TILES];
+
+    for i in 0..SCROLL_TILES_W {
+        let x = img_x.wrapping_add(i as u16) & 0x7fff;
+        let xs_raw = (x >> 4) as i16 - xreg as i16;
+        let xs = (xs_raw.max(0).min(63) as u16 + xreg) as usize;
+
+        for j in 0..SCROLL_TILES_H {
+            let y = img_y.wrapping_add(j as u16) & 0x7fff;
+            let ys_raw = (y >> 3) as i32 - yreg as i32;
+            let ys = ys_raw.max(0).min(31) as usize;
+
+            let sec_num = world.sector_at(xs, ys);
+            let lx = (x & 0xF) as usize;
+            let ly = (y & 0x7) as usize;
+            let tile_idx = world.tile_at(sec_num, lx, ly);
+
+            minimap[j * SCROLL_TILES_W + i] = tile_idx as u16;
         }
     }
 

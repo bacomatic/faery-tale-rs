@@ -340,15 +340,17 @@ impl GameplayScene {
     fn apply_player_input(&mut self) {
         let dir = self.current_direction();
 
-        let (dx, dy): (i32, i32) = match dir {
-            Direction::N    => ( 0, -1),
-            Direction::NE   => ( 1, -1),
-            Direction::E    => ( 1,  0),
-            Direction::SE   => ( 1,  1),
-            Direction::S    => ( 0,  1),
-            Direction::SW   => (-1,  1),
-            Direction::W    => (-1,  0),
-            Direction::NW   => (-1, -1),
+        // Per-direction base deltas from original xdir/ydir tables (fsubs.asm:1277-1278).
+        // Applied as: delta = base * speed / 2  →  cardinal=3px, diagonal=2px at speed=2.
+        let (base_dx, base_dy): (i32, i32) = match dir {
+            Direction::N    => ( 0, -3),
+            Direction::NE   => ( 2, -2),
+            Direction::E    => ( 3,  0),
+            Direction::SE   => ( 2,  2),
+            Direction::S    => ( 0,  3),
+            Direction::SW   => (-2,  2),
+            Direction::W    => (-3,  0),
+            Direction::NW   => (-2, -2),
             Direction::None => ( 0,  0),
         };
 
@@ -373,8 +375,10 @@ impl GameplayScene {
             };
 
 
-            let new_x = (self.state.hero_x as i32 + dx * speed).clamp(0, 0x7FF0) as u16;
-            let new_y = (self.state.hero_y as i32 + dy * speed).clamp(0, 0x3FF0) as u16;
+            let dx = base_dx * speed / 2;
+            let dy = base_dy * speed / 2;
+            let new_x = (self.state.hero_x as i32 + dx).clamp(0, 0x7FF0) as u16;
+            let new_y = (self.state.hero_y as i32 + dy).clamp(0, 0x3FF0) as u16;
 
             // Turtle guardrail: turtle rides water but cannot enter hard-block terrain (mountains).
             let turtle_blocked = self.state.on_raft
@@ -439,14 +443,14 @@ impl GameplayScene {
         let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
 
         // Melee combat when fight is held (npc-103).
-        // Rate-limited to one swing every 20 ticks (~1/3 s at 60 Hz), matching
+        // Rate-limited to one swing every 10 ticks (~1/3 s at 30 Hz), matching
         // fmain.c's per-frame proximity check gated by weapon animation state.
         if self.fight_cooldown > 0 {
             self.fight_cooldown -= 1;
         }
         if self.input.fight && self.fight_cooldown == 0 {
             self.apply_melee_combat();
-            self.fight_cooldown = 20;
+            self.fight_cooldown = 10;
         }
 
         // Raft proximity detection (player-107).
@@ -694,7 +698,7 @@ impl GameplayScene {
                 let dir = facing_toward(ax, ay, hero_x, hero_y);
                 use crate::game::combat::fire_missile;
                 fire_missile(&mut self.missiles, ax, ay, dir, 3, false);
-                self.archer_cooldown = 30;
+                self.archer_cooldown = 15;
                 break; // one archer fires per cycle
             }
         }
@@ -1308,7 +1312,7 @@ impl GameplayScene {
                 } else {
                     self.apply_melee_combat();
                 }
-                self.fight_cooldown = 20;
+                self.fight_cooldown = 10;
             }
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
@@ -1774,6 +1778,33 @@ impl GameplayScene {
 
     /// Compute rel_x/rel_y for an actor at (abs_x, abs_y) given viewport origin (map_x, map_y).
     /// Matches original fmain.c:2150-2158: rel_x = abs_x - map_x - 8, rel_y = abs_y - map_y - 26.
+    /// Camera follow from fsubs.asm:1360–1423.
+    /// Dead zone (±20 px X / ±10 px Y): camera still, player moves in window.
+    /// Creep zone (20–70 px X / 10–24/44 px Y): camera advances 1 px/tick toward player.
+    /// Beyond threshold: camera tracks 1:1 with player, keeping player pinned at the edge.
+    fn map_adjust(hero_x: u16, hero_y: u16, map_x: u16, map_y: u16) -> (u16, u16) {
+        const CX: i32 = 144;
+        const CY: i32 = 70;
+
+        let ideal_x = hero_x as i32 - CX;
+        let dx = ideal_x - map_x as i32;
+        let new_map_x = if dx > 70       { (ideal_x - 70).max(0) }
+                        else if dx < -70 { (ideal_x + 70).max(0) }
+                        else if dx > 20  { map_x as i32 + 1 }
+                        else if dx < -20 { (map_x as i32 - 1).max(0) }
+                        else             { map_x as i32 };
+
+        let ideal_y = hero_y as i32 - CY;
+        let dy = ideal_y - map_y as i32;
+        let new_map_y = if dy > 44       { (ideal_y - 44).max(0) }
+                        else if dy < -24 { (ideal_y + 24).max(0) }
+                        else if dy > 10  { map_y as i32 + 1 }
+                        else if dy < -10 { (map_y as i32 - 1).max(0) }
+                        else             { map_y as i32 };
+
+        (new_map_x as u16, new_map_y as u16)
+    }
+
     fn actor_rel_pos(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16) -> (i32, i32) {
         let rel_x = (abs_x as i32) - (map_x as i32) - 8;
         let rel_y = (abs_y as i32) - (map_y as i32) - 26;
@@ -1802,9 +1833,11 @@ impl GameplayScene {
             let (rel_x, rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
-                // frames_per_dir: 56 frames / 8 dirs = 7 per dir for standard player
+                // frames_per_dir: e.g. 56 frames / 8 dirs = 7 per dir for standard player
                 let frames_per_dir = (sheet.num_frames / 8).max(1);
-                let frame = (hero_facing as usize) * frames_per_dir;
+                let is_moving = state.actors.first().map_or(false, |a| a.moving);
+                let anim_offset = if is_moving { (state.cycle as usize) % frames_per_dir } else { 0 };
+                let frame = (hero_facing as usize) * frames_per_dir + anim_offset;
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
                 }
@@ -2055,6 +2088,7 @@ impl Scene for GameplayScene {
         }
 
         let tick_events = self.state.tick(delta_ticks);
+        self.state.cycle = self.state.cycle.wrapping_add(delta_ticks);
         if !tick_events.is_empty() {
             let bname = brother_name(&self.state);
             for ev in tick_events {
@@ -2140,7 +2174,7 @@ impl Scene for GameplayScene {
 
         // setmood: check music group every 8 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
-        if self.mood_tick >= 8 {
+        if self.mood_tick >= 4 {
             self.mood_tick = 0;
             let mood = self.setmood();
             if mood != self.last_mood {
@@ -2229,8 +2263,8 @@ impl Scene for GameplayScene {
             }
         }
 
-        // Autosave every 3600 ticks (~60s at 60Hz)
-        if self.autosave_enabled && self.state.tick_counter % 3600 == 0 && self.state.tick_counter > 0 {
+        // Autosave every 1800 ticks (~60s at 30Hz)
+        if self.autosave_enabled && self.state.tick_counter % 1800 == 0 && self.state.tick_counter > 0 {
             if let Err(e) = crate::game::persist::save_game(&self.state, 0) {
                 eprintln!("autosave failed: {e}");
             } else if let Err(e) = crate::game::persist::save_transcript(
@@ -2266,72 +2300,75 @@ impl Scene for GameplayScene {
             }
         }
 
-        self.apply_player_input();
+        // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
+        for _ in 0..delta_ticks {
+            self.apply_player_input();
 
-        // Tick missiles (npc-105): advance each active missile, check hits.
-        {
-            let hero_x = self.state.hero_x as i32;
-            let hero_y = self.state.hero_y as i32;
-            // Snapshot NPC positions to avoid simultaneous mutable borrow conflicts.
-            let npc_positions: Vec<(usize, i32, i32)> = self.npc_table.as_ref().map_or(vec![], |t| {
-                t.npcs.iter().enumerate()
-                    .filter(|(_, n)| n.active)
-                    .map(|(i, n)| (i, n.x as i32, n.y as i32))
-                    .collect()
-            });
-            let mut hero_missile_damage: i16 = 0;
-            let mut npc_hits: Vec<(usize, i16)> = vec![];
-            for missile in self.missiles.iter_mut() {
-                if !missile.active { continue; }
-                missile.x += missile.dx;
-                missile.y += missile.dy;
-                if missile.x < 0 || missile.x > 32768 || missile.y < 0 || missile.y > 32768 {
-                    missile.active = false;
-                    continue;
+            // Tick missiles (npc-105): advance each active missile, check hits.
+            {
+                let hero_x = self.state.hero_x as i32;
+                let hero_y = self.state.hero_y as i32;
+                // Snapshot NPC positions to avoid simultaneous mutable borrow conflicts.
+                let npc_positions: Vec<(usize, i32, i32)> = self.npc_table.as_ref().map_or(vec![], |t| {
+                    t.npcs.iter().enumerate()
+                        .filter(|(_, n)| n.active)
+                        .map(|(i, n)| (i, n.x as i32, n.y as i32))
+                        .collect()
+                });
+                let mut hero_missile_damage: i16 = 0;
+                let mut npc_hits: Vec<(usize, i16)> = vec![];
+                for missile in self.missiles.iter_mut() {
+                    if !missile.active { continue; }
+                    missile.x += missile.dx;
+                    missile.y += missile.dy;
+                    if missile.x < 0 || missile.x > 32768 || missile.y < 0 || missile.y > 32768 {
+                        missile.active = false;
+                        continue;
+                    }
+                    if missile.is_friendly {
+                        for &(npc_idx, nx, ny) in &npc_positions {
+                            if (missile.x - nx).abs() < 16 && (missile.y - ny).abs() < 16 {
+                                missile.active = false;
+                                npc_hits.push((npc_idx, missile.damage));
+                                break;
+                            }
+                        }
+                    } else if (missile.x - hero_x).abs() < 16 && (missile.y - hero_y).abs() < 16 {
+                        missile.active = false;
+                        hero_missile_damage += missile.damage;
+                    }
                 }
-                if missile.is_friendly {
-                    for &(npc_idx, nx, ny) in &npc_positions {
-                        if (missile.x - nx).abs() < 16 && (missile.y - ny).abs() < 16 {
-                            missile.active = false;
-                            npc_hits.push((npc_idx, missile.damage));
-                            break;
+                if let Some(ref mut table) = self.npc_table {
+                    for (npc_idx, dmg) in npc_hits {
+                        table.npcs[npc_idx].vitality -= dmg;
+                        if table.npcs[npc_idx].vitality <= 0 {
+                            table.npcs[npc_idx].active = false;
                         }
                     }
-                } else if (missile.x - hero_x).abs() < 16 && (missile.y - hero_y).abs() < 16 {
-                    missile.active = false;
-                    hero_missile_damage += missile.damage;
                 }
+                self.state.vitality -= hero_missile_damage;
             }
-            if let Some(ref mut table) = self.npc_table {
-                for (npc_idx, dmg) in npc_hits {
-                    table.npcs[npc_idx].vitality -= dmg;
-                    if table.npcs[npc_idx].vitality <= 0 {
-                        table.npcs[npc_idx].active = false;
-                    }
-                }
+            let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y, 0);
+            if shells > 0 {
+                self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
             }
-            self.state.vitality -= hero_missile_damage;
-        }
-        let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y, 0);
-        if shells > 0 {
-            self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
-        }
-        self.update_actors(delta_ticks);
+            self.update_actors(1);
 
-        // Camera: center hero in 288×160 viewport (gameloop-110)
-        self.map_x = self.state.hero_x.saturating_sub(144);
-        self.map_y = self.state.hero_y.saturating_sub(80);
-        self.state.map_x = self.map_x;
-        self.state.map_y = self.map_y;
+            let (new_map_x, new_map_y) = Self::map_adjust(
+                self.state.hero_x, self.state.hero_y,
+                self.map_x, self.map_y,
+            );
+            self.map_x = new_map_x;
+            self.map_y = new_map_y;
+            self.state.map_x = self.map_x;
+            self.state.map_y = self.map_y;
+        }
 
         // Compose map viewport when in normal play view (world-105).
-        // Pass img_x = map_x >> 4 and img_y = map_y >> 5 (tile-column and tile-row units),
-        // matching the original: img_x = map_x >> 4, img_y = map_y >> 5 (fmain.c:2306-2307).
+        // Pass pixel-precise map_x/map_y so compose() can apply the sub-tile offset.
         if self.state.viewstatus == 0 {
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                let img_x = self.map_x >> 4;
-                let img_y = self.map_y >> 5;
-                mr.compose(img_x, img_y, self.state.region_num, world);
+                mr.compose(self.map_x, self.map_y, self.state.region_num, world);
             }
             // Blit actors on top of the composed tiles (sprite-104).
             // Collect borrow-safe parameters before taking &mut map_renderer.

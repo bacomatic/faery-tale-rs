@@ -92,31 +92,31 @@ const PAGE_OVERLAYS: [PageOverlay; 3] = [
 const PORTRAIT_X: i32 = 32;
 const PORTRAIT_Y: i32 = 24;
 
-/// How long to display each story page before flipping (ticks at 60Hz).
-/// 8s = 480 ticks.
-const PAGE_DISPLAY_TICKS: u32 = 480;
+/// How long to display each story page before flipping (ticks at 30Hz).
+/// 8s = 240 ticks.
+const PAGE_DISPLAY_TICKS: u32 = 240;
 
 /// How long to hold page0 after zoom in before flipping.
-const PAGE0_DISPLAY_TICKS: u32 = 480;
+const PAGE0_DISPLAY_TICKS: u32 = 240;
 
 /// How long to hold the last page after display before zooming out.
-const LAST_PAGE_HOLD_TICKS: u32 = 480;
+const LAST_PAGE_HOLD_TICKS: u32 = 240;
 
 /// How long to hold the title text before proceeding.
-/// 3s = 180 ticks at 60Hz.
-const TITLE_HOLD_TICKS: u32 = 180;
+/// 3s = 90 ticks at 30Hz.
+const TITLE_HOLD_TICKS: u32 = 90;
 
 /// Duration of the title fade-out in ticks.
-/// 1.5s = 90 ticks at 60Hz.
-const TITLE_FADE_TICKS: u32 = 90;
+/// 1.5s = 45 ticks at 30Hz.
+const TITLE_FADE_TICKS: u32 = 45;
 
 /// Total duration of zoom in/out in ticks.
-/// 3s = 180 ticks at 60Hz.
-const ZOOM_DURATION_TICKS: u32 = 180;
+/// 3s = 90 ticks at 30Hz.
+const ZOOM_DURATION_TICKS: u32 = 90;
 
 /// Minimum ticks per page-flip step for ~5s total flip.
-/// 22 steps × 14 ticks/step ≈ 308 ticks ≈ 5.1s.
-const FLIP_MIN_STEP_TICKS: u32 = 14;
+/// 22 steps × 7 ticks/step ≈ 154 ticks ≈ 5.1s.
+const FLIP_MIN_STEP_TICKS: u32 = 7;
 
 /// Title text is rendered directly to the canvas (640x480 logical) because the
 /// original uses a 640-wide hires text viewport. The text y-coordinates are

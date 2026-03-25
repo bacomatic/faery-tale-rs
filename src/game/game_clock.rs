@@ -27,7 +27,7 @@ struct GameTicker {
     last_update: Instant,
     accumulated_nanos: u128,
 }
-const NANOS_PER_TICK: u128 = 16_666_667; // nanoseconds per tick (60 ticks per second)
+const NANOS_PER_TICK: u128 = 33_333_334; // nanoseconds per tick (30 Hz — NTSC interlaced frame rate)
 
 impl GameTicker {
     pub fn new() -> GameTicker {

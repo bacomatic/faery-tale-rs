@@ -29,7 +29,7 @@ use crate::game::game_library::GameLibrary;
  */
 
 /// How long to display the preamble text before showing the first question.
-const PREAMBLE_HOLD_TICKS: u32 = 90; // ~1.5 seconds
+const PREAMBLE_HOLD_TICKS: u32 = 45; // ~1.5 seconds at 30Hz
 
 /// Maximum characters in an answer.
 const MAX_ANSWER_LEN: usize = 9;
@@ -44,7 +44,7 @@ const BG_COLOR: Color = Color::RGB(0x00, 0x00, 0x66);
 const NUM_QUESTIONS: usize = 3;
 
 /// Brief pause after passing/failing (ticks).
-const RESULT_PAUSE_TICKS: u32 = 60;
+const RESULT_PAUSE_TICKS: u32 = 30; // ~1 second at 30Hz
 
 enum CopyProtectPhase {
     /// Display the copy_junk placard preamble. Wait briefly before asking.

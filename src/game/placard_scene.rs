@@ -30,9 +30,9 @@ use crate::game::game_library::GameLibrary;
  * - Delay(120) holds for 2.4 seconds (at 50Hz)
  */
 
-/// Default hold duration after border is drawn (ticks at 60Hz).
-/// Original: Delay(120) at 50Hz = 2.4s = 144 ticks at 60Hz.
-const DEFAULT_HOLD_TICKS: u32 = 144;
+/// Default hold duration after border is drawn (ticks at 30Hz).
+/// Original: Delay(120) at 50Hz = 2.4s = 72 ticks at 30Hz.
+const DEFAULT_HOLD_TICKS: u32 = 72;
 
 enum PlacardPhase {
     /// First frame: draw text to play_tex, then start border animation.
