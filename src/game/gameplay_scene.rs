@@ -1833,11 +1833,24 @@ impl GameplayScene {
             let (rel_x, rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
-                // frames_per_dir: e.g. 56 frames / 8 dirs = 7 per dir for standard player
-                let frames_per_dir = (sheet.num_frames / 8).max(1);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
-                let anim_offset = if is_moving { (state.cycle as usize) % frames_per_dir } else { 0 };
-                let frame = (hero_facing as usize) * frames_per_dir + anim_offset;
+                // Sprite sheet layout (from fmain.c statelist[] and diroffs[]):
+                //   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31
+                // Original diroffs[] groups: NW+N→north, NE+E→east, SE+S→south, SW+W→west.
+                // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW.
+                let frame_base: usize = match hero_facing {
+                    0 => 16, // N  → northwalk
+                    1 => 24, // NE → eastwalk
+                    2 => 24, // E  → eastwalk
+                    3 => 0,  // SE → southwalk
+                    4 => 0,  // S  → southwalk
+                    5 => 8,  // SW → westwalk
+                    6 => 8,  // W  → westwalk
+                    _ => 16, // NW → northwalk
+                };
+                // Walking: cycle through 8 frames; still: fmain.c uses diroffs[d]+1.
+                let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
+                let frame = frame_base + anim_offset;
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
                 }
