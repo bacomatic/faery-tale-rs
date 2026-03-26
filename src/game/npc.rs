@@ -71,9 +71,12 @@ impl Npc {
 
         let dx = hero_x as i32 - self.x as i32;
         let dy = hero_y as i32 - self.y as i32;
-        let dist_sq = dx * dx + dy * dy;
 
         let speed = self.speed as i16;
+        if dx.abs() > 200 || dy.abs() > 200 {
+            return false;
+        }
+        let dist_sq = dx * dx + dy * dy;
         if dist_sq < 200 * 200 {
             if dx.abs() > dy.abs() {
                 self.x += (dx.signum() as i16) * speed;

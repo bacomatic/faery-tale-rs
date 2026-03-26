@@ -22,7 +22,7 @@ All game world data lives in `game/image`, an Amiga 880KB floppy disk image acce
 
 | Buffer | ADF source | Size | Description |
 |---|---|---|---|
-| `sector_mem` | `nd->sector`, 64 blocks | 32 768 B | 128 sectors × 256 bytes; tile indices |
+| `sector_mem` | `nd->sector`, 64 blocks | 32 768 B | 256 sectors × 128 bytes; tile indices (`SECTOR_SZ = 128*256`, stride confirmed by `lsl.w #7` in fsubs.asm) |
 | `map_mem` | `nd->region`, 8 blocks | 4 096 B | Region map; maps `(secx, secy)` → sector number |
 | `terra_mem[0..512]` | `TERRA_BLOCK + nd->terra1`, 1 block | 512 B | Terrain type table, layer 1 |
 | `terra_mem[512..1024]` | `TERRA_BLOCK + nd->terra2`, 1 block | 512 B | Terrain type table, layer 2 |
@@ -254,13 +254,25 @@ struct door {
 | Offset | Name | Description |
 |---|---|---|
 | +0 | `maptag` | Bitmask used by `maskit()` for sprite depth-sorting |
-| +1 | `terrain` | Low nibble = terrain block type (0–7); high nibble unused |
-| +2 | `tiles` | Terrain feature mask |
+| +1 | `terrain` | **Two independent nibbles**: upper nibble (`>> 4`) = walking collision type returned by `px_to_im` (0–15, used by `proxcheck`); lower nibble (`& 0x0f`) = sprite depth/masking block type (0–7, used by `maskit`) |
+| +2 | `tiles` | 8-bit terrain feature mask — one bit per sub-tile of the 16×32 tile (2 halves × 4 y-bands). If the bit for the hero's sub-cell is clear, `px_to_im` returns 0 (passable) regardless of terrain type |
 | +3 | `big_colors` | Colour zone for lighting |
 
 This 4-byte-per-tile table is the compiled output of `terrain.c`'s `load_images()` run on the original raw tileset files. Each tileset contributes 64 tiles → 256 B to `terra_mem` (two tilesets per 512-byte ADF block).
 
-**Terrain block type** (`k = terra_mem[cm+1] & 0x0f`):
+**Walking collision type** (upper nibble of `terra_mem[cm+1]`, i.e. `>> 4`), returned by `px_to_im` and tested in `prox`:
+
+| Type | Behaviour |
+|------|-----------|
+| 0 | Open terrain — passable |
+| 1 | Hard rock — blocks both feet |
+| 2–5 | Water — slows movement; passable on foot |
+| 8–9 | Blocks left foot only (`is_hard_block_left`) |
+| 10–15 | Blocks both feet (`is_hard_block_right` and `is_hard_block_left`) |
+| 12 | mountain3 — passable if hero holds Shard (`stuff[30]`) |
+| 15 | Door — triggers `doorfind()` lock/key mechanic |
+
+**Sprite depth/masking block type** (lower nibble of `terra_mem[cm+1]`, i.e. `& 0x0f`), used by `maskit`:
 
 | k | Name | Masking condition (skip masking if…) |
 |---|---|---|
@@ -455,7 +467,7 @@ Accessed via KEYS submenu (USE → Key → color selection). Each use tests 9 po
 |-------|------|------|--------|
 | 22 | Talisman | Quest (win-game) | **Passive, pickup-triggered**: when any item is picked up and stuff[22] > 0, sets `quitflag = TRUE`, `viewstatus = 2`, calls `map_message()` and `win_colors()` → triggers the win/ending sequence. Obtained from Necromancer (race 9) on death (`leave_item(i, 139)`) |
 | 23 | Rose | Passive | **Fire immunity**: in the volcanic/fiery death zone (8802 < map_x < 13562, 24744 < map_y < 29544), if hero has stuff[23] > 0, sets `environ=0` (safe) instead of taking fire damage. Without it, environ > 2 → vitality--, environ > 15 → instant death |
-| 24 | Fruit | Passive (auto-use) | **Auto-consumed food**: when hero is in a safe zone, no enemies active, environ==0, safe_flag==0, and `hunger > 30`: consumes one fruit (`stuff[24]--`), reduces hunger by 30, triggers event(37). Also picked up from MEAL objects (ob_id 148): if hunger < 15 → stored as stuff[24], else eaten immediately via `eat(30)` |
+| 24 | Fruit | Passive (auto-use) | **Auto-consumed food**: when hero is in a safe zone, no enemies active, `environ==0`, `safe_flag==0`, and `hunger > 30`: consumes one fruit (`stuff[24]--`), reduces hunger by 30, triggers event(37). Also picked up from MEAL objects (ob_id 148): if hunger < 15 → stored as stuff[24], else eaten immediately via `eat(30)` |
 
 #### Quest items (stuff 25–30, STATBASE=25)
 
@@ -913,3 +925,394 @@ values: `HIBAR_Y + (j / 2) * 18 + 16`.
 - `original/fmain.c:10–15` — `#define` block: `SCREEN_WIDTH=288`, `PAGE_HEIGHT=143`, `RAST_HEIGHT=200`, `TEXT_HEIGHT=57`
 - `original/fmain.c:3785–3822` — `propt()`: button placement formula
 - `src/game/gameplay_scene.rs` — `CANVAS_MARGIN_Y`, `PLAYFIELD_X`, `PLAYFIELD_Y`, `HIBAR_H`, `HIBAR_Y` constants; `render_by_viewstatus()` for playfield 2× blit and HI bar 2×-vertical blit
+
+---
+
+## World Map: Region Diagrams
+
+### Region selection formula (`gen_mini()`, `fmain.c:3661–3690`)
+
+```c
+xs = (hero_x + 7) >> 8        // sector column of viewport centre
+ys = (hero_y - 26) >> 8       // sector row of viewport centre
+xr = (xs >> 6) & 1            // 0 = west column, 1 = east column
+yr = (ys >> 5) & 3            // 0–3 = north → south band
+region_num = xr + yr * 2      // 0–7 for outdoor; ≥8 hard-coded (indoor/dungeon)
+```
+
+The outdoor world is a 2-column × 4-row grid of regions. All coordinate
+ranges are in world pixel units (0–32 767 on each axis). Region transitions
+are seamless; `new_region` is set and `load_all()` is called when the hero
+crosses a boundary.
+
+### World overview (outdoor regions)
+
+```
+         x: 0 – 16 376          x: 16 377 – 32 767
+         ┌──────────────────────┬──────────────────────┐
+y: 0–    │  F1  [id=0]          │  F2  [id=1]          │
+8 217    │  Snowy Region        │  Witch Wood          │
+         ├──────────────────────┼──────────────────────┤
+y: 8218– │  F3  [id=2]          │  F4  [id=3] ★start   │
+16 409   │  Swampy Region       │  Plains & Rocks      │
+         ├──────────────────────┼──────────────────────┤
+y: 16410–│  F5  [id=4]          │  F6  [id=5]          │
+24 601   │  Desert Area         │  Bay / City / Farms  │
+         ├──────────────────────┼──────────────────────┤
+y: 24602–│  F7  [id=6]          │  F8  [id=7]          │
+32 767   │  Volcanic            │  Forest & Wilderness │
+         └──────────────────────┴──────────────────────┘
+
+★ Player starts at (19 036, 15 755), region_num = 3
+```
+
+### Coordinate boundaries (derived)
+
+| Boundary | World coord | Formula |
+|---|---|---|
+| West/East split | x = 16 377 | `xs=64` when `hero_x+7 = 16384` |
+| Row 0/1 split | y = 8 218 | `ys=32` when `hero_y-26 = 8192` |
+| Row 1/2 split | y = 16 410 | `ys=64` when `hero_y-26 = 16384` |
+| Row 2/3 split | y = 24 602 | `ys=96` when `hero_y-26 = 24576` |
+
+---
+
+### F1 — Snowy Region (id = 0)
+
+x: 0 – 16 376   y: 0 – 8 217   (grid cell ≈ 410 × 512 world units)
+
+```
+     x=0                                  x=16376
+y=0  +----------------------------------------+
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+y≈8k |            dc                      cp  |
+     +----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| dc | Dragon Cave | 4 992 | 7 008 |
+| cp | Crystal Palace | 15 840 | 7 104 |
+
+---
+
+### F2 — Witch Wood (id = 1)
+
+x: 16 377 – 32 767   y: 0 – 8 217   (cell ≈ 410 × 512)
+
+```
+     x=16377                              x=32767
+y=0  +----------------------------------------+
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                te                      |
+     |                                        |
+     |                   nk mc               |
+y≈8k |                         wc             |
+     +----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| te | Turtle Eggs | 22 945–23 225 | 5 597–5 747 |
+| nk | North Keep | 24 176 | 6 752 |
+| mc | Maze Caves 1 & 2 | 25 792 / 26 048 | 6 240 / 6 688 |
+| wc | Witch's Castle | 26 624 | 7 008 |
+
+---
+
+### F3 — Swampy Region (id = 2)
+
+x: 0 – 16 376   y: 8 218 – 16 409   (cell ≈ 410 × 512)
+
+```
+     x=0                                  x=16376
+y≈8k +----------------------------------------+
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                   ss      lk           |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                            ri          |
+     |                                        |
+     |                   wk                   |
+y≈16k+----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| ss | Swamp Shack | 9 344 | 13 216 |
+| lk | Lakeside Keep | 12 144 | 11 872 |
+| ri | Road's End Inn | 12 672 | 14 528 |
+| wk | West Keep | 7 792 | 15 200 |
+
+---
+
+### F4 — Plains and Rocks (id = 3) ★ Starting Region
+
+x: 16 377 – 32 767   y: 8 218 – 16 409   (cell ≈ 410 × 512)
+
+```
+     x=16377                              x=32767
+y≈8k +----------------------------------------+
+     |                                        |
+     |                                        |
+  ck |                                        |
+     |                                        |
+     |                   sx      gk           |
+     |                                        |
+     |                                        |
+     |  fi      tc               sk           |
+     |                                        |
+     |     cr      mm                         |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+  fr |                                        |
+y≈16k|TB                                      |
+     +----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| ck | Coast Keep | 17 008 | 9 568 |
+| fi | Forest Inn | 18 304 | 12 224 |
+| sx | Spider Exit (cave) | 24 256 | 10 592 |
+| gk | Glade Keep | 26 224 | 10 848 |
+| tc | Troll Cave | 22 720 | 11 872 |
+| sk | Sea Keep | 27 760 | 11 872 |
+| cr | Crag Keep | 19 568 | 12 896 |
+| mm | Mammoth Manor | 24 816 | 12 992 |
+| fr | Friendly Inn | 17 024 | 15 296 |
+| TB | Tambry ★ (safe spawn) | 18 848–19 072 | 15 552–16 000 |
+
+---
+
+### F5 — Desert Area (id = 4)
+
+x: 0 – 16 376   y: 16 410 – 24 601   (cell ≈ 410 × 512)
+
+Note: the desert interior is blocked unless `stuff[STATBASE] >= 5`
+(five Gold Statues collected).
+
+```
+     x=0                                  x=16376
+y≈16k+----------------------------------------+
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                 oa      to             |
+     |                                        |
+     |                                        |
+     |           df                           |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+y≈24k+----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| oa | Oasis (5 doors) | 6 816–7 040 | 19 296–19 360 |
+| to | Tombs of Hemsath | 13 424 | 19 296 |
+| df | Desert Fort (4 doors) | 4 464 | 20 576 |
+
+---
+
+### F6 — Bay / City / Farms (id = 5)
+
+x: 16 377 – 32 767   y: 16 410 – 24 601   (cell ≈ 410 × 512)
+
+```
+     x=16377                              x=32767
+y≈16k+----------------------------------------+
+     |                                        |
+     |        gc c1                  lh       |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |    mk  c2 MH                  pk       |
+     |                                        |
+     |                                        |
+     |                fk                      |
+     |                                        |
+     |      c6                                |
+y≈24k+----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| gc | Graveyard / Crypt | 19 596–19 974 / 19 856 | 17 034–17 401 / 17 280 |
+| c1 | Cabin #1 yard+door | 21 600–21 648 | 17 728–17 824 |
+| lh | Lighthouse | 27 472 | 17 280 |
+| mk | Mountain Keep | 17 888 | 21 376 |
+| c2 | Cabin #2 yard+door | 19 808–19 856 | 21 568–21 664 |
+| MH | Marheim (city + castle) | 21 984–22 368 | 20 896–21 568 |
+| pk | Point Keep | 28 384 | 21 120 |
+| fk | Farm Keep | 23 008 | 22 656 |
+| c6 | Cabin #6 yard+door | 18 784–18 832 | 23 360–23 456 |
+
+Additional cabins in F6: Cabin #3 (21 344–21 392, 22 592–22 688), Cabin #4 (22 624–22 672, 23 872–23 968), Cabin #5 (25 952–26 000, 23 872–23 968).
+River Keep (19 936, 27 520) and Lonely Keep (27 616, 31 872) are in F8, not F6.
+
+---
+
+### F7 — Volcanic (id = 6)
+
+x: 0 – 16 376   y: 24 602 – 32 767   (cell ≈ 410 × 512)
+
+Note: the lava zone (`LV`, hero needs Rose item for fire immunity) covers
+roughly x = 8 946–13 706, y = 24 834–29 634 (`fmain.c` Rose check).
+
+```
+     x=0                                  x=16376
+y≈24k+----------------------------------------+
+     |                gf             pf       |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |      bi    pf                 LV       |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                            dt LV       |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+y≈32k+----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| gf | Gate Fort | 6 512 | 25 248 |
+| pf | Plain Fort | 12 144 | 25 504 |
+| bi | Bird (swan) start | 2 118–2 618 | 27 237–27 637 |
+| pf | Pass Fort | 6 000 | 27 296 |
+| LV | Lava Zone | 8 946–13 706 | 24 834–29 634 |
+| dt | Doom Tower | 11 264 | 29 024 |
+
+---
+
+### F8 — Forest and Wilderness (id = 7)
+
+x: 16 377 – 32 767   y: 24 602 – 32 767   (cell ≈ 410 × 512)
+
+```
+     x=16377                              x=32767
+y≈24k+----------------------------------------+
+     |                                        |
+     |             eg                         |
+     |                                        |
+     |     c7      uc               c8        |
+     |                                        |
+     |                                        |
+     |         rk                             |
+     |                                        |
+     |                uc9                     |
+     |                    ca                  |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                                        |
+     |                            lp          |
+y≈32k+----------------------------------------+
+```
+
+| Code | Place | x | y |
+|------|-------|---|---|
+| eg | Elf Glade | 21 616 | 25 728 |
+| c7 | Cabin #7 yard+door | 18 528–18 576 | 26 176–26 272 |
+| uc | Unreachable Castle | 22 944 | 26 464 |
+| c8 | Cabin #8 yard+door | 27 936–28 048 | 26 688–26 784 |
+| rk | River Keep | 19 936 | 27 520 |
+| uc9 | Cabin #9 yard+door | 22 880–22 928 | 28 480–28 576 |
+| ca | Cabin #10 yard+door | 24 672–24 720 | 29 248–29 344 |
+| lp | Lonely Keep | 27 616 | 31 872 |
+
+Hidden Valley encounter zone: x = 21 405–21 827, y = 25 583–26 028 (overlaps eg / uc area).
+
+---
+
+### F9 — Inside Buildings (id = 8) and F10 — Dungeons & Caves (id = 9)
+
+Indoor regions do **not** use the coordinate-formula region select. Once
+`secs` on a door entry sets `new_region = 8` (buildings) or `9` (dungeons),
+the player stays in that region until exiting through any door with the
+matching secs value.
+
+**Interior coordinate system** (from `doorlist[].xc2, yc2`):
+
+| Axis | Range observed in `doorlist` |
+|------|------------------------------|
+| x (interior) | 960 – 12 752 |
+| y (interior) | 33 408 – 40 096 (= 0x8280 – 0x9CA0) |
+
+The interior y-origin is offset by `+32768` (0x8000) above the outdoor
+world; both F9 and F10 share this address space but reference different
+`sector_block = 96` sectors.
+
+**Key F9 interior locations** (from `doorlist[].xc2, yc2`):
+
+| Interior | xc2 | yc2 |
+|----------|-----|-----|
+| Tambry buildings (8 doors) | 3 024–5 232 | 33 024–34 496 |
+| Keep interior | 10 352 | 35 680 |
+| Marheim city buildings (10 doors) | 6 400–8 288 | 33 408–34 752 |
+| Marheim main castle | 9 600 | 33 920 |
+| Palace of King Mar (F9) | 9 728–12 544 | 33 024–35 584 |
+| Desert fort interior | 10 352 | 35 680 |
+| Oasis interior (5 doors) | 4 992–6 528 | 37 728–38 848 |
+
+**Key F10 interior locations** (cave/dungeon doors):
+
+| Interior | xc2 | yc2 |
+|----------|-----|-----|
+| Dragon Cave | 6 528 | 35 936 |
+| Troll Cave | 4 544 | 35 680 |
+| Spider Cave exit | 4 544 | 35 680 |
+| Maze Cave 1 | 1 200 | 34 880 |
+| Maze Cave 2 | 960 | 34 400 |
+| Tombs | 1 136 | 36 576 |
+
+**Astral Plane** — special sub-zone within F9 triggered by the
+`extent_list[9]` rectangle: indoor coords x = 9 216–12 544, y = 33 280–35 328
+(`0x2400–0x3100`, `0x8200–0x8A00`). Music switches to palace group 4.

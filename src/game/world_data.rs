@@ -7,16 +7,21 @@ use anyhow::Result;
 
 /// Block counts for each data segment (from fmain.c memory layout).
 pub const SECTOR_BLOCKS: u32 = 64;   // 32768 bytes
-pub const MAP_BLOCKS: u32 = 8;       // 4096 bytes
+pub const MAP_BLOCKS: u32 = 8;       // 4096 bytes per y-band strip
 pub const TERRA_BLOCKS: u32 = 1;     // 512 bytes per terra layer
 pub const IMAGE_BLOCKS_PER_GROUP: u32 = 40; // 5 planes × 8 blocks per tile group
 pub const IMAGE_GROUP_COUNT: u32 = 4;
 
+/// Full overworld map: 128 sector columns × 128 sector rows = 16384 bytes.
+/// Loaded as 4 consecutive y-band strips (one per outdoor yr band), each 4096 bytes.
+/// Indoor regions use only the first 4096 bytes (128 × 32 rows).
+pub const MAP_MEM_SIZE: usize = 16384;
+
 pub struct WorldData {
     pub sector_mem: Box<[u8; 32768]>,
-    pub map_mem: Box<[u8; 4096]>,
-    pub terra_mem: Box<[u8; 1024]>,
-    pub image_mem: Box<[u8; 81920]>,
+    pub map_mem:    Box<[u8; MAP_MEM_SIZE]>,
+    pub terra_mem:  Box<[u8; 1024]>,
+    pub image_mem:  Box<[u8; 81920]>,
     pub region_num: u8,
 }
 
@@ -25,7 +30,7 @@ impl WorldData {
     pub fn empty() -> Self {
         WorldData {
             sector_mem: Box::new([0u8; 32768]),
-            map_mem:    Box::new([0u8; 4096]),
+            map_mem:    Box::new([0u8; MAP_MEM_SIZE]),
             terra_mem:  Box::new([0u8; 1024]),
             image_mem:  Box::new([0u8; 81920]),
             region_num: 0,
@@ -33,6 +38,10 @@ impl WorldData {
     }
 
     /// Load world data using explicit ADF block numbers (from faery.toml RegionBlockConfig).
+    ///
+    /// map_blocks: one entry per y-band strip to load (pass all 4 outdoor strips for the full
+    /// overworld map, or a single block for indoor regions).  Each strip is MAP_BLOCKS (8) ADF
+    /// blocks = 4096 bytes and is placed at offset `i * 4096` in map_mem.
     ///
     /// image_group_blocks: the 4 ADF block offsets for each tile group (file_index[n].image[0..4]).
     /// terra_block / terra2_block: TERRA_BLOCK + terra1/terra2 from file_index.
@@ -43,22 +52,29 @@ impl WorldData {
         adf: &AdfDisk,
         region_num: u8,
         sector_block: u32,
-        map_block: u32,
+        map_blocks: &[u32],
         terra_block: u32,
         terra2_block: u32,
         image_group_blocks: &[u32],
     ) -> Result<Self> {
         let mut sector_mem = Box::new([0u8; 32768]);
-        let mut map_mem = Box::new([0u8; 4096]);
-        let mut terra_mem = Box::new([0u8; 1024]);
-        let mut image_mem = Box::new([0u8; 81920]);
+        let mut map_mem    = Box::new([0u8; MAP_MEM_SIZE]);
+        let mut terra_mem  = Box::new([0u8; 1024]);
+        let mut image_mem  = Box::new([0u8; 81920]);
 
         if let Ok(slice) = Self::try_load(adf, sector_block, SECTOR_BLOCKS) {
             sector_mem[..slice.len()].copy_from_slice(slice);
         }
-        if let Ok(slice) = Self::try_load(adf, map_block, MAP_BLOCKS) {
-            map_mem[..slice.len()].copy_from_slice(slice);
+
+        // Load each map strip at its y-band offset in map_mem.
+        for (i, &mb) in map_blocks.iter().enumerate().take(4) {
+            let dest = i * 4096;
+            if let Ok(slice) = Self::try_load(adf, mb, MAP_BLOCKS) {
+                let n = slice.len().min(4096);
+                map_mem[dest..dest + n].copy_from_slice(&slice[..n]);
+            }
         }
+
         // Load terra1 into first 512 bytes, terra2 into second 512 bytes.
         if terra_block > 0 {
             if let Ok(slice) = Self::try_load(adf, terra_block, TERRA_BLOCKS) {
@@ -91,10 +107,11 @@ impl WorldData {
         Ok(adf.load_blocks(f_block, count))
     }
 
-    /// Look up the tile index at map coordinate (mx, my).
-    /// mx: 0..128 (sector column), my: 0..32 (sector row)
+    /// Look up the sector index at absolute map coordinate (mx, my).
+    /// mx: 0..128 (sector column), my: 0..128 (sector row).
+    /// For the full overworld map_mem covers 128×128; indoor uses the first 128×32 rows.
     pub fn sector_at(&self, mx: usize, my: usize) -> u8 {
-        self.map_mem[(my * 128 + mx).min(4095)]
+        self.map_mem[(my * 128 + mx).min(MAP_MEM_SIZE - 1)]
     }
 
     /// Look up the tile within a sector at local position (lx, ly).

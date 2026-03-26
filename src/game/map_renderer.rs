@@ -29,12 +29,12 @@ impl MapRenderer {
     /// map_x / map_y: pixel-precise viewport origin in world coordinates.
     /// The sub-tile offsets (map_x & 0xF, map_y & 0x1F) are applied so tiles scroll
     /// smoothly rather than snapping by one full tile per boundary crossing.
-    pub fn compose(&mut self, map_x: u16, map_y: u16, region_num: u8, world: &WorldData) {
+    pub fn compose(&mut self, map_x: u16, map_y: u16, world: &WorldData) {
         let img_x = map_x >> 4;
         let img_y = map_y >> 5;
         let ox = (map_x & 0xF) as i32;   // sub-tile X offset (0–15)
         let oy = (map_y & 0x1F) as i32;  // sub-tile Y offset (0–31)
-        let minimap = genmini_scrolled(img_x, img_y, region_num, world);
+        let minimap = genmini_scrolled(img_x, img_y, world);
 
         self.framebuf.fill(0);
         for ty in 0..SCROLL_TILES_H {
@@ -72,7 +72,7 @@ mod tests {
         let world = WorldData::empty();
         let palette = [0xFF000000_u32; 32];
         let mut renderer = MapRenderer::new(&world, &palette);
-        renderer.compose(1600, 6400, 3, &world); // map_x=1600 → img_x=100, map_y=6400 → img_y=200
+        renderer.compose(1600, 6400, &world);
         assert_eq!(renderer.framebuf.len(), (MAP_DST_W * MAP_DST_H) as usize);
     }
 }

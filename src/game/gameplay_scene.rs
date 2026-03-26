@@ -380,8 +380,9 @@ impl GameplayScene {
 
             let dx = base_dx * speed / 2;
             let dy = base_dy * speed / 2;
-            let new_x = (self.state.hero_x as i32 + dx).clamp(0, 0x7FF0) as u16;
-            let new_y = (self.state.hero_y as i32 + dy).clamp(0, 0x3FF0) as u16;
+            // World wraps at MAXCOORD = 0x8000 = 32768 (matching original USHORT arithmetic).
+            let new_x = (self.state.hero_x as i32 + dx).rem_euclid(0x8000) as u16;
+            let new_y = (self.state.hero_y as i32 + dy).rem_euclid(0x8000) as u16;
 
             // Turtle guardrail: turtle rides water but cannot enter hard-block terrain (mountains).
             let turtle_blocked = self.state.on_raft
@@ -398,6 +399,24 @@ impl GameplayScene {
                     self.state.hero_x = door.dst_x;
                     self.state.hero_y = door.dst_y;
                     self.dlog(format!("door: region transition to {}", door.dst_region));
+                }
+                // Outdoor region transition: recompute region from position after every move.
+                // Mirrors gen_mini() in fmain.c — region switches when the hero crosses a
+                // sector-grid boundary, not via an explicit trigger.  Only runs for outdoor
+                // regions; door transitions to F9/F10 (>= 8) are handled above and must not
+                // be overridden.
+                if self.state.region_num < 8 {
+                    let pos_region = Self::outdoor_region_from_pos(
+                        self.state.hero_x, self.state.hero_y,
+                    );
+                    if pos_region != self.state.region_num {
+                        self.dlog(format!(
+                            "outdoor region transition: {} -> {} at ({}, {})",
+                            self.state.region_num, pos_region,
+                            self.state.hero_x, self.state.hero_y,
+                        ));
+                        self.state.region_num = pos_region;
+                    }
                 }
                 // Track safe spawn point after successful movement.
                 if let Some(ref world) = self.map_world {
@@ -966,9 +985,14 @@ impl GameplayScene {
         self.log_buffer.push(format!("on_region_changed: region changed to {}", region));
         if let Some(ref adf) = self.adf {
             let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
+                let map_blocks: Vec<u32> = if region < 8 {
+                    Self::outdoor_map_blocks(game_lib)
+                } else {
+                    vec![cfg.map_block]
+                };
                 crate::game::world_data::WorldData::load(
                     adf, region,
-                    cfg.sector_block, cfg.map_block,
+                    cfg.sector_block, &map_blocks,
                     cfg.terra_block, cfg.terra2_block,
                     &cfg.image_blocks,
                 )
@@ -1634,10 +1658,12 @@ impl GameplayScene {
             TeleportSafe => {
                 self.state.hero_x = self.state.safe_x;
                 self.state.hero_y = self.state.safe_y;
+                self.snap_camera_to_hero();
             }
             TeleportCoords { x, y } => {
                 self.state.hero_x = x;
                 self.state.hero_y = y;
+                self.snap_camera_to_hero();
             }
             TeleportStoneRing { index } => {
                 self.dlog(format!("debug command not yet wired: TeleportStoneRing {{ index: {} }}", index));
@@ -1767,6 +1793,32 @@ impl GameplayScene {
         }
     }
 
+    /// Collect the four y-band map_block values for the full overworld map (regions 0,2,4,6).
+    /// All outdoor region pairs share a map file per y-band (F1/F2 share 160, F3/F4 share 168…).
+    fn outdoor_map_blocks(game_lib: &crate::game::game_library::GameLibrary) -> Vec<u32> {
+        [0u8, 2, 4, 6]
+            .iter()
+            .filter_map(|&r| game_lib.find_region_config(r))
+            .map(|cfg| cfg.map_block)
+            .collect()
+    }
+
+    /// Compute the outdoor region_num (0–7) from hero world-coordinates.
+    ///
+    /// Mirrors `gen_mini()` in `fmain.c`:
+    ///   xs  = (hero_x + 7) >> 8          // sector column of viewport centre
+    ///   ys  = (hero_y - 26) >> 8         // sector row of viewport centre
+    ///   xr  = (xs >> 6) & 1              // 0 = west half, 1 = east half
+    ///   yr  = (ys >> 5) & 3              // north→south band 0–3
+    ///   region_num = xr + yr * 2
+    fn outdoor_region_from_pos(hero_x: u16, hero_y: u16) -> u8 {
+        let xs = (hero_x as u32 + 7) >> 8;
+        let ys = (hero_y as u32).saturating_sub(26) >> 8;
+        let xr = (xs >> 6) & 1;
+        let yr = (ys >> 5) & 3;
+        (xr + yr * 2) as u8
+    }
+
     /// Build the RGBA32 playfield palette for the given region.
     ///
     /// The base palette is `pagecolors[]` from fmain2.c — hardcoded in faery.toml.
@@ -1834,32 +1886,47 @@ impl GameplayScene {
     /// Dead zone (±20 px X / ±10 px Y): camera still, player moves in window.
     /// Creep zone (20–70 px X / 10–24/44 px Y): camera advances 1 px/tick toward player.
     /// Beyond threshold: camera tracks 1:1 with player, keeping player pinned at the edge.
+    /// Immediately center the camera on the hero (used after teleports).
+    fn snap_camera_to_hero(&mut self) {
+        const CX: i32 = 144;
+        const CY: i32 = 70;
+        const WRAP: i32 = 0x8000;
+        self.map_x = (self.state.hero_x as i32 - CX).rem_euclid(WRAP) as u16;
+        self.map_y = (self.state.hero_y as i32 - CY).rem_euclid(WRAP) as u16;
+    }
+
     fn map_adjust(hero_x: u16, hero_y: u16, map_x: u16, map_y: u16) -> (u16, u16) {
         const CX: i32 = 144;
         const CY: i32 = 70;
+        const WRAP: i32 = 0x8000;
 
-        let ideal_x = hero_x as i32 - CX;
-        let dx = ideal_x - map_x as i32;
-        let new_map_x = if dx > 70       { (ideal_x - 70).max(0) }
-                        else if dx < -70 { (ideal_x + 70).max(0) }
-                        else if dx > 20  { map_x as i32 + 1 }
-                        else if dx < -20 { (map_x as i32 - 1).max(0) }
-                        else             { map_x as i32 };
+        // Ideal camera origin, wrapped into [0, WRAP).
+        let ideal_x = (hero_x as i32 - CX).rem_euclid(WRAP);
+        // Shortest-path signed delta in (-WRAP/2, WRAP/2].
+        let dx = { let d = (ideal_x - map_x as i32).rem_euclid(WRAP); if d > WRAP/2 { d - WRAP } else { d } };
+        let new_map_x = (if dx > 70       { ideal_x - 70 }
+                         else if dx < -70 { ideal_x + 70 }
+                         else if dx > 20  { map_x as i32 + 1 }
+                         else if dx < -20 { map_x as i32 - 1 }
+                         else             { map_x as i32 }).rem_euclid(WRAP);
 
-        let ideal_y = hero_y as i32 - CY;
-        let dy = ideal_y - map_y as i32;
-        let new_map_y = if dy > 44       { (ideal_y - 44).max(0) }
-                        else if dy < -24 { (ideal_y + 24).max(0) }
-                        else if dy > 10  { map_y as i32 + 1 }
-                        else if dy < -10 { (map_y as i32 - 1).max(0) }
-                        else             { map_y as i32 };
+        let ideal_y = (hero_y as i32 - CY).rem_euclid(WRAP);
+        let dy = { let d = (ideal_y - map_y as i32).rem_euclid(WRAP); if d > WRAP/2 { d - WRAP } else { d } };
+        let new_map_y = (if dy > 44       { ideal_y - 44 }
+                         else if dy < -24 { ideal_y + 24 }
+                         else if dy > 10  { map_y as i32 + 1 }
+                         else if dy < -10 { map_y as i32 - 1 }
+                         else             { map_y as i32 }).rem_euclid(WRAP);
 
         (new_map_x as u16, new_map_y as u16)
     }
 
     fn actor_rel_pos(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16) -> (i32, i32) {
-        let rel_x = (abs_x as i32) - (map_x as i32) - 8;
-        let rel_y = (abs_y as i32) - (map_y as i32) - 26;
+        const WRAP: i32 = 0x8000;
+        let dx = (abs_x as i32 - map_x as i32 - 8).rem_euclid(WRAP);
+        let rel_x = if dx > WRAP / 2 { dx - WRAP } else { dx };
+        let dy = (abs_y as i32 - map_y as i32 - 26).rem_euclid(WRAP);
+        let rel_y = if dy > WRAP / 2 { dy - WRAP } else { dy };
         (rel_x, rel_y)
     }
 
@@ -2178,9 +2245,14 @@ impl Scene for GameplayScene {
                 Ok(adf) => {
                     let region = self.state.region_num;
                     let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
+                        let map_blocks: Vec<u32> = if region < 8 {
+                            Self::outdoor_map_blocks(game_lib)
+                        } else {
+                            vec![cfg.map_block]
+                        };
                         crate::game::world_data::WorldData::load(
                             &adf, region,
-                            cfg.sector_block, cfg.map_block,
+                            cfg.sector_block, &map_blocks,
                             cfg.terra_block, cfg.terra2_block,
                             &cfg.image_blocks,
                         )
@@ -2257,32 +2329,6 @@ impl Scene for GameplayScene {
             }
         }
 
-        // Region palette transition (world-109)
-        let region = self.state.region_num;
-        if region != self.last_region_num {
-            self.on_region_changed(region, game_lib);
-            self.dlog(format!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
-                crate::game::game_event::GameEvent::RegionTransition { region }));
-            // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
-            if let Some(audio) = resources.audio {
-                audio.set_cave_mode(region == 9);
-            }
-            let from = self.palette_transition
-                .as_ref()
-                .map(|pt| pt.to)
-                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
-            let to = Self::region_palette(game_lib, region);
-            self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
-            self.last_region_num = region;
-        }
-        if let Some(ref mut pt) = self.palette_transition {
-            if !pt.is_done() {
-                let palette = pt.tick();
-                if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                    mr.atlas.rebuild(world, &palette);
-                }
-            }
-        }
 
         // Day/night continuous dimming: rebuild atlas whenever lightlevel changes (gfx-101).
         // lightlevel is a *darkness* value: 0 = full day (bright), 300 = full night (dark).
@@ -2433,11 +2479,40 @@ impl Scene for GameplayScene {
             self.state.map_y = self.map_y;
         }
 
+        // Region transition check (world-109): must run after movement so that on_region_changed()
+        // loads the new world data before compose() runs — otherwise compose() sees the new
+        // region_num (wrong xreg/yreg) with the old map_world, producing a one-frame glitch.
+        let region = self.state.region_num;
+        if region != self.last_region_num {
+            self.on_region_changed(region, game_lib);
+            self.dlog(format!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
+                crate::game::game_event::GameEvent::RegionTransition { region }));
+            // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
+            if let Some(audio) = resources.audio {
+                audio.set_cave_mode(region == 9);
+            }
+            let from = self.palette_transition
+                .as_ref()
+                .map(|pt| pt.to)
+                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
+            let to = Self::region_palette(game_lib, region);
+            self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
+            self.last_region_num = region;
+        }
+        if let Some(ref mut pt) = self.palette_transition {
+            if !pt.is_done() {
+                let palette = pt.tick();
+                if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
+                    mr.atlas.rebuild(world, &palette);
+                }
+            }
+        }
+
         // Compose map viewport when in normal play view (world-105).
         // Pass pixel-precise map_x/map_y so compose() can apply the sub-tile offset.
         if self.state.viewstatus == 0 {
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                mr.compose(self.map_x, self.map_y, self.state.region_num, world);
+                mr.compose(self.map_x, self.map_y, world);
             }
             // Blit actors on top of the composed tiles (sprite-104).
             // Collect borrow-safe parameters before taking &mut map_renderer.

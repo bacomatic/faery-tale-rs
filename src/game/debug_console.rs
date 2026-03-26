@@ -97,6 +97,16 @@ impl DebugConsole {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
+
+        // Install a panic hook that restores the terminal before printing the
+        // panic message.  Without this, panics are silently swallowed by the
+        // alternate screen and the process exits with code 101 and no output.
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = disable_raw_mode();
+            let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
+            default_hook(info);
+        }));
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
         Ok(Self {

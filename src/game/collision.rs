@@ -9,10 +9,11 @@ use crate::game::world_data::WorldData;
 /// Mirrors px_to_im from fsubs.asm:
 /// 1. Compute tile bitmask selector d4 from sub-tile position (bits 3,3,4 of x,y,y).
 /// 2. imx = x/16, imy = y/32.
-/// 3. secx = imx/16, secy = imy/8 → look up map_mem[secy*128+secx] = sec_num.
-/// 4. tile_idx = sector_mem[sec_num*128 + (imy&7)*16 + (imx&15)].
-/// 5. If terra_mem[tile_idx*4+2] & d4 == 0 → passable (return 0).
-/// 6. Else return terra_mem[tile_idx*4+1] >> 4 (upper nibble = terrain type).
+/// 3. xs = imx/16 (sector col 0..127), ys = imy/8 (sector row 0..127).
+/// 4. sec_num = map_mem[ys*128 + xs]  (flat 128×128 overworld map).
+/// 5. tile_idx = sector_mem[sec_num*128 + (imy&7)*16 + (imx&15)].
+/// 6. If terra_mem[tile_idx*4+2] & d4 == 0 → passable (return 0).
+/// 7. Else return terra_mem[tile_idx*4+1] >> 4 (upper nibble = terrain type).
 pub fn px_to_terrain_type(world: &WorldData, x: i32, y: i32) -> u8 {
     if x < 0 || y < 0 {
         return 0; // out of world bounds → passable
@@ -28,15 +29,15 @@ pub fn px_to_terrain_type(world: &WorldData, x: i32, y: i32) -> u8 {
     let imx = (x >> 4) as usize;
     let imy = (y >> 5) as usize;
 
-    // Sector coords: secx = imx/16 (0..127), secy = imy/8 (0..31).
-    let secx = (imx >> 4).min(127);
-    let secy = (imy >> 3).min(31);
+    // Absolute sector coords in the flat 128×128 map.
+    let xs = imx >> 4; // sector col 0..127
+    let ys = imy >> 3; // sector row 0..127
 
     // Local sub-tile coords within the sector's tile grid.
     let local_x = imx & 15;
     let local_y = imy & 7;
 
-    let sec_num = world.sector_at(secx, secy);
+    let sec_num = world.sector_at(xs, ys);
     let tile_idx = world.tile_at(sec_num, local_x, local_y) as usize;
 
     let base = tile_idx * 4;

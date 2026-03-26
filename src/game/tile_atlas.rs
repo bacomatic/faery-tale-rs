@@ -84,7 +84,7 @@ mod tests {
 
     fn empty_world() -> WorldData {
         let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
-        WorldData::load(&adf, 0, 0, 0, 0, 0, &[]).unwrap()
+        WorldData::load(&adf, 0, 0, &[], 0, 0, &[]).unwrap()
     }
 
     #[test]
