@@ -129,13 +129,77 @@ pub enum SeqSlot {
     Dragon = 6,
 }
 
+/// Frame height for objects sprite sheet (cfiles[3]: height=16, vs SPRITE_H=32 for others).
+pub const OBJ_SPRITE_H: usize = 16;
+/// Bytes per bitplane per frame for objects (OBJ_SPRITE_H × PLANE_ROW_BYTES).
+pub const OBJ_PLANE_FRAME_BYTES: usize = OBJ_SPRITE_H * PLANE_ROW_BYTES; // 32
+/// Total bytes per objects frame (5 planes × OBJ_PLANE_FRAME_BYTES).
+pub const OBJ_SHAPE_FRAME_BYTES: usize = SPRITE_PLANES * OBJ_PLANE_FRAME_BYTES; // 160
+
+/// An item entry from inv_list[] (fmain.c:428). Describes how to render an inventory item.
+#[derive(Clone, Copy)]
+pub struct InvItem {
+    /// Sprite frame index in the OBJECTS sequence (seq_list[OBJECTS]).
+    pub image_number: u8,
+    /// X offset on the lores inventory canvas (dest x = xoff + 20).
+    pub xoff: u8,
+    /// Y offset on the lores inventory canvas.
+    pub yoff: u8,
+    /// Y increment for stacked items (each additional item is drawn ydelta pixels lower).
+    pub ydelta: u8,
+    /// Row within the sprite frame to start blitting from.
+    pub img_off: u8,
+    /// Number of rows to blit from the sprite frame.
+    pub img_height: u8,
+    /// Maximum number of items to display on-screen.
+    pub maxshown: u8,
+}
+
+/// inv_list[] from fmain.c:428 — direct port.
+/// Indexed by stuff[] slot (0..GOLDBASE=31). Gold piles (31–34) are excluded from display.
+pub const INV_LIST: [InvItem; 31] = [
+    InvItem { image_number: 12, xoff: 10,  yoff: 0,   ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 0  Dirk
+    InvItem { image_number:  9, xoff: 10,  yoff: 10,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 1  Mace
+    InvItem { image_number:  8, xoff: 10,  yoff: 20,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 2  Sword
+    InvItem { image_number: 10, xoff: 10,  yoff: 30,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 3  Bow
+    InvItem { image_number: 17, xoff: 10,  yoff: 40,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 4  Magic Wand
+    InvItem { image_number: 27, xoff: 10,  yoff: 50,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 5  Golden Lasso
+    InvItem { image_number: 23, xoff: 10,  yoff: 60,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 6  Sea Shell
+    InvItem { image_number: 27, xoff: 10,  yoff: 70,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 7  Sun Stone
+    InvItem { image_number:  3, xoff: 30,  yoff: 0,   ydelta: 3,  img_off: 7, img_height: 1, maxshown: 45 }, // 8  Arrows
+    InvItem { image_number: 18, xoff: 50,  yoff: 0,   ydelta: 9,  img_off: 0, img_height: 8, maxshown: 15 }, // 9  Blue Stone
+    InvItem { image_number: 19, xoff: 65,  yoff: 0,   ydelta: 6,  img_off: 0, img_height: 5, maxshown: 23 }, // 10 Green Jewel
+    InvItem { image_number: 22, xoff: 80,  yoff: 0,   ydelta: 8,  img_off: 0, img_height: 7, maxshown: 17 }, // 11 Glass Vial
+    InvItem { image_number: 21, xoff: 95,  yoff: 0,   ydelta: 7,  img_off: 0, img_height: 6, maxshown: 20 }, // 12 Crystal Orb
+    InvItem { image_number: 23, xoff: 110, yoff: 0,   ydelta: 10, img_off: 0, img_height: 9, maxshown: 14 }, // 13 Bird Totem
+    InvItem { image_number: 17, xoff: 125, yoff: 0,   ydelta: 6,  img_off: 0, img_height: 5, maxshown: 23 }, // 14 Gold Ring
+    InvItem { image_number: 24, xoff: 140, yoff: 0,   ydelta: 10, img_off: 0, img_height: 9, maxshown: 14 }, // 15 Jade Skull
+    InvItem { image_number: 25, xoff: 160, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 16 Gold Key
+    InvItem { image_number: 25, xoff: 172, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 17 Green Key
+    InvItem { image_number: 114,xoff: 184, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 18 Blue Key
+    InvItem { image_number: 114,xoff: 196, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 19 Red Key
+    InvItem { image_number: 26, xoff: 208, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 20 Grey Key
+    InvItem { image_number: 26, xoff: 220, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 21 White Key
+    InvItem { image_number: 11, xoff: 0,   yoff: 80,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 22 Talisman
+    InvItem { image_number: 19, xoff: 0,   yoff: 90,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 23 Rose
+    InvItem { image_number: 20, xoff: 0,   yoff: 100, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 24 Fruit
+    InvItem { image_number: 21, xoff: 232, yoff: 0,   ydelta: 10, img_off: 8, img_height: 8, maxshown: 5  }, // 25 Gold Statue
+    InvItem { image_number: 22, xoff: 0,   yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 26 Book
+    InvItem { image_number:  8, xoff: 14,  yoff: 80,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 27 Herb
+    InvItem { image_number:  9, xoff: 14,  yoff: 90,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 28 Writ
+    InvItem { image_number: 10, xoff: 14,  yoff: 100, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 29 Bone
+    InvItem { image_number: 12, xoff: 14,  yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 30 Shard
+];
+
 /// A loaded sprite sheet: raw pixel data as RGBA32.
 pub struct SpriteSheet {
     pub cfile_idx: u8,
-    /// RGBA32 pixel data, row-major, num_frames * SPRITE_H * SPRITE_W pixels.
+    /// RGBA32 pixel data, row-major, num_frames * frame_h * SPRITE_W pixels.
     /// Transparent pixels are 0x00000000; opaque pixels have alpha=0xFF (high byte).
     pub pixels: Vec<u32>,
     pub num_frames: usize,
+    /// Height of each frame in pixels (SPRITE_H for characters, OBJ_SPRITE_H for objects).
+    pub frame_h: usize,
 }
 
 impl SpriteSheet {
@@ -143,10 +207,10 @@ impl SpriteSheet {
     ///
     /// On-disk layout (fmain2.c read_shapes / fsubs.asm make_mask):
     ///
-    ///   Shape section: frame_count frames × SHAPE_FRAME_BYTES (320) bytes each.
+    ///   Shape section: frame_count frames × frame_bytes bytes each.
     ///   Within each frame, planes are PLANE-MAJOR (not row-interleaved):
-    ///     Frame F: [plane0 64B][plane1 64B][plane2 64B][plane3 64B][plane4 64B]
-    ///   → plane P row R of frame F = data[F*320 + P*64 + R*2 .. +2]
+    ///     Frame F: [plane0][plane1][plane2][plane3][plane4]
+    ///   → plane P row R of frame F = data[F*frame_bytes + P*(frame_h*PLANE_ROW_BYTES) + R*PLANE_ROW_BYTES]
     ///
     ///   The mask is NOT stored on disk. It is computed by make_mask() in fsubs.asm:
     ///     mask_bit = NOT(plane0 AND plane1 AND plane2 AND plane3 AND plane4)
@@ -154,21 +218,24 @@ impl SpriteSheet {
     ///   ("assumes color 31 = transparent" — fsubs.asm:1617)
     ///
     /// `frame_count` must be the cfiles[].count value (not derived from data.len()).
-    pub fn decode(cfile_idx: u8, data: &[u8], palette: &[u32; 32], frame_count: usize) -> Self {
-        let mut pixels = vec![0u32; frame_count * SPRITE_H * SPRITE_W];
+    /// `frame_h` is the sprite height in pixels (SPRITE_H for characters, OBJ_SPRITE_H for objects).
+    pub fn decode(cfile_idx: u8, data: &[u8], palette: &[u32; 32], frame_count: usize, frame_h: usize) -> Self {
+        let plane_frame_bytes = frame_h * PLANE_ROW_BYTES;
+        let frame_bytes = SPRITE_PLANES * plane_frame_bytes;
+        let mut pixels = vec![0u32; frame_count * frame_h * SPRITE_W];
 
         for frame in 0..frame_count {
-            let frame_base = frame * SHAPE_FRAME_BYTES;
-            if frame_base + SHAPE_FRAME_BYTES > data.len() {
+            let frame_base = frame * frame_bytes;
+            if frame_base + frame_bytes > data.len() {
                 break; // shape data truncated
             }
 
-            for row in 0..SPRITE_H {
+            for row in 0..frame_h {
                 let row_off = row * PLANE_ROW_BYTES;
 
                 let mut planes = [0u16; SPRITE_PLANES];
                 for p in 0..SPRITE_PLANES {
-                    let pb = &data[frame_base + p * PLANE_FRAME_BYTES + row_off..];
+                    let pb = &data[frame_base + p * plane_frame_bytes + row_off..];
                     planes[p] = u16::from_be_bytes([pb[0], pb[1]]);
                 }
 
@@ -178,15 +245,15 @@ impl SpriteSheet {
                         .map(|p| ((planes[p] >> bit) & 1) << p)
                         .fold(0usize, |acc, b| acc | b as usize);
                     if color_idx == 31 { continue; } // transparent (color 31 = all planes set)
-                    let pixel_idx = frame * SPRITE_H * SPRITE_W + row * SPRITE_W + col;
+                    let pixel_idx = frame * frame_h * SPRITE_W + row * SPRITE_W + col;
                     pixels[pixel_idx] = palette[color_idx];
                 }
             }
         }
-        SpriteSheet { cfile_idx, pixels, num_frames: frame_count }
+        SpriteSheet { cfile_idx, pixels, num_frames: frame_count, frame_h }
     }
 
-    /// Load and decode a sprite sheet from the ADF for a given cfile index.
+    /// Load and decode a character/enemy sprite sheet from the ADF for a given cfile index.
     /// Returns None if the ADF doesn't have enough blocks.
     pub fn load(adf: &AdfDisk, cfile_idx: u8, palette: &[u32; 32]) -> Option<Self> {
         let block = CFILE_BLOCKS[cfile_idx as usize];
@@ -196,14 +263,29 @@ impl SpriteSheet {
             return None;
         }
         let data = adf.load_blocks(block, num_blocks);
-        Some(Self::decode(cfile_idx, data, palette, frame_count))
+        Some(Self::decode(cfile_idx, data, palette, frame_count, SPRITE_H))
     }
 
-    /// Return the RGBA32 pixel slice for a single frame (SPRITE_H * SPRITE_W pixels).
+    /// Load and decode the objects sprite sheet (cfile 3, height=16 not 32).
+    /// Returns None if the ADF doesn't have enough blocks.
+    pub fn load_objects(adf: &AdfDisk, palette: &[u32; 32]) -> Option<Self> {
+        const CFILE_IDX: u8 = 3;
+        let block = CFILE_BLOCKS[CFILE_IDX as usize];
+        let num_blocks = CFILE_BLOCK_COUNTS[CFILE_IDX as usize];
+        let frame_count = CFILE_FRAME_COUNTS[CFILE_IDX as usize];
+        if block as usize + num_blocks as usize > adf.num_blocks() {
+            return None;
+        }
+        let data = adf.load_blocks(block, num_blocks);
+        Some(Self::decode(CFILE_IDX, data, palette, frame_count, OBJ_SPRITE_H))
+    }
+
+    /// Return the RGBA32 pixel slice for a single frame (frame_h * SPRITE_W pixels).
     /// Returns None for out-of-range frame indices.
     pub fn frame_pixels(&self, frame: usize) -> Option<&[u32]> {
         if frame >= self.num_frames { return None; }
-        let start = frame * SPRITE_H * SPRITE_W;
-        Some(&self.pixels[start..start + SPRITE_H * SPRITE_W])
+        let frame_pixels = self.frame_h * SPRITE_W;
+        let start = frame * frame_pixels;
+        Some(&self.pixels[start..start + frame_pixels])
     }
 }

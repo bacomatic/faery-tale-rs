@@ -221,6 +221,8 @@ pub struct GameplayScene {
     textcolors: crate::game::palette::Palette,
     /// Loaded sprite sheets indexed by cfile_idx (None = not yet loaded).
     sprite_sheets: Vec<Option<crate::game::sprites::SpriteSheet>>,
+    /// Objects sprite sheet (cfile 3, 16×16 frames) — used for inventory screen.
+    object_sprites: Option<crate::game::sprites::SpriteSheet>,
     /// Narrative strings from faery.toml [narr], used by event_msg / speak helpers.
     narr: crate::game::game_library::NarrConfig,
 }
@@ -263,6 +265,7 @@ impl GameplayScene {
             menu: crate::game::menu::MenuState::new(),
             textcolors: [0u32; 32],
             sprite_sheets: (0..crate::game::sprites::CFILE_COUNT).map(|_| None).collect(),
+            object_sprites: None,
             narr: crate::game::game_library::NarrConfig::default(),
         }
     }
@@ -704,6 +707,108 @@ impl GameplayScene {
         }
     }
 
+    /// Render the HI bar (stats, messages, buttons, compass) into the canvas at HIBAR_Y.
+    /// Called for both normal play (viewstatus 0) and inventory screen (viewstatus 4).
+    fn render_hibar(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
+        let brave    = self.state.brave;
+        let luck     = self.state.luck;
+        let kind     = self.state.kind;
+        let vitality = self.state.vitality;
+        let wealth   = self.state.wealth;
+        let buttons = self.menu.print_options();
+        let msg_count = self.messages.len().min(4);
+        let msgs: Vec<&str> = self.messages.iter().collect();
+        let msg_start = msgs.len().saturating_sub(4);
+        let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
+        let textcolors = &self.textcolors;
+        let compass_regions = &self.compass_regions;
+        let input_comptable_dir: usize = match self.current_direction() {
+            Direction::NW   => 0,
+            Direction::N    => 1,
+            Direction::NE   => 2,
+            Direction::E    => 3,
+            Direction::SE   => 4,
+            Direction::S    => 5,
+            Direction::SW   => 6,
+            Direction::W    => 7,
+            Direction::None => 9,
+        };
+        let hiscreen_opt = resources.find_image("hiscreen");
+        let amber_font = resources.amber_font;
+        let topaz_font = resources.topaz_font;
+        let compass_normal = resources.compass_normal;
+        let compass_highlight = resources.compass_highlight;
+
+        let tc = canvas.texture_creator();
+        if let Ok(mut hibar_tex) = tc.create_texture_target(
+            sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H,
+        ) {
+            let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
+                hc.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                hc.clear();
+
+                if let Some(hiscreen) = hiscreen_opt {
+                    hiscreen.draw_scaled(hc, sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
+                } else {
+                    hc.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
+                    hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
+                }
+
+                amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                amber_font.render_string(&format!("Brv:{:3}", brave),     hc, 14,  52);
+                amber_font.render_string(&format!("Lck:{:3}", luck),      hc, 90,  52);
+                amber_font.render_string(&format!("Knd:{:3}", kind),      hc, 168, 52);
+                amber_font.render_string(&format!("Vit:{:3}", vitality),  hc, 245, 52);
+                amber_font.render_string(&format!("Wlth:{:3}", wealth),   hc, 321, 52);
+
+                for (i, msg) in msgs_visible.iter().enumerate() {
+                    let line_from_bottom = (msg_count - 1 - i) as i32;
+                    let y = 42 - line_from_bottom * 10;
+                    amber_font.render_string(msg, hc, 16, y);
+                }
+
+                for btn in &buttons {
+                    let col = btn.display_slot & 1;
+                    let row = btn.display_slot / 2;
+                    let btn_x = if col == 0 { 430i32 } else { 482i32 };
+                    let btn_y = (row as i32) * 9 + 8;
+                    let bg_rgba = textcolors[btn.bg_color as usize];
+                    let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
+                    let fg_rgba = textcolors[btn.fg_color as usize];
+                    let fg = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
+                    topaz_font.render_string_with_bg("      ", hc, btn_x, btn_y, bg, fg);
+                    topaz_font.set_color_mod(fg.0, fg.1, fg.2);
+                    topaz_font.render_string(&btn.text, hc, btn_x + 4, btn_y);
+                    topaz_font.set_color_mod(255, 255, 255);
+                }
+
+                const COMPASS_X: i32 = 567;
+                const COMPASS_SRC_Y: i32 = 15;
+                const COMPASS_SRC_W: u32 = 48;
+                const COMPASS_SRC_H: u32 = 24;
+                let compass_dest = sdl2::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
+                if let Some(normal_tex) = compass_normal {
+                    hc.copy(normal_tex, None, compass_dest).ok();
+                }
+                if input_comptable_dir < compass_regions.len() {
+                    let (rx, ry, rw, rh) = compass_regions[input_comptable_dir];
+                    if rw > 1 || rh > 1 {
+                        if let Some(highlight_tex) = compass_highlight {
+                            let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                            let dst = sdl2::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
+                            hc.copy(highlight_tex, src, dst).ok();
+                        }
+                    }
+                }
+            });
+            canvas.copy(
+                &hibar_tex,
+                sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+            ).ok();
+        }; // semicolon: drops Result<Texture> temporary before tc is dropped
+    }
+
     /// Clear and color the canvas according to the current viewstatus mode.
     fn render_by_viewstatus(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
         match self.state.viewstatus {
@@ -753,128 +858,7 @@ impl GameplayScene {
                     }
                 }
 
-                // HI bar: render all content into a native 640×57 offscreen texture,
-                // then blit it 2× vertically to canvas (640×114). This makes fonts,
-                // buttons, and the compass scale uniformly without per-element ×2 math.
-                {
-                    // Collect all render data before the with_texture_canvas closure.
-                    let brave    = self.state.brave;
-                    let luck     = self.state.luck;
-                    let kind     = self.state.kind;
-                    let vitality = self.state.vitality;
-                    let wealth   = self.state.wealth;
-                    let buttons = self.menu.print_options();
-                    let msg_count = self.messages.len().min(4);
-                    let msgs: Vec<&str> = self.messages.iter().collect();
-                    let msg_start = msgs.len().saturating_sub(4);
-                    let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
-                    let textcolors = &self.textcolors;
-                    let compass_regions = &self.compass_regions;
-                    // Compass highlight reflects current input, not player movement.
-                    // Same comptable order as propt: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7.
-                    let input_comptable_dir: usize = match self.current_direction() {
-                        Direction::NW   => 0,
-                        Direction::N    => 1,
-                        Direction::NE   => 2,
-                        Direction::E    => 3,
-                        Direction::SE   => 4,
-                        Direction::S    => 5,
-                        Direction::SW   => 6,
-                        Direction::W    => 7,
-                        Direction::None => 9,
-                    };
-                    // Extract resource references before mutably borrowing canvas.
-                    let hiscreen_opt = resources.find_image("hiscreen");
-                    let amber_font = resources.amber_font;
-                    let topaz_font = resources.topaz_font;
-                    let compass_normal = resources.compass_normal;
-                    let compass_highlight = resources.compass_highlight;
-
-                    let tc = canvas.texture_creator();
-                    if let Ok(mut hibar_tex) = tc.create_texture_target(
-                        sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H,
-                    ) {
-                        let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
-                            hc.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
-                            hc.clear();
-
-                            // Background: hiscreen IFF at native 1:1 size (640×57).
-                            if let Some(hiscreen) = hiscreen_opt {
-                                hiscreen.draw_scaled(hc, sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
-                            } else {
-                                hc.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
-                                hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
-                            }
-
-                            // Stat line: five separate fields matching fmain2.c case 7 + case 4.
-                            // Original: move(14,52) «Brv:», move(90,52) «Lck:», move(168,52) «Knd:»,
-                            //           move(245,52) «Vit:», move(321,52) «Wlth:» — all baseline y=52.
-                            amber_font.set_color_mod(0xAA, 0x55, 0x00);
-                            amber_font.render_string(&format!("Brv:{:3}", brave),     hc, 14,  52);
-                            amber_font.render_string(&format!("Lck:{:3}", luck),      hc, 90,  52);
-                            amber_font.render_string(&format!("Knd:{:3}", kind),      hc, 168, 52);
-                            amber_font.render_string(&format!("Vit:{:3}", vitality),  hc, 245, 52);
-                            amber_font.render_string(&format!("Wlth:{:3}", wealth),   hc, 321, 52);
-
-                            // Scrolling messages: fmain2.c print() — TXMIN=16, newest at baseline y=42,
-                            // older lines ScrollRaster(0,10) → each prior line is 10px higher.
-                            for (i, msg) in msgs_visible.iter().enumerate() {
-                                let line_from_bottom = (msg_count - 1 - i) as i32;
-                                let y = 42 - line_from_bottom * 10;
-                                amber_font.render_string(msg, hc, 16, y);
-                            }
-
-                            // Button grid: propt() native formula y = row*9+8 (HIRES px).
-                            for btn in &buttons {
-                                let col = btn.display_slot & 1;
-                                let row = btn.display_slot / 2;
-                                let btn_x = if col == 0 { 430i32 } else { 482i32 };
-                                let btn_y = (row as i32) * 9 + 8;
-                                let bg_rgba = textcolors[btn.bg_color as usize];
-                                let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
-                                let fg_rgba = textcolors[btn.fg_color as usize];
-                                let fg = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
-                                topaz_font.render_string_with_bg("      ", hc, btn_x, btn_y, bg, fg);
-                                topaz_font.set_color_mod(fg.0, fg.1, fg.2);
-                                topaz_font.render_string(&btn.text, hc, btn_x + 4, btn_y);
-                                topaz_font.set_color_mod(255, 255, 255);
-                            }
-
-                            // Compass: native HIRES pixel coords within the 57px band.
-                            const COMPASS_X: i32 = 567;
-                            const COMPASS_SRC_Y: i32 = 15;
-                            const COMPASS_SRC_W: u32 = 48;
-                            const COMPASS_SRC_H: u32 = 24;
-                            let compass_dest = sdl2::rect::Rect::new(
-                                COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H,
-                            );
-                            if let Some(normal_tex) = compass_normal {
-                                hc.copy(normal_tex, None, compass_dest).ok();
-                            }
-                            if input_comptable_dir < compass_regions.len() {
-                                let (rx, ry, rw, rh) = compass_regions[input_comptable_dir];
-                                if rw > 1 || rh > 1 {
-                                    if let Some(highlight_tex) = compass_highlight {
-                                        let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
-                                        let dst = sdl2::rect::Rect::new(
-                                            COMPASS_X + rx,
-                                            COMPASS_SRC_Y + ry,
-                                            rw as u32,
-                                            rh as u32,
-                                        );
-                                        hc.copy(highlight_tex, src, dst).ok();
-                                    }
-                                }
-                            }
-                        });
-                        // Blit offscreen HI bar to canvas, stretched 2× vertically.
-                        canvas.copy(
-                            &hibar_tex,
-                            sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
-                            sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
-                        ).ok();
-                    }; // semicolon: drops Result<Texture> temporary before tc is dropped
-                }
+                self.render_hibar(canvas, resources);
 
                 // Tick visual effects and composite them over the map.
                 self.witch_effect.tick();
@@ -895,11 +879,79 @@ impl GameplayScene {
                 canvas.clear();
                 // "MESSAGE" — text rendering pending font wiring
             }
-            // Inventory screen
+            // Inventory screen (viewstatus=4): black play area with item sprites, normal HI bar.
+            // Original: do_option() ITEMS hit=5 — clears playfield to black, blits item sprites
+            // from seq_list[OBJECTS] using inv_list[] layout, then stillscreen() + viewstatus=4.
             4 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(64, 32, 0));
+                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
-                // "INVENTORY" — text rendering pending font wiring
+
+                // Build a 320×200 lores canvas with item sprites at their inv_list positions.
+                // Items use the objects sprite sheet (cfile 3, 16×16 frames).
+                if let Some(ref obj_sheet) = self.object_sprites {
+                    use crate::game::sprites::{INV_LIST, OBJ_SPRITE_H, SPRITE_W};
+                    const LORES_W: usize = 320;
+                    const LORES_H: usize = 200;
+                    let mut inv_pixels = vec![0u32; LORES_W * LORES_H];
+                    let stuff = *self.state.stuff();
+
+                    for (j, item) in INV_LIST.iter().enumerate() {
+                        let count = stuff[j] as usize;
+                        if count == 0 { continue; }
+                        let num = count.min(item.maxshown as usize);
+                        let frame = item.image_number as usize;
+                        if let Some(frame_pix) = obj_sheet.frame_pixels(frame) {
+                            let mut dst_y = item.yoff as i32;
+                            for _ in 0..num {
+                                let dst_x = item.xoff as i32 + 20;
+                                for row in 0..item.img_height as usize {
+                                    let src_row = item.img_off as usize + row;
+                                    if src_row >= OBJ_SPRITE_H { break; }
+                                    let py = dst_y + row as i32;
+                                    if py < 0 || py >= LORES_H as i32 { continue; }
+                                    for col in 0..SPRITE_W {
+                                        let px = dst_x + col as i32;
+                                        if px < 0 || px >= LORES_W as i32 { continue; }
+                                        let src_px = frame_pix[src_row * SPRITE_W + col];
+                                        if src_px != 0 {
+                                            inv_pixels[py as usize * LORES_W + px as usize] = src_px;
+                                        }
+                                    }
+                                }
+                                dst_y += item.ydelta as i32;
+                            }
+                        }
+                    }
+
+                    // Blit the lores inventory canvas to the playfield rect (clip x=16, scale 2×).
+                    let pixels_u8: &[u8] = unsafe {
+                        std::slice::from_raw_parts(
+                            inv_pixels.as_ptr() as *const u8,
+                            inv_pixels.len() * 4,
+                        )
+                    };
+                    let mut pixels_copy = pixels_u8.to_vec();
+                    let tc = canvas.texture_creator();
+                    if let Ok(surface) = sdl2::surface::Surface::from_data(
+                        &mut pixels_copy,
+                        LORES_W as u32, LORES_H as u32,
+                        LORES_W as u32 * 4,
+                        sdl2::pixels::PixelFormatEnum::ARGB8888,
+                    ) {
+                        if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                            let src = sdl2::rect::Rect::new(
+                                16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
+                            );
+                            let dst = sdl2::rect::Rect::new(
+                                PLAYFIELD_X, PLAYFIELD_Y,
+                                PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
+                            );
+                            let _ = canvas.copy(&tex, Some(src), Some(dst));
+                        }
+                    }; // semicolon: drops Result<Surface> temporary before pixels_copy is dropped
+                }
+
+                self.render_hibar(canvas, resources);
             }
             _ => {
                 canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
@@ -2154,6 +2206,10 @@ impl Scene for GameplayScene {
                                     self.sprite_sheets[cfile_idx as usize] = Some(sheet);
                                 }
                             }
+                            // Load objects sprite sheet (cfile 3, 16×16) for inventory screen.
+                            self.object_sprites = crate::game::sprites::SpriteSheet::load_objects(
+                                &adf, &sprite_palette,
+                            );
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
                             self.adf = Some(adf);
