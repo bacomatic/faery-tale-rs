@@ -1,7 +1,7 @@
 //! MapRenderer: combines TileAtlas and genmini() to blit the map viewport.
 
 use crate::game::tile_atlas::{TileAtlas, TILE_W, TILE_H};
-use crate::game::map_view::{genmini_scrolled, SCROLL_TILES_W, SCROLL_TILES_H, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
+use crate::game::map_view::{genmini_scrolled, SCROLL_TILES, SCROLL_TILES_W, SCROLL_TILES_H, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
 use crate::game::world_data::WorldData;
 
 pub const MAP_DST_X: i32 = 0;
@@ -12,20 +12,26 @@ pub const MAP_DST_H: u32 = (TILE_H * VIEWPORT_TILES_H) as u32; // 192
 pub struct MapRenderer {
     pub atlas: TileAtlas,
     /// Palette-index pixel buffer (MAP_DST_W × MAP_DST_H bytes).
-    /// Each byte is a palette index (0–31). Converted to RGBA32 at render time.
     pub framebuf: Vec<u8>,
-    /// Foreground tile layer — pixels from tiles that draw over sprites.
-    /// 0xFF = transparent (no fg pixel here).
-    pub fg_framebuf: Vec<u8>,
+    /// Global shadow_mem bitmask table (12,288 bytes).
+    pub shadow_mem: Vec<u8>,
+    /// Minimap tile indices from last compose() call (20×7 grid, row-major).
+    pub last_minimap: [u16; SCROLL_TILES],
+    /// Sub-tile pixel offsets from last compose().
+    pub last_ox: i32,
+    pub last_oy: i32,
 }
 
 impl MapRenderer {
-    pub fn new(world: &WorldData) -> Self {
+    pub fn new(world: &WorldData, shadow_mem: Vec<u8>) -> Self {
         let buf_size = (MAP_DST_W * MAP_DST_H) as usize;
         MapRenderer {
             atlas: TileAtlas::from_world_data(world),
             framebuf: vec![0u8; buf_size],
-            fg_framebuf: vec![0xFF_u8; buf_size],
+            shadow_mem,
+            last_minimap: [0u16; SCROLL_TILES],
+            last_ox: 0,
+            last_oy: 0,
         }
     }
 
@@ -38,7 +44,9 @@ impl MapRenderer {
         let minimap = genmini_scrolled(img_x, img_y, world);
 
         self.framebuf.fill(0);
-        self.fg_framebuf.fill(0xFF);
+        self.last_minimap = minimap;
+        self.last_ox = ox;
+        self.last_oy = oy;
         for ty in 0..SCROLL_TILES_H {
             for tx in 0..SCROLL_TILES_W {
                 let dst_x = tx as i32 * TILE_W as i32 - ox;
@@ -48,7 +56,6 @@ impl MapRenderer {
                 let tile_idx = minimap[ty * SCROLL_TILES_W + tx] as usize;
                 let clamped = tile_idx.min(255);
                 let tile_pixels = self.atlas.tile_pixels(clamped);
-                let is_fg = self.atlas.mask_type[clamped] != 0;
                 for row in 0..TILE_H {
                     let py = dst_y + row as i32;
                     if py < 0 || py >= MAP_DST_H as i32 { continue; }
@@ -61,11 +68,6 @@ impl MapRenderer {
                     // Background: all tiles
                     self.framebuf[dst_base + col_start..dst_base + col_end]
                         .copy_from_slice(&tile_pixels[src_start..src_start + len]);
-                    // Foreground: only tiles with masking
-                    if is_fg {
-                        self.fg_framebuf[dst_base + col_start..dst_base + col_end]
-                            .copy_from_slice(&tile_pixels[src_start..src_start + len]);
-                    }
                 }
             }
         }
@@ -80,7 +82,7 @@ mod tests {
     #[test]
     fn test_compose_no_panic() {
         let world = WorldData::empty();
-        let mut renderer = MapRenderer::new(&world);
+        let mut renderer = MapRenderer::new(&world, Vec::new());
         renderer.compose(1600, 6400, &world);
         assert_eq!(renderer.framebuf.len(), (MAP_DST_W * MAP_DST_H) as usize);
     }

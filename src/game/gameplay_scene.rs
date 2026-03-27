@@ -1122,7 +1122,7 @@ impl GameplayScene {
                     self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                     self.current_palette = Self::region_palette(game_lib, region);
                     self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
-                    self.map_renderer = Some(MapRenderer::new(&world));
+                    self.map_renderer = Some(MapRenderer::new(&world, Vec::new()));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
                 }
@@ -2589,7 +2589,7 @@ impl Scene for GameplayScene {
                             self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                             self.current_palette = Self::region_palette(game_lib, region);
                             self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
-                            let renderer = MapRenderer::new(&world);
+                            let renderer = MapRenderer::new(&world, Vec::new());
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
                             // sprite-101: load player (cfile 0-2) and setfig (cfile 13-17) sprites
@@ -2919,12 +2919,6 @@ impl Scene for GameplayScene {
                             let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
                             Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
                         }
-                    }
-                }
-                // Foreground tile layer: overlay fg pixels on top of sprites.
-                for (i, &fg_px) in mr.fg_framebuf.iter().enumerate() {
-                    if fg_px != 0xFF {
-                        mr.framebuf[i] = fg_px;
                     }
                 }
             }
