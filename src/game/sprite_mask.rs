@@ -114,7 +114,8 @@ pub fn apply_sprite_mask(
     let ty_start = if top_in_world < 0 { 0 } else { top_in_world as usize / TILE_H };
     let ty_end = (bottom_in_world.max(0) as usize) / TILE_H;
 
-    let ground = sprite.ground;
+    // Convert ground to world/tile coords (ym_base uses +oy, so ground must too).
+    let ground = sprite.ground + oy;
     let ym_base = if top_in_world < 0 { 0u8 } else { (top_in_world >> 5) as u8 };
 
     for tx in tx_start..=tx_end {
