@@ -9,7 +9,6 @@ required_files=(
   "AGENTS.md"
   "PLAN.md"
   "plan_status.toml"
-  "DECODE.md"
   "RESEARCH.md"
   "research_index.toml"
   "scripts/plan_sync_check.sh"
