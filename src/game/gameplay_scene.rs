@@ -404,7 +404,7 @@ impl GameplayScene {
             if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
-                if let Some(door) = crate::game::doors::doorfind(self.state.region_num, new_x, new_y) {
+                if let Some(door) = crate::game::doors::doorfind(&crate::game::doors::DOOR_TABLE, self.state.region_num, new_x, new_y) {
                     self.state.region_num = door.dst_region;
                     self.state.hero_x = door.dst_x;
                     self.state.hero_y = door.dst_y;
@@ -1095,7 +1095,7 @@ impl GameplayScene {
                 if self.state.stuff()[key_slot] == 0 {
                     self.messages.push("No such key.".to_string());
                 } else if crate::game::doors::doorfind(
-                    self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
+                    &crate::game::doors::DOOR_TABLE, self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
                 {
                     self.state.stuff_mut()[key_slot] -= 1;
                     self.messages.push("Door opened.".to_string());
@@ -1319,7 +1319,7 @@ impl GameplayScene {
             }
             GameAction::Sleep => {
                 let at_door = crate::game::doors::doorfind(
-                    self.state.region_num, self.state.hero_x, self.state.hero_y
+                    &crate::game::doors::DOOR_TABLE, self.state.region_num, self.state.hero_x, self.state.hero_y
                 ).is_some();
                 if at_door {
                     self.messages.push("Cannot sleep here.");
