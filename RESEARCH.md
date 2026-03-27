@@ -143,7 +143,7 @@ On spawn (`revive(TRUE)`):
 
 ## Hunger & Fatigue System
 
-Both counters tick simultaneously every 127 `daynight` ticks (`(daynight & 127) == 0`), i.e., approximately every 2.1 seconds of real time at 60 Hz when `daynight` increments by 1 per VBlank.
+Both counters tick simultaneously every 127 `daynight` ticks (`(daynight & 127) == 0`), i.e., approximately every 4.2 seconds of real time at 30 Hz when `daynight` increments by 1 per game tick.
 
 **Auto-eat**: in safe zones, if `hunger > 30 && stuff[24] > 0` (has Fruit), one Fruit is consumed and `hunger -= 30`.
 
@@ -175,8 +175,8 @@ Both counters tick simultaneously every 127 `daynight` ticks (`(daynight & 127) 
 
 ## Day/Night Cycle
 
-`daynight` is a `USHORT` counter [0..23999], incremented by 1 per VBlank (60 Hz):
-- 24000 ticks = one full in-game day ≈ 400 seconds real time (≈6.7 minutes)
+`daynight` is a `USHORT` counter [0..23999], incremented by 1 per game tick (30 Hz):
+- 24000 ticks = one full in-game day ≈ 800 seconds real time (≈13.3 minutes)
 
 `lightlevel = daynight / 40` then if `lightlevel >= 300`: `lightlevel = 600 - lightlevel`.
 This makes a symmetric triangle wave: 0 → 300 → 0 over the day.

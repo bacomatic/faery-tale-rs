@@ -6,7 +6,7 @@
 //! - `vp_page` (LORES, 288×140): the playfield
 //! - `vp_text` (HIRES, 640×57): the HI bar (buttons, compass, messages)
 //!
-//! Both are 2× line-doubled (NTSC 60 Hz non-interlaced → line-doubled to fill 400 lines)
+//! Both are 2× line-doubled (NTSC 30 Hz interlaced → line-doubled to fill 400 lines)
 //! and centered in the SDL 640×480 logical canvas with 40px top/bottom margins:
 //!
 //! ```text
@@ -780,7 +780,7 @@ impl GameplayScene {
         }
 
         // npc-105: Archer NPCs (Goal::Archer1/Archer2) fire missiles toward hero.
-        // Rate-limited: one shot per NPC group every 30 ticks (~0.5s at 60Hz),
+        // Rate-limited: one shot per NPC group every 30 ticks (~1s at 30Hz),
         // mirroring fmain.c state >= SHOOT1 with ms->speed = 3.
         if self.archer_cooldown > 0 {
             self.archer_cooldown -= 1;

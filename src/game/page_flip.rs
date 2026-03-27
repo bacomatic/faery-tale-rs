@@ -169,7 +169,7 @@ impl PageFlip {
         // overhead on the original Amiga, where even zero-delay steps took
         // real time to execute flipscan().
         if !self.step_drawn {
-            // FLIP3 values are NTSC 60Hz ticks directly — no conversion needed.
+            // FLIP3 values are consumed at the game's 30 Hz tick rate.
             // A minimum of 2 ticks approximates the blitter/CPU overhead on
             // the original Amiga even for zero-delay steps.
             self.step_delay = (FLIP3[self.step] as u32).max(self.min_step_ticks);

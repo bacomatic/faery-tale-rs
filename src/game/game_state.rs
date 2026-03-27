@@ -63,6 +63,8 @@ pub struct GameState {
     // Cycle counters
     /// 0–24000 wrapping
     pub daynight: u16,
+    /// Number of full day cycles completed
+    pub game_days: u32,
     /// Derived triangle wave 0–300–0
     pub lightlevel: u16,
     pub cycle: u32,
@@ -182,6 +184,7 @@ impl GameState {
             freeze_timer: 0,
 
             daynight: 8000,  // start at full brightness (noon); original pre-initializes here
+            game_days: 0,
             lightlevel: 300, // full brightness at startup (original: explicit init)
             cycle: 0,
             flasher: 0,
@@ -275,6 +278,7 @@ impl GameState {
         self.daynight = self.daynight.wrapping_add(1);
         if self.daynight >= 24000 {
             self.daynight = 0;
+            self.game_days += 1;
         }
 
         // Recompute lightlevel as a brightness triangle wave (fmain.c:2372-2374).
@@ -292,6 +296,14 @@ impl GameState {
             self.dayperiod = ((self.daynight / 6000) as u8).min(3);
         }
         crossed
+    }
+
+    /// Derive (day, hour, minute) from the authoritative `daynight` counter.
+    pub fn daynight_to_wall_clock(&self) -> (u32, u32, u32) {
+        let hour = (self.daynight / 1000) as u32;
+        let remainder = (self.daynight % 1000) as u32;
+        let minute = remainder * 60 / 1000;
+        (self.game_days, hour, minute)
     }
 
     /// Advance game state by `delta` ticks.
@@ -798,5 +810,47 @@ mod tests {
         let s = GameState::new();
         assert_eq!(s.lightlevel, 300, "game must start at full brightness");
         assert_eq!(s.daynight, 8000, "daynight starts at 8000 per original");
+    }
+
+    #[test]
+    fn test_daynight_to_wall_clock_midnight() {
+        let mut s = GameState::new();
+        s.daynight = 0;
+        s.game_days = 0;
+        let (day, hour, minute) = s.daynight_to_wall_clock();
+        assert_eq!((day, hour, minute), (0, 0, 0));
+    }
+
+    #[test]
+    fn test_daynight_to_wall_clock_start() {
+        let s = GameState::new();
+        let (day, hour, minute) = s.daynight_to_wall_clock();
+        assert_eq!((day, hour, minute), (0, 8, 0), "game starts at 08:00");
+    }
+
+    #[test]
+    fn test_daynight_to_wall_clock_noon() {
+        let mut s = GameState::new();
+        s.daynight = 12000;
+        let (day, hour, minute) = s.daynight_to_wall_clock();
+        assert_eq!((day, hour, minute), (0, 12, 0));
+    }
+
+    #[test]
+    fn test_daynight_to_wall_clock_2330() {
+        let mut s = GameState::new();
+        s.daynight = 23500;
+        let (day, hour, minute) = s.daynight_to_wall_clock();
+        assert_eq!((day, hour, minute), (0, 23, 30));
+    }
+
+    #[test]
+    fn test_game_days_increments_on_wrap() {
+        let mut s = GameState::new();
+        s.daynight = 23999;
+        s.game_days = 0;
+        s.daynight_tick();
+        assert_eq!(s.daynight, 0);
+        assert_eq!(s.game_days, 1);
     }
 }

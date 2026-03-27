@@ -83,7 +83,7 @@ pub trait Scene {
      *
      * `canvas` - the SDL2 canvas for rendering (logical 640x480)
      * `play_tex` - the 320x200 offscreen texture for Amiga-resolution rendering
-     * `delta_ticks` - elapsed ticks since last frame (1/60s per tick)
+     * `delta_ticks` - elapsed ticks since last frame (1/30s per tick)
      * `game_lib` - reference to all game assets
      * `resources` - image and font textures for rendering
      *

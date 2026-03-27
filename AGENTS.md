@@ -12,7 +12,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Timing invariant (critical)
 
-- **NTSC-only at 60 Hz**.
+- **NTSC-only at 30 fps** (interlaced frame rate; the audio VBL interrupt is 60 Hz but gameplay ticks at 30 Hz).
 - There was no PAL release; treat all gameplay/audio/animation timing as NTSC.
 - Ignore any PAL/50Hz comments in `original/` as incorrect for this project.
 

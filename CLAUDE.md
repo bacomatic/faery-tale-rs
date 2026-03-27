@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Timing invariant
 
-- **NTSC-only at 60 Hz**. There was no PAL release; ignore PAL/50Hz comments in `original/`.
+- **NTSC-only at 30 fps** (interlaced frame rate; audio VBL is 60 Hz but gameplay ticks at 30 Hz). There was no PAL release; ignore PAL/50Hz comments in `original/`.
 
 ## Build and run
 
@@ -56,7 +56,7 @@ Each scene implements a `Scene` trait and returns a `SceneResult` to advance the
 | `render_resources.rs` | Owns all SDL2 textures; builds font/image atlases at startup |
 | `audio.rs` | Software synthesizer — 4-voice Amiga-style envelope/wave generation |
 | `game_state.rs` | Player stats (vitality, hunger, fatigue), inventory, position |
-| `game_clock.rs` | NTSC 60 Hz ticker; in-game wall clock (day/hour/minute) |
+| `game_clock.rs` | NTSC 30 Hz ticker; in-game wall clock (day/hour/minute) |
 | `debug_console.rs` | ratatui TUI in the launch terminal (activated with `--debug`) |
 | `sprites.rs` | Character/enemy sprite loading and palette remapping |
 

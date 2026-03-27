@@ -170,7 +170,7 @@ impl FadeController {
 
     /// Create a uniform fade from full brightness to black (100 → 0 on all channels).
     /// Equivalent to the original `fade_down()`: 21 steps with Delay(1) each.
-    /// At 60Hz, 24 ticks ≈ 0.4s matches the original's ~0.42s at 50Hz.
+    /// At 30Hz, 24 ticks ≈ 0.8s.
     pub fn fade_down(source: &Palette, duration_ticks: u32) -> FadeController {
         FadeController::new(source, (100, 100, 100), (0, 0, 0), false, false, duration_ticks)
     }
