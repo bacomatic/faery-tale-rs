@@ -243,6 +243,11 @@ pub struct GameplayScene {
     submerged: bool,
     /// Ticks while submerged (for drowning damage cadence).
     drowning_timer: u32,
+    /// Death countdown active (goodfairy timer running).
+    dying: bool,
+    /// Goodfairy countdown: starts at 255, decrements every other tick (~30Hz).
+    /// When reaches 0, luck check determines faery revive or next brother.
+    goodfairy: i16,
 }
 
 impl GameplayScene {
@@ -293,6 +298,8 @@ impl GameplayScene {
             sleeping: false,
             submerged: false,
             drowning_timer: 0,
+            dying: false,
+            goodfairy: 0,
         }
     }
 
@@ -2734,34 +2741,62 @@ impl Scene for GameplayScene {
         }
 
         // Death / revive cycle (gameloop-106)
-        if self.state.vitality <= 0 && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE) {
-            if self.state.try_respawn() {
-                self.messages.push("Lucky! You barely survive...");
-                self.dlog("try_respawn: luck-gated respawn succeeded");
-            } else if let Some(next) = self.state.next_brother() {
-                // Use config-driven brother activation if available
-                if let Some(bro) = game_lib.get_brother(next) {
-                    let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
-                        .map(|loc| (loc.x, loc.y, loc.region))
-                        .unwrap_or((19036, 15755, 3));
-                    self.state.activate_brother_from_config(
-                        next, bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
-                    );
+        // Trigger: vitality drops to 0 → start goodfairy countdown.
+        // During countdown: no input, decrement goodfairy every other tick (~30Hz).
+        // At 0: luck check → faery revival or next brother / game over.
+        if !self.dying && self.state.vitality <= 0
+            && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE)
+        {
+            self.dying = true;
+            self.goodfairy = 255;
+            self.last_mood = u8::MAX; // force death music re-evaluation
+            self.dlog("death: goodfairy countdown started (255)");
+        }
+
+        if self.dying {
+            // Decrement every other tick (~30Hz countdown, ~8.5s total)
+            self.goodfairy -= delta_ticks as i16;
+            if self.goodfairy <= 0 {
+                self.dying = false;
+                if self.state.luck >= 10 {
+                    // Faery resurrection: teleport to safe spawn, drain luck
+                    self.state.luck -= 10;
+                    self.state.hero_x = self.state.safe_x;
+                    self.state.hero_y = self.state.safe_y;
+                    self.state.region_num = self.state.safe_r;
+                    self.state.vitality = crate::game::magic::heal_cap(self.state.brave);
+                    let bname = brother_name(&self.state);
+                    self.messages.push(format!("A faery saved {}!", bname));
+                    self.last_mood = u8::MAX; // restart normal music
+                    self.dlog(format!("faery revived {}, luck now {}", bname, self.state.luck));
+                } else if let Some(next) = self.state.next_brother() {
+                    if let Some(bro) = game_lib.get_brother(next) {
+                        let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
+                            .map(|loc| (loc.x, loc.y, loc.region))
+                            .unwrap_or((19036, 15755, 3));
+                        self.state.activate_brother_from_config(
+                            next, bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
+                        );
+                    } else {
+                        self.state.activate_brother(next);
+                    }
+                    let bname = brother_name(&self.state);
+                    self.messages.push(format!("{} takes up the quest!", bname));
+                    self.last_mood = u8::MAX;
+                    self.dlog(format!("brother died, {} continues", bname));
                 } else {
-                    self.state.activate_brother(next);
+                    // All brothers dead — game over
+                    self.quit_requested = true;
+                    self.dlog("All brothers dead — GAME OVER");
                 }
-                // TODO: trigger brother-transition placard (gameloop-104 handles scene transition)
-                self.dlog(format!("Brother died, switching to brother {}", next));
-            } else {
-                // All brothers dead — game over
-                // TODO: return SceneResult::Done to trigger game over scene
-                self.dlog("All brothers dead — GAME OVER");
             }
         }
 
         // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
         for _ in 0..delta_ticks {
-            self.apply_player_input();
+            if !self.dying {
+                self.apply_player_input();
+            }
 
             // Tick missiles (npc-105): advance each active missile, check hits.
             {
