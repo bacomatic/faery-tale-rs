@@ -263,9 +263,11 @@ impl GameState {
             self.daynight = 0;
         }
 
-        // Recompute lightlevel as a triangle wave.
-        // NOTE: day/night dimming disabled until scene rendering is complete.
-        self.lightlevel = 0;
+        // Recompute lightlevel as a brightness triangle wave (fmain.c:2372-2374).
+        // 0 = midnight (darkest), 300 = noon (brightest).
+        // lightlevel = daynight / 40; if >= 300: lightlevel = 600 - lightlevel.
+        let raw = self.daynight / 40;
+        self.lightlevel = if raw >= 300 { 600 - raw } else { raw };
 
         // Detect period boundary crossing (boundaries at 0, 6000, 12000, 18000).
         const BOUNDARIES: [u16; 4] = [0, 6000, 12000, 18000];
@@ -616,18 +618,6 @@ impl GameState {
         }
     }
 
-    /// Increment fatigue by 1. At MAX_FATIGUE, resets to 0 (forced sleep).
-    /// Returns true if forced sleep occurred.
-    pub fn tick_fatigue(&mut self) -> bool {
-        self.fatigue = (self.fatigue + 1).min(Self::MAX_FATIGUE);
-        if self.fatigue >= Self::MAX_FATIGUE {
-            self.fatigue = 0;
-            true
-        } else {
-            false
-        }
-    }
-
     /// Per-movement-step fatigue update (player-111).
     /// +1 when moving, -1 when resting. Returns true if forced sleep triggered.
     pub fn fatigue_step(&mut self, moved: bool) -> bool {
@@ -708,15 +698,6 @@ mod tests {
         let vit_before = state.vitality;
         state.apply_hunger_effects();
         assert_eq!(state.vitality, vit_before - 1);
-    }
-
-    #[test]
-    fn test_tick_fatigue_max() {
-        let mut s = GameState::new();
-        s.fatigue = GameState::MAX_FATIGUE - 1;
-        let forced = s.tick_fatigue();
-        assert!(forced);
-        assert_eq!(s.fatigue, 0);
     }
 
     #[test]
