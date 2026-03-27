@@ -1111,28 +1111,38 @@ for each of 6 samples:
 
 ## Sprite / Shape File Layout (ADF)
 
-All character sprites stored as interleaved Amiga bitplanes. `cfiles[]` in `fmain2.c` maps logical sprite IDs to ADF locations:
+All animated character sprites are stored in **ADF `game/image`** (the same 880 KB floppy image used for map data). Sprite data is loaded by `read_shapes()` / `load_track_range()` in `fmain2.c`.
+
+### `cfiles[]` — Sprite File Registry
 
 ```c
 struct cfile_info {
-    UBYTE width;     // width in 16-pixel words
-    UBYTE height;    // height in pixels
-    UBYTE count;     // total animation frame count
-    UBYTE numblocks; // ADF blocks to read
-    UBYTE seq_num;   // which seq_list slot (PHIL/OBJECTS/RAFT/ENEMY/SETFIG/CARRIER/DRAGON)
-    USHORT file_id;  // ADF block number
+    UBYTE width;     // sprite width in 16-pixel interleaved words
+    UBYTE height;    // sprite height in pixels
+    UBYTE count;     // number of animation frames
+    UBYTE numblocks; // ADF 512-byte blocks to read
+    UBYTE seq_num;   // seq_list[] slot (PHIL=0, OBJECTS=1, ENEMY=2, RAFT=3, SETFIG=4, CARRIER=5, DRAGON=6)
+    USHORT file_id;  // starting ADF block number
 };
 ```
 
-Frame byte size = `width * height * 2` (2 bytes = one row of one 16-wide bitplane). Total size per animation file = `width * height * 2 * count * 5` (5 bitplanes) + `width * height * 2 * count` (mask plane) = `size * 6`.
+**Frame byte size** = `width × height × 2` (one row per word, one bitplane).
+**ADF data per file** = `frame_bytes × count × 5` (5 bitplanes only) = `numblocks × 512` bytes.
+`nextshape` advances by `frame_bytes × count × 5`; `seq_list[slot].maskloc` points to the next `frame_bytes × count` bytes of the pre-allocated `shape_mem` buffer.
 
-| cfile | ADF block | Blocks | Width×Height | Frames | Slot | Notes |
-|-------|-----------|--------|--------------|--------|------|-------|
-| 0 | 1376 | 42 | 1×32 | 67 | PHIL | Julian player sprites |
-| 1 | 1418 | 42 | 1×32 | 67 | PHIL | Phillip player sprites |
-| 2 | 1460 | 42 | 1×32 | 67 | PHIL | Kevin player sprites |
-| 3 | 1312 | 36 | 1×16 | 116 | OBJECTS | World objects/items |
-| 4 | 1348 | 3  | 2×32 | 2   | RAFT | Raft sprite |
+**The mask is not stored on disk.** It is computed at runtime by `make_mask()` (`fsubs.asm:1614`):
+for each word position across all frames, it ORs all plane bits then inverts:
+`mask_word = NOT(plane0 AND plane1 AND plane2 AND plane3 AND plane4)`
+A pixel is **transparent** when all 5 plane bits are set (color index 31). All other color indices are opaque.
+Comment in `fsubs.asm:1617`: "assumes color 31 = transparent".
+
+| cfile# | ADF block | Blocks | W×H | Frames | Slot | Contents |
+|--------|-----------|--------|-----|--------|------|----------|
+| 0 | 1376 | 42 | 1×32 | 67 | PHIL | Julian (all directions + fight) |
+| 1 | 1418 | 42 | 1×32 | 67 | PHIL | Phillip |
+| 2 | 1460 | 42 | 1×32 | 67 | PHIL | Kevin |
+| 3 | 1312 | 36 | 1×16 | 116 | OBJECTS | World items / loot objects |
+| 4 | 1348 | 3  | 2×32 | 2   | RAFT | Raft (two frames) |
 | 5 | 1351 | 20 | 2×32 | 16  | CARRIER | Turtle |
 | 6 | 960  | 40 | 1×32 | 64  | ENEMY | Ogre / Orc |
 | 7 | 1080 | 40 | 1×32 | 64  | ENEMY | Ghost / Wraith / Skeleton / Salamander |
@@ -1140,12 +1150,45 @@ Frame byte size = `width * height * 2` (2 bytes = one row of one 16-wide bitplan
 | 9 | 1040 | 40 | 1×32 | 64  | ENEMY | Necromancer / Loraii / Farmer |
 | 10 | 1160 | 12 | 3×40 | 5  | DRAGON | Dragon |
 | 11 | 1120 | 40 | 4×64 | 8  | CARRIER | Bird |
-| 12 | 1376 | 40 | 1×32 | 64 | ENEMY | Snake / Salamander |
+| 12 | 1376 | 40 | 1×32 | 64 | ENEMY | Snake / Salamander (shares ADF block with Julian) |
 | 13 | 936  | 5  | 1×32 | 8  | SETFIG | Wizard / Priest |
 | 14 | 931  | 5  | 1×32 | 8  | SETFIG | Guards / Princess / King / Noble / Sorceress |
 | 15 | 941  | 5  | 1×32 | 8  | SETFIG | Bartender |
 | 16 | 946  | 5  | 1×32 | 8  | SETFIG | Witch / Spectre / Ghost |
 | 17 | 951  | 5  | 1×32 | 8  | SETFIG | Ranger / Beggar |
+
+### Bitplane layout
+
+Each animation frame is stored in **plane-major format**: all rows of one plane are stored together, then all rows of the next plane. For a `1×32` (one word × 32 rows, 5 planes) frame:
+```
+plane 0, row  0: 2 bytes
+plane 0, row  1: 2 bytes
+...
+plane 0, row 31: 2 bytes  (64 bytes total for plane 0)
+plane 1, row  0: 2 bytes
+...
+plane 4, row 31: 2 bytes  (total: 5 × 64 = 320 bytes per frame)
+```
+Offset formula: plane P, row R of frame F = `data[F*320 + P*64 + R*2]`.
+
+The mask is not stored after the frames — see the note above about `make_mask()`.
+
+### `statelist[]` — Animation Frame Index
+
+`statelist[87]` maps animation state+frame indices to `{figure_frame, weapon_frame, wpn_x, wpn_y}`:
+- Frames 0–7: south walk cycle
+- Frames 8–15: west walk cycle
+- Frames 16–23: north walk cycle
+- Frames 24–31: east walk cycle
+- Frames 32–43: south fight (9 transition states + 2 death/special)
+- Frames 44–55: west fight
+- Frames 56–67: north fight
+- Frames 68–79: east fight
+- Frames 80–82: death sequence
+- Frames 83–84: sinking sequence / oscillation
+- Frame 86: asleep
+
+`trans_list[9]` is the combat animation transition table: each state maps to the next state for each of the 4 compass directions.
 
 **`setfig_table[]`** maps `setfig_type` (0–13) → `{cfile_entry, image_base, can_talk}`:
 
