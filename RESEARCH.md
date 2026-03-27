@@ -1,8 +1,12 @@
 ## RESEARCH.md
 
-Human-readable reference notes extracted from `PLAN.md` so the plan stays task-focused.
+Canonical reverse-engineering reference for The Faery Tale Adventure (1987
+Amiga). Covers game systems, binary file formats (`songs`, `v6`, ADF layout),
+original game mechanics, and implementation notes derived from the manual and
+source code.
 
-Stable agent lookup keys live in `research_index.toml`.
+For build/run setup, see `README.md`. Stable agent lookup keys live in
+`research_index.toml`.
 
 ## Maintenance workflow
 
