@@ -238,6 +238,10 @@ pub struct GameplayScene {
     last_zone: Option<usize>,
     /// Hero is in forced sleep (events 12/24).
     sleeping: bool,
+    /// Hero is submerged in water.
+    submerged: bool,
+    /// Ticks while submerged (for drowning damage cadence).
+    drowning_timer: u32,
 }
 
 impl GameplayScene {
@@ -285,6 +289,8 @@ impl GameplayScene {
             zones: Vec::new(),
             last_zone: None,
             sleeping: false,
+            submerged: false,
+            drowning_timer: 0,
         }
     }
 
@@ -561,6 +567,18 @@ impl GameplayScene {
                     }
                 }
             }
+        }
+
+        // Water submersion check (#105)
+        if !self.state.on_raft && self.state.flying == 0 {
+            let terrain = if let Some(ref world) = self.map_world {
+                collision::px_to_terrain_type(
+                    world, self.state.hero_x as i32, self.state.hero_y as i32,
+                )
+            } else { 0 };
+            self.submerged = terrain == 2;
+        } else {
+            self.submerged = false;
         }
 
         // Per-step fatigue: +1 when moving, -1 resting. Returns true on forced sleep.
@@ -2138,6 +2156,7 @@ impl GameplayScene {
         map_x: u16,
         map_y: u16,
         framebuf: &mut Vec<u8>,
+        hero_submerged: bool,
     ) {
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
         use crate::game::sprites::{SPRITE_H, SPRITE_W};
@@ -2148,7 +2167,8 @@ impl GameplayScene {
         // cfiles[0]=Julian (brother=1), [1]=Phillip (brother=2), [2]=Kevin (brother=3)
         let hero_cfile = state.brother.saturating_sub(1) as usize;
         if let Some(Some(ref sheet)) = sprite_sheets.get(hero_cfile) {
-            let (rel_x, rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
+            let (rel_x, mut rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
+            if hero_submerged { rel_y += 8; }
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
@@ -2476,6 +2496,16 @@ impl Scene for GameplayScene {
             return SceneResult::Continue;
         }
 
+        // Drowning damage (#105): 1 vitality per ~1s while submerged
+        if self.submerged {
+            self.drowning_timer = self.drowning_timer.wrapping_add(delta_ticks);
+            if self.drowning_timer % 30 == 0 {
+                self.state.vitality = (self.state.vitality - 1).max(0);
+            }
+        } else {
+            self.drowning_timer = 0;
+        }
+
         // Lazy-load ADF + world data on first tick (render-world-load).
         // ADF path comes from faery.toml [disk].adf; falls back to the default filename.
         // Errors are logged to stderr; missing ADF is gracefully handled.
@@ -2788,6 +2818,7 @@ impl Scene for GameplayScene {
                     map_x,
                     map_y,
                     &mut mr.framebuf,
+                    self.submerged,
                 );
                 // Render world objects on the ground
                 if let Some(ref obj_sheet) = self.object_sprites {
