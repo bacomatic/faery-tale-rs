@@ -23,6 +23,16 @@ pub const ITEM_SHELL: usize = 6;
 pub const TURTLE_NEST_X: u16 = 0x2000;
 pub const TURTLE_NEST_Y: u16 = 0x4000;
 
+/// An item lying on the ground in the world.
+#[derive(Debug, Clone)]
+pub struct WorldObject {
+    pub item_id: u8,
+    pub region: u8,
+    pub x: u16,
+    pub y: u16,
+    pub visible: bool,
+}
+
 pub struct GameState {
     // Hero position
     pub hero_x: u16,
@@ -131,6 +141,9 @@ pub struct GameState {
 
     // Brother liveness (Julian=0, Phillip=1, Kevin=2)
     pub brother_alive: [bool; 3],
+
+    // Items dropped on the ground
+    pub world_objects: Vec<WorldObject>,
 }
 
 impl GameState {
@@ -224,6 +237,7 @@ impl GameState {
 
             tick_counter: 0,
             brother_alive: [true, true, true],
+            world_objects: Vec::new(),
         }
     }
 
@@ -600,6 +614,42 @@ impl GameState {
         } else {
             false
         }
+    }
+
+    /// Drop an item and place it on the ground at the given world location.
+    pub fn drop_item_to_world(&mut self, item_id: usize, region: u8, x: u16, y: u16) -> bool {
+        if self.drop_item(item_id) {
+            self.world_objects.push(WorldObject {
+                item_id: item_id as u8,
+                region, x, y,
+                visible: true,
+            });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Pick up the nearest visible world object within `range` pixels.
+    pub fn pickup_world_object(&mut self, region: u8, hero_x: u16, hero_y: u16, range: u16) -> Option<u8> {
+        let mut found_idx = None;
+        for (i, obj) in self.world_objects.iter().enumerate() {
+            if obj.visible && obj.region == region
+                && hero_x.abs_diff(obj.x) < range
+                && hero_y.abs_diff(obj.y) < range
+            {
+                found_idx = Some(i);
+                break;
+            }
+        }
+        if let Some(idx) = found_idx {
+            let item_id = self.world_objects[idx].item_id;
+            if self.pickup_item(item_id as usize) {
+                self.world_objects[idx].visible = false;
+                return Some(item_id);
+            }
+        }
+        None
     }
 
     /// Returns a string description of the inventory for display.

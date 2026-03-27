@@ -1529,8 +1529,18 @@ impl GameplayScene {
                 self.messages.push(format!("You see: {}.", terrain_name));
             }
             GameAction::Take => {
-                // Item pickup — full implementation requires an object actor scan (npc-002 / loot system).
-                self.messages.push("Nothing here to take.");
+                const PICKUP_RANGE: u16 = 24;
+                if let Some(_item_id) = self.state.pickup_world_object(
+                    self.state.region_num, self.state.hero_x, self.state.hero_y, PICKUP_RANGE,
+                ) {
+                    let bname = brother_name(&self.state);
+                    let msg = crate::game::events::event_msg(&self.narr, 37, bname);
+                    if !msg.is_empty() { self.messages.push(msg); }
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
+                } else {
+                    self.messages.push("Nothing here to take.");
+                }
             }
             GameAction::Give => {
                 // Give 2 gold to a nearby beggar (race 0x8d), raising kindness.
@@ -2739,6 +2749,21 @@ impl Scene for GameplayScene {
                     map_y,
                     &mut mr.framebuf,
                 );
+                // Render world objects on the ground
+                if let Some(ref obj_sheet) = self.object_sprites {
+                    use crate::game::sprites::{SPRITE_W, OBJ_SPRITE_H};
+                    let fb_w = crate::game::map_renderer::MAP_DST_W as i32;
+                            let fb_h = crate::game::map_renderer::MAP_DST_H as i32;
+                    for obj in &self.state.world_objects {
+                        if !obj.visible || obj.region != self.state.region_num { continue; }
+                        let frame = obj.item_id as usize;
+                        if let Some(pix) = obj_sheet.frame_pixels(frame) {
+                            let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
+                            let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
+                            Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                        }
+                    }
+                }
                 // Foreground tile layer: overlay fg pixels on top of sprites.
                 for (i, &fg_px) in mr.fg_framebuf.iter().enumerate() {
                     if fg_px != 0xFF {
