@@ -637,17 +637,17 @@ impl GameplayScene {
                                 if let Some(player) = self.state.actors.first_mut() {
                                     player.weapon = w;
                                 }
-                                self.messages.push(format!("You found a better weapon (type {})!", w));
+                                self.dlog(format!("found better weapon type {}", w));
                             }
                         }
-                        self.messages.push(format!("Enemy slain! Bravery: {}", self.state.brave));
+                        self.dlog(format!("enemy slain, bravery now {}", self.state.brave));
                     } else {
-                        self.messages.push(format!(
-                            "Enemy slain! Bravery: {}", self.state.brave
+                        self.dlog(format!(
+                            "enemy slain, bravery now {}", self.state.brave
                         ));
                     }
                 } else {
-                    self.messages.push(format!("You hit for {}!", damage));
+                    self.dlog(format!("combat hit for {}", damage));
                 }
                 hit_any = true;
                 break; // one hit per swing (fmain.c breaks after first hit)
@@ -708,11 +708,15 @@ impl GameplayScene {
         if let Some(ref mut table) = self.npc_table {
             let hero_x = self.state.hero_x as i16;
             let hero_y = self.state.hero_y as i16;
+            let mut any_approach = false;
             for npc in &mut table.npcs {
                 let adjacent = npc.tick(hero_x, hero_y);
                 if adjacent && npc.active {
-                    self.messages.push(format!("An enemy approaches!"));
+                    any_approach = true;
                 }
+            }
+            if any_approach {
+                self.dlog("enemy approaches".to_string());
             }
         }
 
@@ -1300,7 +1304,7 @@ impl GameplayScene {
             GameAction::Inventory => {
                 self.dlog(format!("Inventory: {}", self.state.inventory_summary()));
                 self.state.viewstatus = 4;
-                self.messages.push("Inventory opened");
+                self.dlog("inventory opened".to_string());
             }
             GameAction::Rebind => {
                 self.rebinding.active = !self.rebinding.active;
@@ -2491,7 +2495,7 @@ impl Scene for GameplayScene {
                         self.state.hero_x as i16,
                         self.state.hero_y as i16,
                     );
-                    self.messages.push("You are ambushed!");
+                    self.dlog("ambush triggered".to_string());
                 }
             }
         }
