@@ -2711,6 +2711,12 @@ impl Scene for GameplayScene {
                     map_y,
                     &mut mr.framebuf,
                 );
+                // Foreground tile layer: overlay fg pixels on top of sprites.
+                for (i, &fg_px) in mr.fg_framebuf.iter().enumerate() {
+                    if fg_px != 0xFF {
+                        mr.framebuf[i] = fg_px;
+                    }
+                }
             }
         }
 

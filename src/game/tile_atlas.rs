@@ -19,6 +19,8 @@ pub struct TileAtlas {
     /// Palette indices (0–31) decoded from Amiga bitplanes.
     /// TOTAL_TILES × TILE_PIXELS bytes, row-major.
     pub pixels: Vec<u8>,
+    /// Per-tile foreground flag (terra_mem[tile*4+1] & 0x0F != 0).
+    pub fg_flags: [bool; TOTAL_TILES],
 }
 
 impl TileAtlas {
@@ -26,6 +28,7 @@ impl TileAtlas {
     /// No palette needed — indices are resolved at render time.
     pub fn from_world_data(world: &WorldData) -> Self {
         let mut pixels = vec![0u8; TOTAL_TILES * TILE_PIXELS];
+        let mut fg_flags = [false; TOTAL_TILES];
         for tile_idx in 0..TOTAL_TILES {
             let group = tile_idx / TILES_PER_GROUP;
             let local = tile_idx % TILES_PER_GROUP;
@@ -52,8 +55,13 @@ impl TileAtlas {
                     pixels[dst_base + row * TILE_W + col] = color_idx as u8;
                 }
             }
+            // Foreground flag: terra_mem[tile*4+1] lower nibble (mask case selector).
+            let terra_off = tile_idx * 4 + 1;
+            if terra_off < world.terra_mem.len() {
+                fg_flags[tile_idx] = (world.terra_mem[terra_off] & 0x0F) != 0;
+            }
         }
-        TileAtlas { pixels }
+        TileAtlas { pixels, fg_flags }
     }
 
     /// Returns the palette-index slice for a single tile (TILE_PIXELS bytes).

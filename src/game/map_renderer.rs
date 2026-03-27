@@ -14,13 +14,18 @@ pub struct MapRenderer {
     /// Palette-index pixel buffer (MAP_DST_W × MAP_DST_H bytes).
     /// Each byte is a palette index (0–31). Converted to RGBA32 at render time.
     pub framebuf: Vec<u8>,
+    /// Foreground tile layer — pixels from tiles that draw over sprites.
+    /// 0xFF = transparent (no fg pixel here).
+    pub fg_framebuf: Vec<u8>,
 }
 
 impl MapRenderer {
     pub fn new(world: &WorldData) -> Self {
+        let buf_size = (MAP_DST_W * MAP_DST_H) as usize;
         MapRenderer {
             atlas: TileAtlas::from_world_data(world),
-            framebuf: vec![0u8; (MAP_DST_W * MAP_DST_H) as usize],
+            framebuf: vec![0u8; buf_size],
+            fg_framebuf: vec![0xFF_u8; buf_size],
         }
     }
 
@@ -33,6 +38,7 @@ impl MapRenderer {
         let minimap = genmini_scrolled(img_x, img_y, world);
 
         self.framebuf.fill(0);
+        self.fg_framebuf.fill(0xFF);
         for ty in 0..SCROLL_TILES_H {
             for tx in 0..SCROLL_TILES_W {
                 let dst_x = tx as i32 * TILE_W as i32 - ox;
@@ -40,7 +46,9 @@ impl MapRenderer {
                 if dst_x >= MAP_DST_W as i32 || dst_y >= MAP_DST_H as i32 { continue; }
                 if dst_x + TILE_W as i32 <= 0 || dst_y + TILE_H as i32 <= 0 { continue; }
                 let tile_idx = minimap[ty * SCROLL_TILES_W + tx] as usize;
-                let tile_pixels = self.atlas.tile_pixels(tile_idx.min(255));
+                let clamped = tile_idx.min(255);
+                let tile_pixels = self.atlas.tile_pixels(clamped);
+                let is_fg = self.atlas.fg_flags[clamped];
                 for row in 0..TILE_H {
                     let py = dst_y + row as i32;
                     if py < 0 || py >= MAP_DST_H as i32 { continue; }
@@ -50,8 +58,14 @@ impl MapRenderer {
                     let len = col_end - col_start;
                     let dst_base = py as usize * MAP_DST_W as usize;
                     let src_start = row * TILE_W + src_off;
+                    // Background: all tiles
                     self.framebuf[dst_base + col_start..dst_base + col_end]
                         .copy_from_slice(&tile_pixels[src_start..src_start + len]);
+                    // Foreground: only tiles with masking
+                    if is_fg {
+                        self.fg_framebuf[dst_base + col_start..dst_base + col_end]
+                            .copy_from_slice(&tile_pixels[src_start..src_start + len]);
+                    }
                 }
             }
         }
