@@ -458,6 +458,7 @@ pub fn main() -> Result<(), String> {
                     autosave_enabled: false, // field is private; toggled by command
                     song_group_count,
                     current_song_group,
+                    cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
                 };
                 dc.update_status(status);
             } else {
@@ -498,6 +499,11 @@ pub fn main() -> Result<(), String> {
             if dc.take_stop_request() {
                 if let Some(ref a) = audio_system {
                     a.stop_score();
+                }
+            }
+            if let Some(cave) = dc.take_cave_mode_request() {
+                if let Some(ref a) = audio_system {
+                    a.set_cave_mode(cave);
                 }
             }
 

@@ -913,6 +913,11 @@ impl AudioSystem {
             st.cave_mode = cave;
         }
     }
+
+    /// Return `true` if the cave instrument override is active.
+    pub fn is_cave_mode(&self) -> bool {
+        self.state.lock().ok().map_or(false, |st| st.cave_mode)
+    }
     ///
     /// Format (from `read_sample()` in `fmain.c`): six contiguous records,
     /// each consisting of a 4-byte big-endian length followed by that many

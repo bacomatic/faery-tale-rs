@@ -63,6 +63,7 @@ pub struct DebugStatus {
     pub autosave_enabled: bool,
     pub song_group_count: usize,
     pub current_song_group: Option<usize>,
+    pub cave_mode: bool,
 }
 
 // ── DebugConsole ─────────────────────────────────────────────────────────────
@@ -88,6 +89,7 @@ pub struct DebugConsole {
     pending_commands: Vec<DebugCommand>,
     song_group_requested: Option<usize>,
     stop_requested: bool,
+    cave_mode_requested: Option<bool>,
     quit_requested: bool,
 
     // Latest status snapshot
@@ -122,6 +124,7 @@ impl DebugConsole {
             pending_commands: Vec::new(),
             song_group_requested: None,
             stop_requested: false,
+            cave_mode_requested: None,
             quit_requested: false,
             status: DebugStatus::default(),
         })
@@ -164,6 +167,11 @@ impl DebugConsole {
         let v = self.stop_requested;
         self.stop_requested = false;
         v
+    }
+
+    /// Returns and clears any cave-mode toggle request.
+    pub fn take_cave_mode_request(&mut self) -> Option<bool> {
+        self.cave_mode_requested.take()
     }
 
     /// Returns true if the user requested quit via Ctrl+C / Ctrl+Q in the console.
@@ -461,7 +469,7 @@ impl DebugConsole {
                 "/fx"   | "fx"      => "/fx <witch|teleport|fadeout|fadein>",
                 "/actors"           => "/actors — print actor list to log.",
                 "/terrain"          => "/terrain — dump terra lookup chain at hero's feet (collision debug).",
-                "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop",
+                "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop  /songs cave <on|off>",
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
                 _ => "No help for that topic.",
@@ -490,7 +498,7 @@ impl DebugConsole {
             "  /save <on|off> toggle autosave",
             "  /fx <e>        trigger: witch/teleport/fadeout/fadein",
             "  /actors        list actors",
-            "  /songs [cmd]   music: play <N> / stop",
+            "  /songs [cmd]   music: play <N> / stop / cave <on|off>",
             "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
             "  /help [cmd]    show help",
@@ -708,6 +716,19 @@ impl DebugConsole {
                 self.stop_requested = true;
                 self.log("Music stopped.");
             }
+            Some("cave") => {
+                match args.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                    Some("on") => {
+                        self.cave_mode_requested = Some(true);
+                        self.log("Cave instrument mode ON (slot 10 → wave=3, vol=7).");
+                    }
+                    Some("off") => {
+                        self.cave_mode_requested = Some(false);
+                        self.log("Cave instrument mode OFF (slot 10 → default).");
+                    }
+                    _ => self.log("Usage: /songs cave <on|off>"),
+                }
+            }
             _ => {
                 // Print song info from the status snapshot
                 let count = self.status.song_group_count;
@@ -720,7 +741,10 @@ impl DebugConsole {
                         let marker = if cur == Some(i) { " ◄ playing" } else { "" };
                         self.log(format!("  /songs play {}  — group {}{}", i + 1, i + 1, marker));
                     }
+                    let cave_label = if self.status.cave_mode { "ON" } else { "OFF" };
+                    self.log(format!("Cave mode: {}", cave_label));
                     self.log("/songs stop  — stop music");
+                    self.log("/songs cave <on|off>  — cave instrument override");
                 }
             }
         }
