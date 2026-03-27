@@ -168,8 +168,8 @@ impl GameState {
             secret_timer: 0,
             freeze_timer: 0,
 
-            daynight: 6000,  // start at 6 AM (dawn); was 0 (midnight)
-            lightlevel: 0,
+            daynight: 8000,  // start at full brightness (noon); original pre-initializes here
+            lightlevel: 300, // full brightness at startup (original: explicit init)
             cycle: 0,
             flasher: 0,
 
@@ -741,5 +741,12 @@ mod tests {
         s.fatigue = GameState::MAX_FATIGUE - 1;
         let forced = s.fatigue_step(true);
         assert!(forced, "fatigue_step must return true when MAX_FATIGUE is reached");
+    }
+
+    #[test]
+    fn test_new_starts_at_full_brightness() {
+        let s = GameState::new();
+        assert_eq!(s.lightlevel, 300, "game must start at full brightness");
+        assert_eq!(s.daynight, 8000, "daynight starts at 8000 per original");
     }
 }
