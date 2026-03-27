@@ -232,6 +232,10 @@ pub struct GameplayScene {
     object_sprites: Option<crate::game::sprites::SpriteSheet>,
     /// Narrative strings from faery.toml [narr], used by event_msg / speak helpers.
     narr: crate::game::game_library::NarrConfig,
+    /// Zone configs from faery.toml, used for event zone entry detection.
+    zones: Vec<crate::game::game_library::ZoneConfig>,
+    /// Index of the zone the hero was in last frame (None = no zone).
+    last_zone: Option<usize>,
 }
 
 impl GameplayScene {
@@ -276,6 +280,8 @@ impl GameplayScene {
             sprite_sheets: (0..crate::game::sprites::CFILE_COUNT).map(|_| None).collect(),
             object_sprites: None,
             narr: crate::game::game_library::NarrConfig::default(),
+            zones: Vec::new(),
+            last_zone: None,
         }
     }
 
@@ -307,6 +313,7 @@ impl GameplayScene {
         }
 
         self.narr = game_lib.narr.clone();
+        self.zones = game_lib.zones.clone();
 
         let stuff = self.state.stuff().clone();
         let wealth = self.state.wealth;
@@ -2547,6 +2554,27 @@ impl Scene for GameplayScene {
         // Encounter zone check (world-111)
         self.in_encounter_zone = crate::game::zones::in_encounter_zone(
             self.state.region_num, self.state.hero_x, self.state.hero_y);
+
+        // Event zone entry check (#107)
+        {
+            let hx = self.state.hero_x;
+            let hy = self.state.hero_y;
+            let region = self.state.region_num;
+            let current_zone = self.zones.iter().position(|z|
+                z.region == region
+                    && hx >= z.x1 && hx <= z.x2
+                    && hy >= z.y1 && hy <= z.y2
+            );
+            if current_zone != self.last_zone {
+                if let Some(idx) = current_zone {
+                    let event_id = self.zones[idx].event_id as usize;
+                    let bname = brother_name(&self.state);
+                    let msg = crate::game::events::event_msg(&self.narr, event_id, bname);
+                    if !msg.is_empty() { self.messages.push(msg); }
+                }
+                self.last_zone = current_zone;
+            }
+        }
 
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
         if self.in_encounter_zone && crate::game::encounter::should_encounter(self.state.tick_counter) {
