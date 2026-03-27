@@ -280,4 +280,43 @@ impl<'a> FontTexture<'a> {
             }
         }
     }
+
+    /// Render a string with glyphs stretched to 2× height (title screen style).
+    pub fn render_string_hires<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, x: i32, y: i32) {
+        if let Some(strong_texture) = self.texture.upgrade() {
+            let result = strong_texture.try_borrow();
+            match result {
+                Err(_) => return,
+                Ok(ref tex) => {
+                    self.render_string_hires_internal(s, canvas, tex, x, y);
+                }
+            }
+        }
+    }
+
+    fn render_string_hires_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
+        let cstr = s.as_bytes();
+        let y_adjusted = y - self.font.baseline as i32;
+        let dst_h = (self.font.y_size * 2) as u32;
+        let mut dst_rect = Rect::new(x, y_adjusted, 0, dst_h);
+        for cc in cstr {
+            if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
+                let cc_index = (cc - self.font.lo_char) as usize;
+                let cc_loc = self.font.char_loc[cc_index];
+                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
+                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+                if cc_loc.1 > 0 {
+                    dst_rect.set_width(cc_loc.1 as u32);
+                    let src_rect = Rect::new(
+                        self.bounds.x + cc_loc.0 as i32 + kern,
+                        self.bounds.y,
+                        cc_loc.1 as u32,
+                        self.font.y_size as u32,
+                    );
+                    canvas.copy(texture, Some(src_rect), Some(dst_rect)).unwrap();
+                }
+                dst_rect.set_x(dst_rect.x() + space);
+            }
+        }
+    }
 }

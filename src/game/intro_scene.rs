@@ -118,10 +118,10 @@ const ZOOM_DURATION_TICKS: u32 = 90;
 /// 22 steps × 7 ticks/step ≈ 154 ticks ≈ 5.1s.
 const FLIP_MIN_STEP_TICKS: u32 = 7;
 
-/// Title text is rendered directly to the canvas (640x480 logical) because the
-/// original uses a 640-wide hires text viewport. The text y-coordinates are
-/// offset by this amount to position them within the visible area.
-const TITLE_Y_OFFSET: i32 = 140;
+/// Title text Y offset for line-doubled rendering.
+/// Original 640×200 HIRES → line-doubled to 640×400, centered in 640×480
+/// canvas with 40px top margin.
+const TITLE_Y_OFFSET: i32 = 40;
 
 pub struct IntroScene {
     phase: IntroPhase,
@@ -272,10 +272,11 @@ impl Scene for IntroScene {
                 canvas.clear();
 
                 // Render white title text directly onto the canvas.
-                // Font color is set explicitly before drawing.
+                // Line-doubled: normal-width glyphs at 2× height, Y positions
+                // doubled to match original Amiga CRT line-doubling of 640×200.
                 resources.amber_font.set_color_mod(255, 255, 255);
                 if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_offset(
+                    placard.draw_line_doubled(
                         resources.amber_font,
                         canvas,
                         0,
@@ -327,11 +328,9 @@ impl Scene for IntroScene {
                     play_canvas.clear();
                 });
                 // Draw title text to canvas with current fade modulation.
-                // We use draw_color_mod on the font itself to simulate the fade,
-                // interpolating from white (255,255,255) to black (0,0,0).
                 resources.amber_font.set_color_mod(r, g, b);
                 if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_offset(
+                    placard.draw_line_doubled(
                         resources.amber_font,
                         canvas,
                         0,

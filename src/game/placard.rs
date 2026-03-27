@@ -61,6 +61,27 @@ impl Placard {
             );
         }
     }
+
+    /// Draw the placard text at 2× glyph height (title screen).
+    /// Simulates Amiga CRT line-doubling: each glyph is rendered at normal
+    /// width but 2× height, with Y positions also doubled so line spacing
+    /// scales correctly.
+    pub fn draw_line_doubled<'a, T: RenderTarget>(
+        &self,
+        font: &FontTexture<'a>,
+        canvas: &mut Canvas<T>,
+        x_offset: i32,
+        y_offset: i32,
+    ) {
+        for line in &self.lines {
+            font.render_string_hires(
+                &line.text,
+                canvas,
+                line.x as i32 + x_offset,
+                (line.y as i32) * 2 + y_offset,
+            );
+        }
+    }
 }
 
 /**
