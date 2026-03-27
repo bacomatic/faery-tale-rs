@@ -290,3 +290,117 @@ impl SpriteSheet {
         Some(&self.pixels[start..start + frame_pixels])
     }
 }
+
+/// One entry of statelist[87]: per-animation-index weapon sprite offsets.
+/// Ported verbatim from original/fmain.c statelist[].
+#[derive(Debug, Clone, Copy)]
+pub struct StatEntry {
+    pub figure: u8,
+    pub wpn_no: u8,
+    pub wpn_x:  i8,
+    pub wpn_y:  i8,
+}
+
+/// STATELIST — 87 entries ported from fmain.c statelist[].
+/// Index = animation state index.
+pub const STATELIST: [StatEntry; 87] = [
+    // 0–7: southwalk
+    StatEntry { figure: 0,  wpn_no: 11, wpn_x: -2, wpn_y: 11 },
+    StatEntry { figure: 1,  wpn_no: 11, wpn_x: -3, wpn_y: 11 },
+    StatEntry { figure: 2,  wpn_no: 11, wpn_x: -3, wpn_y: 10 },
+    StatEntry { figure: 3,  wpn_no: 11, wpn_x: -3, wpn_y:  9 },
+    StatEntry { figure: 4,  wpn_no: 11, wpn_x: -3, wpn_y: 10 },
+    StatEntry { figure: 5,  wpn_no: 11, wpn_x: -3, wpn_y: 11 },
+    StatEntry { figure: 6,  wpn_no: 11, wpn_x: -2, wpn_y: 11 },
+    StatEntry { figure: 7,  wpn_no: 11, wpn_x: -1, wpn_y: 11 },
+    // 8–15: westwalk
+    StatEntry { figure: 8,  wpn_no:  9, wpn_x: -12, wpn_y: 11 },
+    StatEntry { figure: 9,  wpn_no:  9, wpn_x: -11, wpn_y: 12 },
+    StatEntry { figure: 10, wpn_no:  9, wpn_x:  -8, wpn_y: 13 },
+    StatEntry { figure: 11, wpn_no:  9, wpn_x:  -4, wpn_y: 13 },
+    StatEntry { figure: 12, wpn_no:  9, wpn_x:   0, wpn_y: 13 },
+    StatEntry { figure: 13, wpn_no:  9, wpn_x:  -4, wpn_y: 13 },
+    StatEntry { figure: 14, wpn_no:  9, wpn_x:  -8, wpn_y: 13 },
+    StatEntry { figure: 15, wpn_no:  9, wpn_x: -11, wpn_y: 12 },
+    // 16–23: northwalk
+    StatEntry { figure: 16, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
+    StatEntry { figure: 17, wpn_no: 14, wpn_x: -1, wpn_y: 2 },
+    StatEntry { figure: 18, wpn_no: 14, wpn_x: -1, wpn_y: 3 },
+    StatEntry { figure: 19, wpn_no: 14, wpn_x: -1, wpn_y: 4 },
+    StatEntry { figure: 20, wpn_no: 14, wpn_x: -1, wpn_y: 3 },
+    StatEntry { figure: 21, wpn_no: 14, wpn_x: -1, wpn_y: 2 },
+    StatEntry { figure: 22, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
+    StatEntry { figure: 23, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
+    // 24–31: eastwalk
+    StatEntry { figure: 24, wpn_no: 10, wpn_x: 5, wpn_y: 12 },
+    StatEntry { figure: 25, wpn_no: 10, wpn_x: 3, wpn_y: 12 },
+    StatEntry { figure: 26, wpn_no: 10, wpn_x: 2, wpn_y: 12 },
+    StatEntry { figure: 27, wpn_no: 10, wpn_x: 3, wpn_y: 12 },
+    StatEntry { figure: 28, wpn_no: 10, wpn_x: 5, wpn_y: 12 },
+    StatEntry { figure: 29, wpn_no: 10, wpn_x: 6, wpn_y: 12 },
+    StatEntry { figure: 30, wpn_no: 10, wpn_x: 6, wpn_y: 11 },
+    StatEntry { figure: 31, wpn_no: 10, wpn_x: 6, wpn_y: 12 },
+    // 32–43: south fight
+    StatEntry { figure: 32, wpn_no: 11, wpn_x: -2, wpn_y: 12 },
+    StatEntry { figure: 32, wpn_no: 10, wpn_x:  0, wpn_y: 12 },
+    StatEntry { figure: 33, wpn_no:  0, wpn_x:  2, wpn_y: 10 },
+    StatEntry { figure: 34, wpn_no:  1, wpn_x:  4, wpn_y:  6 },
+    StatEntry { figure: 34, wpn_no:  2, wpn_x:  1, wpn_y:  4 },
+    StatEntry { figure: 34, wpn_no:  3, wpn_x:  0, wpn_y:  4 },
+    StatEntry { figure: 36, wpn_no:  4, wpn_x: -5, wpn_y:  0 },
+    StatEntry { figure: 36, wpn_no:  5, wpn_x: -10, wpn_y: 1 },
+    StatEntry { figure: 35, wpn_no: 12, wpn_x: -5, wpn_y:  5 },
+    StatEntry { figure: 36, wpn_no:  0, wpn_x:  0, wpn_y:  6 },
+    StatEntry { figure: 38, wpn_no: 85, wpn_x: -6, wpn_y:  5 },
+    StatEntry { figure: 37, wpn_no: 81, wpn_x: -6, wpn_y:  5 },
+    // 44–55: west fight
+    StatEntry { figure: 40, wpn_no:  9, wpn_x: -7, wpn_y: 12 },
+    StatEntry { figure: 40, wpn_no:  8, wpn_x: -9, wpn_y:  9 },
+    StatEntry { figure: 41, wpn_no:  7, wpn_x: -10, wpn_y: 5 },
+    StatEntry { figure: 42, wpn_no:  7, wpn_x: -12, wpn_y: 4 },
+    StatEntry { figure: 42, wpn_no:  6, wpn_x: -12, wpn_y: 3 },
+    StatEntry { figure: 42, wpn_no:  5, wpn_x: -12, wpn_y: 3 },
+    StatEntry { figure: 44, wpn_no:  5, wpn_x: -8, wpn_y:  3 },
+    StatEntry { figure: 44, wpn_no: 14, wpn_x: -7, wpn_y:  6 },
+    StatEntry { figure: 43, wpn_no: 13, wpn_x: -7, wpn_y:  8 },
+    StatEntry { figure: 42, wpn_no:  5, wpn_x: -12, wpn_y: 3 },
+    StatEntry { figure: 46, wpn_no: 86, wpn_x: -3, wpn_y:  0 },
+    StatEntry { figure: 45, wpn_no: 82, wpn_x: -3, wpn_y:  0 },
+    // 56–67: north fight
+    StatEntry { figure: 48, wpn_no: 14, wpn_x: -3, wpn_y:  0 },
+    StatEntry { figure: 48, wpn_no:  6, wpn_x: -3, wpn_y: -1 },
+    StatEntry { figure: 49, wpn_no:  5, wpn_x: -2, wpn_y: -3 },
+    StatEntry { figure: 50, wpn_no:  5, wpn_x: -3, wpn_y: -4 },
+    StatEntry { figure: 50, wpn_no:  4, wpn_x:  0, wpn_y:  0 },
+    StatEntry { figure: 50, wpn_no:  3, wpn_x:  3, wpn_y:  0 },
+    StatEntry { figure: 52, wpn_no:  4, wpn_x:  6, wpn_y:  1 },
+    StatEntry { figure: 52, wpn_no: 15, wpn_x:  7, wpn_y:  3 },
+    StatEntry { figure: 51, wpn_no: 14, wpn_x:  1, wpn_y:  6 },
+    StatEntry { figure: 50, wpn_no:  4, wpn_x:  0, wpn_y:  0 },
+    StatEntry { figure: 54, wpn_no: 87, wpn_x:  3, wpn_y:  0 },
+    StatEntry { figure: 53, wpn_no: 83, wpn_x:  3, wpn_y:  0 },
+    // 68–79: east fight
+    StatEntry { figure: 56, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    StatEntry { figure: 56, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
+    StatEntry { figure: 57, wpn_no:  1, wpn_x: 10, wpn_y:  6 },
+    StatEntry { figure: 58, wpn_no:  1, wpn_x: 10, wpn_y:  5 },
+    StatEntry { figure: 58, wpn_no:  2, wpn_x:  7, wpn_y:  3 },
+    StatEntry { figure: 58, wpn_no:  3, wpn_x:  6, wpn_y:  3 },
+    StatEntry { figure: 60, wpn_no:  4, wpn_x:  1, wpn_y:  0 },
+    StatEntry { figure: 60, wpn_no:  3, wpn_x:  3, wpn_y:  2 },
+    StatEntry { figure: 59, wpn_no: 15, wpn_x:  4, wpn_y:  1 },
+    StatEntry { figure: 58, wpn_no:  4, wpn_x:  5, wpn_y:  1 },
+    StatEntry { figure: 62, wpn_no: 84, wpn_x:  3, wpn_y:  0 },
+    StatEntry { figure: 61, wpn_no: 80, wpn_x:  3, wpn_y:  0 },
+    // 80–82: death sequence
+    StatEntry { figure: 47, wpn_no:  0, wpn_x:  5, wpn_y: 11 },
+    StatEntry { figure: 63, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
+    StatEntry { figure: 39, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
+    // 83: sinking sequence
+    StatEntry { figure: 55, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    // 84–85: oscillations
+    StatEntry { figure: 64, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    StatEntry { figure: 65, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    // 86: asleep
+    StatEntry { figure: 66, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+];

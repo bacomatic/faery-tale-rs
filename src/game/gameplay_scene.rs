@@ -2005,6 +2005,30 @@ impl GameplayScene {
         }
     }
 
+    /// Blit an object sprite (16×obj_h) into the framebuf.
+    fn blit_obj_to_framebuf(
+        frame_pixels: &[u8],
+        rel_x: i32,
+        rel_y: i32,
+        obj_h: usize,
+        framebuf: &mut [u8],
+        fb_w: i32,
+        fb_h: i32,
+    ) {
+        use crate::game::sprites::SPRITE_W;
+        for row in 0..obj_h as i32 {
+            let dst_y = rel_y + row;
+            if dst_y < 0 || dst_y >= fb_h { continue; }
+            for col in 0..SPRITE_W as i32 {
+                let dst_x = rel_x + col;
+                if dst_x < 0 || dst_x >= fb_w { continue; }
+                let src_idx = frame_pixels[(row as usize) * SPRITE_W + col as usize];
+                if src_idx == 31 { continue; }
+                framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
+            }
+        }
+    }
+
     /// Compute rel_x/rel_y for an actor at (abs_x, abs_y) given viewport origin (map_x, map_y).
     /// Matches original fmain.c:2150-2158: rel_x = abs_x - map_x - 8, rel_y = abs_y - map_y - 26.
     /// Camera follow from fsubs.asm:1360–1423.
@@ -2059,6 +2083,7 @@ impl GameplayScene {
     /// Called immediately after mr.compose() so actors appear on top of tiles.
     fn blit_actors_to_framebuf(
         sprite_sheets: &[Option<crate::game::sprites::SpriteSheet>],
+        obj_sprites: &Option<crate::game::sprites::SpriteSheet>,
         state: &GameState,
         npc_table: &Option<crate::game::npc::NpcTable>,
         map_x: u16,
@@ -2097,6 +2122,35 @@ impl GameplayScene {
                 let frame = frame_base + anim_offset;
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                }
+
+                // Weapon overlay (fmain.c passmode weapon blit).
+                let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
+                if weapon_type > 0 && weapon_type <= 5 {
+                    if let Some(ref obj_sheet) = obj_sprites {
+                        use crate::game::sprites::{STATELIST, OBJ_SPRITE_H};
+                        if let Some(entry) = STATELIST.get(frame) {
+                            let (wpn_x, wpn_y, wpn_frame) = if weapon_type == 5 {
+                                // Wand: facing + 103
+                                let wand_y = if hero_facing == 2 { entry.wpn_y - 6 } else { entry.wpn_y };
+                                (entry.wpn_x, wand_y, hero_facing as usize + 103)
+                            } else {
+                                // Hand weapons: dirk(1)=+64, mace(2)=+32, sword(3)=+48, bow(4)=+0
+                                let k: usize = match weapon_type {
+                                    1 => 64,
+                                    2 => 32,
+                                    3 => 48,
+                                    _ => 0,
+                                };
+                                (entry.wpn_x, entry.wpn_y, entry.wpn_no as usize + k)
+                            };
+                            let wx = rel_x + wpn_x as i32;
+                            let wy = rel_y + wpn_y as i32;
+                            if let Some(wfp) = obj_sheet.frame_pixels(wpn_frame) {
+                                Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, framebuf, fb_w, fb_h);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2641,6 +2695,7 @@ impl Scene for GameplayScene {
             if let Some(ref mut mr) = self.map_renderer {
                 Self::blit_actors_to_framebuf(
                     &self.sprite_sheets,
+                    &self.object_sprites,
                     &self.state,
                     &self.npc_table,
                     map_x,
