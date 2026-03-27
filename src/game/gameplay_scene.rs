@@ -2071,10 +2071,19 @@ impl GameplayScene {
     }
 
     fn actor_rel_pos(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16) -> (i32, i32) {
+        Self::actor_rel_pos_offset(abs_x, abs_y, map_x, map_y, -8, -26)
+    }
+
+    /// Raft/Carrier/Dragon use (-16, -16) offsets (fmain.c:2152-2155).
+    fn carrier_rel_pos(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16) -> (i32, i32) {
+        Self::actor_rel_pos_offset(abs_x, abs_y, map_x, map_y, -16, -16)
+    }
+
+    fn actor_rel_pos_offset(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16, ox: i32, oy: i32) -> (i32, i32) {
         const WRAP: i32 = 0x8000;
-        let dx = (abs_x as i32 - map_x as i32 - 8).rem_euclid(WRAP);
+        let dx = (abs_x as i32 - map_x as i32 + ox).rem_euclid(WRAP);
         let rel_x = if dx > WRAP / 2 { dx - WRAP } else { dx };
-        let dy = (abs_y as i32 - map_y as i32 - 26).rem_euclid(WRAP);
+        let dy = (abs_y as i32 - map_y as i32 + oy).rem_euclid(WRAP);
         let rel_y = if dy > WRAP / 2 { dy - WRAP } else { dy };
         (rel_x, rel_y)
     }
