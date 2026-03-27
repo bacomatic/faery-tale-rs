@@ -126,6 +126,12 @@ impl PlacardRenderer {
     pub fn draw_segments<T: RenderTarget>(&mut self, canvas: &mut Canvas<T>, delta_ticks: i32) -> bool {
         // loop to catch up if we are behind
         let count = delta_ticks * 3; // multiple iterations per frame, otherwise it's too slow
+        let x_min = self.x_offset;
+        let x_max = self.x_offset + 284;
+        let y_min = 0i32;
+        let y_max = 124i32;
+        let cx = |x: i32| x.clamp(x_min, x_max);
+        let cy = |y: i32| y.clamp(y_min, y_max);
 
         for _ in 0..count {
             // check if we're finished
@@ -140,24 +146,24 @@ impl PlacardRenderer {
             if self.block_index < 7 {
                     // Left
                 canvas.draw_line(
-                    Point::new(self.xorg + self.x_offset, self.yorg),
-                    Point::new(dx + self.x_offset, dy)
+                    Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
+                    Point::new(cx(dx + self.x_offset), cy(dy))
                 ).unwrap();
                     // Right
                 canvas.draw_line(
-                    Point::new(284 - self.xorg + self.x_offset, 124 - self.yorg),
-                    Point::new(284 - dx + self.x_offset, 124 - dy)
+                    Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
+                    Point::new(cx(284 - dx + self.x_offset), cy(124 - dy))
                 ).unwrap();
             }
                 // Top
             canvas.draw_line(
-                Point::new(16 + self.yorg + self.x_offset, 12 - self.xorg),
-                Point::new(16 + dy + self.x_offset, 12 - dx)
+                Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
+                Point::new(cx(16 + dy + self.x_offset), cy(12 - dx))
             ).unwrap();
                 // Bottom
             canvas.draw_line(
-                Point::new(268 - self.yorg + self.x_offset, 112 + self.xorg),
-                Point::new(268 - dy + self.x_offset, 112 + dx)
+                Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
+                Point::new(cx(268 - dy + self.x_offset), cy(112 + dx))
             ).unwrap();
 
             self.xorg = dx;
@@ -180,24 +186,24 @@ impl PlacardRenderer {
             if self.block_index < 7 {
                     // Left
                 canvas.draw_line(
-                    Point::new(self.xorg + self.x_offset, self.yorg),
-                    Point::new(dx + self.x_offset, dy)
+                    Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
+                    Point::new(cx(dx + self.x_offset), cy(dy))
                 ).unwrap();
                     // Right
                 canvas.draw_line(
-                    Point::new(284 - self.xorg + self.x_offset, 124 - self.yorg),
-                    Point::new(284 - dx + self.x_offset, 124 - dy)
+                    Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
+                    Point::new(cx(284 - dx + self.x_offset), cy(124 - dy))
                 ).unwrap();
             }
                 // Top
             canvas.draw_line(
-                Point::new(16 + self.yorg + self.x_offset, 12 - self.xorg),
-                Point::new(16 + dy + self.x_offset, 12 - dx)
+                Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
+                Point::new(cx(16 + dy + self.x_offset), cy(12 - dx))
             ).unwrap();
                 // Bottom
             canvas.draw_line(
-                Point::new(268 - self.yorg + self.x_offset, 112 + self.xorg),
-                Point::new(268 - dy + self.x_offset, 112 + dx)
+                Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
+                Point::new(cx(268 - dy + self.x_offset), cy(112 + dx))
             ).unwrap();
         }
 
