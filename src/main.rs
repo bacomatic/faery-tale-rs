@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use crate::game::debug_console::{DebugConsole, DebugStatus};
 use crate::game::game_clock::GameClock;
+use crate::game::game_state::DayPhase;
 use crate::game::settings::{self, GameSettings};
 use crate::game::cursor::CursorAsset;
 use crate::game::colors::Palette;
@@ -450,13 +451,15 @@ pub fn main() -> Result<(), String> {
                     .map(|l| l.tracks.len() / SongLibrary::VOICES)
                     .unwrap_or(0);
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
-                let (gday, ghour, gminute) = clock.get_game_wall_clock();
+                let (gday, ghour, gminute) = gs.state.daynight_to_wall_clock();
                 let status = DebugStatus {
                     fps: game_fps,
                     game_day: gday,
                     game_hour: ghour,
                     game_minute: gminute,
-                    day_phase: clock.get_day_phase(),
+                    day_phase: gs.state.get_day_phase(),
+                    daynight: gs.state.daynight,
+                    lightlevel: gs.state.lightlevel,
                     game_ticks: clock.game_ticks,
                     paused: clock.paused,
                     scene_name: Some("Gameplay".to_owned()),
@@ -476,7 +479,6 @@ pub fn main() -> Result<(), String> {
                 dc.update_status(status);
             } else {
                 // Not yet in gameplay (intro / copy-protect scene)
-                let (gday, ghour, gminute) = clock.get_game_wall_clock();
                 let song_group_count = song_library
                     .as_ref()
                     .map(|l| l.tracks.len() / SongLibrary::VOICES)
@@ -484,10 +486,12 @@ pub fn main() -> Result<(), String> {
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
                 let status = DebugStatus {
                     fps: game_fps,
-                    game_day: gday,
-                    game_hour: ghour,
-                    game_minute: gminute,
-                    day_phase: clock.get_day_phase(),
+                    game_day: 0,
+                    game_hour: 0,
+                    game_minute: 0,
+                    day_phase: DayPhase::default(),
+                    daynight: 0,
+                    lightlevel: 0,
                     game_ticks: clock.game_ticks,
                     paused: clock.paused,
                     scene_name: Some("Intro".to_owned()),
@@ -517,7 +521,6 @@ pub fn main() -> Result<(), String> {
             dc.render();
         } else if let Some(ref mut dc) = debug_console {
             // Console active but no scene yet
-            let (gday, ghour, gminute) = clock.get_game_wall_clock();
             let song_group_count = song_library
                 .as_ref()
                 .map(|l| l.tracks.len() / SongLibrary::VOICES)
@@ -525,10 +528,12 @@ pub fn main() -> Result<(), String> {
             let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
             let status = DebugStatus {
                 fps: game_fps,
-                game_day: gday,
-                game_hour: ghour,
-                game_minute: gminute,
-                day_phase: clock.get_day_phase(),
+                game_day: 0,
+                game_hour: 0,
+                game_minute: 0,
+                day_phase: DayPhase::default(),
+                daynight: 0,
+                lightlevel: 0,
                 game_ticks: clock.game_ticks,
                 paused: clock.paused,
                 scene_name: None,

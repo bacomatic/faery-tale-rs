@@ -33,7 +33,7 @@ use ratatui::{
 use crate::game::debug_command::{
     BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId,
 };
-use crate::game::game_clock::DayPhase;
+use crate::game::game_state::DayPhase;
 
 // ── Status snapshot ──────────────────────────────────────────────────────────
 
@@ -46,6 +46,8 @@ pub struct DebugStatus {
     pub game_hour: u32,
     pub game_minute: u32,
     pub day_phase: DayPhase,
+    pub daynight: u16,
+    pub lightlevel: u16,
     pub game_ticks: u64,
     pub paused: bool,
     pub scene_name: Option<String>,

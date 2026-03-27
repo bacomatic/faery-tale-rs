@@ -1,6 +1,15 @@
 use crate::game::actor::Actor;
 use crate::game::debug_command::GodModeFlags;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DayPhase {
+    #[default]
+    Midnight = 0,
+    Morning = 4,
+    Midday = 6,
+    Evening = 9,
+}
+
 /// Lasso item index in stuff array (from original fmain.h).
 pub const ITEM_LASSO: usize = 16;
 /// Swan carrier type ID (from original cfile/carrier tables).
@@ -304,6 +313,17 @@ impl GameState {
         let remainder = (self.daynight % 1000) as u32;
         let minute = remainder * 60 / 1000;
         (self.game_days, hour, minute)
+    }
+
+    /// Get the current day phase from dayperiod.
+    pub fn get_day_phase(&self) -> DayPhase {
+        match self.dayperiod {
+            0 => DayPhase::Midnight,
+            1 => DayPhase::Morning,
+            2 => DayPhase::Midday,
+            3 => DayPhase::Evening,
+            _ => DayPhase::Midnight,
+        }
     }
 
     /// Advance game state by `delta` ticks.

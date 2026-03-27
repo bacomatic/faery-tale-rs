@@ -57,15 +57,6 @@ impl GameTicker {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum DayPhase {
-    #[default]
-    Midnight = 0,   // It was midnight. (00:00 - 5:59)
-    Morning = 4,    // It was morning.  (06:00 - 11:59)
-    Midday = 6,     // It was midday. (12:00 - 17:59)
-    Evening = 9,    // Evening was drawing near. (18:00 - 23:59)
-}
-
 /*
     Original game clock update logic (from fmain.c):
 
@@ -228,19 +219,5 @@ impl GameClock {
         let delta_ticks = (delta_minutes * TICKS_PER_MINUTE) as u64;
         self.game_ticks += delta_ticks;
         self.ticker.reset();
-    }
-
-    /**
-     * Get the current day phase based on the game clock.
-     */
-    pub fn get_day_phase(&self) -> DayPhase {
-        let day_ticks = self.game_ticks % TICKS_PER_DAY;
-        let hour = day_ticks / TICKS_PER_HOUR;
-        match hour {
-            0..=7 => DayPhase::Midnight,
-            8..=11 => DayPhase::Morning,
-            12..=17 => DayPhase::Midday,
-            _ => DayPhase::Evening,
-        }
     }
 }
