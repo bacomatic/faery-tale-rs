@@ -345,7 +345,6 @@ impl GameState {
     /// Pushes triggered event IDs into `events`.
     fn hunger_fatigue_step(&mut self, events: &mut Vec<u8>) {
         self.hunger += 1;
-        self.fatigue += 1;
 
         // Hunger threshold messages.
         if self.hunger == 35 {
@@ -716,5 +715,22 @@ mod tests {
         let mut s = GameState::new();
         s.luck = 5;
         assert!(!s.try_respawn());
+    }
+
+    #[test]
+    fn test_hunger_fatigue_step_does_not_increment_fatigue() {
+        let mut s = GameState::new();
+        s.fatigue = 10;
+        let mut events = Vec::new();
+        s.hunger_fatigue_step(&mut events);
+        assert_eq!(s.fatigue, 10, "hunger_fatigue_step must not touch fatigue");
+    }
+
+    #[test]
+    fn test_fatigue_step_forced_sleep_triggers() {
+        let mut s = GameState::new();
+        s.fatigue = GameState::MAX_FATIGUE - 1;
+        let forced = s.fatigue_step(true);
+        assert!(forced, "fatigue_step must return true when MAX_FATIGUE is reached");
     }
 }

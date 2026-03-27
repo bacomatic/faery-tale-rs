@@ -115,21 +115,21 @@ const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
 const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
 
 /// Day/night phase derived from lightlevel triangle wave (0–300).
+/// lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DayNightPhase {
-    Day,   // lightlevel < 60
-    Dawn,  // 60-120 (transition)
-    Dusk,  // 121-180 (transition)
-    Night, // >180
+    Night, // lightlevel 0–59   (darkest)
+    Dawn,  // 60–149  (brightening)
+    Day,   // 150–299 (bright)
+    Dusk,  // unused; reserved for symmetrical dusk transition
 }
 
 impl DayNightPhase {
     pub fn from_lightlevel(level: u16) -> Self {
         match level {
-            0..=59    => Self::Day,
-            60..=120  => Self::Dawn,
-            121..=180 => Self::Dusk,
-            _         => Self::Night,
+            0..=59  => Self::Night,
+            60..=149 => Self::Dawn,
+            _        => Self::Day,
         }
     }
 }
@@ -304,9 +304,10 @@ impl GameplayScene {
         self.menu.set_options(&stuff, wealth);
     }
 
-    /// Returns true when it is daytime (lightlevel > 60).
+    /// Returns true when it is daytime (lightlevel >= 40).
+    /// Original: ob_listg[5] lantern activates when lightlevel < 40 (fmain.c:2375-2378).
     pub fn is_daytime(state: &GameState) -> bool {
-        state.lightlevel > 60
+        state.lightlevel >= 40
     }
 
     /// Push a debug/status message to the log buffer (shown in debug window).
@@ -523,9 +524,14 @@ impl GameplayScene {
             }
         }
 
-        // Visual fatigue feedback: per-step counter is kept for possible future animation,
-        // but forced sleep is now driven by the daynight tick (player-111).
-        self.state.fatigue_step(moved);
+        // Per-step fatigue: +1 when moving, -1 resting. Returns true on forced sleep.
+        if self.state.fatigue_step(moved) {
+            // Forced sleep: "just couldn't stay awake any longer!" (event 12)
+            let bname = brother_name(&self.state);
+            let msg = crate::game::events::event_msg(&self.narr, 12, bname);
+            if !msg.is_empty() { self.messages.push(msg); }
+            // TODO(#112): set PlayerState::Sleeping here when sleep state is implemented
+        }
     }
 
     /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
@@ -1738,6 +1744,39 @@ impl GameplayScene {
                 self.state.brother = b;
                 self.dlog(format!("RestartAsBrother: switched to brother {}", b));
             }
+            QueryTerrain => {
+                let x = self.state.hero_x as i32;
+                let y = self.state.hero_y as i32;
+                let lines: Vec<String> = match &self.map_world {
+                    None => vec![
+                        format!("terrain: hero=({}, {})", x, y),
+                        "terrain: map_world not loaded".to_string(),
+                    ],
+                    Some(world) => {
+                        let terra_head = format!("terrain: terra_mem[0..16] = {:02x?}", &world.terra_mem[..16]);
+                        let probes: Vec<String> = [
+                            ("right_foot", x + 4, y + 2),
+                            ("left_foot",  x - 4, y + 2),
+                        ].iter().map(|&(label, px, py)| {
+                            let p = collision::terrain_probe(world, px, py);
+                            format!(
+                                "terrain: {}  pos=({},{})  d4=0x{:02x}  imx={} imy={}  xs={} ys={}  map[{}]=sec{}  sec_off={}  tile_idx={}  terra=[{:02x},{:02x},{:02x},{:02x}]  tiles&d4=0x{:02x}  type={}",
+                                label, p.x, p.y, p.d4, p.imx, p.imy,
+                                p.xs, p.ys, p.map_offset, p.sec_num,
+                                p.sector_offset, p.tile_idx,
+                                p.terra_bytes[0], p.terra_bytes[1],
+                                p.terra_bytes[2], p.terra_bytes[3],
+                                p.tiles_and_d4, p.terrain_type,
+                            )
+                        }).collect();
+                        std::iter::once(format!("terrain: hero=({}, {})", x, y))
+                            .chain(std::iter::once(terra_head))
+                            .chain(probes)
+                            .collect()
+                    }
+                };
+                for line in lines { self.dlog(line); }
+            }
             QueryActors => {
                 let count = self.state.actors.len();
                 let lines: Vec<String> = std::iter::once(format!("Actors: {} total", count))
@@ -2240,7 +2279,7 @@ impl Scene for GameplayScene {
                 .disk
                 .as_ref()
                 .map(|d| d.adf.as_str())
-                .unwrap_or("game/Faery Tale Adventure (MicroIllusions).adf");
+                .unwrap_or("game/image");
             match crate::game::adf::AdfDisk::open(std::path::Path::new(adf_path)) {
                 Ok(adf) => {
                     let region = self.state.region_num;
@@ -2297,17 +2336,7 @@ impl Scene for GameplayScene {
 
         let new_phase = DayNightPhase::from_lightlevel(self.state.lightlevel);
         if new_phase != self.day_night_phase {
-            self.dlog(format!("Day/night: {:?}", new_phase));
-            let from = self.palette_transition
-                .as_ref()
-                .map(|pt| pt.to)
-                .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
-            let to = match new_phase {
-                DayNightPhase::Night => [crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE],
-                DayNightPhase::Day   => [0xFFFFFFFF_u32; crate::game::palette::PALETTE_SIZE],
-                _                   => from,
-            };
-            self.palette_transition = Some(crate::game::palette::PaletteTransition::new(from, to));
+            self.dlog(format!("Day/night phase: {:?}", new_phase));
             self.day_night_phase = new_phase;
         }
 
@@ -2331,12 +2360,16 @@ impl Scene for GameplayScene {
 
 
         // Day/night continuous dimming: rebuild atlas whenever lightlevel changes (gfx-101).
-        // lightlevel is a *darkness* value: 0 = full day (bright), 300 = full night (dark).
-        // pct is brightness percentage passed to apply_lightlevel_dim, so it must be inverted.
+        // lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
+        // Mirrors day_fade() in fmain2.c. Indoors (region >= 8) always runs at full brightness.
         let lightlevel = self.state.lightlevel;
         if lightlevel != self.last_lightlevel {
             self.last_lightlevel = lightlevel;
-            let pct = (100 - lightlevel as i32 * 100 / 300) as i16;
+            let pct = if self.state.region_num >= 8 {
+                100i16 // indoors: no day/night dimming (fmain2.c:2066-2070)
+            } else {
+                (lightlevel as i32 * 100 / 300) as i16
+            };
             self.dlog(format!("daynight: lightlevel={} pct={}%", lightlevel, pct));
             if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
                 let base = self.palette_transition
