@@ -201,6 +201,8 @@ pub struct GameplayScene {
     day_night_phase: DayNightPhase,
     /// Last lightlevel used for atlas dim — triggers rebuild when it changes.
     last_lightlevel: u16,
+    /// RGBA32 palette for the final indexed→RGBA32 render step.
+    current_palette: crate::game::palette::Palette,
 
     witch_effect: WitchEffect,
     teleport_effect: TeleportEffect,
@@ -252,6 +254,7 @@ impl GameplayScene {
             npc_table: None,
             day_night_phase: DayNightPhase::Day,
             last_lightlevel: u16::MAX,
+            current_palette: [0xFF808080_u32; crate::game::palette::PALETTE_SIZE],
 
             witch_effect: WitchEffect::new(),
             teleport_effect: TeleportEffect::new(),
@@ -844,38 +847,31 @@ impl GameplayScene {
                 // Blit composed map framebuf to canvas (world-105).
                 if let Some(ref mr) = self.map_renderer {
                     if !mr.framebuf.is_empty() {
-                        // SAFETY: reinterpreting Vec<u32> as &[u8] — same memory, valid alignment.
-                        let pixels_u8: &[u8] = unsafe {
-                            std::slice::from_raw_parts(
-                                mr.framebuf.as_ptr() as *const u8,
-                                mr.framebuf.len() * 4,
-                            )
-                        };
-                        let mut pixels_copy = pixels_u8.to_vec();
+                        // Apply current_palette: indexed u8 → RGBA32 bytes for SDL2.
+                        let pal = &self.current_palette;
+                        let mut rgb_buf: Vec<u8> = Vec::with_capacity(mr.framebuf.len() * 4);
+                        for &idx in &mr.framebuf {
+                            let rgba = pal[(idx & 31) as usize];
+                            // ARGB8888 on little-endian: memory bytes are [B, G, R, A]
+                            rgb_buf.push((rgba & 0xFF) as u8);
+                            rgb_buf.push(((rgba >> 8) & 0xFF) as u8);
+                            rgb_buf.push(((rgba >> 16) & 0xFF) as u8);
+                            rgb_buf.push(0xFF);
+                        }
                         let tc = canvas.texture_creator();
                         let surface_result = sdl2::surface::Surface::from_data(
-                            &mut pixels_copy,
+                            &mut rgb_buf,
                             crate::game::map_renderer::MAP_DST_W,
                             crate::game::map_renderer::MAP_DST_H,
                             crate::game::map_renderer::MAP_DST_W * 4,
-                            // ARGB8888 = 0xAARRGGBB as u32, matching amiga_color_to_rgba output.
-                            // RGBA32 is ABGR8888 on little-endian (0xAABBGGRR), which would swap R/B.
                             sdl2::pixels::PixelFormatEnum::ARGB8888,
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                                // Clip framebuf to the visible LORES viewport (vp_page.DWidth × DHeight)
-                                // then 2× scale to canvas. Framebuf may be wider/taller than visible
-                                // area due to tile-grid rounding; copper did the clipping on Amiga.
-                                let src = sdl2::rect::Rect::new(
-                                    0, 0,
-                                    PLAYFIELD_LORES_W,
-                                    PLAYFIELD_LORES_H,
-                                );
+                                let src = sdl2::rect::Rect::new(0, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
                                 let dst = sdl2::rect::Rect::new(
                                     PLAYFIELD_X, PLAYFIELD_Y,
-                                    PLAYFIELD_CANVAS_W,
-                                    PLAYFIELD_CANVAS_H,
+                                    PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
                                 );
                                 let _ = canvas.copy(&tex, Some(src), Some(dst));
                             }
@@ -917,7 +913,8 @@ impl GameplayScene {
                     use crate::game::sprites::{INV_LIST, OBJ_SPRITE_H, SPRITE_W};
                     const LORES_W: usize = 320;
                     const LORES_H: usize = 200;
-                    let mut inv_pixels = vec![0u32; LORES_W * LORES_H];
+                    // Index 31 = transparent background.
+                    let mut inv_indices = vec![31u8; LORES_W * LORES_H];
                     let stuff = *self.state.stuff();
 
                     for (j, item) in INV_LIST.iter().enumerate() {
@@ -937,9 +934,9 @@ impl GameplayScene {
                                     for col in 0..SPRITE_W {
                                         let px = dst_x + col as i32;
                                         if px < 0 || px >= LORES_W as i32 { continue; }
-                                        let src_px = frame_pix[src_row * SPRITE_W + col];
-                                        if src_px != 0 {
-                                            inv_pixels[py as usize * LORES_W + px as usize] = src_px;
+                                        let src_idx = frame_pix[src_row * SPRITE_W + col];
+                                        if src_idx != 31 {
+                                            inv_indices[py as usize * LORES_W + px as usize] = src_idx;
                                         }
                                     }
                                 }
@@ -948,17 +945,24 @@ impl GameplayScene {
                         }
                     }
 
+                    // Apply palette: indexed u8 → RGBA32 bytes for SDL2.
+                    let pal = &self.current_palette;
+                    let mut rgb_buf: Vec<u8> = Vec::with_capacity(LORES_W * LORES_H * 4);
+                    for &idx in &inv_indices {
+                        let rgba = if idx == 31 {
+                            0u32 // transparent background → black
+                        } else {
+                            pal[(idx & 31) as usize]
+                        };
+                        rgb_buf.push((rgba & 0xFF) as u8);
+                        rgb_buf.push(((rgba >> 8) & 0xFF) as u8);
+                        rgb_buf.push(((rgba >> 16) & 0xFF) as u8);
+                        rgb_buf.push(0xFF);
+                    }
                     // Blit the lores inventory canvas to the playfield rect (clip x=16, scale 2×).
-                    let pixels_u8: &[u8] = unsafe {
-                        std::slice::from_raw_parts(
-                            inv_pixels.as_ptr() as *const u8,
-                            inv_pixels.len() * 4,
-                        )
-                    };
-                    let mut pixels_copy = pixels_u8.to_vec();
                     let tc = canvas.texture_creator();
                     if let Ok(surface) = sdl2::surface::Surface::from_data(
-                        &mut pixels_copy,
+                        &mut rgb_buf,
                         LORES_W as u32, LORES_H as u32,
                         LORES_W as u32 * 4,
                         sdl2::pixels::PixelFormatEnum::ARGB8888,
@@ -973,7 +977,7 @@ impl GameplayScene {
                             );
                             let _ = canvas.copy(&tex, Some(src), Some(dst));
                         }
-                    }; // semicolon: drops Result<Surface> temporary before pixels_copy is dropped
+                    }; // semicolon: drops Result<Surface> temporary before rgb_buf is dropped
                 }
 
                 self.render_hibar(canvas, resources);
@@ -1007,8 +1011,8 @@ impl GameplayScene {
             };
             match world_result {
                 Ok(world) => {
-                    let palette = Self::region_palette(game_lib, region);
-                    self.map_renderer = Some(MapRenderer::new(&world, &palette));
+                    self.current_palette = Self::region_palette(game_lib, region);
+                    self.map_renderer = Some(MapRenderer::new(&world));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
                 }
@@ -1894,14 +1898,14 @@ impl GameplayScene {
         }
     }
 
-    /// Blit one 16×32 sprite frame (RGBA32) into the map framebuf (sprite-103).
-    /// Transparent pixels (alpha == 0) are skipped.
+    /// Blit one 16×32 sprite frame (indexed u8) into the map framebuf (sprite-103).
+    /// Transparent pixels (index == 31) are skipped.
     /// `rel_x` / `rel_y` are the top-left destination in framebuf pixels.
     fn blit_sprite_to_framebuf(
-        frame_pixels: &[u32],
+        frame_pixels: &[u8],
         rel_x: i32,
         rel_y: i32,
-        framebuf: &mut [u32],
+        framebuf: &mut [u8],
         fb_w: i32,
         fb_h: i32,
     ) {
@@ -1912,9 +1916,9 @@ impl GameplayScene {
             for col in 0..SPRITE_W as i32 {
                 let dst_x = rel_x + col;
                 if dst_x < 0 || dst_x >= fb_w { continue; }
-                let src_px = frame_pixels[(row as usize) * SPRITE_W + col as usize];
-                if src_px >> 24 == 0 { continue; } // transparent
-                framebuf[(dst_y * fb_w + dst_x) as usize] = src_px;
+                let src_idx = frame_pixels[(row as usize) * SPRITE_W + col as usize];
+                if src_idx == 31 { continue; } // transparent
+                framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
             }
         }
     }
@@ -1977,7 +1981,7 @@ impl GameplayScene {
         npc_table: &Option<crate::game::npc::NpcTable>,
         map_x: u16,
         map_y: u16,
-        framebuf: &mut Vec<u32>,
+        framebuf: &mut Vec<u8>,
     ) {
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
         use crate::game::sprites::{SPRITE_H, SPRITE_W};
@@ -2300,15 +2304,14 @@ impl Scene for GameplayScene {
                     };
                     match world_result {
                         Ok(world) => {
-                            let palette = Self::region_palette(game_lib, region);
-                            let renderer = MapRenderer::new(&world, &palette);
+                            self.current_palette = Self::region_palette(game_lib, region);
+                            let renderer = MapRenderer::new(&world);
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
                             // sprite-101: load player (cfile 0-2) and setfig (cfile 13-17) sprites
-                            let sprite_palette = palette;
                             for cfile_idx in [0u8, 1, 2, 13, 14, 15, 16, 17] {
                                 if let Some(sheet) = crate::game::sprites::SpriteSheet::load(
-                                    &adf, cfile_idx, &sprite_palette,
+                                    &adf, cfile_idx,
                                 ) {
                                     self.dlog(format!(
                                         "sprite-load: cfile {} → {} frames",
@@ -2319,7 +2322,7 @@ impl Scene for GameplayScene {
                             }
                             // Load objects sprite sheet (cfile 3, 16×16) for inventory screen.
                             self.object_sprites = crate::game::sprites::SpriteSheet::load_objects(
-                                &adf, &sprite_palette,
+                                &adf,
                             );
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
@@ -2358,28 +2361,6 @@ impl Scene for GameplayScene {
             }
         }
 
-
-        // Day/night continuous dimming: rebuild atlas whenever lightlevel changes (gfx-101).
-        // lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
-        // Mirrors day_fade() in fmain2.c. Indoors (region >= 8) always runs at full brightness.
-        let lightlevel = self.state.lightlevel;
-        if lightlevel != self.last_lightlevel {
-            self.last_lightlevel = lightlevel;
-            let pct = if self.state.region_num >= 8 {
-                100i16 // indoors: no day/night dimming (fmain2.c:2066-2070)
-            } else {
-                (lightlevel as i32 * 100 / 300) as i16
-            };
-            self.dlog(format!("daynight: lightlevel={} pct={}%", lightlevel, pct));
-            if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                let base = self.palette_transition
-                    .as_ref()
-                    .map(|pt| pt.to)
-                    .unwrap_or([0xFFFFFFFF_u32; crate::game::palette::PALETTE_SIZE]);
-                let faded = crate::game::palette_fader::apply_lightlevel_dim(&base, pct);
-                mr.atlas.rebuild(world, &faded);
-            }
-        }
 
         // Indoor/outdoor mode detection (world-108)
         let indoor = self.state.region_num > 7;
@@ -2535,9 +2516,7 @@ impl Scene for GameplayScene {
         if let Some(ref mut pt) = self.palette_transition {
             if !pt.is_done() {
                 let palette = pt.tick();
-                if let (Some(ref mut mr), Some(ref world)) = (&mut self.map_renderer, &self.map_world) {
-                    mr.atlas.rebuild(world, &palette);
-                }
+                self.current_palette = palette;
             }
         }
 

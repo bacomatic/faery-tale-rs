@@ -191,12 +191,12 @@ pub const INV_LIST: [InvItem; 31] = [
     InvItem { image_number: 12, xoff: 14,  yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 30 Shard
 ];
 
-/// A loaded sprite sheet: raw pixel data as RGBA32.
+/// A loaded sprite sheet: palette-index pixel data.
 pub struct SpriteSheet {
     pub cfile_idx: u8,
-    /// RGBA32 pixel data, row-major, num_frames * frame_h * SPRITE_W pixels.
-    /// Transparent pixels are 0x00000000; opaque pixels have alpha=0xFF (high byte).
-    pub pixels: Vec<u32>,
+    /// Palette index per pixel, row-major, num_frames * frame_h * SPRITE_W bytes.
+    /// Index 31 = transparent (Amiga "all planes set" convention).
+    pub pixels: Vec<u8>,
     pub num_frames: usize,
     /// Height of each frame in pixels (SPRITE_H for characters, OBJ_SPRITE_H for objects).
     pub frame_h: usize,
@@ -219,10 +219,11 @@ impl SpriteSheet {
     ///
     /// `frame_count` must be the cfiles[].count value (not derived from data.len()).
     /// `frame_h` is the sprite height in pixels (SPRITE_H for characters, OBJ_SPRITE_H for objects).
-    pub fn decode(cfile_idx: u8, data: &[u8], palette: &[u32; 32], frame_count: usize, frame_h: usize) -> Self {
+    pub fn decode(cfile_idx: u8, data: &[u8], frame_count: usize, frame_h: usize) -> Self {
         let plane_frame_bytes = frame_h * PLANE_ROW_BYTES;
         let frame_bytes = SPRITE_PLANES * plane_frame_bytes;
-        let mut pixels = vec![0u32; frame_count * frame_h * SPRITE_W];
+        // Initialize to 31 (transparent). Opaque pixels will overwrite.
+        let mut pixels = vec![31u8; frame_count * frame_h * SPRITE_W];
 
         for frame in 0..frame_count {
             let frame_base = frame * frame_bytes;
@@ -244,9 +245,9 @@ impl SpriteSheet {
                     let color_idx = (0..SPRITE_PLANES)
                         .map(|p| ((planes[p] >> bit) & 1) << p)
                         .fold(0usize, |acc, b| acc | b as usize);
-                    if color_idx == 31 { continue; } // transparent (color 31 = all planes set)
                     let pixel_idx = frame * frame_h * SPRITE_W + row * SPRITE_W + col;
-                    pixels[pixel_idx] = palette[color_idx];
+                    pixels[pixel_idx] = color_idx as u8;
+                    // index 31 stays as initialized (transparent)
                 }
             }
         }
@@ -255,7 +256,7 @@ impl SpriteSheet {
 
     /// Load and decode a character/enemy sprite sheet from the ADF for a given cfile index.
     /// Returns None if the ADF doesn't have enough blocks.
-    pub fn load(adf: &AdfDisk, cfile_idx: u8, palette: &[u32; 32]) -> Option<Self> {
+    pub fn load(adf: &AdfDisk, cfile_idx: u8) -> Option<Self> {
         let block = CFILE_BLOCKS[cfile_idx as usize];
         let num_blocks = CFILE_BLOCK_COUNTS[cfile_idx as usize];
         let frame_count = CFILE_FRAME_COUNTS[cfile_idx as usize];
@@ -263,12 +264,12 @@ impl SpriteSheet {
             return None;
         }
         let data = adf.load_blocks(block, num_blocks);
-        Some(Self::decode(cfile_idx, data, palette, frame_count, SPRITE_H))
+        Some(Self::decode(cfile_idx, data, frame_count, SPRITE_H))
     }
 
     /// Load and decode the objects sprite sheet (cfile 3, height=16 not 32).
     /// Returns None if the ADF doesn't have enough blocks.
-    pub fn load_objects(adf: &AdfDisk, palette: &[u32; 32]) -> Option<Self> {
+    pub fn load_objects(adf: &AdfDisk) -> Option<Self> {
         const CFILE_IDX: u8 = 3;
         let block = CFILE_BLOCKS[CFILE_IDX as usize];
         let num_blocks = CFILE_BLOCK_COUNTS[CFILE_IDX as usize];
@@ -277,12 +278,12 @@ impl SpriteSheet {
             return None;
         }
         let data = adf.load_blocks(block, num_blocks);
-        Some(Self::decode(CFILE_IDX, data, palette, frame_count, OBJ_SPRITE_H))
+        Some(Self::decode(CFILE_IDX, data, frame_count, OBJ_SPRITE_H))
     }
 
-    /// Return the RGBA32 pixel slice for a single frame (frame_h * SPRITE_W pixels).
+    /// Return the palette-index slice for a single frame (frame_h * SPRITE_W bytes).
     /// Returns None for out-of-range frame indices.
-    pub fn frame_pixels(&self, frame: usize) -> Option<&[u32]> {
+    pub fn frame_pixels(&self, frame: usize) -> Option<&[u8]> {
         if frame >= self.num_frames { return None; }
         let frame_pixels = self.frame_h * SPRITE_W;
         let start = frame * frame_pixels;

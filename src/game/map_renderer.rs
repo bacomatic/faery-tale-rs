@@ -4,7 +4,6 @@ use crate::game::tile_atlas::{TileAtlas, TILE_W, TILE_H};
 use crate::game::map_view::{genmini_scrolled, SCROLL_TILES_W, SCROLL_TILES_H, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
 use crate::game::world_data::WorldData;
 
-/// Destination screen rect for the map viewport.
 pub const MAP_DST_X: i32 = 0;
 pub const MAP_DST_Y: i32 = 0;
 pub const MAP_DST_W: u32 = (TILE_W * VIEWPORT_TILES_W) as u32; // 304
@@ -12,28 +11,25 @@ pub const MAP_DST_H: u32 = (TILE_H * VIEWPORT_TILES_H) as u32; // 192
 
 pub struct MapRenderer {
     pub atlas: TileAtlas,
-    /// RGBA32 pixel buffer for the composed map frame (MAP_DST_W × MAP_DST_H).
-    pub framebuf: Vec<u32>,
+    /// Palette-index pixel buffer (MAP_DST_W × MAP_DST_H bytes).
+    /// Each byte is a palette index (0–31). Converted to RGBA32 at render time.
+    pub framebuf: Vec<u8>,
 }
 
 impl MapRenderer {
-    pub fn new(world: &WorldData, palette: &[u32; 32]) -> Self {
+    pub fn new(world: &WorldData) -> Self {
         MapRenderer {
-            atlas: TileAtlas::from_world_data(world, palette),
-            framebuf: vec![0u32; (MAP_DST_W * MAP_DST_H) as usize],
+            atlas: TileAtlas::from_world_data(world),
+            framebuf: vec![0u8; (MAP_DST_W * MAP_DST_H) as usize],
         }
     }
 
     /// Compose the map into `framebuf` for the given viewport position.
-    ///
-    /// map_x / map_y: pixel-precise viewport origin in world coordinates.
-    /// The sub-tile offsets (map_x & 0xF, map_y & 0x1F) are applied so tiles scroll
-    /// smoothly rather than snapping by one full tile per boundary crossing.
     pub fn compose(&mut self, map_x: u16, map_y: u16, world: &WorldData) {
         let img_x = map_x >> 4;
         let img_y = map_y >> 5;
-        let ox = (map_x & 0xF) as i32;   // sub-tile X offset (0–15)
-        let oy = (map_y & 0x1F) as i32;  // sub-tile Y offset (0–31)
+        let ox = (map_x & 0xF) as i32;
+        let oy = (map_y & 0x1F) as i32;
         let minimap = genmini_scrolled(img_x, img_y, world);
 
         self.framebuf.fill(0);
@@ -70,8 +66,7 @@ mod tests {
     #[test]
     fn test_compose_no_panic() {
         let world = WorldData::empty();
-        let palette = [0xFF000000_u32; 32];
-        let mut renderer = MapRenderer::new(&world, &palette);
+        let mut renderer = MapRenderer::new(&world);
         renderer.compose(1600, 6400, &world);
         assert_eq!(renderer.framebuf.len(), (MAP_DST_W * MAP_DST_H) as usize);
     }
