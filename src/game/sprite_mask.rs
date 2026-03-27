@@ -1,6 +1,10 @@
 //! Sprite-depth masking: per-tile, per-sprite-column ground-line masking
 //! ported from fmain.c lines 3134-3184 and fsubs.asm maskit().
 
+use crate::game::map_renderer::{MapRenderer, MAP_DST_W, MAP_DST_H};
+use crate::game::map_view::{SCROLL_TILES_W, SCROLL_TILES_H};
+use crate::game::tile_atlas::{TILE_W, TILE_H, TOTAL_TILES};
+
 /// Check whether a tile with masking type `k` should mask a sprite at the given position.
 ///
 /// Returns true if the mask should be applied (sprite goes BEHIND the tile).
@@ -52,6 +56,130 @@ pub fn shadow_bit_at(shadow_tile: &[u8], row: usize, col: usize) -> bool {
     let word = u16::from_be_bytes([shadow_tile[row * 2], shadow_tile[row * 2 + 1]]);
     let bit = 15 - col;
     (word >> bit) & 1 != 0
+}
+
+/// Describes a sprite that was blitted to the framebuf and needs masking.
+pub struct BlittedSprite {
+    /// Screen X of sprite's top-left corner in framebuf coordinates.
+    pub screen_x: i32,
+    /// Screen Y of sprite's top-left corner in framebuf coordinates.
+    pub screen_y: i32,
+    /// Sprite width in pixels.
+    pub width: usize,
+    /// Sprite height in pixels.
+    pub height: usize,
+    /// Ground line Y in framebuf coordinates (sprite feet position).
+    /// For characters: screen_y + 32. For objects: screen_y + obj_height.
+    pub ground: i32,
+    /// True if the actor is in FALL state (fmain.c state==22).
+    pub is_falling: bool,
+}
+
+/// Apply sprite-depth masking for one sprite against the tile map.
+///
+/// For each 16×32 tile that overlaps the sprite's bounding box, checks
+/// the tile's mask_type against the sprite's ground-line position. If
+/// masking applies, reads the shadow_mem bitmask and re-stamps tile
+/// pixels over the sprite area in the framebuf.
+pub fn apply_sprite_mask(
+    mr: &mut MapRenderer,
+    sprite: &BlittedSprite,
+    hero_sector: u16,
+    _actor_idx: usize,
+) {
+    let fb_w = MAP_DST_W as i32;
+    let fb_h = MAP_DST_H as i32;
+    let ox = mr.last_ox;
+    let oy = mr.last_oy;
+
+    let is_bridge_sector = hero_sector == 48;
+    let is_actor_1 = _actor_idx == 1;
+
+    let sprite_left = sprite.screen_x;
+    let sprite_right = sprite.screen_x + sprite.width as i32 - 1;
+    let sprite_top = sprite.screen_y;
+    let sprite_bottom = sprite.screen_y + sprite.height as i32 - 1;
+
+    // Convert framebuf pixel coords to tile grid coords.
+    // Guard against negative values before converting to usize.
+    let left_in_world = sprite_left + ox;
+    let right_in_world = sprite_right + ox;
+    let top_in_world = sprite_top + oy;
+    let bottom_in_world = sprite_bottom + oy;
+
+    if right_in_world < 0 || bottom_in_world < 0 { return; }
+
+    let tx_start = if left_in_world < 0 { 0 } else { left_in_world as usize / TILE_W };
+    let tx_end = (right_in_world.max(0) as usize) / TILE_W;
+    let ty_start = if top_in_world < 0 { 0 } else { top_in_world as usize / TILE_H };
+    let ty_end = (bottom_in_world.max(0) as usize) / TILE_H;
+
+    let ground = sprite.ground;
+    let ym_base = if top_in_world < 0 { 0u8 } else { (top_in_world >> 5) as u8 };
+
+    for tx in tx_start..=tx_end {
+        if tx >= SCROLL_TILES_W { continue; }
+        let xm = (tx as i32 - (left_in_world.max(0) as i32 / TILE_W as i32)).max(0) as u8;
+
+        for ty in ty_start..=ty_end {
+            if ty >= SCROLL_TILES_H { continue; }
+
+            let tile_idx = mr.last_minimap[ty * SCROLL_TILES_W + tx] as usize;
+            if tile_idx >= TOTAL_TILES { continue; }
+
+            let k = mr.atlas.mask_type[tile_idx];
+            if k == 0 { continue; }
+
+            let ym = ty as u8 - ym_base.min(ty as u8);
+            let ystop = ground - ((ym as i32 + ym_base as i32) << 5);
+
+            // FALL state handling
+            let k = if sprite.is_falling {
+                if tile_idx <= 220 { continue; } else { 3u8 }
+            } else {
+                k
+            };
+
+            // Case 6: substitute tile 64's maptag for rows above ground
+            let maptag = if k == 6 && ym != 0 {
+                let tile64 = 64usize.min(TOTAL_TILES - 1);
+                mr.atlas.maptag[tile64]
+            } else {
+                mr.atlas.maptag[tile_idx]
+            };
+
+            if !should_mask_tile(k, xm, ystop, ym, is_bridge_sector, is_actor_1) {
+                continue;
+            }
+
+            // Apply shadow_mem bitmask: re-stamp tile pixels where mask bit is set.
+            let shadow_offset = maptag as usize * 64;
+            if shadow_offset + 63 >= mr.shadow_mem.len() { continue; }
+            let shadow_tile = &mr.shadow_mem[shadow_offset..shadow_offset + 64];
+            let tile_pixels = mr.atlas.tile_pixels(tile_idx);
+
+            let tile_screen_x = tx as i32 * TILE_W as i32 - ox;
+            let tile_screen_y = ty as i32 * TILE_H as i32 - oy;
+
+            for row in 0..TILE_H {
+                let py = tile_screen_y + row as i32;
+                if py < 0 || py >= fb_h { continue; }
+                if py < sprite_top || py > sprite_bottom { continue; }
+
+                for col in 0..TILE_W {
+                    let px = tile_screen_x + col as i32;
+                    if px < 0 || px >= fb_w { continue; }
+                    if px < sprite_left || px > sprite_right { continue; }
+
+                    if shadow_bit_at(shadow_tile, row, col) {
+                        let fb_idx = (py * fb_w + px) as usize;
+                        let tile_px = tile_pixels[row * TILE_W + col];
+                        mr.framebuf[fb_idx] = tile_px;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

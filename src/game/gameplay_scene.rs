@@ -2921,6 +2921,42 @@ impl Scene for GameplayScene {
                         }
                     }
                 }
+                // Sprite-depth masking: apply per-sprite tile masking.
+                {
+                    use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
+                    use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H};
+
+                    // Hero sprite masking
+                    let (hero_rx, mut hero_ry) = Self::actor_rel_pos(
+                        self.state.hero_x, self.state.hero_y, map_x, map_y,
+                    );
+                    if self.submerged { hero_ry += 8; }
+                    let hero_sprite = BlittedSprite {
+                        screen_x: hero_rx,
+                        screen_y: hero_ry,
+                        width: SPRITE_W,
+                        height: SPRITE_H,
+                        ground: hero_ry + SPRITE_H as i32,
+                        is_falling: false, // TODO: wire to actor FALL state when actor states are implemented
+                    };
+                    apply_sprite_mask(mr, &hero_sprite, self.state.hero_sector, 0);
+
+                    // World object masking
+                    for obj in &self.state.world_objects {
+                        if !obj.visible || obj.region != self.state.region_num { continue; }
+                        let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
+                        let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
+                        let obj_sprite = BlittedSprite {
+                            screen_x: rel_x,
+                            screen_y: rel_y,
+                            width: SPRITE_W,
+                            height: OBJ_SPRITE_H,
+                            ground: rel_y + OBJ_SPRITE_H as i32,
+                            is_falling: false,
+                        };
+                        apply_sprite_mask(mr, &obj_sprite, self.state.hero_sector, 0);
+                    }
+                }
             }
         }
 
