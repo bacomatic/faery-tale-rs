@@ -316,7 +316,7 @@ impl DiskFont {
         // get char location
         let char_loc = self.char_loc[char_index];
         let offset = (self.modulo * line) + char_loc.0;
-        let total_width = self.char_space[char_index].abs() as usize; // FIXME: handle negative offsets
+        let total_width = self.char_space[char_index].max(0) as usize; // negative spacing not meaningful for terminal debug output
         let is_baseline = line == self.baseline;
 
         if mark {
@@ -356,7 +356,7 @@ impl DiskFont {
     fn print_char(&self, c: u8, mark: bool) {
         if c >= self.lo_char && c <= self.hi_char {
             let char_index = (c - self.lo_char) as usize;
-            let total_width = self.char_space[char_index].abs() as usize;
+            let total_width = self.char_space[char_index].max(0) as usize;
 
             // make sure it's a printable char first
             let char_str = if c.is_ascii_graphic() {

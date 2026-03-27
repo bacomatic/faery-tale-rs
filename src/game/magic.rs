@@ -27,6 +27,24 @@ pub fn heal_cap(brave: i16) -> i16 {
     15 + brave / 4
 }
 
+/// Stone ring sector coordinates from fmain.c stone_list[].
+/// 11 pairs of (x_sector, y_sector) for teleport destinations.
+const STONE_RINGS: [(u8, u8); 11] = [
+    (54, 43), (71, 77),  (78, 102), (66, 121), (12, 85),
+    (79, 40), (107, 38), (73, 21),  (12, 26),  (26, 53), (84, 60),
+];
+
+/// Stone ring activation sector (fmain.c: hero_sector == 144).
+const STONE_RING_SECTOR: u16 = 144;
+
+/// Find the index of the stone ring the hero is currently standing at,
+/// based on their sector coordinates matching a ring in STONE_RINGS.
+fn find_current_ring(hero_x: u16, hero_y: u16) -> Option<usize> {
+    let sx = (hero_x >> 8) as u8;
+    let sy = (hero_y >> 8) as u8;
+    STONE_RINGS.iter().position(|&(rx, ry)| rx == sx && ry == sy)
+}
+
 /// Use a magic item from inventory.
 ///
 /// Mirrors fmain.c `case MAGIC` switch, consuming one charge and applying
@@ -49,9 +67,28 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
 
     let msg = match item_idx {
         ITEM_STONE_RING => {
-            // fmain.c: teleports hero between stone rings (requires hero_sector == 144).
-            // Full stone-list teleport is deferred; consume item and stub.
-            "The stone ring glows but nothing happens here."
+            // fmain.c: teleports hero between stone rings when standing on one.
+            // Requires hero_sector == 144, hero centered in tile, and a matching ring.
+            if state.hero_sector != STONE_RING_SECTOR {
+                return Err("You must stand on a stone ring to use this.");
+            }
+            // Check hero is roughly centered in tile (fmain.c: (hero_x & 255) / 85 == 1)
+            let hx_frac = (state.hero_x & 255) / 85;
+            let hy_frac = (state.hero_y & 255) / 64;
+            if hx_frac != 1 || hy_frac != 1 {
+                return Err("Move to the center of the stone ring.");
+            }
+            if let Some(current) = find_current_ring(state.hero_x, state.hero_y) {
+                // Destination = current ring + facing + 1, wrapped mod 11
+                let dest = (current + state.facing as usize + 1) % STONE_RINGS.len();
+                let (dx, dy) = STONE_RINGS[dest];
+                // Preserve sub-sector offset, change sector
+                state.hero_x = ((dx as u16) << 8) | (state.hero_x & 255);
+                state.hero_y = ((dy as u16) << 8) | (state.hero_y & 255);
+                "The stone ring transports you!"
+            } else {
+                return Err("The stone ring glows but nothing happens here.");
+            }
         }
         ITEM_LANTERN => {
             state.light_timer = state.light_timer.saturating_add(LIGHT_TIMER_INCREMENT);

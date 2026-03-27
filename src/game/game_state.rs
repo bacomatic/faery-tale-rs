@@ -289,7 +289,7 @@ impl GameState {
             .iter()
             .any(|&b| (prev < b && self.daynight >= b) || (prev > self.daynight && b == 0));
         if crossed {
-            self.dayperiod = (self.daynight / 6000) as u8;
+            self.dayperiod = ((self.daynight / 6000) as u8).min(3);
         }
         crossed
     }

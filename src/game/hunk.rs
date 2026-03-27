@@ -61,8 +61,6 @@ pub struct HunkData {
     pub hunks: Vec<Hunk>
 }
 
-// FIXME: there is no bounds checking or error handling, using this with bad or unsupported hunks will cause panics
-
 pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
     // Just read the whole thing into memory first
     let file_data: Vec<u8> = fs::read(filepath)
@@ -70,8 +68,10 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
     let mut offset: usize = 0;
 
     // check for magic cookie
-    let cookie = read_u32(&file_data, &mut offset);
-    assert_eq!(cookie, MAGIC_COOKIE);
+    let cookie = try_read_u32(&file_data, &mut offset)?;
+    if cookie != MAGIC_COOKIE {
+        return Err(format!("{:?}: bad magic cookie: expected {:X}, got {:X}", filepath, MAGIC_COOKIE, cookie));
+    }
 
     let mut hunk = HunkData {
         header: HunkHeader {
@@ -93,16 +93,22 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
     // If both bit 31 and 30 are set in mem flags, then another longword will follow the size, but I've yet to encounter
     // this so I'm not going to implement it
 
-    let strings = read_u32(&file_data, &mut offset);
-    assert_eq!(strings, 0);
+    let strings = try_read_u32(&file_data, &mut offset)?;
+    if strings != 0 {
+        return Err(format!("{:?}: expected resident_libs = 0, got {}", filepath, strings));
+    }
 
-    hunk.header.table_size = read_u32(&file_data, &mut offset);
-    hunk.header.first_hunk = read_u32(&file_data, &mut offset);
-    hunk.header.last_hunk = read_u32(&file_data, &mut offset);
+    hunk.header.table_size = try_read_u32(&file_data, &mut offset)?;
+    hunk.header.first_hunk = try_read_u32(&file_data, &mut offset)?;
+    hunk.header.last_hunk = try_read_u32(&file_data, &mut offset)?;
+
+    if hunk.header.last_hunk < hunk.header.first_hunk {
+        return Err(format!("{:?}: last_hunk {} < first_hunk {}", filepath, hunk.header.last_hunk, hunk.header.first_hunk));
+    }
 
     let hunk_count = (hunk.header.last_hunk - hunk.header.first_hunk + 1) as usize;
-    for _index in [hunk_count] {
-        let mut size = read_u32(&file_data, &mut offset) & ALLOC_FLAG_MASK; // don't care about the flags
+    for _index in 0..hunk_count {
+        let mut size = try_read_u32(&file_data, &mut offset)? & ALLOC_FLAG_MASK; // don't care about the flags
         size *= 4; // Hunk size is number of LONGs
         hunk.header.hunk_sizes.push(size as usize);
     }
@@ -112,24 +118,42 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
     let mut hunk_index: usize = hunk.header.first_hunk as usize;
 
     'hunkloop: loop {
-        let hunk_id = read_u32(&file_data, &mut offset);
+        if offset >= file_data.len() {
+            break 'hunkloop;
+        }
+
+        let hunk_id = try_read_u32(&file_data, &mut offset)?;
         // println!("HUNK ID: {hunk_id:X}");
 
         if hunk_id == HUNK_CODE || hunk_id == HUNK_DATA {
+            if hunk_index >= hunk.header.hunk_sizes.len() {
+                return Err(format!("{:?}: hunk_index {} exceeds hunk_sizes length {}",
+                    filepath, hunk_index, hunk.header.hunk_sizes.len()));
+            }
             let saved_size = hunk.header.hunk_sizes[hunk_index];
-            let size = read_u32(&file_data, &mut offset) as usize * 4;
-            assert_eq!(saved_size, size);
+            let size = try_read_u32(&file_data, &mut offset)? as usize * 4;
+            if saved_size != size {
+                return Err(format!("{:?}: hunk size mismatch at index {}: header says {}, data says {}",
+                    filepath, hunk_index, saved_size, size));
+            }
+
+            if size < 4 {
+                return Err(format!("{:?}: hunk size {} too small at index {}", filepath, size, hunk_index));
+            }
+            let data_len = size - 4;
+            if offset + data_len > file_data.len() {
+                return Err(format!("{:?}: hunk data at offset {} + {} exceeds file length {}",
+                    filepath, offset, data_len, file_data.len()));
+            }
 
             // hunk size includes hunk ID and size on disk, so subtract that
-            let mut data: Vec<u8> = Vec::new();
-            data.extend_from_slice(&file_data[offset .. offset + size - 4]);
-            assert_eq!(data.len(), size - 4);
+            let data = file_data[offset..offset + data_len].to_vec();
             offset += size;
 
             hunk.hunks.push(Hunk {
-                hunk_id: hunk_id,
+                hunk_id,
                 hunk_size: size,
-                data: data
+                data,
             });
 
             hunk_index += 1;
@@ -142,16 +166,24 @@ pub fn load_hunkfile(filepath: &Path) -> Result<HunkData, String> {
              * LONG[N] - offsets to process
              */
             'reloloop: loop {
-                let count = read_u32(&file_data, &mut offset);
+                let count = try_read_u32(&file_data, &mut offset)?;
                 if count == 0 {
                     break 'reloloop;
                 }
-                let hunk_num = read_u32(&file_data, &mut offset) as usize;
+                let hunk_num = try_read_u32(&file_data, &mut offset)? as usize;
+                if hunk_num >= hunk.hunks.len() {
+                    return Err(format!("{:?}: RELOC32 references hunk {} but only {} hunks loaded",
+                        filepath, hunk_num, hunk.hunks.len()));
+                }
                 let ref hunk_data = hunk.hunks[hunk_num].data;
                 // println!("Relocating hunk {} with {} entries", hunk_num, count);
 
                 for _index in 0 .. count as usize {
-                    let mut rel_offset = read_u32(&file_data, &mut offset) as usize;
+                    let mut rel_offset = try_read_u32(&file_data, &mut offset)? as usize;
+                    if rel_offset + 4 > hunk_data.len() {
+                        return Err(format!("{:?}: RELOC32 offset {} + 4 exceeds hunk {} data length {}",
+                            filepath, rel_offset, hunk_num, hunk_data.len()));
+                    }
                     let _value = read_u32(hunk_data, &mut rel_offset);
                     // println!("Relocating hunk {} at offset {:X} value {:X}", hunk_num, rel_offset - 4, value);
 

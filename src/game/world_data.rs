@@ -91,6 +91,11 @@ impl WorldData {
         for (gi, &group_block) in image_group_blocks.iter().enumerate().take(IMAGE_GROUP_COUNT as usize) {
             let dest_base = gi * (IMAGE_BLOCKS_PER_GROUP as usize * 512);
             if let Ok(slice) = Self::try_load(adf, group_block, IMAGE_BLOCKS_PER_GROUP) {
+                if dest_base + slice.len() > image_mem.len() {
+                    eprintln!("world_data: image group {} exceeds buffer ({} + {} > {})",
+                              gi, dest_base, slice.len(), image_mem.len());
+                    continue;
+                }
                 let dest = &mut image_mem[dest_base..dest_base + slice.len()];
                 dest.copy_from_slice(slice);
             }

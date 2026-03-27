@@ -55,3 +55,14 @@ pub fn read_string(data: &Vec<u8>, offset: &mut usize) -> String {
 
     std::str::from_utf8(&data[str_start .. str_end]).unwrap().to_string()
 }
+
+// Bounds-checked variants that return Result instead of panicking.
+
+pub fn try_read_u32(data: &[u8], offset: &mut usize) -> Result<u32, String> {
+    if *offset + 4 > data.len() {
+        return Err(format!("read_u32: offset {} + 4 exceeds length {}", *offset, data.len()));
+    }
+    let vs = &data[*offset..*offset + 4];
+    *offset += 4;
+    Ok(u32::from_be_bytes(vs.try_into().unwrap()))
+}

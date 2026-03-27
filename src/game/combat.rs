@@ -65,8 +65,9 @@ pub fn fire_missile(
 
 /// Weapon type damage factors (from original weapon table).
 /// Index = weapon slot in stuff[], value = damage multiplier.
+/// Fists (slot 0) = 5: original fmain.c caps weapon index >= 8 to 5.
 pub const WEAPON_DAMAGE: &[u8] = &[
-    1,  // fists (slot 0, placeholder)
+    5,  // fists (slot 0, unarmed — original caps touch attack to 5)
     3,  // dagger
     4,  // short sword
     5,  // long sword
