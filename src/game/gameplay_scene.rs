@@ -236,6 +236,8 @@ pub struct GameplayScene {
     zones: Vec<crate::game::game_library::ZoneConfig>,
     /// Index of the zone the hero was in last frame (None = no zone).
     last_zone: Option<usize>,
+    /// Hero is in forced sleep (events 12/24).
+    sleeping: bool,
 }
 
 impl GameplayScene {
@@ -282,6 +284,7 @@ impl GameplayScene {
             narr: crate::game::game_library::NarrConfig::default(),
             zones: Vec::new(),
             last_zone: None,
+            sleeping: false,
         }
     }
 
@@ -358,6 +361,7 @@ impl GameplayScene {
 
     /// Apply player input: move hero and update actor facing/state.
     fn apply_player_input(&mut self) {
+        if self.sleeping { return; }
         let dir = self.current_direction();
 
         // Per-direction base deltas from original xdir/ydir tables (fsubs.asm:1277-1278).
@@ -376,6 +380,25 @@ impl GameplayScene {
 
         let prev_x = self.state.hero_x;
         let prev_y = self.state.hero_y;
+
+        // Stagger when starving (hunger > 120, 1-in-4 chance)
+        let dir = if self.state.hunger > 120 && dir != Direction::None && (self.state.cycle & 3) == 0 {
+            let r = (self.state.cycle >> 2) & 1;
+            let f = if r == 0 {
+                (self.state.facing + 1) & 7
+            } else {
+                (self.state.facing + 7) & 7
+            };
+            let facing_to_dir = |f: u8| match f {
+                0 => Direction::N,  1 => Direction::NE, 2 => Direction::E,  3 => Direction::SE,
+                4 => Direction::S,  5 => Direction::SW, 6 => Direction::W,  7 => Direction::NW,
+                _ => Direction::None,
+            };
+            self.state.facing = f;
+            facing_to_dir(f)
+        } else {
+            dir
+        };
 
         if dir != Direction::None {
             // Speed: flying=4px, on_raft=2px (water passable), water terrain (type 2-5)=1px, default=2px.
@@ -546,7 +569,7 @@ impl GameplayScene {
             let bname = brother_name(&self.state);
             let msg = crate::game::events::event_msg(&self.narr, 12, bname);
             if !msg.is_empty() { self.messages.push(msg); }
-            // TODO(#112): set PlayerState::Sleeping here when sleep state is implemented
+            self.sleeping = true;
         }
     }
 
@@ -2433,7 +2456,24 @@ impl Scene for GameplayScene {
                 if !msg.is_empty() {
                     self.messages.push(msg);
                 }
+                if ev == 12 || ev == 24 {
+                    self.sleeping = true;
+                }
             }
+        }
+
+        // Sleep loop: advance time quickly, reduce fatigue, wake when rested
+        if self.sleeping {
+            self.state.daynight = ((self.state.daynight as u32 + 63) % 24000) as u16;
+            self.state.fatigue = self.state.fatigue.saturating_sub(1);
+            let raw = self.state.daynight / 40;
+            self.state.lightlevel = if raw >= 300 { 600u16.saturating_sub(raw) } else { raw };
+            let can_wake_time = self.state.daynight >= 9000 && self.state.daynight < 10000;
+            if self.state.fatigue == 0 || (self.state.fatigue < 30 && can_wake_time) {
+                self.sleeping = false;
+            }
+            self.render_by_viewstatus(canvas, resources);
+            return SceneResult::Continue;
         }
 
         // Lazy-load ADF + world data on first tick (render-world-load).
