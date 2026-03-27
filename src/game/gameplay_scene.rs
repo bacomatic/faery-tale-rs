@@ -187,6 +187,7 @@ pub struct GameplayScene {
     map_y: u16,
     last_mood: u8,
     mood_tick: u32,
+    music_stop_pending: bool,
     map_renderer: Option<MapRenderer>,
     map_world: Option<crate::game::world_data::WorldData>,
     adf: Option<crate::game::adf::AdfDisk>,
@@ -256,6 +257,7 @@ impl GameplayScene {
             map_y: 0,
             last_mood: u8::MAX,
             mood_tick: 0,
+            music_stop_pending: false,
             map_renderer: None,
             map_world: None,
             adf: None,
@@ -1307,12 +1309,12 @@ impl GameplayScene {
             MenuAction::ToggleMusic => {
                 let on = self.menu.is_music_on();
                 self.messages.push(if on { "Music on." } else { "Music off." });
-                // TODO: call setmood/audio.set_score when audio integration is ready
+                self.last_mood = u8::MAX; // force re-evaluation next tick
+                self.music_stop_pending = !on;
             }
             MenuAction::ToggleSound => {
                 let on = self.menu.is_sound_on();
                 self.messages.push(if on { "Sound on." } else { "Sound off." });
-                // TODO: guard effect() calls with is_sound_on() when audio sample playback is added
             }
             MenuAction::RefreshMusic  => {}
             MenuAction::SummonTurtle  => self.do_option(GameAction::SummonTurtle),
@@ -2644,7 +2646,15 @@ impl Scene for GameplayScene {
 
         // Fatigue is updated per movement step in apply_player_input (player-111).
 
-        // setmood: check music group every 8 ticks (gameloop-113)
+        // Handle pending music stop from ToggleMusic OFF
+        if self.music_stop_pending {
+            self.music_stop_pending = false;
+            if let Some(audio) = resources.audio {
+                audio.stop_score();
+            }
+        }
+
+        // setmood: check music group every 4 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
         if self.mood_tick >= 4 {
             self.mood_tick = 0;
