@@ -48,7 +48,7 @@ impl MapRenderer {
                 let tile_idx = minimap[ty * SCROLL_TILES_W + tx] as usize;
                 let clamped = tile_idx.min(255);
                 let tile_pixels = self.atlas.tile_pixels(clamped);
-                let is_fg = self.atlas.fg_flags[clamped];
+                let is_fg = self.atlas.mask_type[clamped] != 0;
                 for row in 0..TILE_H {
                     let py = dst_y + row as i32;
                     if py < 0 || py >= MAP_DST_H as i32 { continue; }

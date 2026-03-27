@@ -19,8 +19,12 @@ pub struct TileAtlas {
     /// Palette indices (0–31) decoded from Amiga bitplanes.
     /// TOTAL_TILES × TILE_PIXELS bytes, row-major.
     pub pixels: Vec<u8>,
-    /// Per-tile foreground flag (terra_mem[tile*4+1] & 0x0F != 0).
-    pub fg_flags: [bool; TOTAL_TILES],
+    /// Per-tile sprite masking type (0-7) from terra_mem[tile*4+1] & 0x0f.
+    /// 0 = no masking, 1-7 = various depth-sort conditions.
+    pub mask_type: [u8; TOTAL_TILES],
+    /// Per-tile shadow_mem index from terra_mem[tile*4+0].
+    /// Used by maskit() to look up the 16×32 per-pixel bitmask.
+    pub maptag: [u8; TOTAL_TILES],
 }
 
 impl TileAtlas {
@@ -28,7 +32,8 @@ impl TileAtlas {
     /// No palette needed — indices are resolved at render time.
     pub fn from_world_data(world: &WorldData) -> Self {
         let mut pixels = vec![0u8; TOTAL_TILES * TILE_PIXELS];
-        let mut fg_flags = [false; TOTAL_TILES];
+        let mut mask_type = [0u8; TOTAL_TILES];
+        let mut maptag = [0u8; TOTAL_TILES];
         for tile_idx in 0..TOTAL_TILES {
             let group = tile_idx / TILES_PER_GROUP;
             let local = tile_idx % TILES_PER_GROUP;
@@ -55,13 +60,14 @@ impl TileAtlas {
                     pixels[dst_base + row * TILE_W + col] = color_idx as u8;
                 }
             }
-            // Foreground flag: terra_mem[tile*4+1] lower nibble (mask case selector).
-            let terra_off = tile_idx * 4 + 1;
-            if terra_off < world.terra_mem.len() {
-                fg_flags[tile_idx] = (world.terra_mem[terra_off] & 0x0F) != 0;
+            // Sprite-depth masking metadata from terra_mem.
+            let terra_base = tile_idx * 4;
+            if terra_base + 1 < world.terra_mem.len() {
+                maptag[tile_idx] = world.terra_mem[terra_base];
+                mask_type[tile_idx] = world.terra_mem[terra_base + 1] & 0x0F;
             }
         }
-        TileAtlas { pixels, fg_flags }
+        TileAtlas { pixels, mask_type, maptag }
     }
 
     /// Returns the palette-index slice for a single tile (TILE_PIXELS bytes).
@@ -104,5 +110,29 @@ mod tests {
         for &idx in &atlas.pixels {
             assert!(idx <= 31, "index {} out of range", idx);
         }
+    }
+
+    #[test]
+    fn test_tile_mask_metadata() {
+        // Build a world with known terra_mem values.
+        let mut world = empty_world();
+        // tile 0: maptag=5, mask_type=2 (ground-level)
+        world.terra_mem[0] = 5;       // maptag
+        world.terra_mem[1] = 0x72;    // collision=7, mask_type=2
+        // tile 1: maptag=0, mask_type=0 (transparent/no mask)
+        world.terra_mem[4] = 0;
+        world.terra_mem[5] = 0x30;    // collision=3, mask_type=0
+        // tile 2: maptag=10, mask_type=6 (full-if-above)
+        world.terra_mem[8] = 10;
+        world.terra_mem[9] = 0x16;    // collision=1, mask_type=6
+
+        let atlas = TileAtlas::from_world_data(&world);
+
+        assert_eq!(atlas.mask_type[0], 2);
+        assert_eq!(atlas.maptag[0], 5);
+        assert_eq!(atlas.mask_type[1], 0);
+        assert_eq!(atlas.maptag[1], 0);
+        assert_eq!(atlas.mask_type[2], 6);
+        assert_eq!(atlas.maptag[2], 10);
     }
 }
