@@ -7,7 +7,7 @@ This document is the canonical human-readable roadmap and progress log.
 - Human-readable research/reference notes: `RESEARCH.md`
 - Machine-readable research index for agents: `research_index.toml`
 - Build/run setup and developer environment: `README.md`
-- Reverse-engineering and file format details: `DECODE.md`
+- Reverse-engineering and file format details: `RESEARCH.md`
 - Agent constraints and execution contract: `AGENTS.md`
 
 ## Issue Tracking Provenance
@@ -398,7 +398,7 @@ Implement character movement, terrain interaction, and the basic player command 
 5. **Terrain collision mask research**
    - Trace the original collision/blocking path in `fmain.c`/asm helpers to confirm exactly which data controls blocked movement
    - Verify whether blocking uses one of the rendered terrain bitplanes or a dedicated mask/flag plane
-   - Document findings in `DECODE.md` (or the relevant world-data section) before finalizing movement collision implementation
+   - Document findings in `RESEARCH.md` (or the relevant world-data section) before finalizing movement collision implementation
 
 6. **Swan flight mechanic**
    - Implement swan flight traversal behavior gated by inventory possession of the lasso

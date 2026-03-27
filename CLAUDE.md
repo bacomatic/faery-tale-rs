@@ -30,7 +30,7 @@ cargo test -- --nocapture            # show println! output
 ## Canonical sources by topic
 
 - Build/run commands and developer setup: `README.md`
-- Reverse-engineering and file formats (`songs`, `v6`, ADF layout, etc.): **always check `DECODE.md` before guessing at binary format details**
+- Reverse-engineering and file formats (`songs`, `v6`, ADF layout, etc.): **always check `RESEARCH.md` before guessing at binary format details**
 - Architecture deep-dives (screen layout, Amiga rendering pipeline, palette handling, etc.): **always check `RESEARCH.md` before re-deriving implementation decisions**
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
 

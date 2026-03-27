@@ -29,7 +29,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 ## Canonical sources by topic
 
 - Build/run commands and developer setup: `README.md`
-- Reverse-engineering/file formats (`songs`, `v6`, etc.): `DECODE.md`
+- Reverse-engineering/file formats (`songs`, `v6`, etc.): `RESEARCH.md`
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
 - Current architecture and implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 

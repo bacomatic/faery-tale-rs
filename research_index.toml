@@ -1,5 +1,5 @@
 version = 1
-last_updated = "2026-03-02"
+last_updated = "2026-03-27"
 
 # Stable lookup keys for agents.
 # Each key maps to a human-readable section in RESEARCH.md.
@@ -133,16 +133,44 @@ tags = ["world", "extents", "encounters", "zones", "triggers"]
 [[entry]]
 id = "decode.songs"
 title = "game/songs — Music Score Data"
-doc = "DECODE.md"
+doc = "RESEARCH.md"
 anchor = "#gamesongs--music-score-data-5984-bytes"
 tags = ["audio", "music", "songs", "format", "binary"]
 
 [[entry]]
 id = "decode.v6"
 title = "game/v6 — Music Voice/Waveform Data"
-doc = "DECODE.md"
+doc = "RESEARCH.md"
 anchor = "#gamev6--music-voicewaveform-data-4628-bytes"
 tags = ["audio", "music", "v6", "waveform", "envelope"]
+
+[[entry]]
+id = "input.decoding"
+title = "Input Decoding — decode_mouse / decodekey"
+doc = "RESEARCH.md"
+anchor = "#input-decoding--decode_mouse--decodekey-fsubsasm14901576"
+tags = ["input", "mouse", "keyboard", "decoding", "directions"]
+
+[[entry]]
+id = "menu.system"
+title = "Menu System"
+doc = "RESEARCH.md"
+anchor = "#menu-system-fmainc538589-37583820-44094441-fmain2c613675-fsubsasm120165"
+tags = ["menu", "inventory", "ui", "gomenu", "input"]
+
+[[entry]]
+id = "gfx.compass"
+title = "Compass Rose — Direction Indicator Bitmaps"
+doc = "RESEARCH.md"
+anchor = "#compass-rose--direction-indicator-bitmaps"
+tags = ["graphics", "compass", "hibar", "drawcompass", "bitplane"]
+
+[[entry]]
+id = "game.exploits"
+title = "Known Original Exploits"
+doc = "RESEARCH.md"
+anchor = "#known-original-exploits"
+tags = ["bugs", "exploits", "original", "pause", "save"]
 
 [[entry]]
 id = "screen.layout"

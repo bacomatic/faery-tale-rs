@@ -11,7 +11,7 @@ expect updates in a timely manner.
 # Canonical Sources
 
 - Build/run commands and developer setup: this file (`README.md`)
-- Reverse-engineering and asset format notes: `DECODE.md`
+- Reverse-engineering and asset format notes: `RESEARCH.md`
 - Roadmap/progress and task state: `PLAN.md` and `plan_status.toml`
 - Agent constraints and working contract: `AGENTS.md`
 
