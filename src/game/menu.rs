@@ -90,8 +90,8 @@ pub enum MenuAction {
     GiveGold,
     GiveWrit,
     GiveBone,
-    SaveGame,
-    LoadGame,
+    SaveGame(u8),
+    LoadGame(u8),
     Quit,
     TogglePause,
     ToggleMusic,
@@ -126,6 +126,8 @@ pub struct MenuState {
     pub cmode: MenuMode,
     pub menus: [MenuDef; 10],
     pub real_options: [i8; 12], // display slot → menu index (-1 = empty)
+    /// When true, the File sub-menu is being used for saving (not loading).
+    save_pending: bool,
 }
 
 impl MenuState {
@@ -134,6 +136,7 @@ impl MenuState {
         MenuState {
             cmode: MenuMode::Items,
             real_options: [-1; 12],
+            save_pending: false,
             menus: [
                 // ITEMS
                 MenuDef { labels: LABEL2, num: 10, color: 6,
@@ -346,9 +349,18 @@ impl MenuState {
             (MenuMode::Use, 6) => MenuAction::SummonTurtle,
             (MenuMode::Use, 7) => { self.gomenu(MenuMode::Keys);   MenuAction::None }
             (MenuMode::Use, 8) => MenuAction::UseSunstone,
-            (MenuMode::SaveX, 5) => MenuAction::SaveGame,
+            (MenuMode::SaveX, 5) => { self.save_pending = true; self.gomenu(MenuMode::File); MenuAction::None }
             (MenuMode::SaveX, 6) => MenuAction::Quit,
-            (MenuMode::File, _) => MenuAction::LoadGame,
+            (MenuMode::File, 0..=7) => {
+                let slot = hit;
+                let action = if self.save_pending {
+                    MenuAction::SaveGame(slot)
+                } else {
+                    MenuAction::LoadGame(slot)
+                };
+                self.save_pending = false;
+                action
+            }
             (MenuMode::Keys, 5..=10) => MenuAction::TryKey(hit - 5),
             (MenuMode::Give, 5) => MenuAction::GiveGold,
             (MenuMode::Give, 7) => MenuAction::GiveWrit,

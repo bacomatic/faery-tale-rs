@@ -68,11 +68,8 @@ costs = [5, 10, 15, 20, 25, 30, 50, 100, 30, 50, 80, 100, 0, 0, 0, 0, 0, 0, 0, 0
 # region = 255           # 255 = any region
 # encounter_rate = 0     # 0-255
 
-[paths]
-image = "game/image"
-
 [disk]
-adf = "game/Faery Tale Adventure (MicroIllusions).adf"
+adf = "game/image"
 
 [audio]
 instruments = "game/v6"

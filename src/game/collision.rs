@@ -77,6 +77,72 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
     !is_hard_block_right(right_terrain) && !is_hard_block_left(left_terrain)
 }
 
+/// Full terra lookup chain for one probe point — used by the `/terrain` debug command.
+pub struct TerrainProbe {
+    pub x: i32,
+    pub y: i32,
+    pub d4: u8,
+    pub imx: usize,
+    pub imy: usize,
+    pub xs: usize,
+    pub ys: usize,
+    pub map_offset: usize,
+    pub sec_num: u8,
+    pub local_x: usize,
+    pub local_y: usize,
+    pub sector_offset: usize,
+    pub tile_idx: u8,
+    pub terra_bytes: [u8; 4],
+    pub tiles_and_d4: u8,
+    pub terrain_type: u8,
+}
+
+/// Run the full px_to_terrain_type lookup, recording every intermediate value.
+pub fn terrain_probe(world: &WorldData, x: i32, y: i32) -> TerrainProbe {
+    if x < 0 || y < 0 {
+        return TerrainProbe {
+            x, y, d4: 0, imx: 0, imy: 0, xs: 0, ys: 0,
+            map_offset: 0, sec_num: 0, local_x: 0, local_y: 0,
+            sector_offset: 0, tile_idx: 0, terra_bytes: [0; 4],
+            tiles_and_d4: 0, terrain_type: 0,
+        };
+    }
+
+    let mut d4: u8 = 0x80;
+    if x & 0x08 != 0 { d4 >>= 4; }
+    if y & 0x08 != 0 { d4 >>= 1; }
+    if y & 0x10 != 0 { d4 >>= 2; }
+
+    let imx = (x >> 4) as usize;
+    let imy = (y >> 5) as usize;
+    let xs = imx >> 4;
+    let ys = imy >> 3;
+    let local_x = imx & 15;
+    let local_y = imy & 7;
+
+    let map_offset = ys * 128 + xs;
+    let sec_num = world.sector_at(xs, ys);
+    let sector_offset = (sec_num as usize) * 128 + local_y * 16 + local_x;
+    let tile_idx = world.tile_at(sec_num, local_x, local_y);
+
+    let base = (tile_idx as usize) * 4;
+    let terra_bytes = if base + 3 < world.terra_mem.len() {
+        [world.terra_mem[base], world.terra_mem[base+1],
+         world.terra_mem[base+2], world.terra_mem[base+3]]
+    } else {
+        [0; 4]
+    };
+
+    let tiles_and_d4 = terra_bytes[2] & d4;
+    let terrain_type = if tiles_and_d4 == 0 { 0 } else { (terra_bytes[1] >> 4) & 0xF };
+
+    TerrainProbe {
+        x, y, d4, imx, imy, xs, ys, map_offset, sec_num,
+        local_x, local_y, sector_offset, tile_idx, terra_bytes,
+        tiles_and_d4, terrain_type,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

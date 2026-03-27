@@ -48,4 +48,6 @@ pub enum DebugCommand {
     QuerySongs,
     /// Dump `count` ADF blocks starting at `block` as hex rows to the debug log.
     DumpAdfBlock { block: u32, count: u32 },
+    /// Dump full terra lookup chain at hero's current position (both foot probes).
+    QueryTerrain,
 }

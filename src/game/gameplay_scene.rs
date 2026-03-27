@@ -1171,11 +1171,11 @@ impl GameplayScene {
                 let wealth = self.state.wealth;
                 self.menu.set_options(self.state.stuff(), wealth);
             }
-            MenuAction::SaveGame => {
-                match crate::game::persist::save_game(&self.state, 0) {
+            MenuAction::SaveGame(slot) => {
+                match crate::game::persist::save_game(&self.state, slot) {
                     Ok(()) => {
                         if let Err(e) = crate::game::persist::save_transcript(
-                            self.messages.transcript(), 0,
+                            self.messages.transcript(), slot,
                         ) {
                             eprintln!("save transcript failed: {e}");
                         }
@@ -1187,14 +1187,14 @@ impl GameplayScene {
                     }
                 }
             }
-            MenuAction::LoadGame => {
+            MenuAction::LoadGame(slot) => {
                 // EXPLOIT FIX NEEDED: reset all runtime door state before restoring
                 // save, otherwise keys replenish but doors stay unlocked.
-                match crate::game::persist::load_game(0) {
+                match crate::game::persist::load_game(slot) {
                     Ok(new_state) => {
                         *self.state = new_state;
                         // Restore existing transcript so new messages are appended.
-                        let existing = crate::game::persist::load_transcript(0);
+                        let existing = crate::game::persist::load_transcript(slot);
                         self.messages.set_transcript(existing);
                         self.messages.push("Game loaded.");
                     }
