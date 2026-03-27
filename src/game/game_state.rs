@@ -286,7 +286,7 @@ impl GameState {
     /// triggered this update — hunger/fatigue warnings, time-of-day announcements, etc.
     /// The caller (gameplay_scene) is responsible for displaying the corresponding messages.
     pub fn tick(&mut self, delta: u32) -> Vec<u8> {
-        const HEAL_PERIOD: u32 = 300; // 10 s at 30 Hz
+        const HEAL_PERIOD: u32 = 1024; // ~34 s at 30 Hz, matching original fmain.c
 
         let mut events: Vec<u8> = Vec::new();
 
@@ -329,12 +329,13 @@ impl GameState {
         self.tick_counter = self.tick_counter.wrapping_add(delta);
 
         // Healing: +1 vitality every HEAL_PERIOD ticks when out of battle and injured.
-        if !self.battleflag && self.vitality > 0 && self.vitality < 100 {
+        let cap = crate::game::magic::heal_cap(self.brave);
+        if !self.battleflag && self.vitality > 0 && self.vitality < cap {
             let prev_heal = self.tick_counter.wrapping_sub(delta) / HEAL_PERIOD;
             let next_heal = self.tick_counter / HEAL_PERIOD;
             if next_heal > prev_heal {
                 let increments = (next_heal - prev_heal) as i16;
-                self.vitality = (self.vitality + increments).min(100);
+                self.vitality = (self.vitality + increments).min(cap);
             }
         }
 
