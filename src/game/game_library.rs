@@ -82,6 +82,10 @@ pub struct ZoneConfig {
 #[derive(Debug, Deserialize)]
 pub struct DiskConfig {
     pub adf: String,
+    #[serde(default)]
+    pub shadow_block: u32,
+    #[serde(default)]
+    pub shadow_count: u32,
 }
 
 #[derive(Debug, Deserialize)]

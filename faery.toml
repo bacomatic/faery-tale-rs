@@ -70,6 +70,8 @@ costs = [5, 10, 15, 20, 25, 30, 50, 100, 30, 50, 80, 100, 0, 0, 0, 0, 0, 0, 0, 0
 
 [disk]
 adf = "game/image"
+shadow_block = 896
+shadow_count = 24
 
 [audio]
 instruments = "game/v6"

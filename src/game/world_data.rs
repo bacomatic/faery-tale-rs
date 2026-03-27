@@ -137,3 +137,11 @@ impl WorldData {
         })
     }
 }
+
+/// Load the global shadow_mem bitmask table (12,288 bytes) from ADF.
+/// Each of the 256 possible maptag values indexes into this table at
+/// maptag * 64 bytes (32 rows × 2 bytes/row, 1 bit per pixel, 16px wide).
+pub fn load_shadow_mem(adf: &AdfDisk, block: u32, count: u32) -> Vec<u8> {
+    let data = adf.load_blocks(block, count);
+    data.to_vec()
+}
