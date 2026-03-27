@@ -1666,12 +1666,16 @@ impl GameplayScene {
                 if (index as usize) < stuff.len() {
                     stuff[index as usize] = value;
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             AdjustInventory { index, delta } => {
                 let stuff = self.state.stuff_mut();
                 if (index as usize) < stuff.len() {
                     stuff[index as usize] = stuff[index as usize].saturating_add_signed(delta);
                 }
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             TeleportSafe => {
                 self.state.hero_x = self.state.safe_x;
@@ -1743,6 +1747,8 @@ impl GameplayScene {
                 // Keys: slots 16-21
                 for i in 16..=21 { stuff[i] = 1; }
                 self.dlog("HeroPack: weapons, magic, and keys filled".to_string());
+                let wealth = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), wealth);
             }
             SummonSwan => {
                 self.dlog("SummonSwan: not yet wired".to_string());
