@@ -191,6 +191,7 @@ pub struct GameplayScene {
     map_renderer: Option<MapRenderer>,
     map_world: Option<crate::game::world_data::WorldData>,
     adf: Option<crate::game::adf::AdfDisk>,
+    shadow_mem: Vec<u8>,
     adf_load_attempted: bool,
     rebinding: RebindingState,
     local_bindings: KeyBindings,
@@ -266,6 +267,7 @@ impl GameplayScene {
             map_renderer: None,
             map_world: None,
             adf: None,
+            shadow_mem: Vec::new(),
             adf_load_attempted: false,
             rebinding: RebindingState { active: false, waiting_for_action: None },
             local_bindings: KeyBindings::default_bindings(),
@@ -1122,7 +1124,7 @@ impl GameplayScene {
                     self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                     self.current_palette = Self::region_palette(game_lib, region);
                     self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
-                    self.map_renderer = Some(MapRenderer::new(&world, Vec::new()));
+                    self.map_renderer = Some(MapRenderer::new(&world, self.shadow_mem.clone()));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
                 }
@@ -2589,7 +2591,18 @@ impl Scene for GameplayScene {
                             self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                             self.current_palette = Self::region_palette(game_lib, region);
                             self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
-                            let renderer = MapRenderer::new(&world, Vec::new());
+                            // Load global shadow_mem bitmask table (sprite-depth masking).
+                            let shadow_mem = if let Some(ref disk) = game_lib.disk {
+                                if disk.shadow_count > 0 {
+                                    crate::game::world_data::load_shadow_mem(&adf, disk.shadow_block, disk.shadow_count)
+                                } else {
+                                    Vec::new()
+                                }
+                            } else {
+                                Vec::new()
+                            };
+                            self.shadow_mem = shadow_mem;
+                            let renderer = MapRenderer::new(&world, self.shadow_mem.clone());
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
                             // sprite-101: load player (cfile 0-2) and setfig (cfile 13-17) sprites
