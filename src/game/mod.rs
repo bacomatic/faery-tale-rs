@@ -56,3 +56,4 @@ pub mod events;
 pub mod shop;
 pub mod loot;
 pub mod menu;
+pub mod sprite_mask;
