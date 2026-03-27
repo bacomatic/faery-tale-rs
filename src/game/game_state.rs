@@ -645,10 +645,10 @@ impl GameState {
         }
     }
 
-    /// Update safe spawn point if current terrain is passable (not water).
-    /// terrain_type: 0=open, 1=hard block edge; 2+ = water/impassable.
+    /// Update safe spawn point if conditions match original fmain.c:
+    /// outdoors (region < 8), not in battle, and passable non-water terrain.
     pub fn update_safe_spawn(&mut self, terrain_type: u8) {
-        if terrain_type < 2 {
+        if self.region_num < 8 && !self.battleflag && terrain_type < 2 {
             self.safe_x = self.hero_x;
             self.safe_y = self.hero_y;
             self.safe_r = self.region_num;
@@ -708,6 +708,14 @@ mod tests {
         s.hero_x = 999;
         s.update_safe_spawn(3); // water — should not update
         assert_eq!(s.safe_x, 100);
+        // Indoor regions should not update safe spawn.
+        s.hero_x = 500; s.region_num = 8;
+        s.update_safe_spawn(0);
+        assert_eq!(s.safe_x, 100, "indoor region must not update safe spawn");
+        // Battle should not update safe spawn.
+        s.region_num = 3; s.battleflag = true;
+        s.update_safe_spawn(0);
+        assert_eq!(s.safe_x, 100, "battleflag must prevent safe spawn update");
     }
 
     #[test]
