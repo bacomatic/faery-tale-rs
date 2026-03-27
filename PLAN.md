@@ -53,7 +53,7 @@ Machine-readable mirror: `plan_status.toml`
 
 ### Done
 
-> **All 16 rollup issues closed.** Open bugs: [#86 placard border tail artifact](https://github.com/bacomatic/faery-tale-rs/issues/86) (fidelity — not yet planned).
+> **All 16 rollup issues closed.** No open bugs.
 
 - [debug-effects-001] Debug window visual effects controls (5/5 steps complete; Issue: #88)
 - [faerytoml-001] Move hardcoded asset paths/tables to faery.toml (9/9 steps complete; Issue: #91)
