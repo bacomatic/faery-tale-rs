@@ -24,6 +24,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Avoid unrelated refactors while touching gameplay-critical code.
 - Validate changed behavior with targeted commands/tests when feasible.
 - Always call `font.set_color_mod(r, g, b)` before every `render_string()` call. The canonical white/default is `set_color_mod(255, 255, 255)`. SDL2 color mod is stateful; failing to reset it causes text to render in the previous scene's tint color.
+- When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
 
 ## Canonical sources by topic
 
