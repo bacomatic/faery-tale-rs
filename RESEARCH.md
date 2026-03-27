@@ -1677,6 +1677,107 @@ The Rust port maps SDL2 mouse coordinates directly without the Amiga lo-res scal
 
 ---
 
+## Compass Rose — Direction Indicator Bitmaps
+
+The HI-bar compass is rendered by `drawcompass(dir)` (`fmain2.c:493–508`).
+Two single-plane bitmaps control the compass appearance; they are composited
+into bitplane 2 of the text viewport at position **(567, 15)**, sized
+**48 × 24** pixels.
+
+### Source data
+
+`_hinor` and `_hivar` are defined in `fsubs.asm` (lines 250–277) as raw
+`dc.l` longwords.  At startup `into_chip()` copies them into Chip RAM so the
+blitter can access them.
+
+The backing bitmap is initialised as:
+
+```c
+InitBitMap(bm_source, 3, 64, 24);   /* 3 planes, 64 px wide, 24 rows */
+```
+
+Only **plane 2** is used — planes 0 and 1 of `bm_source` are unused.
+Stride is `64 / 8 = 8` bytes per row; each plane occupies `8 × 24 = 192`
+bytes.  The compass content occupies the leftmost **48 pixels** (6 bytes) of
+each row; the trailing 2 bytes per row are padding.
+
+| Symbol   | Role                                  | Size (bytes) |
+|----------|---------------------------------------|--------------|
+| `_hinor` | Normal compass (no direction highlighted) | 200 (192 + 8 pad) |
+| `_hivar` | All directions highlighted                | 200 (192 + 8 pad) |
+
+### `drawcompass(dir)` algorithm
+
+```
+1.  bm_source->Planes[2] = nhinor
+2.  BltBitMap(bm_source, 0, 0, bm_text, 567, 15, 48, 24, 0xC0, 4, NULL)
+        — blits the entire 48×24 normal compass to the text viewport
+3.  if dir < 9:
+        bm_source->Planes[2] = nhivar
+        BltBitMap(bm_source, xr, yr, bm_text, 567+xr, 15+yr, xs, ys, 0xC0, 4, NULL)
+            — overlays only the active direction sub-region with the highlighted variant
+```
+
+**BltBitMap parameters:**
+
+| Param    | Value  | Meaning                              |
+|----------|--------|--------------------------------------|
+| minterm  | `0xC0` | D := A (straight copy, source → dest) |
+| mask     | `4`    | Binary `0100` → only plane 2 is copied |
+
+### `comptable[10]` — Direction sub-regions
+
+Each entry defines a rectangle `{xrect, yrect, xsize, ysize}` within the
+48 × 24 compass area.  Directions 8 and 9 are "standing still" (1 × 1 no-op).
+
+| Index | Direction | xrect | yrect | xsize | ysize |
+|-------|-----------|-------|-------|-------|-------|
+| 0     | NW        |  0    |  0    | 16    |  8    |
+| 1     | N         | 16    |  0    | 16    |  9    |
+| 2     | NE        | 32    |  0    | 16    |  8    |
+| 3     | E         | 30    |  8    | 18    |  8    |
+| 4     | SE        | 32    | 16    | 16    |  8    |
+| 5     | S         | 16    | 13    | 16    | 11    |
+| 6     | SW        |  0    | 16    | 16    |  8    |
+| 7     | W         |  0    |  8    | 18    |  8    |
+| 8     | still     |  0    |  0    |  1    |  1    |
+| 9     | still     |  0    |  0    |  1    |  1    |
+
+### How plane 2 produces colour
+
+The text viewport (opened by `setup_screen` in `fmain.c`) uses the
+`textcolors[]` palette.  Plane 2 is bit 2 of the 4-bit colour index.
+The compass area in `bm_text` gets planes 0, 1, 3 from the hiscreen image;
+plane 2 is the only plane modified by `drawcompass()`.
+
+The resulting colour at each pixel is `textcolors[index]` where
+`index = (p3 << 3) | (p2 << 2) | (p1 << 1) | p0`.
+Setting plane 2 toggles between colour pairs, e.g.:
+
+| Planes 3,1,0 | Plane 2 = 0       | Plane 2 = 1          |
+|---------------|-------------------|----------------------|
+| `0,0,0`       | `[0]` 0x000 black | `[4]` 0x00F blue     |
+| `0,0,1`       | `[1]` 0xFFF white | `[5]` 0xC0F magenta  |
+| `0,1,0`       | `[2]` 0xC00 red   | `[6]` 0x090 green    |
+| `0,1,1`       | `[3]` 0xF60 orange| `[7]` 0xFF0 yellow   |
+
+### Rust port notes
+
+The extracted compass data lives in `faery.toml` under `[compass]`:
+
+- `[compass.comptable]` — direction sub-regions
+- `[compass.hinor]` — normal compass, single-plane BitMap (48 × 24, stride 6)
+- `[compass.hivar]` — highlighted compass, single-plane BitMap
+
+At render-resource build time the port extracts the compass region from
+the hiscreen `IffImage`, replaces plane 2 with `hinor` / `hivar`, and
+converts both composites to RGBA textures using the `textcolors` palette.
+During gameplay, the normal compass texture is blitted first; if the player
+is moving, the active direction sub-region from the highlighted texture is
+overlaid on top.
+
+---
+
 ## Screen Layout: Amiga Mixed-Resolution Viewports
 
 ### Original Amiga display geometry
@@ -1764,6 +1865,35 @@ values: `HIBAR_Y + (j / 2) * 18 + 16`.
 - `original/fmain.c:10–15` — `#define` block: `SCREEN_WIDTH=288`, `PAGE_HEIGHT=143`, `RAST_HEIGHT=200`, `TEXT_HEIGHT=57`
 - `original/fmain.c:3785–3822` — `propt()`: button placement formula
 - `src/game/gameplay_scene.rs` — `CANVAS_MARGIN_Y`, `PLAYFIELD_X`, `PLAYFIELD_Y`, `HIBAR_H`, `HIBAR_Y` constants; `render_by_viewstatus()` for playfield 2× blit and HI bar 2×-vertical blit
+
+---
+
+## Known Original Exploits
+
+These bugs exist in the original 1987 release. The port should avoid replicating them.
+
+### Pause-Take duplication (`fmain.c` — do_option / prq path)
+
+When the game is paused (Space), pressing `T` triggers the Take action. Because the game
+loop is suspended, the player can press `T` repeatedly to pick up the same ground item
+multiple times without it being consumed.
+
+**Fix**: Guard `MenuAction::Take` dispatch (and any other item-consuming immediate action)
+behind an `!is_paused()` check, similar to the existing `gomenu()` guard. The `handle_key`
+path in `menu.rs` already blocks all keys except Space while paused, so the exploit cannot
+occur via the menu key path. Verify that the `GameAction::Take` path in the direct key
+binding layer (`key_bindings.rs`) also checks the paused state before acting.
+
+### Key replenishment after save/reload within a session (`fmain.c` — save/load path)
+
+If the player enters an area, saves the game, uses keys to unlock doors, then reloads the
+save in the same session, the keys are restored from the save file but the door-unlocked
+state is not reset (door state is held in a runtime table, not persisted). The player
+effectively gets unlimited key uses.
+
+**Fix**: When implementing `LoadGame`, reset all in-memory door state (the runtime "door
+open" flags in `doors.rs`) before restoring from the save file. Alternatively, persist door
+state as part of the save file format so reload is fully consistent.
 
 ---
 
