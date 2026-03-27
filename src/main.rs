@@ -459,6 +459,12 @@ pub fn main() -> Result<(), String> {
                     song_group_count,
                     current_song_group,
                     cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
+                    vfx_jewel_active: gs.state.light_timer > 0,
+                    vfx_light_sticky: gs.state.light_sticky,
+                    vfx_secret_active: gs.state.region_num == 9 && gs.state.secret_timer > 0,
+                    vfx_witch_active: gs.is_witch_active(),
+                    vfx_teleport_active: gs.is_teleport_active(),
+                    vfx_palette_xfade: gs.is_palette_xfade_active(),
                 };
                 dc.update_status(status);
             } else {

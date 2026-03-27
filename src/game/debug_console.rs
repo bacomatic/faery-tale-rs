@@ -64,6 +64,14 @@ pub struct DebugStatus {
     pub song_group_count: usize,
     pub current_song_group: Option<usize>,
     pub cave_mode: bool,
+
+    // VFX state
+    pub vfx_jewel_active: bool,
+    pub vfx_light_sticky: bool,
+    pub vfx_secret_active: bool,
+    pub vfx_witch_active: bool,
+    pub vfx_teleport_active: bool,
+    pub vfx_palette_xfade: bool,
 }
 
 // ── DebugConsole ─────────────────────────────────────────────────────────────
@@ -302,15 +310,24 @@ impl DebugConsole {
         let _ = self.terminal.draw(|f| {
             let area = f.area();
 
-            // Layout: status header (fixed 5 lines) | log (fills) | prompt (3 lines)
+            // Layout: status header (fixed 6 lines) | log (fills) | prompt (3 lines)
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(5),
+                    Constraint::Length(6),
                     Constraint::Min(3),
                     Constraint::Length(3),
                 ])
                 .split(area);
+
+            // Split status header horizontally: Status (left) | VFX (right)
+            let status_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(65),
+                    Constraint::Percentage(35),
+                ])
+                .split(chunks[0]);
 
             // ── Status header ──────────────────────────────────────────────
             let phase_str = format!("{:?}", status.day_phase);
@@ -377,7 +394,38 @@ impl DebugConsole {
 
             let status_widget = Paragraph::new(status_text)
                 .block(Block::default().borders(Borders::ALL).title(" Status "));
-            f.render_widget(status_widget, chunks[0]);
+            f.render_widget(status_widget, status_chunks[0]);
+
+            // ── VFX status ────────────────────────────────────────────
+            let on_off = |v: bool| if v { "ON" } else { "off" };
+            let vfx_text = vec![
+                Line::from(vec![
+                    styled_label("LL: "),
+                    Span::raw(format!("{}  ", status.lightlevel)),
+                    styled_label("DN: "),
+                    Span::raw(format!("{}  ", status.daynight)),
+                ]),
+                Line::from(vec![
+                    styled_label("Jewel: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_jewel_active))),
+                    styled_label("Sticky: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_light_sticky))),
+                    styled_label("Secret: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_secret_active))),
+                ]),
+                Line::from(vec![
+                    styled_label("Witch: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_witch_active))),
+                    styled_label("Teleport: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_teleport_active))),
+                    styled_label("Xfade: "),
+                    Span::raw(format!("{}  ", on_off(status.vfx_palette_xfade))),
+                ]),
+            ];
+
+            let vfx_widget = Paragraph::new(vfx_text)
+                .block(Block::default().borders(Borders::ALL).title(" VFX "));
+            f.render_widget(vfx_widget, status_chunks[1]);
 
             // ── Log ───────────────────────────────────────────────────────
             let log_height = chunks[1].height.saturating_sub(2) as usize; // subtract borders

@@ -356,6 +356,15 @@ impl GameplayScene {
         std::mem::take(&mut self.log_buffer)
     }
 
+    /// Whether the witch screen-warp effect is active.
+    pub fn is_witch_active(&self) -> bool { self.witch_effect.active }
+
+    /// Whether the teleport flash/fade effect is active.
+    pub fn is_teleport_active(&self) -> bool { self.teleport_effect.active }
+
+    /// Whether a palette crossfade (region transition) is in progress.
+    pub fn is_palette_xfade_active(&self) -> bool { self.palette_transition.is_some() }
+
     /// Enable or disable echoing every new message to stdout (--echo-transcript flag).
     pub fn set_echo_transcript(&mut self, echo: bool) {
         self.messages.set_echo(echo);
@@ -2663,10 +2672,6 @@ impl Scene for GameplayScene {
                         secret_active,
                     );
                 }
-                self.dlog(format!(
-                    "palette: ll={} light_on={} secret={}",
-                    lightlevel, light_on, secret_active
-                ));
             }
         }
 
