@@ -96,12 +96,10 @@ impl GameTicker {
         }
     }
 
-    Assumption is that this happens every tick (1/60 second), so a full day is 24000 ticks,
-    or 400 seconds (6 minutes 40 seconds) of real time. Each hour is 1000 ticks (16.67 seconds).
+    The game loop runs at 30 Hz (NTSC interlaced frame rate). A full day is 24000 ticks,
+    or 800 seconds (13 minutes 20 seconds) of real time. Each hour is 1000 ticks (33.3 seconds).
  */
-const TICKS_PER_DAY: u64 = 24000;
-const TICKS_PER_HOUR: u64 = 1000;
-const TICKS_PER_MINUTE: f64 = TICKS_PER_HOUR as f64 / 60.0; // unfortunately not an integer
+
 
 impl GameClock {
     pub fn new() -> GameClock {
@@ -168,56 +166,5 @@ impl GameClock {
         println!("Game clock resumed at {} total ticks, {} game ticks", self.mono_ticks, self.game_ticks);
     }
 
-    /**
-     * Get the total number of game days passed.
-     */
-    pub fn get_game_days(&self) -> u64 {
-        self.game_ticks / TICKS_PER_DAY
-    }
 
-    /**
-     * Get the current in-game wall clock time (day, hour, minute).
-     */
-    pub fn get_game_wall_clock(&self) -> (u32, u32, u32) {
-        let day_ticks = self.game_ticks % TICKS_PER_DAY;
-
-        let hour = day_ticks / TICKS_PER_HOUR;
-        let minute = (day_ticks % TICKS_PER_HOUR) as f64 / TICKS_PER_MINUTE;
-        let day = self.game_ticks / TICKS_PER_DAY;
-        (day as u32, hour as u32, minute as u32)
-    }
-
-    /**
-     * Set the in-game wall clock time (day, hour, minute).
-     */
-    pub fn set_game_wall_clock(&mut self, day: u32, hour: u32, minute: u32) {
-        let total_minutes = (day as f64 * 24.0 * 60.0) + (hour as f64 * 60.0) + (minute as f64);
-        let total_ticks = (total_minutes * TICKS_PER_MINUTE) as u64;
-        self.game_ticks = total_ticks;
-        self.ticker.reset();
-    }
-
-    /**
-     * Advance the game wall to the specified hour and minute, possibly advancing to the next day.
-     */
-    pub fn advance_game_wall_clock_to(&mut self, hour: u32, minute: u32) {
-        let (mut current_day, current_hour, current_minute) = self.get_game_wall_clock();
-        if current_hour > hour || (current_hour == hour && current_minute >= minute) {
-            // already at or past target time today, so advance to next day
-            current_day += 1;
-        }
-
-        self.set_game_wall_clock(current_day, hour, minute);
-        self.ticker.reset();
-    }
-
-    /**
-     * Advance the game wall clock by the specified number of (hours, minutes).
-     */
-    pub fn advance_game_wall_clock_by(&mut self, hours: u32, minutes: u32) {
-        let delta_minutes = (hours as f64 * 60.0) + (minutes as f64);
-        let delta_ticks = (delta_minutes * TICKS_PER_MINUTE) as u64;
-        self.game_ticks += delta_ticks;
-        self.ticker.reset();
-    }
 }

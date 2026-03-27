@@ -179,7 +179,6 @@ pub fn main() -> Result<(), String> {
     let mut walker: Point = Point::new(0, 20);
 
     let mut clock: GameClock = GameClock::new();
-    let mut last_minute: u32 = 0;
 
     // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
     // The scene_phase tracks what to start next when a scene completes.
@@ -261,7 +260,7 @@ pub fn main() -> Result<(), String> {
                 => {
                     kill_flag = true;
                 },
-                Event::KeyDown {scancode, keymod, repeat: false, .. }
+                Event::KeyDown {scancode, keymod: _, repeat: false, .. }
                 => {
                     // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
@@ -270,16 +269,6 @@ pub fn main() -> Result<(), String> {
 
                     let sc = scancode.unwrap();
                     match sc {
-                        Scancode::A => {
-                            if keymod.intersects(sdl2::keyboard::Mod::LSHIFTMOD | sdl2::keyboard::Mod::RSHIFTMOD) {
-                                // advance to 4:00 AM
-                                clock.advance_game_wall_clock_to(4, 0);
-                            } else {
-                                // jump ahead 2 hours
-                                clock.advance_game_wall_clock_by(2, 0);
-                            }
-                        }
-
                         Scancode::M => {
                             // toggle mouse cursor
                             if mouse_cursor.is_some() {
@@ -320,12 +309,6 @@ pub fn main() -> Result<(), String> {
             if result.is_err() {
                 println!("Error saving settings: {}", result.err().unwrap());
             }
-        }
-
-        let (_day, _hour, minute) = clock.get_game_wall_clock();
-        if minute != last_minute {
-            last_minute = minute;
-            dirty = true;
         }
 
         // Scene rendering takes priority when active
