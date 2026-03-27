@@ -72,6 +72,40 @@ pub fn genmini_scrolled(img_x: u16, img_y: u16, world: &WorldData) -> [u16; SCRO
     minimap
 }
 
+/// Dimensions of the bird-eye overview.
+pub const BIGDRAW_COLS: usize = 288;
+pub const BIGDRAW_ROWS: usize = 72;
+
+/// Render a 288×72 overview bitmap (1 pixel per world tile) centred on hero position.
+/// Each pixel maps terra_mem[tile_idx*4+3] (color byte) to a green-tone ARGB8888 pixel.
+pub fn bigdraw(hero_x: u16, hero_y: u16, world: &WorldData) -> Vec<u32> {
+    let mut buf = vec![0xFF000020_u32; BIGDRAW_COLS * BIGDRAW_ROWS];
+    let center_tx = (hero_x >> 4) as i32;
+    let center_ty = (hero_y >> 5) as i32;
+    let start_tx = center_tx - (BIGDRAW_COLS as i32 / 2);
+    let start_ty = center_ty - (BIGDRAW_ROWS as i32 / 2);
+
+    for py in 0..BIGDRAW_ROWS {
+        for px in 0..BIGDRAW_COLS {
+            let tx = (start_tx + px as i32).rem_euclid(2048) as usize;
+            let ty = (start_ty + py as i32).rem_euclid(1024) as usize;
+            let xs = tx >> 4;
+            let ys = ty >> 3;
+            let lx = tx & 0xF;
+            let ly = ty & 0x7;
+            let sec = world.sector_at(xs, ys);
+            let tile_idx = world.tile_at(sec, lx, ly) as usize;
+            let base = tile_idx * 4;
+            let color_byte = if base + 3 < world.terra_mem.len() {
+                world.terra_mem[base + 3]
+            } else { 0 };
+            let c = (color_byte as u32 * 8).min(255);
+            buf[py * BIGDRAW_COLS + px] = 0xFF000000 | (c << 8);
+        }
+    }
+    buf
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +123,12 @@ mod tests {
         let world = WorldData::empty();
         let _ = genmini(0xFFFF, 0xFFFF, &world);
         let _ = genmini(0, 0, &world);
+    }
+
+    #[test]
+    fn test_bigdraw_size() {
+        let world = WorldData::empty();
+        let buf = bigdraw(0, 0, &world);
+        assert_eq!(buf.len(), BIGDRAW_COLS * BIGDRAW_ROWS);
     }
 }

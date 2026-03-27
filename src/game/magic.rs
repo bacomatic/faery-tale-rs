@@ -70,7 +70,9 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
             "You feel unseen."
         }
         ITEM_TOTEM => {
-            // Show world map overlay (viewstatus = 1 in fmain.c).
+            if state.region_num >= 8 {
+                return Err("The bird totem does not work indoors.");
+            }
             state.viewstatus = 1;
             "The bird totem shows the way."
         }

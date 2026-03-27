@@ -946,11 +946,52 @@ impl GameplayScene {
                     canvas.fill_rect(None).ok();
                 }
             }
-            // Map view
+            // Map view (bird totem)
             1 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 48, 0));
+                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
-                // "MAP VIEW" — text rendering pending font wiring
+
+                if let Some(ref world) = self.map_world {
+                    let buf = crate::game::map_view::bigdraw(
+                        self.state.hero_x, self.state.hero_y, world,
+                    );
+                    let mut pixels_u8: Vec<u8> = Vec::with_capacity(buf.len() * 4);
+                    for &px in &buf {
+                        pixels_u8.push((px & 0xFF) as u8);
+                        pixels_u8.push(((px >> 8) & 0xFF) as u8);
+                        pixels_u8.push(((px >> 16) & 0xFF) as u8);
+                        pixels_u8.push(0xFF);
+                    }
+                    let tc = canvas.texture_creator();
+                    let surface_result = sdl2::surface::Surface::from_data(
+                        &mut pixels_u8,
+                        crate::game::map_view::BIGDRAW_COLS as u32,
+                        crate::game::map_view::BIGDRAW_ROWS as u32,
+                        (crate::game::map_view::BIGDRAW_COLS * 4) as u32,
+                        sdl2::pixels::PixelFormatEnum::ARGB8888,
+                    );
+                    if let Ok(surface) = surface_result {
+                        if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                            let dst = sdl2::rect::Rect::new(32, 40, 576, 144);
+                            let _ = canvas.copy(&tex, None, Some(dst));
+                        }
+                    }
+                }
+
+                // Hero position marker (center of the map view)
+                canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+                let hero_px = 32 + 576 / 2;
+                let hero_py = 40 + 144 / 2;
+                let _ = canvas.draw_line(
+                    sdl2::rect::Point::new(hero_px - 4, hero_py),
+                    sdl2::rect::Point::new(hero_px + 4, hero_py),
+                );
+                let _ = canvas.draw_line(
+                    sdl2::rect::Point::new(hero_px, hero_py - 4),
+                    sdl2::rect::Point::new(hero_px, hero_py + 4),
+                );
+
+                self.render_hibar(canvas, resources);
             }
             // Message overlay
             2 => {
