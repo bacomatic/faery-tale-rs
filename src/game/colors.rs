@@ -89,7 +89,7 @@ impl RGB4 {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Palette {
     #[serde(deserialize_with = "deserialize_rgb4_vec")]
     pub colors: Vec<RGB4>

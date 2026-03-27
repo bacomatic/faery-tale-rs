@@ -199,10 +199,15 @@ pub struct GameplayScene {
     pub in_encounter_zone: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
     day_night_phase: DayNightPhase,
-    /// Last lightlevel used for atlas dim — triggers rebuild when it changes.
-    last_lightlevel: u16,
     /// RGBA32 palette for the final indexed→RGBA32 render step.
     current_palette: crate::game::palette::Palette,
+    /// Base palette loaded from faery.toml (colors::Palette with RGB4 values).
+    /// Used as input to fade_page() for day/night/jewel palette computation.
+    /// None until init_from_library() runs.
+    base_colors_palette: Option<crate::game::colors::Palette>,
+    /// Dirty-check key for current_palette: (lightlevel, light_on, secret_active).
+    /// When any of these change, current_palette is recomputed.
+    last_palette_key: (u16, bool, bool),
 
     witch_effect: WitchEffect,
     teleport_effect: TeleportEffect,
@@ -253,8 +258,9 @@ impl GameplayScene {
             in_encounter_zone: false,
             npc_table: None,
             day_night_phase: DayNightPhase::Day,
-            last_lightlevel: u16::MAX,
             current_palette: [0xFF808080_u32; crate::game::palette::PALETTE_SIZE],
+            base_colors_palette: None,
+            last_palette_key: (u16::MAX, false, false),
 
             witch_effect: WitchEffect::new(),
             teleport_effect: TeleportEffect::new(),
@@ -1011,7 +1017,9 @@ impl GameplayScene {
             };
             match world_result {
                 Ok(world) => {
+                    self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                     self.current_palette = Self::region_palette(game_lib, region);
+                    self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
                     self.map_renderer = Some(MapRenderer::new(&world));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
@@ -1886,6 +1894,70 @@ impl GameplayScene {
         palette
     }
 
+    /// Build a base `colors::Palette` for a region from faery.toml pagecolors,
+    /// with per-region color 31 override applied.
+    fn build_base_colors_palette(
+        game_lib: &GameLibrary,
+        region: u8,
+    ) -> Option<crate::game::colors::Palette> {
+        let base = game_lib.find_palette("pagecolors")?;
+        let mut cloned = base.clone();
+        let color31: u16 = match region {
+            4 => 0x0980,
+            9 => 0x0445,
+            _ => 0x0bdf,
+        };
+        if let Some(c) = cloned.colors.get_mut(31) {
+            *c = crate::game::colors::RGB4::from(color31);
+        }
+        Some(cloned)
+    }
+
+    /// Recompute current_palette from base_colors_palette + lighting state.
+    ///
+    /// For outdoors (region < 8): applies fade_page() with per-channel percentages
+    /// derived from lightlevel (0=midnight, 300=noon) and jewel light_on flag.
+    /// For indoors (region >= 8): returns base palette at full brightness.
+    fn compute_current_palette(
+        base: &crate::game::colors::Palette,
+        region_num: u8,
+        lightlevel: u16,
+        light_on: bool,
+        secret_active: bool,
+    ) -> crate::game::palette::Palette {
+        use crate::game::palette::{amiga_color_to_rgba, PALETTE_SIZE};
+
+        // Indoors: full brightness, no fade.
+        if region_num >= 8 {
+            let mut pal = [0xFF808080_u32; PALETTE_SIZE];
+            for (i, entry) in base.colors.iter().enumerate().take(PALETTE_SIZE) {
+                pal[i] = amiga_color_to_rgba(entry.color);
+            }
+            // Region 9 secret_timer swaps color 31.
+            if region_num == 9 && secret_active {
+                pal[31] = amiga_color_to_rgba(0x00f0);
+            }
+            return pal;
+        }
+
+        let ll = lightlevel as i32;
+        let ll_boost = if light_on { 200i32 } else { 0 };
+        let r_pct = ((ll - 80 + ll_boost) * 100 / 300).clamp(0, 100) as i16;
+        let g_pct = ((ll - 61) * 100 / 300).clamp(0, 100) as i16;
+        let b_pct = ((ll - 62) * 100 / 300).clamp(0, 100) as i16;
+
+        let faded = crate::game::palette_fader::fade_page(
+            r_pct, g_pct, b_pct, true, light_on, base,
+        );
+
+        // Convert colors::Palette (RGB4) → [u32; 32] (ARGB8888).
+        let mut out = [0xFF808080_u32; PALETTE_SIZE];
+        for (i, entry) in faded.colors.iter().enumerate().take(PALETTE_SIZE) {
+            out[i] = amiga_color_to_rgba(entry.color);
+        }
+        out
+    }
+
     fn stat_field_mut(state: &mut GameState, stat: StatId) -> &mut i16 {
         match stat {
             StatId::Vitality => &mut state.vitality,
@@ -2304,7 +2376,9 @@ impl Scene for GameplayScene {
                     };
                     match world_result {
                         Ok(world) => {
+                            self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                             self.current_palette = Self::region_palette(game_lib, region);
+                            self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
                             let renderer = MapRenderer::new(&world);
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
@@ -2341,6 +2415,30 @@ impl Scene for GameplayScene {
         if new_phase != self.day_night_phase {
             self.dlog(format!("Day/night phase: {:?}", new_phase));
             self.day_night_phase = new_phase;
+        }
+
+        // Recompute current_palette when lighting state changes.
+        {
+            let lightlevel = self.state.lightlevel;
+            let light_on = self.state.light_timer > 0;
+            let secret_active = self.state.region_num == 9 && self.state.secret_timer > 0;
+            let palette_key = (lightlevel, light_on, secret_active);
+            if palette_key != self.last_palette_key {
+                self.last_palette_key = palette_key;
+                if let Some(ref base) = self.base_colors_palette {
+                    self.current_palette = Self::compute_current_palette(
+                        base,
+                        self.state.region_num,
+                        lightlevel,
+                        light_on,
+                        secret_active,
+                    );
+                }
+                self.dlog(format!(
+                    "palette: ll={} light_on={} secret={}",
+                    lightlevel, light_on, secret_active
+                ));
+            }
         }
 
         // Fatigue is updated per movement step in apply_player_input (player-111).
