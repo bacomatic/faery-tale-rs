@@ -1083,22 +1083,29 @@ ob_stat: i8
 
 ## Sound Effects (`game/samples`)
 
-Loaded from ADF block 920 (11 blocks = 5,632 bytes, `SAMPLE_SZ`) into `sample_mem`. Six samples packed sequentially as length-prefixed raw signed 8-bit PCM:
+Loaded from **ADF block 920**, reading **11 blocks** (5,632 bytes, `SAMPLE_SZ`) into `sample_mem` via `read_sample()` in `fmain.c`.
+
+Six IFF-style length-prefixed sound effects packed sequentially:
 
 ```
-[4-byte big-endian length][PCM bytes] × 6
+for each of 6 samples:
+  [4 bytes big-endian] length N
+  [N bytes]            signed 8-bit PCM mono sample data
 ```
 
-`effect(num, speed)` calls `playsample(sample[num], sample_size[num]/2, speed)` where `speed` is an Amiga Paula period register value — higher = slower/lower pitch.
+`effect(num, speed)` calls `playsample(sample[num], sample_size[num] / 2, speed)`.
+- `sample[num]` is a pointer into `sample_mem` past the length prefix
+- `sample_size[num] / 2` is the length in 16-bit words (Paula DMA uses word count)
+- `speed` is an Amiga Paula **period register** value (higher = slower, lower pitch); the `rand` jitter creates pitch variation per hit
 
-| Index | Trigger | Speed range | Context |
-|-------|---------|-------------|---------|
-| 0 | Hero is hit by melee | 800 + bitrand(511) | `dohit` with j==0 |
-| 1 | Weapon near-miss | 150 + rand256() | Proximity ≤ bv+2, not wand |
-| 2 | Arrow/bolt hits player | 500 + rand64() | `dohit` with i==-1 |
-| 3 | Monster is hit by melee | 400 + rand256() | `dohit` with j>0 |
-| 4 | Arrow hits target | 400 + rand256() | Missile impact |
-| 5 | Magic/fireball hit or monster death | 3200 + bitrand(511) | `dohit` with i==-2, some deaths |
+| Index | Trigger event | Speed base | Jitter |
+|-------|--------------|------------|--------|
+| 0 | Hero hit by melee | 800 | +bitrand(511) |
+| 1 | Weapon near-miss | 150 | +rand256() |
+| 2 | Arrow/bolt hits player | 500 | +rand64() |
+| 3 | Monster hit by melee | 400 | +rand256() |
+| 4 | Arrow hits a target | 400 | +rand256() |
+| 5 | Magic/fireball hit | 3200 | +bitrand(511) |
 
 ---
 
