@@ -236,7 +236,7 @@ On spawn (`revive(TRUE)`):
 
 **`brave`** — melee weapon reach radius `bv = brave/20 + 5` (0–15 cap). Each enemy kill grants `brave++`. Hero death subtracts 5 from `luck`. Vitality cap = `15 + brave/4`.
 
-**`luck`** — modifies fairy spawning: fairy appears when `luck < 1 && goodfairy < 200`. Reduced by enemy hits to player (`luck -= 2` in some death paths, `-5` on hero death).
+**`luck`** — modifies fairy rescue: if `luck < 1 && goodfairy < 200`, the fairy does **not** appear and a new brother spawns instead (`revive(TRUE)`). Reduced by enemy hits to player (`luck -= 2` in some death paths, `-5` on hero death).
 
 **`kind`** — moral stat. Killing a non-evil `SETFIG` NPC: `kind -= 3` (floored at 0). Giving 2 gold to a beggar: if `rand64() > kind`, then `kind++`. Used to gate some dialogue/quest paths.
 
