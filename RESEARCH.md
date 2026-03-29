@@ -216,6 +216,24 @@ On spawn (`revive(TRUE)`):
 - `hunger = fatigue = 0`
 - Raft spawns at `(13668, 14470)`, goodfairy setfig at `(13668, 15000)`
 
+**Fairy rescue animation** (`fmain.c:1557–1582`):
+- When hero enters DEAD or FALL state, `goodfairy` counter begins decrementing each frame
+- When `goodfairy < 120`: fairy sprite appears at `hero_x + goodfairy*2 - 20`, animated with cycling
+- When `goodfairy == 1`: `revive(FALSE)` triggers — fairy rescue, hero returns to safe position
+- FALL state with `goodfairy < 200`: automatic rescue from pit
+- Fairy rescue condition: `luck >= 1` OR `goodfairy >= 200` (if luck < 1 and goodfairy < 200, a new brother spawns instead)
+
+**New brother flow** (`revive(TRUE)`):
+- Dead brother's position stored in `ob_listg[brother]` (`xc = hero_x, yc = hero_y, ob_stat = 1`)
+- Ghost brother enabled: `ob_listg[brother + 2].ob_stat = 3` (appears as setfig)
+- Stats loaded from `blist[brother]` (see table above)
+- All inventory cleared: `stuff[0..GOLDBASE-1] = 0`
+- Starting dirk given: `stuff[0] = weapon = 1`
+- Timers reset: `secret_timer = light_timer = freeze_timer = 0`
+- If `brother > 3` after increment → `quitflag = TRUE` (game over, 500-tick delay)
+
+**Common to both revival paths**: hero placed at `safe_x, safe_y`; `vitality = 15 + brave/4`; `daynight = 8000`; `lightlevel = 300`; `hunger = fatigue = 0`; `anix = 3` (clear all enemies).
+
 **`brave`** — melee weapon reach radius `bv = brave/20 + 5` (0–15 cap). Each enemy kill grants `brave++`. Hero death subtracts 5 from `luck`. Vitality cap = `15 + brave/4`.
 
 **`luck`** — modifies fairy spawning: fairy appears when `luck < 1 && goodfairy < 200`. Reduced by enemy hits to player (`luck -= 2` in some death paths, `-5` on hero death).
@@ -267,6 +285,23 @@ This makes the hero stagger drunkenly when severely hungry.
 `fatigue` has **no passive decrement** — it only decreases during the SLEEP state (−1 per frame while asleep). There is no fatigue recovery while awake.
 
 `eat(amt)`: `hunger -= amt; if hunger < 0 → hunger = 0, event(13)` ("Feeling better"). Used for Fruit (amt=30) and buying food at inns (amt=50).
+
+### Sleep System
+
+**Bed detection** (`fmain.c:2162–2188`): only in `region_num == 8` (inside buildings). Bed tiles are sector IDs 52, 53, 161, 162. Hero must stand still on a bed tile for 30 frames (`sleepwait` counter). If `fatigue < 50`: event(25) "Not tired enough". Otherwise: event(26), Y-axis snaps (`hero_y |= 0x1f`), `state = SLEEP`.
+
+**Sleep processing** (`fmain.c:2357–2368`): while in SLEEP state, `daynight += 63` per frame (63× time acceleration — ~1,890 daynight ticks/second at 30 fps, or ~6.3 in-game hours per real second). `fatigue` decrements by 1 per frame.
+
+**Wake conditions** (any of):
+1. `fatigue == 0` (fully rested)
+2. `fatigue < 30` AND `daynight` in 9000–10000 (dawn wake — hero wakes at sunrise if reasonably rested)
+3. `battleflag` AND `rand64() == 0` (1/64 chance per frame — interrupted by combat)
+
+On wake: `state = STILL`, Y-axis unsnaps (`hero_y &= 0xffe0`).
+
+**Forced sleep**:
+- `fatigue > 170` and `vitality ≤ 5`: event(12), `state = SLEEP` (exhaustion collapse)
+- `hunger > 140` (every 8 ticks): event(24), `hunger = 130`, `state = SLEEP` (starvation collapse)
 
 **Vitality recovery**: every 1024 `daynight` ticks (`(daynight & 0x3ff) == 0`), if `vitality < 15 + brave/4` and not DEAD: `vitality++`, prints HP display.
 
