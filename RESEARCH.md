@@ -1396,6 +1396,73 @@ NPC AI runs on `anim_list[3..anix-1]` (figures beyond the 3 reserved for player,
 
 ---
 
+## NPC Interaction Mechanics
+
+Sources: `fmain.c:2473–2494`, `fmain.c:4167–4271`, `fmain2.c:1226–1292`, `fmain2.c:1969–2001`.
+
+### Auto-speak on proximity (`fmain.c:2473–2494`)
+
+When `nearest_person` changes race (new NPC enters range), automatic dialogue triggers:
+
+| Race | NPC | Dialogue |
+|------|-----|----------|
+| 7 | DKnight | speak(41) |
+| 9 | Necromancer | speak(43) |
+| 0x84 | Princess | speak(16) if `ob_list8[9].ob_stat` set |
+| 0x89 | Witch | speak(46) |
+| 0x8d | Beggar | speak(23) |
+
+### Talk range
+
+- **Yell** (hit==5): `nearest_fig(1, 100)` — 100-pixel range
+- **Say / Ask** (hit==6,7): `nearest_fig(1, 50)` — 50-pixel range
+
+### Setfig dialogue details
+
+| Type | NPC | Key behavior |
+|------|-----|-------------|
+| 0 | Wizard | `kind < 10` → rebuff; else random wisdom based on `goal` |
+| 1 | Priest | Has writ (`stuff[28]`) → quest trigger; `kind < 10` → rebuff; else heal to full vitality |
+| 2, 3 | Guards | Always speak(15) |
+| 4 | Princess | Only speaks if `ob_list8[9].ob_stat` set |
+| 5 | King | Only speaks if `ob_list8[9].ob_stat` set |
+| 6 | Noble | speak(20) |
+| 7 | Sorceress | First visit: speak(45), sets `ob_listg[9].ob_stat = 1`. Subsequent: if `luck < rand64()` (0–63) then `luck += 5` |
+| 8 | Bartender | Response varies by fatigue (`fatigue < 5` check) and time of day |
+| 9 | Witch | speak(46) |
+| 10 | Spectre | speak(47) |
+| 11 | Ghost | speak(49) |
+| 12 | Ranger | Region-dependent dialogue |
+| 13 | Beggar | speak(23) |
+
+### Talking state
+
+When a setfig has `can_talk == TRUE`: `state = TALKING`, `tactic = 15` (15-frame timer). Each frame `tactic--`; at 0, returns to STILL.
+
+### Princess rescue (`fmain2.c:1969–2001`)
+
+Triggered when entering extent type 83 with `ob_list8[9].ob_stat` set.
+
+**Rewards**:
+- `wealth += 100`
+- `stuff[28] = 1` (Writ of Passage)
+- `stuff[16..21] += 3` each (3 of every key colour)
+- Hero teleported to throne room at (5511, 33780)
+- Bird extent relocated to (22205, 21231)
+- Noble NPC replaced with Princess (ob_id 4)
+- `ob_list8[9].ob_stat = 0` (flag reset)
+- `princess++` counter incremented
+
+### Necromancer death transformation (`fmain.c:2006–2017`)
+
+When Necromancer (race 9) dies: transforms to Woodcutter — `race = 10`, `vitality = 10`, `state = STILL`, `weapon = 0`. Then `leave_item(i, 139)` drops the Talisman.
+
+### Witch visual attack (`fmain2.c:1226–1292`)
+
+The Witch creates a rotating quadrilateral visual distortion using `witchpoints[]` (64-point circle table). A cross-product test determines if the hero is inside the attack cone. If inside AND `calc_dist(2, 0) < 100`: `dohit(-1, 0, facing, rand2() + 1)` — 1–2 damage. The attack direction oscillates based on the sign of the cross product.
+
+---
+
 ## Extents and Encounter Zones
 
 `extent_list[EXT_COUNT]` (22 entries) — axis-aligned rectangles triggering encounters or events:
