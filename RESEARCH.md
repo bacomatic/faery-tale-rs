@@ -1550,6 +1550,82 @@ Formula: `comptable_index = (facing + 1) & 7`.
 
 ---
 
+## Movement System
+
+Sources: `fmain.c:1614–1896`, `fsubs.asm:1274–1319`.
+
+### Movement formula
+
+`newx(x, dir, speed)` / `newy(y, dir, speed)` (`fsubs.asm:1281–1319`):
+```
+new_pos = old_pos + (dir_table[dir] * speed) / 2
+```
+
+Direction tables (`fsubs.asm:1277–1278`):
+```
+xdir: -2,  0,  2,  3,  2,  0, -2, -3,  0,  0   (dirs 0–9)
+ydir: -2, -3, -2,  0,  2,  3,  2,  0,  0,  0
+```
+
+Maximum displacement per frame at speed 2: 3 pixels (east/west), 3 pixels (north/south), 2 pixels diagonal.
+
+### Speed values
+
+| Condition | Speed `e` | Effect |
+|-----------|-----------|--------|
+| Normal | 2 | Standard walking speed |
+| Riding raft (`riding == 5`) | 3 | Faster water travel |
+| Slow terrain (`environ == -1`, type 6) | 4 | Higher speed value but same formula |
+| Sinking (`environ == 2` or `> 6`) | 1 | Half speed in water |
+| Backwards terrain (`environ == -3`) | -2 | Hero walks backwards |
+
+### Walk / still state transitions (`fmain.c:1624–1637`)
+
+- `oldir < 9` AND input held (qualifier or keydir) → `state = WALKING` (12)
+- `oldir == 9` (no directional input) → `state = STILL` (13)
+- Animation index: `dex = diroffs[d] + ((cycle + i) & 7)` — 8-frame walk cycle
+- Still index: `dex = diroffs[d] + 1`
+
+### Wall sliding (direction deviation) (`fmain.c:1839–1852`)
+
+When `proxcheck()` blocks the attempted move:
+1. Try `(direction + 1) & 7` at same position
+2. If still blocked, try `(direction - 2) & 7`
+3. If both fail → increment `frustflag`, hero stays put
+
+### Frustration animation (`fmain.c:1889–1896`)
+
+| `frustflag` | Animation |
+|-------------|-----------|
+| > 40 | Unique frustrated pose (frame 40) |
+| > 20 | Oscillating animation (frames 84–85, `(cycle >> 1) & 1`) |
+| ≤ 20 | Normal still frame |
+
+NPCs use `tactic = FRUST` instead of the frustflag counter.
+
+### Coordinate wrapping (`fmain.c:2111–2127`)
+
+For outdoor regions (0–7), hero position wraps at world boundaries:
+```
+if abs_x < 300:     abs_x = 32565
+else if abs_x > 32565: abs_x = 300
+else if abs_y < 300:     abs_y = 32565
+else if abs_y > 32565: abs_y = 300
+```
+
+Conditions are **`else if` chained** — only one axis wraps per frame. The Y-axis high bit (`hero_y & 0x8000`) indicates indoor coordinates and is preserved during wrapping.
+
+### Velocity tracking (`fmain.c:1881–1882`)
+
+```
+vel_x = (xtest - abs_x) * 4
+vel_y = (ytest - abs_y) * 4
+```
+
+Used for smooth interpolation, pushback calculations, and bird dismount velocity checks.
+
+---
+
 ## Menu System (`fmain.c:538–589`, `3758–3820`, `4409–4441`; `fmain2.c:613–675`; `fsubs.asm:120–165`)
 
 ### 10 Menu Modes
