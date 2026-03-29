@@ -1929,12 +1929,14 @@ state as part of the save file format so reload is fully consistent.
 ### Region selection formula (`gen_mini()`, `fmain.c:3661–3690`)
 
 ```c
-xs = (hero_x + 7) >> 8        // sector column of viewport centre
-ys = (hero_y - 26) >> 8       // sector row of viewport centre
+xs = (map_x + 151) >> 8       // sector column at viewport centre
+ys = (map_y + 64) >> 8        // sector row at viewport centre
 xr = (xs >> 6) & 1            // 0 = west column, 1 = east column
 yr = (ys >> 5) & 3            // 0–3 = north → south band
 region_num = xr + yr * 2      // 0–7 for outdoor; ≥8 hard-coded (indoor/dungeon)
 ```
+
+Uses `map_x`/`map_y` (viewport top-left), not `hero_x`/`hero_y`. The offsets 151 and 64 centre the calculation within the 288 × 140 playfield.
 
 The outdoor world is a 2-column × 4-row grid of regions. All coordinate
 ranges are in world pixel units (0–32 767 on each axis). Region transitions
