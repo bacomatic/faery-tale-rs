@@ -239,18 +239,32 @@ Both counters tick simultaneously every 127 `daynight` ticks (`(daynight & 127) 
 | 35             | event(0) — "Getting hungry" message |
 | 60             | event(1) — "Very hungry" message |
 | 90             | event(4) — "Famished" message |
-| >100 (every 8 ticks, if vitality > 5) | `vitality -= 2` if also `fatigue > 160` |
+| >100 (every 8 ticks, if vitality > 5) | `vitality -= 2` (starvation damage) |
 | >90 (every 8 ticks, if vitality > 5) | event(2) — starvation warning |
 | >140 (every 8 ticks) | event(24), `hunger` clamped to 130, `state = SLEEP` (collapse) |
+
+**Hunger stumble** (`fmain.c:1625–1631`): when `hunger > 120`, on each movement step there is a 1/4 chance (`!rand4()`) the direction deviates by ±1:
+```c
+if (hunger > 120 && !(rand4())) {
+    if (rand() & 1)
+        oldir = (oldir + 1) & 7;
+    else
+        oldir = (oldir - 1) & 7;
+}
+```
+This makes the hero stagger drunkenly when severely hungry.
 
 **Fatigue progression:**
 
 | `fatigue` value | Event |
 |-----------------|-------|
 | 70              | event(3) — "Weary" message |
+| >160 (every 8 ticks, if vitality > 5) | `vitality -= 2` (exhaustion damage) |
 | >170 (every 8 ticks, vitality ≤ 5) | event(12), `state = SLEEP` (collapse from exhaustion) |
 
-`fatigue` decrements by 1 per daynight tick passively. Sleep in combat (battleflag) or very low fatigue triggers forced `SLEEP` state. Sleeping on interior tiles 161, 52, 162, or 53 after `sleepwait` reaches 30 also triggers sleep (if `fatigue > 50`).
+**Vitality damage**: starvation and exhaustion trigger independently (`fmain.c:2632–2635`): `if (hunger > 100 || fatigue > 160) { vitality -= 2; }` when `vitality > 5` and `(hunger & 7) == 0`.
+
+`fatigue` has **no passive decrement** — it only decreases during the SLEEP state (−1 per frame while asleep). There is no fatigue recovery while awake.
 
 `eat(amt)`: `hunger -= amt; if hunger < 0 → hunger = 0, event(13)` ("Feeling better"). Used for Fruit (amt=30) and buying food at inns (amt=50).
 
