@@ -274,8 +274,11 @@ This makes the hero stagger drunkenly when severely hungry.
 
 ## Day/Night Cycle
 
-`daynight` is a `USHORT` counter [0..23999], incremented by 1 per game tick (30 Hz):
+`daynight` is a `USHORT` counter [0..23999], incremented by 1 per game tick (~30 Hz):
 - 24000 ticks = one full in-game day ≈ 800 seconds real time (≈13.3 minutes)
+- `daynight` is incremented in the main game loop (`fmain.c:2370`), not in the VBlank interrupt (which only handles music)
+
+**Frame rate**: the game loop effectively runs at ~30 Hz. During scrolling, the Amiga blitter is saturated (5-plane scroll + sprite blits exceed one 16.7 ms VBlank period). When standing still, an explicit `Delay(1)` in `ppick()` (`fmain2.c:621`) throttles the idle loop to match.
 
 `lightlevel = daynight / 40` then if `lightlevel >= 300`: `lightlevel = 600 - lightlevel`.
 This makes a symmetric triangle wave: 0 → 300 → 0 over the day.
@@ -295,7 +298,17 @@ This makes a symmetric triangle wave: 0 → 300 → 0 over the day.
 | 6 | event(30) — noon |
 | 9 | event(31) — dusk |
 
-`fade_page(r, g, b, limit, colors)` applies per-frame colour scaling. Night limit floor: r≥10, g≥25, b≥60 (ensures blue-tinted night). `light_timer` (Green Jewel light effect) temporarily equalises R and G channels.
+**`day_fade()`** (`fmain2.c:2059–2071`) calls `fade_page()` every 4th `daynight` tick (`daynight & 3 == 0`) or on viewstatus changes:
+
+```c
+ll = light_timer ? 200 : 0;
+if (region_num < 8)
+    fade_page(lightlevel - 80 + ll, lightlevel - 61, lightlevel - 62, TRUE, pagecolors);
+else
+    fade_page(100, 100, 100, TRUE, pagecolors);  // full brightness indoors
+```
+
+`fade_page(r, g, b, limit, colors)` applies per-frame colour scaling. Night limit floor: r≥10, g≥25, b≥60 (ensures blue-tinted night). `light_timer` (Green Jewel) adds +200 to the **red channel parameter only**, making the scene warm and bright. Indoor regions (`region_num ≥ 8`) always use full brightness (100, 100, 100) — no day/night variation.
 
 ---
 
@@ -684,7 +697,7 @@ Accessed via MAGIC menu (hit 5–11 maps to stuff[9–15]). Each use **decrement
 | Index | Name | MAGIC hit | Timer/Mechanic | Duration/Value | Effect |
 |-------|------|-----------|----------------|----------------|--------|
 | 9 | Blue Stone | 5 | Stone Ring transport | — | `hero_sector==144` and hero centered in tile → teleports to next stone ring in `stone_list[]` (offset by facing direction + 1, wraps mod 11). If not on a stone ring, returns without consuming. Only works in overworld (region < 8); blocked in underworld unless `cheat1` |
-| 10 | Green Jewel | 6 | `light_timer += 760` | ~760 game ticks | **Illumination**: `day_fade()` boosts red channel (`r1 = g1` when `r1 < g1`), adds +200 to lightlevel calculation. Makes night as bright as day. Palette color 31 unaffected. Timer decrements each main-loop tick |
+| 10 | Green Jewel | 6 | `light_timer += 760` | ~760 game ticks | **Illumination**: `day_fade()` adds +200 to red channel parameter in `fade_page()`, making night nearly as bright as day. Does not modify `lightlevel` itself. Palette color 31 unaffected. Timer decrements each main-loop tick |
 | 11 | Glass Vial | 7 | Heal | Instant | Restores `rand8() + 4` vitality (4–11 HP). Capped at max vitality `15 + brave/4`. Prints "That feels a lot better!" if not already at max |
 | 12 | Crystal Orb | 8 | `secret_timer += 360` | ~360 game ticks | **Reveal secrets**: in region 9 (underworld/dungeons), changes palette color 31 from 0x0445 (dark) to 0x00F0 (bright green), revealing hidden passages. Timer decrements each tick |
 | 13 | Bird Totem | 9 | World map | Instant | **Minimap display**: draws the world map (`bigdraw(map_x, map_y)`) with hero position marked by "+" at computed pixel offset. Only works in overworld (`region_num < 8`); blocked while `riding > 1`. Sets `viewstatus=1`, waits for keypress |
