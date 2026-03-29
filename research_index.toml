@@ -1,5 +1,5 @@
 version = 1
-last_updated = "2026-03-27"
+last_updated = "2026-03-29"
 
 # Stable lookup keys for agents.
 # Each key maps to a human-readable section in RESEARCH.md.
@@ -37,6 +37,7 @@ id = "player.stats"
 title = "Player Character Stats"
 doc = "RESEARCH.md"
 anchor = "#player-character-stats"
+last_updated = "2026-03-29"
 tags = ["player", "stats", "brave", "luck", "kind", "wealth", "character"]
 
 [[entry]]
@@ -44,6 +45,7 @@ id = "player.hunger_fatigue"
 title = "Hunger & Fatigue System"
 doc = "RESEARCH.md"
 anchor = "#hunger--fatigue-system"
+last_updated = "2026-03-29"
 tags = ["player", "hunger", "fatigue", "survival", "sleep"]
 
 [[entry]]
@@ -51,6 +53,7 @@ id = "world.day_night"
 title = "Day/Night Cycle"
 doc = "RESEARCH.md"
 anchor = "#daynight-cycle"
+last_updated = "2026-03-29"
 tags = ["world", "daynight", "lightlevel", "time", "palette"]
 
 [[entry]]
@@ -72,6 +75,7 @@ id = "combat.system"
 title = "Combat System"
 doc = "RESEARCH.md"
 anchor = "#combat-system"
+last_updated = "2026-03-29"
 tags = ["combat", "weapons", "dohit", "hitbox", "missiles"]
 
 [[entry]]
@@ -184,5 +188,45 @@ id = "world.region-diagrams"
 title = "World Map: Region Diagrams"
 doc = "RESEARCH.md"
 anchor = "#world-map-region-diagrams"
-last_updated = "2026-03-25"
+last_updated = "2026-03-29"
 tags = ["world", "map", "regions", "coordinates", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "diagram"]
+
+[[entry]]
+id = "player.movement"
+title = "Movement System"
+doc = "RESEARCH.md"
+anchor = "#movement-system"
+last_updated = "2026-03-29"
+tags = ["player", "movement", "speed", "collision", "wrapping"]
+
+[[entry]]
+id = "player.riding"
+title = "Riding / Carrier System"
+doc = "RESEARCH.md"
+anchor = "#riding--carrier-system"
+last_updated = "2026-03-29"
+tags = ["player", "riding", "raft", "turtle", "bird", "dragon", "carrier"]
+
+[[entry]]
+id = "npc.interaction"
+title = "NPC Interaction Mechanics"
+doc = "RESEARCH.md"
+anchor = "#npc-interaction-mechanics"
+last_updated = "2026-03-29"
+tags = ["npc", "dialogue", "talk", "princess", "witch", "necromancer"]
+
+[[entry]]
+id = "world.encounter_spawning"
+title = "Encounter Spawning System"
+doc = "RESEARCH.md"
+anchor = "#encounter-spawning-system"
+last_updated = "2026-03-29"
+tags = ["world", "encounters", "spawning", "danger", "objects"]
+
+[[entry]]
+id = "player.sleep"
+title = "Sleep System"
+doc = "RESEARCH.md"
+anchor = "#sleep-system"
+last_updated = "2026-03-29"
+tags = ["player", "sleep", "fatigue", "bed", "rest"]
