@@ -582,6 +582,28 @@ if yd < bv+2 and wt != 5: effect(1)   // near-miss sound
 - If killed friendly SETFIG (NPC): `kind -= 3` (floored at 0)
 - If hero (i == 0): `event(dtype)`, `luck -= 5`, `setmood(TRUE)` → death music
 
+**Hero dodge mechanic**: when an NPC (`i > 0`) swings at the hero, the hit includes a dodge roll (`fmain.c:2707`):
+```
+if yd < bv: hit connects only if (i == 0) or (rand256() > brave)
+```
+- Hero (`i == 0`) always hits if in range — no dodge on outgoing attacks
+- NPCs attacking hero: hit only connects if `rand256() > brave`
+- This is the primary defensive scaling — higher `brave` = more dodges
+- Effective dodge rate ≈ `brave / 256`. Julian start (brave=35): ~14%. Brave=100: ~39%. Brave=255: ~100%.
+
+**NPC fight state clamping** (`fmain.c:1958–1959`): NPCs (`i > 2`) clamp fight animation states 6 and 7 to state 8, limiting their combat animation variety compared to the hero.
+
+**Battle flag management** (`fmain.c:2497–2527`): `battleflag` is cleared each AI tick, then re-set if any living enemy is within 300 × 300 pixels of the hero and is visible (or was already flagged). Battle start triggers `setmood(1)` (battle music). Battle end calls `aftermath()` — counts dead/fleeing enemies and reports tallies; prints "Bravely done!" if hero vitality < 5.
+
+**Distance calculation** — `calc_dist(a, b)` (`fmain2.c:446–463`): piecewise linear approximation of Euclidean distance used throughout combat and NPC proximity:
+```c
+x = abs(a.abs_x - b.abs_x);
+y = abs(a.abs_y - b.abs_y);
+if (x > y + y) return x;       // mostly horizontal
+if (y > x + x) return y;       // mostly vertical
+return (x + y) * 5 / 7;        // diagonal approximation
+```
+
 **Missile / Arrow combat**:
 - 6 active missiles in `missile_list[]`; each has position, direction, speed, archer ID
 - Move `speed * 2` pixels per tick; expire after 40 ticks or hitting terrain (tile 1 or 15)
