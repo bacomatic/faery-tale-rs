@@ -896,6 +896,60 @@ Food (hit=5) is special: calls `eat(50)` directly (−50 hunger) + event(22), no
 
 ---
 
+## Riding / Carrier System
+
+Four carrier types: raft, turtle, bird (swan), and dragon. `riding` variable tracks current mount; `wcarry` tracks carrier slot; `active_carrier` tracks loaded carrier sprite.
+
+### Raft
+
+`anim_list[1]` is always the raft. Proximity detection (`fmain.c:1645–1651`):
+```
+xstart = hero_x - raft_x - 4;  ystart = hero_y - raft_y - 4;
+if |xstart| < 16 && |ystart| < 16: raftprox = 1  (near — raft follows)
+if |xstart| < 9  && |ystart| < 9:  raftprox = 2  (close enough to board)
+```
+
+- Boarding: `wcarry == 1` AND `raftprox == 2` AND hero on water terrain
+- Speed: hero speed = 3 when `riding == 5`
+- Raft follows hero when hero is in water (terrain types 3–5) and `raftprox == 1`
+
+### Turtle
+
+Carrier slot `active_carrier = 5`, sprite file 5. Loaded via `load_carrier(5)`.
+
+- Movement: follows hero when `raftprox` and `wcarry == 3`; hero facing adopted; animation `dex = d + d + (cycle & 1)`; speed = 3
+- Autonomous: when not near hero, turtle wanders toward water (terrain type 5), tries current direction then ±1, ±2 directions
+- `riding = FALSE` when turtle not near hero
+- Summoning via `get_turtle()` (`fmain.c:4397–4407`): places turtle at water tile (terrain type 5) near hero; up to 25 random attempts. Blocked if hero within (11194 < x < 21373, 10205 < y < 16208)
+
+### Bird / Swan
+
+Carrier slot `active_carrier = 11`, sprite file 11. Loaded via `load_carrier(11)`.
+
+- Requires `stuff[5] > 0` (golden lasso) AND `raftprox` (proximity to carrier)
+- `riding = 11`, triggers flying movement (acceleration-based)
+- **Flying physics** (`fmain.c:1788–1812`):
+  - Velocity accumulates: `vel_x += newx(20, dir, 2) - 20`, `vel_y += newy(20, dir, 2) - 20`
+  - Speed caps: `|vel_x| < e - 8`, `|vel_y| < e` where `e = 40` for bird, `e = 42` otherwise
+  - Position update: `abs_x += vel_x / 4`, `abs_y += vel_y / 4`
+  - No terrain collision while airborne — bypasses `proxcheck()`
+- **Dismount** (`fmain.c:1595–1607`): fight button when `|vel_x| < 15` AND `|vel_y| < 15` AND `proxcheck(hero_x, hero_y - 14)` passes (passable terrain above)
+
+### Dragon
+
+Separate type `DRAGON` (not `CARRIER`). Extent zone 2: coordinates (6749, 34951)–(7249, 35351). Loaded via `load_carrier(10)`.
+
+- `vitality = 50`, `weapon = 5` (fireball)
+- Fires randomly: 25% chance per tick (`rand4() == 0`)
+- Always fires direction 5 (south)
+- Fireball: `missile_type = 2`, `speed = 5`
+
+### `load_carrier(n)` (`fmain.c:3421–3448`)
+
+Places carrier in `anim_list[3]` at extent origin + (250, 200). `n=5` → turtle (extent 1), `n=10` → dragon (extent 2), `n=11` → bird (extent 0). Sets `anix = 4`, `active_carrier = n`.
+
+---
+
 ## `setmood()` — Music State Machine
 
 Called on every state change, on player death, region cross, and periodically via `(daynight & 7) == 0`. Selects the active 4-track group from `track[]` (28 track pointers loaded by `read_score()`):
