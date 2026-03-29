@@ -1425,6 +1425,58 @@ Key entries:
 
 ---
 
+## Encounter Spawning System
+
+Sources: `fmain.c:2422–2472`, `fmain.c:3350–3392`.
+
+### Random encounter trigger (`fmain.c:2451–2472`)
+
+Every 32 ticks (`daynight & 31 == 0`), when **all** conditions met:
+- No actors on screen (`actors_on_screen == 0`)
+- No actors loading (`actors_loading == 0`)
+- No active carrier
+- Not in a forced encounter zone (`xtype < 50`)
+
+**Danger level**:
+- Indoor (`region_num > 7`): `5 + xtype`
+- Outdoor: `2 + xtype`
+
+**Spawn chance**: `rand64() <= danger_level`
+
+**Type selection**: base `encounter_type = rand4()` with overrides:
+- Swamp zone (`xtype == 7`): type 2 → 4 (snake replaces wraith)
+- Spider zone (`xtype == 8`): type forced to 6 (spider)
+- `xtype == 49`: type forced to 2 (wraith)
+
+### Encounter placement (`fmain.c:2422–2449`)
+
+Every 16 ticks (`daynight & 15 == 0`) when `encounter_number > 0`:
+- `set_loc()` picks random direction and distance (150 + rand64 pixels from hero)
+- Up to 10 attempts to find passable terrain via `proxcheck()`
+- Places encounters in `anim_list` slots 3–6 (max 4 active enemies)
+- Dead wraiths (race 2) are recycled immediately (slot reused)
+
+### `set_encounter()` (`fmain.c:3350–3392`)
+
+- DKnight (race 7): always spawns at fixed position (21635, 25762) instead of random
+- Others: random within `spread/2` of encounter origin, up to 15 attempts for passable terrain
+- **Mix flag** (`mixflag`): bit 1 (`& 2`) → race alternates within pair (even/odd encounter IDs); bit 2 (`& 4`) → weapon varies
+- Goal assignment: `ARCHER1/2` if weapon has bit 2 set (bow/wand), otherwise `ATTACK1/2` based on `cleverness`
+
+### Object distribution (`fmain2.c:1561–1583`)
+
+On first visit to a region (`dstobs[region_num] == 0`), 10 random treasure objects are scattered:
+```
+for each of 10 objects:
+    x = bitrand(0x3fff) + ((region_num & 1) * 0x4000)
+    y = bitrand(0x1fff) + ((region_num & 6) * 0x1000)
+    retry until px_to_im(x, y) == 0  (passable terrain)
+    ob_id = rand_treasure[bitrand(15)]
+```
+Region is then marked distributed (`dstobs[region_num] = 1`).
+
+---
+
 ## Key Bindings: Design and compatibility notes
 
 - The original game's `letter_list[]` is a flat array scanned linearly on each keypress — we replace this with a `HashMap` reverse index for O(1) lookup.
