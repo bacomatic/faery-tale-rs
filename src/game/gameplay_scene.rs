@@ -3066,5 +3066,9 @@ mod tests {
         // Inactive / container → None
         assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE,      RACE_NORMAL), None);
         assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL), None);
+        // Unknown type → default ogre sheet
+        assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
+        // Beggar → SetFig pass (not enemy)
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
     }
 }
