@@ -2320,11 +2320,31 @@ impl GameplayScene {
         }
 
         // --- Enemy NPCs from npc_table ---
-        // NPC npc_type maps to cfile index:
-        //   NPC_TYPE_HUMAN=1 → cfile 6 (ogre file is default enemy)
-        // Enemy blitting is best-effort: use npc_type as a rough cfile hint.
-        // SetFig NPCs (wizard, king, etc.) use a separate placement system.
-        let _ = npc_table; // reserved for future enemy sprite lookup
+        if let Some(ref table) = npc_table {
+            for npc in table.npcs.iter().filter(|n| n.active) {
+                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
+
+                let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
+
+                // Compute facing from NPC position relative to hero (NPCs always chase hero).
+                let dx = state.hero_x as i32 - npc.x as i32;
+                let dy = state.hero_y as i32 - npc.y as i32;
+                let npc_facing = if dx.abs() >= dy.abs() {
+                    if dx > 0 { 2u8 } else { 6u8 }  // E or W toward hero
+                } else {
+                    if dy > 0 { 4u8 } else { 0u8 }  // S or N toward hero
+                };
+
+                let frame_base = Self::facing_to_frame_base(npc_facing);
+                // Wrap with sheet.num_frames to handle short sheets (e.g. dragon=5).
+                let frame = (frame_base + (state.cycle as usize % 8)) % sheet.num_frames;
+
+                if let Some(fp) = sheet.frame_pixels(frame) {
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                }
+            }
+        }
     }
 
     /// Hit-test canvas position (mx, my) against the 8 compass arrow regions.
@@ -3070,5 +3090,57 @@ mod tests {
         assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
         // Beggar → SetFig pass (not enemy)
         assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
+    }
+
+    #[test]
+    fn test_enemy_npc_render_pass_writes_pixels() {
+        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+        use crate::game::game_state::GameState;
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+
+        // Build a minimal mock sprite sheet for cfile 6 (ogre).
+        // Pixel value 0 is non-transparent (only 31 is transparent).
+        let frames = 64;
+        let mock_sheet = SpriteSheet {
+            cfile_idx: 6,
+            pixels: vec![0u8; SPRITE_W * SPRITE_H * frames],
+            num_frames: frames,
+            frame_h: SPRITE_H,
+        };
+
+        // 18-element vec; only slot 6 is Some.
+        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+        sheets[6] = Some(mock_sheet);
+
+        let mut state = GameState::new();
+        // Hero at viewport center (map_x=0, map_y=0), hero at (8, 26) so rel=(0,0)
+        state.hero_x = 8;
+        state.hero_y = 26;
+
+        // Place an ORC near the hero but offset so it appears in viewport
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 80,  // rel_x = 80 - 0 - 8 = 72, well within 304px viewport
+            y: 80,  // rel_y = 80 - 0 - 26 = 54
+            vitality: 10,
+            gold: 5,
+            speed: 2,
+            active: true,
+        };
+
+        let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize]; // all transparent
+        GameplayScene::blit_actors_to_framebuf(
+            &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+        );
+
+        // At least some pixels in the ORC's blit area should have been overwritten to 0
+        let orc_area_start = (54 * MAP_DST_W as usize) + 72;
+        let has_written = framebuf[orc_area_start..orc_area_start + SPRITE_W]
+            .iter()
+            .any(|&p| p == 0);
+        assert!(has_written, "expected ORC pixels to be written to framebuf");
     }
 }
