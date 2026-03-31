@@ -51,6 +51,42 @@ pub fn spawn_encounter(region_zone_idx: usize, x: i16, y: i16) -> Npc {
     }
 }
 
+/// Spawn up to 4 enemies into free NPC slots, mirroring fmain.c group encounter logic.
+///
+/// Applies mixflag blending: each successive NPC alternates the low bit of race
+/// (`race = (base_race & 0xFE) | (i & 1)`), creating a mixed enemy group.
+/// Spawn positions fan out in 4 cardinal directions from the hero.
+///
+/// Returns the number of NPCs spawned.
+pub fn spawn_encounter_group(
+    table: &mut crate::game::npc::NpcTable,
+    region_zone_idx: usize,
+    hero_x: i16,
+    hero_y: i16,
+) -> usize {
+    const MAX_GROUP: usize = 4;
+    const OFFSETS: [(i16, i16); 4] = [(48, 0), (-48, 0), (0, 48), (0, -48)];
+
+    let base = spawn_encounter(region_zone_idx, hero_x, hero_y);
+    let base_race = base.race & 0xFE; // clear low bit for mixflag alternation
+
+    let mut spawned = 0;
+    for (i, (ox, oy)) in OFFSETS.iter().enumerate() {
+        if spawned >= MAX_GROUP {
+            break;
+        }
+        if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+            let mut npc = spawn_encounter(region_zone_idx, hero_x, hero_y);
+            npc.x = hero_x.saturating_add(*ox);
+            npc.y = hero_y.saturating_add(*oy);
+            npc.race = base_race | (i as u8 & 1); // mixflag: alternate even/odd
+            *slot = npc;
+            spawned += 1;
+        }
+    }
+    spawned
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +109,41 @@ mod tests {
         let r1 = should_encounter(12345);
         let r2 = should_encounter(12345);
         assert_eq!(r1, r2);
+    }
+
+    #[test]
+    fn test_spawn_encounter_group_fills_slots() {
+        use crate::game::npc::NpcTable;
+        let mut table = NpcTable { npcs: Default::default() };
+        let spawned = spawn_encounter_group(&mut table, 0, 100, 100);
+        assert_eq!(spawned, 4, "should fill 4 free slots");
+        let active: Vec<_> = table.npcs.iter().filter(|n| n.active).collect();
+        assert_eq!(active.len(), 4);
+    }
+
+    #[test]
+    fn test_spawn_encounter_group_respects_existing() {
+        use crate::game::npc::{NpcTable, Npc};
+        let mut table = NpcTable { npcs: Default::default() };
+        // Pre-fill 14 of the 16 slots
+        for i in 0..14 {
+            table.npcs[i] = Npc { active: true, ..Default::default() };
+        }
+        let spawned = spawn_encounter_group(&mut table, 0, 100, 100);
+        assert_eq!(spawned, 2, "should only fill the 2 remaining free slots");
+    }
+
+    #[test]
+    fn test_spawn_encounter_group_mixflag_alternates_race() {
+        use crate::game::npc::NpcTable;
+        let mut table = NpcTable { npcs: Default::default() };
+        spawn_encounter_group(&mut table, 0, 100, 100);
+        // With mixflag blending, consecutive enemies alternate race (even/odd LSB).
+        let active: Vec<_> = table.npcs.iter().filter(|n| n.active).collect();
+        assert!(active.len() >= 2);
+        // LSBs of race for first two should differ by 1 (0 and 1, or 2 and 3, etc.)
+        let r0 = active[0].race & 1;
+        let r1 = active[1].race & 1;
+        assert_ne!(r0, r1, "mixflag: consecutive NPCs should alternate race LSB");
     }
 }
