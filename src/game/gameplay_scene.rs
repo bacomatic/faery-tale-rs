@@ -505,17 +505,35 @@ impl GameplayScene {
             } else if !turtle_blocked {
                 // Check if movement was blocked by a door tile (terrain type 15).
                 // Mirrors fmain.c: proxcheck returns 15 → doorfind(xtest, ytest, 0).
-                // Use the hero's current position (before the blocked step) so that the
-                // proximity match in doorfind aligns with the doorlist src coordinates.
+                //
+                // Use the BLOCKED new position (new_x, new_y) as the reference — it is
+                // right at the door face, closer to the doorlist src coords than the hero's
+                // current position.  The original uses grid-aligned exact matching; we use
+                // nearest-within-radius to handle sub-pixel approach offsets.
+                //
+                // BUMP_PROX_X = 32  (2 × 16px X grid cell)
+                // BUMP_PROX_Y = 64  (2 × 32px Y grid cell)
+                // Using min_by_key picks the correct entry when multiple entries are in
+                // range (e.g. two doors 64px apart in Y — the nearest always wins).
                 let door_tile = self.map_world.as_ref().map_or(false, |world| {
                     collision::px_to_terrain_type(world, new_x as i32 + 4, new_y as i32 + 2) == 15
                         || collision::px_to_terrain_type(world, new_x as i32 - 4, new_y as i32 + 2) == 15
                 });
                 if door_tile {
-                    if let Some(door) = crate::game::doors::doorfind(
-                        &self.doors, self.state.region_num,
-                        self.state.hero_x, self.state.hero_y,
-                    ) {
+                    const BUMP_PROX_X: i32 = 32;
+                    const BUMP_PROX_Y: i32 = 64;
+                    let region = self.state.region_num;
+                    let nearest = self.doors.iter()
+                        .filter(|d| d.src_region == region
+                            && (d.src_x as i32 - new_x as i32).abs() < BUMP_PROX_X
+                            && (d.src_y as i32 - new_y as i32).abs() < BUMP_PROX_Y)
+                        .min_by_key(|d| {
+                            let dx = d.src_x as i32 - new_x as i32;
+                            let dy = d.src_y as i32 - new_y as i32;
+                            dx * dx + dy * dy
+                        })
+                        .copied();
+                    if let Some(door) = nearest {
                         self.state.region_num = door.dst_region;
                         self.state.hero_x = door.dst_x;
                         self.state.hero_y = door.dst_y;
