@@ -567,13 +567,27 @@ impl GameplayScene {
                     if let Some((idx, door)) = nearest {
                         if self.opened_doors.contains(&idx) {
                             // Phase 2 — door was opened; let the hero cross the threshold.
-                            let (ix, iy) = crate::game::doors::entry_spawn(&door);
-                            self.state.region_num = door.dst_region;
-                            self.state.hero_x = ix;
-                            self.state.hero_y = iy;
-                            self.opened_doors.remove(&idx);
-                            self.bumped_door = None;
-                            self.dlog(format!("door: walk-through to region {}", door.dst_region));
+                            // Mirrors fmain.c every-frame door scan sub-tile position check:
+                            //   Horizontal (type & 1): teleport only when hero_y & 0x10 == 0
+                            //     (upper half of tile — hero walks from lower half into upper).
+                            //   Vertical: teleport only when hero_x & 15 <= 6
+                            //     (within left portion of tile — hero walks in from right).
+                            // Use new_y/new_x (proposed blocked position) as the equivalent
+                            // of the original's post-move hero_y/hero_x.
+                            let sub_tile_ok = if door.door_type & 1 != 0 {
+                                new_y & 0x10 == 0  // horizontal: upper half
+                            } else {
+                                new_x & 15 <= 6    // vertical: left portion
+                            };
+                            if sub_tile_ok {
+                                let (ix, iy) = crate::game::doors::entry_spawn(&door);
+                                self.state.region_num = door.dst_region;
+                                self.state.hero_x = ix;
+                                self.state.hero_y = iy;
+                                self.opened_doors.remove(&idx);
+                                self.bumped_door = None;
+                                self.dlog(format!("door: walk-through to region {}", door.dst_region));
+                            }
                         } else {
                             // Phase 1 — attempt to open the door.
                             match key_req(door.door_type) {
