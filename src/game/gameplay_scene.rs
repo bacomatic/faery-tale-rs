@@ -2031,6 +2031,11 @@ impl GameplayScene {
                 use crate::game::game_state::WorldObject;
                 const TALISMAN_IDX: usize = 22;
 
+                if count == 0 {
+                    self.dlog("scattered 0 items".to_string());
+                    return;
+                }
+
                 let region = self.state.region_num;
                 let hero_x = self.state.hero_x as i32;
                 let hero_y = self.state.hero_y as i32;
