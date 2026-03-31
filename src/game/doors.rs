@@ -204,7 +204,8 @@ pub fn doorfind_nearest_by_bump_radius(
 /// Find a door at the outdoor position using the original's exact grid-aligned matching.
 /// Mirrors fmain.c binary-search Phase-2 match conditions:
 ///   xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0
-///   Horizontal (type & 1): d->xc1 <= xtest <= d->xc1+15 AND d->yc1 == ytest
+///   Horizontal (type & 1): d->xc1 <= xtest <= d->xc1+16 AND d->yc1 == ytest
+///     (+16 because the original skips only when d->xc1+16 < xtest, covering 2 tile cells)
 ///   Vertical            : d->xc1 == xtest               AND d->yc1 == ytest
 /// Sub-tile position guard (caller responsibility):
 ///   Horizontal: skip if hero_y & 0x10 != 0  (lower half → not yet through)
@@ -217,8 +218,9 @@ pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -
             continue;
         }
         let x_match = if door.door_type & 1 != 0 {
-            // horizontal door: xtest within the 16px tile cell starting at src_x
-            xtest >= door.src_x && xtest <= door.src_x.saturating_add(15)
+            // horizontal door: xtest in [src_x, src_x+16] — covers both tile cells of a 2-wide door.
+            // Original: `d->xc1 + 16 < xtest` → skip right, so match iff xtest <= xc1+16.
+            xtest >= door.src_x && xtest <= door.src_x.saturating_add(16)
         } else {
             // vertical door: exact x grid-alignment
             xtest == door.src_x
@@ -318,11 +320,13 @@ mod tests {
         assert!(doorfind(&table, 2, 0x6F, 0x7F).is_some()); // right edge of cell
         // hero_x & 0xFFF0 = 0x70 ≠ 0x60 → no match (vertical requires exact x)
         assert!(doorfind(&table, 2, 0x70, 0x60).is_none());
-        // HWOOD (horizontal, type & 1 == 1): xtest within [src_x, src_x+15] is acceptable.
+        // HWOOD (horizontal, type & 1 == 1): xtest in [src_x, src_x+16] covers both tile cells.
+        // Original: `d->xc1 + 16 < xtest` → skip, so match iff xtest <= src_x+16.
         let htable = [DoorEntry { src_region: 2, src_x: 0x60, src_y: 0x60, dst_region: 5, dst_x: 200, dst_y: 200, door_type: HWOOD }];
-        assert!(doorfind(&htable, 2, 0x60, 0x60).is_some());
-        assert!(doorfind(&htable, 2, 0x6F, 0x60).is_some()); // xtest=0x60, same cell
-        assert!(doorfind(&htable, 2, 0x70, 0x60).is_none()); // xtest=0x70 > src_x+15
+        assert!(doorfind(&htable, 2, 0x60, 0x60).is_some()); // xtest=0x60 = src_x → left cell
+        assert!(doorfind(&htable, 2, 0x6F, 0x60).is_some()); // xtest=0x60, still left cell
+        assert!(doorfind(&htable, 2, 0x70, 0x60).is_some()); // xtest=0x70 = src_x+16 → right cell ✓
+        assert!(doorfind(&htable, 2, 0x80, 0x60).is_none()); // xtest=0x80 > src_x+16 → no match
     }
 
     #[test]
