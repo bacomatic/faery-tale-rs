@@ -502,6 +502,28 @@ impl GameplayScene {
                     );
                     self.state.update_safe_spawn(terrain);
                 }
+            } else if !turtle_blocked {
+                // Check if movement was blocked by a door tile (terrain type 15).
+                // Mirrors fmain.c: proxcheck returns 15 → doorfind(xtest, ytest, 0).
+                // Use the hero's current position (before the blocked step) so that the
+                // proximity match in doorfind aligns with the doorlist src coordinates.
+                let door_tile = self.map_world.as_ref().map_or(false, |world| {
+                    collision::px_to_terrain_type(world, new_x as i32 + 4, new_y as i32 + 2) == 15
+                        || collision::px_to_terrain_type(world, new_x as i32 - 4, new_y as i32 + 2) == 15
+                });
+                if door_tile {
+                    if let Some(door) = crate::game::doors::doorfind(
+                        &self.doors, self.state.region_num,
+                        self.state.hero_x, self.state.hero_y,
+                    ) {
+                        self.state.region_num = door.dst_region;
+                        self.state.hero_x = door.dst_x;
+                        self.state.hero_y = door.dst_y;
+                        self.dlog(format!("door: bumped transition to {}", door.dst_region));
+                    } else {
+                        self.messages.push("It's locked.");
+                    }
+                }
             }
 
             let facing: u8 = match dir {
@@ -1214,11 +1236,15 @@ impl GameplayScene {
                 let key_slot = 16 + idx as usize;
                 if self.state.stuff()[key_slot] == 0 {
                     self.messages.push("No such key.".to_string());
-                } else if crate::game::doors::doorfind(
-                    &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
+                } else if let Some(door) = crate::game::doors::doorfind(
+                    &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y)
                 {
                     self.state.stuff_mut()[key_slot] -= 1;
                     self.messages.push("Door opened.".to_string());
+                    self.state.region_num = door.dst_region;
+                    self.state.hero_x = door.dst_x;
+                    self.state.hero_y = door.dst_y;
+                    self.dlog(format!("door: key transition to {}", door.dst_region));
                 } else {
                     self.messages.push("Key didn't fit.".to_string());
                 }
