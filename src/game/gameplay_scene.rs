@@ -529,14 +529,23 @@ impl GameplayScene {
                 // BUMP_PROX_Y = 64  (2 × 32px Y grid cell)
                 // Using min_by_key picks the correct entry when multiple entries are in
                 // range (e.g. two doors 64px apart in Y — the nearest always wins).
-                let door_tile = self.map_world.as_ref().map_or(false, |world| {
-                    collision::px_to_terrain_type(world, new_x as i32 + 4, new_y as i32 + 2) == 15
-                        || collision::px_to_terrain_type(world, new_x as i32 - 4, new_y as i32 + 2) == 15
-                });
+                // Identify which probe point found terrain 15 and use IT (not new_x/new_y) for
+                // the door lookup.  new_x is the hero's pre-move position, which can be one
+                // 16-px tile-cell west of the door's dst_x (entry_spawn places hero at dst_x-1).
+                // Grid-aligning new_x gives 0x_bc0 instead of 0x_bd0 — off by one cell.
+                // The probe point IS inside the door tile, so (probe_x & 0xFFF0) == dst_x.
+                let right_t = self.map_world.as_ref().map_or(0, |w|
+                    collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2));
+                let left_t  = self.map_world.as_ref().map_or(0, |w|
+                    collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2));
+                let door_tile = right_t == 15 || left_t == 15;
                 if door_tile {
+                    // Choose the probe that hit terrain 15; its grid-aligned coords identify the door.
+                    let probe_x = if right_t == 15 { new_x.wrapping_add(4) } else { new_x.wrapping_sub(4) };
+                    let probe_y = new_y.wrapping_add(2);
                     if self.state.region_num >= 8 {
-                        // Indoor exit: match blocked position against grid-aligned dst coords.
-                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, new_x, new_y) {
+                        // Indoor exit: match probe against grid-aligned dst coords.
+                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, probe_x, probe_y) {
                             let (ex, ey) = crate::game::doors::exit_spawn(&door);
                             let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
                             self.state.region_num = outdoor_region;
