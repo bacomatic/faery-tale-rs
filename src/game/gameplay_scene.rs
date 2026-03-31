@@ -2338,7 +2338,7 @@ impl GameplayScene {
 
                 let frame_base = Self::facing_to_frame_base(npc_facing);
                 // Wrap with sheet.num_frames to handle short sheets (e.g. dragon=5).
-                let frame = (frame_base + (state.cycle as usize % 8)) % sheet.num_frames;
+                let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
