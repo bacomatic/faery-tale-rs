@@ -2213,6 +2213,22 @@ impl GameplayScene {
         (rel_x, rel_y)
     }
 
+    /// Map a facing direction (0=N…7=NW) to the sprite sheet frame base.
+    /// Mirrors the diroffs[] group mapping from fmain.c:
+    ///   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31.
+    fn facing_to_frame_base(facing: u8) -> usize {
+        match facing {
+            0 => 16, // N  → northwalk
+            1 => 24, // NE → eastwalk
+            2 => 24, // E  → eastwalk
+            3 => 0,  // SE → southwalk
+            4 => 0,  // S  → southwalk
+            5 => 8,  // SW → westwalk
+            6 => 8,  // W  → westwalk
+            _ => 16, // NW → northwalk
+        }
+    }
+
     /// Blit all visible actors (hero + enemy NPCs) onto the map framebuf (sprite-104).
     /// Called immediately after mr.compose() so actors appear on top of tiles.
     fn blit_actors_to_framebuf(
@@ -2243,16 +2259,7 @@ impl GameplayScene {
                 //   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31
                 // Original diroffs[] groups: NW+N→north, NE+E→east, SE+S→south, SW+W→west.
                 // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW.
-                let frame_base: usize = match hero_facing {
-                    0 => 16, // N  → northwalk
-                    1 => 24, // NE → eastwalk
-                    2 => 24, // E  → eastwalk
-                    3 => 0,  // SE → southwalk
-                    4 => 0,  // S  → southwalk
-                    5 => 8,  // SW → westwalk
-                    6 => 8,  // W  → westwalk
-                    _ => 16, // NW → northwalk
-                };
+                let frame_base = Self::facing_to_frame_base(hero_facing);
                 // Walking: cycle through 8 frames; still: fmain.c uses diroffs[d]+1.
                 let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
                 let frame = frame_base + anim_offset;
@@ -2998,5 +3005,23 @@ impl Scene for GameplayScene {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_facing_to_frame_base() {
+        // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
+        assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(3), 0);  // SE → southwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(4), 0);  // S  → southwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
+        assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
     }
 }
