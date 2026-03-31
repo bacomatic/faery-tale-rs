@@ -64,8 +64,113 @@ pub fn key_req(door_type: u8) -> KeyReq {
     }
 }
 
-/// Proximity in pixels for walk-on door detection (outdoor src coord matching).
-pub const DOOR_PROXIMITY: u16 = 8;
+/// Tile replacement for an opened door, mirroring `open_list[17]` in fmain.c.
+/// `new1` replaces the main cell; `new2` (if non-zero) replaces a secondary cell
+/// in the direction encoded by `above`:
+///   1 = above (imx, imy-1)
+///   2 = right (imx+1, imy)          ← most common
+///   3 = left  (imx-1, imy)
+///   4 = multi: (imx,imy-1)=87, (imx+1,imy)=86, (imx+1,imy-1)=88
+///   other (used in GOLDEN 3-wide): right=new2, right+1=above_val
+#[derive(Debug, Clone, Copy)]
+pub struct DoorTileReplacement {
+    pub new1: u8,
+    pub new2: u8,
+    pub above: u8,
+}
+
+/// Return the tile replacement spec for a door type.
+/// Derived from open_list[17] in fmain.c by matching door type constants to entries.
+/// Returns None for types whose tile IDs are unknown or region-specific.
+pub fn door_tile_replacement(door_type: u8) -> Option<DoorTileReplacement> {
+    // open_list entries (door_id, map_id, new1, new2, above, keytype):
+    //  {120, 360, 125, 126, 2, NOKEY}  HWOOD
+    //  {122, 360, 127,   0, 0, NOKEY}  VWOOD
+    //  {64,  360, 123, 124, 2, GREEN}  HSTONE
+    //  {64,  280, 124, 125, 2, GREY}   HSTON2
+    //  {77,  280, 126,   0, 0, GREY}   VSTON2
+    //  {82,  480,  84,  85, 2, KBLUE}  CRYST
+    //  {64,  480, 105, 106, 2, GREEN}  DESERT/OASIS
+    //  {128, 240, 154, 155, 1, WHITE}  MARBLE
+    //  {39,  680,  41,  42, 2, GOLD}   BLACK horizontal (HGATE)
+    //  {25,  680,  27,  26, 3, GOLD}   BLACK vertical (VGATE, above=3=left)
+    //  {114, 760, 116, 117, 1, RED}    SECRET
+    //  {187, 800,  76,  77, 2, NOKEY}  LOG horizontal
+    //  {73,  720,  75,   0, 0, NOKEY}  STAIR
+    //  {165, 800,  85,  86, 4, GREEN}  HCITY/VCITY (multi-tile gate)
+    //  {210, 840, 208, 209, 2, NOKEY}  CAVE
+    match door_type {
+        HWOOD  => Some(DoorTileReplacement { new1: 125, new2: 126, above: 2 }),
+        VWOOD  => Some(DoorTileReplacement { new1: 127, new2:   0, above: 0 }),
+        HSTONE => Some(DoorTileReplacement { new1: 123, new2: 124, above: 2 }),
+        VSTONE => None, // tile ID unknown; no open_list entry observed
+        HCITY | VCITY => Some(DoorTileReplacement { new1:  85, new2:  86, above: 4 }),
+        CRYST  => Some(DoorTileReplacement { new1:  84, new2:  85, above: 2 }),
+        SECRET => Some(DoorTileReplacement { new1: 116, new2: 117, above: 1 }),
+        BLACK  => Some(DoorTileReplacement { new1:  41, new2:  42, above: 2 }), // horizontal variant
+        MARBLE => Some(DoorTileReplacement { new1: 154, new2: 155, above: 1 }),
+        LOG    => Some(DoorTileReplacement { new1:  76, new2:  77, above: 2 }),
+        HSTON2 => Some(DoorTileReplacement { new1: 124, new2: 125, above: 2 }),
+        VSTON2 => Some(DoorTileReplacement { new1: 126, new2:   0, above: 0 }),
+        STAIR  => Some(DoorTileReplacement { new1:  75, new2:   0, above: 0 }),
+        DESERT => Some(DoorTileReplacement { new1: 105, new2: 106, above: 2 }),
+        CAVE   => Some(DoorTileReplacement { new1: 208, new2: 209, above: 2 }),
+        _      => None,
+    }
+}
+
+/// Apply the open-door tile replacement to `world`'s sector_mem.
+/// `probe_x, probe_y` are the pixel coordinates that detected terrain-15 (from the
+/// bump path's right_t/left_t probes). Mirrors fmain.c doorfind() tile-write logic:
+///   1. Walk left up to 2×16px while still terrain-15 (find leftmost tile cell).
+///   2. Walk down 1×32px if terrain-15 below (for doors whose origin is above).
+///   3. Write new1 to (imx, imy); write new2 to secondary cell per above direction.
+pub fn apply_door_tile_replacement(
+    world: &mut crate::game::world_data::WorldData,
+    door_type: u8,
+    probe_x: i32,
+    probe_y: i32,
+) {
+    use crate::game::collision::px_to_terrain_type;
+    let rep = match door_tile_replacement(door_type) {
+        Some(r) => r,
+        None => return,
+    };
+
+    // Align to tile origin (mirrors doorfind grid-align steps).
+    let mut px = probe_x;
+    let py = probe_y;
+    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 { px -= 16; }
+    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 { px -= 16; }
+    // Note: original also checks y+32; uncommon in practice for outdoor doors.
+    // (The y+32 step handles doors whose reference coord is at the upper tile.)
+
+    let imx = (px >> 4) as usize;
+    let imy = (py >> 5) as usize;
+
+    world.set_tile_at_image(imx, imy, rep.new1);
+
+    if rep.new2 != 0 {
+        match rep.above {
+            1 => { world.set_tile_at_image(imx,     imy.saturating_sub(1), rep.new2); }
+            2 => { world.set_tile_at_image(imx + 1, imy, rep.new2); }
+            3 => { world.set_tile_at_image(imx.saturating_sub(1), imy, rep.new2); }
+            4 => {
+                // Multi-tile gate (HCITY/VCITY): hardcoded 4-cell pattern from fmain.c.
+                world.set_tile_at_image(imx,     imy.saturating_sub(1), 87);
+                world.set_tile_at_image(imx + 1, imy,                   86);
+                world.set_tile_at_image(imx + 1, imy.saturating_sub(1), 88);
+            }
+            _ => {
+                // 3-wide door (e.g. GOLDEN gate): right=new2, right+1=above val.
+                world.set_tile_at_image(imx + 1, imy, rep.new2);
+                world.set_tile_at_image(imx + 2, imy, rep.above);
+            }
+        }
+    }
+}
+
+
 
 /// Bump-detection search window (pixels). Mirrors the original's grid-aligned exact match
 /// while tolerating sub-pixel approach offsets.
@@ -95,6 +200,10 @@ pub fn doorfind_nearest_by_bump_radius(
         })
         .map(|(i, d)| (i, *d))
 }
+
+/// Walk-on proximity radius for outdoor door entry (pixels).
+/// Original fmain.c uses 8px (~half a tile) for the walk-on scan.
+pub const DOOR_PROXIMITY: u16 = 8;
 
 pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -> Option<DoorEntry> {
     for door in table {

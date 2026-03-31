@@ -126,6 +126,21 @@ impl WorldData {
         self.sector_mem[(base + ly * 16 + lx).min(32767)]
     }
 
+    /// Write a tile into sector_mem by image-space coordinates.
+    /// imx = pixel_x / 16, imy = pixel_y / 32 (after any indoor Y offset adjustment).
+    /// Mirrors `*(mapxy(x, y)) = tile` in fmain.c doorfind().
+    pub fn set_tile_at_image(&mut self, imx: usize, imy: usize, tile: u8) {
+        let xs = imx >> 4;
+        let ys = imy >> 3;
+        let local_x = imx & 15;
+        let local_y = imy & 7;
+        let sec_num = self.sector_at(xs, ys) as usize;
+        let offset = sec_num * 128 + local_y * 16 + local_x;
+        if offset < 32768 {
+            self.sector_mem[offset] = tile;
+        }
+    }
+
     /// Decode a 32-color Amiga palette from 64 bytes at `palette_block` in the ADF.
     /// Each entry is a big-endian u16 color register (0x0RGB, 12-bit).
     ///

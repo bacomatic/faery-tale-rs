@@ -557,10 +557,14 @@ impl GameplayScene {
                 let left_t  = self.map_world.as_ref().map_or(0, |w|
                     collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2));
                 let door_tile = right_t == 15 || left_t == 15;
+                // probe_x: the probe point that found terrain-15 (used for tile-origin alignment).
+                let probe_x = if right_t == 15 { new_x as i32 + 4 } else { new_x as i32 - 4 };
+                let probe_y = new_y as i32 + 2;
                 if door_tile && self.state.region_num < 8 {
                     // Indoor exit is handled by the walk-on branch above (mirrors fmain.c: door
                     // scan runs on hero_x/hero_y after every successful move).
-                    use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq};
+                    use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq,
+                                             apply_door_tile_replacement};
                     let region = self.state.region_num;
                     let nearest = doorfind_nearest_by_bump_radius(
                         &self.doors, region, new_x, new_y);
@@ -593,6 +597,9 @@ impl GameplayScene {
                             match key_req(door.door_type) {
                                 KeyReq::NoKey => {
                                     // Freely-opening doors (wood, city gates, caves, stairs).
+                                    if let Some(ref mut world) = self.map_world {
+                                        apply_door_tile_replacement(world, door.door_type, probe_x, probe_y);
+                                    }
                                     self.messages.push("It opened.");
                                     self.opened_doors.insert(idx);
                                     self.bumped_door = None;
@@ -609,6 +616,9 @@ impl GameplayScene {
                                     // DESERT/oasis: silently blocks if < 5 gold statues
                                     // (original fmain.c: `if (d->type == DESERT && stuff[STATBASE] < 5) break;`)
                                     if self.state.stuff()[25] >= 5 {
+                                        if let Some(ref mut world) = self.map_world {
+                                            apply_door_tile_replacement(world, door.door_type, probe_x, probe_y);
+                                        }
                                         self.messages.push("It opened.");
                                         self.opened_doors.insert(idx);
                                         self.bumped_door = None;
@@ -1335,7 +1345,8 @@ impl GameplayScene {
             }
             MenuAction::TryKey(idx) => {
                 use crate::game::menu::MenuMode;
-                use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq};
+                use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq,
+                                         apply_door_tile_replacement};
                 // idx: 0=GOLD, 1=GREEN, 2=KBLUE, 3=RED, 4=GREY, 5=WHITE → stuff[16+idx]
                 let key_slot_stuff = 16 + idx as usize;
                 if self.state.stuff()[key_slot_stuff] == 0 {
@@ -1350,8 +1361,16 @@ impl GameplayScene {
                         let req = key_req(door.door_type);
                         let key_matches = matches!(req, KeyReq::Key(slot) if slot as usize == idx as usize);
                         if key_matches {
-                            // Consume key, open door (Phase 1 only — player must walk through).
+                            // Consume key, apply tile replacement, open door
+                            // (Phase 1 only — player must walk through).
                             self.state.stuff_mut()[key_slot_stuff] -= 1;
+                            if let Some(ref mut world) = self.map_world {
+                                // Use hero position as probe; key is used while standing at door.
+                                apply_door_tile_replacement(
+                                    world, door.door_type,
+                                    self.state.hero_x as i32, self.state.hero_y as i32,
+                                );
+                            }
                             self.messages.push("It opened.".to_string());
                             self.opened_doors.insert(door_idx);
                             self.bumped_door = None;
