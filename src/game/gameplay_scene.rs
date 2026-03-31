@@ -534,27 +534,41 @@ impl GameplayScene {
                         || collision::px_to_terrain_type(world, new_x as i32 - 4, new_y as i32 + 2) == 15
                 });
                 if door_tile {
-                    const BUMP_PROX_X: i32 = 32;
-                    const BUMP_PROX_Y: i32 = 64;
-                    let region = self.state.region_num;
-                    let nearest = self.doors.iter()
-                        .filter(|d| d.src_region == region
-                            && (d.src_x as i32 - new_x as i32).abs() < BUMP_PROX_X
-                            && (d.src_y as i32 - new_y as i32).abs() < BUMP_PROX_Y)
-                        .min_by_key(|d| {
-                            let dx = d.src_x as i32 - new_x as i32;
-                            let dy = d.src_y as i32 - new_y as i32;
-                            dx * dx + dy * dy
-                        })
-                        .copied();
-                    if let Some(door) = nearest {
-                        let (ix, iy) = crate::game::doors::entry_spawn(&door);
-                        self.state.region_num = door.dst_region;
-                        self.state.hero_x = ix;
-                        self.state.hero_y = iy;
-                        self.dlog(format!("door: bumped transition to {}", door.dst_region));
+                    if self.state.region_num >= 8 {
+                        // Indoor exit: match blocked position against grid-aligned dst coords.
+                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, new_x, new_y) {
+                            let (ex, ey) = crate::game::doors::exit_spawn(&door);
+                            let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
+                            self.state.region_num = outdoor_region;
+                            self.state.hero_x = ex;
+                            self.state.hero_y = ey;
+                            self.dlog(format!("door: indoor bump exit to region {} ({}, {})", outdoor_region, ex, ey));
+                        } else {
+                            self.messages.push("It's locked.");
+                        }
                     } else {
-                        self.messages.push("It's locked.");
+                        const BUMP_PROX_X: i32 = 32;
+                        const BUMP_PROX_Y: i32 = 64;
+                        let region = self.state.region_num;
+                        let nearest = self.doors.iter()
+                            .filter(|d| d.src_region == region
+                                && (d.src_x as i32 - new_x as i32).abs() < BUMP_PROX_X
+                                && (d.src_y as i32 - new_y as i32).abs() < BUMP_PROX_Y)
+                            .min_by_key(|d| {
+                                let dx = d.src_x as i32 - new_x as i32;
+                                let dy = d.src_y as i32 - new_y as i32;
+                                dx * dx + dy * dy
+                            })
+                            .copied();
+                        if let Some(door) = nearest {
+                            let (ix, iy) = crate::game::doors::entry_spawn(&door);
+                            self.state.region_num = door.dst_region;
+                            self.state.hero_x = ix;
+                            self.state.hero_y = iy;
+                            self.dlog(format!("door: bumped transition to {}", door.dst_region));
+                        } else {
+                            self.messages.push("It's locked.");
+                        }
                     }
                 }
             }
