@@ -825,7 +825,6 @@ impl DebugConsole {
             Some(name) => {
                 let npc_type = match name {
                     "orc"      => Some(NPC_TYPE_ORC),
-                    "human"    => Some(NPC_TYPE_HUMAN),
                     "ghost"    => Some(NPC_TYPE_GHOST),
                     "skeleton" => Some(NPC_TYPE_SKELETON),
                     "wraith"   => Some(NPC_TYPE_WRAITH),
