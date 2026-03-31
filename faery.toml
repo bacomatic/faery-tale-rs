@@ -47,15 +47,693 @@ spawn  = "tambry"
 # Item cost table (jtrans[] from original). Index = item slot, value = gold cost. 0 = not for sale.
 costs = [5, 10, 15, 20, 25, 30, 50, 100, 30, 50, 80, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-# Door table schema — entries will go here once ADF analysis is complete.
-# Each entry maps a source region+position to a destination region+position.
-# [[doors]]
-# src_region = 0
-# src_x = 0
-# src_y = 0
-# dst_region = 0
-# dst_x = 0
-# dst_y = 0
+[[doors]]
+src_region = 4
+src_x      = 4464
+src_y      = 20576
+dst_region = 8
+dst_x      = 10352
+dst_y      = 35680
+
+[[doors]]
+src_region = 4
+src_x      = 4464
+src_y      = 20576
+dst_region = 8
+dst_x      = 10352
+dst_y      = 35680
+
+[[doors]]
+src_region = 4
+src_x      = 4464
+src_y      = 20576
+dst_region = 8
+dst_x      = 10352
+dst_y      = 35680
+
+[[doors]]
+src_region = 4
+src_x      = 4464
+src_y      = 20576
+dst_region = 8
+dst_x      = 10352
+dst_y      = 35680
+
+[[doors]]
+src_region = 0
+src_x      = 5008
+src_y      = 7008
+dst_region = 9
+dst_x      = 6528
+dst_y      = 35936
+
+[[doors]]
+src_region = 6
+src_x      = 6000
+src_y      = 27296
+dst_region = 8
+dst_x      = 8816
+dst_y      = 38560
+
+[[doors]]
+src_region = 6
+src_x      = 6512
+src_y      = 25248
+dst_region = 8
+dst_x      = 8048
+dst_y      = 38560
+
+[[doors]]
+src_region = 4
+src_x      = 6816
+src_y      = 19360
+dst_region = 8
+dst_x      = 5024
+dst_y      = 38304
+
+[[doors]]
+src_region = 4
+src_x      = 6816
+src_y      = 19552
+dst_region = 8
+dst_x      = 5024
+dst_y      = 38752
+
+[[doors]]
+src_region = 4
+src_x      = 6944
+src_y      = 19296
+dst_region = 8
+dst_x      = 5920
+dst_y      = 38240
+
+[[doors]]
+src_region = 4
+src_x      = 7040
+src_y      = 19328
+dst_region = 8
+dst_x      = 5504
+dst_y      = 38272
+
+[[doors]]
+src_region = 4
+src_x      = 7040
+src_y      = 19520
+dst_region = 8
+dst_x      = 5504
+dst_y      = 38720
+
+[[doors]]
+src_region = 2
+src_x      = 7792
+src_y      = 15200
+dst_region = 8
+dst_x      = 10368
+dst_y      = 40032
+
+[[doors]]
+src_region = 2
+src_x      = 9344
+src_y      = 13216
+dst_region = 8
+dst_x      = 11904
+dst_y      = 36256
+
+[[doors]]
+src_region = 8
+src_x      = 10592
+src_y      = 34656
+dst_region = 8
+dst_x      = 11008
+dst_y      = 37568
+
+[[doors]]
+src_region = 8
+src_x      = 11008
+src_y      = 37568
+dst_region = 9
+dst_x      = 10592
+dst_y      = 34688
+
+[[doors]]
+src_region = 6
+src_x      = 11264
+src_y      = 29024
+dst_region = 8
+dst_x      = 10992
+dst_y      = 37728
+
+[[doors]]
+src_region = 2
+src_x      = 12144
+src_y      = 11872
+dst_region = 8
+dst_x      = 12672
+dst_y      = 39520
+
+[[doors]]
+src_region = 6
+src_x      = 12144
+src_y      = 25504
+dst_region = 8
+dst_x      = 7280
+dst_y      = 38560
+
+[[doors]]
+src_region = 2
+src_x      = 12672
+src_y      = 14528
+dst_region = 8
+dst_x      = 10112
+dst_y      = 39104
+
+[[doors]]
+src_region = 4
+src_x      = 13424
+src_y      = 19296
+dst_region = 9
+dst_x      = 1136
+dst_y      = 36576
+
+[[doors]]
+src_region = 0
+src_x      = 15840
+src_y      = 7104
+dst_region = 8
+dst_x      = 12000
+dst_y      = 37824
+
+[[doors]]
+src_region = 0
+src_x      = 15872
+src_y      = 7104
+dst_region = 8
+dst_x      = 12032
+dst_y      = 37824
+
+[[doors]]
+src_region = 3
+src_x      = 17008
+src_y      = 9568
+dst_region = 8
+dst_x      = 11904
+dst_y      = 39520
+
+[[doors]]
+src_region = 3
+src_x      = 17024
+src_y      = 15296
+dst_region = 8
+dst_x      = 10624
+dst_y      = 39104
+
+[[doors]]
+src_region = 5
+src_x      = 17888
+src_y      = 21376
+dst_region = 8
+dst_x      = 9680
+dst_y      = 38528
+
+[[doors]]
+src_region = 3
+src_x      = 18304
+src_y      = 12224
+dst_region = 8
+dst_x      = 9600
+dst_y      = 39104
+
+[[doors]]
+src_region = 7
+src_x      = 18528
+src_y      = 26176
+dst_region = 8
+dst_x      = 7264
+dst_y      = 39488
+
+[[doors]]
+src_region = 7
+src_x      = 18576
+src_y      = 26272
+dst_region = 8
+dst_x      = 7312
+dst_y      = 39584
+
+[[doors]]
+src_region = 5
+src_x      = 18784
+src_y      = 23360
+dst_region = 8
+dst_x      = 8800
+dst_y      = 39488
+
+[[doors]]
+src_region = 5
+src_x      = 18832
+src_y      = 23456
+dst_region = 8
+dst_x      = 8848
+dst_y      = 39072
+
+[[doors]]
+src_region = 3
+src_x      = 18848
+src_y      = 15552
+dst_region = 8
+dst_x      = 2976
+dst_y      = 33472
+
+[[doors]]
+src_region = 3
+src_x      = 18896
+src_y      = 15808
+dst_region = 8
+dst_x      = 3024
+dst_y      = 33984
+
+[[doors]]
+src_region = 3
+src_x      = 18896
+src_y      = 15872
+dst_region = 8
+dst_x      = 3024
+dst_y      = 34048
+
+[[doors]]
+src_region = 3
+src_x      = 18960
+src_y      = 15488
+dst_region = 8
+dst_x      = 3344
+dst_y      = 33408
+
+[[doors]]
+src_region = 3
+src_x      = 18960
+src_y      = 15680
+dst_region = 8
+dst_x      = 3856
+dst_y      = 33600
+
+[[doors]]
+src_region = 3
+src_x      = 18992
+src_y      = 15808
+dst_region = 8
+dst_x      = 3632
+dst_y      = 34240
+
+[[doors]]
+src_region = 3
+src_x      = 19040
+src_y      = 16000
+dst_region = 8
+dst_x      = 4192
+dst_y      = 34176
+
+[[doors]]
+src_region = 3
+src_x      = 19056
+src_y      = 15488
+dst_region = 8
+dst_x      = 4976
+dst_y      = 33408
+
+[[doors]]
+src_region = 3
+src_x      = 19072
+src_y      = 15680
+dst_region = 8
+dst_x      = 4496
+dst_y      = 33600
+
+[[doors]]
+src_region = 3
+src_x      = 19568
+src_y      = 12896
+dst_region = 8
+dst_x      = 9600
+dst_y      = 40032
+
+[[doors]]
+src_region = 5
+src_x      = 19808
+src_y      = 21568
+dst_region = 8
+dst_x      = 8032
+dst_y      = 40000
+
+[[doors]]
+src_region = 5
+src_x      = 19856
+src_y      = 17280
+dst_region = 8
+dst_x      = 12416
+dst_y      = 36224
+
+[[doors]]
+src_region = 5
+src_x      = 19856
+src_y      = 21664
+dst_region = 8
+dst_x      = 8080
+dst_y      = 40096
+
+[[doors]]
+src_region = 7
+src_x      = 19936
+src_y      = 27520
+dst_region = 8
+dst_x      = 10704
+dst_y      = 38528
+
+[[doors]]
+src_region = 5
+src_x      = 21344
+src_y      = 22592
+dst_region = 8
+dst_x      = 8800
+dst_y      = 38976
+
+[[doors]]
+src_region = 5
+src_x      = 21392
+src_y      = 22688
+dst_region = 8
+dst_x      = 8848
+dst_y      = 39072
+
+[[doors]]
+src_region = 5
+src_x      = 21600
+src_y      = 17728
+dst_region = 8
+dst_x      = 7264
+dst_y      = 38976
+
+[[doors]]
+src_region = 7
+src_x      = 21616
+src_y      = 25728
+dst_region = 8
+dst_x      = 11392
+dst_y      = 36224
+
+[[doors]]
+src_region = 5
+src_x      = 21648
+src_y      = 17824
+dst_region = 8
+dst_x      = 7312
+dst_y      = 39072
+
+[[doors]]
+src_region = 5
+src_x      = 22000
+src_y      = 21216
+dst_region = 8
+dst_x      = 5856
+dst_y      = 33760
+
+[[doors]]
+src_region = 5
+src_x      = 22208
+src_y      = 21440
+dst_region = 8
+dst_x      = 7104
+dst_y      = 33984
+
+[[doors]]
+src_region = 5
+src_x      = 22208
+src_y      = 21568
+dst_region = 8
+dst_x      = 6592
+dst_y      = 34112
+
+[[doors]]
+src_region = 5
+src_x      = 22256
+src_y      = 20896
+dst_region = 8
+dst_x      = 6640
+dst_y      = 33440
+
+[[doors]]
+src_region = 5
+src_x      = 22272
+src_y      = 21056
+dst_region = 8
+dst_x      = 7664
+dst_y      = 33600
+
+[[doors]]
+src_region = 5
+src_x      = 22288
+src_y      = 21568
+dst_region = 8
+dst_x      = 7184
+dst_y      = 34368
+
+[[doors]]
+src_region = 5
+src_x      = 22320
+src_y      = 21248
+dst_region = 8
+dst_x      = 6736
+dst_y      = 33792
+
+[[doors]]
+src_region = 5
+src_x      = 22320
+src_y      = 21376
+dst_region = 8
+dst_x      = 7216
+dst_y      = 33920
+
+[[doors]]
+src_region = 5
+src_x      = 22352
+src_y      = 20896
+dst_region = 8
+dst_x      = 7264
+dst_y      = 33440
+
+[[doors]]
+src_region = 5
+src_x      = 22352
+src_y      = 21088
+dst_region = 8
+dst_x      = 8272
+dst_y      = 33632
+
+[[doors]]
+src_region = 5
+src_x      = 22368
+src_y      = 21440
+dst_region = 8
+dst_x      = 8288
+dst_y      = 33984
+
+[[doors]]
+src_region = 5
+src_x      = 22368
+src_y      = 21568
+dst_region = 8
+dst_x      = 7776
+dst_y      = 34112
+
+[[doors]]
+src_region = 5
+src_x      = 22624
+src_y      = 23872
+dst_region = 8
+dst_x      = 7264
+dst_y      = 39488
+
+[[doors]]
+src_region = 5
+src_x      = 22672
+src_y      = 23968
+dst_region = 8
+dst_x      = 7312
+dst_y      = 40096
+
+[[doors]]
+src_region = 3
+src_x      = 22720
+src_y      = 11872
+dst_region = 9
+dst_x      = 2752
+dst_y      = 34912
+
+[[doors]]
+src_region = 7
+src_x      = 22880
+src_y      = 28480
+dst_region = 8
+dst_x      = 8800
+dst_y      = 39488
+
+[[doors]]
+src_region = 7
+src_x      = 22928
+src_y      = 28576
+dst_region = 8
+dst_x      = 8848
+dst_y      = 40096
+
+[[doors]]
+src_region = 7
+src_x      = 22944
+src_y      = 26464
+dst_region = 8
+dst_x      = 10912
+dst_y      = 35680
+
+[[doors]]
+src_region = 5
+src_x      = 23008
+src_y      = 22656
+dst_region = 8
+dst_x      = 10192
+dst_y      = 38528
+
+[[doors]]
+src_region = 1
+src_x      = 24176
+src_y      = 6752
+dst_region = 8
+dst_x      = 9600
+dst_y      = 39520
+
+[[doors]]
+src_region = 3
+src_x      = 24256
+src_y      = 10592
+dst_region = 9
+dst_x      = 4544
+dst_y      = 35680
+
+[[doors]]
+src_region = 7
+src_x      = 24672
+src_y      = 29248
+dst_region = 8
+dst_x      = 6496
+dst_y      = 40000
+
+[[doors]]
+src_region = 7
+src_x      = 24720
+src_y      = 29344
+dst_region = 8
+dst_x      = 6544
+dst_y      = 40096
+
+[[doors]]
+src_region = 3
+src_x      = 24816
+src_y      = 12992
+dst_region = 8
+dst_x      = 9712
+dst_y      = 35776
+
+[[doors]]
+src_region = 1
+src_x      = 25792
+src_y      = 6240
+dst_region = 9
+dst_x      = 960
+dst_y      = 34400
+
+[[doors]]
+src_region = 5
+src_x      = 25952
+src_y      = 23872
+dst_region = 8
+dst_x      = 8032
+dst_y      = 39488
+
+[[doors]]
+src_region = 5
+src_x      = 26000
+src_y      = 23968
+dst_region = 8
+dst_x      = 8080
+dst_y      = 39072
+
+[[doors]]
+src_region = 1
+src_x      = 26048
+src_y      = 6688
+dst_region = 9
+dst_x      = 1200
+dst_y      = 34880
+
+[[doors]]
+src_region = 3
+src_x      = 26224
+src_y      = 10848
+dst_region = 8
+dst_x      = 11136
+dst_y      = 39520
+
+[[doors]]
+src_region = 1
+src_x      = 26624
+src_y      = 7008
+dst_region = 8
+dst_x      = 10992
+dst_y      = 36960
+
+[[doors]]
+src_region = 5
+src_x      = 27472
+src_y      = 17280
+dst_region = 8
+dst_x      = 10320
+dst_y      = 36224
+
+[[doors]]
+src_region = 7
+src_x      = 27616
+src_y      = 31872
+dst_region = 8
+dst_x      = 11216
+dst_y      = 38528
+
+[[doors]]
+src_region = 3
+src_x      = 27760
+src_y      = 11872
+dst_region = 8
+dst_x      = 10368
+dst_y      = 39520
+
+[[doors]]
+src_region = 7
+src_x      = 28000
+src_y      = 26688
+dst_region = 8
+dst_x      = 8032
+dst_y      = 39488
+
+[[doors]]
+src_region = 7
+src_x      = 28048
+src_y      = 26784
+dst_region = 8
+dst_x      = 8080
+dst_y      = 39584
+
+[[doors]]
+src_region = 5
+src_x      = 28384
+src_y      = 21120
+dst_region = 8
+dst_x      = 12752
+dst_y      = 38528
 
 # Zone table schema — entries will go here once ADF analysis is complete.
 # Each zone is a rectangular trigger area in a region.

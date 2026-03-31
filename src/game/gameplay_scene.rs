@@ -234,6 +234,8 @@ pub struct GameplayScene {
     object_sprites: Option<crate::game::sprites::SpriteSheet>,
     /// Narrative strings from faery.toml [narr], used by event_msg / speak helpers.
     narr: crate::game::game_library::NarrConfig,
+    /// Door table from faery.toml [[doors]], used for region transition checks.
+    doors: Vec<crate::game::doors::DoorEntry>,
     /// Zone configs from faery.toml, used for event zone entry detection.
     zones: Vec<crate::game::game_library::ZoneConfig>,
     /// Index of the zone the hero was in last frame (None = no zone).
@@ -295,6 +297,7 @@ impl GameplayScene {
             sprite_sheets: (0..crate::game::sprites::CFILE_COUNT).map(|_| None).collect(),
             object_sprites: None,
             narr: crate::game::game_library::NarrConfig::default(),
+            doors: Vec::new(),
             zones: Vec::new(),
             last_zone: None,
             sleeping: false,
@@ -333,6 +336,14 @@ impl GameplayScene {
         }
 
         self.narr = game_lib.narr.clone();
+        self.doors = game_lib.doors.iter().map(|d| crate::game::doors::DoorEntry {
+            src_region: d.src_region,
+            src_x:      d.src_x,
+            src_y:      d.src_y,
+            dst_region: d.dst_region,
+            dst_x:      d.dst_x,
+            dst_y:      d.dst_y,
+        }).collect();
         self.zones = game_lib.zones.clone();
 
         let stuff = self.state.stuff().clone();
@@ -460,7 +471,7 @@ impl GameplayScene {
             if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
-                if let Some(door) = crate::game::doors::doorfind(&crate::game::doors::DOOR_TABLE, self.state.region_num, new_x, new_y) {
+                if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
                     self.state.region_num = door.dst_region;
                     self.state.hero_x = door.dst_x;
                     self.state.hero_y = door.dst_y;
@@ -1204,7 +1215,7 @@ impl GameplayScene {
                 if self.state.stuff()[key_slot] == 0 {
                     self.messages.push("No such key.".to_string());
                 } else if crate::game::doors::doorfind(
-                    &crate::game::doors::DOOR_TABLE, self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
+                    &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y).is_some()
                 {
                     self.state.stuff_mut()[key_slot] -= 1;
                     self.messages.push("Door opened.".to_string());
@@ -1428,7 +1439,7 @@ impl GameplayScene {
             }
             GameAction::Sleep => {
                 let at_door = crate::game::doors::doorfind(
-                    &crate::game::doors::DOOR_TABLE, self.state.region_num, self.state.hero_x, self.state.hero_y
+                    &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y
                 ).is_some();
                 if at_door {
                     self.messages.push("Cannot sleep here.");
