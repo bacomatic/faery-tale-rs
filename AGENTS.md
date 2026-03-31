@@ -33,6 +33,12 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
 - Current architecture and implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 
+## Game mechanics research order
+
+When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
+1. **First**: check `RESEARCH.md` — it contains verified reverse-engineering notes.
+2. **Only if RESEARCH.md is silent or appears incorrect**: do a deep dive into `original/` (C/ASM sources).
+
 ## Planning files contract
 
 - `PLAN.md` is the human-readable roadmap and progress log.

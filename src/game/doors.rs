@@ -33,8 +33,38 @@ pub const DESERT: u8 = 17;
 pub const CAVE:   u8 = 18;
 // VLOG = 18 (same as CAVE); distinguish by context only
 
-/// Find the door at an outdoor position (region < 8) using grid-aligned src coords.
-/// Mirrors fmain.c outdoor doorfind: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
+/// Key type enum matching original fmain.c `enum ky`.
+/// Values are the inventory slot index relative to KEYBASE (stuff[16+slot]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyReq {
+    /// No key required — door opens freely.
+    NoKey,
+    /// Requires stuff[16 + slot] > 0 to open; slot 0=GOLD,1=GREEN,2=KBLUE,3=RED,4=GREY,5=WHITE.
+    Key(u8),
+    /// Talisman (stuff[30]) required — BLACK doors (doom tower, pass fort, witch's castle).
+    Talisman,
+    /// DESERT oasis doors — require 5 gold statues (stuff[25] >= 5) to pass.
+    GoldStatues,
+}
+
+/// Return the key requirement for a given door type.
+/// Derived from `open_list[17]` in fmain.c.
+/// Slot values: 0=GOLD, 1=GREEN, 2=KBLUE, 3=RED, 4=GREY, 5=WHITE.
+pub fn key_req(door_type: u8) -> KeyReq {
+    match door_type {
+        HWOOD | VWOOD | HCITY | VCITY | LOG | STAIR | CAVE => KeyReq::NoKey,
+        HSTONE | VSTONE => KeyReq::Key(1), // GREEN
+        CRYST            => KeyReq::Key(2), // KBLUE
+        SECRET           => KeyReq::Key(3), // RED
+        HSTON2 | VSTON2  => KeyReq::Key(4), // GREY
+        MARBLE           => KeyReq::Key(5), // WHITE
+        BLACK            => KeyReq::Talisman,
+        DESERT           => KeyReq::GoldStatues,
+        _                => KeyReq::NoKey,
+    }
+}
+
+/// Proximity in pixels for walk-on door detection (outdoor src coord matching).
 pub const DOOR_PROXIMITY: u16 = 8;
 
 pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -> Option<DoorEntry> {

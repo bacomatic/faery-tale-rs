@@ -34,6 +34,12 @@ cargo test -- --nocapture            # show println! output
 - Architecture deep-dives (screen layout, Amiga rendering pipeline, palette handling, etc.): **always check `RESEARCH.md` before re-deriving implementation decisions**
 - Roadmap/progress and task state: `PLAN.md` + `plan_status.toml`
 
+## Game mechanics research order
+
+When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
+1. **First**: check `RESEARCH.md` — it contains verified reverse-engineering notes.
+2. **Only if RESEARCH.md is silent or appears incorrect**: do a deep dive into `original/` (C/ASM sources).
+
 ## Architecture
 
 SDL2-rendered game using a **chain-of-scenes** pattern. Scenes run sequentially:
