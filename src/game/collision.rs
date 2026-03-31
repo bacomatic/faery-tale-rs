@@ -14,9 +14,21 @@ use crate::game::world_data::WorldData;
 /// 5. tile_idx = sector_mem[sec_num*128 + (imy&7)*16 + (imx&15)].
 /// 6. If terra_mem[tile_idx*4+2] & d4 == 0 → passable (return 0).
 /// 7. Else return terra_mem[tile_idx*4+1] >> 4 (upper nibble = terrain type).
+///
+/// For indoor regions (region_num >= 8): the original uses xreg=0, yreg=128.
+/// px_to_im subtracts (yreg*256 = 0x8000) from y before computing imy, so that
+/// the indoor pixel coordinate range (0x8000–0x9FFF) maps into the indoor
+/// map_mem rows (0..31).
 pub fn px_to_terrain_type(world: &WorldData, x: i32, y: i32) -> u8 {
     if x < 0 || y < 0 {
         return 0; // out of world bounds → passable
+    }
+
+    // Indoor maps: subtract yreg offset (0x8000) so that y maps into the indoor
+    // map_mem row range (0..31 sectors = 0..255 tile rows = 0..8191 pixels).
+    let y = if world.region_num >= 8 { y - 0x8000 } else { y };
+    if y < 0 {
+        return 0; // below indoor map base → passable
     }
 
     // Tile bitmask selector: from bits 3,3,4 of x,y,y (tested before coordinate shifts).
@@ -100,6 +112,17 @@ pub struct TerrainProbe {
 /// Run the full px_to_terrain_type lookup, recording every intermediate value.
 pub fn terrain_probe(world: &WorldData, x: i32, y: i32) -> TerrainProbe {
     if x < 0 || y < 0 {
+        return TerrainProbe {
+            x, y, d4: 0, imx: 0, imy: 0, xs: 0, ys: 0,
+            map_offset: 0, sec_num: 0, local_x: 0, local_y: 0,
+            sector_offset: 0, tile_idx: 0, terra_bytes: [0; 4],
+            tiles_and_d4: 0, terrain_type: 0,
+        };
+    }
+
+    // Indoor maps: subtract yreg offset (0x8000) — same adjustment as px_to_terrain_type.
+    let y = if world.region_num >= 8 { y - 0x8000 } else { y };
+    if y < 0 {
         return TerrainProbe {
             x, y, d4: 0, imx: 0, imy: 0, xs: 0, ys: 0,
             map_offset: 0, sec_num: 0, local_x: 0, local_y: 0,
