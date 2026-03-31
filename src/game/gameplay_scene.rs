@@ -553,86 +553,72 @@ impl GameplayScene {
                 let left_t  = self.map_world.as_ref().map_or(0, |w|
                     collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2));
                 let door_tile = right_t == 15 || left_t == 15;
-                if door_tile {
-                    // Choose the probe that hit terrain 15; its grid-aligned coords identify the door.
-                    let probe_x = if right_t == 15 { new_x.wrapping_add(4) } else { new_x.wrapping_sub(4) };
-                    let probe_y = new_y.wrapping_add(2);
-                    if self.state.region_num >= 8 {
-                        // Indoor exit: match probe against grid-aligned dst coords.
-                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, probe_x, probe_y) {
-                            let (ex, ey) = crate::game::doors::exit_spawn(&door);
-                            let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
-                            self.state.region_num = outdoor_region;
-                            self.state.hero_x = ex;
-                            self.state.hero_y = ey;
-                            self.dlog(format!("door: indoor bump exit to region {} ({}, {})", outdoor_region, ex, ey));
-                        } else {
-                            self.messages.push("It's locked.");
-                        }
-                    } else {
-                        const BUMP_PROX_X: i32 = 32;
-                        const BUMP_PROX_Y: i32 = 64;
-                        let region = self.state.region_num;
-                        let nearest = self.doors.iter()
-                            .filter(|d| d.src_region == region
-                                && (d.src_x as i32 - new_x as i32).abs() < BUMP_PROX_X
-                                && (d.src_y as i32 - new_y as i32).abs() < BUMP_PROX_Y)
-                            .min_by_key(|d| {
-                                let dx = d.src_x as i32 - new_x as i32;
-                                let dy = d.src_y as i32 - new_y as i32;
-                                dx * dx + dy * dy
-                            })
-                            .copied();
-                        if let Some(door) = nearest {
-                            use crate::game::doors::{key_req, KeyReq};
-                            match key_req(door.door_type) {
-                                KeyReq::NoKey => {
+                if door_tile && self.state.region_num < 8 {
+                    // Outdoor entry: identify the probe that hit terrain 15; its grid-aligned
+                    // coords narrow the search.  Indoor exit is handled by the walk-on branch
+                    // above (mirrors fmain.c: door scan runs on hero_x/hero_y after every move).
+                    const BUMP_PROX_X: i32 = 32;
+                    const BUMP_PROX_Y: i32 = 64;
+                    let region = self.state.region_num;
+                    let nearest = self.doors.iter()
+                        .filter(|d| d.src_region == region
+                            && (d.src_x as i32 - new_x as i32).abs() < BUMP_PROX_X
+                            && (d.src_y as i32 - new_y as i32).abs() < BUMP_PROX_Y)
+                        .min_by_key(|d| {
+                            let dx = d.src_x as i32 - new_x as i32;
+                            let dy = d.src_y as i32 - new_y as i32;
+                            dx * dx + dy * dy
+                        })
+                        .copied();
+                    if let Some(door) = nearest {
+                        use crate::game::doors::{key_req, KeyReq};
+                        match key_req(door.door_type) {
+                            KeyReq::NoKey => {
+                                let (ix, iy) = crate::game::doors::entry_spawn(&door);
+                                self.state.region_num = door.dst_region;
+                                self.state.hero_x = ix;
+                                self.state.hero_y = iy;
+                                self.dlog(format!("door: bumped transition to {}", door.dst_region));
+                            }
+                            KeyReq::Key(slot) => {
+                                if self.state.stuff()[16 + slot as usize] > 0 {
+                                    self.state.stuff_mut()[16 + slot as usize] -= 1;
                                     let (ix, iy) = crate::game::doors::entry_spawn(&door);
                                     self.state.region_num = door.dst_region;
                                     self.state.hero_x = ix;
                                     self.state.hero_y = iy;
-                                    self.dlog(format!("door: bumped transition to {}", door.dst_region));
-                                }
-                                KeyReq::Key(slot) => {
-                                    if self.state.stuff()[16 + slot as usize] > 0 {
-                                        self.state.stuff_mut()[16 + slot as usize] -= 1;
-                                        let (ix, iy) = crate::game::doors::entry_spawn(&door);
-                                        self.state.region_num = door.dst_region;
-                                        self.state.hero_x = ix;
-                                        self.state.hero_y = iy;
-                                        self.messages.push("It opened.");
-                                        self.dlog(format!("door: key-opened transition to {}", door.dst_region));
-                                    } else {
-                                        self.messages.push("It's locked.");
-                                    }
-                                }
-                                KeyReq::Talisman => {
-                                    if self.state.stuff()[30] > 0 {
-                                        let (ix, iy) = crate::game::doors::entry_spawn(&door);
-                                        self.state.region_num = door.dst_region;
-                                        self.state.hero_x = ix;
-                                        self.state.hero_y = iy;
-                                        self.dlog(format!("door: talisman transition to {}", door.dst_region));
-                                    } else {
-                                        self.messages.push("It's locked.");
-                                    }
-                                }
-                                KeyReq::GoldStatues => {
-                                    // DESERT/OASIS doors require 5 gold statues (stuff[25] >= 5).
-                                    if self.state.stuff()[25] >= 5 {
-                                        let (ix, iy) = crate::game::doors::entry_spawn(&door);
-                                        self.state.region_num = door.dst_region;
-                                        self.state.hero_x = ix;
-                                        self.state.hero_y = iy;
-                                        self.dlog(format!("door: oasis transition to {}", door.dst_region));
-                                    }
-                                    // Original silently blocks if statues < 5 (no message)
+                                    self.messages.push("It opened.");
+                                    self.dlog(format!("door: key-opened transition to {}", door.dst_region));
+                                } else {
+                                    self.messages.push("It's locked.");
                                 }
                             }
+                            KeyReq::Talisman => {
+                                if self.state.stuff()[30] > 0 {
+                                    let (ix, iy) = crate::game::doors::entry_spawn(&door);
+                                    self.state.region_num = door.dst_region;
+                                    self.state.hero_x = ix;
+                                    self.state.hero_y = iy;
+                                    self.dlog(format!("door: talisman transition to {}", door.dst_region));
+                                } else {
+                                    self.messages.push("It's locked.");
+                                }
+                            }
+                            KeyReq::GoldStatues => {
+                                // DESERT/OASIS doors require 5 gold statues (stuff[25] >= 5).
+                                if self.state.stuff()[25] >= 5 {
+                                    let (ix, iy) = crate::game::doors::entry_spawn(&door);
+                                    self.state.region_num = door.dst_region;
+                                    self.state.hero_x = ix;
+                                    self.state.hero_y = iy;
+                                    self.dlog(format!("door: oasis transition to {}", door.dst_region));
+                                }
+                                // Original silently blocks if statues < 5 (no message)
+                            }
                         }
-                        // No doorlist entry in range: silently block (no "It's locked." —
-                        // we don't know if it's a genuine locked door or an unimplemented type).
                     }
+                    // No doorlist entry in range: silently block (no "It's locked." —
+                    // we don't know if it's a genuine locked door or an unimplemented type).
                 }
             }
 
