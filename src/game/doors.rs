@@ -91,6 +91,16 @@ pub fn doorfind_exit(table: &[DoorEntry], hero_x: u16, hero_y: u16) -> Option<Do
             && (door.dst_x == xtest
                 || (door.door_type & 1 != 0 && door.dst_x == xtest.wrapping_sub(16)))
         {
+            // Fine-grained sub-tile position check (mirrors original fmain.c nodoor2 conditions):
+            // Horizontal door (type & 1): hero must be in lower half of the tile row (y & 0x10 != 0).
+            // Vertical door: hero must not be at the very left edge of the tile (x & 15 >= 2).
+            if door.door_type & 1 != 0 {
+                if hero_y & 0x10 == 0 {
+                    continue; // not yet in the doorway row
+                }
+            } else if hero_x & 15 < 2 {
+                continue; // too far left within tile — not in the doorway
+            }
             return Some(*door);
         }
     }
@@ -157,13 +167,18 @@ mod tests {
     #[test]
     fn test_doorfind_exit_vertical() {
         // VWOOD door: dst_x = 0x0bd0, dst_y = 0x84c0 (village #1.a)
-        // grid-aligned: xtest = 0x0bd0, ytest = 0x84c0 (already aligned)
+        // VWOOD exit is triggered via bump detection — probe_x = hero_x+4 lands inside the door tile.
+        // entry_spawn puts hero at (0x0bcf, 0x84d0); walking north, right probe = 0x0bd3.
         let table = [DoorEntry {
             src_region: 2, src_x: 0x49d0, src_y: 0x3dc0,
             dst_region: 8, dst_x: 0x0bd0, dst_y: 0x84c0, door_type: VWOOD,
         }];
-        assert!(doorfind_exit(&table, 0x0bd0, 0x84c0).is_some());
-        assert!(doorfind_exit(&table, 0x0bd0, 0x84e0).is_none());
+        // Bump probe inside door tile: xtest=0x0bd0 ✓, ytest=0x84c0 ✓, x & 15 = 3 >= 2 ✓ → match
+        assert!(doorfind_exit(&table, 0x0bd3, 0x84c2).is_some());
+        // Fine check fails: x & 15 = 0 < 2 → no match
+        assert!(doorfind_exit(&table, 0x0bd0, 0x84c0).is_none());
+        // Wrong ytest
+        assert!(doorfind_exit(&table, 0x0bd3, 0x84e0).is_none());
     }
 
     #[test]
@@ -173,12 +188,14 @@ mod tests {
             src_region: 2, src_x: 0x4a10, src_y: 0x3c80,
             dst_region: 8, dst_x: 0x0d10, dst_y: 0x8280, door_type: HWOOD,
         }];
-        // Direct match
-        assert!(doorfind_exit(&table, 0x0d10, 0x8280).is_some());
+        // y=0x8290: ytest=0x8280 ✓, y & 0x10 = 0x10 ✓ → direct match
+        assert!(doorfind_exit(&table, 0x0d10, 0x8290).is_some());
         // 16px right of dst_x also matches for horizontal
-        assert!(doorfind_exit(&table, 0x0d20, 0x8280).is_some());
-        // 32px right does not
-        assert!(doorfind_exit(&table, 0x0d30, 0x8280).is_none());
+        assert!(doorfind_exit(&table, 0x0d20, 0x8290).is_some());
+        // y=0x8280: fine check fails (y & 0x10 == 0) → no match
+        assert!(doorfind_exit(&table, 0x0d10, 0x8280).is_none());
+        // 32px right → xtest off by too much → no match
+        assert!(doorfind_exit(&table, 0x0d30, 0x8290).is_none());
     }
 
     #[test]
