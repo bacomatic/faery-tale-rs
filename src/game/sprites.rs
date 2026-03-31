@@ -191,6 +191,101 @@ pub const INV_LIST: [InvItem; 31] = [
     InvItem { image_number: 12, xoff: 14,  yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 30 Shard
 ];
 
+/// Map a short item name or numeric string to an INV_LIST index (0–30).
+/// Numeric strings parse to the index directly (0–30 valid; 31+ returns None).
+/// Name matching is case-insensitive substring: "sword" matches "long sword".
+/// Talisman (index 22) is intentionally included — callers guard against it.
+pub fn item_name_to_id(name: &str) -> Option<usize> {
+    const TABLE: &[(&str, usize)] = &[
+        ("dirk",         0),
+        ("mace",         1),
+        ("sword",        2),
+        ("bow",          3),
+        ("wand",         4),
+        ("lasso",        5),
+        ("shell",        6),
+        ("sunstone",     7),
+        ("sun stone",    7),
+        ("arrow",        8),
+        ("blue stone",   9),
+        ("bluestone",    9),
+        ("jewel",       10),
+        ("vial",        11),
+        ("orb",         12),
+        ("totem",       13),
+        ("gold ring",   14),
+        ("gold key",    16),
+        ("green key",   17),
+        ("blue key",    18),
+        ("red key",     19),
+        ("grey key",    20),
+        ("gray key",    20),
+        ("white key",   21),
+        ("ring",        14),  // after "gold ring" so specific match wins
+        ("key",         16),  // generic key → gold key (first key)
+        ("talisman",    22),
+        ("rose",        23),
+        ("fruit",       24),
+        ("statue",      25),
+        ("book",        26),
+        ("herb",        27),
+        ("writ",        28),
+        ("bone",        29),
+        ("shard",       30),
+    ];
+
+    let lower = name.to_ascii_lowercase();
+    if lower.is_empty() { return None; }
+
+    // Numeric index
+    if let Ok(n) = lower.parse::<usize>() {
+        return if n < INV_LIST.len() { Some(n) } else { None };
+    }
+
+    // Exact match first, then substring
+    TABLE.iter()
+        .find(|(entry, _)| *entry == lower.as_str())
+        .or_else(|| TABLE.iter().find(|(entry, _)| lower.contains(*entry)))
+        .map(|(_, id)| *id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_item_name_to_id_exact() {
+        assert_eq!(item_name_to_id("sword"),    Some(2));
+        assert_eq!(item_name_to_id("bow"),      Some(3));
+        assert_eq!(item_name_to_id("talisman"), Some(22));
+        assert_eq!(item_name_to_id("shard"),    Some(30));
+    }
+
+    #[test]
+    fn test_item_name_to_id_numeric() {
+        assert_eq!(item_name_to_id("0"),  Some(0));
+        assert_eq!(item_name_to_id("22"), Some(22));
+        assert_eq!(item_name_to_id("30"), Some(30));
+        assert_eq!(item_name_to_id("31"), None); // out of range
+    }
+
+    #[test]
+    fn test_item_name_to_id_aliases() {
+        assert_eq!(item_name_to_id("wand"),   Some(4));
+        assert_eq!(item_name_to_id("lasso"),  Some(5));
+        assert_eq!(item_name_to_id("shell"),  Some(6));
+        assert_eq!(item_name_to_id("arrows"), Some(8));
+        assert_eq!(item_name_to_id("key"),    Some(16)); // first key match
+    }
+
+    #[test]
+    fn test_item_name_to_id_unknown() {
+        assert_eq!(item_name_to_id("fireball"), None);
+        assert_eq!(item_name_to_id("orc"),      None);
+        assert_eq!(item_name_to_id(""),         None);
+    }
+}
+
 /// A loaded sprite sheet: palette-index pixel data.
 pub struct SpriteSheet {
     pub cfile_idx: u8,
