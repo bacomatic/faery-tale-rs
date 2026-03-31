@@ -2648,8 +2648,8 @@ impl Scene for GameplayScene {
                             let renderer = MapRenderer::new(&world, self.shadow_mem.clone());
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
-                            // sprite-101: load player (cfile 0-2) and setfig (cfile 13-17) sprites
-                            for cfile_idx in [0u8, 1, 2, 13, 14, 15, 16, 17] {
+                            // sprite-101: load player (cfile 0-2), enemies (cfile 4-12), and setfig (cfile 13-17) sprites
+                            for cfile_idx in [0u8, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] {
                                 if let Some(sheet) = crate::game::sprites::SpriteSheet::load(
                                     &adf, cfile_idx,
                                 ) {
