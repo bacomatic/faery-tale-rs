@@ -445,7 +445,105 @@ struct door {
 
 **`secs` field** sets `new_region` on crossing: `secs==1` → `new_region=8` (indoor), `secs==2` → `new_region=9` (cave/dungeon). Indoor regions use a linear scan of `doorlist`; outdoor uses binary search.
 
-**Locked doors (`doorfind`)**: called when player tries to walk through an impassable tile. The USE→KEYS menu calls `doorfind(newx(hero_x,i,16), newy(...), keytype)` for all 9 directions. Consumes one key from `stuff[KEYBASE + hit]` on success.
+---
+
+### Two-Phase Door Interaction
+
+Doors operate in two distinct phases. The teleport (`xfer`) **never** fires at bump time; it fires on a separate every-frame scan after the tile has been made passable.
+
+#### Phase 1 — Bump / Open (`doorfind`)
+
+Triggered from the hero sprite-movement loop when `proxcheck(xtest, ytest, 0)` returns **15** (terrain type 15 = door tile) for the hero's proposed new position:
+
+```c
+j = proxcheck(xtest, ytest, i);   // returns terrain type at proposed pos
+if (i == 0) {                      // i==0 = hero sprite only
+    if (j == 15) {
+        doorfind(xtest, ytest, 0); // open attempt with no key (keytype=0)
+    } else
+        bumped = 0;                // reset dedup flag on any non-door block
+}
+if (j) goto checkdev1;            // still blocked — hero does NOT move
+```
+
+`doorfind(x, y, keytype)` (**fmain.c** ~line 1174):
+1. Probes `px_to_im(x, y)`, `px_to_im(x+4, y)`, `px_to_im(x-4, y)` to find a terrain-15 cell.
+2. Grid-aligns to find the top-left tile corner: steps `x -= 16` while `px_to_im(x-16, y) == 15`; steps `y += 32` if `px_to_im(x, y+32) == 15`.
+3. Converts to image coords: `x >>= 4`, `y >>= 5`.
+4. Reads the tile index from `sector_mem` via `mapxy(x, y)`.
+5. Looks up the tile in `open_list[17]` — the tile-graphic replacement table.
+6. If a matching entry is found and `keytype` matches (or `keytype == NOKEY`):
+   - **Replaces tiles in `sector_mem`** to show the open-door graphic.
+   - Sets `viewstatus = 99` (forces screen refresh).
+   - Prints `"It opened."`.
+   - Returns `TRUE`.
+7. If no match: if `!bumped && !keytype`, prints `"It's locked."`; sets `bumped = 1`. Returns `FALSE`.
+
+After `doorfind` returns, the hero's move is **still blocked** (goto checkdev1 runs regardless). The tile replacement means that on the very next frame, `proxcheck` returns a passable value and the hero can walk forward.
+
+**`bumped` global flag**: prevents `"It's locked."` from printing every frame while the player holds a direction key into a locked door. Reset to 0 when `proxcheck` returns a non-15 value, and to 0 explicitly at the start of any key-usage attempt (USE→KEYS menu).
+
+#### `open_list` — Door graphic replacement table
+
+```c
+struct door_open {
+    UBYTE  door_id;   // closed-door tile index in sector_mem
+    USHORT map_id;    // tileset region ID (from current_loads.image[])
+    UBYTE  new1;      // replacement tile for the main cell
+    UBYTE  new2;      // replacement tile for secondary cell (0 = none)
+    UBYTE  above;     // direction of secondary cell: 1=above, 2=right, 3=left, 4=multi
+    UBYTE  keytype;   // required key: NOKEY=0, GOLD=1, GREEN=2, KBLUE=3, RED=4, GREY=5, WHITE=6
+} open_list[17];
+```
+
+`above == 4` (multi-tile, used for large gates): sets three additional cells — `mapxy(x, y-1) = 87`, `mapxy(x+1, y) = 86`, `mapxy(x+1, y-1) = 88`.
+
+Key type mapping (`enum ky`): `NOKEY=0, GOLD=1, GREEN=2, KBLUE=3, RED=4, GREY=5, WHITE=6`. Matches key inventory slots `stuff[16..21]` (KEYBASE=16). Talisman (BLACK gates) and DESERT doors are not handled via `open_list`; they are checked by special-case logic before the `open_list` loop.
+
+#### Phase 2 — Walk-through / Teleport (every-frame door scan)
+
+After every hero move, the main game loop runs a door scan (**fmain.c** ~line 2190) using the *current* hero position:
+
+```c
+xtest = hero_x & 0xfff0;   // grid-align to 16px X cell
+ytest = hero_y & 0xffe0;   // grid-align to 32px Y cell
+```
+
+**Outdoor (region\_num < 8)** — binary search on `doorlist` sorted by `xc1`:
+- Matches when `xc1 <= xtest <= xc1+16` and `yc1 == ytest`.
+- Sub-tile check: horizontal doors require `(hero_y & 0x10) == 0`; vertical require `(hero_x & 15) <= 6`.
+- DESERT gate special case: if `stuff[STATBASE] < 5`, silently blocks (no message, no teleport).
+- On match: compute indoor spawn via the entry offset formulas above, set `new_region`, call `xfer(ix, iy, FALSE)`.
+
+**Indoor (region\_num >= 8)** — linear scan matching on `xc2/yc2`:
+- Matches when `yc2 == ytest` and (`xc2 == xtest` or `xc2 == xtest-16` for horizontal doors).
+- Same sub-tile checks as outdoor (inverted: horizontal require `(hero_y & 0x10) != 0`; vertical require `(hero_x & 15) >= 2`).
+- On match: compute outdoor spawn via exit offset formulas, call `xfer(ox, oy, TRUE)`.
+
+The scan fires **unconditionally every frame** regardless of door open/closed state — it matches on position only. It is the tile-replacement in Phase 1 that makes the position reachable.
+
+#### Key door flow (USE→KEYS menu)
+
+```c
+case KEYS:
+    hit -= 5;            // hit 0–5 → key slot 0–5
+    bumped = 0;          // reset dedup flag before attempting
+    if (stuff[hit + KEYBASE]) {
+        for (i = 0; i < 9; i++) {
+            x = newx(hero_x, i, 16);  // probe 8 compass dirs + center, 16px radius
+            y = newy(hero_y, i, 16);
+            if (doorfind(x, y, hit + 1)) {   // keytype = hit+1 (1–6)
+                stuff[hit + KEYBASE]--;       // consume one key
+                break;
+            }
+        }
+        if (i > 8) {
+            // "% tried a [Key] but it didn't fit."
+        }
+    }
+```
+
+`doorfind` is called with `keytype = hit + 1` (non-zero). The `open_list` check succeeds when `open_list[j].keytype == keytype`. On success: tiles are replaced, `"It opened."` is printed. The hero then walks through on the next move (Phase 2 as normal).
 
 ---
 
@@ -818,7 +916,7 @@ Accessed via MAGIC menu (hit 5–11 maps to stuff[9–15]). Each use **decrement
 
 #### Keys (stuff 16–21, KEYBASE=16)
 
-Accessed via KEYS submenu (USE → Key → color selection). Each use tests 9 positions around hero (8 compass directions + center) via `doorfind(x, y, hit+1)`. If a matching locked door is found, the key is consumed (`stuff[hit + KEYBASE]--`) and door opens. If no matching door: "% tried a [Key Name] but it didn't fit."
+Accessed via KEYS submenu (USE → Key → color selection). Each use probes 9 positions around hero (8 compass directions + center, 16px radius) via `doorfind(x, y, hit+1)`. `doorfind` checks terrain type 15, grid-aligns to find the door tile, matches it against `open_list` with the given `keytype`. On success: tiles replaced in `sector_mem` (door is now passable), `"It opened."` printed, key consumed (`stuff[hit + KEYBASE]--`). Hero must then walk forward to cross the threshold (Phase 2 scan fires the teleport). If no matching door found at any of the 9 probes: `"% tried a [Key Name] but it didn't fit."`
 
 | Index | Name | KEYS hit | `doorfind` keytype |
 |-------|------|----------|-------------------|
