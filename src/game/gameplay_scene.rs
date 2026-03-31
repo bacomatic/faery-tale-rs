@@ -503,9 +503,17 @@ impl GameplayScene {
                     }
                 } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
                     // Outdoor (region < 8): walk-on entry check — match on src coords.
+                    // Sub-tile position guard mirrors fmain.c Phase-2 nodoor conditions:
+                    //   Horizontal (type & 1): skip if hero_y & 0x10 != 0 (lower half — not through yet)
+                    //   Vertical             : skip if hero_x & 15 > 6   (right portion — not through yet)
+                    let in_doorway = if door.door_type & 1 != 0 {
+                        new_y & 0x10 == 0  // horizontal: upper half
+                    } else {
+                        new_x & 15 <= 6    // vertical: left portion
+                    };
                     // DESERT doors (oasis) require 5 gold statues; original silently blocks if < 5.
                     use crate::game::doors::{key_req, KeyReq};
-                    let allow = match key_req(door.door_type) {
+                    let allow = in_doorway && match key_req(door.door_type) {
                         KeyReq::GoldStatues => self.state.stuff()[25] >= 5,
                         _ => true, // walk-on path: door was already opened by bump; NOKEY always allowed
                     };

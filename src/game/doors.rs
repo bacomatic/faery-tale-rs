@@ -201,16 +201,29 @@ pub fn doorfind_nearest_by_bump_radius(
         .map(|(i, d)| (i, *d))
 }
 
-/// Walk-on proximity radius for outdoor door entry (pixels).
-/// Original fmain.c uses 8px (~half a tile) for the walk-on scan.
-pub const DOOR_PROXIMITY: u16 = 8;
-
+/// Find a door at the outdoor position using the original's exact grid-aligned matching.
+/// Mirrors fmain.c binary-search Phase-2 match conditions:
+///   xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0
+///   Horizontal (type & 1): d->xc1 <= xtest <= d->xc1+15 AND d->yc1 == ytest
+///   Vertical            : d->xc1 == xtest               AND d->yc1 == ytest
+/// Sub-tile position guard (caller responsibility):
+///   Horizontal: skip if hero_y & 0x10 != 0  (lower half → not yet through)
+///   Vertical  : skip if hero_x & 15 > 6     (right portion → not yet through)
 pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -> Option<DoorEntry> {
+    let xtest = hero_x & 0xFFF0;
+    let ytest = hero_y & 0xFFE0;
     for door in table {
-        if door.src_region == region_num
-            && hero_x.abs_diff(door.src_x) < DOOR_PROXIMITY
-            && hero_y.abs_diff(door.src_y) < DOOR_PROXIMITY
-        {
+        if door.src_region != region_num || door.src_y != ytest {
+            continue;
+        }
+        let x_match = if door.door_type & 1 != 0 {
+            // horizontal door: xtest within the 16px tile cell starting at src_x
+            xtest >= door.src_x && xtest <= door.src_x.saturating_add(15)
+        } else {
+            // vertical door: exact x grid-alignment
+            xtest == door.src_x
+        };
+        if x_match {
             return Some(*door);
         }
     }
@@ -296,10 +309,20 @@ mod tests {
     }
 
     #[test]
-    fn test_doorfind_proximity_edge() {
-        let table = [DoorEntry { src_region: 2, src_x: 100, src_y: 100, dst_region: 5, dst_x: 200, dst_y: 200, door_type: VWOOD }];
-        assert!(doorfind(&table, 2, 107, 100).is_some());
-        assert!(doorfind(&table, 2, 108, 100).is_none());
+    fn test_doorfind_grid_match() {
+        // VWOOD (vertical, type & 1 == 0): exact grid x match required.
+        // Door at grid-aligned (0x60, 0x60); hero anywhere in same 16×32px cell triggers it.
+        let table = [DoorEntry { src_region: 2, src_x: 0x60, src_y: 0x60, dst_region: 5, dst_x: 200, dst_y: 200, door_type: VWOOD }];
+        // hero_x & 0xFFF0 = 0x60, hero_y & 0xFFE0 = 0x60 → match
+        assert!(doorfind(&table, 2, 0x60, 0x60).is_some());
+        assert!(doorfind(&table, 2, 0x6F, 0x7F).is_some()); // right edge of cell
+        // hero_x & 0xFFF0 = 0x70 ≠ 0x60 → no match (vertical requires exact x)
+        assert!(doorfind(&table, 2, 0x70, 0x60).is_none());
+        // HWOOD (horizontal, type & 1 == 1): xtest within [src_x, src_x+15] is acceptable.
+        let htable = [DoorEntry { src_region: 2, src_x: 0x60, src_y: 0x60, dst_region: 5, dst_x: 200, dst_y: 200, door_type: HWOOD }];
+        assert!(doorfind(&htable, 2, 0x60, 0x60).is_some());
+        assert!(doorfind(&htable, 2, 0x6F, 0x60).is_some()); // xtest=0x60, same cell
+        assert!(doorfind(&htable, 2, 0x70, 0x60).is_none()); // xtest=0x70 > src_x+15
     }
 
     #[test]
