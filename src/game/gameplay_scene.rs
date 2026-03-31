@@ -1976,6 +1976,56 @@ impl GameplayScene {
                     }
                 }
             }
+            SpawnEncounterRandom => {
+                let zone_idx = self.state.region_num as usize;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                if let Some(ref mut table) = self.npc_table {
+                    let spawned = crate::game::encounter::spawn_encounter_group(
+                        table, zone_idx, hero_x, hero_y,
+                    );
+                    self.dlog(format!("forced encounter: {} enemies", spawned));
+                } else {
+                    self.dlog("forced encounter: no npc_table loaded".to_string());
+                }
+            }
+            SpawnEncounterType(npc_type) => {
+                use crate::game::npc::*;
+                let zone_idx = self.state.region_num as usize;
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                let requested_type = npc_type;
+                if let Some(ref mut table) = self.npc_table {
+                    if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+                        let mut npc = crate::game::encounter::spawn_encounter(
+                            zone_idx, hero_x + 48, hero_y,
+                        );
+                        npc.npc_type = requested_type;
+                        npc.race = match requested_type {
+                            NPC_TYPE_WRAITH   => RACE_WRAITH,
+                            NPC_TYPE_GHOST | NPC_TYPE_SKELETON => RACE_UNDEAD,
+                            _                 => RACE_ENEMY,
+                        };
+                        *slot = npc;
+                        self.dlog(format!("spawned enemy type={}", requested_type));
+                    } else {
+                        self.dlog("spawn enemy: no free NPC slots".to_string());
+                    }
+                } else {
+                    self.dlog("spawn enemy: no npc_table loaded".to_string());
+                }
+            }
+            ClearEncounters => {
+                if let Some(ref mut table) = self.npc_table {
+                    let n = table.active_count();
+                    for npc in table.npcs.iter_mut() {
+                        npc.active = false;
+                    }
+                    self.dlog(format!("cleared {} NPCs", n));
+                } else {
+                    self.dlog("clear encounters: no npc_table loaded".to_string());
+                }
+            }
         }
     }
 

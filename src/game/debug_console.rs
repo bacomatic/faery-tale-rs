@@ -482,6 +482,7 @@ impl DebugConsole {
             "/fx" => self.cmd_fx(args),
             "/actors" => self.push_cmd(DebugCommand::QueryActors),
             "/terrain" => self.push_cmd(DebugCommand::QueryTerrain),
+            "/encounter" => self.cmd_encounter(args),
             "/songs" => self.cmd_songs(args),
             "/adf" => self.cmd_adf(args),
             "/clear" | "/cls" => self.cmd_clear(),
@@ -517,6 +518,7 @@ impl DebugConsole {
                 "/fx"   | "fx"      => "/fx <witch|teleport|fadeout|fadein>",
                 "/actors"           => "/actors — print actor list to log.",
                 "/terrain"          => "/terrain — dump terra lookup chain at hero's feet (collision debug).",
+                "/encounter"        => "/encounter — force regional encounter (4 enemies).\n  /encounter <type>  spawn one enemy: orc ghost skeleton wraith dragon snake swan horse\n  /encounter clear   deactivate all active NPCs",
                 "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop  /songs cave <on|off>",
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
@@ -546,6 +548,8 @@ impl DebugConsole {
             "  /save <on|off> toggle autosave",
             "  /fx <e>        trigger: witch/teleport/fadeout/fadein",
             "  /actors        list actors",
+            "  /terrain       dump terrain at current position",
+            "  /encounter [t] force encounter / spawn type / clear",
             "  /songs [cmd]   music: play <N> / stop / cave <on|off>",
             "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
@@ -811,6 +815,35 @@ impl DebugConsole {
             _ => { self.log("Usage: /adf <block> [count]"); return; }
         };
         self.push_cmd(DebugCommand::DumpAdfBlock { block, count });
+    }
+
+    fn cmd_encounter(&mut self, args: &[&str]) {
+        use crate::game::npc::*;
+        match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
+            None => self.push_cmd(DebugCommand::SpawnEncounterRandom),
+            Some("clear") => self.push_cmd(DebugCommand::ClearEncounters),
+            Some(name) => {
+                let npc_type = match name {
+                    "orc"      => Some(NPC_TYPE_ORC),
+                    "human"    => Some(NPC_TYPE_HUMAN),
+                    "ghost"    => Some(NPC_TYPE_GHOST),
+                    "skeleton" => Some(NPC_TYPE_SKELETON),
+                    "wraith"   => Some(NPC_TYPE_WRAITH),
+                    "dragon"   => Some(NPC_TYPE_DRAGON),
+                    "snake"    => Some(NPC_TYPE_SKELETON), // snake → cfile 7 (same group)
+                    "swan"     => Some(NPC_TYPE_SWAN),
+                    "horse"    => Some(NPC_TYPE_HORSE),
+                    _ => None,
+                };
+                match npc_type {
+                    Some(t) => self.push_cmd(DebugCommand::SpawnEncounterType(t)),
+                    None => self.log(format!(
+                        "Unknown enemy type: {}.  Valid: orc ghost skeleton wraith dragon snake swan horse",
+                        name
+                    )),
+                }
+            }
+        }
     }
 
     fn cmd_clear(&mut self) {

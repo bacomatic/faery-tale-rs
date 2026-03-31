@@ -50,4 +50,10 @@ pub enum DebugCommand {
     DumpAdfBlock { block: u32, count: u32 },
     /// Dump full terra lookup chain at hero's current position (both foot probes).
     QueryTerrain,
+    /// Force a regional encounter (4 enemies, mixflag blending).
+    SpawnEncounterRandom,
+    /// Spawn one named enemy type adjacent to the hero.
+    SpawnEncounterType(u8),
+    /// Deactivate all NPCs in the current npc_table.
+    ClearEncounters,
 }
