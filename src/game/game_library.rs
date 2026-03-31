@@ -64,6 +64,8 @@ pub struct DoorConfig {
     pub dst_region: u8,
     pub dst_x:      u16,
     pub dst_y:      u16,
+    #[serde(default)]
+    pub door_type:  u8,
 }
 
 #[derive(Deserialize, Debug, Clone)]

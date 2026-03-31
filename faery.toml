@@ -54,6 +54,7 @@ src_y      = 20576
 dst_region = 8
 dst_x      = 10352
 dst_y      = 35680
+door_type  = 1
 
 [[doors]]
 src_region = 4
@@ -62,6 +63,7 @@ src_y      = 20576
 dst_region = 8
 dst_x      = 10352
 dst_y      = 35680
+door_type  = 1
 
 [[doors]]
 src_region = 4
@@ -70,6 +72,7 @@ src_y      = 20576
 dst_region = 8
 dst_x      = 10352
 dst_y      = 35680
+door_type  = 1
 
 [[doors]]
 src_region = 4
@@ -78,6 +81,7 @@ src_y      = 20576
 dst_region = 8
 dst_x      = 10352
 dst_y      = 35680
+door_type  = 1
 
 [[doors]]
 src_region = 0
@@ -86,6 +90,7 @@ src_y      = 7008
 dst_region = 9
 dst_x      = 6528
 dst_y      = 35936
+door_type  = 18
 
 [[doors]]
 src_region = 6
@@ -94,6 +99,7 @@ src_y      = 27296
 dst_region = 8
 dst_x      = 8816
 dst_y      = 38560
+door_type  = 9
 
 [[doors]]
 src_region = 6
@@ -102,6 +108,7 @@ src_y      = 25248
 dst_region = 8
 dst_x      = 8048
 dst_y      = 38560
+door_type  = 9
 
 [[doors]]
 src_region = 4
@@ -110,6 +117,7 @@ src_y      = 19360
 dst_region = 8
 dst_x      = 5024
 dst_y      = 38304
+door_type  = 17
 
 [[doors]]
 src_region = 4
@@ -118,6 +126,7 @@ src_y      = 19552
 dst_region = 8
 dst_x      = 5024
 dst_y      = 38752
+door_type  = 17
 
 [[doors]]
 src_region = 4
@@ -126,6 +135,7 @@ src_y      = 19296
 dst_region = 8
 dst_x      = 5920
 dst_y      = 38240
+door_type  = 17
 
 [[doors]]
 src_region = 4
@@ -134,6 +144,7 @@ src_y      = 19328
 dst_region = 8
 dst_x      = 5504
 dst_y      = 38272
+door_type  = 17
 
 [[doors]]
 src_region = 4
@@ -142,6 +153,7 @@ src_y      = 19520
 dst_region = 8
 dst_x      = 5504
 dst_y      = 38720
+door_type  = 17
 
 [[doors]]
 src_region = 2
@@ -150,6 +162,7 @@ src_y      = 15200
 dst_region = 8
 dst_x      = 10368
 dst_y      = 40032
+door_type  = 3
 
 [[doors]]
 src_region = 2
@@ -158,6 +171,7 @@ src_y      = 13216
 dst_region = 8
 dst_x      = 11904
 dst_y      = 36256
+door_type  = 1
 
 [[doors]]
 src_region = 8
@@ -166,6 +180,7 @@ src_y      = 34656
 dst_region = 8
 dst_x      = 11008
 dst_y      = 37568
+door_type  = 15
 
 [[doors]]
 src_region = 8
@@ -174,6 +189,7 @@ src_y      = 37568
 dst_region = 9
 dst_x      = 10592
 dst_y      = 34688
+door_type  = 15
 
 [[doors]]
 src_region = 6
@@ -182,6 +198,7 @@ src_y      = 29024
 dst_region = 8
 dst_x      = 10992
 dst_y      = 37728
+door_type  = 9
 
 [[doors]]
 src_region = 2
@@ -190,6 +207,7 @@ src_y      = 11872
 dst_region = 8
 dst_x      = 12672
 dst_y      = 39520
+door_type  = 3
 
 [[doors]]
 src_region = 6
@@ -198,6 +216,7 @@ src_y      = 25504
 dst_region = 8
 dst_x      = 7280
 dst_y      = 38560
+door_type  = 9
 
 [[doors]]
 src_region = 2
@@ -206,6 +225,7 @@ src_y      = 14528
 dst_region = 8
 dst_x      = 10112
 dst_y      = 39104
+door_type  = 1
 
 [[doors]]
 src_region = 4
@@ -214,6 +234,7 @@ src_y      = 19296
 dst_region = 9
 dst_x      = 1136
 dst_y      = 36576
+door_type  = 15
 
 [[doors]]
 src_region = 0
@@ -222,6 +243,7 @@ src_y      = 7104
 dst_region = 8
 dst_x      = 12000
 dst_y      = 37824
+door_type  = 7
 
 [[doors]]
 src_region = 0
@@ -230,6 +252,7 @@ src_y      = 7104
 dst_region = 8
 dst_x      = 12032
 dst_y      = 37824
+door_type  = 7
 
 [[doors]]
 src_region = 3
@@ -238,6 +261,7 @@ src_y      = 9568
 dst_region = 8
 dst_x      = 11904
 dst_y      = 39520
+door_type  = 3
 
 [[doors]]
 src_region = 3
@@ -246,6 +270,7 @@ src_y      = 15296
 dst_region = 8
 dst_x      = 10624
 dst_y      = 39104
+door_type  = 1
 
 [[doors]]
 src_region = 5
@@ -254,6 +279,7 @@ src_y      = 21376
 dst_region = 8
 dst_x      = 9680
 dst_y      = 38528
+door_type  = 10
 
 [[doors]]
 src_region = 3
@@ -262,6 +288,7 @@ src_y      = 12224
 dst_region = 8
 dst_x      = 9600
 dst_y      = 39104
+door_type  = 1
 
 [[doors]]
 src_region = 7
@@ -270,6 +297,7 @@ src_y      = 26176
 dst_region = 8
 dst_x      = 7264
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -278,6 +306,7 @@ src_y      = 26272
 dst_region = 8
 dst_x      = 7312
 dst_y      = 39584
+door_type  = 11
 
 [[doors]]
 src_region = 5
@@ -286,6 +315,7 @@ src_y      = 23360
 dst_region = 8
 dst_x      = 8800
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -294,6 +324,7 @@ src_y      = 23456
 dst_region = 8
 dst_x      = 8848
 dst_y      = 39072
+door_type  = 11
 
 [[doors]]
 src_region = 3
@@ -302,6 +333,7 @@ src_y      = 15552
 dst_region = 8
 dst_x      = 2976
 dst_y      = 33472
+door_type  = 2
 
 [[doors]]
 src_region = 3
@@ -310,6 +342,7 @@ src_y      = 15808
 dst_region = 8
 dst_x      = 3024
 dst_y      = 33984
+door_type  = 2
 
 [[doors]]
 src_region = 3
@@ -318,6 +351,7 @@ src_y      = 15872
 dst_region = 8
 dst_x      = 3024
 dst_y      = 34048
+door_type  = 2
 
 [[doors]]
 src_region = 3
@@ -326,6 +360,7 @@ src_y      = 15488
 dst_region = 8
 dst_x      = 3344
 dst_y      = 33408
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -334,6 +369,7 @@ src_y      = 15680
 dst_region = 8
 dst_x      = 3856
 dst_y      = 33600
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -342,6 +378,7 @@ src_y      = 15808
 dst_region = 8
 dst_x      = 3632
 dst_y      = 34240
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -350,6 +387,7 @@ src_y      = 16000
 dst_region = 8
 dst_x      = 4192
 dst_y      = 34176
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -358,6 +396,7 @@ src_y      = 15488
 dst_region = 8
 dst_x      = 4976
 dst_y      = 33408
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -366,6 +405,7 @@ src_y      = 15680
 dst_region = 8
 dst_x      = 4496
 dst_y      = 33600
+door_type  = 1
 
 [[doors]]
 src_region = 3
@@ -374,6 +414,7 @@ src_y      = 12896
 dst_region = 8
 dst_x      = 9600
 dst_y      = 40032
+door_type  = 3
 
 [[doors]]
 src_region = 5
@@ -382,6 +423,7 @@ src_y      = 21568
 dst_region = 8
 dst_x      = 8032
 dst_y      = 40000
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -390,6 +432,7 @@ src_y      = 17280
 dst_region = 8
 dst_x      = 12416
 dst_y      = 36224
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -398,6 +441,7 @@ src_y      = 21664
 dst_region = 8
 dst_x      = 8080
 dst_y      = 40096
+door_type  = 11
 
 [[doors]]
 src_region = 7
@@ -406,6 +450,7 @@ src_y      = 27520
 dst_region = 8
 dst_x      = 10704
 dst_y      = 38528
+door_type  = 10
 
 [[doors]]
 src_region = 5
@@ -414,6 +459,7 @@ src_y      = 22592
 dst_region = 8
 dst_x      = 8800
 dst_y      = 38976
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -422,6 +468,7 @@ src_y      = 22688
 dst_region = 8
 dst_x      = 8848
 dst_y      = 39072
+door_type  = 11
 
 [[doors]]
 src_region = 5
@@ -430,6 +477,7 @@ src_y      = 17728
 dst_region = 8
 dst_x      = 7264
 dst_y      = 38976
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -438,6 +486,7 @@ src_y      = 25728
 dst_region = 8
 dst_x      = 11392
 dst_y      = 36224
+door_type  = 3
 
 [[doors]]
 src_region = 5
@@ -446,6 +495,7 @@ src_y      = 17824
 dst_region = 8
 dst_x      = 7312
 dst_y      = 39072
+door_type  = 11
 
 [[doors]]
 src_region = 5
@@ -454,6 +504,7 @@ src_y      = 21216
 dst_region = 8
 dst_x      = 5856
 dst_y      = 33760
+door_type  = 10
 
 [[doors]]
 src_region = 5
@@ -462,6 +513,7 @@ src_y      = 21440
 dst_region = 8
 dst_x      = 7104
 dst_y      = 33984
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -470,6 +522,7 @@ src_y      = 21568
 dst_region = 8
 dst_x      = 6592
 dst_y      = 34112
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -478,6 +531,7 @@ src_y      = 20896
 dst_region = 8
 dst_x      = 6640
 dst_y      = 33440
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -486,6 +540,7 @@ src_y      = 21056
 dst_region = 8
 dst_x      = 7664
 dst_y      = 33600
+door_type  = 14
 
 [[doors]]
 src_region = 5
@@ -494,6 +549,7 @@ src_y      = 21568
 dst_region = 8
 dst_x      = 7184
 dst_y      = 34368
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -502,6 +558,7 @@ src_y      = 21248
 dst_region = 8
 dst_x      = 6736
 dst_y      = 33792
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -510,6 +567,7 @@ src_y      = 21376
 dst_region = 8
 dst_x      = 7216
 dst_y      = 33920
+door_type  = 14
 
 [[doors]]
 src_region = 5
@@ -518,6 +576,7 @@ src_y      = 20896
 dst_region = 8
 dst_x      = 7264
 dst_y      = 33440
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -526,6 +585,7 @@ src_y      = 21088
 dst_region = 8
 dst_x      = 8272
 dst_y      = 33632
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -534,6 +594,7 @@ src_y      = 21440
 dst_region = 8
 dst_x      = 8288
 dst_y      = 33984
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -542,6 +603,7 @@ src_y      = 21568
 dst_region = 8
 dst_x      = 7776
 dst_y      = 34112
+door_type  = 13
 
 [[doors]]
 src_region = 5
@@ -550,6 +612,7 @@ src_y      = 23872
 dst_region = 8
 dst_x      = 7264
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -558,6 +621,7 @@ src_y      = 23968
 dst_region = 8
 dst_x      = 7312
 dst_y      = 40096
+door_type  = 11
 
 [[doors]]
 src_region = 3
@@ -566,6 +630,7 @@ src_y      = 11872
 dst_region = 9
 dst_x      = 2752
 dst_y      = 34912
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -574,6 +639,7 @@ src_y      = 28480
 dst_region = 8
 dst_x      = 8800
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -582,6 +648,7 @@ src_y      = 28576
 dst_region = 8
 dst_x      = 8848
 dst_y      = 40096
+door_type  = 11
 
 [[doors]]
 src_region = 7
@@ -590,6 +657,7 @@ src_y      = 26464
 dst_region = 8
 dst_x      = 10912
 dst_y      = 35680
+door_type  = 15
 
 [[doors]]
 src_region = 5
@@ -598,6 +666,7 @@ src_y      = 22656
 dst_region = 8
 dst_x      = 10192
 dst_y      = 38528
+door_type  = 10
 
 [[doors]]
 src_region = 1
@@ -606,6 +675,7 @@ src_y      = 6752
 dst_region = 8
 dst_x      = 9600
 dst_y      = 39520
+door_type  = 3
 
 [[doors]]
 src_region = 3
@@ -614,6 +684,7 @@ src_y      = 10592
 dst_region = 9
 dst_x      = 4544
 dst_y      = 35680
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -622,6 +693,7 @@ src_y      = 29248
 dst_region = 8
 dst_x      = 6496
 dst_y      = 40000
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -630,6 +702,7 @@ src_y      = 29344
 dst_region = 8
 dst_x      = 6544
 dst_y      = 40096
+door_type  = 11
 
 [[doors]]
 src_region = 3
@@ -638,6 +711,7 @@ src_y      = 12992
 dst_region = 8
 dst_x      = 9712
 dst_y      = 35776
+door_type  = 3
 
 [[doors]]
 src_region = 1
@@ -646,6 +720,7 @@ src_y      = 6240
 dst_region = 9
 dst_x      = 960
 dst_y      = 34400
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -654,6 +729,7 @@ src_y      = 23872
 dst_region = 8
 dst_x      = 8032
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 5
@@ -662,6 +738,7 @@ src_y      = 23968
 dst_region = 8
 dst_x      = 8080
 dst_y      = 39072
+door_type  = 11
 
 [[doors]]
 src_region = 1
@@ -670,6 +747,7 @@ src_y      = 6688
 dst_region = 9
 dst_x      = 1200
 dst_y      = 34880
+door_type  = 9
 
 [[doors]]
 src_region = 3
@@ -678,6 +756,7 @@ src_y      = 10848
 dst_region = 8
 dst_x      = 11136
 dst_y      = 39520
+door_type  = 3
 
 [[doors]]
 src_region = 1
@@ -686,6 +765,7 @@ src_y      = 7008
 dst_region = 8
 dst_x      = 10992
 dst_y      = 36960
+door_type  = 9
 
 [[doors]]
 src_region = 5
@@ -694,6 +774,7 @@ src_y      = 17280
 dst_region = 8
 dst_x      = 10320
 dst_y      = 36224
+door_type  = 13
 
 [[doors]]
 src_region = 7
@@ -702,6 +783,7 @@ src_y      = 31872
 dst_region = 8
 dst_x      = 11216
 dst_y      = 38528
+door_type  = 10
 
 [[doors]]
 src_region = 3
@@ -710,6 +792,7 @@ src_y      = 11872
 dst_region = 8
 dst_x      = 10368
 dst_y      = 39520
+door_type  = 3
 
 [[doors]]
 src_region = 7
@@ -718,6 +801,7 @@ src_y      = 26688
 dst_region = 8
 dst_x      = 8032
 dst_y      = 39488
+door_type  = 18
 
 [[doors]]
 src_region = 7
@@ -726,6 +810,7 @@ src_y      = 26784
 dst_region = 8
 dst_x      = 8080
 dst_y      = 39584
+door_type  = 11
 
 [[doors]]
 src_region = 5
@@ -734,6 +819,7 @@ src_y      = 21120
 dst_region = 8
 dst_x      = 12752
 dst_y      = 38528
+door_type  = 10
 
 # Zone table schema — entries will go here once ADF analysis is complete.
 # Each zone is a rectangular trigger area in a region.

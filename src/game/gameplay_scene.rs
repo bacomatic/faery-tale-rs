@@ -343,6 +343,7 @@ impl GameplayScene {
             dst_region: d.dst_region,
             dst_x:      d.dst_x,
             dst_y:      d.dst_y,
+            door_type:  d.door_type,
         }).collect();
         self.zones = game_lib.zones.clone();
 
@@ -471,10 +472,23 @@ impl GameplayScene {
             if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
                 self.state.hero_x = new_x;
                 self.state.hero_y = new_y;
-                if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
+                if self.state.region_num >= 8 {
+                    // Indoor (region >= 8): exit check — match on grid-aligned dst coords.
+                    // Mirrors fmain.c indoor branch: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
+                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, new_x, new_y) {
+                        let (ex, ey) = crate::game::doors::exit_spawn(&door);
+                        let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
+                        self.state.region_num = outdoor_region;
+                        self.state.hero_x = ex;
+                        self.state.hero_y = ey;
+                        self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
+                    }
+                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
+                    // Outdoor (region < 8): entry check — match on src coords.
+                    let (ix, iy) = crate::game::doors::entry_spawn(&door);
                     self.state.region_num = door.dst_region;
-                    self.state.hero_x = door.dst_x;
-                    self.state.hero_y = door.dst_y;
+                    self.state.hero_x = ix;
+                    self.state.hero_y = iy;
                     self.dlog(format!("door: region transition to {}", door.dst_region));
                 }
                 // Outdoor region transition: recompute region from position after every move.
@@ -534,9 +548,10 @@ impl GameplayScene {
                         })
                         .copied();
                     if let Some(door) = nearest {
+                        let (ix, iy) = crate::game::doors::entry_spawn(&door);
                         self.state.region_num = door.dst_region;
-                        self.state.hero_x = door.dst_x;
-                        self.state.hero_y = door.dst_y;
+                        self.state.hero_x = ix;
+                        self.state.hero_y = iy;
                         self.dlog(format!("door: bumped transition to {}", door.dst_region));
                     } else {
                         self.messages.push("It's locked.");
@@ -1259,9 +1274,10 @@ impl GameplayScene {
                 {
                     self.state.stuff_mut()[key_slot] -= 1;
                     self.messages.push("Door opened.".to_string());
+                    let (ix, iy) = crate::game::doors::entry_spawn(&door);
                     self.state.region_num = door.dst_region;
-                    self.state.hero_x = door.dst_x;
-                    self.state.hero_y = door.dst_y;
+                    self.state.hero_x = ix;
+                    self.state.hero_y = iy;
                     self.dlog(format!("door: key transition to {}", door.dst_region));
                 } else {
                     self.messages.push("Key didn't fit.".to_string());
