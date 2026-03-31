@@ -345,6 +345,61 @@ else
 
 `fade_page(r, g, b, limit, colors)` applies per-frame colour scaling. Night limit floor: r≥10, g≥25, b≥60 (ensures blue-tinted night). `light_timer` (Green Jewel) adds +200 to the **red channel parameter only**, making the scene warm and bright. Indoor regions (`region_num ≥ 8`) always use full brightness (100, 100, 100) — no day/night variation.
 
+### Palette saturation / desaturation thresholds
+
+The `day_fade()` parameters passed to `fade_page()` are (without Green Jewel):
+
+| Channel | Parameter formula    | Clamp range | Hits floor when    | Hits ceiling when    |
+|---------|----------------------|-------------|--------------------|----------------------|
+| Red     | `lightlevel - 80`    | [10, 100]   | `lightlevel ≤ 90`  | `lightlevel ≥ 180`  |
+| Green   | `lightlevel - 61`    | [25, 100]   | `lightlevel ≤ 86`  | `lightlevel ≥ 161`  |
+| Blue    | `lightlevel - 62`    | [60, 100]   | `lightlevel ≤ 122` | `lightlevel ≥ 162`  |
+
+Converting `lightlevel` to `daynight` ticks: `daynight = lightlevel × 40` (ascending half),
+`daynight = (600 − lightlevel) × 40` (descending half). Time of day: `hours = daynight / 1000`,
+`minutes = (daynight % 1000) × 60 / 1000`.
+
+**Dawn sequence** (ascending lightlevel, midnight → noon):
+
+| Time  | daynight | lightlevel | Event                                     |
+|-------|----------|------------|-------------------------------------------|
+| 03:26 |     3440 |         86 | Green rises off floor (25→26)             |
+| 03:36 |     3600 |         90 | Red rises off floor (10→11)               |
+| 04:52 |     4880 |        122 | Blue rises off floor (60→61)              |
+| 06:26 |     6440 |        161 | Green saturates (reaches 100)             |
+| 06:28 |     6480 |        162 | Blue saturates (reaches 100)              |
+| 07:12 |     7200 |        180 | Red saturates — **full brightness begins** |
+
+**Dusk sequence** (descending lightlevel, noon → midnight):
+
+| Time  | daynight | lightlevel | Event                                      |
+|-------|----------|------------|--------------------------------------------|
+| 16:48 |    16800 |        180 | Red drops below 100 — **full brightness ends** |
+| 17:31 |    17520 |        162 | Blue drops below 100                       |
+| 17:33 |    17560 |        161 | Green drops below 100                      |
+| 19:07 |    19120 |        122 | Blue hits floor (60)                       |
+| 20:24 |    20400 |         90 | Red hits floor (10)                        |
+| 20:33 |    20560 |         86 | Green hits floor — **full darkness begins** |
+
+**Summary zones:**
+
+| Period          | Time range      | Description                                     |
+|-----------------|-----------------|--------------------------------------------------|
+| Full darkness   | 20:33 – 03:26   | All channels clamped to floor (r=10, g=25, b=60) |
+| Dawn transition | 03:26 – 07:12   | Channels rise off floor → ceiling progressively  |
+| Full brightness | 07:12 – 16:48   | All channels clamped to 100 (unmodified palette)  |
+| Dusk transition | 16:48 – 20:33   | Channels drop from ceiling → floor progressively |
+
+Full brightness lasts **9 hours 36 minutes** in-game; full darkness lasts **6 hours 53 minutes**.
+Dawn transition spans **3 hours 46 minutes**; dusk transition mirrors at **3 hours 45 minutes**
+(rounding from tick boundaries).
+
+**With Green Jewel** (`light_timer`): the red parameter becomes `lightlevel − 80 + 200 =
+lightlevel + 120`, which exceeds 100 at all lightlevels — red is permanently clamped to 100.
+Green and blue thresholds are unaffected. The per-color boost (`if r1 < g1: r1 = g1`) further
+ensures warm tones. Net effect: the jewel eliminates the red dimming entirely, leaving only
+green/blue to cycle.
+
 ---
 
 ## Door / Portal System
