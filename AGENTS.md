@@ -7,6 +7,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Rust port of "The Faery Tale Adventure" (1987 Amiga game by MicroIllusions).
 - Personal learning project; PRs are not accepted.
 - **Fidelity first**: be true to the original game. Do not add enhancements or modernizations.
+- Fidelity does not necessarily mean "line-by-line accuracy" to the original C/ASM sources; it means matching the original behavior and player experience, even if that requires different code structure or algorithms.
 - Do not intentionally "fix" original behavior unless reproducing the original bug would require extra work.
 - Original C/ASM sources in `original/` are reference material and may be non-buildable.
 
@@ -38,6 +39,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
 1. **First**: check `RESEARCH.md` — it contains verified reverse-engineering notes.
 2. **Only if RESEARCH.md is silent or appears incorrect**: do a deep dive into `original/` (C/ASM sources).
+3. **ALWAYS**: Update RESEARCH.md with new findings, even if they just confirm what's already there. This file is the single source of truth for game mechanics research.
 
 ## Planning files contract
 

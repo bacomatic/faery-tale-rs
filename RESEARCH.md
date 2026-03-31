@@ -437,7 +437,7 @@ struct door {
 | CAVE / VLOG | 18 | Cave entrance / log cabin yard |
 
 **Entry/exit position logic:**
-- Horizontal door (`type & 1 == 1`): player enters only if `(hero_y & 0x10) == 0` (lower half of tile)
+- Horizontal door (`type & 1 == 1`): player enters only if `(hero_y & 0x10) == 0` (upper half of tile — hero walks from lower half and triggers on crossing into upper half)
 - Vertical door (`type & 1 == 0`): player enters only if `(hero_x & 15) > 6`
 - Cave type: entry offset `(xc2+24, yc2+16)`, exit offset `(xc1-4, yc1+16)`
 - Horizontal non-cave: entry `(xc2+16, yc2)`, exit `(xc1+16, yc1+34)`
