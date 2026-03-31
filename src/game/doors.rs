@@ -67,6 +67,35 @@ pub fn key_req(door_type: u8) -> KeyReq {
 /// Proximity in pixels for walk-on door detection (outdoor src coord matching).
 pub const DOOR_PROXIMITY: u16 = 8;
 
+/// Bump-detection search window (pixels). Mirrors the original's grid-aligned exact match
+/// while tolerating sub-pixel approach offsets.
+pub const BUMP_PROX_X: i32 = 32; // 2 × 16px X grid cell
+pub const BUMP_PROX_Y: i32 = 64; // 2 × 32px Y grid cell
+
+/// Find the nearest outdoor door within bump proximity, returning its (index, entry).
+/// Used by both the terrain-15 bump path and the USE→KEYS TryKey path.
+pub fn doorfind_nearest_by_bump_radius(
+    table: &[DoorEntry],
+    region_num: u8,
+    hero_x: u16,
+    hero_y: u16,
+) -> Option<(usize, DoorEntry)> {
+    table
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| {
+            d.src_region == region_num
+                && (d.src_x as i32 - hero_x as i32).abs() < BUMP_PROX_X
+                && (d.src_y as i32 - hero_y as i32).abs() < BUMP_PROX_Y
+        })
+        .min_by_key(|(_, d)| {
+            let dx = d.src_x as i32 - hero_x as i32;
+            let dy = d.src_y as i32 - hero_y as i32;
+            dx * dx + dy * dy
+        })
+        .map(|(i, d)| (i, *d))
+}
+
 pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -> Option<DoorEntry> {
     for door in table {
         if door.src_region == region_num
@@ -220,5 +249,42 @@ mod tests {
         let (x, y) = entry_spawn(&door);
         assert_eq!(x, 0x0bd0u16.wrapping_sub(1));
         assert_eq!(y, 0x84c0 + 16);
+    }
+
+    #[test]
+    fn test_doorfind_nearest_by_bump_radius_no_match() {
+        let table = [DoorEntry { src_region: 0, src_x: 500, src_y: 500, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD }];
+        // Wrong region
+        assert!(doorfind_nearest_by_bump_radius(&table, 1, 500, 500).is_none());
+        // Too far X
+        assert!(doorfind_nearest_by_bump_radius(&table, 0, 500 + BUMP_PROX_X as u16, 500).is_none());
+        // Too far Y
+        assert!(doorfind_nearest_by_bump_radius(&table, 0, 500, 500 + BUMP_PROX_Y as u16).is_none());
+    }
+
+    #[test]
+    fn test_doorfind_nearest_by_bump_radius_match() {
+        let table = [
+            DoorEntry { src_region: 2, src_x: 100, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD },
+            DoorEntry { src_region: 2, src_x: 200, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: VWOOD },
+        ];
+        // Within radius of first door only
+        let result = doorfind_nearest_by_bump_radius(&table, 2, 110, 100);
+        assert!(result.is_some());
+        let (idx, door) = result.unwrap();
+        assert_eq!(idx, 0);
+        assert_eq!(door.door_type, HWOOD);
+        // Nearest of two doors both in range — hero at x=120, door1 Δ20, door2 Δ80 (out of range)
+        // Use doors closer together so both fit within BUMP_PROX_X=32: door1@100, door2@130
+        let table2 = [
+            DoorEntry { src_region: 2, src_x: 100, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD },
+            DoorEntry { src_region: 2, src_x: 130, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: VWOOD },
+        ];
+        // Hero at x=120: Δ20 from door1, Δ10 from door2 → door2 is nearest
+        let result2 = doorfind_nearest_by_bump_radius(&table2, 2, 120, 100);
+        assert!(result2.is_some());
+        let (idx2, door2) = result2.unwrap();
+        assert_eq!(idx2, 1);
+        assert_eq!(door2.door_type, VWOOD);
     }
 }
