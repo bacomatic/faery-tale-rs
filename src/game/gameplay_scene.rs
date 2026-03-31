@@ -458,9 +458,15 @@ impl GameplayScene {
 
             let dx = base_dx * speed / 2;
             let dy = base_dy * speed / 2;
-            // World wraps at MAXCOORD = 0x8000 = 32768 (matching original USHORT arithmetic).
+            // Outdoor world wraps at MAXCOORD = 0x8000 = 32768 (USHORT arithmetic).
+            // Indoor maps (region >= 8) use y coordinates in the 0x8000–0x9FFF range;
+            // wrapping would collapse them to 0–0x1FFF and break doorfind_exit matching.
             let new_x = (self.state.hero_x as i32 + dx).rem_euclid(0x8000) as u16;
-            let new_y = (self.state.hero_y as i32 + dy).rem_euclid(0x8000) as u16;
+            let new_y = if self.state.region_num < 8 {
+                (self.state.hero_y as i32 + dy).rem_euclid(0x8000) as u16
+            } else {
+                (self.state.hero_y as i32 + dy) as u16
+            };
 
             // Turtle guardrail: turtle rides water but cannot enter hard-block terrain (mountains).
             let turtle_blocked = self.state.on_raft
