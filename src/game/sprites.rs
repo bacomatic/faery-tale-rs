@@ -193,7 +193,7 @@ pub const INV_LIST: [InvItem; 31] = [
 
 /// Map a short item name or numeric string to an INV_LIST index (0–30).
 /// Numeric strings parse to the index directly (0–30 valid; 31+ returns None).
-/// Name matching is case-insensitive substring: "sword" matches "long sword".
+/// Name matching is case-insensitive: user input is checked for table entry containment ("arrows" matches "arrow").
 /// Talisman (index 22) is intentionally included — callers guard against it.
 pub fn item_name_to_id(name: &str) -> Option<usize> {
     const TABLE: &[(&str, usize)] = &[
