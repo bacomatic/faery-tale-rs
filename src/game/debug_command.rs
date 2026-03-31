@@ -56,4 +56,7 @@ pub enum DebugCommand {
     SpawnEncounterType(u8),
     /// Deactivate all NPCs in the current npc_table.
     ClearEncounters,
+    /// Scatter items in a ring around the player.
+    /// item_id: None = random from safe pool (no talisman); Some(id) = specific item.
+    ScatterItems { count: usize, item_id: Option<usize> },
 }

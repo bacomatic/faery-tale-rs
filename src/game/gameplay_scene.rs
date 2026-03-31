@@ -2026,6 +2026,60 @@ impl GameplayScene {
                     self.dlog("clear encounters: no npc_table loaded".to_string());
                 }
             }
+            ScatterItems { count, item_id } => {
+                use crate::game::sprites::INV_LIST;
+                use crate::game::game_state::WorldObject;
+                const TALISMAN_IDX: usize = 22;
+
+                let region = self.state.region_num;
+                let hero_x = self.state.hero_x as i32;
+                let hero_y = self.state.hero_y as i32;
+                let mut dropped = 0usize;
+
+                if let Some(id) = item_id {
+                    // Drop `count` copies of one specific item in a ring.
+                    let radius = if count == 1 { 16.0f32 } else { 80.0f32 };
+                    for i in 0..count {
+                        let angle = if count == 1 {
+                            0.0f32
+                        } else {
+                            2.0 * std::f32::consts::PI * (i as f32) / (count as f32)
+                        };
+                        let x = (hero_x + (radius * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
+                        let y = (hero_y + (radius * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+                        self.state.world_objects.push(WorldObject {
+                            item_id: id as u8,
+                            region,
+                            x, y,
+                            visible: true,
+                        });
+                        dropped += 1;
+                    }
+                    self.dlog(format!("scattered {} x item {} ({})", dropped, id,
+                        if id == TALISMAN_IDX { "TALISMAN — end-of-game item" } else { "" }
+                    ));
+                } else {
+                    // Drop `count` items from the safe pool (no talisman), in a ring.
+                    let safe_pool: Vec<usize> = (0..INV_LIST.len())
+                        .filter(|&i| i != TALISMAN_IDX)
+                        .collect();
+                    let n = count.min(safe_pool.len() * 4); // allow cycling
+                    for i in 0..n {
+                        let item_id = safe_pool[i % safe_pool.len()];
+                        let angle = 2.0 * std::f32::consts::PI * (i as f32) / (n as f32);
+                        let x = (hero_x + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
+                        let y = (hero_y + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+                        self.state.world_objects.push(WorldObject {
+                            item_id: item_id as u8,
+                            region,
+                            x, y,
+                            visible: true,
+                        });
+                        dropped += 1;
+                    }
+                    self.dlog(format!("scattered {} items", dropped));
+                }
+            }
         }
     }
 
@@ -3267,5 +3321,35 @@ mod tests {
             .iter()
             .any(|&p| p == 0);
         assert!(has_written, "expected SetFig pixels to be written to framebuf");
+    }
+
+    #[test]
+    fn test_scatter_items_adds_world_objects() {
+        use crate::game::game_state::{GameState, WorldObject};
+        use crate::game::sprites::INV_LIST;
+
+        let mut state = GameState::new();
+        state.hero_x = 1000;
+        state.hero_y = 1000;
+        state.region_num = 3;
+
+        const TALISMAN_IDX: usize = 22;
+        let count = 5usize;
+        let safe_pool: Vec<usize> = (0..INV_LIST.len()).filter(|&i| i != TALISMAN_IDX).collect();
+        let n = count.min(safe_pool.len());
+        for i in 0..n {
+            let item_id = safe_pool[i % safe_pool.len()];
+            let angle = 2.0f32 * std::f32::consts::PI * (i as f32) / (n as f32);
+            let x = (state.hero_x as i32 + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
+            let y = (state.hero_y as i32 + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+            state.world_objects.push(WorldObject {
+                item_id: item_id as u8,
+                region: state.region_num,
+                x, y,
+                visible: true,
+            });
+        }
+        assert_eq!(state.world_objects.len(), 5);
+        assert!(state.world_objects.iter().all(|o| o.item_id != TALISMAN_IDX as u8));
     }
 }

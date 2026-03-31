@@ -483,6 +483,7 @@ impl DebugConsole {
             "/actors" => self.push_cmd(DebugCommand::QueryActors),
             "/terrain" => self.push_cmd(DebugCommand::QueryTerrain),
             "/encounter" => self.cmd_encounter(args),
+            "/items" => self.cmd_items(args),
             "/songs" => self.cmd_songs(args),
             "/adf" => self.cmd_adf(args),
             "/clear" | "/cls" => self.cmd_clear(),
@@ -519,6 +520,7 @@ impl DebugConsole {
                 "/actors"           => "/actors — print actor list to log.",
                 "/terrain"          => "/terrain — dump terra lookup chain at hero's feet (collision debug).",
                 "/encounter"        => "/encounter — force regional encounter (4 enemies).\n  /encounter <type>  spawn one enemy: orc ghost skeleton wraith dragon snake swan horse\n  /encounter clear   deactivate all active NPCs",
+                "/items"            => "/items — scatter items around player.\n  /items             all 30 safe items\n  /items <count>     N random items (no talisman)\n  /items <name|id>   drop one item by name or index 0-30\n  /items <n> <name>  drop N of a named item\n  Note: talisman (triggers end-of-game) only drops with: /items talisman",
                 "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop  /songs cave <on|off>",
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
@@ -550,6 +552,7 @@ impl DebugConsole {
             "  /actors        list actors",
             "  /terrain       dump terrain at current position",
             "  /encounter [t] force encounter / spawn type / clear",
+            "  /items [n] [name]  scatter items around player (no talisman unless named)",
             "  /songs [cmd]   music: play <N> / stop / cave <on|off>",
             "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
@@ -842,6 +845,37 @@ impl DebugConsole {
                     )),
                 }
             }
+        }
+    }
+
+    fn cmd_items(&mut self, args: &[&str]) {
+        match args {
+            [] => {
+                // All 30 safe items (no talisman)
+                self.push_cmd(DebugCommand::ScatterItems { count: 30, item_id: None });
+            }
+            [arg] => {
+                if let Ok(n) = arg.parse::<usize>() {
+                    self.push_cmd(DebugCommand::ScatterItems { count: n, item_id: None });
+                } else {
+                    match crate::game::sprites::item_name_to_id(arg) {
+                        Some(id) => self.push_cmd(DebugCommand::ScatterItems { count: 1, item_id: Some(id) }),
+                        None => self.log(format!("Unknown item: {}.  Use a name or index 0-30.", arg)),
+                    }
+                }
+            }
+            [count_str, name] => {
+                match count_str.parse::<usize>() {
+                    Err(_) => self.log(format!(
+                        "Invalid count '{}'. Usage: /items [count] [name|index]", count_str
+                    )),
+                    Ok(n) => match crate::game::sprites::item_name_to_id(name) {
+                        Some(id) => self.push_cmd(DebugCommand::ScatterItems { count: n, item_id: Some(id) }),
+                        None => self.log(format!("Unknown item: {}.  Use a name or index 0-30.", name)),
+                    },
+                }
+            }
+            _ => self.log("Usage: /items [count] [name|index]  e.g. /items 5 sword".to_string()),
         }
     }
 
