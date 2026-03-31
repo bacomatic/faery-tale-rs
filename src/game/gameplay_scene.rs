@@ -2229,6 +2229,27 @@ impl GameplayScene {
         }
     }
 
+    /// Map (npc_type, race) → cfile index for enemy sprite rendering.
+    /// Returns None for SetFig humans (rendered in a separate pass) and skipped types.
+    /// cfile 7 covers ghost/wraith/skeleton per RESEARCH.md sprite assignments.
+    fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
+        use crate::game::npc::*;
+        match npc_type {
+            NPC_TYPE_NONE | NPC_TYPE_CONTAINER => None,
+            NPC_TYPE_HUMAN if race == RACE_ENEMY => Some(6),
+            NPC_TYPE_HUMAN => None,  // SetFig — handled in setfig pass
+            NPC_TYPE_SWAN     => Some(11),
+            NPC_TYPE_HORSE    => Some(5),
+            NPC_TYPE_DRAGON   => Some(10),
+            NPC_TYPE_GHOST    => Some(7),
+            NPC_TYPE_ORC      => Some(6),
+            NPC_TYPE_WRAITH   => Some(7),
+            NPC_TYPE_SKELETON => Some(7),
+            NPC_TYPE_RAFT     => Some(4),
+            _                 => Some(6), // unknown enemy types default to ogre sheet
+        }
+    }
+
     /// Blit all visible actors (hero + enemy NPCs) onto the map framebuf (sprite-104).
     /// Called immediately after mr.compose() so actors appear on top of tiles.
     fn blit_actors_to_framebuf(
@@ -3023,5 +3044,27 @@ mod tests {
         assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
         assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
         assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
+    }
+
+    #[test]
+    fn test_npc_type_to_cfile() {
+        use crate::game::npc::*;
+        // Enemy humans → ogre sheet
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_ENEMY), Some(6));
+        // Named humans → None (SetFig pass)
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_NORMAL), None);
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_SHOPKEEPER), None);
+        // Enemy types
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_ORC,      RACE_ENEMY),  Some(6));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_GHOST,    RACE_UNDEAD), Some(7));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SKELETON, RACE_UNDEAD), Some(7));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_WRAITH,   RACE_WRAITH), Some(7));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_DRAGON,   RACE_ENEMY),  Some(10));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SWAN,     RACE_NORMAL), Some(11));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HORSE,    RACE_NORMAL), Some(5));
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_RAFT,     RACE_NORMAL), Some(4));
+        // Inactive / container → None
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE,      RACE_NORMAL), None);
+        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL), None);
     }
 }
