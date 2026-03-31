@@ -2250,6 +2250,20 @@ impl GameplayScene {
         }
     }
 
+    /// Map (npc_type, race) → SETFIG_TABLE index for named NPC rendering.
+    /// Returns None if the NPC is not a SetFig.
+    /// SETFIG_TABLE indices: 0=wizard, 8=bartender, 13=beggar (see sprites.rs).
+    fn npc_to_setfig_idx(npc_type: u8, race: u8) -> Option<usize> {
+        use crate::game::npc::*;
+        if npc_type != NPC_TYPE_HUMAN { return None; }
+        match race {
+            RACE_SHOPKEEPER => Some(8),   // bartender
+            RACE_BEGGAR     => Some(13),  // beggar
+            RACE_NORMAL     => Some(0),   // wizard (default named NPC)
+            _               => None,
+        }
+    }
+
     /// Blit all visible actors (hero + enemy NPCs) onto the map framebuf (sprite-104).
     /// Called immediately after mr.compose() so actors appear on top of tiles.
     fn blit_actors_to_framebuf(
@@ -2340,6 +2354,25 @@ impl GameplayScene {
                 // Wrap with sheet.num_frames to handle short sheets (e.g. dragon=5).
                 let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
 
+                if let Some(fp) = sheet.frame_pixels(frame) {
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                }
+            }
+        }
+
+        // --- SetFig NPCs (named NPCs: shopkeepers, beggars, etc.) ---
+        if let Some(ref table) = npc_table {
+            use crate::game::sprites::SETFIG_TABLE;
+            for npc in table.npcs.iter().filter(|n| n.active) {
+                let Some(setfig_idx) = Self::npc_to_setfig_idx(npc.npc_type, npc.race) else { continue };
+                let entry = SETFIG_TABLE[setfig_idx];
+                let cfile_idx = entry.cfile_entry as usize;
+                let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
+
+                let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
+
+                // SetFigs are stationary; use image_base as the static frame.
+                let frame = (entry.image_base as usize) % sheet.num_frames;
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
                 }
@@ -3142,5 +3175,47 @@ mod tests {
             .iter()
             .any(|&p| p == 0);
         assert!(has_written, "expected ORC pixels to be written to framebuf");
+    }
+
+    #[test]
+    fn test_setfig_render_pass_writes_pixels() {
+        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
+        use crate::game::game_state::GameState;
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+
+        // Bartender uses cfile 15 (SETFIG_TABLE[8]).
+        let mock_sheet = SpriteSheet {
+            cfile_idx: 15,
+            pixels: vec![0u8; SPRITE_W * SPRITE_H * 8],
+            num_frames: 8,
+            frame_h: SPRITE_H,
+        };
+        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+        sheets[15] = Some(mock_sheet);
+
+        let mut state = GameState::new();
+        state.hero_x = 8;
+        state.hero_y = 26;
+
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_HUMAN,
+            race: RACE_SHOPKEEPER,
+            x: 80, y: 80,
+            vitality: 10, gold: 0, speed: 0,
+            active: true,
+        };
+
+        let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize];
+        GameplayScene::blit_actors_to_framebuf(
+            &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+        );
+
+        let setfig_area_start = (54 * MAP_DST_W as usize) + 72;
+        let has_written = framebuf[setfig_area_start..setfig_area_start + SPRITE_W]
+            .iter()
+            .any(|&p| p == 0);
+        assert!(has_written, "expected SetFig pixels to be written to framebuf");
     }
 }
