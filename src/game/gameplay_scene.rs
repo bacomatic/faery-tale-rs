@@ -2258,13 +2258,15 @@ impl GameplayScene {
                     16 => "some sacks",
                     _ => "a container",
                 };
-                self.messages.push(format!("{} found {}.", bname, container_name));
 
                 // rand4() determines loot: 0=nothing, 1=one item, 2=two items, 3=three of same
+                // Original uses print/print_cont for multi-part messages on the HI bar.
+                // We combine announce_container prefix with loot suffix into one push.
+                let prefix = format!("{} found {} containing ", bname, container_name);
                 let roll = (self.state.tick_counter & 3) as u8;
                 match roll {
                     0 => {
-                        self.messages.push("It was empty.");
+                        self.messages.push(format!("{}nothing.", prefix));
                     }
                     1 => {
                         // One random item from inv_list[rand8()+8]
@@ -2272,28 +2274,37 @@ impl GameplayScene {
                         let item_idx = if item_idx == 8 { 35usize } else { item_idx }; // 8→ARROWBASE(35)
                         if item_idx < 35 {
                             self.state.pickup_item(item_idx);
-                            self.messages.push(format!("Inside: a {}.", stuff_index_name(item_idx)));
                         }
+                        let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
+                        self.messages.push(format!("{}a {}.", prefix, name));
                     }
                     2 => {
                         // Two different random items
-                        let item1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
-                        let item1 = if item1 == 8 { 35 } else { item1 };
+                        // Special: first item i==8 → GOLDBASE+3 (100 Gold Pieces, wealth+=100)
+                        let raw1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        let (item1, gold_special) = if raw1 == 8 {
+                            (34usize, true) // GOLDBASE+3 = inv_list[34] = "100 Gold Pieces"
+                        } else {
+                            (raw1, false)
+                        };
+                        if gold_special {
+                            self.state.wealth = self.state.wealth.saturating_add(100);
+                        }
                         let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
-                        if item2 == item1 { item2 = ((item2 + 1) & 7) + 8; }
+                        if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
                         let item2 = if item2 == 8 { 35 } else { item2 };
-                        if item1 < 35 { self.state.pickup_item(item1); }
+                        if !gold_special && item1 < 31 { self.state.pickup_item(item1); }
                         if item2 < 35 { self.state.pickup_item(item2); }
-                        let n1 = if item1 < 31 { stuff_index_name(item1) } else { "Arrows" };
-                        let n2 = if item2 < 31 { stuff_index_name(item2) } else { "Arrows" };
-                        self.messages.push(format!("Inside: a {} and a {}.", n1, n2));
+                        let n1 = if item1 < 31 { stuff_index_name(item1) } else if item1 == 34 { "100 Gold Pieces" } else { "quiver of arrows" };
+                        let n2 = if item2 < 31 { stuff_index_name(item2) } else { "quiver of arrows" };
+                        self.messages.push(format!("{}{} and a {}.", prefix, n1, n2));
                     }
                     3 | _ => {
                         // Three of the same item
                         let item = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         if item == 8 {
                             // Special: 3 random keys
-                            self.messages.push("Inside: 3 keys.");
+                            self.messages.push(format!("{}3 keys.", prefix));
                             for shift in [4, 7, 10] {
                                 let mut key_idx = ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
                                 if key_idx == 22 { key_idx = 16; }
@@ -2301,8 +2312,8 @@ impl GameplayScene {
                                 self.state.pickup_item(key_idx);
                             }
                         } else {
-                            let name = if item < 31 { stuff_index_name(item) } else { "Arrows" };
-                            self.messages.push(format!("Inside: 3 {}s.", name));
+                            let name = if item < 31 { stuff_index_name(item) } else { "quiver of arrows" };
+                            self.messages.push(format!("{}3 {}s.", prefix, name));
                             if item < 35 {
                                 self.state.pickup_item(item);
                                 self.state.pickup_item(item);
