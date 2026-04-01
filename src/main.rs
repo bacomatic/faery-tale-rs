@@ -459,6 +459,14 @@ pub fn main() -> Result<(), String> {
                     song_group_count,
                     current_song_group,
                     cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
+                    current_zone_idx: {
+                        let (idx, _) = gs.current_zone_info();
+                        idx
+                    },
+                    current_zone_label: {
+                        let (_, label) = gs.current_zone_info();
+                        label
+                    },
                     vfx_jewel_active: gs.state.light_timer > 0,
                     vfx_light_sticky: gs.state.light_sticky,
                     vfx_secret_active: gs.state.region_num == 9 && gs.state.secret_timer > 0,

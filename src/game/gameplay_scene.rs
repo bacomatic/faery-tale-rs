@@ -399,6 +399,13 @@ impl GameplayScene {
     /// Whether a palette crossfade (region transition) is in progress.
     pub fn is_palette_xfade_active(&self) -> bool { self.palette_transition.is_some() }
 
+    /// Current zone index and label for the debug console.
+    pub fn current_zone_info(&self) -> (Option<usize>, Option<String>) {
+        let label = self.last_zone
+            .and_then(|i| self.zones.get(i).map(|z| z.label.clone()));
+        (self.last_zone, label)
+    }
+
     /// Enable or disable echoing every new message to stdout (--echo-transcript flag).
     pub fn set_echo_transcript(&mut self, echo: bool) {
         self.messages.set_echo(echo);

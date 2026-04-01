@@ -65,6 +65,10 @@ pub struct DebugStatus {
     pub current_song_group: Option<usize>,
     pub cave_mode: bool,
 
+    // Geography
+    pub current_zone_idx: Option<usize>,
+    pub current_zone_label: Option<String>,
+
     // VFX state
     pub vfx_jewel_active: bool,
     pub vfx_light_sticky: bool,
@@ -320,12 +324,13 @@ impl DebugConsole {
                 ])
                 .split(area);
 
-            // Split status header horizontally: Status (left) | VFX (right)
+            // Split status header: Status (left) | Geography (center) | VFX (right)
             let status_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(65),
+                    Constraint::Percentage(40),
                     Constraint::Percentage(35),
+                    Constraint::Percentage(25),
                 ])
                 .split(chunks[0]);
 
@@ -363,10 +368,6 @@ impl DebugConsole {
                     },
                 ]),
                 Line::from(vec![
-                    styled_label("Hero: "),
-                    Span::raw(format!("({:4},{:4})  ", status.hero_x, status.hero_y)),
-                    styled_label("Region: "),
-                    Span::raw(format!("{}  ", status.region_num)),
                     styled_label("Brother: "),
                     Span::raw(format!("{}  ", brother_name)),
                     styled_label("Scene: "),
@@ -395,6 +396,30 @@ impl DebugConsole {
             let status_widget = Paragraph::new(status_text)
                 .block(Block::default().borders(Borders::ALL).title(" Status "));
             f.render_widget(status_widget, status_chunks[0]);
+
+            // ── Geography ─────────────────────────────────────────────
+            let zone_str = match (status.current_zone_idx, &status.current_zone_label) {
+                (Some(idx), Some(label)) => format!("[{}] {}", idx, label),
+                _ => "—".to_string(),
+            };
+            let geo_text = vec![
+                Line::from(vec![
+                    styled_label("Hero: "),
+                    Span::raw(format!("({:5},{:5})", status.hero_x, status.hero_y)),
+                ]),
+                Line::from(vec![
+                    styled_label("Region: "),
+                    Span::raw(format!("{}", status.region_num)),
+                ]),
+                Line::from(vec![
+                    styled_label("Zone: "),
+                    Span::raw(zone_str),
+                ]),
+            ];
+
+            let geo_widget = Paragraph::new(geo_text)
+                .block(Block::default().borders(Borders::ALL).title(" Geography "));
+            f.render_widget(geo_widget, status_chunks[1]);
 
             // ── VFX status ────────────────────────────────────────────
             let on_off = |v: bool| if v { "ON" } else { "off" };
@@ -425,7 +450,7 @@ impl DebugConsole {
 
             let vfx_widget = Paragraph::new(vfx_text)
                 .block(Block::default().borders(Borders::ALL).title(" VFX "));
-            f.render_widget(vfx_widget, status_chunks[1]);
+            f.render_widget(vfx_widget, status_chunks[2]);
 
             // ── Log ───────────────────────────────────────────────────────
             let log_height = chunks[1].height.saturating_sub(2) as usize; // subtract borders
