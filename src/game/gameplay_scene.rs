@@ -261,6 +261,20 @@ pub struct GameplayScene {
     goodfairy: i16,
 }
 
+/// What kind of figure was found by nearest_fig.
+enum FigKind {
+    /// An enemy NPC from npc_table, with its index.
+    Npc(usize),
+    /// A setfig from world_objects, with its index and setfig type (ob_id).
+    SetFig { world_idx: usize, setfig_type: u8 },
+}
+
+/// Result of nearest_fig search.
+struct NearestFig {
+    kind: FigKind,
+    dist: i32,
+}
+
 impl GameplayScene {
     pub fn new() -> Self {
         GameplayScene {
@@ -750,6 +764,67 @@ impl GameplayScene {
         } else {
             self.submerged = false;
         }
+    }
+
+    /// Port of nearest_fig(constraint, max_dist) from fmain2.c:426-442.
+    /// constraint=0: find items (skip setfigs, skip OBJECTS with ob_id==0x1d).
+    /// constraint=1: find NPCs/setfigs (skip ground items).
+    /// Searches both npc_table and world_objects.
+    fn nearest_fig(&self, constraint: u8, max_dist: i32) -> Option<NearestFig> {
+        use crate::game::collision::calc_dist;
+        let hx = self.state.hero_x as i32;
+        let hy = self.state.hero_y as i32;
+
+        let mut best: Option<NearestFig> = None;
+        let mut best_dist = max_dist;
+
+        // Search enemy NPCs from npc_table
+        if let Some(ref table) = self.npc_table {
+            for (i, npc) in table.npcs.iter().enumerate() {
+                if !npc.active { continue; }
+                let d = calc_dist(hx, hy, npc.x as i32, npc.y as i32);
+                if d < best_dist {
+                    best_dist = d;
+                    best = Some(NearestFig {
+                        kind: FigKind::Npc(i),
+                        dist: d,
+                    });
+                }
+            }
+        }
+
+        // Search world_objects for setfigs (ob_stat=3) and ground items (ob_stat=1)
+        for (i, obj) in self.state.world_objects.iter().enumerate() {
+            if !obj.visible { continue; }
+            if obj.region != self.state.region_num { continue; }
+
+            if constraint == 1 {
+                // Looking for NPCs: skip ground items, include setfigs
+                if obj.ob_stat != 3 { continue; }
+            } else {
+                // Looking for items: skip setfigs, include ground items
+                if obj.ob_stat == 3 { continue; }
+                if obj.ob_id == 0x1d { continue; } // empty chest
+            }
+
+            let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
+            if d < best_dist {
+                best_dist = d;
+                if obj.ob_stat == 3 {
+                    best = Some(NearestFig {
+                        kind: FigKind::SetFig { world_idx: i, setfig_type: obj.ob_id },
+                        dist: d,
+                    });
+                } else {
+                    best = Some(NearestFig {
+                        kind: FigKind::Npc(i), // reuse Npc variant for ground items
+                        dist: d,
+                    });
+                }
+            }
+        }
+
+        best
     }
 
     /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
