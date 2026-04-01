@@ -513,7 +513,16 @@ impl GameplayScene {
 
             // Direction deviation (wall-sliding): fmain.c checkdev1/checkdev2.
             // Only for diagonal directions when the original direction was blocked.
-            if !can_move && !turtle_blocked && self.state.flying == 0 && !self.state.on_raft {
+            // Skip deviation when blocked by a door tile (terrain 15) — the player must
+            // bump the door to open it, not slide around it.
+            let blocked_by_door = !can_move && self.map_world.as_ref().map_or(false, |w| {
+                let rt = collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2);
+                let lt = collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2);
+                rt == 15 || lt == 15
+            });
+            if !can_move && !turtle_blocked && !blocked_by_door
+                && self.state.flying == 0 && !self.state.on_raft
+            {
                 let is_diagonal = matches!(dir, Direction::NE | Direction::SE | Direction::SW | Direction::NW);
                 if is_diagonal {
                     let indoor = self.state.region_num >= 8;
