@@ -3683,11 +3683,23 @@ impl Scene for GameplayScene {
                                     let frame_base = Self::facing_to_frame_base(hero_facing);
                                     let anim_offset = if is_moving { (self.state.cycle as usize) % 8 } else { 1 };
                                     let frame = frame_base + anim_offset;
+
+                                    // Build BlittedSprite and mask BEFORE blit
+                                    let sprite_info = BlittedSprite {
+                                        screen_x: rel_x,
+                                        screen_y: rel_y,
+                                        width: SPRITE_W,
+                                        height: SPRITE_H,
+                                        ground: rel_y + SPRITE_H as i32,
+                                        is_falling: false,
+                                    };
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
                                     if let Some(fp) = sheet.frame_pixels(frame) {
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
                                     }
 
-                                    // Weapon overlay
+                                    // Weapon overlay (after hero blit — weapon is part of hero sprite)
                                     let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
                                     if weapon_type > 0 && weapon_type <= 5 {
                                         if let Some(ref obj_sheet) = self.object_sprites {
@@ -3714,14 +3726,7 @@ impl Scene for GameplayScene {
                                         }
                                     }
 
-                                    blitted.push(BlittedSprite {
-                                        screen_x: rel_x,
-                                        screen_y: rel_y,
-                                        width: SPRITE_W,
-                                        height: SPRITE_H,
-                                        ground: rel_y + SPRITE_H as i32,
-                                        is_falling: false,
-                                    });
+                                    blitted.push(sprite_info);
                                 }
                             }
                         }
@@ -3744,18 +3749,22 @@ impl Scene for GameplayScene {
                                 let frame_base = Self::facing_to_frame_base(npc_facing);
                                 let frame = ((frame_base % sheet.num_frames) + (self.state.cycle as usize % 8)) % sheet.num_frames;
 
-                                if let Some(fp) = sheet.frame_pixels(frame) {
-                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
-                                }
-
-                                blitted.push(BlittedSprite {
+                                // Mask BEFORE blit
+                                let sprite_info = BlittedSprite {
                                     screen_x: rel_x,
                                     screen_y: rel_y,
                                     width: SPRITE_W,
                                     height: SPRITE_H,
                                     ground: rel_y + SPRITE_H as i32,
                                     is_falling: false,
-                                });
+                                };
+                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                if let Some(fp) = sheet.frame_pixels(frame) {
+                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                }
+
+                                blitted.push(sprite_info);
                             }
                         }
                         RenderKind::WorldObj(idx) => {
@@ -3765,16 +3774,21 @@ impl Scene for GameplayScene {
                                 if let Some(pix) = obj_sheet.frame_pixels(frame) {
                                     let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
                                     let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
-                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
 
-                                    blitted.push(BlittedSprite {
+                                    // Mask BEFORE blit
+                                    let sprite_info = BlittedSprite {
                                         screen_x: rel_x,
                                         screen_y: rel_y,
                                         width: SPRITE_W,
                                         height: OBJ_SPRITE_H,
                                         ground: rel_y + OBJ_SPRITE_H as i32,
                                         is_falling: false,
-                                    });
+                                    };
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+
+                                    blitted.push(sprite_info);
                                 }
                             }
                         }
@@ -3791,16 +3805,21 @@ impl Scene for GameplayScene {
                                         // actor_rel_pos already applies a Y offset of -26, matching that total,
                                         // so no further adjustment is needed here.
                                         let (rel_x, rel_y) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
 
-                                        blitted.push(BlittedSprite {
+                                        // Mask BEFORE blit
+                                        let sprite_info = BlittedSprite {
                                             screen_x: rel_x,
                                             screen_y: rel_y,
                                             width: SPRITE_W,
                                             height: SPRITE_H,
                                             ground: rel_y + SPRITE_H as i32,
                                             is_falling: false,
-                                        });
+                                        };
+                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+
+                                        blitted.push(sprite_info);
                                     }
                                 }
                             }
@@ -3808,10 +3827,7 @@ impl Scene for GameplayScene {
                     }
                 }
 
-                // Sprite-depth masking for all rendered sprites
-                for sprite in &blitted {
-                    apply_sprite_mask(mr, sprite, self.state.hero_sector, 0);
-                }
+                // Per-sprite masking is now done before each blit
             }
         }
 
