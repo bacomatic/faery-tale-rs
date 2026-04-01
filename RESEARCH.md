@@ -716,7 +716,7 @@ The asymmetric thresholds (≥10 right, ≥8 left) mean types 8–9 only block t
 | `riding == 5` (on raft) | `raftprox` set; drowning suppressed (`k = 0`). Raft can only navigate type 5 tiles. |
 | Type 9 + hero on `xtype==52` (vulture) | Triggers `FALL` state; luck −2. |
 | Type 1 or 15 | Stops projectiles (arrows/fireballs) dead. |
-| `passmode` set (weapon pass-through) | Sprites rendered without masking; terrain masking skipped. |
+| `passmode` set (weapon pass) | Weapon rendered with its own bounding box; masking applied per-pass (see "Weapon rendering and two-pass sprite masking"). |
 
 ---
 
@@ -1499,6 +1499,38 @@ The mask is not stored after the frames — see the note above about `make_mask(
 | 11 | Ghost    | 16 | 7 | No |
 | 12 | Ranger   | 17 | 0 | Yes |
 | 13 | Beggar   | 17 | 4 | Yes |
+
+### Weapon rendering and two-pass sprite masking (`fmain.c:2880–3184`)
+
+The rendering loop uses a **two-pass** system (`pass` 0 and 1) per entity, controlled by `passmode`. Each pass draws either the body or the weapon, then applies depth-masking independently using that pass's bounding box.
+
+**Weapon draw order (`passmode`)**:
+
+For most weapons, `(facing - 2) & 4` selects whether the weapon draws before the body (behind) or after (in front):
+
+| Original facing | Direction | `(f-2)&4` | Weapon draws… |
+|-----------------|-----------|-----------|---------------|
+| 0 | NW | 4 | Behind body |
+| 1 | N  | 4 | Behind body |
+| 2 | NE | 0 | In front |
+| 3 | E  | 0 | In front |
+| 4 | SE | 0 | In front |
+| 5 | S  | 0 | In front |
+| 6 | SW | 4 | Behind body |
+| 7 | W  | 4 | Behind body |
+
+(Rust facing convention is rotated: 0=N, 1=NE, …, 7=NW; the same set of four directions map to `weapon_behind`.)
+
+Bow (weapon type 4) has an inverted test: `(facing & 4) == 0` reverses the draw order.
+
+**Masking applies to BOTH passes independently.**  Each pass computes its own bounding box:
+
+- **Pass 0 (body)**: `xstart = rel_x`, `ystart = rel_y`, size 16×32, `ground = ystart + 32`.
+- **Pass 1 (weapon)**: `xstart = rel_x + wpn_x`, `ystart = rel_y + wpn_y`, size 16×16, same `ground` (body feet).
+
+Both passes run through the same `maskit()` loop (`fmain.c:3134–3184`), checking tile mask types and applying `shadow_mem` bitmasks. This ensures the weapon is hidden behind foreground terrain (buildings, trees) even when its pixels extend beyond the body sprite's bounding box.
+
+**Key invariant**: the weapon pass uses the **body's ground line** (`ystart + 32`, not the weapon's own bottom edge) for depth comparison. This is because depth sorting is always relative to the character's feet position on the ground plane.
 
 ---
 
