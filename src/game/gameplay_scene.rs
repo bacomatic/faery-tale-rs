@@ -3507,25 +3507,14 @@ impl Scene for GameplayScene {
 
         // Encounter zone check (world-111)
         self.in_encounter_zone = crate::game::zones::in_encounter_zone(
-            self.state.region_num, self.state.hero_x, self.state.hero_y);
+            &self.zones, self.state.hero_x, self.state.hero_y);
 
         // Event zone entry check (#107)
         {
             let hx = self.state.hero_x;
             let hy = self.state.hero_y;
-            let region = self.state.region_num;
-            let current_zone = self.zones.iter().position(|z|
-                z.region == region
-                    && hx >= z.x1 && hx <= z.x2
-                    && hy >= z.y1 && hy <= z.y2
-            );
+            let current_zone = crate::game::zones::find_zone(&self.zones, hx, hy);
             if current_zone != self.last_zone {
-                if let Some(idx) = current_zone {
-                    let event_id = self.zones[idx].event_id as usize;
-                    let bname = brother_name(&self.state);
-                    let msg = crate::game::events::event_msg(&self.narr, event_id, bname);
-                    if !msg.is_empty() { self.messages.push(msg); }
-                }
                 self.last_zone = current_zone;
             }
         }
