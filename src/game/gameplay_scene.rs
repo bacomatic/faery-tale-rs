@@ -750,15 +750,6 @@ impl GameplayScene {
         } else {
             self.submerged = false;
         }
-
-        // Per-step fatigue: +1 when moving, -1 resting. Returns true on forced sleep.
-        if self.state.fatigue_step(moved) {
-            // Forced sleep: "just couldn't stay awake any longer!" (event 12)
-            let bname = brother_name(&self.state);
-            let msg = crate::game::events::event_msg(&self.narr, 12, bname);
-            if !msg.is_empty() { self.messages.push(msg); }
-            self.sleeping = true;
-        }
     }
 
     /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
@@ -2370,9 +2361,9 @@ impl GameplayScene {
 
         let ll = lightlevel as i32;
         let ll_boost = if light_on { 200i32 } else { 0 };
-        let r_pct = ((ll - 80 + ll_boost) * 100 / 300).clamp(0, 100) as i16;
-        let g_pct = ((ll - 61) * 100 / 300).clamp(0, 100) as i16;
-        let b_pct = ((ll - 62) * 100 / 300).clamp(0, 100) as i16;
+        let r_pct = (ll - 80 + ll_boost) as i16;
+        let g_pct = (ll - 61) as i16;
+        let b_pct = (ll - 62) as i16;
 
         let faded = crate::game::palette_fader::fade_page(
             r_pct, g_pct, b_pct, true, light_on, base,

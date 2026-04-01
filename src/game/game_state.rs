@@ -393,6 +393,7 @@ impl GameState {
     /// Pushes triggered event IDs into `events`.
     fn hunger_fatigue_step(&mut self, events: &mut Vec<u8>) {
         self.hunger += 1;
+        self.fatigue += 1;
 
         // Hunger threshold messages.
         if self.hunger == 35 {
@@ -748,22 +749,6 @@ impl GameState {
         }
     }
 
-    /// Per-movement-step fatigue update (player-111).
-    /// +1 when moving, -1 when resting. Returns true if forced sleep triggered.
-    pub fn fatigue_step(&mut self, moved: bool) -> bool {
-        if moved {
-            self.fatigue = self.fatigue.saturating_add(1);
-        } else {
-            self.fatigue = self.fatigue.saturating_sub(1);
-        }
-        if self.fatigue >= Self::MAX_FATIGUE {
-            self.fatigue = 0;
-            true
-        } else {
-            false
-        }
-    }
-
     /// Award a sea shell when a snake guarding turtle eggs is defeated (player-108).
     /// Stubs the full turtle egg rescue quest from fmain.c (race==4 + turtle_eggs flag).
     /// Returns true if a shell was awarded.
@@ -857,20 +842,14 @@ mod tests {
     }
 
     #[test]
-    fn test_hunger_fatigue_step_does_not_increment_fatigue() {
+    fn test_hunger_fatigue_step_increments_both() {
         let mut s = GameState::new();
         s.fatigue = 10;
+        s.hunger = 5;
         let mut events = Vec::new();
         s.hunger_fatigue_step(&mut events);
-        assert_eq!(s.fatigue, 10, "hunger_fatigue_step must not touch fatigue");
-    }
-
-    #[test]
-    fn test_fatigue_step_forced_sleep_triggers() {
-        let mut s = GameState::new();
-        s.fatigue = GameState::MAX_FATIGUE - 1;
-        let forced = s.fatigue_step(true);
-        assert!(forced, "fatigue_step must return true when MAX_FATIGUE is reached");
+        assert_eq!(s.hunger, 6, "hunger should increment by 1");
+        assert_eq!(s.fatigue, 11, "fatigue should increment by 1");
     }
 
     #[test]
