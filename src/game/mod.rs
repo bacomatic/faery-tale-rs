@@ -45,6 +45,7 @@ pub mod map_renderer;
 pub mod map_view;
 pub mod tile_atlas;
 pub mod world_data;
+pub mod world_objects;
 pub mod npc;
 pub mod combat;
 pub mod doors;
