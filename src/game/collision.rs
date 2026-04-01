@@ -104,6 +104,27 @@ pub fn calc_dist(ax: i32, ay: i32, bx: i32, by: i32) -> i32 {
     }
 }
 
+/// X displacement per direction. Mirrors xdir[] from fsubs.asm.
+const XDIR: [i32; 8] = [0, 2, 3, 2, 0, -2, -3, -2];
+/// Y displacement per direction. Mirrors ydir[] from fsubs.asm.
+const YDIR: [i32; 8] = [-3, -2, 0, 2, 3, 2, 0, -2];
+
+/// Compute new X from current + direction * distance (port of newx from fsubs.asm).
+pub fn newx(x: u16, dir: u8, dist: i32) -> u16 {
+    let dx = XDIR[(dir & 7) as usize] * dist / 2;
+    ((x as i32 + dx).rem_euclid(0x8000)) as u16
+}
+
+/// Compute new Y from current + direction * distance (port of newy from fsubs.asm).
+pub fn newy(y: u16, dir: u8, dist: i32, indoor: bool) -> u16 {
+    let dy = YDIR[(dir & 7) as usize] * dist / 2;
+    if indoor {
+        (y as i32 + dy) as u16
+    } else {
+        ((y as i32 + dy).rem_euclid(0x8000)) as u16
+    }
+}
+
 /// Full terra lookup chain for one probe point — used by the `/terrain` debug command.
 pub struct TerrainProbe {
     pub x: i32,
@@ -258,5 +279,32 @@ mod calc_dist_tests {
         // Uses absolute differences, so sign shouldn't matter
         assert_eq!(calc_dist(100, 200, 100, 200), 0);
         assert_eq!(calc_dist(50, 50, 100, 50), 50);
+    }
+}
+
+#[cfg(test)]
+mod newxy_tests {
+    use super::{newx, newy};
+
+    #[test]
+    fn test_newx_cardinal() {
+        // dir=2 (East), dist=2: dx = 3*2/2 = 3
+        assert_eq!(newx(100, 2, 2), 103);
+        // dir=6 (West), dist=2: dx = -3*2/2 = -3
+        assert_eq!(newx(100, 6, 2), 97);
+    }
+
+    #[test]
+    fn test_newy_cardinal() {
+        // dir=0 (North), dist=2: dy = -3*2/2 = -3
+        assert_eq!(newy(100, 0, 2, false), 97);
+        // dir=4 (South), dist=2: dy = 3*2/2 = 3
+        assert_eq!(newy(100, 4, 2, false), 103);
+    }
+
+    #[test]
+    fn test_newx_diagonal() {
+        // dir=1 (NE), dist=2: dx = 2*2/2 = 2
+        assert_eq!(newx(100, 1, 2), 102);
     }
 }

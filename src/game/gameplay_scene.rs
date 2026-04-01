@@ -482,6 +482,13 @@ impl GameplayScene {
 
             let dx = base_dx * speed / 2;
             let dy = base_dy * speed / 2;
+
+            let facing: u8 = match dir {
+                Direction::N  => 0, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
+                Direction::S  => 4, Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                Direction::None => 0,
+            };
+
             // Outdoor world wraps at MAXCOORD = 0x8000 = 32768 (USHORT arithmetic).
             // Indoor maps (region >= 8) use y coordinates in the 0x8000–0x9FFF range;
             // wrapping would collapse them to 0–0x1FFF and break doorfind_exit matching.
@@ -499,15 +506,52 @@ impl GameplayScene {
                     collision::px_to_terrain_type(world, new_x as i32, new_y as i32) == 1
                 });
 
-            if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
-                self.state.hero_x = new_x;
-                self.state.hero_y = new_y;
+            let mut final_x = new_x;
+            let mut final_y = new_y;
+            let mut final_facing = facing;
+            let mut can_move = !turtle_blocked
+                && (self.state.flying != 0 || self.state.on_raft
+                    || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32));
+
+            // Direction deviation (wall-sliding): fmain.c checkdev1/checkdev2.
+            // Only for diagonal directions when the original direction was blocked.
+            if !can_move && !turtle_blocked && self.state.flying == 0 && !self.state.on_raft {
+                let is_diagonal = matches!(dir, Direction::NE | Direction::SE | Direction::SW | Direction::NW);
+                if is_diagonal {
+                    let indoor = self.state.region_num >= 8;
+                    // checkdev1: try (facing + 1) & 7
+                    let dev1 = (facing + 1) & 7;
+                    let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
+                    let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
+                    if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32) {
+                        final_x = dev1_x;
+                        final_y = dev1_y;
+                        final_facing = dev1;
+                        can_move = true;
+                    } else {
+                        // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
+                        let dev2 = (dev1.wrapping_sub(2)) & 7;
+                        let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
+                        let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
+                        if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32) {
+                            final_x = dev2_x;
+                            final_y = dev2_y;
+                            final_facing = dev2;
+                            can_move = true;
+                        }
+                    }
+                }
+            }
+
+            if can_move {
+                self.state.hero_x = final_x;
+                self.state.hero_y = final_y;
                 // Successful move — hero is no longer blocked by a door, reset dedup flag.
                 self.bumped_door = None;
                 if self.state.region_num >= 8 {
                     // Indoor (region >= 8): exit check — match on grid-aligned dst coords.
                     // Mirrors fmain.c indoor branch: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
-                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, new_x, new_y) {
+                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, final_x, final_y) {
                         let (ex, ey) = crate::game::doors::exit_spawn(&door);
                         let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
                         self.state.region_num = outdoor_region;
@@ -515,15 +559,15 @@ impl GameplayScene {
                         self.state.hero_y = ey;
                         self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
                     }
-                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
+                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, final_x, final_y) {
                     // Outdoor (region < 8): walk-on entry check — match on src coords.
                     // Sub-tile position guard mirrors fmain.c Phase-2 nodoor conditions:
                     //   Horizontal (type & 1): skip if hero_y & 0x10 != 0 (lower half — not through yet)
                     //   Vertical             : skip if hero_x & 15 > 6   (right portion — not through yet)
                     let in_doorway = if door.door_type & 1 != 0 {
-                        new_y & 0x10 == 0  // horizontal: upper half
+                        final_y & 0x10 == 0  // horizontal: upper half
                     } else {
-                        new_x & 15 <= 6    // vertical: left portion
+                        final_x & 15 <= 6    // vertical: left portion
                     };
                     // DESERT doors (oasis) require 5 gold statues; original silently blocks if < 5.
                     use crate::game::doors::{key_req, KeyReq};
@@ -657,17 +701,7 @@ impl GameplayScene {
                 }
             }
 
-            let facing: u8 = match dir {
-                Direction::N  => 0,
-                Direction::NE => 1,
-                Direction::E  => 2,
-                Direction::SE => 3,
-                Direction::S  => 4,
-                Direction::SW => 5,
-                Direction::W  => 6,
-                Direction::NW => 7,
-                Direction::None => 0,
-            };
+            let facing = final_facing;
 
             let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
             if let Some(player) = self.state.actors.first_mut() {
