@@ -1683,9 +1683,36 @@ Every 16 ticks (`daynight & 15 == 0`) when `encounter_number > 0`:
 - **Mix flag** (`mixflag`): bit 1 (`& 2`) → race alternates within pair (even/odd encounter IDs); bit 2 (`& 4`) → weapon varies
 - Goal assignment: `ARCHER1/2` if weapon has bit 2 set (bow/wand), otherwise `ATTACK1/2` based on `cleverness`
 
+### RNG implementation (`fsubs.asm:300–311`, `fmain.c:724`)
+
+The game uses a single global LCG (linear congruential generator) for all randomness:
+```asm
+_rand:  move.l  _seed1,d0
+        mulu.w  #45821,d0
+        addq.l  #1,d0
+        move.l  d0,_seed1
+        ror.l   #6,d0
+        and.l   #$7fffffff,d0
+        rts
+
+_bitrand:  bsr.s  _rand       ; rand() & mask
+           and.l  4(sp),d0
+           rts
+```
+
+**The seed is hardcoded and never re-initialized:**
+```c
+long seed1 = 19837325, seed2 = 23098324;   // fmain.c:724
+```
+
+The `original/notes` file contains a one-line reminder — *"Need to initialize random number generator."* — indicating the developer intended to seed from a clock or other source but never did. As a result, **all "random" values are fully deterministic**: every new game produces the identical RNG sequence, and scattered objects always appear at the same positions.
+
+`seed2` is declared but never referenced; only `seed1` drives the LCG.
+
 ### Object distribution (`fmain2.c:1561–1583`)
 
-On first visit to a region (`dstobs[region_num] == 0`), 10 random treasure objects are scattered:
+On first visit to a region (`dstobs[region_num] == 0`), 10 treasure objects are scattered using `bitrand()`. Because the RNG seed is fixed (see above), these positions are **deterministic** — the same objects appear at the same coordinates every new game.
+
 ```
 for each of 10 objects:
     x = bitrand(0x3fff) + ((region_num & 1) * 0x4000)
