@@ -35,7 +35,8 @@ pub const TURTLE_NEST_Y: u16 = 0x4000;
 /// An item lying on the ground in the world.
 #[derive(Debug, Clone)]
 pub struct WorldObject {
-    pub item_id: u8,
+    /// ob_id: original obytes enum value (sprite frame index for rendering).
+    pub ob_id: u8,
     pub region: u8,
     pub x: u16,
     pub y: u16,
@@ -652,7 +653,7 @@ impl GameState {
     pub fn drop_item_to_world(&mut self, item_id: usize, region: u8, x: u16, y: u16) -> bool {
         if self.drop_item(item_id) {
             self.world_objects.push(WorldObject {
-                item_id: item_id as u8,
+                ob_id: item_id as u8,
                 region, x, y,
                 visible: true,
             });
@@ -675,7 +676,7 @@ impl GameState {
             }
         }
         if let Some(idx) = found_idx {
-            let item_id = self.world_objects[idx].item_id;
+            let item_id = self.world_objects[idx].ob_id;
             if self.pickup_item(item_id as usize) {
                 self.world_objects[idx].visible = false;
                 return Some(item_id);

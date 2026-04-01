@@ -2232,7 +2232,7 @@ impl GameplayScene {
                         let x = (hero_x + (radius * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
                         let y = (hero_y + (radius * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
                         self.state.world_objects.push(WorldObject {
-                            item_id: id as u8,
+                            ob_id: id as u8,
                             region,
                             x, y,
                             visible: true,
@@ -2254,7 +2254,7 @@ impl GameplayScene {
                         let x = (hero_x + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
                         let y = (hero_y + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
                         self.state.world_objects.push(WorldObject {
-                            item_id: item_id as u8,
+                            ob_id: item_id as u8,
                             region,
                             x, y,
                             visible: true,
@@ -3306,7 +3306,7 @@ impl Scene for GameplayScene {
                             let fb_h = crate::game::map_renderer::MAP_DST_H as i32;
                     for obj in &self.state.world_objects {
                         if !obj.visible || obj.region != self.state.region_num { continue; }
-                        let frame = obj.item_id as usize;
+                        let frame = obj.ob_id as usize;
                         if let Some(pix) = obj_sheet.frame_pixels(frame) {
                             let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
                             let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
@@ -3527,13 +3527,13 @@ mod tests {
             let x = (state.hero_x as i32 + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
             let y = (state.hero_y as i32 + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
             state.world_objects.push(WorldObject {
-                item_id: item_id as u8,
+                ob_id: item_id as u8,
                 region: state.region_num,
                 x, y,
                 visible: true,
             });
         }
         assert_eq!(state.world_objects.len(), 5);
-        assert!(state.world_objects.iter().all(|o| o.item_id != TALISMAN_IDX as u8));
+        assert!(state.world_objects.iter().all(|o| o.ob_id != TALISMAN_IDX as u8));
     }
 }
