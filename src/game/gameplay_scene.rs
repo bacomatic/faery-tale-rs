@@ -3845,7 +3845,7 @@ impl Scene for GameplayScene {
                                         } else { None }
                                     } else { None };
 
-                                    // Draw weapon BEHIND body when facing N/NE/SW/W/NW
+                                    // Draw weapon BEHIND body when facing N/SW/W/NW
                                     if weapon_behind {
                                         if let Some((wfp, wx, wy)) = wpn_blit {
                                             Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
@@ -3856,15 +3856,30 @@ impl Scene for GameplayScene {
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
                                     }
 
-                                    // Draw weapon IN FRONT when facing E/SE/S
+                                    // Draw weapon IN FRONT when facing NE/E/SE/S
                                     if !weapon_behind {
                                         if let Some((wfp, wx, wy)) = wpn_blit {
                                             Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
                                         }
                                     }
 
-                                    // Mask AFTER blit: restore foreground terrain over the sprite
+                                    // Mask AFTER blit: restore foreground terrain over the body
                                     apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                    // Mask the weapon separately (original uses two-pass masking:
+                                    // one for body, one for weapon, each with its own bounding box
+                                    // but sharing the body's ground line — fmain.c:2921-3184).
+                                    if let Some((_, wx, wy)) = wpn_blit {
+                                        let wpn_info = BlittedSprite {
+                                            screen_x: wx,
+                                            screen_y: wy,
+                                            width: SPRITE_W,
+                                            height: OBJ_SPRITE_H,
+                                            ground: sprite_info.ground,
+                                            is_falling: false,
+                                        };
+                                        apply_sprite_mask(mr, &wpn_info, self.state.hero_sector, 0);
+                                    }
 
                                     blitted.push(sprite_info);
                                 }
