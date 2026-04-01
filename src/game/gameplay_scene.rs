@@ -3010,6 +3010,24 @@ impl GameplayScene {
         }
     }
 
+    /// Map facing direction to fighting sprite frame base.
+    /// Based on diroffs[d+8] from fmain.c:1099, with diagonal directions
+    /// following the Rust convention from facing_to_frame_base() (NE→east,
+    /// SE→south, SW→west, NW→north).
+    /// Frame ranges: southfight=32-43, westfight=44-55, northfight=56-67, eastfight=68-79.
+    fn facing_to_fight_frame_base(facing: u8) -> usize {
+        match facing {
+            0 => 56, // N  → northfight
+            1 => 68, // NE → eastfight
+            2 => 68, // E  → eastfight
+            3 => 32, // SE → southfight
+            4 => 32, // S  → southfight
+            5 => 44, // SW → westfight
+            6 => 44, // W  → westfight
+            _ => 56, // NW → northfight
+        }
+    }
+
     /// Map (npc_type, race) → cfile index for enemy sprite rendering.
     /// Returns None for SetFig humans (rendered in a separate pass) and skipped types.
     /// cfile 7 covers ghost/wraith/skeleton per RESEARCH.md sprite assignments.
@@ -3083,10 +3101,16 @@ impl GameplayScene {
                 //   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31
                 // Original diroffs[] groups: NW+N→north, NE+E→east, SE+S→south, SW+W→west.
                 // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW.
-                let frame_base = Self::facing_to_frame_base(hero_facing);
-                // Walking: cycle through 8 frames; still: fmain.c uses diroffs[d]+1.
-                let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
-                let frame = frame_base + anim_offset;
+                let hero_state = state.actors.first().map(|a| &a.state);
+                let frame = if let Some(ActorState::Fighting(fight_state)) = hero_state {
+                    // Fighting: use fight frame base + current animation state (0-8).
+                    let fight_base = Self::facing_to_fight_frame_base(hero_facing);
+                    fight_base + (*fight_state as usize).min(8)
+                } else {
+                    // Walking or still: existing logic.
+                    let frame_base = Self::facing_to_frame_base(hero_facing);
+                    if is_moving { frame_base + (state.cycle as usize) % 8 } else { frame_base + 1 }
+                };
                 // Weapon overlay (fmain.c passmode weapon blit).
                 // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
@@ -4083,6 +4107,18 @@ mod tests {
         assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
         assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
         assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
+    }
+
+    #[test]
+    fn test_facing_to_fight_frame_base() {
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // N  → northfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 68); // NE → eastfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // E  → eastfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 32); // SE → southfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // S  → southfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 44); // SW → westfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // W  → westfight
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 56); // NW → northfight
     }
 
     #[test]
