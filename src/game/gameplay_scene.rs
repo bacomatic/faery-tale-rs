@@ -723,9 +723,6 @@ impl GameplayScene {
             }
         }
 
-        // Actual movement result (computed after the branch above).
-        let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
-
         // Melee combat when fight is held (npc-103).
         // Rate-limited to one swing every 10 ticks (~1/3 s at 30 Hz), matching
         // fmain.c's per-frame proximity check gated by weapon animation state.
@@ -1051,25 +1048,6 @@ impl GameplayScene {
                 }
             }
         }
-    }
-
-    /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
-    /// Mirrors original nearest_fig() / calc_dist() from fmain.c:4167-4272.
-    fn nearest_npc_in_range(&self, range: i32) -> Option<&crate::game::npc::Npc> {
-        let hx = self.state.hero_x as i32;
-        let hy = self.state.hero_y as i32;
-        self.npc_table.as_ref()?.npcs.iter()
-            .filter(|n| n.active)
-            .filter(|n| {
-                let dx = (n.x as i32 - hx).abs();
-                let dy = (n.y as i32 - hy).abs();
-                dx.max(dy) <= range
-            })
-            .min_by_key(|n| {
-                let dx = (n.x as i32 - hx).abs();
-                let dy = (n.y as i32 - hy).abs();
-                dx.max(dy)
-            })
     }
 
     /// Helper: buy one unit of item_idx from a nearby shopkeeper (npc-107).
@@ -3777,8 +3755,6 @@ impl Scene for GameplayScene {
                                         ground: rel_y + SPRITE_H as i32,
                                         is_falling: false,
                                     };
-                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
-
                                     if let Some(fp) = sheet.frame_pixels(frame) {
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
                                     }
@@ -3809,6 +3785,9 @@ impl Scene for GameplayScene {
                                             }
                                         }
                                     }
+
+                                    // Mask AFTER blit: restore foreground terrain over the sprite
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
 
                                     blitted.push(sprite_info);
                                 }
@@ -3842,11 +3821,12 @@ impl Scene for GameplayScene {
                                     ground: rel_y + SPRITE_H as i32,
                                     is_falling: false,
                                 };
-                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
-
                                 if let Some(fp) = sheet.frame_pixels(frame) {
                                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
                                 }
+
+                                // Mask AFTER blit: restore foreground terrain over the sprite
+                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
 
                                 blitted.push(sprite_info);
                             }
@@ -3868,9 +3848,10 @@ impl Scene for GameplayScene {
                                         ground: rel_y + OBJ_SPRITE_H as i32,
                                         is_falling: false,
                                     };
-                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
-
                                     Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+
+                                    // Mask AFTER blit: restore foreground terrain over the sprite
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
 
                                     blitted.push(sprite_info);
                                 }
@@ -3899,9 +3880,10 @@ impl Scene for GameplayScene {
                                             ground: rel_y + SPRITE_H as i32,
                                             is_falling: false,
                                         };
-                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
-
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+
+                                        // Mask AFTER blit: restore foreground terrain over the sprite
+                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
 
                                         blitted.push(sprite_info);
                                     }
@@ -3911,7 +3893,7 @@ impl Scene for GameplayScene {
                     }
                 }
 
-                // Per-sprite masking is now done before each blit
+                // Per-sprite masking is done after each blit (mask restores foreground terrain)
             }
         }
 
