@@ -1870,6 +1870,12 @@ Our `Direction` enum uses a different order than the original:
 
 Formula: `comptable_index = (facing + 1) & 7`.
 
+**Important:** any bitwise checks on `an->facing` from the original must be
+remapped to Rust facing values. Example: the weapon draw-order test
+`(facing - 2) & 4` evaluates true for original dirs 0,1,6,7 (NW,N,SW,W).
+In Rust that corresponds to facing 0,5,6,7 (N,SW,W,NW). Always convert
+through the table above rather than copying the original expression directly.
+
 ---
 
 ## Movement System

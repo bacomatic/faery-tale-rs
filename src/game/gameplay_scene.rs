@@ -3026,13 +3026,10 @@ impl GameplayScene {
                 // Walking: cycle through 8 frames; still: fmain.c uses diroffs[d]+1.
                 let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
                 let frame = frame_base + anim_offset;
-                if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
-                }
-
                 // Weapon overlay (fmain.c passmode weapon blit).
+                // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
-                if weapon_type > 0 && weapon_type <= 5 {
+                let wpn_blit = if weapon_type > 0 && weapon_type <= 5 {
                     if let Some(ref obj_sheet) = obj_sprites {
                         use crate::game::sprites::{STATELIST, OBJ_SPRITE_H};
                         if let Some(entry) = STATELIST.get(frame) {
@@ -3052,10 +3049,24 @@ impl GameplayScene {
                             };
                             let wx = rel_x + wpn_x as i32;
                             let wy = rel_y + wpn_y as i32;
-                            if let Some(wfp) = obj_sheet.frame_pixels(wpn_frame) {
-                                Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, framebuf, fb_w, fb_h);
-                            }
-                        }
+                            obj_sheet.frame_pixels(wpn_frame).map(|wfp| (wfp, wx, wy, OBJ_SPRITE_H))
+                        } else { None }
+                    } else { None }
+                } else { None };
+
+                // Weapon behind body for N(0), SW(5), W(6), NW(7)
+                let weapon_behind = matches!(hero_facing, 0 | 5 | 6 | 7);
+                if weapon_behind {
+                    if let Some((wfp, wx, wy, oh)) = wpn_blit {
+                        Self::blit_obj_to_framebuf(wfp, wx, wy, oh, framebuf, fb_w, fb_h);
+                    }
+                }
+                if let Some(fp) = sheet.frame_pixels(frame) {
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
+                }
+                if !weapon_behind {
+                    if let Some((wfp, wx, wy, oh)) = wpn_blit {
+                        Self::blit_obj_to_framebuf(wfp, wx, wy, oh, framebuf, fb_w, fb_h);
                     }
                 }
             }
@@ -3792,7 +3803,14 @@ impl Scene for GameplayScene {
                                     let anim_offset = if is_moving { (self.state.cycle as usize) % 8 } else { 1 };
                                     let frame = frame_base + anim_offset;
 
-                                    // Build BlittedSprite and mask BEFORE blit
+                                    // Weapon draw order (fmain.c:2907-2916 passmode):
+                                    // Original facing: 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
+                                    // Rust facing:     0=N, 1=NE,2=E, 3=SE,4=S, 5=SW,6=W, 7=NW
+                                    // (orig_facing - 2) & 4 → behind for orig 0,1,6,7 = NW,N,SW,W
+                                    // Mapped to Rust: N(0), SW(5), W(6), NW(7).
+                                    let weapon_behind = matches!(hero_facing, 0 | 5 | 6 | 7);
+
+                                    // Build BlittedSprite for masking
                                     let sprite_info = BlittedSprite {
                                         screen_x: rel_x,
                                         screen_y: rel_y,
@@ -3801,13 +3819,10 @@ impl Scene for GameplayScene {
                                         ground: rel_y + SPRITE_H as i32,
                                         is_falling: false,
                                     };
-                                    if let Some(fp) = sheet.frame_pixels(frame) {
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
-                                    }
 
-                                    // Weapon overlay (after hero blit — weapon is part of hero sprite)
+                                    // Prepare weapon blit parameters
                                     let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
-                                    if weapon_type > 0 && weapon_type <= 5 {
+                                    let wpn_blit = if weapon_type > 0 && weapon_type <= 5 {
                                         if let Some(ref obj_sheet) = self.object_sprites {
                                             use crate::game::sprites::STATELIST;
                                             if let Some(stat_entry) = STATELIST.get(frame) {
@@ -3825,10 +3840,26 @@ impl Scene for GameplayScene {
                                                 };
                                                 let wx = rel_x + wpn_x as i32;
                                                 let wy = rel_y + wpn_y as i32;
-                                                if let Some(wfp) = obj_sheet.frame_pixels(wpn_frame) {
-                                                    Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
-                                                }
-                                            }
+                                                obj_sheet.frame_pixels(wpn_frame).map(|wfp| (wfp, wx, wy))
+                                            } else { None }
+                                        } else { None }
+                                    } else { None };
+
+                                    // Draw weapon BEHIND body when facing N/NE/SW/W/NW
+                                    if weapon_behind {
+                                        if let Some((wfp, wx, wy)) = wpn_blit {
+                                            Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                        }
+                                    }
+
+                                    if let Some(fp) = sheet.frame_pixels(frame) {
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
+                                    }
+
+                                    // Draw weapon IN FRONT when facing E/SE/S
+                                    if !weapon_behind {
+                                        if let Some((wfp, wx, wy)) = wpn_blit {
+                                            Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
                                         }
                                     }
 
