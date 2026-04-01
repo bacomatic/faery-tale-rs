@@ -487,6 +487,11 @@ impl GameState {
         *self.stuff_mut() = [0u8; 35];
         self.stuff_mut()[0] = 1;
 
+        // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
+        if let Some(player) = self.actors.first_mut() {
+            player.weapon = 1;
+        }
+
         // Teleport to spawn location
         self.hero_x = spawn_x;
         self.hero_y = spawn_y;
@@ -530,6 +535,10 @@ impl GameState {
         self.safe_r = spawn_region;
         // Give a dirk
         self.stuff_mut()[0] = 1;
+        // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
+        if let Some(player) = self.actors.first_mut() {
+            player.weapon = 1;
+        }
     }
 
     /// Returns true if all three brothers are dead.
@@ -969,5 +978,14 @@ mod tests {
             .collect();
         assert!(!setfigs.is_empty(), "region 3 should have at least one setfig");
         assert!(setfigs.iter().all(|o| o.visible), "setfigs should be visible");
+    }
+
+    #[test]
+    fn test_init_first_brother_equips_dirk() {
+        let mut state = GameState::new();
+        state.actors.push(crate::game::actor::Actor::default());
+        state.init_first_brother(10, 10, 10, 100, 1000, 2000, 3);
+        assert_eq!(state.stuff()[0], 1, "dirk should be in inventory");
+        assert_eq!(state.actors[0].weapon, 1, "dirk should be equipped");
     }
 }
