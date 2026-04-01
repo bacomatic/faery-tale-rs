@@ -23,6 +23,29 @@ use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
 
+/// Attack animation transition table from fmain.c:132-140.
+/// Each entry has 4 possible next states, selected by rand4().
+/// States 0-8 represent weapon swing positions.
+const FIGHT_TRANS_LIST: [[u8; 4]; 9] = [
+    [1, 8, 0, 1], // 0: arm down, weapon low
+    [2, 0, 1, 0], // 1: arm down, weapon diagonal down
+    [3, 1, 2, 8], // 2: arm swing1, weapon horizontal
+    [4, 2, 3, 7], // 3: arm swing2, weapon raised
+    [5, 3, 4, 6], // 4: arm swing2, weapon diag up
+    [6, 4, 5, 5], // 5: arm swing2, weapon high
+    [8, 5, 6, 4], // 6: arm high, weapon up
+    [8, 6, 7, 3], // 7: arm high, weapon horizontal
+    [0, 6, 8, 2], // 8: arm middle, weapon raise fwd
+];
+
+/// Advance the fight animation state using trans_list random transitions.
+/// `state`: current fight state (0-8). `tick`: game cycle for randomness.
+fn advance_fight_state(state: u8, tick: u32) -> u8 {
+    let idx = (state as usize).min(8);
+    let col = crate::game::combat::rand4(tick);
+    FIGHT_TRANS_LIST[idx][col]
+}
+
 /// Map an SDL Keycode to the corresponding menu key byte used by LETTER_LIST.
 /// Numpad movement keys (Kp8/7/9/1/3) are excluded; only top-row Num8 maps to b'8'.
 fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
@@ -445,6 +468,41 @@ impl GameplayScene {
         if self.sleeping { return; }
         let dir = self.current_direction();
 
+        // Exclusive fight branch — matches fmain.c where fighting is a separate
+        // branch above walking. Movement is suppressed; only facing updates.
+        if self.input.fight {
+            let facing = match dir {
+                Direction::N  => 0u8, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
+                Direction::S  => 4,   Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                Direction::None => self.state.facing,
+            };
+            self.state.facing = facing;
+
+            let fight_state = match self.state.actors.first() {
+                Some(actor) => match actor.state {
+                    ActorState::Fighting(s) => s,
+                    _ => 0,
+                },
+                _ => 0,
+            };
+            let next_state = advance_fight_state(fight_state, self.state.cycle);
+
+            if let Some(player) = self.state.actors.first_mut() {
+                player.facing = facing;
+                player.moving = false;
+                player.state = ActorState::Fighting(next_state);
+            }
+
+            if self.fight_cooldown > 0 {
+                self.fight_cooldown -= 1;
+            }
+            if self.fight_cooldown == 0 {
+                self.apply_melee_combat();
+                self.fight_cooldown = 10;
+            }
+            return;
+        }
+
         // Per-direction base deltas from original xdir/ydir tables (fsubs.asm:1277-1278).
         // Applied as: delta = base * speed / 2  →  cardinal=3px, diagonal=2px at speed=2.
         let (base_dx, base_dy): (i32, i32) = match dir {
@@ -735,33 +793,14 @@ impl GameplayScene {
             if let Some(player) = self.state.actors.first_mut() {
                 player.facing = facing;
                 player.moving = moved;
-                if self.input.fight {
-                    player.state = ActorState::Fighting(0);
-                } else {
-                    player.state = ActorState::Walking;
-                }
+                player.state = ActorState::Walking;
             }
             self.state.facing = facing;
         } else {
             if let Some(player) = self.state.actors.first_mut() {
                 player.moving = false;
-                if self.input.fight {
-                    player.state = ActorState::Fighting(0);
-                } else {
-                    player.state = ActorState::Still;
-                }
+                player.state = ActorState::Still;
             }
-        }
-
-        // Melee combat when fight is held (npc-103).
-        // Rate-limited to one swing every 10 ticks (~1/3 s at 30 Hz), matching
-        // fmain.c's per-frame proximity check gated by weapon animation state.
-        if self.fight_cooldown > 0 {
-            self.fight_cooldown -= 1;
-        }
-        if self.input.fight && self.fight_cooldown == 0 {
-            self.apply_melee_combat();
-            self.fight_cooldown = 10;
         }
 
         // Raft proximity detection (player-107).
@@ -4204,5 +4243,20 @@ mod tests {
         }
         assert_eq!(state.world_objects.len(), 5);
         assert!(state.world_objects.iter().all(|o| o.ob_id != TALISMAN_IDX as u8));
+    }
+
+    #[test]
+    fn test_fight_state_advances() {
+        let next = advance_fight_state(0, 42);
+        assert!(next <= 8, "fight state {next} out of range 0-8");
+    }
+
+    #[test]
+    fn test_fight_state_varies_with_tick() {
+        let mut seen = std::collections::HashSet::new();
+        for tick in 0..100u32 {
+            seen.insert(advance_fight_state(0, tick));
+        }
+        assert!(seen.len() > 1, "trans_list should produce varied states");
     }
 }
