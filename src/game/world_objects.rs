@@ -47,6 +47,23 @@ pub fn ob_id_to_stuff_index(ob_id: u8) -> Option<usize> {
     None
 }
 
+/// Translate a stuff[] inventory index to an ob_id value.
+/// Inverse of ob_id_to_stuff_index.
+pub fn stuff_index_to_ob_id(stuff_idx: usize) -> Option<u8> {
+    const INVERSE: &[(usize, u8)] = &[
+        (0, 12), (1, 9), (2, 8), (3, 10), (4, 145), (5, 27),
+        (6, 151), (7, 155), (8, 11), (9, 18), (10, 19), (11, 22),
+        (12, 21), (13, 23), (14, 17), (15, 24), (16, 25), (17, 153),
+        (18, 114), (19, 242), (20, 26), (21, 154), (22, 139), (23, 147),
+        (24, 148), (25, 149), (26, 150), (27, 136), (28, 137), (29, 138),
+        (30, 140),
+    ];
+    for &(si, oid) in INVERSE {
+        if si == stuff_idx { return Some(oid); }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +128,21 @@ mod tests {
                 ob_id,
                 expected_idx
             );
+        }
+    }
+
+    #[test]
+    fn test_stuff_to_ob_id_roundtrip() {
+        for si in 0..=30 {
+            if let Some(ob_id) = stuff_index_to_ob_id(si) {
+                let back = ob_id_to_stuff_index(ob_id);
+                if si == 8 {
+                    // QUIVER (ob_id 11) maps to stuff 35 (arrows ×10), not 8
+                    assert_eq!(back, Some(35));
+                } else {
+                    assert_eq!(back, Some(si), "roundtrip failed for stuff_idx {}", si);
+                }
+            }
         }
     }
 }

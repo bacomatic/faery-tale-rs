@@ -1265,6 +1265,8 @@ impl GameplayScene {
         // Reset door interaction state: all opened doors and the locked-message dedup.
         self.opened_doors.clear();
         self.bumped_door = None;
+        self.state.populate_region_objects(region, game_lib);
+        self.log_buffer.push(format!("on_region_changed: loaded {} world objects", self.state.world_objects.len()));
         if let Some(ref adf) = self.adf {
             let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
                 let map_blocks: Vec<u32> = if region < 8 {
@@ -2208,6 +2210,7 @@ impl GameplayScene {
             ScatterItems { count, item_id } => {
                 use crate::game::sprites::INV_LIST;
                 use crate::game::game_state::WorldObject;
+                use crate::game::world_objects::stuff_index_to_ob_id;
                 const TALISMAN_IDX: usize = 22;
 
                 if count == 0 {
@@ -2231,8 +2234,9 @@ impl GameplayScene {
                         };
                         let x = (hero_x + (radius * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
                         let y = (hero_y + (radius * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+                        let ob_id_val = stuff_index_to_ob_id(id).unwrap_or(id as u8);
                         self.state.world_objects.push(WorldObject {
-                            ob_id: id as u8,
+                            ob_id: ob_id_val,
                             region,
                             x, y,
                             visible: true,
@@ -2253,8 +2257,9 @@ impl GameplayScene {
                         let angle = 2.0 * std::f32::consts::PI * (i as f32) / (n as f32);
                         let x = (hero_x + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
                         let y = (hero_y + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+                        let ob_id_val = stuff_index_to_ob_id(item_id).unwrap_or(item_id as u8);
                         self.state.world_objects.push(WorldObject {
-                            ob_id: item_id as u8,
+                            ob_id: ob_id_val,
                             region,
                             x, y,
                             visible: true,
@@ -2989,6 +2994,7 @@ impl Scene for GameplayScene {
                             let renderer = MapRenderer::new(&world, self.shadow_mem.clone());
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
+                            self.state.populate_region_objects(region, game_lib);
                             // sprite-101: load player (cfile 0-2), enemies (cfile 4-12), and setfig (cfile 13-17) sprites
                             for cfile_idx in [0u8, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] {
                                 if let Some(sheet) = crate::game::sprites::SpriteSheet::load(

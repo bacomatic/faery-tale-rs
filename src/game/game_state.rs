@@ -664,7 +664,13 @@ impl GameState {
     }
 
     /// Pick up the nearest visible world object within `range` pixels.
+    /// Translates ob_id → stuff[] index via itrans. Special handling:
+    /// - MONEY (13): adds 50 gold
+    /// - FOOTSTOOL (31), TURTLE (102): not pickable
+    /// - Containers (URN 14, CHEST 15, SACKS 16): not yet implemented (skip)
     pub fn pickup_world_object(&mut self, region: u8, hero_x: u16, hero_y: u16, range: u16) -> Option<u8> {
+        use crate::game::world_objects::ob_id_to_stuff_index;
+
         let mut found_idx = None;
         for (i, obj) in self.world_objects.iter().enumerate() {
             if obj.visible && obj.region == region
@@ -675,14 +681,55 @@ impl GameState {
                 break;
             }
         }
-        if let Some(idx) = found_idx {
-            let item_id = self.world_objects[idx].ob_id;
-            if self.pickup_item(item_id as usize) {
+        let idx = found_idx?;
+        let ob_id = self.world_objects[idx].ob_id;
+
+        // Non-pickable objects.
+        match ob_id {
+            31 | 102 => return None,     // FOOTSTOOL, TURTLE
+            14 | 15 | 16 => return None, // URN, CHEST, SACKS (containers — TODO)
+            _ => {}
+        }
+
+        // MONEY: +50 gold, no inventory slot.
+        if ob_id == 13 {
+            self.gold += 50;
+            self.world_objects[idx].visible = false;
+            return Some(ob_id);
+        }
+
+        // Translate ob_id → stuff[] index.
+        if let Some(stuff_idx) = ob_id_to_stuff_index(ob_id) {
+            if self.pickup_item(stuff_idx) {
                 self.world_objects[idx].visible = false;
-                return Some(item_id);
+                return Some(ob_id);
             }
         }
         None
+    }
+
+    /// Load static world objects for the given region from the game library.
+    /// Only ground items (ob_stat 1) and hidden items (ob_stat 5) are loaded.
+    /// SetFig NPCs (ob_stat 3/4) are handled by the NPC system.
+    pub fn populate_region_objects(&mut self, region: u8, game_lib: &crate::game::game_library::GameLibrary) {
+        self.world_objects.clear();
+
+        for obj_cfg in &game_lib.objects {
+            // Include objects for this region + global objects (region 255)
+            if obj_cfg.region != region && obj_cfg.region != 255 {
+                continue;
+            }
+            // Only ground items (1) and hidden items (5)
+            if obj_cfg.ob_stat == 1 || obj_cfg.ob_stat == 5 {
+                self.world_objects.push(WorldObject {
+                    ob_id: obj_cfg.ob_id,
+                    region,  // tag with current region so render filter passes
+                    x: obj_cfg.x,
+                    y: obj_cfg.y,
+                    visible: obj_cfg.ob_stat == 1,
+                });
+            }
+        }
     }
 
     /// Returns a string description of the inventory for display.
@@ -873,5 +920,64 @@ mod tests {
         s.daynight_tick();
         assert_eq!(s.daynight, 0);
         assert_eq!(s.game_days, 1);
+    }
+
+    #[test]
+    fn test_pickup_translates_ob_id() {
+        let mut s = GameState::new();
+        s.region_num = 3;
+        s.hero_x = 100;
+        s.hero_y = 100;
+        // Gold Key: ob_id 25 → stuff index 16
+        s.world_objects.push(WorldObject {
+            ob_id: 25, region: 3, x: 100, y: 100, visible: true,
+        });
+        let result = s.pickup_world_object(3, 100, 100, 24);
+        assert!(result.is_some());
+        assert_eq!(s.stuff()[16], 1, "Gold Key should be in stuff[16]");
+        assert!(!s.world_objects[0].visible);
+    }
+
+    #[test]
+    fn test_pickup_money_adds_gold() {
+        let mut s = GameState::new();
+        s.region_num = 3;
+        s.hero_x = 100;
+        s.hero_y = 100;
+        s.gold = 10;
+        s.world_objects.push(WorldObject {
+            ob_id: 13, region: 3, x: 100, y: 100, visible: true,
+        });
+        let result = s.pickup_world_object(3, 100, 100, 24);
+        assert!(result.is_some());
+        assert_eq!(s.gold, 60, "MONEY should add 50 gold");
+    }
+
+    #[test]
+    fn test_pickup_footstool_blocked() {
+        let mut s = GameState::new();
+        s.region_num = 8;
+        s.hero_x = 100;
+        s.hero_y = 100;
+        s.world_objects.push(WorldObject {
+            ob_id: 31, region: 8, x: 100, y: 100, visible: true,
+        });
+        let result = s.pickup_world_object(8, 100, 100, 24);
+        assert!(result.is_none());
+        assert!(s.world_objects[0].visible);
+    }
+
+    #[test]
+    fn test_populate_region_objects() {
+        let lib = crate::game::game_library::load_game_library(std::path::Path::new("faery.toml"))
+            .expect("should load faery.toml");
+        let mut s = GameState::new();
+        s.populate_region_objects(3, &lib);
+        let ground_items: Vec<_> = s.world_objects.iter()
+            .filter(|o| o.visible)
+            .collect();
+        assert!(ground_items.len() >= 9, "region 3 should have at least 9 visible items, got {}", ground_items.len());
+        let chest = ground_items.iter().find(|o| o.ob_id == 15 && o.x == 19298);
+        assert!(chest.is_some(), "should have the starting chest");
     }
 }
