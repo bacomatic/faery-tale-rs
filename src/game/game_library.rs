@@ -80,15 +80,15 @@ pub struct DoorConfig {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ZoneConfig {
-    pub zone_type:      String,
-    pub x1:             u16,
-    pub y1:             u16,
-    pub x2:             u16,
-    pub y2:             u16,
-    pub region:         u8,
-    pub encounter_rate: u8,
-    #[serde(default)]
-    pub event_id:       u8,
+    pub label:  String,
+    pub etype:  u8,
+    pub x1:     u16,
+    pub y1:     u16,
+    pub x2:     u16,
+    pub y2:     u16,
+    pub v1:     u8,
+    pub v2:     u8,
+    pub v3:     u8,
 }
 
 #[derive(Debug, Deserialize)]
