@@ -42,6 +42,10 @@ When investigating any game mechanic (combat, movement, AI, timings, formulas, e
 2. **Only if RESEARCH.md is silent or appears incorrect**: do a deep dive into `original/` (C/ASM sources).
 3. **ALWAYS**: Update RESEARCH.md with new findings, even if they just confirm what's already there. This file is the single source of truth for game mechanics research.
 
+## Plan execution
+
+- Always use **subagent-driven development** when executing implementation plans. Do not ask which execution approach to use.
+
 ## Architecture
 
 SDL2-rendered game using a **chain-of-scenes** pattern. Scenes run sequentially:

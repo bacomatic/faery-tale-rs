@@ -17,6 +17,10 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - There was no PAL release; treat all gameplay/audio/animation timing as NTSC.
 - Ignore any PAL/50Hz comments in `original/` as incorrect for this project.
 
+## Plan execution
+
+- Always use **subagent-driven development** when executing implementation plans. Do not ask which execution approach to use.
+
 ## Agent working rules
 
 - Make minimal, surgical changes consistent with existing code style.
