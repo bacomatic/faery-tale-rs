@@ -2312,7 +2312,15 @@ impl GameplayScene {
                     }
                 }
 
-                self.state.mark_object_taken(world_idx);
+                // Original fmain2.c:1548-1551: chest → replace with open sprite (0x1d);
+                // urn/sacks → set ob_stat = flag (hidden).
+                if ob_id == 15 {
+                    if let Some(obj) = self.state.world_objects.get_mut(world_idx) {
+                        obj.ob_id = 0x1d; // open/empty chest sprite
+                    }
+                } else {
+                    self.state.mark_object_taken(world_idx);
+                }
                 return true;
             }
             _ => {}
