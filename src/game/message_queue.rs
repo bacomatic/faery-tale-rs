@@ -55,6 +55,20 @@ impl MessageQueue {
         }
     }
 
+    /// Push a message, word-wrapping across multiple lines if it exceeds
+    /// [`MSG_LINE_MAX`].  The original Amiga `extract()` / `print()` system
+    /// word-wrapped long event text the same way.
+    pub fn push_wrapped(&mut self, msg: impl Into<String>) {
+        let s = msg.into();
+        if s.chars().count() <= MSG_LINE_MAX {
+            self.push(s);
+            return;
+        }
+        for line in wrap_words(&s, MSG_LINE_MAX) {
+            self.push(line);
+        }
+    }
+
     /// Iterate messages oldest-first (top of scroll area).
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         self.lines.iter().map(|s| s.as_str())
@@ -68,6 +82,37 @@ impl MessageQueue {
     pub fn is_empty(&self) -> bool { self.lines.is_empty() }
     pub fn len(&self) -> usize { self.lines.len() }
     pub fn clear(&mut self) { self.lines.clear(); }
+}
+
+/// Word-wrap `text` into lines no longer than `max` characters, breaking on
+/// whitespace boundaries.  Falls back to hard truncation when a single word
+/// exceeds `max`.
+fn wrap_words(text: &str, max: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        if line.is_empty() {
+            if word.len() > max {
+                lines.push(word.chars().take(max).collect());
+            } else {
+                line.push_str(word);
+            }
+        } else if line.len() + 1 + word.len() > max {
+            lines.push(std::mem::take(&mut line));
+            if word.len() > max {
+                lines.push(word.chars().take(max).collect());
+            } else {
+                line.push_str(word);
+            }
+        } else {
+            line.push(' ');
+            line.push_str(word);
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
 }
 
 impl Default for MessageQueue {
@@ -94,5 +139,35 @@ mod tests {
         let mut q = MessageQueue::new();
         q.push("a".repeat(MSG_LINE_MAX + 10));
         assert!(q.latest().unwrap().chars().count() <= MSG_LINE_MAX);
+    }
+
+    #[test]
+    fn test_push_wrapped_splits_long_message() {
+        let mut q = MessageQueue::new();
+        q.push_wrapped(
+            "Julian started the journey in his home village of Tambry."
+        );
+        // Should be split into two lines, both <= 40 chars
+        assert_eq!(q.len(), 2);
+        for msg in q.iter() {
+            assert!(msg.chars().count() <= MSG_LINE_MAX,
+                "line too long: {:?} ({})", msg, msg.chars().count());
+        }
+    }
+
+    #[test]
+    fn test_push_wrapped_short_message_stays_single() {
+        let mut q = MessageQueue::new();
+        q.push_wrapped("Hello world.");
+        assert_eq!(q.len(), 1);
+        assert_eq!(q.latest().unwrap(), "Hello world.");
+    }
+
+    #[test]
+    fn test_wrap_words() {
+        let lines = wrap_words("Julian started the journey in his home village of Tambry.", 40);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "Julian started the journey in his home");
+        assert_eq!(lines[1], "village of Tambry.");
     }
 }

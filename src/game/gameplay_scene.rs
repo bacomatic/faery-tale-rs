@@ -369,6 +369,20 @@ impl GameplayScene {
         }).collect();
         self.zones = game_lib.zones.clone();
 
+        // Push startup event message (original: revive() calls event(9) +
+        // print_cont(".") for Julian, event(10/11) for later brothers).
+        let bname = brother_name(&self.state);
+        let mut msg9 = crate::game::events::event_msg(&self.narr, 9, bname);
+        match self.state.brother {
+            1 => { msg9.push('.'); self.messages.push_wrapped(msg9); }
+            2 => { self.messages.push_wrapped(msg9);
+                    self.messages.push_wrapped(
+                        crate::game::events::event_msg(&self.narr, 10, bname)); }
+            _ => { self.messages.push_wrapped(msg9);
+                    self.messages.push_wrapped(
+                        crate::game::events::event_msg(&self.narr, 11, bname)); }
+        }
+
         let stuff = self.state.stuff().clone();
         let wealth = self.state.wealth;
         self.menu.set_options(&stuff, wealth);
@@ -3593,7 +3607,19 @@ impl Scene for GameplayScene {
                         self.state.activate_brother(next);
                     }
                     let bname = brother_name(&self.state);
-                    self.messages.push(format!("{} takes up the quest!", bname));
+                    // Original: event(9) + event(10) for Phillip,
+                    //           event(9) + event(11) for Kevin.
+                    self.messages.push_wrapped(
+                        crate::game::events::event_msg(&self.narr, 9, bname));
+                    let cont_id = match self.state.brother {
+                        2 => Some(10),
+                        3 => Some(11),
+                        _ => None,
+                    };
+                    if let Some(id) = cont_id {
+                        self.messages.push_wrapped(
+                            crate::game::events::event_msg(&self.narr, id, bname));
+                    }
                     self.last_mood = u8::MAX;
                     self.dlog(format!("brother died, {} continues", bname));
                 } else {

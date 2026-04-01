@@ -407,7 +407,7 @@ impl GameState {
         // Fatigue threshold messages.
         if self.fatigue == 70 {
             events.push(3); // "was getting tired"
-        } else if self.hunger == 90 {
+        } else if self.fatigue == 90 {
             events.push(4); // "was getting sleepy"
         }
 
