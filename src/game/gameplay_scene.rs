@@ -250,15 +250,28 @@ pub struct GameplayScene {
     last_zone: Option<usize>,
     /// Hero is in forced sleep (events 12/24).
     sleeping: bool,
-    /// Hero is submerged in water.
-    submerged: bool,
-    /// Ticks while submerged (for drowning damage cadence).
-    drowning_timer: u32,
+    /// True when hero is in the volcanic region (lava damage active).
+    /// Mirrors fiery_death global from fmain.c:1554.
+    fiery_death: bool,
     /// Death countdown active (goodfairy timer running).
     dying: bool,
     /// Goodfairy countdown: starts at 255, decrements every other tick (~30Hz).
     /// When reaches 0, luck check determines faery revive or next brother.
     goodfairy: i16,
+}
+
+/// What kind of figure was found by nearest_fig.
+enum FigKind {
+    /// An enemy NPC from npc_table, with its index.
+    Npc(usize),
+    /// A setfig from world_objects, with its index and setfig type (ob_id).
+    SetFig { world_idx: usize, setfig_type: u8 },
+}
+
+/// Result of nearest_fig search.
+struct NearestFig {
+    kind: FigKind,
+    dist: i32,
 }
 
 impl GameplayScene {
@@ -311,8 +324,7 @@ impl GameplayScene {
             zones: Vec::new(),
             last_zone: None,
             sleeping: false,
-            submerged: false,
-            drowning_timer: 0,
+            fiery_death: false,
             dying: false,
             goodfairy: 0,
         }
@@ -468,6 +480,13 @@ impl GameplayScene {
 
             let dx = base_dx * speed / 2;
             let dy = base_dy * speed / 2;
+
+            let facing: u8 = match dir {
+                Direction::N  => 0, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
+                Direction::S  => 4, Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                Direction::None => 0,
+            };
+
             // Outdoor world wraps at MAXCOORD = 0x8000 = 32768 (USHORT arithmetic).
             // Indoor maps (region >= 8) use y coordinates in the 0x8000–0x9FFF range;
             // wrapping would collapse them to 0–0x1FFF and break doorfind_exit matching.
@@ -485,15 +504,61 @@ impl GameplayScene {
                     collision::px_to_terrain_type(world, new_x as i32, new_y as i32) == 1
                 });
 
-            if !turtle_blocked && (self.state.flying != 0 || self.state.on_raft || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)) {
-                self.state.hero_x = new_x;
-                self.state.hero_y = new_y;
+            let mut final_x = new_x;
+            let mut final_y = new_y;
+            let mut final_facing = facing;
+            let mut can_move = !turtle_blocked
+                && (self.state.flying != 0 || self.state.on_raft
+                    || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32));
+
+            // Direction deviation (wall-sliding): fmain.c checkdev1/checkdev2.
+            // Only for diagonal directions when the original direction was blocked.
+            // Skip deviation when blocked by a door tile (terrain 15) — the player must
+            // bump the door to open it, not slide around it.
+            let blocked_by_door = !can_move && self.map_world.as_ref().map_or(false, |w| {
+                let rt = collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2);
+                let lt = collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2);
+                rt == 15 || lt == 15
+            });
+            if !can_move && !turtle_blocked && !blocked_by_door
+                && self.state.flying == 0 && !self.state.on_raft
+            {
+                let is_diagonal = matches!(dir, Direction::NE | Direction::SE | Direction::SW | Direction::NW);
+                if is_diagonal {
+                    let indoor = self.state.region_num >= 8;
+                    // checkdev1: try (facing + 1) & 7
+                    let dev1 = (facing + 1) & 7;
+                    let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
+                    let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
+                    if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32) {
+                        final_x = dev1_x;
+                        final_y = dev1_y;
+                        final_facing = dev1;
+                        can_move = true;
+                    } else {
+                        // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
+                        let dev2 = (dev1.wrapping_sub(2)) & 7;
+                        let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
+                        let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
+                        if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32) {
+                            final_x = dev2_x;
+                            final_y = dev2_y;
+                            final_facing = dev2;
+                            can_move = true;
+                        }
+                    }
+                }
+            }
+
+            if can_move {
+                self.state.hero_x = final_x;
+                self.state.hero_y = final_y;
                 // Successful move — hero is no longer blocked by a door, reset dedup flag.
                 self.bumped_door = None;
                 if self.state.region_num >= 8 {
                     // Indoor (region >= 8): exit check — match on grid-aligned dst coords.
                     // Mirrors fmain.c indoor branch: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
-                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, new_x, new_y) {
+                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, final_x, final_y) {
                         let (ex, ey) = crate::game::doors::exit_spawn(&door);
                         let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
                         self.state.region_num = outdoor_region;
@@ -501,15 +566,15 @@ impl GameplayScene {
                         self.state.hero_y = ey;
                         self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
                     }
-                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, new_x, new_y) {
+                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, final_x, final_y) {
                     // Outdoor (region < 8): walk-on entry check — match on src coords.
                     // Sub-tile position guard mirrors fmain.c Phase-2 nodoor conditions:
                     //   Horizontal (type & 1): skip if hero_y & 0x10 != 0 (lower half — not through yet)
                     //   Vertical             : skip if hero_x & 15 > 6   (right portion — not through yet)
                     let in_doorway = if door.door_type & 1 != 0 {
-                        new_y & 0x10 == 0  // horizontal: upper half
+                        final_y & 0x10 == 0  // horizontal: upper half
                     } else {
-                        new_x & 15 <= 6    // vertical: left portion
+                        final_x & 15 <= 6    // vertical: left portion
                     };
                     // DESERT doors (oasis) require 5 gold statues; original silently blocks if < 5.
                     use crate::game::doors::{key_req, KeyReq};
@@ -643,17 +708,7 @@ impl GameplayScene {
                 }
             }
 
-            let facing: u8 = match dir {
-                Direction::N  => 0,
-                Direction::NE => 1,
-                Direction::E  => 2,
-                Direction::SE => 3,
-                Direction::S  => 4,
-                Direction::SW => 5,
-                Direction::W  => 6,
-                Direction::NW => 7,
-                Direction::None => 0,
-            };
+            let facing = final_facing;
 
             let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
             if let Some(player) = self.state.actors.first_mut() {
@@ -676,9 +731,6 @@ impl GameplayScene {
                 }
             }
         }
-
-        // Actual movement result (computed after the branch above).
-        let moved = self.state.hero_x != prev_x || self.state.hero_y != prev_y;
 
         // Melee combat when fight is held (npc-103).
         // Rate-limited to one swing every 10 ticks (~1/3 s at 30 Hz), matching
@@ -738,37 +790,273 @@ impl GameplayScene {
                 }
             }
         }
+    }
 
-        // Water submersion check (#105)
-        if !self.state.on_raft && self.state.flying == 0 {
-            let terrain = if let Some(ref world) = self.map_world {
-                collision::px_to_terrain_type(
-                    world, self.state.hero_x as i32, self.state.hero_y as i32,
-                )
-            } else { 0 };
-            self.submerged = terrain == 2;
+    /// Port of nearest_fig(constraint, max_dist) from fmain2.c:426-442.
+    /// constraint=0: find items (skip setfigs, skip OBJECTS with ob_id==0x1d).
+    /// constraint=1: find NPCs/setfigs (skip ground items).
+    /// Searches both npc_table and world_objects.
+    fn nearest_fig(&self, constraint: u8, max_dist: i32) -> Option<NearestFig> {
+        use crate::game::collision::calc_dist;
+        let hx = self.state.hero_x as i32;
+        let hy = self.state.hero_y as i32;
+
+        let mut best: Option<NearestFig> = None;
+        let mut best_dist = max_dist;
+
+        // Search enemy NPCs from npc_table
+        if let Some(ref table) = self.npc_table {
+            for (i, npc) in table.npcs.iter().enumerate() {
+                if !npc.active { continue; }
+                let d = calc_dist(hx, hy, npc.x as i32, npc.y as i32);
+                if d < best_dist {
+                    best_dist = d;
+                    best = Some(NearestFig {
+                        kind: FigKind::Npc(i),
+                        dist: d,
+                    });
+                }
+            }
+        }
+
+        // Search world_objects for setfigs (ob_stat=3) and ground items (ob_stat=1)
+        for (i, obj) in self.state.world_objects.iter().enumerate() {
+            if !obj.visible { continue; }
+            if obj.region != self.state.region_num { continue; }
+
+            if constraint == 1 {
+                // Looking for NPCs: skip ground items, include setfigs
+                if obj.ob_stat != 3 { continue; }
+            } else {
+                // Looking for items: skip setfigs, include ground items
+                if obj.ob_stat == 3 { continue; }
+                if obj.ob_id == 0x1d { continue; } // empty chest
+            }
+
+            let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
+            if d < best_dist {
+                best_dist = d;
+                if obj.ob_stat == 3 {
+                    best = Some(NearestFig {
+                        kind: FigKind::SetFig { world_idx: i, setfig_type: obj.ob_id },
+                        dist: d,
+                    });
+                } else {
+                    best = Some(NearestFig {
+                        kind: FigKind::Npc(i), // reuse Npc variant for ground items
+                        dist: d,
+                    });
+                }
+            }
+        }
+
+        best
+    }
+
+    /// Update actor environ based on terrain type at current position.
+    /// Port of fmain.c:2019-2074 sinker logic.
+    fn update_environ(&mut self) {
+        let terrain = if let Some(ref world) = self.map_world {
+            collision::px_to_terrain_type(
+                world, self.state.hero_x as i32, self.state.hero_y as i32,
+            )
         } else {
-            self.submerged = false;
+            return;
+        };
+
+        if self.state.on_raft || self.state.flying != 0 {
+            if let Some(player) = self.state.actors.first_mut() {
+                player.environ = 0;
+            }
+            return;
+        }
+
+        let cur_environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+        let mut k: i8 = cur_environ;
+
+        match terrain {
+            0 => { k = 0; }
+            6 => { k = -1; } // ice
+            7 => { k = -2; } // lava
+            8 => { k = -3; } // special C
+            2 => { k = 2; }  // shallow water/wading
+            3 => { k = 5; }  // brush/deep wade
+            4 | 5 => {
+                let threshold: i8 = if terrain == 4 { 10 } else { 30 };
+                if k > threshold {
+                    k -= 1;
+                } else if k < threshold {
+                    k += 1;
+                    if k > 15 {
+                        // Trigger SINK state
+                        if let Some(player) = self.state.actors.first_mut() {
+                            if !matches!(player.state, ActorState::Dying | ActorState::Dead) {
+                                player.state = ActorState::Sinking;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {} // types 1, 9-15: no environ change from these
+        }
+
+        // Reset SINK state when leaving water
+        if k == 0 {
+            if let Some(player) = self.state.actors.first_mut() {
+                if player.state == ActorState::Sinking {
+                    player.state = ActorState::Still;
+                }
+            }
+        }
+
+        if let Some(player) = self.state.actors.first_mut() {
+            player.environ = k;
         }
     }
 
-    /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
-    /// Mirrors original nearest_fig() / calc_dist() from fmain.c:4167-4272.
-    fn nearest_npc_in_range(&self, range: i32) -> Option<&crate::game::npc::Npc> {
-        let hx = self.state.hero_x as i32;
-        let hy = self.state.hero_y as i32;
-        self.npc_table.as_ref()?.npcs.iter()
-            .filter(|n| n.active)
-            .filter(|n| {
-                let dx = (n.x as i32 - hx).abs();
-                let dy = (n.y as i32 - hy).abs();
-                dx.max(dy) <= range
-            })
-            .min_by_key(|n| {
-                let dx = (n.x as i32 - hx).abs();
-                let dy = (n.y as i32 - hy).abs();
-                dx.max(dy)
-            })
+    /// Check if the hero is in the volcanic/lava region.
+    /// Mirrors fmain.c:1554: fiery_death = (map_x > 8802 && map_x < 13562 && map_y > 24744 && map_y < 29544).
+    fn update_fiery_death(&mut self) {
+        let mx = self.state.hero_x as i32;
+        let my = self.state.hero_y as i32;
+        self.fiery_death = mx > 8802 && mx < 13562 && my > 24744 && my < 29544;
+    }
+
+    /// Apply environ-based damage: drowning at environ==30, lava in fiery_death region.
+    /// Port of fmain.c:2131-2147.
+    fn apply_environ_damage(&mut self) {
+        let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+
+        // Lava damage (fiery_death region, fmain.c:2133-2140)
+        if self.fiery_death {
+            // Rose (stuff[23]) grants fire immunity
+            if self.state.stuff()[23] > 0 {
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.environ = 0;
+                }
+            } else if environ > 15 {
+                self.state.vitality = 0;
+            } else if environ > 2 {
+                self.state.vitality = (self.state.vitality - 1).max(0);
+            }
+        }
+
+        // Drowning damage (fmain.c:2142-2146): environ==30 && (cycle & 7)==0
+        if environ as i32 == 30 && (self.state.cycle & 7) == 0 {
+            self.state.vitality = (self.state.vitality - 1).max(0);
+        }
+    }
+
+    /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
+    fn handle_setfig_talk(&mut self, fig: &NearestFig, bname: &str) {
+        match &fig.kind {
+            FigKind::Npc(idx) => {
+                // Enemy NPC — use race-based speech (existing logic).
+                if let Some(ref table) = self.npc_table {
+                    if let Some(npc) = table.npcs.get(*idx) {
+                        use crate::game::npc::*;
+                        let speech_id: usize = match npc.race {
+                            RACE_NORMAL     => 3,
+                            RACE_UNDEAD     => 2,
+                            RACE_WRAITH     => 2,
+                            RACE_ENEMY      => 1,
+                            RACE_SNAKE      => 4,
+                            RACE_SHOPKEEPER => 12,
+                            RACE_BEGGAR     => 23,
+                            _               => 6,
+                        };
+                        self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
+                    }
+                }
+            }
+            FigKind::SetFig { setfig_type, .. } => {
+                let k = *setfig_type as usize;
+                // Per-setfig dialogue (fmain.c:4188-4261).
+                match k {
+                    0 => {
+                        // Wizard: kind < 10 → speak(35), else speak(27 + goal).
+                        // goal is not tracked yet; use speak(27) as default.
+                        if self.state.kind < 10 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 35, bname));
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 27, bname));
+                        }
+                    }
+                    1 => {
+                        // Priest: heals hero. kind < 10 → speak(40), else speak(36 + daynight%3) + heal.
+                        if self.state.kind < 10 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 40, bname));
+                        } else {
+                            let day_mod = (self.state.daynight % 3) as usize;
+                            self.messages.push(crate::game::events::speak(&self.narr, 36 + day_mod, bname));
+                            // Heal: vitality = 15 + brave/4 (fmain.c:4222).
+                            self.state.vitality = 15 + self.state.brave / 4;
+                        }
+                    }
+                    2 | 3 => {
+                        // Guard: speak(15).
+                        self.messages.push(crate::game::events::speak(&self.narr, 15, bname));
+                    }
+                    4 => {
+                        // Princess: speak(16).
+                        self.messages.push(crate::game::events::speak(&self.narr, 16, bname));
+                    }
+                    5 => {
+                        // King: speak(17).
+                        self.messages.push(crate::game::events::speak(&self.narr, 17, bname));
+                    }
+                    6 => {
+                        // Noble: speak(20).
+                        self.messages.push(crate::game::events::speak(&self.narr, 20, bname));
+                    }
+                    7 => {
+                        // Sorceress: luck boost (fmain.c:4241-4247).
+                        if self.state.luck < 64 {
+                            self.state.luck += 5;
+                        }
+                        self.messages.push(crate::game::events::speak(&self.narr, 45, bname));
+                    }
+                    8 => {
+                        // Bartender: fatigue < 5 → speak(13), dayperiod > 7 → speak(12), else speak(14).
+                        let speech = if self.state.fatigue < 5 {
+                            13
+                        } else if self.state.dayperiod > 7 {
+                            12
+                        } else {
+                            14
+                        };
+                        self.messages.push(crate::game::events::speak(&self.narr, speech, bname));
+                    }
+                    9 => {
+                        // Witch: speak(46).
+                        self.messages.push(crate::game::events::speak(&self.narr, 46, bname));
+                    }
+                    10 => {
+                        // Spectre: speak(47).
+                        self.messages.push(crate::game::events::speak(&self.narr, 47, bname));
+                    }
+                    11 => {
+                        // Ghost: speak(49).
+                        self.messages.push(crate::game::events::speak(&self.narr, 49, bname));
+                    }
+                    12 => {
+                        // Ranger: region 2 → speak(22), else speak(53 + goal).
+                        if self.state.region_num == 2 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 22, bname));
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 53, bname));
+                        }
+                    }
+                    13 => {
+                        // Beggar: speak(23).
+                        self.messages.push(crate::game::events::speak(&self.narr, 23, bname));
+                    }
+                    _ => {
+                        self.messages.push(crate::game::events::speak(&self.narr, 6, bname));
+                    }
+                }
+            }
+        }
     }
 
     /// Helper: buy one unit of item_idx from a nearby shopkeeper (npc-107).
@@ -1803,15 +2091,17 @@ impl GameplayScene {
                 self.messages.push(format!("You see: {}.", terrain_name));
             }
             GameAction::Take => {
-                const PICKUP_RANGE: u16 = 24;
-                if let Some(_item_id) = self.state.pickup_world_object(
-                    self.state.region_num, self.state.hero_x, self.state.hero_y, PICKUP_RANGE,
+                // Take: nearest_fig(0, 30) — find nearest item within range 30 (fmain.c:3876-4000).
+                const TAKE_RANGE: i32 = 30;
+                if let Some((idx, ob_id)) = self.state.find_nearest_item(
+                    self.state.region_num, self.state.hero_x, self.state.hero_y, TAKE_RANGE,
                 ) {
                     let bname = brother_name(&self.state);
-                    let msg = crate::game::events::event_msg(&self.narr, 37, bname);
-                    if !msg.is_empty() { self.messages.push(msg); }
-                    let wealth = self.state.wealth;
-                    self.menu.set_options(self.state.stuff(), wealth);
+                    let taken = self.handle_take_item(idx, ob_id, bname);
+                    if taken {
+                        let wealth = self.state.wealth;
+                        self.menu.set_options(self.state.stuff(), wealth);
+                    }
                 } else {
                     self.messages.push("Nothing here to take.");
                 }
@@ -1844,17 +2134,16 @@ impl GameplayScene {
                 }
             }
             GameAction::Yell => {
-                // Yell range = 100. If NPC within 35 → "No need to shout, son!" (speech 8).
-                // Otherwise yell the missing brother's name (original yell behavior).
+                // Yell: nearest_fig(1, 100). If NPC within 35 → speak(8) "No need to shout!"
+                // Otherwise yell the next brother's name (fmain.c:4167-4175).
                 let bname = brother_name(&self.state);
-                let yell_dist = self.nearest_npc_in_range(100)
-                    .map(|n| {
-                        let dx = (n.x as i32 - self.state.hero_x as i32).abs();
-                        let dy = (n.y as i32 - self.state.hero_y as i32).abs();
-                        dx.max(dy)
-                    });
-                if yell_dist.map_or(false, |d| d < 35) {
-                    self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                if let Some(fig) = self.nearest_fig(1, 100) {
+                    if fig.dist < 35 {
+                        self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                    } else {
+                        // NPC in yell range but not close — show dialogue
+                        self.handle_setfig_talk(&fig, bname);
+                    }
                 } else {
                     let next_brother = match self.state.brother {
                         1 => "Phillip",
@@ -1865,7 +2154,7 @@ impl GameplayScene {
                 }
             }
             GameAction::Speak | GameAction::Ask => {
-                // Talk range = 50. Check nearest NPC within range (npc-002, fmain.c:4167).
+                // Talk: nearest_fig(1, 50). Check shopkeeper first, then setfig dialogue.
                 let bname = brother_name(&self.state);
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
@@ -1873,8 +2162,7 @@ impl GameplayScene {
                     crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
                 });
                 if near_shop {
-                    // Show buy menu: list items available for purchase with prices.
-                    // Mirrors fmain.c BUY menu (label5 = "Food ArrowVial Mace SwordBow  Totem").
+                    // Shopkeeper buy menu (unchanged from existing code).
                     let items = [
                         (0,  "Food"),
                         (1,  "Arrows"),
@@ -1893,20 +2181,8 @@ impl GameplayScene {
                     }
                     menu.push_str(&format!("  (Your gold: {})", self.state.gold));
                     self.messages.push(menu);
-                } else if let Some(npc) = self.nearest_npc_in_range(50) {
-                    // NPC in range — show race-appropriate speech (fmain.c:4195-4230).
-                    use crate::game::npc::*;
-                    let speech_id: usize = match npc.race {
-                        RACE_NORMAL   => 3,  // skeleton clattering (generic)
-                        RACE_UNDEAD   => 2,  // wraith "Doom!"
-                        RACE_WRAITH   => 2,  // wraith "Doom!"
-                        RACE_ENEMY    => 1,  // orc "Human must die!"
-                        RACE_SNAKE    => 4,  // snake (waste of time)
-                        RACE_SHOPKEEPER => 12, // tavern keeper greeting
-                        RACE_BEGGAR   => 23, // beggar "Alms!"
-                        _             => 6,  // "There was no reply."
-                    };
-                    self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
+                } else if let Some(fig) = self.nearest_fig(1, 50) {
+                    self.handle_setfig_talk(&fig, bname);
                 } else {
                     self.messages.push("There is no one here to talk to.");
                 }
@@ -1924,6 +2200,161 @@ impl GameplayScene {
             _ => {}
         }
     }
+
+    /// Handle taking a specific world item. Ports fmain.c:3880-4000.
+    /// Returns true if the item was successfully taken.
+    fn handle_take_item(&mut self, world_idx: usize, ob_id: u8, bname: &str) -> bool {
+        use crate::game::world_objects::{ob_id_to_stuff_index, stuff_index_name};
+
+        match ob_id {
+            // FOOTSTOOL, TURTLE — can't take
+            31 | 102 => {
+                return false;
+            }
+            // MONEY — +50 gold
+            13 => {
+                self.state.gold += 50;
+                self.messages.push(format!("{} found 50 gold pieces.", bname));
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // SCRAP OF PAPER (ob_id 20): event 17, then 18 or 19 by region
+            20 => {
+                let msg17 = crate::game::events::event_msg(&self.narr, 17, bname);
+                if !msg17.is_empty() { self.messages.push(msg17); }
+                let region_event = if self.state.region_num > 7 { 19 } else { 18 };
+                let msg = crate::game::events::event_msg(&self.narr, region_event, bname);
+                if !msg.is_empty() { self.messages.push(msg); }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // FRUIT (ob_id 148): eat if hungry, else add to inventory
+            148 => {
+                if self.state.hunger >= 15 {
+                    // Hungry — eat immediately
+                    self.state.eat_amount(30);
+                    self.dlog(format!("ate fruit, hunger now {}", self.state.hunger));
+                } else {
+                    // Not hungry — add to inventory (stuff[24])
+                    self.state.pickup_item(24);
+                    let msg = crate::game::events::event_msg(&self.narr, 36, bname);
+                    if !msg.is_empty() { self.messages.push(msg); }
+                }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // BROTHER'S BONES (ob_id 28): combine saved brother's inventory
+            28 => {
+                self.messages.push(format!("{} found his brother's bones.", bname));
+                // TODO: combine julstuff/philstuff when WorldObject carries vitality field
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // URN (14), CHEST (15), SACKS (16) — containers with random loot
+            14 | 15 | 16 => {
+                let container_name = match ob_id {
+                    14 => "a brass urn",
+                    15 => "a chest",
+                    16 => "some sacks",
+                    _ => "a container",
+                };
+
+                // rand4() determines loot: 0=nothing, 1=one item, 2=two items, 3=three of same
+                // Original uses print/print_cont for multi-part messages on the HI bar.
+                // We combine announce_container prefix with loot suffix into one push.
+                let prefix = format!("{} found {} containing ", bname, container_name);
+                let roll = (self.state.tick_counter & 3) as u8;
+                match roll {
+                    0 => {
+                        self.messages.push(format!("{}nothing.", prefix));
+                    }
+                    1 => {
+                        // One random item from inv_list[rand8()+8]
+                        let item_idx = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        let item_idx = if item_idx == 8 { 35usize } else { item_idx }; // 8→ARROWBASE(35)
+                        if item_idx < 35 {
+                            self.state.pickup_item(item_idx);
+                        }
+                        let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
+                        self.messages.push(format!("{}a {}.", prefix, name));
+                    }
+                    2 => {
+                        // Two different random items
+                        // Special: first item i==8 → GOLDBASE+3 (100 Gold Pieces, wealth+=100)
+                        let raw1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        let (item1, gold_special) = if raw1 == 8 {
+                            (34usize, true) // GOLDBASE+3 = inv_list[34] = "100 Gold Pieces"
+                        } else {
+                            (raw1, false)
+                        };
+                        if gold_special {
+                            self.state.wealth = self.state.wealth.saturating_add(100);
+                        }
+                        let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
+                        if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
+                        let item2 = if item2 == 8 { 35 } else { item2 };
+                        if !gold_special && item1 < 31 { self.state.pickup_item(item1); }
+                        if item2 < 35 { self.state.pickup_item(item2); }
+                        let n1 = if item1 < 31 { stuff_index_name(item1) } else if item1 == 34 { "100 Gold Pieces" } else { "quiver of arrows" };
+                        let n2 = if item2 < 31 { stuff_index_name(item2) } else { "quiver of arrows" };
+                        self.messages.push(format!("{}{} and a {}.", prefix, n1, n2));
+                    }
+                    3 | _ => {
+                        // Three of the same item
+                        let item = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        if item == 8 {
+                            // Special: 3 random keys
+                            self.messages.push(format!("{}3 keys.", prefix));
+                            for shift in [4, 7, 10] {
+                                let mut key_idx = ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
+                                if key_idx == 22 { key_idx = 16; }
+                                if key_idx == 23 { key_idx = 20; }
+                                self.state.pickup_item(key_idx);
+                            }
+                        } else {
+                            let name = if item < 31 { stuff_index_name(item) } else { "quiver of arrows" };
+                            self.messages.push(format!("{}3 {}s.", prefix, name));
+                            if item < 35 {
+                                self.state.pickup_item(item);
+                                self.state.pickup_item(item);
+                                self.state.pickup_item(item);
+                            }
+                        }
+                    }
+                }
+
+                // Original fmain2.c:1548-1551: chest → replace with open sprite (0x1d);
+                // urn/sacks → set ob_stat = flag (hidden).
+                if ob_id == 15 {
+                    if let Some(obj) = self.state.world_objects.get_mut(world_idx) {
+                        obj.ob_id = 0x1d; // open/empty chest sprite
+                    }
+                } else {
+                    self.state.mark_object_taken(world_idx);
+                }
+                return true;
+            }
+            _ => {}
+        }
+
+        // Standard itrans pickup
+        if let Some(stuff_idx) = ob_id_to_stuff_index(ob_id) {
+            if self.state.pickup_item(stuff_idx) {
+                let name = stuff_index_name(stuff_idx);
+                let msg = crate::game::events::event_msg(&self.narr, 37, bname);
+                if !msg.is_empty() {
+                    self.messages.push(msg);
+                } else {
+                    self.messages.push(format!("{} found a {}.", bname, name));
+                }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn handle_game_event(&mut self, event: crate::game::game_event::GameEvent) {
         use crate::game::game_event::GameEvent;
         match event {
@@ -2394,16 +2825,19 @@ impl GameplayScene {
     /// Blit one 16×32 sprite frame (indexed u8) into the map framebuf (sprite-103).
     /// Transparent pixels (index == 31) are skipped.
     /// `rel_x` / `rel_y` are the top-left destination in framebuf pixels.
+    /// `max_rows` limits the number of source rows drawn (for environ clipping).
     fn blit_sprite_to_framebuf(
         frame_pixels: &[u8],
         rel_x: i32,
         rel_y: i32,
+        max_rows: usize,
         framebuf: &mut [u8],
         fb_w: i32,
         fb_h: i32,
     ) {
         use crate::game::sprites::{SPRITE_W, SPRITE_H};
-        for row in 0..SPRITE_H as i32 {
+        let row_limit = max_rows.min(SPRITE_H) as i32;
+        for row in 0..row_limit {
             let dst_y = rel_y + row;
             if dst_y < 0 || dst_y >= fb_h { continue; }
             for col in 0..SPRITE_W as i32 {
@@ -2560,7 +2994,7 @@ impl GameplayScene {
         map_x: u16,
         map_y: u16,
         framebuf: &mut Vec<u8>,
-        hero_submerged: bool,
+        _hero_submerged: bool,
     ) {
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
         use crate::game::sprites::{SPRITE_H, SPRITE_W};
@@ -2572,7 +3006,15 @@ impl GameplayScene {
         let hero_cfile = state.brother.saturating_sub(1) as usize;
         if let Some(Some(ref sheet)) = sprite_sheets.get(hero_cfile) {
             let (rel_x, mut rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
-            if hero_submerged { rel_y += 8; }
+            let environ = state.actors.first().map_or(0i8, |a| a.environ);
+            let body_rows: usize = if environ == 2 {
+                SPRITE_H.saturating_sub(10)
+            } else if environ > 2 {
+                rel_y += environ as i32;
+                SPRITE_H.saturating_sub(environ as usize)
+            } else {
+                SPRITE_H
+            };
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
@@ -2585,7 +3027,7 @@ impl GameplayScene {
                 let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
                 let frame = frame_base + anim_offset;
                 if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
                 }
 
                 // Weapon overlay (fmain.c passmode weapon blit).
@@ -2641,7 +3083,7 @@ impl GameplayScene {
                 let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, crate::game::sprites::SPRITE_H, framebuf, fb_w, fb_h);
                 }
             }
         }
@@ -2911,16 +3353,6 @@ impl Scene for GameplayScene {
             return SceneResult::Continue;
         }
 
-        // Drowning damage (#105): 1 vitality per ~1s while submerged
-        if self.submerged {
-            self.drowning_timer = self.drowning_timer.wrapping_add(delta_ticks);
-            if self.drowning_timer % 30 == 0 {
-                self.state.vitality = (self.state.vitality - 1).max(0);
-            }
-        } else {
-            self.drowning_timer = 0;
-        }
-
         // Lazy-load ADF + world data on first tick (render-world-load).
         // ADF path comes from faery.toml [disk].adf; falls back to the default filename.
         // Errors are logged to stderr; missing ADF is gracefully handled.
@@ -3171,6 +3603,10 @@ impl Scene for GameplayScene {
                 self.apply_player_input();
             }
 
+            self.update_fiery_death();
+            self.update_environ();
+            self.apply_environ_damage();
+
             // Tick missiles (npc-105): advance each active missile, check hits.
             {
                 let hero_x = self.state.hero_x as i32;
@@ -3329,7 +3765,24 @@ impl Scene for GameplayScene {
                                 let (rel_x, mut rel_y) = Self::actor_rel_pos(
                                     self.state.hero_x, self.state.hero_y, map_x, map_y,
                                 );
-                                if self.submerged { rel_y += 8; }
+                                let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+                                // Environ rendering (fmain.c:3026-3040, passmode==0):
+                                //   environ==2:  ystop -= 10 (clip bottom 10 rows, no Y shift)
+                                //   environ>29:  fully submerged (splash sprite)
+                                //   environ>2:   ystart += environ (shift down, clip bottom)
+                                let body_rows: usize = if environ > 29 {
+                                    // Fully submerged — skip rendering body
+                                    // TODO: render splash sprite (ob_id 97/98)
+                                    continue;
+                                } else if environ == 2 {
+                                    // Shallow water: clip bottom 10 rows, no Y shift
+                                    SPRITE_H.saturating_sub(10)
+                                } else if environ > 2 {
+                                    rel_y += environ as i32;
+                                    SPRITE_H.saturating_sub(environ as usize)
+                                } else {
+                                    SPRITE_H
+                                };
                                 if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
                                     && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
                                 {
@@ -3338,11 +3791,21 @@ impl Scene for GameplayScene {
                                     let frame_base = Self::facing_to_frame_base(hero_facing);
                                     let anim_offset = if is_moving { (self.state.cycle as usize) % 8 } else { 1 };
                                     let frame = frame_base + anim_offset;
+
+                                    // Build BlittedSprite and mask BEFORE blit
+                                    let sprite_info = BlittedSprite {
+                                        screen_x: rel_x,
+                                        screen_y: rel_y,
+                                        width: SPRITE_W,
+                                        height: SPRITE_H,
+                                        ground: rel_y + SPRITE_H as i32,
+                                        is_falling: false,
+                                    };
                                     if let Some(fp) = sheet.frame_pixels(frame) {
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
                                     }
 
-                                    // Weapon overlay
+                                    // Weapon overlay (after hero blit — weapon is part of hero sprite)
                                     let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
                                     if weapon_type > 0 && weapon_type <= 5 {
                                         if let Some(ref obj_sheet) = self.object_sprites {
@@ -3369,14 +3832,10 @@ impl Scene for GameplayScene {
                                         }
                                     }
 
-                                    blitted.push(BlittedSprite {
-                                        screen_x: rel_x,
-                                        screen_y: rel_y,
-                                        width: SPRITE_W,
-                                        height: SPRITE_H,
-                                        ground: rel_y + SPRITE_H as i32,
-                                        is_falling: false,
-                                    });
+                                    // Mask AFTER blit: restore foreground terrain over the sprite
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                    blitted.push(sprite_info);
                                 }
                             }
                         }
@@ -3399,18 +3858,23 @@ impl Scene for GameplayScene {
                                 let frame_base = Self::facing_to_frame_base(npc_facing);
                                 let frame = ((frame_base % sheet.num_frames) + (self.state.cycle as usize % 8)) % sheet.num_frames;
 
-                                if let Some(fp) = sheet.frame_pixels(frame) {
-                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
-                                }
-
-                                blitted.push(BlittedSprite {
+                                // Mask BEFORE blit
+                                let sprite_info = BlittedSprite {
                                     screen_x: rel_x,
                                     screen_y: rel_y,
                                     width: SPRITE_W,
                                     height: SPRITE_H,
                                     ground: rel_y + SPRITE_H as i32,
                                     is_falling: false,
-                                });
+                                };
+                                if let Some(fp) = sheet.frame_pixels(frame) {
+                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                }
+
+                                // Mask AFTER blit: restore foreground terrain over the sprite
+                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                blitted.push(sprite_info);
                             }
                         }
                         RenderKind::WorldObj(idx) => {
@@ -3420,16 +3884,22 @@ impl Scene for GameplayScene {
                                 if let Some(pix) = obj_sheet.frame_pixels(frame) {
                                     let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
                                     let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
-                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
 
-                                    blitted.push(BlittedSprite {
+                                    // Mask BEFORE blit
+                                    let sprite_info = BlittedSprite {
                                         screen_x: rel_x,
                                         screen_y: rel_y,
                                         width: SPRITE_W,
                                         height: OBJ_SPRITE_H,
                                         ground: rel_y + OBJ_SPRITE_H as i32,
                                         is_falling: false,
-                                    });
+                                    };
+                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+
+                                    // Mask AFTER blit: restore foreground terrain over the sprite
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                    blitted.push(sprite_info);
                                 }
                             }
                         }
@@ -3446,16 +3916,22 @@ impl Scene for GameplayScene {
                                         // actor_rel_pos already applies a Y offset of -26, matching that total,
                                         // so no further adjustment is needed here.
                                         let (rel_x, rel_y) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
 
-                                        blitted.push(BlittedSprite {
+                                        // Mask BEFORE blit
+                                        let sprite_info = BlittedSprite {
                                             screen_x: rel_x,
                                             screen_y: rel_y,
                                             width: SPRITE_W,
                                             height: SPRITE_H,
                                             ground: rel_y + SPRITE_H as i32,
                                             is_falling: false,
-                                        });
+                                        };
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+
+                                        // Mask AFTER blit: restore foreground terrain over the sprite
+                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+
+                                        blitted.push(sprite_info);
                                     }
                                 }
                             }
@@ -3463,10 +3939,7 @@ impl Scene for GameplayScene {
                     }
                 }
 
-                // Sprite-depth masking for all rendered sprites
-                for sprite in &blitted {
-                    apply_sprite_mask(mr, sprite, self.state.hero_sector, 0);
-                }
+                // Per-sprite masking is done after each blit (mask restores foreground terrain)
             }
         }
 

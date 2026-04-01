@@ -89,6 +89,42 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
     !is_hard_block_right(right_terrain) && !is_hard_block_left(left_terrain)
 }
 
+/// Octagonal distance approximation from fmain2.c:446-463.
+/// Used by nearest_fig() for NPC/object proximity checks.
+/// Returns: if x > 2*y → x; if y > 2*x → y; else (x+y)*5/7.
+pub fn calc_dist(ax: i32, ay: i32, bx: i32, by: i32) -> i32 {
+    let x = (ax - bx).abs();
+    let y = (ay - by).abs();
+    if x > y + y {
+        x
+    } else if y > x + x {
+        y
+    } else {
+        (x + y) * 5 / 7
+    }
+}
+
+/// X displacement per direction. Mirrors xdir[] from fsubs.asm.
+const XDIR: [i32; 8] = [0, 2, 3, 2, 0, -2, -3, -2];
+/// Y displacement per direction. Mirrors ydir[] from fsubs.asm.
+const YDIR: [i32; 8] = [-3, -2, 0, 2, 3, 2, 0, -2];
+
+/// Compute new X from current + direction * distance (port of newx from fsubs.asm).
+pub fn newx(x: u16, dir: u8, dist: i32) -> u16 {
+    let dx = XDIR[(dir & 7) as usize] * dist / 2;
+    ((x as i32 + dx).rem_euclid(0x8000)) as u16
+}
+
+/// Compute new Y from current + direction * distance (port of newy from fsubs.asm).
+pub fn newy(y: u16, dir: u8, dist: i32, indoor: bool) -> u16 {
+    let dy = YDIR[(dir & 7) as usize] * dist / 2;
+    if indoor {
+        (y as i32 + dy) as u16
+    } else {
+        ((y as i32 + dy).rem_euclid(0x8000)) as u16
+    }
+}
+
 /// Full terra lookup chain for one probe point — used by the `/terrain` debug command.
 pub struct TerrainProbe {
     pub x: i32,
@@ -206,5 +242,69 @@ mod tests {
         let world = WorldData::empty();
         // All-zero world: tiles bytes are 0, so every position is passable.
         assert!(proxcheck(Some(&world), 256, 256));
+    }
+}
+
+#[cfg(test)]
+mod calc_dist_tests {
+    use super::calc_dist;
+
+    #[test]
+    fn test_calc_dist_cardinal() {
+        // Pure X distance: x > 2*y → return x
+        assert_eq!(calc_dist(100, 0, 0, 0), 100);
+        // Pure Y distance: y > 2*x → return y
+        assert_eq!(calc_dist(0, 0, 0, 200), 200);
+    }
+
+    #[test]
+    fn test_calc_dist_diagonal() {
+        // Equal distances: (x+y)*5/7
+        // x=70, y=70 → neither > 2*other → (70+70)*5/7 = 100
+        assert_eq!(calc_dist(0, 0, 70, 70), 100);
+    }
+
+    #[test]
+    fn test_calc_dist_asymmetric() {
+        // x=10, y=30: y > 2*x → return y = 30
+        assert_eq!(calc_dist(0, 0, 10, 30), 30);
+        // x=30, y=10: x > 2*y → return x = 30
+        assert_eq!(calc_dist(0, 0, 30, 10), 30);
+        // x=20, y=15: neither > 2*other → (20+15)*5/7 = 25
+        assert_eq!(calc_dist(0, 0, 20, 15), 25);
+    }
+
+    #[test]
+    fn test_calc_dist_negative_coords() {
+        // Uses absolute differences, so sign shouldn't matter
+        assert_eq!(calc_dist(100, 200, 100, 200), 0);
+        assert_eq!(calc_dist(50, 50, 100, 50), 50);
+    }
+}
+
+#[cfg(test)]
+mod newxy_tests {
+    use super::{newx, newy};
+
+    #[test]
+    fn test_newx_cardinal() {
+        // dir=2 (East), dist=2: dx = 3*2/2 = 3
+        assert_eq!(newx(100, 2, 2), 103);
+        // dir=6 (West), dist=2: dx = -3*2/2 = -3
+        assert_eq!(newx(100, 6, 2), 97);
+    }
+
+    #[test]
+    fn test_newy_cardinal() {
+        // dir=0 (North), dist=2: dy = -3*2/2 = -3
+        assert_eq!(newy(100, 0, 2, false), 97);
+        // dir=4 (South), dist=2: dy = 3*2/2 = 3
+        assert_eq!(newy(100, 4, 2, false), 103);
+    }
+
+    #[test]
+    fn test_newx_diagonal() {
+        // dir=1 (NE), dist=2: dx = 2*2/2 = 2
+        assert_eq!(newx(100, 1, 2), 102);
     }
 }

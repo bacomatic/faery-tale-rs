@@ -487,6 +487,11 @@ impl GameState {
         *self.stuff_mut() = [0u8; 35];
         self.stuff_mut()[0] = 1;
 
+        // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
+        if let Some(player) = self.actors.first_mut() {
+            player.weapon = 1;
+        }
+
         // Teleport to spawn location
         self.hero_x = spawn_x;
         self.hero_y = spawn_y;
@@ -530,6 +535,10 @@ impl GameState {
         self.safe_r = spawn_region;
         // Give a dirk
         self.stuff_mut()[0] = 1;
+        // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
+        if let Some(player) = self.actors.first_mut() {
+            player.weapon = 1;
+        }
     }
 
     /// Returns true if all three brothers are dead.
@@ -619,6 +628,12 @@ impl GameState {
         }
     }
 
+    /// Reduce hunger by a given amount (used by fruit pickup).
+    /// Mirrors fmain.c eat(amount): hunger -= amount, clamped to 0.
+    pub fn eat_amount(&mut self, amount: i16) {
+        self.hunger = (self.hunger - amount).max(0);
+    }
+
     /// Apply hunger effects: if hunger >= MAX_HUNGER, drain vitality by 1.
     /// Call this from tick() after hunger is incremented.
     pub fn apply_hunger_effects(&mut self) {
@@ -664,6 +679,39 @@ impl GameState {
             true
         } else {
             false
+        }
+    }
+
+    /// Find the nearest visible ground item within range using calc_dist.
+    /// Returns (world_objects index, ob_id) of the nearest item, or None.
+    /// Does NOT modify state — caller decides what to do with the item.
+    pub fn find_nearest_item(&self, region: u8, hero_x: u16, hero_y: u16, max_range: i32) -> Option<(usize, u8)> {
+        use crate::game::collision::calc_dist;
+
+        let hx = hero_x as i32;
+        let hy = hero_y as i32;
+        let mut best_idx = None;
+        let mut best_dist = max_range;
+
+        for (i, obj) in self.world_objects.iter().enumerate() {
+            if obj.ob_stat == 3 { continue; } // setfigs not pickable
+            if !obj.visible { continue; }
+            if obj.region != region { continue; }
+            if obj.ob_id == 0x1d { continue; } // empty chest (skip per original)
+
+            let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
+            if d < best_dist {
+                best_dist = d;
+                best_idx = Some((i, obj.ob_id));
+            }
+        }
+        best_idx
+    }
+
+    /// Mark a world object as picked up (ob_stat → hidden).
+    pub fn mark_object_taken(&mut self, world_idx: usize) {
+        if let Some(obj) = self.world_objects.get_mut(world_idx) {
+            obj.visible = false;
         }
     }
 
@@ -969,5 +1017,14 @@ mod tests {
             .collect();
         assert!(!setfigs.is_empty(), "region 3 should have at least one setfig");
         assert!(setfigs.iter().all(|o| o.visible), "setfigs should be visible");
+    }
+
+    #[test]
+    fn test_init_first_brother_equips_dirk() {
+        let mut state = GameState::new();
+        state.actors.push(crate::game::actor::Actor::default());
+        state.init_first_brother(10, 10, 10, 100, 1000, 2000, 3);
+        assert_eq!(state.stuff()[0], 1, "dirk should be in inventory");
+        assert_eq!(state.actors[0].weapon, 1, "dirk should be equipped");
     }
 }
