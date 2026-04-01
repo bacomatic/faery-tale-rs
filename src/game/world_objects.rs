@@ -64,6 +64,20 @@ pub fn stuff_index_to_ob_id(stuff_idx: usize) -> Option<u8> {
     None
 }
 
+/// Display name for a stuff[] inventory slot (used by container loot messages).
+/// Matches inv_list[].name ordering from fmain.c:428.
+pub fn stuff_index_name(idx: usize) -> &'static str {
+    const NAMES: [&str; 31] = [
+        "Dirk", "Mace", "Sword", "Bow", "Magic Wand", "Golden Lasso",
+        "Sea Shell", "Sun Stone", "Arrows", "Blue Stone", "Green Jewel",
+        "Glass Vial", "Crystal Orb", "Bird Totem", "Gold Ring", "Jade Skull",
+        "Gold Key", "Green Key", "Blue Key", "Red Key", "Grey Key", "White Key",
+        "Talisman", "Rose", "Fruit", "Gold Statue", "Book", "Herb", "Writ",
+        "Bone", "Shard",
+    ];
+    NAMES.get(idx).copied().unwrap_or("an unknown thing")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +158,15 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_stuff_index_name() {
+        assert_eq!(super::stuff_index_name(0), "Dirk");
+        assert_eq!(super::stuff_index_name(2), "Sword");
+        assert_eq!(super::stuff_index_name(8), "Arrows");
+        assert_eq!(super::stuff_index_name(16), "Gold Key");
+        assert_eq!(super::stuff_index_name(30), "Shard");
+        assert_eq!(super::stuff_index_name(99), "an unknown thing");
     }
 }

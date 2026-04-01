@@ -2024,15 +2024,17 @@ impl GameplayScene {
                 self.messages.push(format!("You see: {}.", terrain_name));
             }
             GameAction::Take => {
-                const PICKUP_RANGE: u16 = 24;
-                if let Some(_item_id) = self.state.pickup_world_object(
-                    self.state.region_num, self.state.hero_x, self.state.hero_y, PICKUP_RANGE,
+                // Take: nearest_fig(0, 30) — find nearest item within range 30 (fmain.c:3876-4000).
+                const TAKE_RANGE: i32 = 30;
+                if let Some((idx, ob_id)) = self.state.find_nearest_item(
+                    self.state.region_num, self.state.hero_x, self.state.hero_y, TAKE_RANGE,
                 ) {
                     let bname = brother_name(&self.state);
-                    let msg = crate::game::events::event_msg(&self.narr, 37, bname);
-                    if !msg.is_empty() { self.messages.push(msg); }
-                    let wealth = self.state.wealth;
-                    self.menu.set_options(self.state.stuff(), wealth);
+                    let taken = self.handle_take_item(idx, ob_id, bname);
+                    if taken {
+                        let wealth = self.state.wealth;
+                        self.menu.set_options(self.state.stuff(), wealth);
+                    }
                 } else {
                     self.messages.push("Nothing here to take.");
                 }
@@ -2131,6 +2133,142 @@ impl GameplayScene {
             _ => {}
         }
     }
+
+    /// Handle taking a specific world item. Ports fmain.c:3880-4000.
+    /// Returns true if the item was successfully taken.
+    fn handle_take_item(&mut self, world_idx: usize, ob_id: u8, bname: &str) -> bool {
+        use crate::game::world_objects::{ob_id_to_stuff_index, stuff_index_name};
+
+        match ob_id {
+            // FOOTSTOOL, TURTLE — can't take
+            31 | 102 => {
+                return false;
+            }
+            // MONEY — +50 gold
+            13 => {
+                self.state.gold += 50;
+                self.messages.push(format!("{} found 50 gold pieces.", bname));
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // SCRAP OF PAPER (ob_id 20): event 17, then 18 or 19 by region
+            20 => {
+                let msg17 = crate::game::events::event_msg(&self.narr, 17, bname);
+                if !msg17.is_empty() { self.messages.push(msg17); }
+                let region_event = if self.state.region_num > 7 { 19 } else { 18 };
+                let msg = crate::game::events::event_msg(&self.narr, region_event, bname);
+                if !msg.is_empty() { self.messages.push(msg); }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // FRUIT (ob_id 148): eat if hungry, else add to inventory
+            148 => {
+                if self.state.hunger >= 15 {
+                    // Hungry — eat immediately
+                    self.state.eat_amount(30);
+                    self.dlog(format!("ate fruit, hunger now {}", self.state.hunger));
+                } else {
+                    // Not hungry — add to inventory (stuff[24])
+                    self.state.pickup_item(24);
+                    let msg = crate::game::events::event_msg(&self.narr, 36, bname);
+                    if !msg.is_empty() { self.messages.push(msg); }
+                }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // BROTHER'S BONES (ob_id 28): combine saved brother's inventory
+            28 => {
+                self.messages.push(format!("{} found his brother's bones.", bname));
+                // TODO: combine julstuff/philstuff when WorldObject carries vitality field
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            // URN (14), CHEST (15), SACKS (16) — containers with random loot
+            14 | 15 | 16 => {
+                let container_name = match ob_id {
+                    14 => "a brass urn",
+                    15 => "a chest",
+                    16 => "some sacks",
+                    _ => "a container",
+                };
+                self.messages.push(format!("{} found {}.", bname, container_name));
+
+                // rand4() determines loot: 0=nothing, 1=one item, 2=two items, 3=three of same
+                let roll = (self.state.tick_counter & 3) as u8;
+                match roll {
+                    0 => {
+                        self.messages.push("It was empty.");
+                    }
+                    1 => {
+                        // One random item from inv_list[rand8()+8]
+                        let item_idx = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        let item_idx = if item_idx == 8 { 35usize } else { item_idx }; // 8→ARROWBASE(35)
+                        if item_idx < 35 {
+                            self.state.pickup_item(item_idx);
+                            self.messages.push(format!("Inside: a {}.", stuff_index_name(item_idx)));
+                        }
+                    }
+                    2 => {
+                        // Two different random items
+                        let item1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        let item1 = if item1 == 8 { 35 } else { item1 };
+                        let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
+                        if item2 == item1 { item2 = ((item2 + 1) & 7) + 8; }
+                        let item2 = if item2 == 8 { 35 } else { item2 };
+                        if item1 < 35 { self.state.pickup_item(item1); }
+                        if item2 < 35 { self.state.pickup_item(item2); }
+                        let n1 = if item1 < 31 { stuff_index_name(item1) } else { "Arrows" };
+                        let n2 = if item2 < 31 { stuff_index_name(item2) } else { "Arrows" };
+                        self.messages.push(format!("Inside: a {} and a {}.", n1, n2));
+                    }
+                    3 | _ => {
+                        // Three of the same item
+                        let item = ((self.state.tick_counter >> 2) & 7) as usize + 8;
+                        if item == 8 {
+                            // Special: 3 random keys
+                            self.messages.push("Inside: 3 keys.");
+                            for shift in [4, 7, 10] {
+                                let mut key_idx = ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
+                                if key_idx == 22 { key_idx = 16; }
+                                if key_idx == 23 { key_idx = 20; }
+                                self.state.pickup_item(key_idx);
+                            }
+                        } else {
+                            let name = if item < 31 { stuff_index_name(item) } else { "Arrows" };
+                            self.messages.push(format!("Inside: 3 {}s.", name));
+                            if item < 35 {
+                                self.state.pickup_item(item);
+                                self.state.pickup_item(item);
+                                self.state.pickup_item(item);
+                            }
+                        }
+                    }
+                }
+
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+            _ => {}
+        }
+
+        // Standard itrans pickup
+        if let Some(stuff_idx) = ob_id_to_stuff_index(ob_id) {
+            if self.state.pickup_item(stuff_idx) {
+                let name = stuff_index_name(stuff_idx);
+                let msg = crate::game::events::event_msg(&self.narr, 37, bname);
+                if !msg.is_empty() {
+                    self.messages.push(msg);
+                } else {
+                    self.messages.push(format!("{} found a {}.", bname, name));
+                }
+                self.state.mark_object_taken(world_idx);
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn handle_game_event(&mut self, event: crate::game::game_event::GameEvent) {
         use crate::game::game_event::GameEvent;
         match event {
