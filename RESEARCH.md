@@ -1722,6 +1722,29 @@ for each of 10 objects:
 ```
 Region is then marked distributed (`dstobs[region_num] = 1`).
 
+### Static object lists (`fmain2.c:1347–1508`)
+
+In addition to the scatter system, the original game defines **hardcoded static object lists** for each region. These are populated unconditionally at region entry, not via the RNG.
+
+- `ob_listg[]` — 11 global objects, visible in all regions
+- `ob_list0[]` through `ob_list9[]` — per-region lists (typically 7–16 entries each)
+- Total: ~120 static objects across all regions
+
+Each entry is `(x, y, ob_id, ob_stat)`:
+- `ob_stat 0` = nonexistent
+- `ob_stat 1` = ground item (pickable, visible)
+- `ob_stat 2` = in inventory
+- `ob_stat 3` = setfig (NPC sprite)
+- `ob_stat 4` = dead setfig
+- `ob_stat 5` = hidden (revealed by Look command)
+- `ob_stat 6` = cabinet item (inside furniture)
+
+The starting chest near (19298, 16128) is in `ob_list3` (Region 3) with `ob_id = 15` (CHEST) and `ob_stat = 1`.
+
+#### Implementation note
+
+In the Rust port, static object data lives in `faery.toml` as `[[objects]]` entries rather than hardcoded arrays. The `itrans[]` translation table (ob_id → stuff[] index) remains in `src/game/world_objects.rs`.
+
 ---
 
 ## Key Bindings: Design and compatibility notes
