@@ -2825,16 +2825,19 @@ impl GameplayScene {
     /// Blit one 16×32 sprite frame (indexed u8) into the map framebuf (sprite-103).
     /// Transparent pixels (index == 31) are skipped.
     /// `rel_x` / `rel_y` are the top-left destination in framebuf pixels.
+    /// `max_rows` limits the number of source rows drawn (for environ clipping).
     fn blit_sprite_to_framebuf(
         frame_pixels: &[u8],
         rel_x: i32,
         rel_y: i32,
+        max_rows: usize,
         framebuf: &mut [u8],
         fb_w: i32,
         fb_h: i32,
     ) {
         use crate::game::sprites::{SPRITE_W, SPRITE_H};
-        for row in 0..SPRITE_H as i32 {
+        let row_limit = max_rows.min(SPRITE_H) as i32;
+        for row in 0..row_limit {
             let dst_y = rel_y + row;
             if dst_y < 0 || dst_y >= fb_h { continue; }
             for col in 0..SPRITE_W as i32 {
@@ -3004,9 +3007,14 @@ impl GameplayScene {
         if let Some(Some(ref sheet)) = sprite_sheets.get(hero_cfile) {
             let (rel_x, mut rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
             let environ = state.actors.first().map_or(0i8, |a| a.environ);
-            if environ > 2 {
+            let body_rows: usize = if environ == 2 {
+                SPRITE_H.saturating_sub(10)
+            } else if environ > 2 {
                 rel_y += environ as i32;
-            }
+                SPRITE_H.saturating_sub(environ as usize)
+            } else {
+                SPRITE_H
+            };
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
@@ -3019,7 +3027,7 @@ impl GameplayScene {
                 let anim_offset = if is_moving { (state.cycle as usize) % 8 } else { 1 };
                 let frame = frame_base + anim_offset;
                 if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
                 }
 
                 // Weapon overlay (fmain.c passmode weapon blit).
@@ -3075,7 +3083,7 @@ impl GameplayScene {
                 let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, crate::game::sprites::SPRITE_H, framebuf, fb_w, fb_h);
                 }
             }
         }
@@ -3758,13 +3766,23 @@ impl Scene for GameplayScene {
                                     self.state.hero_x, self.state.hero_y, map_x, map_y,
                                 );
                                 let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
-                                if environ > 29 {
+                                // Environ rendering (fmain.c:3026-3040, passmode==0):
+                                //   environ==2:  ystop -= 10 (clip bottom 10 rows, no Y shift)
+                                //   environ>29:  fully submerged (splash sprite)
+                                //   environ>2:   ystart += environ (shift down, clip bottom)
+                                let body_rows: usize = if environ > 29 {
                                     // Fully submerged — skip rendering body
                                     // TODO: render splash sprite (ob_id 97/98)
                                     continue;
+                                } else if environ == 2 {
+                                    // Shallow water: clip bottom 10 rows, no Y shift
+                                    SPRITE_H.saturating_sub(10)
                                 } else if environ > 2 {
                                     rel_y += environ as i32;
-                                }
+                                    SPRITE_H.saturating_sub(environ as usize)
+                                } else {
+                                    SPRITE_H
+                                };
                                 if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
                                     && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
                                 {
@@ -3784,7 +3802,7 @@ impl Scene for GameplayScene {
                                         is_falling: false,
                                     };
                                     if let Some(fp) = sheet.frame_pixels(frame) {
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
                                     }
 
                                     // Weapon overlay (after hero blit — weapon is part of hero sprite)
@@ -3850,7 +3868,7 @@ impl Scene for GameplayScene {
                                     is_falling: false,
                                 };
                                 if let Some(fp) = sheet.frame_pixels(frame) {
-                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
                                 }
 
                                 // Mask AFTER blit: restore foreground terrain over the sprite
@@ -3908,7 +3926,7 @@ impl Scene for GameplayScene {
                                             ground: rel_y + SPRITE_H as i32,
                                             is_falling: false,
                                         };
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
 
                                         // Mask AFTER blit: restore foreground terrain over the sprite
                                         apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
