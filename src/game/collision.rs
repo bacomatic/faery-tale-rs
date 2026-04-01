@@ -89,6 +89,21 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
     !is_hard_block_right(right_terrain) && !is_hard_block_left(left_terrain)
 }
 
+/// Octagonal distance approximation from fmain2.c:446-463.
+/// Used by nearest_fig() for NPC/object proximity checks.
+/// Returns: if x > 2*y → x; if y > 2*x → y; else (x+y)*5/7.
+pub fn calc_dist(ax: i32, ay: i32, bx: i32, by: i32) -> i32 {
+    let x = (ax - bx).abs();
+    let y = (ay - by).abs();
+    if x > y + y {
+        x
+    } else if y > x + x {
+        y
+    } else {
+        (x + y) * 5 / 7
+    }
+}
+
 /// Full terra lookup chain for one probe point — used by the `/terrain` debug command.
 pub struct TerrainProbe {
     pub x: i32,
@@ -206,5 +221,42 @@ mod tests {
         let world = WorldData::empty();
         // All-zero world: tiles bytes are 0, so every position is passable.
         assert!(proxcheck(Some(&world), 256, 256));
+    }
+}
+
+#[cfg(test)]
+mod calc_dist_tests {
+    use super::calc_dist;
+
+    #[test]
+    fn test_calc_dist_cardinal() {
+        // Pure X distance: x > 2*y → return x
+        assert_eq!(calc_dist(100, 0, 0, 0), 100);
+        // Pure Y distance: y > 2*x → return y
+        assert_eq!(calc_dist(0, 0, 0, 200), 200);
+    }
+
+    #[test]
+    fn test_calc_dist_diagonal() {
+        // Equal distances: (x+y)*5/7
+        // x=70, y=70 → neither > 2*other → (70+70)*5/7 = 100
+        assert_eq!(calc_dist(0, 0, 70, 70), 100);
+    }
+
+    #[test]
+    fn test_calc_dist_asymmetric() {
+        // x=10, y=30: y > 2*x → return y = 30
+        assert_eq!(calc_dist(0, 0, 10, 30), 30);
+        // x=30, y=10: x > 2*y → return x = 30
+        assert_eq!(calc_dist(0, 0, 30, 10), 30);
+        // x=20, y=15: neither > 2*other → (20+15)*5/7 = 25
+        assert_eq!(calc_dist(0, 0, 20, 15), 25);
+    }
+
+    #[test]
+    fn test_calc_dist_negative_coords() {
+        // Uses absolute differences, so sign shouldn't matter
+        assert_eq!(calc_dist(100, 200, 100, 200), 0);
+        assert_eq!(calc_dist(50, 50, 100, 50), 50);
     }
 }
