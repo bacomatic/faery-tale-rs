@@ -174,6 +174,13 @@ pub fn in_melee_range(
     xd.max(yd) < reach as i32
 }
 
+/// Random 0–3 from game tick, matching original rand4() used by trans_list.
+/// Uses tick-seeded hash to avoid SystemTime dependency in animation loop.
+pub fn rand4(tick: u32) -> usize {
+    let h = tick.wrapping_mul(2246822519).wrapping_add(3266489917);
+    (h as usize >> 16) & 3
+}
+
 /// Simple pseudo-random number for damage rolls (no external crate dependency).
 pub fn melee_rand(max: u32) -> u32 {
     if max == 0 { return 0; }
@@ -199,6 +206,14 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
+        }
+    }
+
+    #[test]
+    fn test_rand4_range() {
+        for tick in 0..100u32 {
+            let v = rand4(tick);
+            assert!(v < 4, "rand4({tick}) returned {v}, expected 0-3");
         }
     }
 
