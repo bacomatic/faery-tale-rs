@@ -56,6 +56,16 @@ pub struct ItemsConfig {
     pub costs: Vec<i32>,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct ObjectConfig {
+    pub x: u16,
+    pub y: u16,
+    pub ob_id: u8,
+    pub ob_stat: u8,
+    /// Which region this object belongs to. 255 = global (ob_listg).
+    pub region: u8,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct DoorConfig {
     pub src_region: u8,
@@ -198,6 +208,8 @@ pub struct GameLibrary {
     pub compass: Option<CompassConfig>,
     #[serde(default)]
     pub narr: NarrConfig,
+    #[serde(default)]
+    pub objects: Vec<ObjectConfig>,
 }
 
 impl GameLibrary {
@@ -307,6 +319,14 @@ impl GameLibrary {
     pub fn get_compass(&self) -> Option<&CompassConfig> {
         self.compass.as_ref()
     }
+
+    /// Returns all objects for a given region (both global objects with region=255
+    /// and region-specific objects).
+    pub fn objects_for_region(&self, region: u8) -> Vec<&ObjectConfig> {
+        self.objects.iter()
+            .filter(|o| o.region == region || o.region == 255)
+            .collect()
+    }
 }
 
 pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>> {
@@ -330,13 +350,38 @@ pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>>
 mod tests {
     use super::*;
 
+    fn load_library() -> GameLibrary {
+        let config = fs::read_to_string("faery.toml")
+            .expect("faery.toml should exist in the project root");
+        toml::from_str::<GameLibrary>(&config)
+            .expect("faery.toml should deserialize into GameLibrary without errors")
+    }
+
     /// Ensure faery.toml can be deserialized into GameLibrary without errors.
     /// This catches TOML syntax issues and schema mismatches early.
     #[test]
     fn faery_toml_parses() {
-        let config = fs::read_to_string("faery.toml")
-            .expect("faery.toml should exist in the project root");
-        toml::from_str::<GameLibrary>(&config)
-            .expect("faery.toml should deserialize into GameLibrary without errors");
+        load_library();
+    }
+
+    #[test]
+    fn test_objects_for_region_filters_correctly() {
+        let lib = load_library();
+        let r3 = lib.objects_for_region(3);
+        // Region 3 should have ground items (CHEST at 19298,16128 etc.) + globals
+        assert!(!r3.is_empty(), "region 3 should have objects");
+        let chest = r3.iter().find(|o| o.ob_id == 15 && o.x == 19298 && o.y == 16128);
+        assert!(chest.is_some(), "region 3 should have the starting chest at (19298, 16128)");
+    }
+
+    #[test]
+    fn test_global_objects_included_in_all_regions() {
+        let lib = load_library();
+        let globals: Vec<_> = lib.objects.iter().filter(|o| o.region == 255).collect();
+        assert!(!globals.is_empty(), "should have global objects");
+        // Globals should appear in region 3 query
+        let r3 = lib.objects_for_region(3);
+        let global_count = r3.iter().filter(|o| o.region == 255).count();
+        assert_eq!(global_count, globals.len());
     }
 }

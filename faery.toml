@@ -1656,3 +1656,924 @@ file = "game/hiscreen"
 # You can only see this if you win!
 [images.winpic]
 file = "game/winpic"
+
+# =============================================================================
+# Object placement data (ob_listg, ob_list0-9 from fmain2.c)
+# region = 255 means global (visible in all regions)
+# =============================================================================
+
+# Global objects (ob_listg) — visible across all regions
+[[objects]]
+x = 0
+y = 0
+ob_id = 0
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 0
+y = 0
+ob_id = 28
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 0
+y = 0
+ob_id = 28
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 19316
+y = 15747
+ob_id = 11
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 18196
+y = 15735
+ob_id = 11
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 12439
+y = 36202
+ob_id = 10
+ob_stat = 3
+region = 255
+
+[[objects]]
+x = 11092
+y = 38526
+ob_id = 149
+ob_stat = 1
+region = 255
+
+[[objects]]
+x = 25737
+y = 10662
+ob_id = 149
+ob_stat = 1
+region = 255
+
+[[objects]]
+x = 2910
+y = 39023
+ob_id = 149
+ob_stat = 1
+region = 255
+
+[[objects]]
+x = 12025
+y = 37639
+ob_id = 149
+ob_stat = 0
+region = 255
+
+[[objects]]
+x = 6700
+y = 33766
+ob_id = 149
+ob_stat = 0
+region = 255
+
+# Region 0 — snow land
+[[objects]]
+x = 3340
+y = 6735
+ob_id = 12
+ob_stat = 3
+region = 0
+
+[[objects]]
+x = 9678
+y = 7035
+ob_id = 12
+ob_stat = 3
+region = 0
+
+[[objects]]
+x = 4981
+y = 6306
+ob_id = 12
+ob_stat = 3
+region = 0
+
+# Region 1 — maze forest north
+[[objects]]
+x = 23087
+y = 5667
+ob_id = 102
+ob_stat = 1
+region = 1
+
+# Region 2 — swamp land
+[[objects]]
+x = 13668
+y = 15000
+ob_id = 0
+ob_stat = 3
+region = 2
+
+[[objects]]
+x = 10627
+y = 13154
+ob_id = 0
+ob_stat = 3
+region = 2
+
+[[objects]]
+x = 4981
+y = 10056
+ob_id = 12
+ob_stat = 3
+region = 2
+
+[[objects]]
+x = 13950
+y = 11087
+ob_id = 16
+ob_stat = 1
+region = 2
+
+[[objects]]
+x = 10344
+y = 36171
+ob_id = 151
+ob_stat = 1
+region = 2
+
+# Region 3 — starting region
+[[objects]]
+x = 19298
+y = 16128
+ob_id = 15
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 18310
+y = 15969
+ob_id = 13
+ob_stat = 3
+region = 3
+
+[[objects]]
+x = 20033
+y = 14401
+ob_id = 0
+ob_stat = 3
+region = 3
+
+[[objects]]
+x = 24794
+y = 13102
+ob_id = 13
+ob_stat = 3
+region = 3
+
+[[objects]]
+x = 21626
+y = 15446
+ob_id = 18
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 21616
+y = 15456
+ob_id = 13
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 21636
+y = 15456
+ob_id = 17
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 20117
+y = 14222
+ob_id = 19
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 24185
+y = 9840
+ob_id = 16
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 25769
+y = 10617
+ob_id = 13
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 25678
+y = 10703
+ob_id = 18
+ob_stat = 1
+region = 3
+
+[[objects]]
+x = 17177
+y = 10599
+ob_id = 20
+ob_stat = 1
+region = 3
+
+# Region 4 — desert
+[[objects]]
+x = 0
+y = 0
+ob_id = 0
+ob_stat = 0
+region = 4
+
+[[objects]]
+x = 0
+y = 0
+ob_id = 0
+ob_stat = 0
+region = 4
+
+[[objects]]
+x = 6817
+y = 19693
+ob_id = 13
+ob_stat = 3
+region = 4
+
+# Region 5 — farm and city
+[[objects]]
+x = 22184
+y = 21156
+ob_id = 13
+ob_stat = 3
+region = 5
+
+[[objects]]
+x = 18734
+y = 17595
+ob_id = 17
+ob_stat = 1
+region = 5
+
+[[objects]]
+x = 21294
+y = 22648
+ob_id = 15
+ob_stat = 1
+region = 5
+
+[[objects]]
+x = 22956
+y = 19955
+ob_id = 0
+ob_stat = 3
+region = 5
+
+[[objects]]
+x = 28342
+y = 22613
+ob_id = 0
+ob_stat = 3
+region = 5
+
+# Region 6 — lava plain
+[[objects]]
+x = 24794
+y = 13102
+ob_id = 13
+ob_stat = 3
+region = 6
+
+# Region 7 — southern mountains
+[[objects]]
+x = 23297
+y = 5797
+ob_id = 102
+ob_stat = 1
+region = 7
+
+# Region 8 — interiors (NPCs)
+[[objects]]
+x = 6700
+y = 33756
+ob_id = 1
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5491
+y = 33780
+ob_id = 5
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5592
+y = 33764
+ob_id = 6
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5514
+y = 33668
+ob_id = 2
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5574
+y = 33668
+ob_id = 2
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 8878
+y = 38995
+ob_id = 0
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 7776
+y = 34084
+ob_id = 0
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5514
+y = 33881
+ob_id = 3
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 5574
+y = 33881
+ob_id = 3
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 10853
+y = 35656
+ob_id = 4
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 12037
+y = 37614
+ob_id = 7
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 11013
+y = 36804
+ob_id = 9
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 9631
+y = 38953
+ob_id = 8
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 10191
+y = 38953
+ob_id = 8
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 10649
+y = 38953
+ob_id = 8
+ob_stat = 3
+region = 8
+
+[[objects]]
+x = 2966
+y = 33964
+ob_id = 8
+ob_stat = 3
+region = 8
+
+# Region 8 — ground items
+[[objects]]
+x = 9532
+y = 40002
+ob_id = 31
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 6747
+y = 33751
+ob_id = 31
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11410
+y = 36169
+ob_id = 155
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9550
+y = 39964
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9552
+y = 39964
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9682
+y = 39964
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9684
+y = 39964
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9532
+y = 40119
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9575
+y = 39459
+ob_id = 14
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9590
+y = 39459
+ob_id = 14
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9605
+y = 39459
+ob_id = 14
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9680
+y = 39453
+ob_id = 22
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9682
+y = 39453
+ob_id = 22
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9784
+y = 39453
+ob_id = 22
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9668
+y = 39554
+ob_id = 15
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11090
+y = 39462
+ob_id = 13
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11108
+y = 39458
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11118
+y = 39459
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11128
+y = 39459
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11138
+y = 39458
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11148
+y = 39459
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11158
+y = 39459
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11855
+y = 36206
+ob_id = 31
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11909
+y = 36198
+ob_id = 15
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11918
+y = 36246
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11928
+y = 36246
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11938
+y = 36246
+ob_id = 23
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 12212
+y = 38481
+ob_id = 15
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11652
+y = 38481
+ob_id = 242
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 10427
+y = 39977
+ob_id = 31
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 10323
+y = 40071
+ob_id = 14
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 10059
+y = 38472
+ob_id = 16
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 10344
+y = 36171
+ob_id = 151
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 11936
+y = 36207
+ob_id = 20
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 9674
+y = 35687
+ob_id = 14
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 5473
+y = 38699
+ob_id = 147
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7185
+y = 34342
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7190
+y = 34342
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7195
+y = 34342
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7185
+y = 34347
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7190
+y = 34347
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 7195
+y = 34347
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 6593
+y = 34085
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 6598
+y = 34085
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 6593
+y = 34090
+ob_id = 148
+ob_stat = 1
+region = 8
+
+[[objects]]
+x = 6598
+y = 34090
+ob_id = 148
+ob_stat = 1
+region = 8
+
+# Region 8 — hidden items (revealed by Look)
+[[objects]]
+x = 3872
+y = 33546
+ob_id = 25
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 3887
+y = 33510
+ob_id = 23
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 4495
+y = 33510
+ob_id = 22
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 3327
+y = 33383
+ob_id = 24
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 4221
+y = 34119
+ob_id = 11
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 7610
+y = 33604
+ob_id = 22
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 7616
+y = 33522
+ob_id = 13
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 9570
+y = 35768
+ob_id = 18
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 9668
+y = 35769
+ob_id = 11
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 9553
+y = 38951
+ob_id = 17
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 10062
+y = 39005
+ob_id = 24
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 10577
+y = 38951
+ob_id = 22
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 11062
+y = 39514
+ob_id = 13
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 8845
+y = 39494
+ob_id = 154
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 6542
+y = 39494
+ob_id = 19
+ob_stat = 5
+region = 8
+
+[[objects]]
+x = 7313
+y = 38992
+ob_id = 242
+ob_stat = 5
+region = 8
+
+# Region 9 — underground
+[[objects]]
+x = 7540
+y = 38528
+ob_id = 145
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 9624
+y = 36559
+ob_id = 145
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 9624
+y = 37459
+ob_id = 145
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 8337
+y = 36719
+ob_id = 145
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 8154
+y = 34890
+ob_id = 15
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 7826
+y = 35741
+ob_id = 15
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 3460
+y = 37260
+ob_id = 0
+ob_stat = 3
+region = 9
+
+[[objects]]
+x = 8485
+y = 35725
+ob_id = 13
+ob_stat = 1
+region = 9
+
+[[objects]]
+x = 3723
+y = 39340
+ob_id = 138
+ob_stat = 1
+region = 9
