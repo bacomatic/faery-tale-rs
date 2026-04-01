@@ -37,6 +37,8 @@ pub const TURTLE_NEST_Y: u16 = 0x4000;
 pub struct WorldObject {
     /// ob_id: original obytes enum value (sprite frame index for rendering).
     pub ob_id: u8,
+    /// ob_stat: 1 = ground item, 3 = setfig NPC, 5 = hidden item.
+    pub ob_stat: u8,
     pub region: u8,
     pub x: u16,
     pub y: u16,
@@ -655,6 +657,7 @@ impl GameState {
         if self.drop_item(item_id) {
             self.world_objects.push(WorldObject {
                 ob_id: item_id as u8,
+                ob_stat: 1,
                 region, x, y,
                 visible: true,
             });
@@ -674,6 +677,7 @@ impl GameState {
 
         let mut found_idx = None;
         for (i, obj) in self.world_objects.iter().enumerate() {
+            if obj.ob_stat == 3 { continue; } // setfig NPCs are not pickable
             if obj.visible && obj.region == region
                 && hero_x.abs_diff(obj.x) < range
                 && hero_y.abs_diff(obj.y) < range
@@ -720,14 +724,15 @@ impl GameState {
             if obj_cfg.region != region && obj_cfg.region != 255 {
                 continue;
             }
-            // Only ground items (1) and hidden items (5)
-            if obj_cfg.ob_stat == 1 || obj_cfg.ob_stat == 5 {
+            // Ground items (1), setfig NPCs (3), and hidden items (5)
+            if obj_cfg.ob_stat == 1 || obj_cfg.ob_stat == 3 || obj_cfg.ob_stat == 5 {
                 self.world_objects.push(WorldObject {
                     ob_id: obj_cfg.ob_id,
+                    ob_stat: obj_cfg.ob_stat,
                     region,  // tag with current region so render filter passes
                     x: obj_cfg.x,
                     y: obj_cfg.y,
-                    visible: obj_cfg.ob_stat == 1,
+                    visible: obj_cfg.ob_stat != 5, // ob_stat 1 and 3 are visible
                 });
             }
         }
@@ -909,7 +914,7 @@ mod tests {
         s.hero_y = 100;
         // Gold Key: ob_id 25 → stuff index 16
         s.world_objects.push(WorldObject {
-            ob_id: 25, region: 3, x: 100, y: 100, visible: true,
+            ob_id: 25, ob_stat: 1, region: 3, x: 100, y: 100, visible: true,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -925,7 +930,7 @@ mod tests {
         s.hero_y = 100;
         s.gold = 10;
         s.world_objects.push(WorldObject {
-            ob_id: 13, region: 3, x: 100, y: 100, visible: true,
+            ob_id: 13, ob_stat: 1, region: 3, x: 100, y: 100, visible: true,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -939,7 +944,7 @@ mod tests {
         s.hero_x = 100;
         s.hero_y = 100;
         s.world_objects.push(WorldObject {
-            ob_id: 31, region: 8, x: 100, y: 100, visible: true,
+            ob_id: 31, ob_stat: 1, region: 8, x: 100, y: 100, visible: true,
         });
         let result = s.pickup_world_object(8, 100, 100, 24);
         assert!(result.is_none());
@@ -953,10 +958,16 @@ mod tests {
         let mut s = GameState::new();
         s.populate_region_objects(3, &lib);
         let ground_items: Vec<_> = s.world_objects.iter()
-            .filter(|o| o.visible)
+            .filter(|o| o.visible && o.ob_stat == 1)
             .collect();
         assert!(ground_items.len() >= 9, "region 3 should have at least 9 visible items, got {}", ground_items.len());
         let chest = ground_items.iter().find(|o| o.ob_id == 15 && o.x == 19298);
         assert!(chest.is_some(), "should have the starting chest");
+        // SetFigs (ob_stat 3) should also be loaded and visible.
+        let setfigs: Vec<_> = s.world_objects.iter()
+            .filter(|o| o.ob_stat == 3)
+            .collect();
+        assert!(!setfigs.is_empty(), "region 3 should have at least one setfig");
+        assert!(setfigs.iter().all(|o| o.visible), "setfigs should be visible");
     }
 }

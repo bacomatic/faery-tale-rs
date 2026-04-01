@@ -2228,6 +2228,7 @@ impl GameplayScene {
                         let ob_id_val = stuff_index_to_ob_id(id).unwrap_or(id as u8);
                         self.state.world_objects.push(WorldObject {
                             ob_id: ob_id_val,
+                            ob_stat: 1,
                             region,
                             x, y,
                             visible: true,
@@ -2251,6 +2252,7 @@ impl GameplayScene {
                         let ob_id_val = stuff_index_to_ob_id(item_id).unwrap_or(item_id as u8);
                         self.state.world_objects.push(WorldObject {
                             ob_id: ob_id_val,
+                            ob_stat: 1,
                             region,
                             x, y,
                             visible: true,
@@ -2638,25 +2640,6 @@ impl GameplayScene {
                 // Wrap with sheet.num_frames to handle short sheets (e.g. dragon=5).
                 let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
 
-                if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
-                }
-            }
-        }
-
-        // --- SetFig NPCs (named NPCs: shopkeepers, beggars, etc.) ---
-        if let Some(ref table) = npc_table {
-            use crate::game::sprites::SETFIG_TABLE;
-            for npc in table.npcs.iter().filter(|n| n.active) {
-                let Some(setfig_idx) = Self::npc_to_setfig_idx(npc.npc_type, npc.race) else { continue };
-                let entry = SETFIG_TABLE[setfig_idx];
-                let cfile_idx = entry.cfile_entry as usize;
-                let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
-
-                let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
-
-                // SetFigs are stationary; use image_base as the static frame.
-                let frame = (entry.image_base as usize) % sheet.num_frames;
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, framebuf, fb_w, fb_h);
                 }
@@ -3286,66 +3269,202 @@ impl Scene for GameplayScene {
             let map_x = self.map_x;
             let map_y = self.map_y;
             if let Some(ref mut mr) = self.map_renderer {
-                Self::blit_actors_to_framebuf(
-                    &self.sprite_sheets,
-                    &self.object_sprites,
-                    &self.state,
-                    &self.npc_table,
-                    map_x,
-                    map_y,
-                    &mut mr.framebuf,
-                    self.submerged,
-                );
-                // Render world objects on the ground
-                if let Some(ref obj_sheet) = self.object_sprites {
-                    use crate::game::sprites::{SPRITE_W, OBJ_SPRITE_H};
-                    let fb_w = crate::game::map_renderer::MAP_DST_W as i32;
-                            let fb_h = crate::game::map_renderer::MAP_DST_H as i32;
-                    for obj in &self.state.world_objects {
-                        if !obj.visible || obj.region != self.state.region_num { continue; }
-                        let frame = obj.ob_id as usize;
-                        if let Some(pix) = obj_sheet.frame_pixels(frame) {
-                            let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
-                            let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
-                            Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                // --- Unified Y-sorted render pass (fmain2.c:set_objects) ---
+                // Build render list for ALL visible entities, sort by Y, render in order.
+                use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+                use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
+                use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H, SETFIG_TABLE};
+
+                let fb_w = MAP_DST_W as i32;
+                let fb_h = MAP_DST_H as i32;
+
+                #[derive(Clone, Copy)]
+                enum RenderKind {
+                    Hero,
+                    Enemy(usize),
+                    WorldObj(usize),
+                    SetFig(usize),
+                }
+                struct RenderEntry {
+                    abs_y: u16,
+                    kind: RenderKind,
+                }
+
+                let mut entries: Vec<RenderEntry> = Vec::new();
+
+                // Hero
+                entries.push(RenderEntry { abs_y: self.state.hero_y, kind: RenderKind::Hero });
+
+                // Enemy NPCs (skip setfig-type entries from NpcTable)
+                if let Some(ref table) = self.npc_table {
+                    for (i, npc) in table.npcs.iter().enumerate() {
+                        if !npc.active { continue; }
+                        if Self::npc_to_setfig_idx(npc.npc_type, npc.race).is_some() { continue; }
+                        entries.push(RenderEntry { abs_y: npc.y as u16, kind: RenderKind::Enemy(i) });
+                    }
+                }
+
+                // World objects and setfigs from world_objects list
+                for (i, obj) in self.state.world_objects.iter().enumerate() {
+                    if !obj.visible || obj.region != self.state.region_num { continue; }
+                    if obj.ob_stat == 3 {
+                        entries.push(RenderEntry { abs_y: obj.y, kind: RenderKind::SetFig(i) });
+                    } else {
+                        entries.push(RenderEntry { abs_y: obj.y, kind: RenderKind::WorldObj(i) });
+                    }
+                }
+
+                // Sort ascending by Y (higher on screen drawn first, lower overwrites)
+                entries.sort_by_key(|e| e.abs_y);
+
+                // Collect BlittedSprite info for masking pass
+                let mut blitted: Vec<BlittedSprite> = Vec::new();
+
+                for entry in &entries {
+                    match entry.kind {
+                        RenderKind::Hero => {
+                            // Hero blit (unchanged from blit_actors_to_framebuf)
+                            let hero_cfile = self.state.brother.saturating_sub(1) as usize;
+                            if let Some(Some(ref sheet)) = self.sprite_sheets.get(hero_cfile) {
+                                let (rel_x, mut rel_y) = Self::actor_rel_pos(
+                                    self.state.hero_x, self.state.hero_y, map_x, map_y,
+                                );
+                                if self.submerged { rel_y += 8; }
+                                if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
+                                    && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
+                                {
+                                    let hero_facing = self.state.actors.first().map_or(0u8, |a| a.facing);
+                                    let is_moving = self.state.actors.first().map_or(false, |a| a.moving);
+                                    let frame_base = Self::facing_to_frame_base(hero_facing);
+                                    let anim_offset = if is_moving { (self.state.cycle as usize) % 8 } else { 1 };
+                                    let frame = frame_base + anim_offset;
+                                    if let Some(fp) = sheet.frame_pixels(frame) {
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                    }
+
+                                    // Weapon overlay
+                                    let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
+                                    if weapon_type > 0 && weapon_type <= 5 {
+                                        if let Some(ref obj_sheet) = self.object_sprites {
+                                            use crate::game::sprites::STATELIST;
+                                            if let Some(stat_entry) = STATELIST.get(frame) {
+                                                let (wpn_x, wpn_y, wpn_frame) = if weapon_type == 5 {
+                                                    let wand_y = if hero_facing == 2 { stat_entry.wpn_y - 6 } else { stat_entry.wpn_y };
+                                                    (stat_entry.wpn_x, wand_y, hero_facing as usize + 103)
+                                                } else {
+                                                    let k: usize = match weapon_type {
+                                                        1 => 64,
+                                                        2 => 32,
+                                                        3 => 48,
+                                                        _ => 0,
+                                                    };
+                                                    (stat_entry.wpn_x, stat_entry.wpn_y, stat_entry.wpn_no as usize + k)
+                                                };
+                                                let wx = rel_x + wpn_x as i32;
+                                                let wy = rel_y + wpn_y as i32;
+                                                if let Some(wfp) = obj_sheet.frame_pixels(wpn_frame) {
+                                                    Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    blitted.push(BlittedSprite {
+                                        screen_x: rel_x,
+                                        screen_y: rel_y,
+                                        width: SPRITE_W,
+                                        height: SPRITE_H,
+                                        ground: rel_y + SPRITE_H as i32,
+                                        is_falling: false,
+                                    });
+                                }
+                            }
+                        }
+                        RenderKind::Enemy(idx) => {
+                            if let Some(ref table) = self.npc_table {
+                                let npc = &table.npcs[idx];
+                                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) else { continue };
+
+                                let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
+
+                                let dx = self.state.hero_x as i32 - npc.x as i32;
+                                let dy = self.state.hero_y as i32 - npc.y as i32;
+                                let npc_facing = if dx.abs() >= dy.abs() {
+                                    if dx > 0 { 2u8 } else { 6u8 }
+                                } else {
+                                    if dy > 0 { 4u8 } else { 0u8 }
+                                };
+
+                                let frame_base = Self::facing_to_frame_base(npc_facing);
+                                let frame = ((frame_base % sheet.num_frames) + (self.state.cycle as usize % 8)) % sheet.num_frames;
+
+                                if let Some(fp) = sheet.frame_pixels(frame) {
+                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+                                }
+
+                                blitted.push(BlittedSprite {
+                                    screen_x: rel_x,
+                                    screen_y: rel_y,
+                                    width: SPRITE_W,
+                                    height: SPRITE_H,
+                                    ground: rel_y + SPRITE_H as i32,
+                                    is_falling: false,
+                                });
+                            }
+                        }
+                        RenderKind::WorldObj(idx) => {
+                            let obj = &self.state.world_objects[idx];
+                            if let Some(ref obj_sheet) = self.object_sprites {
+                                let frame = obj.ob_id as usize;
+                                if let Some(pix) = obj_sheet.frame_pixels(frame) {
+                                    let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
+                                    let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
+                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+
+                                    blitted.push(BlittedSprite {
+                                        screen_x: rel_x,
+                                        screen_y: rel_y,
+                                        width: SPRITE_W,
+                                        height: OBJ_SPRITE_H,
+                                        ground: rel_y + OBJ_SPRITE_H as i32,
+                                        is_falling: false,
+                                    });
+                                }
+                            }
+                        }
+                        RenderKind::SetFig(idx) => {
+                            let obj = &self.state.world_objects[idx];
+                            let setfig_idx = obj.ob_id as usize;
+                            if setfig_idx < SETFIG_TABLE.len() {
+                                let sf_entry = SETFIG_TABLE[setfig_idx];
+                                let cfile_idx = sf_entry.cfile_entry as usize;
+                                if let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) {
+                                    let frame = (sf_entry.image_base as usize) % sheet.num_frames;
+                                    if let Some(fp) = sheet.frame_pixels(frame) {
+                                        // Original: ystart -= 18 in set_objects()
+                                        let (rel_x, rel_y_base) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
+                                        let rel_y = rel_y_base - 18;
+                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
+
+                                        blitted.push(BlittedSprite {
+                                            screen_x: rel_x,
+                                            screen_y: rel_y,
+                                            width: SPRITE_W,
+                                            height: SPRITE_H,
+                                            ground: rel_y + SPRITE_H as i32,
+                                            is_falling: false,
+                                        });
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                // Sprite-depth masking: apply per-sprite tile masking.
-                {
-                    use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
-                    use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H};
 
-                    // Hero sprite masking
-                    let (hero_rx, mut hero_ry) = Self::actor_rel_pos(
-                        self.state.hero_x, self.state.hero_y, map_x, map_y,
-                    );
-                    if self.submerged { hero_ry += 8; }
-                    let hero_sprite = BlittedSprite {
-                        screen_x: hero_rx,
-                        screen_y: hero_ry,
-                        width: SPRITE_W,
-                        height: SPRITE_H,
-                        ground: hero_ry + SPRITE_H as i32,
-                        is_falling: false, // TODO: wire to actor FALL state when actor states are implemented
-                    };
-                    apply_sprite_mask(mr, &hero_sprite, self.state.hero_sector, 0);
-
-                    // World object masking
-                    for obj in &self.state.world_objects {
-                        if !obj.visible || obj.region != self.state.region_num { continue; }
-                        let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
-                        let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
-                        let obj_sprite = BlittedSprite {
-                            screen_x: rel_x,
-                            screen_y: rel_y,
-                            width: SPRITE_W,
-                            height: OBJ_SPRITE_H,
-                            ground: rel_y + OBJ_SPRITE_H as i32,
-                            is_falling: false,
-                        };
-                        apply_sprite_mask(mr, &obj_sprite, self.state.hero_sector, 0);
-                    }
+                // Sprite-depth masking for all rendered sprites
+                for sprite in &blitted {
+                    apply_sprite_mask(mr, sprite, self.state.hero_sector, 0);
                 }
             }
         }
@@ -3464,12 +3583,17 @@ mod tests {
 
     #[test]
     fn test_setfig_render_pass_writes_pixels() {
+        // SetFigs are now rendered from world_objects (ob_stat 3) in the unified
+        // Y-sorted pass, not from NpcTable. This test verifies that
+        // blit_actors_to_framebuf still handles the enemy pass correctly and does
+        // not crash when a HUMAN/SHOPKEEPER NPC (setfig) is present in the table
+        // (it should be silently skipped since npc_type_to_cfile returns None for
+        // non-enemy humans).
         use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
         use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
         use crate::game::game_state::GameState;
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
 
-        // Bartender uses cfile 15 (SETFIG_TABLE[8]).
         let mock_sheet = SpriteSheet {
             cfile_idx: 15,
             pixels: vec![0u8; SPRITE_W * SPRITE_H * 8],
@@ -3493,15 +3617,19 @@ mod tests {
         };
 
         let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize];
+        // blit_actors_to_framebuf should skip the human/shopkeeper NPC (setfig)
+        // without crashing.
         GameplayScene::blit_actors_to_framebuf(
             &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
         );
 
+        // The setfig NPC should NOT have been rendered by blit_actors_to_framebuf
+        // (setfigs are rendered from world_objects in the unified pass instead).
         let setfig_area_start = (54 * MAP_DST_W as usize) + 72;
         let has_written = framebuf[setfig_area_start..setfig_area_start + SPRITE_W]
             .iter()
             .any(|&p| p == 0);
-        assert!(has_written, "expected SetFig pixels to be written to framebuf");
+        assert!(!has_written, "setfig NPC should not be rendered by blit_actors_to_framebuf");
     }
 
     #[test]
@@ -3525,6 +3653,7 @@ mod tests {
             let y = (state.hero_y as i32 + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
             state.world_objects.push(WorldObject {
                 ob_id: item_id as u8,
+                ob_stat: 1,
                 region: state.region_num,
                 x, y,
                 visible: true,
