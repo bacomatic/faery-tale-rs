@@ -827,6 +827,118 @@ impl GameplayScene {
         best
     }
 
+    /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
+    fn handle_setfig_talk(&mut self, fig: &NearestFig, bname: &str) {
+        match &fig.kind {
+            FigKind::Npc(idx) => {
+                // Enemy NPC — use race-based speech (existing logic).
+                if let Some(ref table) = self.npc_table {
+                    if let Some(npc) = table.npcs.get(*idx) {
+                        use crate::game::npc::*;
+                        let speech_id: usize = match npc.race {
+                            RACE_NORMAL     => 3,
+                            RACE_UNDEAD     => 2,
+                            RACE_WRAITH     => 2,
+                            RACE_ENEMY      => 1,
+                            RACE_SNAKE      => 4,
+                            RACE_SHOPKEEPER => 12,
+                            RACE_BEGGAR     => 23,
+                            _               => 6,
+                        };
+                        self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
+                    }
+                }
+            }
+            FigKind::SetFig { setfig_type, .. } => {
+                let k = *setfig_type as usize;
+                // Per-setfig dialogue (fmain.c:4188-4261).
+                match k {
+                    0 => {
+                        // Wizard: kind < 10 → speak(35), else speak(27 + goal).
+                        // goal is not tracked yet; use speak(27) as default.
+                        if self.state.kind < 10 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 35, bname));
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 27, bname));
+                        }
+                    }
+                    1 => {
+                        // Priest: heals hero. kind < 10 → speak(40), else speak(36 + daynight%3) + heal.
+                        if self.state.kind < 10 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 40, bname));
+                        } else {
+                            let day_mod = (self.state.daynight % 3) as usize;
+                            self.messages.push(crate::game::events::speak(&self.narr, 36 + day_mod, bname));
+                            // Heal: vitality = 15 + brave/4 (fmain.c:4222).
+                            self.state.vitality = 15 + self.state.brave / 4;
+                        }
+                    }
+                    2 | 3 => {
+                        // Guard: speak(15).
+                        self.messages.push(crate::game::events::speak(&self.narr, 15, bname));
+                    }
+                    4 => {
+                        // Princess: speak(16).
+                        self.messages.push(crate::game::events::speak(&self.narr, 16, bname));
+                    }
+                    5 => {
+                        // King: speak(17).
+                        self.messages.push(crate::game::events::speak(&self.narr, 17, bname));
+                    }
+                    6 => {
+                        // Noble: speak(20).
+                        self.messages.push(crate::game::events::speak(&self.narr, 20, bname));
+                    }
+                    7 => {
+                        // Sorceress: luck boost (fmain.c:4241-4247).
+                        if self.state.luck < 64 {
+                            self.state.luck += 5;
+                        }
+                        self.messages.push(crate::game::events::speak(&self.narr, 45, bname));
+                    }
+                    8 => {
+                        // Bartender: fatigue < 5 → speak(13), dayperiod > 7 → speak(12), else speak(14).
+                        let speech = if self.state.fatigue < 5 {
+                            13
+                        } else if self.state.dayperiod > 7 {
+                            12
+                        } else {
+                            14
+                        };
+                        self.messages.push(crate::game::events::speak(&self.narr, speech, bname));
+                    }
+                    9 => {
+                        // Witch: speak(46).
+                        self.messages.push(crate::game::events::speak(&self.narr, 46, bname));
+                    }
+                    10 => {
+                        // Spectre: speak(47).
+                        self.messages.push(crate::game::events::speak(&self.narr, 47, bname));
+                    }
+                    11 => {
+                        // Ghost: speak(49).
+                        self.messages.push(crate::game::events::speak(&self.narr, 49, bname));
+                    }
+                    12 => {
+                        // Ranger: region 2 → speak(22), else speak(53 + goal).
+                        if self.state.region_num == 2 {
+                            self.messages.push(crate::game::events::speak(&self.narr, 22, bname));
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 53, bname));
+                        }
+                    }
+                    13 => {
+                        // Beggar: speak(23).
+                        self.messages.push(crate::game::events::speak(&self.narr, 23, bname));
+                    }
+                    _ => {
+                        self.messages.push(crate::game::events::speak(&self.narr, 6, bname));
+                    }
+                }
+            }
+        }
+    }
+
     /// Return the nearest active NPC within `range` world units (Chebyshev), or None.
     /// Mirrors original nearest_fig() / calc_dist() from fmain.c:4167-4272.
     fn nearest_npc_in_range(&self, range: i32) -> Option<&crate::game::npc::Npc> {
@@ -1919,17 +2031,16 @@ impl GameplayScene {
                 }
             }
             GameAction::Yell => {
-                // Yell range = 100. If NPC within 35 → "No need to shout, son!" (speech 8).
-                // Otherwise yell the missing brother's name (original yell behavior).
+                // Yell: nearest_fig(1, 100). If NPC within 35 → speak(8) "No need to shout!"
+                // Otherwise yell the next brother's name (fmain.c:4167-4175).
                 let bname = brother_name(&self.state);
-                let yell_dist = self.nearest_npc_in_range(100)
-                    .map(|n| {
-                        let dx = (n.x as i32 - self.state.hero_x as i32).abs();
-                        let dy = (n.y as i32 - self.state.hero_y as i32).abs();
-                        dx.max(dy)
-                    });
-                if yell_dist.map_or(false, |d| d < 35) {
-                    self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                if let Some(fig) = self.nearest_fig(1, 100) {
+                    if fig.dist < 35 {
+                        self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                    } else {
+                        // NPC in yell range but not close — show dialogue
+                        self.handle_setfig_talk(&fig, bname);
+                    }
                 } else {
                     let next_brother = match self.state.brother {
                         1 => "Phillip",
@@ -1940,7 +2051,7 @@ impl GameplayScene {
                 }
             }
             GameAction::Speak | GameAction::Ask => {
-                // Talk range = 50. Check nearest NPC within range (npc-002, fmain.c:4167).
+                // Talk: nearest_fig(1, 50). Check shopkeeper first, then setfig dialogue.
                 let bname = brother_name(&self.state);
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
@@ -1948,8 +2059,7 @@ impl GameplayScene {
                     crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
                 });
                 if near_shop {
-                    // Show buy menu: list items available for purchase with prices.
-                    // Mirrors fmain.c BUY menu (label5 = "Food ArrowVial Mace SwordBow  Totem").
+                    // Shopkeeper buy menu (unchanged from existing code).
                     let items = [
                         (0,  "Food"),
                         (1,  "Arrows"),
@@ -1968,20 +2078,8 @@ impl GameplayScene {
                     }
                     menu.push_str(&format!("  (Your gold: {})", self.state.gold));
                     self.messages.push(menu);
-                } else if let Some(npc) = self.nearest_npc_in_range(50) {
-                    // NPC in range — show race-appropriate speech (fmain.c:4195-4230).
-                    use crate::game::npc::*;
-                    let speech_id: usize = match npc.race {
-                        RACE_NORMAL   => 3,  // skeleton clattering (generic)
-                        RACE_UNDEAD   => 2,  // wraith "Doom!"
-                        RACE_WRAITH   => 2,  // wraith "Doom!"
-                        RACE_ENEMY    => 1,  // orc "Human must die!"
-                        RACE_SNAKE    => 4,  // snake (waste of time)
-                        RACE_SHOPKEEPER => 12, // tavern keeper greeting
-                        RACE_BEGGAR   => 23, // beggar "Alms!"
-                        _             => 6,  // "There was no reply."
-                    };
-                    self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
+                } else if let Some(fig) = self.nearest_fig(1, 50) {
+                    self.handle_setfig_talk(&fig, bname);
                 } else {
                     self.messages.push("There is no one here to talk to.");
                 }
