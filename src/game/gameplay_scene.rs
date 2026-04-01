@@ -250,10 +250,9 @@ pub struct GameplayScene {
     last_zone: Option<usize>,
     /// Hero is in forced sleep (events 12/24).
     sleeping: bool,
-    /// Hero is submerged in water.
-    submerged: bool,
-    /// Ticks while submerged (for drowning damage cadence).
-    drowning_timer: u32,
+    /// True when hero is in the volcanic region (lava damage active).
+    /// Mirrors fiery_death global from fmain.c:1554.
+    fiery_death: bool,
     /// Death countdown active (goodfairy timer running).
     dying: bool,
     /// Goodfairy countdown: starts at 255, decrements every other tick (~30Hz).
@@ -325,8 +324,7 @@ impl GameplayScene {
             zones: Vec::new(),
             last_zone: None,
             sleeping: false,
-            submerged: false,
-            drowning_timer: 0,
+            fiery_death: false,
             dying: false,
             goodfairy: 0,
         }
@@ -786,18 +784,6 @@ impl GameplayScene {
                 }
             }
         }
-
-        // Water submersion check (#105)
-        if !self.state.on_raft && self.state.flying == 0 {
-            let terrain = if let Some(ref world) = self.map_world {
-                collision::px_to_terrain_type(
-                    world, self.state.hero_x as i32, self.state.hero_y as i32,
-                )
-            } else { 0 };
-            self.submerged = terrain == 2;
-        } else {
-            self.submerged = false;
-        }
     }
 
     /// Port of nearest_fig(constraint, max_dist) from fmain2.c:426-442.
@@ -859,6 +845,100 @@ impl GameplayScene {
         }
 
         best
+    }
+
+    /// Update actor environ based on terrain type at current position.
+    /// Port of fmain.c:2019-2074 sinker logic.
+    fn update_environ(&mut self) {
+        let terrain = if let Some(ref world) = self.map_world {
+            collision::px_to_terrain_type(
+                world, self.state.hero_x as i32, self.state.hero_y as i32,
+            )
+        } else {
+            return;
+        };
+
+        if self.state.on_raft || self.state.flying != 0 {
+            if let Some(player) = self.state.actors.first_mut() {
+                player.environ = 0;
+            }
+            return;
+        }
+
+        let cur_environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+        let mut k: i8 = cur_environ;
+
+        match terrain {
+            0 => { k = 0; }
+            6 => { k = -1; } // ice
+            7 => { k = -2; } // lava
+            8 => { k = -3; } // special C
+            2 => { k = 2; }  // shallow water/wading
+            3 => { k = 5; }  // brush/deep wade
+            4 | 5 => {
+                let threshold: i8 = if terrain == 4 { 10 } else { 30 };
+                if k > threshold {
+                    k -= 1;
+                } else if k < threshold {
+                    k += 1;
+                    if k > 15 {
+                        // Trigger SINK state
+                        if let Some(player) = self.state.actors.first_mut() {
+                            if !matches!(player.state, ActorState::Dying | ActorState::Dead) {
+                                player.state = ActorState::Sinking;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {} // types 1, 9-15: no environ change from these
+        }
+
+        // Reset SINK state when leaving water
+        if k == 0 {
+            if let Some(player) = self.state.actors.first_mut() {
+                if player.state == ActorState::Sinking {
+                    player.state = ActorState::Still;
+                }
+            }
+        }
+
+        if let Some(player) = self.state.actors.first_mut() {
+            player.environ = k;
+        }
+    }
+
+    /// Check if the hero is in the volcanic/lava region.
+    /// Mirrors fmain.c:1554: fiery_death = (map_x > 8802 && map_x < 13562 && map_y > 24744 && map_y < 29544).
+    fn update_fiery_death(&mut self) {
+        let mx = self.state.hero_x as i32;
+        let my = self.state.hero_y as i32;
+        self.fiery_death = mx > 8802 && mx < 13562 && my > 24744 && my < 29544;
+    }
+
+    /// Apply environ-based damage: drowning at environ==30, lava in fiery_death region.
+    /// Port of fmain.c:2131-2147.
+    fn apply_environ_damage(&mut self) {
+        let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+
+        // Lava damage (fiery_death region, fmain.c:2133-2140)
+        if self.fiery_death {
+            // Rose (stuff[23]) grants fire immunity
+            if self.state.stuff()[23] > 0 {
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.environ = 0;
+                }
+            } else if environ > 15 {
+                self.state.vitality = 0;
+            } else if environ > 2 {
+                self.state.vitality = (self.state.vitality - 1).max(0);
+            }
+        }
+
+        // Drowning damage (fmain.c:2142-2146): environ==30 && (cycle & 7)==0
+        if environ as i32 == 30 && (self.state.cycle & 7) == 0 {
+            self.state.vitality = (self.state.vitality - 1).max(0);
+        }
     }
 
     /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
@@ -2905,7 +2985,7 @@ impl GameplayScene {
         map_x: u16,
         map_y: u16,
         framebuf: &mut Vec<u8>,
-        hero_submerged: bool,
+        _hero_submerged: bool,
     ) {
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
         use crate::game::sprites::{SPRITE_H, SPRITE_W};
@@ -2917,7 +2997,10 @@ impl GameplayScene {
         let hero_cfile = state.brother.saturating_sub(1) as usize;
         if let Some(Some(ref sheet)) = sprite_sheets.get(hero_cfile) {
             let (rel_x, mut rel_y) = Self::actor_rel_pos(state.hero_x, state.hero_y, map_x, map_y);
-            if hero_submerged { rel_y += 8; }
+            let environ = state.actors.first().map_or(0i8, |a| a.environ);
+            if environ > 2 {
+                rel_y += environ as i32;
+            }
             if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
@@ -3256,16 +3339,6 @@ impl Scene for GameplayScene {
             return SceneResult::Continue;
         }
 
-        // Drowning damage (#105): 1 vitality per ~1s while submerged
-        if self.submerged {
-            self.drowning_timer = self.drowning_timer.wrapping_add(delta_ticks);
-            if self.drowning_timer % 30 == 0 {
-                self.state.vitality = (self.state.vitality - 1).max(0);
-            }
-        } else {
-            self.drowning_timer = 0;
-        }
-
         // Lazy-load ADF + world data on first tick (render-world-load).
         // ADF path comes from faery.toml [disk].adf; falls back to the default filename.
         // Errors are logged to stderr; missing ADF is gracefully handled.
@@ -3516,6 +3589,10 @@ impl Scene for GameplayScene {
                 self.apply_player_input();
             }
 
+            self.update_fiery_death();
+            self.update_environ();
+            self.apply_environ_damage();
+
             // Tick missiles (npc-105): advance each active missile, check hits.
             {
                 let hero_x = self.state.hero_x as i32;
@@ -3674,7 +3751,14 @@ impl Scene for GameplayScene {
                                 let (rel_x, mut rel_y) = Self::actor_rel_pos(
                                     self.state.hero_x, self.state.hero_y, map_x, map_y,
                                 );
-                                if self.submerged { rel_y += 8; }
+                                let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+                                if environ > 29 {
+                                    // Fully submerged — skip rendering body
+                                    // TODO: render splash sprite (ob_id 97/98)
+                                    continue;
+                                } else if environ > 2 {
+                                    rel_y += environ as i32;
+                                }
                                 if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
                                     && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
                                 {
