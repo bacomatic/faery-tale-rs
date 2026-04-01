@@ -1,5 +1,5 @@
 version = 1
-last_updated = "2026-03-29"
+last_updated = "2026-04-01"
 
 # Stable lookup keys for agents.
 # Each key maps to a human-readable section in RESEARCH.md.
@@ -230,3 +230,11 @@ doc = "RESEARCH.md"
 anchor = "#sleep-system"
 last_updated = "2026-03-29"
 tags = ["player", "sleep", "fatigue", "bed", "rest"]
+
+[[entry]]
+id = "narr.message_triggers"
+title = "Message Trigger Reference"
+doc = "RESEARCH.md"
+anchor = "#message-trigger-reference"
+last_updated = "2026-04-01"
+tags = ["messages", "event_msg", "place_msg", "inside_msg", "speeches", "narr", "triggers", "dialogue"]

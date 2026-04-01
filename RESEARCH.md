@@ -2861,3 +2861,333 @@ world; both F9 and F10 share this address space but reference different
 **Astral Plane** — special sub-zone within F9 triggered by the
 `extent_list[9]` rectangle: indoor coords x = 9 216–12 544, y = 33 280–35 328
 (`0x2400–0x3100`, `0x8200–0x8A00`). Music switches to palace group 4.
+
+## Message Trigger Reference
+
+All in-game text messages are defined in `faery.toml` across four tables:
+`event_msg` (gameplay events), `place_msg` (outdoor locations), `inside_msg`
+(interior locations), and `speeches` (NPC dialogue). The original source
+defines these in `narr.asm` and triggers them via `event(index)` and
+`speak(index)` calls throughout `fmain.c` and `fmain2.c`.
+
+The `%` token in message text is substituted with the active brother's name
+(Julian, Phillip, or Kevin) at display time.
+
+**Key finding:** All 148 messages are reachable in the original game — none
+are orphaned or unused.
+
+### Display architecture (original)
+
+- `event(index)` — extracts from `_event_msg[]` array, formats with hero
+  name, pushes to the HI bar message scroll area.
+- `speak(index)` — extracts from `_speeches[]` array, same display path.
+- `find_place()` — data-driven lookup; when the player enters a POI tile
+  sector, looks up `_place_tbl[sector]` or `_inside_tbl[sector]` and calls
+  `event()` with the resulting index.
+
+All messages render in the parchment/message area of the HI bar (640×57
+hires region at screen bottom).
+
+### event_msg (indices 0–38)
+
+Source: `narr.asm` line 11+; triggers in `fmain.c` and `fmain2.c`.
+
+| Idx | Text | Original trigger | Rust status |
+|-----|------|------------------|-------------|
+| 0 | "% was getting rather hungry." | `hunger == 35` (`fmain.c:2628`) | ✅ `game_state.rs` |
+| 1 | "% was getting very hungry." | `hunger == 60` (`fmain.c:2630`) | ✅ `game_state.rs` |
+| 2 | "% was starving!" | `hunger > 90 && vitality > 5`, every 8 ticks (`fmain.c:2638`) | ✅ `game_state.rs` |
+| 3 | "% was getting tired." | `fatigue == 70` (`fmain.c:2649`) | ✅ `game_state.rs` |
+| 4 | "% was getting sleepy." | `fatigue == 90` (`fmain.c:2651`) | ✅ `game_state.rs` (was bug: checked hunger) |
+| 5 | "% was hit and killed!" | Combat death via `checkdead(0, 5)` (`fmain.c:3409`) | ❌ Not wired |
+| 6 | "% was drowned in the water!" | `environ == 30 && (cycle & 7) == 0` — deep water (`fmain.c:2145`) | ❌ Not wired |
+| 7 | "% was burned in the lava." | Lava damage via `checkdead(i, 7)` (`fmain.c:2140`) | ❌ Not wired |
+| 8 | "% was turned to stone by the witch." | Witch petrify special (`fmain2.c:1226`) | ❌ Not wired |
+| 9 | "% started the journey in his home village of Tambry" | Game start / brother transition (`fmain.c:2556`) | ✅ `gameplay_scene.rs` |
+| 10 | "as had his brother before him." | Phillip's start (one brother dead) | ✅ `gameplay_scene.rs` |
+| 11 | "as had his brothers before him." | Kevin's start (two brothers dead) | ✅ `gameplay_scene.rs` |
+| 12 | "% just couldn't stay awake any longer!" | `fatigue > 170 && vitality <= 5` (`fmain.c:2640`) | ✅ `game_state.rs` |
+| 13 | "% was feeling quite full." | After eating when `hunger < 0` (`fmain2.c:2139`) | ❌ Not wired |
+| 14 | "% was feeling quite rested." | After sleeping/resting (`fmain.c:4238`) | ❌ Not wired |
+| 15 | "Even % would not be stupid enough to draw weapon in here." | Draw weapon in sanctuary (`xtype == 81`, `fmain.c:1591`) | ❌ Not wired |
+| 16 | "A great calming influence comes over %..." | Draw weapon in temple (`xtype == 82`, `fmain.c:1593`) | ❌ Not wired |
+| 17 | "% picked up a scrap of paper." | Picking up scrap object (`fmain.c:4067`) | ✅ `gameplay_scene.rs` |
+| 18 | "It read: \"Find the turtle!\"" | Scrap content (quest hint) | ✅ `gameplay_scene.rs` |
+| 19 | "It read: \"Meet me at midnight at the Crypt...\"" | Scrap content (quest hint) | ✅ `gameplay_scene.rs` |
+| 20 | "% looked around but discovered nothing." | LOOK action finds nothing (`fmain.c:4069`) | ❌ Not wired |
+| 21 | "% does not have that item." | GIVE item not in inventory (`stuff[4+hit] == 0`, `fmain.c:4076`) | ❌ Not wired |
+| 22 | "% bought some food and ate it." | Tavern purchase food (`i == 0`, `fmain.c:4286`) | ❌ Not wired |
+| 23 | "% bought some arrows." | Tavern purchase arrows (`i == 8`, `fmain.c:4290`) | ❌ Not wired |
+| 24 | "% passed out from hunger!" | `hunger > 140 && vitality <= 5` (`fmain.c:2643`) | ✅ `game_state.rs` |
+| 25 | "% is not sleepy." | SLEEP when `fatigue < 50` (`fmain.c:2179`) | ❌ Not wired |
+| 26 | "% was tired, so he decided to lie down and sleep." | SLEEP action accepted (`fmain.c:2175`) | ✅ `gameplay_scene.rs` |
+| 27 | "% perished in the hot lava!" | Fatal lava, `fiery_death && environ > 15` (`fmain.c:2140`) | ❌ Not wired |
+| 28 | "It was midnight." | `dayperiod == 0` transition (`fmain.c:2383`) | ❌ Not wired |
+| 29 | "It was morning." | `dayperiod == 4` transition (`fmain.c:2385`) | ❌ Not wired |
+| 30 | "It was midday." | `dayperiod == 6` transition (`fmain.c:2388`) | ❌ Not wired |
+| 31 | "Evening was drawing near." | `dayperiod == 9` transition (`fmain.c:2392`) | ❌ Not wired |
+| 32 | "Ground is too hot for swan to land." | Swan landing on lava (`riding == 11 && fiery_death`, `fmain.c:1597`) | ❌ Not wired |
+| 33 | "Flying too fast to dismount." | Dismount while flying fast (`riding == 11 && velocity > threshold`, `fmain.c:1607`) | ❌ Not wired |
+| 34 | "\"They're all dead!\" he cried." | All three brothers dead — game over (`fmain.c:2560`) | ❌ Not wired |
+| 35 | "No time for that now!" | Invalid action during combat/encounter (`fmain.c:1560`) | ❌ Not wired |
+| 36 | "% put an apple away for later." | Fruit pickup when not hungry | ✅ `gameplay_scene.rs` |
+| 37 | "% ate one of his apples." | EAT food action | ✅ `gameplay_scene.rs` |
+| 38 | "% discovered a hidden object." | LOOK action finds object (`flag == 1`, `fmain.c:4067`) | ❌ Not wired |
+
+### place_msg (indices 0–26)
+
+Source: `narr.asm` line 100+; triggered by `find_place()` in `fmain.c`.
+
+The `find_place()` function checks the player's map sector against
+`_place_tbl[]` (outdoor) or `_inside_tbl[]` (indoor, when `region_num > 7`).
+Each sector maps to a message index. Index 0 means "no message" (empty
+string). Messages fire once per sector entry.
+
+| Idx | Text | Location |
+|-----|------|----------|
+| 0 | *(empty — no message)* | Default / untagged sectors |
+| 1 | *(empty — reserved)* | Reserved |
+| 2 | "% returned to the village of Tambry." | Tambry village |
+| 3 | "% came to Vermillion Manor." | Vermillion Manor |
+| 4 | "% reached the Mountains of Frost" | Mountains of Frost |
+| 5 | "% reached the Plain of Grief." | Plain of Grief |
+| 6 | "% came to the city of Marheim." | Marheim city |
+| 7 | "% came to the Witch's castle." | Witch's castle |
+| 8 | "% came to the Graveyard." | Graveyard |
+| 9 | "% came to a great stone ring." | Stone ring (teleport) |
+| 10 | "% came to a watchtower." | Watchtower / lighthouse |
+| 11 | "% traveled to the great Bog." | Great Bog / swamp |
+| 12 | "% came to the Crystal Palace." | Crystal Palace |
+| 13 | "% came to mysterious Pixle Grove." | Pixie shrine |
+| 14 | "% entered the Citadel of Doom." | Citadel of Doom |
+| 15 | "% entered the Burning Waste." | Burning Waste / desert |
+| 16 | "% found an oasis." | Oasis |
+| 17 | "% came to the hidden city of Azal." | Hidden city of Azal |
+| 18 | "% discovered an outlying fort." | Outlying fort |
+| 19 | "% came to a small keep." | Small keep |
+| 20 | "% came to an old castle." | Old castle |
+| 21 | "% came to a log cabin." | Log cabin |
+| 22 | "% came to a dark stone tower." | Dark stone tower |
+| 23 | "% came to an isolated cabin." | Isolated / swamp cabin |
+| 24 | "% came to the Tombs of Hemsath." | Tombs of Hemsath |
+| 25 | "% reached the Forbidden Keep." | Forbidden Keep |
+| 26 | "% found a cave in the hillside." | Dragon cave |
+
+**Rust status:** Config loaded in `game_library.rs` but **entirely unwired**.
+The `find_place()` sector-lookup mechanism is not yet implemented. Requires
+sector-to-message mapping data (from `_place_tbl[]` in `narr.asm`) and a
+trigger in the movement/region-transition code.
+
+### inside_msg (indices 0–22)
+
+Source: `narr.asm` line 200+; triggered by `find_place()` when
+`region_num > 7` (interior regions).
+
+| Idx | Text | Location type |
+|-----|------|---------------|
+| 0 | *(empty — no message)* | Default |
+| 1 | *(empty — reserved)* | Reserved |
+| 2 | "% came to a small chamber." | Small chamber |
+| 3 | "% came to a large chamber." | Large chamber |
+| 4 | "% came to a long passageway." | Long passageway |
+| 5 | "% came to a twisting tunnel." | Twisting tunnel |
+| 6 | "% came to a forked intersection." | Forked intersection |
+| 7 | "He entered the keep." | Keep interior |
+| 8 | "He entered the castle." | Castle interior |
+| 9 | "He entered the castle of King Mar." | Castle of King Mar |
+| 10 | "He entered the sanctuary of the temple." | Temple sanctuary |
+| 11 | "% entered the Spirit Plane." | Spirit Plane / astral |
+| 12 | "% came to a large room." | Large room |
+| 13 | "% came to an octagonal room." | Octagonal room |
+| 14 | "% traveled along a stone corridor." | Stone corridor |
+| 15 | "% came to a stone maze." | Stone maze |
+| 16 | "He entered a small building." | Small building |
+| 17 | "He entered the building." | Generic building |
+| 18 | "He entered the tavern." | Tavern |
+| 19 | "He went inside the inn." | Inn |
+| 20 | "He entered the crypt." | Crypt / tomb |
+| 21 | "He walked into the cabin." | Cabin |
+| 22 | "He unlocked the door and entered." | Locked-door entry |
+
+**Rust status:** Config loaded in `game_library.rs` but **entirely unwired**.
+Same `find_place()` mechanism as `place_msg`, but uses `_inside_tbl[]` when
+`region_num > 7`.
+
+### speeches (indices 0–60)
+
+Source: `narr.asm` line 351+; triggered via NPC talk dispatch in
+`fmain.c:4167–4271` and combat/item-use handlers in `fmain2.c`.
+
+#### Creature combat dialogue (talk to hostile enemy)
+
+Triggered by TALK menu when target is `an->type == ENEMY`. The creature's
+`race` field directly indexes the speech: `speak(an->race)`.
+
+| Idx | Text | Creature | Rust |
+|-----|------|----------|------|
+| 0 | "% attempted to communicate with the Ogre..." | Ogre (race 0) | ❌ |
+| 1 | "\"Human must die!\" said the goblin-man." | Orc/goblin (race 1) | ✅ |
+| 2 | "\"Doom!\" wailed the wraith." | Wraith (race 2) | ✅ |
+| 3 | "A clattering of bones was the only reply." | Skeleton (race 3) | ✅ |
+| 4 | "% knew that it is a waste of time to talk to a snake." | Snake (race 4) | ✅ |
+| 5 | "..." | Salamander (race 5) | ❌ |
+| 6 | "There was no reply." | Loraii/Spider (race 6) | ✅ |
+| 7 | "\"Die, foolish mortal!\" he said." | Necromancer (race 7) | ❌ |
+
+#### Named NPC dialogue (setfig system)
+
+Named NPCs use `an->race & 0x7f` as a setfig index. Each NPC has
+conditional dialogue based on quest state, character stats, and time of day.
+
+**Wizard** (setfig 0) — `fmain.c:4189–4193`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 27 | "\"Kind deeds could gain thee a friend from the sea.\"" | `kind >= 10 && goal == 0` | ✅ (default only) |
+| 28 | "\"Seek the place that is darker than night...\"" | `kind >= 10 && goal == 1` | ❌ goal not tracked |
+| 29 | "\"Like the eye itself, a crystal Orb can help...\"" | `kind >= 10 && goal == 2` | ❌ goal not tracked |
+| 30 | "\"The Witch lives in the dim forest of Grimwood...\"" | `kind >= 10 && goal == 3` | ❌ goal not tracked |
+| 31 | "\"Only the light of the Sun can destroy the Witch's Evil.\"" | `kind >= 10 && goal == 4` | ❌ goal not tracked |
+| 32 | "\"The maiden you seek lies imprisoned...\"" | `kind >= 10 && goal == 5` | ❌ goal not tracked |
+| 33 | "\"Tame the golden beast...\"" | `kind >= 10 && goal == 6` | ❌ goal not tracked |
+| 34 | "\"Just what I needed!\" he said." | `kind >= 10 && goal == 7` | ❌ goal not tracked |
+| 35 | "\"Away with you, young ruffian!\"" | `kind < 10` | ✅ |
+
+**Priest/Cleric** (setfig 1) — `fmain.c:4195–4208`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 36 | "\"You must seek your enemy on the spirit plane...\"" | `kind >= 10 && daynight % 3 == 0` | ✅ |
+| 37 | "\"When you wish to travel quickly, seek the power of the Stones.\"" | `kind >= 10 && daynight % 3 == 1` | ✅ |
+| 38 | "\"Since you are brave of heart, I shall Heal...\"" + heals player | `kind >= 10 && daynight % 3 == 2` | ✅ |
+| 39 | "\"Ah! You have a writ from the king...golden statues...\"" | `stuff[28] == 1 && ob_listg[10].ob_stat == 0` (first visit with writ) | ❌ quest state |
+| 40 | "\"Repent, Sinner!...\"" | `kind < 10` | ✅ |
+
+**Guard** (setfig 2, 3) — `fmain.c:4209`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 15 | "\"State your business!\" said the guard." | Always (auto-speak on proximity) | ✅ |
+
+**Princess** (setfig 4) — `fmain.c:4214`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 16 | "\"Please, sir, rescue me...\"" | `ob_list8[9].ob_stat` (imprisoned) | ✅ |
+
+**King** (setfig 5) — `fmain.c:4218–4221`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 17 | "\"I cannot help you, young man...\"" | Default (no writ, princess imprisoned) | ✅ |
+| 18 | "\"Here is a writ designating you as my official agent...\"" | `stuff[28] == 0` — gives writ to player | ❌ quest state |
+| 19 | "\"I already gave the golden statue to the other young man.\"" | `ob_listg[10].ob_stat != 0` — statue already given | ❌ quest state |
+
+**Noble (Lord Trane)** (setfig 6) — `fmain.c:4223`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 20 | "\"If you could rescue the king's daughter...\"" | Always | ✅ |
+
+**Sorceress** (setfig 7) — `fmain.c:4226–4232`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 45 | "\"Welcome. Here is one of the five golden figurines...\"" | One-time gift (sets `ob_stat`) | ✅ (partial) |
+
+**Bartender** (setfig 8) — `fmain.c:4236–4241`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 12 | "\"Would you like to buy something?...\"" | `dayperiod > 7` (late night) | ✅ |
+| 13 | "\"Good Morning...Hope you slept well.\"" | `fatigue < 5` (just rested) | ✅ |
+| 14 | "\"Have a drink!\"" | Default (other times) | ✅ |
+
+**Witch** (setfig 9) — `fmain.c:4243`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 46 | "\"Look into my eyes and Die!!\"" | Always (auto-speak) | ✅ |
+
+**Spectre** (setfig 10) — `fmain.c:4247`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 47 | "\"HE has usurped my place as lord of undead...\"" | First meeting (no bones yet) | ✅ |
+| 48 | "\"Good! That spirit now rests...Take this crystal shard.\"" | Player gives bones (`stuff[29] == 1`) | ❌ quest state |
+
+**Ghost** (setfig 11) — `fmain.c:4251`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 49 | "\"I am the ghost of your dead brother...\"" | Always | ✅ |
+
+**Ranger** (setfig 12) — `fmain.c:4252–4256`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 9 | "\"Nice weather we're having...\"" | Generic ranger greeting (not dragon-direction) | ❌ goal not tracked |
+| 10 | "\"Good luck, sonny!...\"" | Ranger variation | ❌ goal not tracked |
+| 11 | "\"If you need to cross the lake...raft north of here.\"" | Ranger variation (raft hint) | ❌ goal not tracked |
+| 22 | "\"The dragon's cave is directly north...\"" | `region_num == 2` (Grimwood) | ✅ |
+| 53 | "\"The dragon's cave is east...\"" | `region_num != 2 && goal == 0` | ✅ (default only) |
+| 54 | "\"The dragon's cave is west...\"" | `region_num != 2 && goal == 1` | ❌ goal not tracked |
+| 55 | "\"The dragon's cave is south...\"" | `region_num != 2 && goal == 2` | ❌ goal not tracked |
+
+**Beggar** (setfig 13) — `fmain.c:4259, 4372–4381`:
+
+| Idx | Text | Condition | Rust |
+|-----|------|-----------|------|
+| 23 | "\"Alms! Alms for the poor!\"" | TALK (always) | ✅ |
+| 24 | "\"I have a prophecy...seek two women...\"" | GIVE gold, `goal == 0` | ❌ quest state |
+| 25 | "\"Lovely Jewels, glint in the night...\"" | GIVE gold, `goal == 1` | ❌ quest state |
+| 26 | "\"Where is the hidden city?...\"" | GIVE gold, `goal == 2` | ❌ quest state |
+
+#### Other dialogue contexts
+
+| Idx | Text | Trigger | Rust |
+|-----|------|---------|------|
+| 8 | "\"No need to shout, son!\"" | YELL near any NPC within 35 units (`fmain.c:4161`) | ✅ |
+| 21 | "\"Sorry, I have no use for it.\"" | GIVE non-gold item to NPC that doesn't want it | ❌ |
+| 41 | "\"None may enter the sacred shrine...\"" | Dream Knight blocks entry (combat challenge) | ❌ quest |
+| 42 | "\"Your prowess in battle is great...earned the right...\"" | Dream Knight defeated — grants entry | ❌ quest |
+| 43 | "\"So this is the so-called Hero...Simply Pathetic.\"" | Necromancer encounter (Spirit Plane boss fight) | ❌ quest |
+| 44 | "% gasped. The Necromancer had been transformed..." | Necromancer defeated — quest complete | ❌ quest |
+| 50 | "% gave him some gold coins..." | GIVE gold to non-beggar NPC (`fmain.c:4381`) | ❌ |
+| 51 | "\"Sorry, but I have nothing to sell.\"" | BUY from NPC with no shop inventory | ❌ |
+| 52 | *(empty)* | Placeholder / null | N/A |
+| 56 | "\"Oh, thank you for saving my eggs...\"" | Turtle egg rescue (`stuff[6] == 0`, `fmain.c:4264`) | ❌ quest state |
+| 57 | "\"Just hop on my back...\"" | Turtle already has shell (`stuff[6] == 1`, `fmain.c:4267`) | ❌ quest state |
+| 58 | "\"Stupid fool, you can't hurt me with that!\"" | Melee attack on witch or unarmed vs necromancer (`fmain2.c:321`) | ❌ |
+| 59 | "\"Your magic won't work here, fool!\"" | MAGIC in Necromancer's zone (`extn->v3 == 9`) | ❌ |
+| 60 | "The Sunstone has made the witch vulnerable!" | USE Sunstone item against witch (`witchflag`) | ❌ |
+
+### Implementation gap summary
+
+Grouped by feature system, with the message indices each gap covers:
+
+| Feature gap | event_msg | speeches | Notes |
+|-------------|-----------|----------|-------|
+| Place message system (`find_place()`) | — | — | All 27 place_msg + 23 inside_msg unwired |
+| Death type messages | 5, 6, 7, 8, 27, 34 | — | Combat, drowning, lava, petrification, all-dead |
+| Time-of-day announcements | 28, 29, 30, 31 | — | `dayperiod` transitions |
+| Terrain/environment warnings | 32, 33 | — | Swan-on-lava, flying-too-fast |
+| Post-action feedback | 13, 14, 25 | — | Felt full, felt rested, not sleepy |
+| Search/discovery system | 20, 38 | — | LOOK found nothing / found hidden object |
+| Shopping messages | 22, 23 | — | Buy food, buy arrows |
+| Sanctuary weapon restriction | 15, 16 | — | Draw weapon in sacred zones |
+| Combat-time action restriction | 35 | — | "No time for that now!" |
+| Give-item dialogue | 21 | 21, 50 | Missing item, unwanted item, give gold |
+| Creature combat dialogue | — | 0, 5, 7 | Ogre, Salamander, Necromancer talk |
+| Wizard quest variations | — | 28–34 | `goal`-based hint cycling |
+| Ranger dialogue variations | — | 9–11, 54, 55 | Generic greetings + direction variants |
+| Beggar quest dialogue | — | 24–26 | GIVE-gold prophecy cycling |
+| King quest states | — | 18, 19 | Writ granting, statue given |
+| Priest writ quest | — | 39 | Writ → golden statue exchange |
+| Spectre bones quest | — | 48 | Give bones → crystal shard |
+| Turtle quest dialogue | — | 56, 57 | Egg rescue + ride offer |
+| Dream Knight quest | — | 41, 42 | Shrine challenge + entry granted |
+| Necromancer quest | — | 43, 44 | Boss encounter + defeat |
+| Witch combat responses | — | 58, 60 | Invulnerability + Sunstone |
+| Necromancer combat responses | — | 59 | Magic blocked in zone |
+| Non-seller response | — | 51 | BUY from non-merchant |
