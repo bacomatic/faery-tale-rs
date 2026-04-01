@@ -3442,9 +3442,10 @@ impl Scene for GameplayScene {
                                 if let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) {
                                     let frame = (sf_entry.image_base as usize) % sheet.num_frames;
                                     if let Some(fp) = sheet.frame_pixels(frame) {
-                                        // Original: ystart -= 18 in set_objects()
-                                        let (rel_x, rel_y_base) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
-                                        let rel_y = rel_y_base - 18;
+                                        // Original does ystart = yc - map_y - 8; ystart -= 18 (total: -26).
+                                        // actor_rel_pos already applies a Y offset of -26, matching that total,
+                                        // so no further adjustment is needed here.
+                                        let (rel_x, rel_y) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, &mut mr.framebuf, fb_w, fb_h);
 
                                         blitted.push(BlittedSprite {
