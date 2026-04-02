@@ -4053,9 +4053,14 @@ impl Scene for GameplayScene {
                                 {
                                     let hero_facing = self.state.actors.first().map_or(0u8, |a| a.facing);
                                     let is_moving = self.state.actors.first().map_or(false, |a| a.moving);
-                                    let frame_base = Self::facing_to_frame_base(hero_facing);
-                                    let anim_offset = if is_moving { (self.state.cycle as usize) % 8 } else { 1 };
-                                    let frame = frame_base + anim_offset;
+                                    let hero_state = self.state.actors.first().map(|a| &a.state);
+                                    let frame = if let Some(ActorState::Fighting(fight_state)) = hero_state {
+                                        let fight_base = Self::facing_to_fight_frame_base(hero_facing);
+                                        fight_base + (*fight_state as usize).min(8)
+                                    } else {
+                                        let frame_base = Self::facing_to_frame_base(hero_facing);
+                                        if is_moving { frame_base + (self.state.cycle as usize) % 8 } else { frame_base + 1 }
+                                    };
 
                                     // Weapon draw order (fmain.c:2907-2916 passmode):
                                     // Original facing: 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
