@@ -114,6 +114,23 @@ fn brother_name(state: &crate::game::game_state::GameState) -> &'static str {
     }
 }
 
+/// Find the next owned weapon slot in the given direction.
+/// `current` is the 1-based weapon value (1=Dirk..5=Wand, matching actor.weapon).
+/// `direction` is +1 (next) or -1 (prev).
+/// `stuff` is the player's inventory array.
+/// Returns `Some(new_weapon_value)` if a different weapon is found, `None` otherwise.
+fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 35]) -> Option<u8> {
+    let weapon_count: i8 = 5; // weapons 1..=5, stuff indices 0..=4
+    let cur_0 = (current as i8 - 1).max(0); // convert to 0-based index
+    for offset in 1..weapon_count {
+        let idx_0 = (cur_0 + direction * offset).rem_euclid(weapon_count) as usize;
+        if stuff[idx_0] > 0 {
+            return Some((idx_0 as u8) + 1); // return 1-based weapon value
+        }
+    }
+    None
+}
+
 /// Canvas layout — original 640×200 game area line-doubled to 640×400,
 /// centered in 640×480 logical canvas with 40px margins top and bottom.
 ///
@@ -2337,6 +2354,38 @@ impl GameplayScene {
             GameAction::UseSkull => {
                 self.do_option(GameAction::CastSpell7); // ITEM_SKULL = stuff[15], spell slot 7
             }
+            GameAction::WeaponPrev => {
+                let current_weapon = self.state.actors.first()
+                    .map(|a| a.weapon).unwrap_or(1);
+                if let Some(new_weapon) = cycle_weapon_slot(current_weapon, -1, self.state.stuff()) {
+                    if let Some(player) = self.state.actors.first_mut() {
+                        player.weapon = new_weapon;
+                    }
+                    let name = match new_weapon {
+                        1 => "Dirk", 2 => "Mace", 3 => "Sword", 4 => "Bow",
+                        5 => "Wand", _ => "?",
+                    };
+                    self.messages.push(format!("{} readied.", name));
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
+                }
+            }
+            GameAction::WeaponNext => {
+                let current_weapon = self.state.actors.first()
+                    .map(|a| a.weapon).unwrap_or(1);
+                if let Some(new_weapon) = cycle_weapon_slot(current_weapon, 1, self.state.stuff()) {
+                    if let Some(player) = self.state.actors.first_mut() {
+                        player.weapon = new_weapon;
+                    }
+                    let name = match new_weapon {
+                        1 => "Dirk", 2 => "Mace", 3 => "Sword", 4 => "Bow",
+                        5 => "Wand", _ => "?",
+                    };
+                    self.messages.push(format!("{} readied.", name));
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
+                }
+            }
             _ => {}
         }
     }
@@ -4364,5 +4413,45 @@ mod tests {
             seen.insert(advance_fight_state(0, tick));
         }
         assert!(seen.len() > 1, "trans_list should produce varied states");
+    }
+
+    #[test]
+    fn test_cycle_weapon_next() {
+        let mut stuff = [0u8; 35];
+        stuff[0] = 1; // Dirk (weapon 1)
+        stuff[2] = 1; // Sword (weapon 3)
+        stuff[4] = 1; // Wand (weapon 5)
+        // From Dirk (1), next should be Sword (3)
+        assert_eq!(cycle_weapon_slot(1, 1, &stuff), Some(3));
+        // From Sword (3), next should be Wand (5)
+        assert_eq!(cycle_weapon_slot(3, 1, &stuff), Some(5));
+        // From Wand (5), next should wrap to Dirk (1)
+        assert_eq!(cycle_weapon_slot(5, 1, &stuff), Some(1));
+    }
+
+    #[test]
+    fn test_cycle_weapon_prev() {
+        let mut stuff = [0u8; 35];
+        stuff[0] = 1; // Dirk (weapon 1)
+        stuff[2] = 1; // Sword (weapon 3)
+        stuff[4] = 1; // Wand (weapon 5)
+        // From Dirk (1), prev should wrap to Wand (5)
+        assert_eq!(cycle_weapon_slot(1, -1, &stuff), Some(5));
+        // From Sword (3), prev should be Dirk (1)
+        assert_eq!(cycle_weapon_slot(3, -1, &stuff), Some(1));
+    }
+
+    #[test]
+    fn test_cycle_weapon_single_owned() {
+        let mut stuff = [0u8; 35];
+        stuff[0] = 1; // Only Dirk (weapon 1)
+        assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
+        assert_eq!(cycle_weapon_slot(1, -1, &stuff), None);
+    }
+
+    #[test]
+    fn test_cycle_weapon_none_owned() {
+        let stuff = [0u8; 35];
+        assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
     }
 }
