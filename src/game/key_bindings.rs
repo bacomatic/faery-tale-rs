@@ -83,11 +83,39 @@ pub enum GameAction {
     SelectKey5,
     SelectKey6,
 
+    // Controller: menu navigation
+    MenuUp,
+    MenuDown,
+    MenuLeft,
+    MenuRight,
+    MenuConfirm,
+    MenuCancel,
+
+    // Controller: weapon cycling
+    WeaponPrev,
+    WeaponNext,
+
+    // Controller: magic quick-select (DPad in gameplay mode)
+    UseCrystalVial,
+    UseOrb,
+    UseTotem,
+    UseSkull,
+
+    // Controller: toggle menu mode
+    ToggleMenuMode,
+
     // UI / meta
     Confirm,
     Cancel,
     Menu,
     Rebind,
+}
+
+/// Controller input mode — determines which binding map is active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ControllerMode {
+    Gameplay,
+    Menu,
 }
 
 impl GameAction {
@@ -108,6 +136,10 @@ impl GameAction {
             UseSpecial, Board, SummonTurtle,
             BuyFood, BuyArrow, BuyVial, BuyMace, BuySword, BuyBow, BuyTotem,
             SelectKey1, SelectKey2, SelectKey3, SelectKey4, SelectKey5, SelectKey6,
+            MenuUp, MenuDown, MenuLeft, MenuRight, MenuConfirm, MenuCancel,
+            WeaponPrev, WeaponNext,
+            UseCrystalVial, UseOrb, UseTotem, UseSkull,
+            ToggleMenuMode,
             Confirm, Cancel, Menu, Rebind,
         ]
     }
@@ -141,6 +173,13 @@ impl GameAction {
             SelectKey1 => "Select Key 1", SelectKey2 => "Select Key 2",
             SelectKey3 => "Select Key 3", SelectKey4 => "Select Key 4",
             SelectKey5 => "Select Key 5", SelectKey6 => "Select Key 6",
+            MenuUp => "Menu Up", MenuDown => "Menu Down",
+            MenuLeft => "Menu Left", MenuRight => "Menu Right",
+            MenuConfirm => "Menu Confirm", MenuCancel => "Menu Cancel",
+            WeaponPrev => "Prev Weapon", WeaponNext => "Next Weapon",
+            UseCrystalVial => "Crystal Vial", UseOrb => "Jewel",
+            UseTotem => "Totem", UseSkull => "Skull",
+            ToggleMenuMode => "Menu Mode",
             Confirm => "Confirm", Cancel => "Cancel", Menu => "Menu", Rebind => "Rebind",
         }
     }
