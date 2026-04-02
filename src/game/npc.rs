@@ -119,10 +119,12 @@ impl Npc {
         if dist > 0 {
             let facing = direction_to_target(self.x, self.y, hero_x, hero_y);
             if facing < 9 {
-                // speed=0 NPCs are treated as speed=1 to avoid stalling.
-                let speed = self.speed.max(1) as i32;
-                let proposed_x = newx(self.x as u16, facing, speed);
-                let proposed_y = newy(self.y as u16, facing, speed, indoor);
+                // Original hardcodes e=2 for all NPC walking (fmain.c:1824).
+                // With xdir/ydir displacement tables and newx()/newy() dividing
+                // by 2, this yields exactly one xdir/ydir unit per frame.
+                let dist = 2i32;
+                let proposed_x = newx(self.x as u16, facing, dist);
+                let proposed_y = newy(self.y as u16, facing, dist, indoor);
 
                 // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
                 let terrain_passable = self.race == RACE_WRAITH
@@ -135,15 +137,15 @@ impl Npc {
                     // Wall-sliding: try clockwise then counter-clockwise deviation
                     // (fmain2.c set_course deviation).
                     let dev_cw = (facing + 1) & 7;
-                    let cw_x = newx(self.x as u16, dev_cw, speed);
-                    let cw_y = newy(self.y as u16, dev_cw, speed, indoor);
+                    let cw_x = newx(self.x as u16, dev_cw, dist);
+                    let cw_y = newy(self.y as u16, dev_cw, dist, indoor);
                     if proxcheck(world, cw_x as i32, cw_y as i32) {
                         self.x = cw_x as i16;
                         self.y = cw_y as i16;
                     } else {
                         let dev_ccw = (facing.wrapping_sub(1)) & 7;
-                        let ccw_x = newx(self.x as u16, dev_ccw, speed);
-                        let ccw_y = newy(self.y as u16, dev_ccw, speed, indoor);
+                        let ccw_x = newx(self.x as u16, dev_ccw, dist);
+                        let ccw_y = newy(self.y as u16, dev_ccw, dist, indoor);
                         if proxcheck(world, ccw_x as i32, ccw_y as i32) {
                             self.x = ccw_x as i16;
                             self.y = ccw_y as i16;
