@@ -1204,7 +1204,7 @@ impl GameplayScene {
     /// Apply one melee swing against nearby enemy NPCs (npc-103).
     /// Ports fmain.c sword proximity loop + dohit + checkdead.
     fn apply_melee_combat(&mut self) {
-        use crate::game::combat::{in_melee_range, melee_rand};
+        use crate::game::combat::in_melee_range;
         use crate::game::debug_command::GodModeFlags;
 
         // Hero weapon value from actor[0] (default 1 = fists).
@@ -1223,11 +1223,12 @@ impl GameplayScene {
                                    npc.x, npc.y, insane_reach) {
                     continue;
                 }
-                // damage = rand() % (arms + 1), min 1 (from task spec / dohit wt).
+                // Original dohit() formula: wt + bitrand(2).
+                // wt = weapon index, capped to 5 if >= 8 (touch attacks).
                 let damage: i16 = if one_hit_kill {
                     npc.vitality
                 } else {
-                    (melee_rand(arms as u32 + 1) as i16).max(1)
+                    crate::game::combat::bitrand_damage(arms)
                 };
                 npc.vitality -= damage;
                 if npc.vitality < 0 { npc.vitality = 0; }
@@ -1265,6 +1266,34 @@ impl GameplayScene {
             }
         }
         let _ = hit_any; // no "miss" message — matches original silent miss
+
+        // Enemy counterattack — fmain.c:2688-2709 for i > 0.
+        // Each active enemy in melee range swings at hero once per combat tick.
+        // Brave dodge: NPC hits only if rand256() > brave (fmain.c:2707).
+        let mut counter_logs: Vec<String> = Vec::new();
+        if let Some(ref table) = self.npc_table {
+            for npc in table.npcs.iter().filter(|n| n.active) {
+                let npc_weapon = npc.weapon.max(1);
+                // NPC reach: bv = 2 + rand4(), capped at 15 (fmain.c melee check).
+                let npc_reach = (2i16 + crate::game::combat::rand4(self.state.cycle) as i16).min(15);
+                let dx = (self.state.hero_x as i32 - npc.x as i32).abs();
+                let dy = (self.state.hero_y as i32 - npc.y as i32).abs();
+                if dx.max(dy) < npc_reach as i32 {
+                    // Brave dodge: NPC hits only if rand256() > brave (fmain.c:2707)
+                    let roll = crate::game::combat::melee_rand(256) as i16;
+                    if roll > self.state.brave {
+                        let damage = crate::game::combat::bitrand_damage(npc_weapon);
+                        self.state.vitality = (self.state.vitality - damage).max(0);
+                        counter_logs.push(format!("enemy hit hero for {} (brave dodge failed, roll={})", damage, roll));
+                    } else {
+                        counter_logs.push(format!("hero dodged (roll={} <= brave={})", roll, self.state.brave));
+                    }
+                }
+            }
+        }
+        for msg in counter_logs {
+            self.dlog(msg);
+        }
     }
 
     /// Advance all active actors by one frame.
