@@ -2301,8 +2301,53 @@ impl GameplayScene {
                     self.messages.push("Game paused. Press Space to continue.");
                 }
             }
+            GameAction::ToggleMenuMode => {
+                self.toggle_menu_mode();
+            }
+            GameAction::MenuUp => {
+                self.menu_cursor.navigate_up();
+            }
+            GameAction::MenuDown => {
+                self.menu_cursor.navigate_down();
+            }
+            GameAction::MenuLeft => {
+                self.menu_cursor.navigate_left();
+            }
+            GameAction::MenuRight => {
+                self.menu_cursor.navigate_right();
+            }
+            GameAction::MenuConfirm => {
+                let slot = self.menu_cursor.slot();
+                let action = self.menu.handle_click(slot);
+                self.dispatch_menu_action(action);
+            }
+            GameAction::MenuCancel => {
+                self.menu_cursor.active = false;
+                self.controller_mode = ControllerMode::Gameplay;
+            }
+            GameAction::UseCrystalVial => {
+                self.do_option(GameAction::CastSpell3); // ITEM_VIAL = stuff[11], spell slot 3
+            }
+            GameAction::UseOrb => {
+                self.do_option(GameAction::CastSpell4); // ITEM_ORB = stuff[12], spell slot 4
+            }
+            GameAction::UseTotem => {
+                self.do_option(GameAction::CastSpell5); // ITEM_TOTEM = stuff[13], spell slot 5
+            }
+            GameAction::UseSkull => {
+                self.do_option(GameAction::CastSpell7); // ITEM_SKULL = stuff[15], spell slot 7
+            }
             _ => {}
         }
+    }
+
+    fn toggle_menu_mode(&mut self) {
+        self.menu_cursor.active = !self.menu_cursor.active;
+        self.controller_mode = if self.menu_cursor.active {
+            ControllerMode::Menu
+        } else {
+            ControllerMode::Gameplay
+        };
     }
 
     /// Handle taking a specific world item. Ports fmain.c:3880-4000.
