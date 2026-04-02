@@ -218,17 +218,11 @@ impl Default for InputState {
 }
 
 /// Cursor state for controller-driven HI bar menu navigation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct MenuCursor {
     col: usize,   // 0 or 1 (HI bar is 2 columns)
     row: usize,   // 0–5 (6 rows)
     active: bool,  // true when in menu mode
-}
-
-impl Default for MenuCursor {
-    fn default() -> Self {
-        MenuCursor { col: 0, row: 0, active: false }
-    }
 }
 
 impl MenuCursor {
