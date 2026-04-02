@@ -66,6 +66,7 @@ pub fn fire_missile(
 /// Weapon type damage factors (from original weapon table).
 /// Index = weapon slot in stuff[], value = damage multiplier.
 /// Fists (slot 0) = 5: original fmain.c caps weapon index >= 8 to 5.
+#[deprecated(note = "Use bitrand_damage() instead")]
 pub const WEAPON_DAMAGE: &[u8] = &[
     5,  // fists (slot 0, unarmed — original caps touch attack to 5)
     3,  // dagger
@@ -97,6 +98,10 @@ pub struct CombatResult {
 
 /// Resolve one round of melee combat between hero and NPC.
 /// Weapon slot is index into stuff[]; 0 = fists.
+///
+/// **Deprecated:** Use `GameplayScene::apply_melee_combat()` instead.
+#[deprecated(note = "Use GameplayScene::apply_melee_combat() instead")]
+#[allow(deprecated)]
 pub fn resolve_combat(state: &mut GameState, npc: &mut Npc, hero_weapon_slot: usize) -> CombatResult {
     // Hero attacks enemy
     let weapon_factor = WEAPON_DAMAGE.get(hero_weapon_slot).copied().unwrap_or(1) as i16;
@@ -233,6 +238,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_combat_reduces_enemy_vitality() {
         let mut state = GameState::new();
         state.vitality = 50;
@@ -243,6 +249,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_combat_enemy_defeated() {
         let mut state = GameState::new();
         state.vitality = 200; // very strong hero
