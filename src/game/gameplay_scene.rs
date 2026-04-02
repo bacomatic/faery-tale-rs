@@ -168,7 +168,7 @@ use crate::game::debug_command::{BrotherId, DebugCommand, GodModeFlags, MagicEff
 use crate::game::gfx_effects::{TeleportEffect, WitchEffect};
 use crate::game::game_library::GameLibrary;
 use crate::game::game_state::GameState;
-use crate::game::key_bindings::{GameAction, KeyBindings};
+use crate::game::key_bindings::{ControllerBindings, ControllerMode, GameAction, KeyBindings};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 
 /// State for the key rebinding mode (F2 to enter, Escape to exit).
@@ -200,6 +200,43 @@ impl Default for InputState {
     }
 }
 
+/// Cursor state for controller-driven HI bar menu navigation.
+#[derive(Debug, Clone)]
+struct MenuCursor {
+    col: usize,   // 0 or 1 (HI bar is 2 columns)
+    row: usize,   // 0–5 (6 rows)
+    active: bool,  // true when in menu mode
+}
+
+impl Default for MenuCursor {
+    fn default() -> Self {
+        MenuCursor { col: 0, row: 0, active: false }
+    }
+}
+
+impl MenuCursor {
+    fn navigate_up(&mut self) {
+        self.row = if self.row == 0 { 5 } else { self.row - 1 };
+    }
+
+    fn navigate_down(&mut self) {
+        self.row = if self.row == 5 { 0 } else { self.row + 1 };
+    }
+
+    fn navigate_left(&mut self) {
+        self.col = if self.col == 0 { 1 } else { 0 };
+    }
+
+    fn navigate_right(&mut self) {
+        self.col = if self.col == 1 { 0 } else { 1 };
+    }
+
+    /// Returns the display slot index for MenuState::handle_click().
+    fn slot(&self) -> usize {
+        self.row * 2 + self.col
+    }
+}
+
 pub struct GameplayScene {
     pub state: Box<GameState>,
     pub messages: MessageQueue,
@@ -218,6 +255,9 @@ pub struct GameplayScene {
     adf_load_attempted: bool,
     rebinding: RebindingState,
     local_bindings: KeyBindings,
+    controller_mode: ControllerMode,
+    controller_bindings: ControllerBindings,
+    menu_cursor: MenuCursor,
     last_region_num: u8,
     palette_transition: Option<crate::game::palette::PaletteTransition>,
     last_indoor: bool,
@@ -317,6 +357,9 @@ impl GameplayScene {
             adf_load_attempted: false,
             rebinding: RebindingState { active: false, waiting_for_action: None },
             local_bindings: KeyBindings::default_bindings(),
+            controller_mode: ControllerMode::Gameplay,
+            controller_bindings: ControllerBindings::default_bindings(),
+            menu_cursor: MenuCursor::default(),
             last_region_num: u8::MAX,
             palette_transition: None,
             last_indoor: false,
