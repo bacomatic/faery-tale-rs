@@ -30,7 +30,7 @@
 
 Closes: #157 (partial — damage primitives)
 
-- [ ] **Step 1: Add `weapon` field to Npc struct**
+- [x] **Step 1: Add `weapon` field to Npc struct**
 
 In `src/game/npc.rs`, add `weapon: u8` to the `Npc` struct after the `speed` field:
 
@@ -71,7 +71,7 @@ pub fn from_bytes(data: &[u8]) -> Self {
 
 Note: For encounter-spawned NPCs, `weapon` is set by `spawn_encounter()` (Task 3), not from bytes.
 
-- [ ] **Step 2: Add `bitrand` helper to combat.rs**
+- [x] **Step 2: Add `bitrand` helper to combat.rs**
 
 In `src/game/combat.rs`, add a `bitrand` function that matches the original's `rand() & mask` pattern, using the existing `melee_rand` as the underlying RNG:
 
@@ -83,7 +83,7 @@ pub fn bitrand(mask: u32) -> u32 {
 }
 ```
 
-- [ ] **Step 3: Write failing test for `bitrand` range**
+- [x] **Step 3: Write failing test for `bitrand` range**
 
 In `src/game/combat.rs` tests module:
 
@@ -98,12 +98,12 @@ fn test_bitrand_range() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test test_bitrand_range -- --nocapture`
 Expected: PASS
 
-- [ ] **Step 5: Write `bitrand_damage` function**
+- [x] **Step 5: Write `bitrand_damage` function**
 
 In `src/game/combat.rs`, add the damage calculation matching the original `dohit()`:
 
@@ -117,7 +117,7 @@ pub fn bitrand_damage(weapon_index: u8) -> i16 {
 }
 ```
 
-- [ ] **Step 6: Write tests for `bitrand_damage`**
+- [x] **Step 6: Write tests for `bitrand_damage`**
 
 ```rust
 #[test]
@@ -149,12 +149,12 @@ fn test_bitrand_damage_fists() {
 }
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run: `cargo test test_bitrand_damage -- --nocapture`
 Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/game/npc.rs src/game/combat.rs
@@ -177,7 +177,7 @@ Closes: #157 (partial)"
 
 Closes: #157
 
-- [ ] **Step 1: Write failing test for brave dodge**
+- [x] **Step 1: Write failing test for brave dodge**
 
 In `src/game/combat.rs` tests module, add:
 
@@ -194,7 +194,7 @@ fn test_brave_dodge_blocks_at_max() {
 }
 ```
 
-- [ ] **Step 2: Rewrite `apply_melee_combat()` with original formula + brave dodge**
+- [x] **Step 2: Rewrite `apply_melee_combat()` with original formula + brave dodge**
 
 In `src/game/gameplay_scene.rs`, replace the damage calculation inside `apply_melee_combat()`. Change:
 
@@ -231,7 +231,7 @@ use crate::game::combat::{in_melee_range, bitrand_damage};
 
 Remove the now-unused `melee_rand` import if it was only used here.
 
-- [ ] **Step 3: Add enemy-attacks-hero path with brave dodge**
+- [x] **Step 3: Add enemy-attacks-hero path with brave dodge**
 
 After the existing hero-attacks-enemy loop in `apply_melee_combat()`, add the enemy counterattack. The original processes all figures in the same battle loop — enemies attack the hero each frame they're in range. Add after the `let _ = hit_any;` line:
 
@@ -262,12 +262,12 @@ if let Some(ref table) = self.npc_table {
 
 **Important:** This requires reading `self.npc_table` immutably after the mutable hero-attacks-enemy loop. The existing code uses `if let Some(ref mut table)` for the hero's attack loop. The enemy counterattack needs a separate `if let Some(ref table)` block after that loop completes.
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 Run: `cargo test -- --nocapture`
 Expected: All tests pass. The existing `test_combat_reduces_enemy_vitality` and `test_combat_enemy_defeated` tests use `resolve_combat()` which is a dead code path — they should still pass but are now testing legacy code. The live path is `apply_melee_combat()`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/gameplay_scene.rs
@@ -291,7 +291,7 @@ Closes: #157"
 
 Closes: #158
 
-- [ ] **Step 1: Add full encounter chart with per-type stats**
+- [x] **Step 1: Add full encounter chart with per-type stats**
 
 In `src/game/encounter.rs`, replace `ENCOUNTER_CHART` with the full chart from RESEARCH.md. Add above `ENCOUNTER_CHART`:
 
@@ -337,7 +337,7 @@ pub const WEAPON_PROBS: [u8; 32] = [
 ];
 ```
 
-- [ ] **Step 2: Add `actors_on_screen` helper and rewrite `spawn_encounter()`**
+- [x] **Step 2: Add `actors_on_screen` helper and rewrite `spawn_encounter()`**
 
 Replace the existing `spawn_encounter()` function:
 
@@ -410,7 +410,7 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
 }
 ```
 
-- [ ] **Step 3: Add gated `try_trigger_encounter` function**
+- [x] **Step 3: Add gated `try_trigger_encounter` function**
 
 Replace `should_encounter()` with a gated function that checks all original conditions:
 
@@ -473,7 +473,7 @@ fn rand64_from_tick(tick: u32) -> u32 {
 }
 ```
 
-- [ ] **Step 4: Update `spawn_encounter_group` to use new signature**
+- [x] **Step 4: Update `spawn_encounter_group` to use new signature**
 
 Update `spawn_encounter_group` to accept `encounter_type` and `tick`:
 
@@ -507,7 +507,7 @@ pub fn spawn_encounter_group(
 }
 ```
 
-- [ ] **Step 5: Update tests**
+- [x] **Step 5: Update tests**
 
 Replace the existing encounter tests to match new signatures:
 
@@ -622,12 +622,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `cargo test encounter -- --nocapture`
 Expected: All encounter tests pass.
 
-- [ ] **Step 7: Wire new encounter system into gameplay_scene.rs**
+- [x] **Step 7: Wire new encounter system into gameplay_scene.rs**
 
 In `src/game/gameplay_scene.rs`:
 
@@ -672,12 +672,12 @@ if self.in_encounter_zone {
 
 **Note:** This requires `self.state.xtype` to exist. If `xtype` is not yet a field on `GameState`, add `pub xtype: u16` initialized to `0`. Check if it already exists first.
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
 Run: `cargo test -- --nocapture`
 Expected: All tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/game/encounter.rs src/game/gameplay_scene.rs
@@ -702,7 +702,7 @@ Closes: #158"
 
 Closes: #159
 
-- [ ] **Step 1: Replace walking-only frame selection with fighting-aware logic**
+- [x] **Step 1: Replace walking-only frame selection with fighting-aware logic**
 
 In `src/game/gameplay_scene.rs`, in the Y-sorted render pass's `RenderKind::Hero` branch, find the 3-line frame calculation (approximately line 4017–4019):
 
@@ -725,17 +725,17 @@ let frame = if let Some(ActorState::Fighting(fight_state)) = hero_state {
 };
 ```
 
-- [ ] **Step 2: Run the game to visually verify**
+- [x] **Step 2: Run the game to visually verify**
 
 Run: `cargo run -- --debug --skip-intro`
 Test: Press Numpad 0 to attack. The hero sprite should now cycle through fighting frames (weapon swing animation). Hold a direction while fighting — hero should face that direction while swinging, without moving.
 
-- [ ] **Step 3: Run all tests**
+- [x] **Step 3: Run all tests**
 
 Run: `cargo test`
 Expected: All tests pass (no unit tests specifically cover the render path, but ensure no regressions).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene.rs
@@ -755,7 +755,7 @@ Closes: #159"
 **Files:**
 - Modify: `src/game/combat.rs` (remove/deprecate `resolve_combat`, update `WEAPON_DAMAGE`)
 
-- [ ] **Step 1: Mark `resolve_combat()` and old `WEAPON_DAMAGE` as deprecated**
+- [x] **Step 1: Mark `resolve_combat()` and old `WEAPON_DAMAGE` as deprecated**
 
 `resolve_combat()` is a dead code path — the live combat runs through `apply_melee_combat()` in gameplay_scene.rs. Rather than deleting it (which would break the existing tests that call it), mark it deprecated and leave a comment:
 
@@ -781,12 +781,12 @@ fn test_combat_reduces_enemy_vitality() {
 fn test_combat_enemy_defeated() {
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `cargo test`
 Expected: All tests pass, no deprecation warnings in test output.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/game/combat.rs
