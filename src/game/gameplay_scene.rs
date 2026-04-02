@@ -2822,7 +2822,7 @@ impl GameplayScene {
                 let hero_y = self.state.hero_y as i16;
                 if let Some(ref mut table) = self.npc_table {
                     let spawned = crate::game::encounter::spawn_encounter_group(
-                        table, zone_idx, hero_x, hero_y,
+                        table, zone_idx, hero_x, hero_y, self.state.tick_counter,
                     );
                     self.dlog(format!("forced encounter: {} enemies", spawned));
                 } else {
@@ -2838,7 +2838,7 @@ impl GameplayScene {
                 if let Some(ref mut table) = self.npc_table {
                     if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
                         let mut npc = crate::game::encounter::spawn_encounter(
-                            zone_idx, hero_x + 48, hero_y,
+                            zone_idx, hero_x + 48, hero_y, self.state.tick_counter,
                         );
                         npc.npc_type = requested_type;
                         npc.race = match requested_type {
@@ -3763,16 +3763,26 @@ impl Scene for GameplayScene {
         }
 
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
-        if self.in_encounter_zone && crate::game::encounter::should_encounter(self.state.tick_counter) {
-            if let Some(ref mut table) = self.npc_table {
-                if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
-                    let zone_idx = self.state.region_num as usize;
-                    *slot = crate::game::encounter::spawn_encounter(
-                        zone_idx,
+        if self.in_encounter_zone {
+            let trigger = self.npc_table.as_ref().and_then(|table| {
+                crate::game::encounter::try_trigger_encounter(
+                    self.state.tick_counter,
+                    table,
+                    self.state.hero_x as i16,
+                    self.state.hero_y as i16,
+                    self.state.xtype,
+                    self.state.region_num,
+                )
+            });
+            if let Some(encounter_type) = trigger {
+                if let Some(ref mut table) = self.npc_table {
+                    crate::game::encounter::spawn_encounter_group(
+                        table,
+                        encounter_type,
                         self.state.hero_x as i16,
                         self.state.hero_y as i16,
+                        self.state.tick_counter,
                     );
-                    self.dlog("ambush triggered".to_string());
                 }
             }
         }
