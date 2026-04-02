@@ -3355,35 +3355,17 @@ impl Scene for GameplayScene {
                     _ => false,
                 }
             }
-            // Controller button press: map to game actions via ControllerBindings
             Event::ControllerButtonDown { button, .. } => {
-                use sdl2::controller::Button;
-                match button {
-                    Button::DPadUp    => { self.input.up    = true; true }
-                    Button::DPadDown  => { self.input.down  = true; true }
-                    Button::DPadLeft  => { self.input.left  = true; true }
-                    Button::DPadRight => { self.input.right = true; true }
-                    Button::A         => { self.do_option(GameAction::Fight);     true }
-                    Button::X         => { self.do_option(GameAction::Inventory); true }
-                    Button::Y         => { self.do_option(GameAction::Look);      true }
-                    Button::B         => { self.do_option(GameAction::UseItem);   true }
-                    Button::LeftShoulder  => { self.do_option(GameAction::CastSpell1); true }
-                    Button::RightShoulder => { self.do_option(GameAction::CastSpell2); true }
-                    Button::Start     => { self.do_option(GameAction::Pause);     true }
-                    Button::Back      => { self.do_option(GameAction::Map);       true }
-                    _ => false,
+                if let Some(action) = self.controller_bindings.action_for_button(
+                    self.controller_mode, *button
+                ) {
+                    self.do_option(action);
                 }
+                true
             }
-            // Controller button release: clear movement inputs
-            Event::ControllerButtonUp { button, .. } => {
-                use sdl2::controller::Button;
-                match button {
-                    Button::DPadUp    => { self.input.up    = false; true }
-                    Button::DPadDown  => { self.input.down  = false; true }
-                    Button::DPadLeft  => { self.input.left  = false; true }
-                    Button::DPadRight => { self.input.right = false; true }
-                    _ => false,
-                }
+            Event::ControllerButtonUp { .. } => {
+                // DPad no longer controls movement (stick does); button-up is a no-op.
+                true
             }
             // Mouse click: close overlay views, or dispatch through MenuState button grid
             Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
