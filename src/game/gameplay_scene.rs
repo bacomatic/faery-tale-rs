@@ -1394,6 +1394,9 @@ impl GameplayScene {
         let topaz_font = resources.topaz_font;
         let compass_normal = resources.compass_normal;
         let compass_highlight = resources.compass_highlight;
+        let cursor_active = self.menu_cursor.active;
+        let cursor_col = self.menu_cursor.col;
+        let cursor_row = self.menu_cursor.row;
 
         let tc = canvas.texture_creator();
         if let Ok(mut hibar_tex) = tc.create_texture_target(
@@ -1455,6 +1458,18 @@ impl GameplayScene {
                             hc.copy(highlight_tex, src, dst).ok();
                         }
                     }
+                }
+
+                // Controller menu cursor outline
+                if cursor_active {
+                    let cursor_x = if cursor_col == 0 { 430i32 } else { 482i32 };
+                    let cursor_y = (cursor_row as i32) * 9 + 8;
+                    let cursor_w = 48u32; // button text width (6 chars × 8px)
+                    let cursor_h = 9u32;  // row height
+                    hc.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+                    hc.draw_rect(sdl2::rect::Rect::new(
+                        cursor_x - 1, cursor_y - 1, cursor_w + 2, cursor_h + 2
+                    )).ok();
                 }
             });
             canvas.copy(
