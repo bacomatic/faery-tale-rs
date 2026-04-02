@@ -4469,4 +4469,64 @@ mod tests {
         let stuff = [0u8; 35];
         assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
     }
+
+    #[test]
+    fn test_menu_cursor_navigation_wraps() {
+        let mut c = MenuCursor::default();
+        assert_eq!(c.row, 0);
+        assert_eq!(c.col, 0);
+
+        // Up from row 0 wraps to row 5
+        c.navigate_up();
+        assert_eq!(c.row, 5);
+
+        // Down from row 5 wraps to row 0
+        c.navigate_down();
+        assert_eq!(c.row, 0);
+
+        // Down increments normally
+        c.navigate_down();
+        assert_eq!(c.row, 1);
+
+        // Left from col 0 wraps to col 1
+        c.navigate_left();
+        assert_eq!(c.col, 1);
+
+        // Right from col 1 wraps to col 0
+        c.navigate_right();
+        assert_eq!(c.col, 0);
+    }
+
+    #[test]
+    fn test_menu_cursor_slot_calculation() {
+        let mut c = MenuCursor::default();
+        assert_eq!(c.slot(), 0); // (0,0) → slot 0
+
+        c.col = 1;
+        assert_eq!(c.slot(), 1); // (0,1) → slot 1
+
+        c.row = 2;
+        c.col = 0;
+        assert_eq!(c.slot(), 4); // (2,0) → slot 4
+
+        c.row = 5;
+        c.col = 1;
+        assert_eq!(c.slot(), 11); // (5,1) → slot 11
+    }
+
+    #[test]
+    fn test_menu_cursor_position_persists() {
+        let mut c = MenuCursor::default();
+        c.navigate_down();
+        c.navigate_down();
+        c.navigate_right();
+        assert_eq!(c.row, 2);
+        assert_eq!(c.col, 1);
+
+        // Deactivate and reactivate — position should persist
+        c.active = false;
+        c.active = true;
+        assert_eq!(c.row, 2);
+        assert_eq!(c.col, 1);
+    }
 }
