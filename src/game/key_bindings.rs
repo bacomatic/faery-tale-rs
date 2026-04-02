@@ -298,30 +298,70 @@ impl Default for KeyBindings {
     fn default() -> Self { Self::default_bindings() }
 }
 
-/// Maps SDL2 game controller buttons to game actions.
+/// Maps SDL2 game controller buttons to game actions, with separate maps
+/// for Gameplay and Menu modes.
 #[derive(Debug, Clone)]
 pub struct ControllerBindings {
-    bindings: HashMap<Button, GameAction>,
+    gameplay: HashMap<Button, GameAction>,
+    menu: HashMap<Button, GameAction>,
 }
 
 impl ControllerBindings {
     pub fn default_bindings() -> Self {
-        let mut m = HashMap::new();
         use Button::*;
-        m.insert(DPadUp,    GameAction::MoveUp);
-        m.insert(DPadDown,  GameAction::MoveDown);
-        m.insert(DPadLeft,  GameAction::MoveLeft);
-        m.insert(DPadRight, GameAction::MoveRight);
-        m.insert(A,         GameAction::Confirm);
-        m.insert(B,         GameAction::Cancel);
-        m.insert(Start,     GameAction::Menu);
-        m.insert(Back,      GameAction::Inventory);
-        ControllerBindings { bindings: m }
+
+        let mut gameplay = HashMap::new();
+        // Face buttons
+        gameplay.insert(A,         GameAction::Fight);
+        gameplay.insert(B,         GameAction::Take);
+        gameplay.insert(X,         GameAction::BuyFood);  // BuyFood doubles as Eat
+        gameplay.insert(Y,         GameAction::Look);
+        // Bumpers — weapon cycling
+        gameplay.insert(LeftShoulder,  GameAction::WeaponPrev);
+        gameplay.insert(RightShoulder, GameAction::WeaponNext);
+        // DPad — magic quick-select
+        gameplay.insert(DPadUp,    GameAction::UseCrystalVial);
+        gameplay.insert(DPadDown,  GameAction::UseOrb);
+        gameplay.insert(DPadLeft,  GameAction::UseTotem);
+        gameplay.insert(DPadRight, GameAction::UseSkull);
+        // Start/Back/Stick clicks
+        gameplay.insert(Start,     GameAction::ToggleMenuMode);
+        gameplay.insert(Back,      GameAction::Map);
+        gameplay.insert(LeftStick, GameAction::Inventory);
+
+        let mut menu = HashMap::new();
+        // Face buttons
+        menu.insert(A,         GameAction::MenuConfirm);
+        menu.insert(B,         GameAction::MenuCancel);
+        menu.insert(X,         GameAction::BuyFood);  // Eat still works in menu
+        menu.insert(Y,         GameAction::Look);     // Look still works in menu
+        // Bumpers — weapon cycling (unchanged)
+        menu.insert(LeftShoulder,  GameAction::WeaponPrev);
+        menu.insert(RightShoulder, GameAction::WeaponNext);
+        // DPad — menu navigation
+        menu.insert(DPadUp,    GameAction::MenuUp);
+        menu.insert(DPadDown,  GameAction::MenuDown);
+        menu.insert(DPadLeft,  GameAction::MenuLeft);
+        menu.insert(DPadRight, GameAction::MenuRight);
+        // Start exits menu mode too
+        menu.insert(Start,     GameAction::ToggleMenuMode);
+        menu.insert(Back,      GameAction::Map);
+        menu.insert(LeftStick, GameAction::Inventory);
+
+        ControllerBindings { gameplay, menu }
     }
 
-    pub fn action_for_button(&self, btn: Button) -> Option<GameAction> {
-        self.bindings.get(&btn).copied()
+    /// Look up the action for a button in the given mode.
+    pub fn action_for_button(&self, mode: ControllerMode, btn: Button) -> Option<GameAction> {
+        match mode {
+            ControllerMode::Gameplay => self.gameplay.get(&btn).copied(),
+            ControllerMode::Menu => self.menu.get(&btn).copied(),
+        }
     }
+}
+
+impl Default for ControllerBindings {
+    fn default() -> Self { Self::default_bindings() }
 }
 
 #[cfg(test)]
@@ -345,5 +385,117 @@ mod tests {
         let mut kb = KeyBindings::default_bindings();
         kb.set_binding(GameAction::MoveUp, vec![Keycode::Kp8]);
         assert_eq!(kb.action_for_key(Keycode::Kp8), Some(GameAction::MoveUp));
+    }
+
+    #[test]
+    fn test_controller_gameplay_mode_dpad_maps_to_magic() {
+        let cb = ControllerBindings::default_bindings();
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::DPadUp),
+            Some(GameAction::UseCrystalVial)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::DPadDown),
+            Some(GameAction::UseOrb)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::DPadLeft),
+            Some(GameAction::UseTotem)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::DPadRight),
+            Some(GameAction::UseSkull)
+        );
+    }
+
+    #[test]
+    fn test_controller_menu_mode_dpad_maps_to_navigation() {
+        let cb = ControllerBindings::default_bindings();
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::DPadUp),
+            Some(GameAction::MenuUp)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::DPadDown),
+            Some(GameAction::MenuDown)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::DPadLeft),
+            Some(GameAction::MenuLeft)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::DPadRight),
+            Some(GameAction::MenuRight)
+        );
+    }
+
+    #[test]
+    fn test_controller_face_buttons_gameplay() {
+        let cb = ControllerBindings::default_bindings();
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::A),
+            Some(GameAction::Fight)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::B),
+            Some(GameAction::Take)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::X),
+            Some(GameAction::BuyFood) // BuyFood doubles as Eat when not near shop
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::Y),
+            Some(GameAction::Look)
+        );
+    }
+
+    #[test]
+    fn test_controller_bumpers_both_modes() {
+        let cb = ControllerBindings::default_bindings();
+        // Gameplay mode
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::LeftShoulder),
+            Some(GameAction::WeaponPrev)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::RightShoulder),
+            Some(GameAction::WeaponNext)
+        );
+        // Menu mode — same
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::LeftShoulder),
+            Some(GameAction::WeaponPrev)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::RightShoulder),
+            Some(GameAction::WeaponNext)
+        );
+    }
+
+    #[test]
+    fn test_controller_menu_mode_a_b_are_confirm_cancel() {
+        let cb = ControllerBindings::default_bindings();
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::A),
+            Some(GameAction::MenuConfirm)
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::B),
+            Some(GameAction::MenuCancel)
+        );
+    }
+
+    #[test]
+    fn test_controller_unknown_button_returns_none() {
+        let cb = ControllerBindings::default_bindings();
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Gameplay, Button::Guide),
+            None
+        );
+        assert_eq!(
+            cb.action_for_button(ControllerMode::Menu, Button::Guide),
+            None
+        );
     }
 }
