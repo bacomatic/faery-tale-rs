@@ -192,6 +192,20 @@ pub fn melee_rand(max: u32) -> u32 {
     nanos % max
 }
 
+/// Port of original `bitrand(mask)` — `rand() & mask`.
+/// For combat: `bitrand(2)` returns 0, 1, or 2 (mask 0b10 → values 0..=2).
+pub fn bitrand(mask: u32) -> u32 {
+    melee_rand(u32::MAX) & mask
+}
+
+/// Melee damage from original dohit() formula.
+/// `weapon_index`: attacker's weapon value (1=dirk..5=wand, ≥8 capped to 5).
+/// Returns `wt + bitrand(2)`: weapon base + random 0–2 bonus.
+pub fn bitrand_damage(weapon_index: u8) -> i16 {
+    let wt = if weapon_index >= 8 { 5 } else { weapon_index };
+    wt as i16 + bitrand(2) as i16
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,6 +220,7 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
+            ..Default::default()
         }
     }
 
@@ -261,5 +276,41 @@ mod tests {
         let slot = fire_missile(&mut missiles, 0, 0, 2, 5, true);
         assert!(slot.is_some());
         assert!(missiles[slot.unwrap()].active);
+    }
+
+    #[test]
+    fn test_bitrand_range() {
+        for _ in 0..1000 {
+            let v = bitrand(2);
+            assert!(v <= 2, "bitrand(2) returned {v}, expected 0-2");
+        }
+    }
+
+    #[test]
+    fn test_bitrand_damage_range() {
+        // Dirk (weapon 1): damage should be 1, 2, or 3
+        for _ in 0..100 {
+            let d = bitrand_damage(1);
+            assert!((1..=3).contains(&d), "dirk damage {d} out of range 1-3");
+        }
+        // Sword (weapon 3): damage should be 3, 4, or 5
+        for _ in 0..100 {
+            let d = bitrand_damage(3);
+            assert!((3..=5).contains(&d), "sword damage {d} out of range 3-5");
+        }
+        // Touch attack (weapon 8+): capped to 5, so damage 5, 6, or 7
+        for _ in 0..100 {
+            let d = bitrand_damage(10);
+            assert!((5..=7).contains(&d), "touch damage {d} out of range 5-7");
+        }
+    }
+
+    #[test]
+    fn test_bitrand_damage_fists() {
+        // weapon 0 = no weapon: damage should be 0, 1, or 2
+        for _ in 0..100 {
+            let d = bitrand_damage(0);
+            assert!((0..=2).contains(&d), "fist damage {d} out of range 0-2");
+        }
     }
 }

@@ -48,6 +48,7 @@ pub fn spawn_encounter(region_zone_idx: usize, x: i16, y: i16) -> Npc {
         gold: 5 + region_zone_idx as i16,
         speed: 2 + (region_zone_idx / 4) as u8,
         active: true,
+        ..Default::default()
     }
 }
 

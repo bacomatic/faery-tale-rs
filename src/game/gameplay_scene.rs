@@ -1391,6 +1391,7 @@ impl GameplayScene {
         let cursor_active = self.menu_cursor.active;
         let cursor_col = self.menu_cursor.col;
         let cursor_row = self.menu_cursor.row;
+        let topaz_baseline = topaz_font.get_font().baseline as i32;
 
         let tc = canvas.texture_creator();
         if let Ok(mut hibar_tex) = tc.create_texture_target(
@@ -1457,7 +1458,7 @@ impl GameplayScene {
                 // Controller menu cursor outline
                 if cursor_active {
                     let cursor_x = if cursor_col == 0 { 430i32 } else { 482i32 };
-                    let cursor_y = (cursor_row as i32) * 9 + 8;
+                    let cursor_y = (cursor_row as i32) * 9 + 8 - topaz_baseline;
                     let cursor_w = 48u32; // button text width (6 chars × 8px)
                     let cursor_h = 9u32;  // row height
                     hc.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
@@ -4312,6 +4313,7 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
+            ..Default::default()
         };
 
         let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize]; // all transparent
@@ -4360,6 +4362,7 @@ mod tests {
             x: 80, y: 80,
             vitality: 10, gold: 0, speed: 0,
             active: true,
+            ..Default::default()
         };
 
         let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize];

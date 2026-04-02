@@ -67,6 +67,7 @@ pub struct Npc {
     pub vitality: i16,
     pub gold: i16,
     pub speed: u8,
+    pub weapon: u8,
     pub active: bool,
 }
 
@@ -85,6 +86,7 @@ impl Npc {
             vitality: i16::from_be_bytes([data[6], data[7]]),
             gold: i16::from_be_bytes([data[8], data[9]]),
             speed: data[10],
+            weapon: data[11],
             active: data[0] != NPC_TYPE_NONE,
         }
     }
@@ -244,6 +246,7 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
+            ..Default::default()
         };
         let _ = npc.tick(100, 0, None, false); // hero at x=100
         assert!(npc.x > 0); // should have moved toward hero
@@ -272,6 +275,7 @@ mod tests {
             gold: 0,
             speed: 2,
             active: true,
+            ..Default::default()
         };
         let old_x = npc.x;
         // Hero is directly east at (1100, 1000).
