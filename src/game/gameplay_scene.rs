@@ -288,8 +288,6 @@ pub struct GameplayScene {
     witch_effect: WitchEffect,
     teleport_effect: TeleportEffect,
     pub missiles: [crate::game::combat::Missile; crate::game::combat::MAX_MISSILES],
-    /// Frames remaining before next melee swing can land (rate-limits continuous fight).
-    fight_cooldown: u32,
     /// Frames remaining before an archer NPC can fire again.
     archer_cooldown: u32,
     /// Debug log lines buffered for the debug window. Drained each frame by main loop.
@@ -384,7 +382,6 @@ impl GameplayScene {
             witch_effect: WitchEffect::new(),
             teleport_effect: TeleportEffect::new(),
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
-            fight_cooldown: 0,
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             quit_requested: false,
@@ -547,13 +544,6 @@ impl GameplayScene {
                 player.state = ActorState::Fighting(next_state);
             }
 
-            if self.fight_cooldown > 0 {
-                self.fight_cooldown -= 1;
-            }
-            if self.fight_cooldown == 0 {
-                self.apply_melee_combat();
-                self.fight_cooldown = 10;
-            }
             return;
         }
 
@@ -2116,31 +2106,8 @@ impl GameplayScene {
                     self.messages.push("Nothing to attack.");
                 }
             }
-            // Fight (joystick fire / Space key): melee swing using direction-sensitive
-            // proximity check (npc-103, mirrors fmain.c keyfight + dohit path).
             GameAction::Fight => {
-                use crate::game::game_state::{ITEM_BOW, ITEM_ARROWS};
-                let has_bow = self.state.stuff()[ITEM_BOW] > 0;
-                let has_arrows = self.state.stuff()[ITEM_ARROWS] > 0;
-                if has_bow && has_arrows {
-                    // Bow equipped: fire arrow instead of melee swing (fmain.c weapon==4 → SHOOT1).
-                    use crate::game::combat::fire_missile;
-                    fire_missile(
-                        &mut self.missiles,
-                        self.state.hero_x as i32,
-                        self.state.hero_y as i32,
-                        self.state.facing,
-                        5,
-                        true,
-                    );
-                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
-                    self.messages.push("You shoot an arrow!");
-                    let wealth = self.state.wealth;
-                    self.menu.set_options(self.state.stuff(), wealth);
-                } else {
-                    self.apply_melee_combat();
-                }
-                self.fight_cooldown = 10;
+                self.input.fight = true;
             }
             GameAction::UseItem => {
                 self.messages.push("Nothing to use.");
@@ -3221,6 +3188,8 @@ impl GameplayScene {
             NPC_TYPE_ORC      => Some(6),
             NPC_TYPE_WRAITH   => Some(7),
             NPC_TYPE_SKELETON => Some(7),
+            NPC_TYPE_SNAKE | NPC_TYPE_SPIDER | NPC_TYPE_DKNIGHT => Some(8),
+            NPC_TYPE_LORAII | NPC_TYPE_NECROMANCER => Some(9),
             NPC_TYPE_RAFT     => Some(4),
             _                 => Some(6), // unknown enemy types default to ogre sheet
         }
@@ -3493,12 +3462,22 @@ impl Scene for GameplayScene {
                 if let Some(action) = self.controller_bindings.action_for_button(
                     self.controller_mode, *button
                 ) {
-                    self.do_option(action);
+                    if action == GameAction::Fight {
+                        self.input.fight = true;
+                    } else {
+                        self.do_option(action);
+                    }
                 }
                 true
             }
-            Event::ControllerButtonUp { .. } => {
-                // DPad no longer controls movement (stick does); button-up is a no-op.
+            Event::ControllerButtonUp { button, .. } => {
+                if let Some(action) = self.controller_bindings.action_for_button(
+                    self.controller_mode, *button
+                ) {
+                    if action == GameAction::Fight {
+                        self.input.fight = false;
+                    }
+                }
                 true
             }
             // Mouse click: close overlay views, or dispatch through MenuState button grid

@@ -91,6 +91,23 @@ pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
 
+    // Initialize game controller subsystem so SDL2 generates ControllerButton/Axis events.
+    let game_controller_subsystem = sdl_context.game_controller()
+        .map_err(|e| format!("Could not initialize game controller subsystem: {}", e))?;
+    let mut controllers: Vec<sdl2::controller::GameController> = Vec::new();
+    // Open any controllers that are already connected at startup.
+    for i in 0..game_controller_subsystem.num_joysticks().unwrap_or(0) {
+        if game_controller_subsystem.is_game_controller(i) {
+            match game_controller_subsystem.open(i) {
+                Ok(c) => {
+                    println!("Controller connected: {}", c.name());
+                    controllers.push(c);
+                }
+                Err(e) => println!("Warning: could not open controller {}: {}", i, e),
+            }
+        }
+    }
+
 
     let mut width = 640;
     let mut height = 480;
@@ -300,6 +317,21 @@ pub fn main() -> Result<(), String> {
                     println!("Key UP: scancode = {:?}, mod {}", scancode, keymod);
                 },
                  */
+                Event::ControllerDeviceAdded { which, .. } => {
+                    if game_controller_subsystem.is_game_controller(which) {
+                        match game_controller_subsystem.open(which) {
+                            Ok(c) => {
+                                println!("Controller connected: {}", c.name());
+                                controllers.push(c);
+                            }
+                            Err(e) => println!("Warning: could not open controller {}: {}", which, e),
+                        }
+                    }
+                }
+                Event::ControllerDeviceRemoved { which, .. } => {
+                    controllers.retain(|c| c.instance_id() != which);
+                    println!("Controller disconnected (id {})", which);
+                }
                 _ => {}
             }
         }

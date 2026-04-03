@@ -1564,16 +1564,92 @@ NPC AI runs on `anim_list[3..anix-1]` (figures beyond the 3 reserved for player,
 - `EGG_SEEK(10)` — snakes seeking turtle eggs
 - `DOOR_SEEK(11)` / `DOOR_LET(12)` — DKnight blocking/permitting door passage
 
-**`set_course(object, target_x, target_y, mode)`**:
-- `mode 1`: ATTACK1 (add deviation if dist < 40)
-- `mode 2`: ATTACK2 (add deviation if dist < 30)
-- `mode 3`: FLEE (reverse xdir/ydir)
-- `mode 4`: diagonal-ok (no 2:1 bias reduction)
-- `mode 5`: stand still after movement (no WALKING state)
-- `mode 6`: use target_x/y directly as delta instead of computing offset from figure
-- Direction LUT `com2[9] = {0,1,2,7,9,3,6,5,4}` maps `(xdir,ydir)` to the 8 compass directions; `j=9` → `STILL`
+### `do_tactic(i, tactic)` — Probabilistic tactic execution
 
-**`proxcheck(x, y, i)`**:
+Source: `fmain2.c:2075–2135`.
+
+Called from the main AI decision loop. Rolls `r = !(rand() & 7)` (~12.5% / 1-in-8 chance) to gate direction recalculation. When `an->goal == ATTACK2`, upgrades to `r = !(rand() & 3)` (~25% / 1-in-4). This means NPCs only re-aim toward the hero occasionally — the rest of the time they keep walking in their current direction. This is the single biggest contributor to the "drunken walk" feel of the original NPC movement.
+
+| Tactic | On trigger (r==true) | Mode | Notes |
+|--------|---------------------|------|-------|
+| PURSUE | `set_course(i, hero_x, hero_y, 0)` | Smart seek | Default melee chase |
+| SHOOT | 50% chance fire arrow if in line-of-sight band; else `set_course(mode 0)` | 0 or 5 | Range check: xd<8 or yd<8 or diagonal band ±5–7px |
+| RANDOM | `facing = rand() & 7`; `state = WALKING` | N/A | No `set_course` call |
+| BUMBLE_SEEK | `set_course(i, hero_x, hero_y, 4)` | Diagonal-ok | Ignores 2:1 axis suppression |
+| BACKUP | `set_course(i, hero_x, hero_y, 3)` | Flee | Reverses direction vectors |
+| FOLLOW | `set_course(i, leader_x, leader_y+20, 0)` | Smart seek | Targets `leader` NPC; self-follow → RANDOM |
+| EVADE | `set_course(i, other_npc_x, other_npc_y+20, 2)` | Deviation | BUG: target NPC index is `i+i` (doubles); mode 2 adds ±2 deviation |
+| EGG_SEEK | `set_course(i, 23087, 5667, 0)`; `state = WALKING` | Smart seek | Fixed world coords for turtle nest |
+
+### AI decision loop — tactic selection
+
+Source: `fmain.c:2500–2595`.
+
+Runs once per frame for each hostile NPC (`i = 2..anix`). Skips CARRIER (waypoint movement only) and SETFIG (stationary dialogue) types.
+
+**Recalculation gate (`r`):**
+- Default: `r = !bitrand(15)` → ~6.25% (1-in-16)
+- For `mode & 2 == 0` (ATTACK1, ARCHER1): upgrades to `r = !rand4()` → ~25%
+- For ATTACK2/ARCHER2: stays at 6.25%
+
+**Tactic decision tree** (only when `r == true`):
+1. Snake + turtle_eggs → `EGG_SEEK`
+2. No weapon → `mode = CONFUSED`, `tactic = RANDOM`
+3. Low vitality (<6) + 50% → `EVADE`
+4. Archer + too close (xd<40, yd<30) → `BACKUP`
+5. Archer + in range (xd<70, yd<70) → `SHOOT`
+6. Archer + far away → `PURSUE`
+7. Default melee → `PURSUE`
+
+**Close-range melee transition** (separate from tactic tree):
+```
+thresh = 14 - mode;  // ATTACK1→14, ATTACK2→13, ARCHER1→11, ARCHER2→10
+if (race == 7) thresh = 16;  // DKnight extended range
+if (!(weapon & 4) && xd < thresh && yd < thresh) {
+    set_course(i, hero_x, hero_y, 0);
+    state = FIGHTING;  // bypass do_tactic, go straight to melee
+}
+```
+
+**Non-hostile modes:**
+- `FLEE` → `do_tactic(i, BACKUP)`
+- `FOLLOWER` → `do_tactic(i, FOLLOW)`
+- `STAND` → `set_course(direct)` then `state = STILL`
+- `WAIT` → `state = STILL`
+
+### `set_course(object, target_x, target_y, mode)` — Direction computation
+
+Source: `fmain2.c` (search for `set_course`).
+
+Computes facing direction from current position to target, with mode-dependent behavior:
+
+**Smart-seek axis suppression** (modes 0–3):
+```
+if (xabs >> 1) > yabs: zero ydir  // X distance >> Y → go horizontal
+if (yabs >> 1) > xabs: zero xdir  // Y distance >> X → go vertical
+```
+This prevents diagonal zigzag when one axis dominates.
+
+**Facing deviation:**
+- Mode 1: deviation=1 when dist<40 (slight collision avoidance)
+- Mode 2: deviation=2 when dist<30 (aggressive collision avoidance)
+- Applied randomly: 50% add, 50% subtract from facing
+
+**Direction lookup** (`com2[9]`):
+```
+com2[] = {0, 1, 2, 7, 9, 3, 6, 5, 4}
+Index = 4 - 3*ydir - xdir  (ydir,xdir ∈ {-1,0,+1})
+```
+Maps `(xdir, ydir)` sign pair to 8-way facing. Result `9` = STILL (at target).
+
+**Mode-specific:**
+- Mode 0: smart seek (default)
+- Mode 3: FLEE — negate both `xdir` and `ydir` before lookup
+- Mode 4: BUMBLE — skip axis suppression, allow true diagonals
+- Mode 5: set facing but do NOT set state to WALKING (aiming pose)
+- Mode 6: interpret target_x/y as raw delta vector, not world position
+
+**`proxcheck(x, y, i)`** — Terrain + figure collision:
 - Checks terrain collision via `prox(x, y)` (tile-based, returns non-zero for blocked)
 - Wraith (race 2) bypasses tile collision
 - Hero (i==0) can pass water/sink tiles (prox values 8, 9 are cleared)

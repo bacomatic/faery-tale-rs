@@ -2,7 +2,11 @@
 //! Ports encounter_chart[] and encounter probability logic from fmain.c.
 
 use crate::game::actor::{Goal, Tactic};
-use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_GHOST, NPC_TYPE_WRAITH, RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE};
+use crate::game::npc::{
+    Npc, NpcState, NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_GHOST, NPC_TYPE_WRAITH,
+    NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_DKNIGHT, NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER,
+    RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE,
+};
 
 /// encounter_chart[11]: enemy type per region/zone index.
 /// Index 0-10 maps to different region types; values are NPC type codes.
@@ -43,6 +47,23 @@ pub const ENCOUNTER_CHART_FULL: [EnemyTypeStats; 11] = [
     EnemyTypeStats { hp: 12, arms: 6, clever: 1, treasure: 0, cfile: 9 },  // 8: Loraii
     EnemyTypeStats { hp: 50, arms: 5, clever: 0, treasure: 0, cfile: 9 },  // 9: Necromancer
     EnemyTypeStats { hp: 4,  arms: 0, clever: 0, treasure: 0, cfile: 9 },  // 10: Woodcutter
+];
+
+/// Map encounter_chart index → NPC type constant for sprite rendering.
+/// In the original game, all enemies had type=ENEMY and race=encounter_index;
+/// the Rust port uses npc_type for cfile lookup, so we need this translation.
+const ENCOUNTER_TO_NPC_TYPE: [u8; 11] = [
+    NPC_TYPE_ORC,          // 0: Ogre
+    NPC_TYPE_ORC,          // 1: Orcs
+    NPC_TYPE_WRAITH,       // 2: Wraith
+    NPC_TYPE_SKELETON,     // 3: Skeleton
+    NPC_TYPE_SNAKE,        // 4: Snake
+    NPC_TYPE_GHOST,        // 5: Salamander (shares cfile 7 with ghost)
+    NPC_TYPE_SPIDER,       // 6: Spider
+    NPC_TYPE_DKNIGHT,      // 7: DKnight
+    NPC_TYPE_LORAII,       // 8: Loraii
+    NPC_TYPE_NECROMANCER,  // 9: Necromancer
+    NPC_TYPE_ORC,          // 10: Woodcutter (placeholder)
 ];
 
 /// Weapon probability table from fmain.c weapon_probs[].
@@ -158,7 +179,7 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
     };
 
     Npc {
-        npc_type: etype as u8,
+        npc_type: ENCOUNTER_TO_NPC_TYPE[etype],
         race,
         x: hero_x.saturating_add(50),
         y: hero_y.saturating_add(50),
@@ -223,6 +244,20 @@ mod tests {
     fn test_spawn_encounter_wraith_race() {
         let npc = spawn_encounter(2, 0, 0, 42);
         assert_eq!(npc.race, RACE_WRAITH);
+    }
+
+    #[test]
+    fn test_spawn_encounter_npc_types() {
+        // Verify encounter-spawned NPCs get the correct npc_type for cfile lookup.
+        // Bug: previously stored raw encounter_chart index as npc_type,
+        // causing wraith→bird sprites, skeleton→turtle sprites, etc.
+        assert_eq!(spawn_encounter(0, 0, 0, 1).npc_type, NPC_TYPE_ORC);       // Ogre
+        assert_eq!(spawn_encounter(1, 0, 0, 1).npc_type, NPC_TYPE_ORC);       // Orcs
+        assert_eq!(spawn_encounter(2, 0, 0, 1).npc_type, NPC_TYPE_WRAITH);    // Wraith
+        assert_eq!(spawn_encounter(3, 0, 0, 1).npc_type, NPC_TYPE_SKELETON);  // Skeleton
+        assert_eq!(spawn_encounter(4, 0, 0, 1).npc_type, NPC_TYPE_SNAKE);     // Snake
+        assert_eq!(spawn_encounter(5, 0, 0, 1).npc_type, NPC_TYPE_GHOST);     // Salamander
+        assert_eq!(spawn_encounter(6, 0, 0, 1).npc_type, NPC_TYPE_SPIDER);    // Spider
     }
 
     #[test]

@@ -17,10 +17,15 @@ pub const NPC_TYPE_GHOST: u8 = 5;
 pub const NPC_TYPE_ORC: u8 = 6;
 pub const NPC_TYPE_WRAITH: u8 = 7;
 pub const NPC_TYPE_SKELETON: u8 = 8;
-/// Container NPC type (chest/barrel — drops items on defeat).
-pub const NPC_TYPE_CONTAINER: u8 = 0x80;
 /// Raft carrier NPC type (player-107).
 pub const NPC_TYPE_RAFT: u8 = 9;
+pub const NPC_TYPE_SNAKE: u8 = 10;
+pub const NPC_TYPE_SPIDER: u8 = 11;
+pub const NPC_TYPE_DKNIGHT: u8 = 12;
+pub const NPC_TYPE_LORAII: u8 = 13;
+pub const NPC_TYPE_NECROMANCER: u8 = 14;
+/// Container NPC type (chest/barrel — drops items on defeat).
+pub const NPC_TYPE_CONTAINER: u8 = 0x80;
 
 /// NPC race/behavior codes.
 pub const RACE_NORMAL: u8 = 0;
