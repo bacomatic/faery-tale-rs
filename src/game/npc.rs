@@ -37,6 +37,8 @@ pub const RACE_SNAKE: u8 = 4;
 pub const RACE_SHOPKEEPER: u8 = 0x88;
 /// Beggar race code (from fmain.c do_option GIVE case: race 0x8d).
 pub const RACE_BEGGAR: u8 = 0x8d;
+pub const RACE_NECROMANCER: u8 = 9;
+pub const RACE_WITCH: u8 = 0x89;
 
 /// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
 #[derive(Debug, Clone, PartialEq, Default)]

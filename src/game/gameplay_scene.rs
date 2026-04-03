@@ -46,6 +46,21 @@ fn advance_fight_state(state: u8, tick: u32) -> u8 {
     FIGHT_TRANS_LIST[idx][col]
 }
 
+/// Compute pixel offset for pushback in a facing direction.
+fn push_offset(facing: u8, distance: i32) -> (i32, i32) {
+    match facing & 7 {
+        0 => (0, -distance),
+        1 => (distance, -distance),
+        2 => (distance, 0),
+        3 => (distance, distance),
+        4 => (0, distance),
+        5 => (-distance, distance),
+        6 => (-distance, 0),
+        7 => (-distance, -distance),
+        _ => (0, 0),
+    }
+}
+
 /// Map an SDL Keycode to the corresponding menu key byte used by LETTER_LIST.
 /// Numpad movement keys (Kp8/7/9/1/3) are excluded; only top-row Num8 maps to b'8'.
 fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
@@ -1285,103 +1300,103 @@ impl GameplayScene {
         }
     }
 
-    /// Apply one hit — stub for now, implemented in Task 3.
-    fn apply_hit(&mut self, _attacker: usize, _target: usize, _facing: u8, _damage: i16) {
-        self.dlog("apply_hit stub called".to_string());
-    }
+    /// Apply one melee hit from attacker to target.
+    /// Ports fmain2.c dohit(i, j, fc, wt).
+    fn apply_hit(&mut self, attacker_idx: usize, target_idx: usize, facing: u8, damage: i16) {
+        use crate::game::npc::{RACE_NECROMANCER, RACE_WITCH};
 
-    /// Apply one melee swing against nearby enemy NPCs (npc-103).
-    /// Ports fmain.c sword proximity loop + dohit + checkdead.
-    fn apply_melee_combat(&mut self) {
-        use crate::game::combat::in_melee_range;
-        use crate::game::debug_command::GodModeFlags;
+        if target_idx == 0 {
+            // NPC hitting hero
+            self.state.vitality = (self.state.vitality - damage).max(0);
+            self.dlog(format!("enemy hit hero for {}", damage));
 
-        // Hero weapon value from actor[0] (default 1 = fists).
-        let arms = self.state.actors.first().map_or(1u8, |a| a.weapon.max(1));
-        let brave = self.state.brave;
-        let facing = self.state.facing;
-        let hero_x = self.state.hero_x as i16;
-        let hero_y = self.state.hero_y as i16;
-        let one_hit_kill = self.state.god_mode.contains(GodModeFlags::ONE_HIT_KILL);
-        let insane_reach = self.state.god_mode.contains(GodModeFlags::INSANE_REACH);
+            // Pushback: hero pushed 2px in attacker's facing direction
+            let (px, py) = push_offset(facing, 2);
+            self.state.hero_x = (self.state.hero_x as i32 + px).clamp(0, 32767) as u16;
+            self.state.hero_y = (self.state.hero_y as i32 + py).clamp(0, 32767) as u16;
 
-        let mut hit_any = false;
-        if let Some(ref mut table) = self.npc_table {
-            for npc in table.npcs.iter_mut().filter(|n| n.active) {
-                if !in_melee_range(hero_x, hero_y, facing, arms, brave,
-                                   npc.x, npc.y, insane_reach) {
-                    continue;
+            // checkdead for hero
+            if self.state.vitality <= 0 {
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.state = crate::game::actor::ActorState::Dying;
                 }
-                // Original dohit() formula: wt + bitrand(2).
-                // wt = weapon index, capped to 5 if >= 8 (touch attacks).
-                let damage: i16 = if one_hit_kill {
-                    npc.vitality
-                } else {
-                    crate::game::combat::bitrand_damage(arms)
-                };
-                npc.vitality -= damage;
-                if npc.vitality < 0 { npc.vitality = 0; }
-                // checkdead: vitality <= 0 → mark dead, award brave (fmain.c checkdead).
-                if npc.vitality == 0 {
-                    npc.active = false;
-                    // brave++ on enemy kill (original: if i != 0 { brave++; }).
-                    self.state.brave = (self.state.brave + 1).min(100);
-                    // npc-106: roll treasure_probs[] drop on kill.
-                    let npc_snap = npc.clone();
-                    let tick = self.state.tick_counter;
-                    if let Some(drop) = crate::game::loot::roll_treasure(&npc_snap, tick) {
-                        let weapon_slot = crate::game::loot::award_treasure(&mut self.state, &drop);
-                        // Auto-equip dropped weapon if it's better than current (fmain.c body search).
-                        if let Some(w) = weapon_slot {
-                            let cur = self.state.actors.first().map_or(0, |a| a.weapon);
-                            if w > cur {
-                                if let Some(player) = self.state.actors.first_mut() {
-                                    player.weapon = w;
-                                }
-                                self.dlog(format!("found better weapon type {}", w));
+                self.state.luck = (self.state.luck - 5).max(0);
+                self.dlog("hero killed in combat".to_string());
+            }
+        } else {
+            // Hero (or NPC) hitting an NPC
+            let attacker_weapon = if attacker_idx == 0 {
+                self.state.actors.first().map_or(1, |a| a.weapon)
+            } else {
+                self.state.actors.get(attacker_idx).map_or(1, |a| a.weapon)
+            };
+
+            // Work inside the npc_table borrow, collect results to act on after.
+            let mut logs: Vec<String> = Vec::new();
+            let mut dead_npc: Option<crate::game::npc::Npc> = None;
+
+            if let Some(ref mut table) = self.npc_table {
+                let npc_idx = target_idx.saturating_sub(2);
+                if npc_idx < table.npcs.len() {
+                    let npc = &mut table.npcs[npc_idx];
+
+                    // Immunity guard: Necromancer/Witch immune unless weapon >= 4
+                    let actual_damage = if (npc.race == RACE_NECROMANCER || npc.race == RACE_WITCH)
+                        && attacker_weapon < 4
+                    {
+                        0
+                    } else {
+                        damage
+                    };
+
+                    npc.vitality -= actual_damage;
+                    if npc.vitality < 0 { npc.vitality = 0; }
+
+                    // Pushback on target: 2px in attacker facing
+                    let (px, py) = push_offset(facing, 2);
+                    npc.x = (npc.x as i32 + px).clamp(0, 32767) as i16;
+                    npc.y = (npc.y as i32 + py).clamp(0, 32767) as i16;
+
+                    // If hero is attacker, hero also pushes forward 2px
+                    if attacker_idx == 0 {
+                        let (rx, ry) = push_offset(facing, 2);
+                        self.state.hero_x = (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
+                        self.state.hero_y = (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                    }
+
+                    if actual_damage > 0 {
+                        logs.push(format!("combat hit npc {} for {}", npc_idx, actual_damage));
+                    }
+
+                    // checkdead
+                    if npc.vitality == 0 {
+                        npc.active = false;
+                        self.state.brave = (self.state.brave + 1).min(100);
+                        dead_npc = Some(npc.clone());
+                        logs.push(format!("enemy slain, bravery now {}", self.state.brave));
+                    }
+                }
+            }
+
+            // Deferred work outside the npc_table borrow
+            for msg in logs {
+                self.dlog(msg);
+            }
+            if let Some(npc_snap) = dead_npc {
+                let tick = self.state.tick_counter;
+                if let Some(drop) = crate::game::loot::roll_treasure(&npc_snap, tick) {
+                    let weapon_slot = crate::game::loot::award_treasure(&mut self.state, &drop);
+                    if let Some(w) = weapon_slot {
+                        let cur = self.state.actors.first().map_or(0, |a| a.weapon);
+                        if w > cur {
+                            if let Some(player) = self.state.actors.first_mut() {
+                                player.weapon = w;
                             }
+                            self.dlog(format!("found better weapon type {}", w));
                         }
-                        self.dlog(format!("enemy slain, bravery now {}", self.state.brave));
-                    } else {
-                        self.dlog(format!(
-                            "enemy slain, bravery now {}", self.state.brave
-                        ));
-                    }
-                } else {
-                    self.dlog(format!("combat hit for {}", damage));
-                }
-                hit_any = true;
-                break; // one hit per swing (fmain.c breaks after first hit)
-            }
-        }
-        let _ = hit_any; // no "miss" message — matches original silent miss
-
-        // Enemy counterattack — fmain.c:2688-2709 for i > 0.
-        // Each active enemy in melee range swings at hero once per combat tick.
-        // Brave dodge: NPC hits only if rand256() > brave (fmain.c:2707).
-        let mut counter_logs: Vec<String> = Vec::new();
-        if let Some(ref table) = self.npc_table {
-            for npc in table.npcs.iter().filter(|n| n.active) {
-                let npc_weapon = npc.weapon.max(1);
-                // NPC reach: bv = 2 + rand4(), capped at 15 (fmain.c melee check).
-                let npc_reach = (2i16 + crate::game::combat::rand4(self.state.cycle) as i16).min(15);
-                let dx = (self.state.hero_x as i32 - npc.x as i32).abs();
-                let dy = (self.state.hero_y as i32 - npc.y as i32).abs();
-                if dx.max(dy) < npc_reach as i32 {
-                    // Brave dodge: NPC hits only if rand256() > brave (fmain.c:2707)
-                    let roll = crate::game::combat::melee_rand(256) as i16;
-                    if roll > self.state.brave {
-                        let damage = crate::game::combat::bitrand_damage(npc_weapon);
-                        self.state.vitality = (self.state.vitality - damage).max(0);
-                        counter_logs.push(format!("enemy hit hero for {} (brave dodge failed, roll={})", damage, roll));
-                    } else {
-                        counter_logs.push(format!("hero dodged (roll={} <= brave={})", roll, self.state.brave));
                     }
                 }
             }
-        }
-        for msg in counter_logs {
-            self.dlog(msg);
         }
     }
 
