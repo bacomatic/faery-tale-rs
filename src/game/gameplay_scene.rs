@@ -3393,6 +3393,48 @@ impl GameplayScene {
         }
     }
 
+    /// Compute the sprite frame index for an NPC, matching fmain.c:2076–2108.
+    /// `npc_idx` is the NPC's index in the table (provides phase offset like original `cycle + i`).
+    /// Returns the frame index clamped to `num_frames`.
+    fn npc_animation_frame(
+        npc: &crate::game::npc::Npc,
+        npc_idx: usize,
+        cycle: u32,
+        num_frames: usize,
+    ) -> usize {
+        use crate::game::npc::{NpcState, RACE_WRAITH, RACE_SNAKE};
+
+        let frame_base = Self::facing_to_frame_base(npc.facing);
+
+        let raw = match npc.state {
+            NpcState::Walking => {
+                if npc.race == RACE_WRAITH {
+                    // Wraiths: no walk cycle (fmain.c:2079 — race 2 skips cycle offset)
+                    frame_base
+                } else if npc.race == RACE_SNAKE {
+                    // Snakes walking: 2-frame, changes every 2 ticks (fmain.c:2081)
+                    frame_base + ((cycle as usize / 2) & 1)
+                } else {
+                    // Default: 8-frame walk cycle with per-NPC phase offset (fmain.c:1863)
+                    frame_base + ((cycle as usize + npc_idx) & 7)
+                }
+            }
+            NpcState::Still => {
+                if npc.race == RACE_SNAKE {
+                    // Snakes still: slow 2-frame idle (fmain.c:2079)
+                    frame_base + (cycle as usize & 1)
+                } else {
+                    // Default still: static frame (fmain.c:~1900 — diroffs[d] + 1)
+                    frame_base + 1
+                }
+            }
+            // Dying/Dead/Sinking/Fighting/Shooting: static base frame
+            _ => frame_base,
+        };
+
+        raw % num_frames
+    }
+
     /// Blit all visible actors (hero + enemy NPCs) onto the map framebuf (sprite-104).
     /// Called immediately after mr.compose() so actors appear on top of tiles.
     fn blit_actors_to_framebuf(
@@ -4734,6 +4776,93 @@ mod tests {
         c.active = true;
         assert_eq!(c.row, 2);
         assert_eq!(c.col, 1);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_walking_default() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+        let npc = Npc {
+            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+            facing: 4, state: NpcState::Walking, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 2, 3, 64), 5);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 3, 6, 64), 1);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_still_default() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+        let npc = Npc {
+            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+            facing: 4, state: NpcState::Still, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 1);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 1);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_wraith_no_cycle() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_WRAITH, RACE_WRAITH};
+        let npc = Npc {
+            npc_type: NPC_TYPE_WRAITH, race: RACE_WRAITH,
+            facing: 4, state: NpcState::Walking, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 50, 64), 0);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_snake_walking() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
+        let npc = Npc {
+            npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
+            facing: 4, state: NpcState::Walking, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 2, 64), 1);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 3, 64), 1);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_snake_still() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
+        let npc = Npc {
+            npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
+            facing: 4, state: NpcState::Still, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 1);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_wraps_short_sheet() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+        let npc = Npc {
+            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+            facing: 4, state: NpcState::Walking, active: true,
+            ..Default::default()
+        };
+        let frame = GameplayScene::npc_animation_frame(&npc, 0, 6, 5);
+        assert!(frame < 5, "frame {} must be < num_frames 5", frame);
+    }
+
+    #[test]
+    fn test_npc_animation_frame_dying() {
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+        let npc = Npc {
+            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+            facing: 4, state: NpcState::Dying, active: true,
+            ..Default::default()
+        };
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 0);
     }
 }
 
