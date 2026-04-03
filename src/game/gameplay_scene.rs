@@ -4711,3 +4711,20 @@ mod tests {
         assert_eq!(c.col, 1);
     }
 }
+
+#[cfg(test)]
+mod combat_tests {
+    use super::push_offset;
+
+    #[test]
+    fn test_push_offset_directions() {
+        assert_eq!(push_offset(0, 2), (0, -2));   // N
+        assert_eq!(push_offset(2, 2), (2, 0));    // E
+        assert_eq!(push_offset(4, 2), (0, 2));    // S
+        assert_eq!(push_offset(6, 2), (-2, 0));   // W
+        assert_eq!(push_offset(1, 2), (2, -2));   // NE
+        assert_eq!(push_offset(3, 2), (2, 2));    // SE
+        assert_eq!(push_offset(5, 2), (-2, 2));   // SW
+        assert_eq!(push_offset(7, 2), (-2, -2));  // NW
+    }
+}

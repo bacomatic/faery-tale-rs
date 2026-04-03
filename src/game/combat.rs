@@ -358,4 +358,52 @@ mod tests {
             assert!((0..=2).contains(&d), "fist damage {d} out of range 0-2");
         }
     }
+
+    #[test]
+    fn test_weapon_tip_offset_north() {
+        let (tx, ty) = weapon_tip(100, 100, 0, 3);
+        assert!(ty < 100, "north tip_y={} should be < 100", ty);
+        assert!((tx - 100).abs() <= 4, "north tip_x={} too far from 100", tx);
+    }
+
+    #[test]
+    fn test_weapon_tip_offset_east() {
+        let (tx, ty) = weapon_tip(100, 100, 2, 3);
+        assert!(tx > 100, "east tip_x={} should be > 100", tx);
+        assert!((ty - 100).abs() <= 4, "east tip_y={} too far from 100", ty);
+    }
+
+    #[test]
+    fn test_combat_reach_hero() {
+        let r = combat_reach(true, 50, 0);
+        assert_eq!(r, 7);
+    }
+
+    #[test]
+    fn test_combat_reach_hero_cap() {
+        let r = combat_reach(true, 250, 0);
+        assert_eq!(r, 15);
+    }
+
+    #[test]
+    fn test_combat_reach_hero_min() {
+        let r = combat_reach(true, 0, 0);
+        assert_eq!(r, 5);
+    }
+
+    #[test]
+    fn test_combat_reach_npc_range() {
+        for tick in 0..100u32 {
+            let r = combat_reach(false, 0, tick);
+            assert!((2..=5).contains(&r), "npc reach {} out of range at tick {}", r, tick);
+        }
+    }
+
+    #[test]
+    fn test_rand256_range() {
+        for _ in 0..1000 {
+            let r = rand256();
+            assert!((0..=255).contains(&r), "rand256 returned {}", r);
+        }
+    }
 }
