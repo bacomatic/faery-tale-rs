@@ -690,9 +690,22 @@ impl GameplayScene {
             let mut final_x = new_x;
             let mut final_y = new_y;
             let mut final_facing = facing;
+            // Gather live NPC positions for actor collision (mirrors original proxcheck actor loop).
+            let npc_positions: Vec<(i32, i32)> = if self.state.flying == 0 && !self.state.on_raft {
+                self.npc_table.as_ref()
+                    .map(|t| t.npcs.iter()
+                        .filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead)
+                        .map(|n| (n.x as i32, n.y as i32))
+                        .collect())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
             let mut can_move = !turtle_blocked
                 && (self.state.flying != 0 || self.state.on_raft
-                    || collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32));
+                    || (collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)
+                        && !collision::actor_collides(new_x as i32, new_y as i32, &npc_positions)));
 
             // Direction deviation (wall-sliding): fmain.c checkdev1/checkdev2.
             // Only for diagonal directions when the original direction was blocked.
@@ -713,7 +726,8 @@ impl GameplayScene {
                     let dev1 = (facing + 1) & 7;
                     let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
                     let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
-                    if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32) {
+                    if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32)
+                        && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions) {
                         final_x = dev1_x;
                         final_y = dev1_y;
                         final_facing = dev1;
@@ -723,7 +737,8 @@ impl GameplayScene {
                         let dev2 = (dev1.wrapping_sub(2)) & 7;
                         let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
                         let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
-                        if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32) {
+                        if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32)
+                            && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions) {
                             final_x = dev2_x;
                             final_y = dev2_y;
                             final_facing = dev2;
@@ -1477,10 +1492,20 @@ impl GameplayScene {
                 do_tactic(npc, hero_x, hero_y, leader_idx, &positions, tick);
             }
 
-            // 2. Movement execution pass.
-            for npc in &mut table.npcs {
-                if !npc.active { continue; }
-                npc.tick(self.map_world.as_ref(), indoor);
+            // 2. Movement execution pass (sequential — later NPCs see earlier updates).
+            for i in 0..table.npcs.len() {
+                if !table.npcs[i].active { continue; }
+                if table.npcs[i].state != NpcState::Walking { continue; }
+                // Build collision list: hero + all other active, alive NPCs.
+                let mut others: Vec<(i32, i32)> = Vec::with_capacity(crate::game::npc::MAX_NPCS + 1);
+                others.push((hero_x, hero_y));
+                for (j, other) in table.npcs.iter().enumerate() {
+                    if j == i { continue; }
+                    if !other.active { continue; }
+                    if other.state == NpcState::Dead { continue; }
+                    others.push((other.x as i32, other.y as i32));
+                }
+                table.npcs[i].tick_with_actors(self.map_world.as_ref(), indoor, &others);
             }
 
             // 3. Battleflag: true if any active NPC within 300px.
