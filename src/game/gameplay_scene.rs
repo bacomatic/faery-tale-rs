@@ -1296,93 +1296,93 @@ impl GameplayScene {
         }
     }
 
-    /// Advance all active actors by one frame.
-    /// Actor 0 is always the player; actors 1..anix are NPCs with goal-based AI.
+    /// Advance all active NPCs by one frame using the AI pipeline.
+    /// Actor 0 is always the player; actors 1..anix are synced from NPC state.
     fn update_actors(&mut self, _delta: u32) {
+        use crate::game::npc_ai::{select_tactic, do_tactic};
+        use crate::game::npc::NpcState;
+
         let hero_x = self.state.hero_x as i32;
         let hero_y = self.state.hero_y as i32;
-        // Skip actor 0 (player); apply goal-based movement to NPC actors.
-        let anix = self.state.anix;
-        for actor in self.state.actors[1..anix.max(1)].iter_mut() {
-            if !actor.is_active() {
-                continue;
-            }
-            let ax = actor.abs_x as i32;
-            let ay = actor.abs_y as i32;
-            let dx = hero_x - ax;
-            let dy = hero_y - ay;
-            let (vx, vy): (i16, i16) = match actor.goal {
-                // Hostile: move toward hero (ATTACK1/ATTACK2/ARCHER1/ARCHER2/GUARD)
-                Goal::Attack1 | Goal::Attack2 | Goal::Archer1 | Goal::Archer2 | Goal::Guard => {
-                    if dx.abs() > dy.abs() {
-                        (dx.signum() as i16, 0)
-                    } else {
-                        (0, dy.signum() as i16)
-                    }
-                }
-                // Flee: move directly away from hero
-                Goal::Flee => {
-                    if dx.abs() > dy.abs() {
-                        (-(dx.signum() as i16), 0)
-                    } else {
-                        (0, -(dy.signum() as i16))
-                    }
-                }
-                // Follower/Leader: follow hero but stop when adjacent
-                Goal::Follower | Goal::Leader => {
-                    if dx.abs() > 32 || dy.abs() > 32 {
-                        (dx.signum() as i16, dy.signum() as i16)
-                    } else {
-                        (0, 0)
-                    }
-                }
-                // Stand, Wait, User, None: stationary
-                Goal::Stand | Goal::User | Goal::None => (0, 0),
-            };
-            actor.vel_x = vx;
-            actor.vel_y = vy;
-            actor.abs_x = actor.abs_x.wrapping_add_signed(vx);
-            actor.abs_y = actor.abs_y.wrapping_add_signed(vy);
-            actor.moving = vx != 0 || vy != 0;
-        }
+        let hero_dead = self.state.vitality <= 0;
+        let xtype = self.state.xtype;
+        let indoor = self.state.region_num >= 8;
+        let tick = self.state.tick_counter;
+
         if let Some(ref mut table) = self.npc_table {
-            let _hero_x = self.state.hero_x as i16; // TODO: Task 7 will use these
-            let _hero_y = self.state.hero_y as i16;
-            let indoor = self.state.region_num >= 8;
-            let mut any_approach = false;
+            // Snapshot NPC positions for Follow/Evade targeting.
+            let positions: Vec<(i32, i32)> = table.npcs.iter()
+                .map(|n| (n.x as i32, n.y as i32))
+                .collect();
+
+            // Determine leader: first active hostile NPC.
+            let leader_idx = table.npcs.iter().position(|n| {
+                n.active && matches!(n.goal,
+                    Goal::Attack1 | Goal::Attack2 | Goal::Archer1 | Goal::Archer2)
+            });
+
+            // 1. AI decision pass.
             for npc in &mut table.npcs {
-                npc.tick(self.map_world.as_ref(), indoor);
-                let adjacent = false; // TODO: Task 7 rewires update_actors with AI pipeline
-                if adjacent && npc.active {
-                    any_approach = true;
-                }
+                if !npc.active { continue; }
+                select_tactic(npc, hero_x, hero_y, hero_dead, leader_idx, xtype, tick);
+                do_tactic(npc, hero_x, hero_y, leader_idx, &positions, tick);
             }
-            if any_approach {
-                self.dlog("enemy approaches".to_string());
+
+            // 2. Movement execution pass.
+            for npc in &mut table.npcs {
+                if !npc.active { continue; }
+                npc.tick(self.map_world.as_ref(), indoor);
+            }
+
+            // 3. Battleflag: true if any active NPC within 300px.
+            let any_nearby = table.npcs.iter().any(|n| {
+                n.active
+                    && (n.x as i32 - hero_x).abs() < 300
+                    && (n.y as i32 - hero_y).abs() < 300
+            });
+            self.state.battleflag = any_nearby;
+
+            // 4. Sync NPC positions → Actor array for rendering.
+            let anix = self.state.anix;
+            let mut actor_idx = 1; // Skip actor 0 (player).
+            for npc in &table.npcs {
+                if !npc.active { continue; }
+                if actor_idx >= anix { break; }
+                let actor = &mut self.state.actors[actor_idx];
+                actor.abs_x = npc.x as u16;
+                actor.abs_y = npc.y as u16;
+                actor.facing = npc.facing;
+                actor.moving = npc.state == NpcState::Walking;
+                actor.state = match npc.state {
+                    NpcState::Walking => crate::game::actor::ActorState::Walking,
+                    NpcState::Fighting => crate::game::actor::ActorState::Fighting(0),
+                    NpcState::Shooting => crate::game::actor::ActorState::Shooting(0),
+                    NpcState::Dying => crate::game::actor::ActorState::Dying,
+                    NpcState::Dead => crate::game::actor::ActorState::Dead,
+                    NpcState::Sinking => crate::game::actor::ActorState::Sinking,
+                    NpcState::Still => crate::game::actor::ActorState::Still,
+                };
+                actor_idx += 1;
             }
         }
 
-        // npc-105: Archer NPCs (Goal::Archer1/Archer2) fire missiles toward hero.
-        // Rate-limited: one shot per NPC group every 30 ticks (~1s at 30Hz),
-        // mirroring fmain.c state >= SHOOT1 with ms->speed = 3.
+        // 5. Archer missile firing (from NPC Shooting state).
         if self.archer_cooldown > 0 {
             self.archer_cooldown -= 1;
-        } else {
+        } else if let Some(ref table) = self.npc_table {
             let hero_x = self.state.hero_x as i32;
             let hero_y = self.state.hero_y as i32;
-            let anix = self.state.anix;
-            for actor in self.state.actors[1..anix.max(1)].iter() {
-                if !actor.is_active() { continue; }
-                if !matches!(actor.goal, Goal::Archer1 | Goal::Archer2) { continue; }
-                let ax = actor.abs_x as i32;
-                let ay = actor.abs_y as i32;
-                // Fire only when hero is within 150px (Chebyshev distance).
+            for npc in &table.npcs {
+                if !npc.active { continue; }
+                if npc.state != NpcState::Shooting { continue; }
+                let ax = npc.x as i32;
+                let ay = npc.y as i32;
                 if (hero_x - ax).abs().max((hero_y - ay).abs()) > 150 { continue; }
                 let dir = facing_toward(ax, ay, hero_x, hero_y);
                 use crate::game::combat::fire_missile;
                 fire_missile(&mut self.missiles, ax, ay, dir, 3, false);
                 self.archer_cooldown = 15;
-                break; // one archer fires per cycle
+                break;
             }
         }
     }
