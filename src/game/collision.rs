@@ -89,6 +89,20 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
     !is_hard_block_right(right_terrain) && !is_hard_block_left(left_terrain)
 }
 
+/// Check if position (x, y) collides with any actor in the `others` list.
+/// Uses the original game's bounding box: |dx| < 11, |dy| < 9.
+/// Mirrors fmain2.c proxcheck() actor-vs-actor loop (lines 395–427).
+pub fn actor_collides(x: i32, y: i32, others: &[(i32, i32)]) -> bool {
+    for &(ox, oy) in others {
+        let dx = x - ox;
+        let dy = y - oy;
+        if dx > -11 && dx < 11 && dy > -9 && dy < 9 {
+            return true;
+        }
+    }
+    false
+}
+
 /// Octagonal distance approximation from fmain2.c:446-463.
 /// Used by nearest_fig() for NPC/object proximity checks.
 /// Returns: if x > 2*y → x; if y > 2*x → y; else (x+y)*5/7.
@@ -306,5 +320,49 @@ mod newxy_tests {
     fn test_newx_diagonal() {
         // dir=1 (NE), dist=2: dx = 2*2/2 = 2
         assert_eq!(newx(100, 1, 2), 102);
+    }
+}
+
+#[cfg(test)]
+mod actor_collision_tests {
+    use super::*;
+
+    #[test]
+    fn test_actor_collides_overlapping() {
+        let others = vec![(100i32, 100i32)];
+        assert!(actor_collides(100, 100, &others));
+    }
+
+    #[test]
+    fn test_actor_collides_within_bbox() {
+        let others = vec![(100i32, 100i32)];
+        assert!(actor_collides(110, 108, &others)); // dx=10, dy=8
+    }
+
+    #[test]
+    fn test_actor_collides_at_boundary() {
+        let others = vec![(100i32, 100i32)];
+        assert!(!actor_collides(111, 100, &others)); // dx=11 — outside
+        assert!(!actor_collides(100, 109, &others)); // dy=9 — outside
+    }
+
+    #[test]
+    fn test_actor_collides_negative_direction() {
+        let others = vec![(100i32, 100i32)];
+        assert!(actor_collides(90, 92, &others));   // dx=-10, dy=-8
+        assert!(!actor_collides(89, 100, &others));  // dx=-11 — outside
+        assert!(!actor_collides(100, 91, &others));  // dy=-9 — outside
+    }
+
+    #[test]
+    fn test_actor_collides_empty_list() {
+        assert!(!actor_collides(100, 100, &[]));
+    }
+
+    #[test]
+    fn test_actor_collides_multiple_actors() {
+        let others = vec![(50i32, 50i32), (200, 200)];
+        assert!(actor_collides(55, 55, &others));
+        assert!(!actor_collides(100, 100, &others));
     }
 }
