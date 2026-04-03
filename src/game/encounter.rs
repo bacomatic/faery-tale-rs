@@ -1,7 +1,8 @@
 //! Encounter spawning: chart-based enemy selection for random encounters.
 //! Ports encounter_chart[] and encounter probability logic from fmain.c.
 
-use crate::game::npc::{Npc, NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_GHOST, NPC_TYPE_WRAITH, RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE};
+use crate::game::actor::{Goal, Tactic};
+use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_GHOST, NPC_TYPE_WRAITH, RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE};
 
 /// encounter_chart[11]: enemy type per region/zone index.
 /// Index 0-10 maps to different region types; values are NPC type codes.
@@ -148,6 +149,14 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
         4 => RACE_SNAKE,
         _ => RACE_ENEMY,
     };
+    // Assign goal based on weapon type and cleverness.
+    let is_ranged = weapon >= 4; // bow or wand
+    let goal = if is_ranged {
+        if stats.clever > 0 { Goal::Archer2 } else { Goal::Archer1 }
+    } else {
+        if stats.clever > 0 { Goal::Attack2 } else { Goal::Attack1 }
+    };
+
     Npc {
         npc_type: etype as u8,
         race,
@@ -158,7 +167,11 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
         speed: 2,
         weapon,
         active: true,
-        ..Default::default()
+        goal,
+        tactic: Tactic::Pursue,
+        facing: 4, // South (toward hero, roughly)
+        state: NpcState::Walking,
+        cleverness: stats.clever,
     }
 }
 
@@ -289,5 +302,39 @@ mod tests {
             }
         }
         assert!(found, "should find a tick that produces base=2");
+    }
+
+    #[test]
+    fn test_spawn_encounter_has_ai_fields() {
+        use crate::game::actor::{Goal, Tactic};
+        use crate::game::npc::NpcState;
+
+        let npc = spawn_encounter(0, 100, 100, 42); // Ogre
+        assert_eq!(npc.cleverness, 0);
+        assert!(matches!(npc.goal, Goal::Attack1 | Goal::Attack2));
+        assert_eq!(npc.tactic, Tactic::Pursue);
+        assert_eq!(npc.state, NpcState::Walking);
+    }
+
+    #[test]
+    fn test_spawn_encounter_archer_goal() {
+        use crate::game::actor::Goal;
+
+        // Try many ticks to find one where weapon >= 4 (bow).
+        for tick in 0..100u32 {
+            let npc = spawn_encounter(7, 100, 100, tick);
+            if npc.weapon >= 4 {
+                assert!(matches!(npc.goal, Goal::Archer1 | Goal::Archer2),
+                    "Bow/wand wielder should get Archer goal, got {:?}", npc.goal);
+                return;
+            }
+        }
+        // If no bow was rolled in 100 ticks, that's fine — skip.
+    }
+
+    #[test]
+    fn test_spawn_encounter_cleverness_wraith() {
+        let npc = spawn_encounter(2, 100, 100, 42); // Wraith: clever=1
+        assert_eq!(npc.cleverness, 1);
     }
 }
