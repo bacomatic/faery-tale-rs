@@ -2,6 +2,7 @@
 //! Ports the carrier/enemy table loading from fmain.c hdrive.c.
 
 use crate::game::adf::AdfDisk;
+use crate::game::actor::{Goal, Tactic};
 
 /// Maximum number of NPCs in any region (original limit).
 pub const MAX_NPCS: usize = 16;
@@ -57,6 +58,19 @@ fn direction_to_target(sx: i16, sy: i16, tx: i16, ty: i16) -> u8 {
     COM2[yi][xi]
 }
 
+/// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum NpcState {
+    #[default]
+    Still,
+    Walking,
+    Fighting,
+    Shooting,
+    Dying,
+    Dead,
+    Sinking,
+}
+
 /// An NPC/actor record.
 #[derive(Debug, Clone, Default)]
 pub struct Npc {
@@ -69,6 +83,11 @@ pub struct Npc {
     pub speed: u8,
     pub weapon: u8,
     pub active: bool,
+    pub goal: Goal,
+    pub tactic: Tactic,
+    pub facing: u8,
+    pub state: NpcState,
+    pub cleverness: u8,
 }
 
 impl Npc {
@@ -88,6 +107,11 @@ impl Npc {
             speed: data[10],
             weapon: data[11],
             active: data[0] != NPC_TYPE_NONE,
+            goal: Goal::None,
+            tactic: Tactic::None,
+            facing: 0,
+            state: NpcState::Still,
+            cleverness: 0,
         }
     }
 
@@ -292,5 +316,15 @@ mod tests {
         let (gold, _) = npc.defeat();
         assert!(!npc.active);
         assert_eq!(gold, 50);
+    }
+
+    #[test]
+    fn test_npc_ai_fields_default() {
+        let npc = Npc::default();
+        assert_eq!(npc.goal, Goal::None);
+        assert_eq!(npc.tactic, Tactic::None);
+        assert_eq!(npc.facing, 0);
+        assert_eq!(npc.state, NpcState::Still);
+        assert_eq!(npc.cleverness, 0);
     }
 }

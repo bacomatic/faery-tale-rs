@@ -158,6 +158,7 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
         speed: 2,
         weapon,
         active: true,
+        ..Default::default()
     }
 }
 
