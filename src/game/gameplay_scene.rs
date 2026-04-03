@@ -537,6 +537,8 @@ impl GameplayScene {
         // Exclusive fight branch — matches fmain.c where fighting is a separate
         // branch above walking. Movement is suppressed; only facing updates.
         if self.input.fight {
+            use crate::game::game_state::ITEM_ARROWS;
+
             let facing = match dir {
                 Direction::N  => 0u8, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
                 Direction::S  => 4,   Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
@@ -544,22 +546,65 @@ impl GameplayScene {
             };
             self.state.facing = facing;
 
-            let fight_state = match self.state.actors.first() {
-                Some(actor) => match actor.state {
-                    ActorState::Fighting(s) => s,
+            let hero_weapon = self.state.actors.first().map_or(1, |a| a.weapon);
+            let has_bow = hero_weapon == 4;
+            let has_arrows = self.state.stuff()[ITEM_ARROWS] > 0;
+
+            if has_bow && has_arrows {
+                // SHOOT1: aiming. Stay in Shooting state while button held.
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.facing = facing;
+                    player.moving = false;
+                    player.state = ActorState::Shooting(0);
+                }
+            } else {
+                // Melee fighting
+                let fight_state = match self.state.actors.first() {
+                    Some(actor) => match actor.state {
+                        ActorState::Fighting(s) => s,
+                        _ => 0,
+                    },
                     _ => 0,
-                },
-                _ => 0,
-            };
-            let next_state = advance_fight_state(fight_state, self.state.cycle);
+                };
+                let next_state = advance_fight_state(fight_state, self.state.cycle);
 
-            if let Some(player) = self.state.actors.first_mut() {
-                player.facing = facing;
-                player.moving = false;
-                player.state = ActorState::Fighting(next_state);
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.facing = facing;
+                    player.moving = false;
+                    player.state = ActorState::Fighting(next_state);
+                }
             }
-
             return;
+        }
+
+        // Bow release-to-fire: arrow fires on the frame input.fight goes false
+        // while hero is in Shooting state (SHOOT1 → SHOOT3 transition).
+        if let Some(player) = self.state.actors.first() {
+            if matches!(player.state, ActorState::Shooting(_)) {
+                use crate::game::game_state::ITEM_ARROWS;
+                use crate::game::combat::fire_missile;
+
+                if self.state.stuff()[ITEM_ARROWS] > 0 {
+                    fire_missile(
+                        &mut self.missiles,
+                        self.state.hero_x as i32,
+                        self.state.hero_y as i32,
+                        self.state.facing,
+                        5,
+                        true,
+                    );
+                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
+                    self.messages.push("You shoot an arrow!");
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
+                }
+
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.state = ActorState::Still;
+                    player.moving = false;
+                }
+                return;
+            }
         }
 
         // Per-direction base deltas from original xdir/ydir tables (fsubs.asm:1277-1278).
