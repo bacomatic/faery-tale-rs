@@ -47,6 +47,7 @@ pub mod tile_atlas;
 pub mod world_data;
 pub mod world_objects;
 pub mod npc;
+pub mod npc_ai;
 pub mod combat;
 pub mod doors;
 pub mod zones;
