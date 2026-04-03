@@ -99,8 +99,8 @@ pub struct CombatResult {
 /// Resolve one round of melee combat between hero and NPC.
 /// Weapon slot is index into stuff[]; 0 = fists.
 ///
-/// **Deprecated:** Use `GameplayScene::apply_melee_combat()` instead.
-#[deprecated(note = "Use GameplayScene::apply_melee_combat() instead")]
+/// **Deprecated:** Use `GameplayScene::run_combat_tick()` instead.
+#[deprecated(note = "Use GameplayScene::run_combat_tick() instead")]
 #[allow(deprecated)]
 pub fn resolve_combat(state: &mut GameState, npc: &mut Npc, hero_weapon_slot: usize) -> CombatResult {
     // Hero attacks enemy

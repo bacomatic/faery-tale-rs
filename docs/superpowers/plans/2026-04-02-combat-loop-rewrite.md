@@ -19,7 +19,7 @@ All attack triggers must set/clear `self.input.fight` instead of calling combat 
 **Files:**
 - Modify: `src/game/gameplay_scene.rs` (event handling ~lines 3494–3505, do_option ~lines 2121–2140)
 
-- [ ] **Step 1: Change controller button handling to set input.fight**
+- [x] **Step 1: Change controller button handling to set input.fight**
 
 Replace the `ControllerButtonDown` handler to set `input.fight` when the action is `GameAction::Fight`, and add fight-clear logic to `ControllerButtonUp`:
 
@@ -55,7 +55,7 @@ Change the `Event::ControllerButtonUp` arm (~line 3502):
             }
 ```
 
-- [ ] **Step 2: Change do_option(GameAction::Fight) to set input.fight**
+- [x] **Step 2: Change do_option(GameAction::Fight) to set input.fight**
 
 Replace the `GameAction::Fight` arm in `do_option()` (~line 2121) to just set the flag:
 
@@ -67,7 +67,7 @@ Replace the `GameAction::Fight` arm in `do_option()` (~line 2121) to just set th
 
 This covers any remaining code paths that dispatch `GameAction::Fight` through the action system (e.g., remapped keyboard bindings).
 
-- [ ] **Step 3: Remove fight_cooldown field**
+- [x] **Step 3: Remove fight_cooldown field**
 
 In the `GameplayScene` struct definition (~line 286), remove:
 
@@ -78,12 +78,12 @@ In the `GameplayScene` struct definition (~line 286), remove:
 
 And remove its initialization (search for `fight_cooldown: 0` or `fight_cooldown:` in the constructor/Default impl). Also remove any remaining references to `self.fight_cooldown` in the codebase (the ones in `apply_player_input()` and `do_option` — these will be cleaned up in Task 3 when `apply_melee_combat()` is replaced).
 
-- [ ] **Step 4: Build and fix compile errors**
+- [x] **Step 4: Build and fix compile errors**
 
 Run: `cargo build 2>&1 | head -60`
 Expected: May have compile errors from removed `fight_cooldown` references. Fix any remaining references by deleting the lines that read/write `fight_cooldown`. The `apply_melee_combat()` method and its calls will be removed in Task 3, so for now just comment out or stub the calls if needed to get a clean compile.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "combat: unify fight input routing through input.fight flag
@@ -104,7 +104,7 @@ Port the fmain.c combat loop (lines 2680–2730) as a unified per-frame combat t
 
 **Reference:** `original/fmain.c:2680–2730`, `RESEARCH.md` Combat System section.
 
-- [ ] **Step 1: Add weapon_tip_offset helper to combat.rs**
+- [x] **Step 1: Add weapon_tip_offset helper to combat.rs**
 
 Add a public helper that computes the weapon tip position with jitter, matching `newx/newy` in fmain.c:
 
@@ -154,7 +154,7 @@ pub fn rand8() -> u32 {
 }
 ```
 
-- [ ] **Step 2: Implement run_combat_tick() on GameplayScene**
+- [x] **Step 2: Implement run_combat_tick() on GameplayScene**
 
 Add the following method to `GameplayScene` in `src/game/gameplay_scene.rs`:
 
@@ -262,7 +262,7 @@ Add the following method to `GameplayScene` in `src/game/gameplay_scene.rs`:
     }
 ```
 
-- [ ] **Step 3: Wire run_combat_tick() into the main game loop**
+- [x] **Step 3: Wire run_combat_tick() into the main game loop**
 
 In the main tick loop (~line 3870), add the call after `update_actors()`:
 
@@ -271,7 +271,7 @@ In the main tick loop (~line 3870), add the call after `update_actors()`:
             self.run_combat_tick();
 ```
 
-- [ ] **Step 4: Build and verify**
+- [x] **Step 4: Build and verify**
 
 Run: `cargo build 2>&1 | head -60`
 Expected: Clean compile (apply_hit doesn't exist yet — add a stub).
@@ -284,7 +284,7 @@ Add a temporary stub if needed:
     }
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "combat: add unified run_combat_tick() per-frame loop
@@ -306,7 +306,7 @@ Port `dohit()` from fmain2.c and delete the old combat resolution path.
 
 **Reference:** `original/fmain2.c:317–356`, `RESEARCH.md` Combat System section.
 
-- [ ] **Step 1: Add missing race constants**
+- [x] **Step 1: Add missing race constants**
 
 Check `src/game/npc.rs` for the Necromancer and Witch race values. The original uses race 9 (Necromancer) and 0x89 (Witch) for the weapon >= 4 immunity guard. Add if missing:
 
@@ -315,7 +315,7 @@ pub const RACE_NECROMANCER: u8 = 9;
 pub const RACE_WITCH: u8 = 0x89;
 ```
 
-- [ ] **Step 2: Implement apply_hit()**
+- [x] **Step 2: Implement apply_hit()**
 
 Replace the stub in `src/game/gameplay_scene.rs`:
 
@@ -432,7 +432,7 @@ fn push_offset(facing: u8, distance: i32) -> (i32, i32) {
 }
 ```
 
-- [ ] **Step 3: Delete apply_melee_combat()**
+- [x] **Step 3: Delete apply_melee_combat()**
 
 Remove the entire `apply_melee_combat()` method from `gameplay_scene.rs` (~lines 1206–1310). This includes:
 - The hero swing logic
@@ -441,7 +441,7 @@ Remove the entire `apply_melee_combat()` method from `gameplay_scene.rs` (~lines
 
 Also remove any remaining calls to `apply_melee_combat()` — there should be none left after Task 1 changed `do_option(Fight)` and the `apply_player_input()` fight branch no longer calls it.
 
-- [ ] **Step 4: Clean up apply_player_input() fight branch**
+- [x] **Step 4: Clean up apply_player_input() fight branch**
 
 The fight branch in `apply_player_input()` (~lines 525–560) currently calls `apply_melee_combat()` and manages `fight_cooldown`. Remove those lines. The branch should now only:
 1. Update hero facing from directional input
@@ -476,13 +476,13 @@ The fight branch in `apply_player_input()` (~lines 525–560) currently calls `a
         }
 ```
 
-- [ ] **Step 5: Build and run tests**
+- [x] **Step 5: Build and run tests**
 
 Run: `cargo build 2>&1 | head -60`
 Then: `cargo test 2>&1 | tail -20`
 Expected: Clean compile, all existing tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "combat: implement apply_hit(), delete apply_melee_combat()
@@ -503,7 +503,7 @@ Implement the original SHOOT1/SHOOT3 two-state machine for bow combat.
 
 **Reference:** `original/fmain.c:1584–1622, 1907–1930`
 
-- [ ] **Step 1: Add bow detection to the fight branch in apply_player_input()**
+- [x] **Step 1: Add bow detection to the fight branch in apply_player_input()**
 
 Modify the fight branch (~line 525) to check if the hero has a bow equipped. If weapon == 4 (bow) and arrows > 0, set `ActorState::Shooting(0)` instead of `Fighting`:
 
@@ -550,7 +550,7 @@ Modify the fight branch (~line 525) to check if the hero has a bow equipped. If 
         }
 ```
 
-- [ ] **Step 2: Add bow release-to-fire logic**
+- [x] **Step 2: Add bow release-to-fire logic**
 
 After the fight branch check, add logic to detect when `input.fight` just went false while hero is in Shooting state (the release frame). Place this right after the `if self.input.fight { ... return; }` block:
 
@@ -587,12 +587,12 @@ After the fight branch check, add logic to detect when `input.fight` just went f
         }
 ```
 
-- [ ] **Step 3: Build and verify**
+- [x] **Step 3: Build and verify**
 
 Run: `cargo build 2>&1 | head -60`
 Expected: Clean compile.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "combat: bow press-to-aim, release-to-fire state machine
@@ -611,7 +611,7 @@ Add unit tests for the new combat tick behavior.
 - Modify: `src/game/combat.rs` (tests for new helpers)
 - Modify: `src/game/gameplay_scene.rs` (integration tests if test infrastructure exists)
 
-- [ ] **Step 1: Add tests for new combat.rs helpers**
+- [x] **Step 1: Add tests for new combat.rs helpers**
 
 Add to the `#[cfg(test)] mod tests` block in `src/game/combat.rs`:
 
@@ -672,7 +672,7 @@ Add to the `#[cfg(test)] mod tests` block in `src/game/combat.rs`:
     }
 ```
 
-- [ ] **Step 2: Add pushback helper test**
+- [x] **Step 2: Add pushback helper test**
 
 In `src/game/gameplay_scene.rs`, add a test (in any existing `#[cfg(test)]` block, or create one):
 
@@ -695,12 +695,12 @@ mod combat_tests {
 }
 ```
 
-- [ ] **Step 3: Run all tests**
+- [x] **Step 3: Run all tests**
 
 Run: `cargo test 2>&1 | tail -30`
 Expected: All tests pass, including the new ones.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A && git commit -m "combat: add unit tests for combat tick helpers
@@ -717,7 +717,7 @@ Verify the full combat flow works end-to-end.
 **Files:**
 - Possibly modify: `src/game/gameplay_scene.rs` (any remaining cleanup)
 
-- [ ] **Step 1: Run the game with debug mode**
+- [x] **Step 1: Run the game with debug mode**
 
 Run: `cargo run -- --debug --skip-intro`
 
@@ -728,19 +728,19 @@ Test scenarios:
 4. With bow+arrows equipped: hold attack → aiming pose, release → arrow fires
 5. Rapidly tap attack with bow: one arrow per tap
 
-- [ ] **Step 2: Clean up any remaining deprecated references**
+- [x] **Step 2: Clean up any remaining deprecated references**
 
 Search for any remaining references to `apply_melee_combat` or `fight_cooldown`:
 
 Run: `grep -rn "apply_melee_combat\|fight_cooldown" src/`
 Expected: No matches (all removed).
 
-- [ ] **Step 3: Run full test suite one final time**
+- [x] **Step 3: Run full test suite one final time**
 
 Run: `cargo test 2>&1 | tail -10`
 Expected: All tests pass.
 
-- [ ] **Step 4: Final commit if any cleanup was needed**
+- [x] **Step 4: Final commit if any cleanup was needed**
 
 ```bash
 git add -A && git commit -m "combat: final cleanup after combat loop rewrite"
