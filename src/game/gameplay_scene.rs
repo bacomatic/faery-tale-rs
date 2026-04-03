@@ -1346,12 +1346,13 @@ impl GameplayScene {
             actor.moving = vx != 0 || vy != 0;
         }
         if let Some(ref mut table) = self.npc_table {
-            let hero_x = self.state.hero_x as i16;
-            let hero_y = self.state.hero_y as i16;
+            let _hero_x = self.state.hero_x as i16; // TODO: Task 7 will use these
+            let _hero_y = self.state.hero_y as i16;
             let indoor = self.state.region_num >= 8;
             let mut any_approach = false;
             for npc in &mut table.npcs {
-                let adjacent = npc.tick(hero_x, hero_y, self.map_world.as_ref(), indoor);
+                npc.tick(self.map_world.as_ref(), indoor);
+                let adjacent = false; // TODO: Task 7 rewires update_actors with AI pipeline
                 if adjacent && npc.active {
                     any_approach = true;
                 }

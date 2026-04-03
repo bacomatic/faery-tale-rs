@@ -115,76 +115,62 @@ impl Npc {
         }
     }
 
-    /// Update NPC position for one frame tick.
-    /// Uses 8-way direction toward hero + proxcheck collision + wall-sliding.
-    /// Returns true if NPC is adjacent to hero (triggers encounter).
+    /// Execute one frame of movement using stored `facing` and `state`.
+    /// The AI layer (select_tactic → do_tactic → set_course) sets facing/state
+    /// before this runs. Only moves when state == Walking.
+    ///
+    /// If all three directions (primary + ±1 deviation) are blocked,
+    /// sets state to Still and tactic to Frust.
     ///
     /// `world`: terrain data for collision checks (None = always passable).
     /// `indoor`: true for indoor regions (region >= 8), affects Y wrapping.
     pub fn tick(
         &mut self,
-        hero_x: i16,
-        hero_y: i16,
         world: Option<&crate::game::world_data::WorldData>,
         indoor: bool,
-    ) -> bool {
-        use crate::game::collision::{proxcheck, newx, newy, calc_dist};
+    ) {
+        use crate::game::collision::{proxcheck, newx, newy};
+        use crate::game::actor::Tactic;
 
-        if !self.active { return false; }
-
-        let dx = hero_x as i32 - self.x as i32;
-        let dy = hero_y as i32 - self.y as i32;
-
-        // Only chase within 200px range (original proximity).
-        if dx.abs() > 200 || dy.abs() > 200 {
-            return false;
+        if !self.active || self.state != NpcState::Walking {
+            return;
         }
 
-        let dist = calc_dist(self.x as i32, self.y as i32, hero_x as i32, hero_y as i32);
+        let facing = self.facing;
+        let dist = 2i32;
 
-        if dist > 0 {
-            let facing = direction_to_target(self.x, self.y, hero_x, hero_y);
-            if facing < 9 {
-                // Original hardcodes e=2 for all NPC walking (fmain.c:1824).
-                // With xdir/ydir displacement tables and newx()/newy() dividing
-                // by 2, this yields exactly one xdir/ydir unit per frame.
-                let dist = 2i32;
-                let proposed_x = newx(self.x as u16, facing, dist);
-                let proposed_y = newy(self.y as u16, facing, dist, indoor);
+        let proposed_x = newx(self.x as u16, facing, dist);
+        let proposed_y = newy(self.y as u16, facing, dist, indoor);
 
-                // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
-                let terrain_passable = self.race == RACE_WRAITH
-                    || proxcheck(world, proposed_x as i32, proposed_y as i32);
+        // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
+        let terrain_passable = self.race == RACE_WRAITH
+            || proxcheck(world, proposed_x as i32, proposed_y as i32);
 
-                if terrain_passable {
-                    self.x = proposed_x as i16;
-                    self.y = proposed_y as i16;
+        if terrain_passable {
+            self.x = proposed_x as i16;
+            self.y = proposed_y as i16;
+        } else {
+            // Wall-sliding: try clockwise then counter-clockwise deviation.
+            let dev_cw = (facing + 1) & 7;
+            let cw_x = newx(self.x as u16, dev_cw, dist);
+            let cw_y = newy(self.y as u16, dev_cw, dist, indoor);
+            if proxcheck(world, cw_x as i32, cw_y as i32) {
+                self.x = cw_x as i16;
+                self.y = cw_y as i16;
+            } else {
+                let dev_ccw = (facing.wrapping_sub(1)) & 7;
+                let ccw_x = newx(self.x as u16, dev_ccw, dist);
+                let ccw_y = newy(self.y as u16, dev_ccw, dist, indoor);
+                if proxcheck(world, ccw_x as i32, ccw_y as i32) {
+                    self.x = ccw_x as i16;
+                    self.y = ccw_y as i16;
                 } else {
-                    // Wall-sliding: try clockwise then counter-clockwise deviation
-                    // (fmain2.c set_course deviation).
-                    let dev_cw = (facing + 1) & 7;
-                    let cw_x = newx(self.x as u16, dev_cw, dist);
-                    let cw_y = newy(self.y as u16, dev_cw, dist, indoor);
-                    if proxcheck(world, cw_x as i32, cw_y as i32) {
-                        self.x = cw_x as i16;
-                        self.y = cw_y as i16;
-                    } else {
-                        let dev_ccw = (facing.wrapping_sub(1)) & 7;
-                        let ccw_x = newx(self.x as u16, dev_ccw, dist);
-                        let ccw_y = newy(self.y as u16, dev_ccw, dist, indoor);
-                        if proxcheck(world, ccw_x as i32, ccw_y as i32) {
-                            self.x = ccw_x as i16;
-                            self.y = ccw_y as i16;
-                        }
-                        // Else: fully blocked, NPC stays put this frame.
-                    }
+                    // Fully blocked — frustrated.
+                    self.state = NpcState::Still;
+                    self.tactic = Tactic::Frust;
                 }
             }
         }
-
-        // Adjacent check uses pre-movement distance (consistent with original
-        // fmain.c where encounter detection is a separate pass from move_figure).
-        dist < 16
     }
 
     /// Defeat this NPC (on encounter win).
@@ -270,10 +256,12 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
+            facing: 2,  // East
+            state: NpcState::Walking,
             ..Default::default()
         };
-        let _ = npc.tick(100, 0, None, false); // hero at x=100
-        assert!(npc.x > 0); // should have moved toward hero
+        npc.tick(None, false);
+        assert!(npc.x > 0); // should have moved east
     }
 
     #[test]
@@ -299,15 +287,13 @@ mod tests {
             gold: 0,
             speed: 2,
             active: true,
+            facing: 2,  // East
+            state: NpcState::Walking,
             ..Default::default()
         };
         let old_x = npc.x;
-        // Hero is directly east at (1100, 1000).
-        // With no WorldData, proxcheck always passes.
-        let adjacent = npc.tick(1100, 1000, None, false);
-        assert!(!adjacent);
-        // NPC should have moved east (x increased).
-        assert!(npc.x > old_x, "NPC should move east toward hero");
+        npc.tick(None, false);
+        assert!(npc.x > old_x, "NPC should move east");
     }
 
     #[test]
@@ -326,5 +312,62 @@ mod tests {
         assert_eq!(npc.facing, 0);
         assert_eq!(npc.state, NpcState::Still);
         assert_eq!(npc.cleverness, 0);
+    }
+
+    #[test]
+    fn test_npc_tick_uses_stored_facing() {
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2, // East
+            state: NpcState::Walking,
+            ..Default::default()
+        };
+        let old_x = npc.x;
+        npc.tick(None, false);
+        assert!(npc.x > old_x, "Walking east should increase X");
+    }
+
+    #[test]
+    fn test_npc_tick_still_does_not_move() {
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2,
+            state: NpcState::Still,
+            ..Default::default()
+        };
+        let old_x = npc.x;
+        let old_y = npc.y;
+        npc.tick(None, false);
+        assert_eq!(npc.x, old_x);
+        assert_eq!(npc.y, old_y);
+    }
+
+    #[test]
+    fn test_npc_tick_blocked_becomes_frust() {
+        use crate::game::actor::Tactic;
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2,
+            state: NpcState::Walking,
+            ..Default::default()
+        };
+        // With no WorldData (None), proxcheck always passes → should move.
+        npc.tick(None, false);
+        assert_eq!(npc.state, NpcState::Walking); // Still walking (not frustrated)
     }
 }
