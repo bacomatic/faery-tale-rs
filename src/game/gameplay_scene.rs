@@ -3531,24 +3531,12 @@ impl GameplayScene {
 
         // --- Enemy NPCs from npc_table ---
         if let Some(ref table) = npc_table {
-            for npc in table.npcs.iter().filter(|n| n.active) {
+            for (npc_idx, npc) in table.npcs.iter().enumerate().filter(|(_, n)| n.active) {
                 let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
                 let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
 
                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
-
-                // Compute facing from NPC position relative to hero (NPCs always chase hero).
-                let dx = state.hero_x as i32 - npc.x as i32;
-                let dy = state.hero_y as i32 - npc.y as i32;
-                let npc_facing = if dx.abs() >= dy.abs() {
-                    if dx > 0 { 2u8 } else { 6u8 }  // E or W toward hero
-                } else {
-                    if dy > 0 { 4u8 } else { 0u8 }  // S or N toward hero
-                };
-
-                let frame_base = Self::facing_to_frame_base(npc_facing);
-                // Wrap with sheet.num_frames to handle short sheets (e.g. dragon=5).
-                let frame = ((frame_base % sheet.num_frames) + (state.cycle as usize % 8)) % sheet.num_frames;
+                let frame = Self::npc_animation_frame(npc, npc_idx, state.cycle, sheet.num_frames);
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, crate::game::sprites::SPRITE_H, framebuf, fb_w, fb_h);
@@ -4359,16 +4347,7 @@ impl Scene for GameplayScene {
 
                                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
 
-                                let dx = self.state.hero_x as i32 - npc.x as i32;
-                                let dy = self.state.hero_y as i32 - npc.y as i32;
-                                let npc_facing = if dx.abs() >= dy.abs() {
-                                    if dx > 0 { 2u8 } else { 6u8 }
-                                } else {
-                                    if dy > 0 { 4u8 } else { 0u8 }
-                                };
-
-                                let frame_base = Self::facing_to_frame_base(npc_facing);
-                                let frame = ((frame_base % sheet.num_frames) + (self.state.cycle as usize % 8)) % sheet.num_frames;
+                                let frame = Self::npc_animation_frame(npc, idx, self.state.cycle, sheet.num_frames);
 
                                 // Mask BEFORE blit
                                 let sprite_info = BlittedSprite {
