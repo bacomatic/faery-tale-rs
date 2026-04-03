@@ -3421,7 +3421,7 @@ impl GameplayScene {
             }
             NpcState::Still => {
                 if npc.race == RACE_SNAKE {
-                    // Snakes still: slow 2-frame idle (fmain.c:2079)
+                    // Snakes still: 2-frame idle, every tick (fmain.c:2079)
                     frame_base + (cycle as usize & 1)
                 } else {
                     // Default still: static frame (fmain.c:~1900 — diroffs[d] + 1)

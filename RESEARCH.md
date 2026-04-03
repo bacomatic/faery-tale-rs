@@ -2039,6 +2039,22 @@ When `proxcheck()` blocks the attempted move:
 
 NPCs use `tactic = FRUST` instead of the frustflag counter.
 
+### Enemy NPC animation frame selection (`fmain.c:2076–2108`)
+
+After movement, the original overrides the animation index `dex` based on enemy race:
+
+| Race | State | Frame formula | Notes |
+|------|-------|--------------|-------|
+| Default enemy | Walking | `diroffs[d] + ((cycle + i) & 7)` | 8-frame walk cycle; `i` = actor index provides per-NPC phase offset |
+| Default enemy | Still | `diroffs[d] + 1` | Static standing frame |
+| Wraith (race 2) | Walking | `diroffs[d]` | No walk cycle — wraiths glide |
+| Snake (race 4) | Still (`< WALKING`) | `(cycle & 1) + diroffs[d]` | Slow 2-frame idle |
+| Snake (race 4) | Walking (`< DYING`) | `((cycle / 2) & 1) + diroffs[d]` | 2-frame walk, changes every 2 ticks |
+| Dragon (race 8) | Alive | `(cycle & 3) * 2` + slot variation via `i % 3` | Complex pattern with cfile offsets 0x25/0x28/0x30 |
+| Dragon (race 8) | Dying | `0x3f` (frame 63) | Death frame |
+| Dragon (race 8) | Dead | `abs_x = 0` (removed from screen) | Despawn |
+| Skeleton (race 7, vit=0) | Dead | `1` | Collapsed frame |
+
 ### Coordinate wrapping (`fmain.c:2111–2127`)
 
 For outdoor regions (0–7), hero position wraps at world boundaries:
