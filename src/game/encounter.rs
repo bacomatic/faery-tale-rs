@@ -84,9 +84,19 @@ fn rand4_from_tick(tick: u32) -> u32 {
     (h >> 16) & 3
 }
 
+fn rand8_from_tick(tick: u32) -> u32 {
+    let h = tick.wrapping_mul(1103515245).wrapping_add(12345);
+    (h >> 13) & 7
+}
+
 fn rand64_from_tick(tick: u32) -> u32 {
     let h = tick.wrapping_mul(1664525).wrapping_add(1013904223);
     (h >> 10) & 63
+}
+
+fn bitrand_from_tick(tick: u32, mask: u32) -> u32 {
+    let h = tick.wrapping_mul(214013).wrapping_add(2531011);
+    (h >> 8) & mask
 }
 
 /// Check if any active enemy NPC is within visibility range (~300px).
@@ -158,8 +168,23 @@ pub fn try_trigger_encounter(
     Some(pick_encounter_type(xtype, tick))
 }
 
+/// Direction vector tables from fsubs.asm (8 compass directions).
+/// Used by newx/newy to compute offsets: result = base + (dir_table[dir] * distance) / 2
+const XDIR: [i16; 8] = [-2, 0, 2, 3, 2, 0, -2, -3];
+const YDIR: [i16; 8] = [-2, -3, -2, 0, 2, 3, 2, 0];
+
+/// Compute encounter origin point 150-213 pixels from hero in a random direction.
+/// Ports set_loc() from fmain2.c: direction = rand8(), distance = 150 + rand64().
+fn encounter_origin(hero_x: i16, hero_y: i16, tick: u32) -> (i16, i16) {
+    let dir = rand8_from_tick(tick) as usize;
+    let dist = 150 + rand64_from_tick(tick.wrapping_add(7)) as i16;
+    let ox = hero_x.wrapping_add((XDIR[dir].wrapping_mul(dist)) / 2);
+    let oy = hero_y.wrapping_add((YDIR[dir].wrapping_mul(dist)) / 2);
+    (ox, oy)
+}
+
 /// Spawn a single encounter NPC with stats from the full encounter chart.
-pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u32) -> Npc {
+pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick: u32) -> Npc {
     let etype = encounter_type.min(10);
     let stats = &ENCOUNTER_CHART_FULL[etype];
     let wp_idx = (stats.arms as usize * 4 + rand4_from_tick(tick.wrapping_add(etype as u32)) as usize).min(31);
@@ -181,8 +206,8 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
     Npc {
         npc_type: ENCOUNTER_TO_NPC_TYPE[etype],
         race,
-        x: hero_x.saturating_add(50),
-        y: hero_y.saturating_add(50),
+        x: origin_x,
+        y: origin_y,
         vitality: stats.hp,
         gold: stats.treasure as i16 * 5,
         speed: 2,
@@ -197,7 +222,11 @@ pub fn spawn_encounter(encounter_type: usize, hero_x: i16, hero_y: i16, tick: u3
 }
 
 /// Spawn up to 4 enemies into free NPC slots, mirroring fmain.c group encounter logic.
-/// Spawn positions fan out in 4 cardinal directions from the hero.
+/// Enemies spawn offscreen: origin is 150-213px from hero in a random direction,
+/// then each enemy is scattered ±(spread/2) around that origin.
+/// Each NPC retries up to MAX_TRY (15) positions to avoid overlapping other actors
+/// (hero + already-placed NPCs), matching the original set_encounter() retry loop.
+/// Ports set_loc() + set_encounter() from fmain.c/fmain2.c.
 /// Returns the number of NPCs spawned.
 pub fn spawn_encounter_group(
     table: &mut crate::game::npc::NpcTable,
@@ -206,20 +235,53 @@ pub fn spawn_encounter_group(
     hero_y: i16,
     tick: u32,
 ) -> usize {
+    use crate::game::collision::actor_collides;
+
     const MAX_GROUP: usize = 4;
-    const OFFSETS: [(i16, i16); 4] = [(48, 0), (-48, 0), (0, 48), (0, -48)];
+    const SPREAD: i16 = 63; // bitrand(spread) - spread/2 per axis
+    const MAX_TRY: u32 = 15; // fmain.c set_encounter() retry limit
+
+    let (enc_x, enc_y) = encounter_origin(hero_x, hero_y, tick);
+
+    // Collect positions of hero + all already-active NPCs for collision checks.
+    let mut occupied: Vec<(i32, i32)> = Vec::with_capacity(crate::game::npc::MAX_NPCS + 1);
+    occupied.push((hero_x as i32, hero_y as i32));
+    for n in table.npcs.iter() {
+        if n.active {
+            occupied.push((n.x as i32, n.y as i32));
+        }
+    }
 
     let mut spawned = 0;
-    for (i, (ox, oy)) in OFFSETS.iter().enumerate() {
-        if spawned >= MAX_GROUP {
-            break;
+    for i in 0..MAX_GROUP {
+        let slot_idx = match table.npcs.iter().position(|n| !n.active) {
+            Some(idx) => idx,
+            None => break,
+        };
+
+        // Retry loop: try up to MAX_TRY scatter positions per NPC (original set_encounter).
+        let mut placed = false;
+        for j in 0..MAX_TRY {
+            let sub_tick = tick.wrapping_add(i as u32).wrapping_mul(31).wrapping_add(j * 7);
+            let scatter_x = bitrand_from_tick(sub_tick, SPREAD as u32) as i16 - SPREAD / 2;
+            let scatter_y = bitrand_from_tick(sub_tick.wrapping_add(13), SPREAD as u32) as i16 - SPREAD / 2;
+            let npc_x = enc_x.wrapping_add(scatter_x);
+            let npc_y = enc_y.wrapping_add(scatter_y);
+
+            if !actor_collides(npc_x as i32, npc_y as i32, &occupied) {
+                let mut npc = spawn_encounter(encounter_type, npc_x, npc_y, tick.wrapping_add(i as u32));
+                npc.x = npc_x;
+                npc.y = npc_y;
+                table.npcs[slot_idx] = npc;
+                occupied.push((npc_x as i32, npc_y as i32));
+                spawned += 1;
+                placed = true;
+                break;
+            }
         }
-        if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
-            let mut npc = spawn_encounter(encounter_type, hero_x, hero_y, tick.wrapping_add(i as u32));
-            npc.x = hero_x.saturating_add(*ox);
-            npc.y = hero_y.saturating_add(*oy);
-            *slot = npc;
-            spawned += 1;
+        // If all MAX_TRY attempts collided, skip this NPC (original returns FALSE).
+        if !placed {
+            continue;
         }
     }
     spawned
@@ -323,6 +385,39 @@ mod tests {
         let spawned = spawn_encounter_group(&mut table, 0, 100, 100, 42);
         assert_eq!(spawned, 4);
         assert_eq!(active_enemy_count(&table), 4);
+    }
+
+    #[test]
+    fn test_encounter_origin_is_offscreen() {
+        // Original game viewport is 288x140; encounter origin should be >144px
+        // from hero on at least one axis. set_loc() uses 150+rand64 = 150-213px
+        // distance with direction vectors of magnitude 2-3, giving 150-320px offset.
+        for tick in 0..100u32 {
+            let (ox, oy) = encounter_origin(1000, 1000, tick);
+            let dx = (ox as i32 - 1000).abs();
+            let dy = (oy as i32 - 1000).abs();
+            // At minimum, distance = 150 with smallest dir component (magnitude 2),
+            // giving offset = (2*150)/2 = 150px. Must be well outside half-viewport.
+            assert!(dx > 70 || dy > 70,
+                "tick={}: origin ({},{}) too close to hero (1000,1000): dx={}, dy={}",
+                tick, ox, oy, dx, dy);
+        }
+    }
+
+    #[test]
+    fn test_spawn_encounter_group_positions_offscreen() {
+        // All spawned enemies should be far from the hero, not surrounding them.
+        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let hero_x = 5000i16;
+        let hero_y = 5000i16;
+        spawn_encounter_group(&mut table, 0, hero_x, hero_y, 42);
+        for npc in table.npcs.iter().filter(|n| n.active) {
+            let dx = (npc.x as i32 - hero_x as i32).abs();
+            let dy = (npc.y as i32 - hero_y as i32).abs();
+            assert!(dx > 50 || dy > 50,
+                "Enemy at ({},{}) too close to hero ({},{}): dx={}, dy={}",
+                npc.x, npc.y, hero_x, hero_y, dx, dy);
+        }
     }
 
     #[test]
