@@ -211,6 +211,44 @@ pub fn bitrand_damage(weapon_index: u8) -> i16 {
     wt as i16 + bitrand(2) as i16
 }
 
+/// Compute weapon tip position with jitter (ports fmain.c newx/newy + rand8() - 3).
+/// `wt` is the weapon value (after cap).
+/// Returns (tip_x, tip_y) in world coordinates.
+pub fn weapon_tip(abs_x: i32, abs_y: i32, facing: u8, wt: i16) -> (i32, i32) {
+    let offset = (wt * 2) as i32;
+    let (ox, oy): (i32, i32) = match facing & 7 {
+        0 => (0, -offset),
+        1 => (offset, -offset),
+        2 => (offset, 0),
+        3 => (offset, offset),
+        4 => (0, offset),
+        5 => (-offset, offset),
+        6 => (-offset, 0),
+        7 => (-offset, -offset),
+        _ => (0, -offset),
+    };
+    let jitter_x = (melee_rand(8) as i32) - 3;
+    let jitter_y = (melee_rand(8) as i32) - 3;
+    (abs_x + ox + jitter_x, abs_y + oy + jitter_y)
+}
+
+/// Compute melee reach for a combatant.
+/// For hero (is_hero=true): (brave/20) + 5, capped at 15, min 4.
+/// For NPCs: 2 + rand4(tick), capped at 15.
+pub fn combat_reach(is_hero: bool, brave: i16, tick: u32) -> i16 {
+    let bv = if is_hero {
+        ((brave / 20) + 5).max(4)
+    } else {
+        2 + rand4(tick) as i16
+    };
+    bv.min(15)
+}
+
+/// rand256(): random 0–255 for dodge rolls.
+pub fn rand256() -> i16 {
+    melee_rand(256) as i16
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1191,6 +1191,105 @@ impl GameplayScene {
         }
     }
 
+    /// Unified combat tick — runs every frame for all combatants.
+    /// Ports fmain.c:2680–2730 sword proximity loop.
+    fn run_combat_tick(&mut self) {
+        use crate::game::combat::{weapon_tip, combat_reach, rand256, bitrand};
+        use crate::game::actor::ActorState;
+        use crate::game::debug_command::GodModeFlags;
+
+        let freeze = self.state.freeze_timer > 0;
+        let brave = self.state.brave;
+        let tick = self.state.cycle;
+        let one_hit_kill = self.state.god_mode.contains(GodModeFlags::ONE_HIT_KILL);
+        let insane_reach = self.state.god_mode.contains(GodModeFlags::INSANE_REACH);
+        let anix = self.state.anix;
+
+        struct Combatant {
+            x: i32,
+            y: i32,
+            facing: u8,
+            weapon: u8,
+            fighting: bool,
+            active: bool,
+        }
+        let mut combatants: Vec<Combatant> = Vec::with_capacity(anix);
+        for (i, actor) in self.state.actors.iter().take(anix).enumerate() {
+            let fighting = matches!(actor.state, ActorState::Fighting(_));
+            combatants.push(Combatant {
+                x: actor.abs_x as i32,
+                y: actor.abs_y as i32,
+                facing: actor.facing,
+                weapon: if i == 0 { actor.weapon.max(1) } else { actor.weapon },
+                fighting,
+                active: !matches!(actor.state, ActorState::Dead | ActorState::Dying),
+            });
+        }
+
+        struct HitRecord {
+            attacker: usize,
+            target: usize,
+            facing: u8,
+            damage: i16,
+        }
+        let mut hits: Vec<HitRecord> = Vec::new();
+
+        for (i, attacker) in combatants.iter().enumerate() {
+            if i == 1 { continue; } // skip raft slot
+            if !attacker.active || !attacker.fighting { continue; }
+            if i > 0 && freeze { continue; } // NPCs frozen
+
+            let mut wt = attacker.weapon;
+            if wt & 4 != 0 { continue; } // bow/wand — handled by shoot state machine
+            if wt >= 8 { wt = 5; } // cap touch attack
+            let wt_dmg = wt as i16 + bitrand(2) as i16;
+
+            let reach = if insane_reach && i == 0 {
+                combat_reach(true, brave, tick) * 4
+            } else {
+                combat_reach(i == 0, brave, tick)
+            };
+
+            let (tip_x, tip_y) = weapon_tip(attacker.x, attacker.y, attacker.facing, wt as i16);
+
+            for (j, target) in combatants.iter().enumerate() {
+                if j == 1 || j == i { continue; } // skip raft, self
+                if !target.active { continue; }
+
+                let xd = (target.x - tip_x).abs();
+                let yd = (target.y - tip_y).abs();
+                let dist = xd.max(yd);
+
+                // Hit check: hero always hits, NPCs must pass brave dodge
+                let hit_roll = i == 0 || rand256() > brave;
+                if hit_roll && dist < reach as i32 {
+                    let damage = if one_hit_kill && i == 0 {
+                        999
+                    } else {
+                        wt_dmg
+                    };
+                    hits.push(HitRecord {
+                        attacker: i,
+                        target: j,
+                        facing: attacker.facing,
+                        damage,
+                    });
+                    break; // one hit per swing
+                }
+            }
+        }
+
+        // Apply hits
+        for hit in hits {
+            self.apply_hit(hit.attacker, hit.target, hit.facing, hit.damage);
+        }
+    }
+
+    /// Apply one hit — stub for now, implemented in Task 3.
+    fn apply_hit(&mut self, _attacker: usize, _target: usize, _facing: u8, _damage: i16) {
+        self.dlog("apply_hit stub called".to_string());
+    }
+
     /// Apply one melee swing against nearby enemy NPCs (npc-103).
     /// Ports fmain.c sword proximity loop + dohit + checkdead.
     fn apply_melee_combat(&mut self) {
@@ -3901,6 +4000,7 @@ impl Scene for GameplayScene {
                 self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
             }
             self.update_actors(1);
+            self.run_combat_tick();
 
             let (new_map_x, new_map_y) = Self::map_adjust(
                 self.state.hero_x, self.state.hero_y,
