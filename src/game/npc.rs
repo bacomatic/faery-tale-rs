@@ -97,21 +97,32 @@ impl Npc {
         }
     }
 
-    /// Execute one frame of movement using stored `facing` and `state`.
-    /// The AI layer (select_tactic → do_tactic → set_course) sets facing/state
-    /// before this runs. Only moves when state == Walking.
-    ///
-    /// If all three directions (primary + ±1 deviation) are blocked,
-    /// sets state to Still and tactic to Frust.
-    ///
-    /// `world`: terrain data for collision checks (None = always passable).
-    /// `indoor`: true for indoor regions (region >= 8), affects Y wrapping.
+    /// Execute one frame of movement (terrain-only collision).
+    /// Delegates to `tick_with_actors()` with no actor positions.
     pub fn tick(
         &mut self,
         world: Option<&crate::game::world_data::WorldData>,
         indoor: bool,
     ) {
-        use crate::game::collision::{proxcheck, newx, newy};
+        self.tick_with_actors(world, indoor, &[]);
+    }
+
+    /// Execute one frame of movement with both terrain and actor collision.
+    /// `other_actors`: positions of all other live actors (hero + other NPCs)
+    /// that this NPC should not overlap with.
+    ///
+    /// The AI layer (select_tactic → do_tactic → set_course) sets facing/state
+    /// before this runs. Only moves when state == Walking.
+    ///
+    /// If all three directions (primary + ±1 deviation) are blocked,
+    /// sets state to Still and tactic to Frust.
+    pub fn tick_with_actors(
+        &mut self,
+        world: Option<&crate::game::world_data::WorldData>,
+        indoor: bool,
+        other_actors: &[(i32, i32)],
+    ) {
+        use crate::game::collision::{proxcheck, actor_collides, newx, newy};
         use crate::game::actor::Tactic;
 
         if !self.active || self.state != NpcState::Walking {
@@ -127,8 +138,9 @@ impl Npc {
         // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
         let terrain_passable = self.race == RACE_WRAITH
             || proxcheck(world, proposed_x as i32, proposed_y as i32);
+        let actor_passable = !actor_collides(proposed_x as i32, proposed_y as i32, other_actors);
 
-        if terrain_passable {
+        if terrain_passable && actor_passable {
             self.x = proposed_x as i16;
             self.y = proposed_y as i16;
         } else {
@@ -136,14 +148,20 @@ impl Npc {
             let dev_cw = (facing + 1) & 7;
             let cw_x = newx(self.x as u16, dev_cw, dist);
             let cw_y = newy(self.y as u16, dev_cw, dist, indoor);
-            if proxcheck(world, cw_x as i32, cw_y as i32) {
+            let cw_terrain = self.race == RACE_WRAITH
+                || proxcheck(world, cw_x as i32, cw_y as i32);
+            let cw_actor = !actor_collides(cw_x as i32, cw_y as i32, other_actors);
+            if cw_terrain && cw_actor {
                 self.x = cw_x as i16;
                 self.y = cw_y as i16;
             } else {
                 let dev_ccw = (facing.wrapping_sub(1)) & 7;
                 let ccw_x = newx(self.x as u16, dev_ccw, dist);
                 let ccw_y = newy(self.y as u16, dev_ccw, dist, indoor);
-                if proxcheck(world, ccw_x as i32, ccw_y as i32) {
+                let ccw_terrain = self.race == RACE_WRAITH
+                    || proxcheck(world, ccw_x as i32, ccw_y as i32);
+                let ccw_actor = !actor_collides(ccw_x as i32, ccw_y as i32, other_actors);
+                if ccw_terrain && ccw_actor {
                     self.x = ccw_x as i16;
                     self.y = ccw_y as i16;
                 } else {
@@ -339,5 +357,69 @@ mod tests {
         // With no WorldData (None), proxcheck always passes → should move.
         npc.tick(None, false);
         assert_eq!(npc.state, NpcState::Walking); // Still walking (not frustrated)
+    }
+
+    #[test]
+    fn test_npc_tick_blocked_by_actor() {
+        use crate::game::actor::Tactic;
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2,  // East
+            state: NpcState::Walking,
+            ..Default::default()
+        };
+        // Place actors blocking primary (east) + clockwise (SE) + counterclockwise (NE).
+        let others = vec![(1003, 1000), (1002, 1002), (1002, 998)];
+        let old_x = npc.x;
+        let old_y = npc.y;
+        npc.tick_with_actors(None, false, &others);
+        assert_eq!(npc.x, old_x);
+        assert_eq!(npc.y, old_y);
+        assert_eq!(npc.state, NpcState::Still);
+        assert_eq!(npc.tactic, Tactic::Frust);
+    }
+
+    #[test]
+    fn test_npc_tick_not_blocked_by_distant_actor() {
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2,  // East
+            state: NpcState::Walking,
+            ..Default::default()
+        };
+        let others = vec![(2000, 2000)];
+        let old_x = npc.x;
+        npc.tick_with_actors(None, false, &others);
+        assert!(npc.x > old_x, "NPC should move east — actor is far away");
+    }
+
+    #[test]
+    fn test_npc_tick_empty_actors_same_as_no_actors() {
+        let mut npc1 = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 1000,
+            y: 1000,
+            vitality: 10,
+            active: true,
+            facing: 2,
+            state: NpcState::Walking,
+            ..Default::default()
+        };
+        let mut npc2 = npc1.clone();
+        npc1.tick(None, false);
+        npc2.tick_with_actors(None, false, &[]);
+        assert_eq!(npc1.x, npc2.x);
+        assert_eq!(npc1.y, npc2.y);
     }
 }
