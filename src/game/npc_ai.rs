@@ -192,6 +192,147 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: u8) {
     }
 }
 
+/// Goal value for close-range melee threshold computation.
+fn goal_value(goal: &Goal) -> i32 {
+    match goal {
+        Goal::Attack1 => 0,
+        Goal::Attack2 => 1,
+        Goal::Archer1 => 3,
+        Goal::Archer2 => 4,
+        _ => 0,
+    }
+}
+
+/// Select tactic for this NPC based on goal, distance, state.
+/// Ports the tactic decision tree from fmain.c:2500-2595.
+///
+/// `hero_dead`: true if hero is dead/falling.
+/// `leader_idx`: index of leader NPC for follower logic.
+/// `xtype`: terrain type from game state.
+/// `tick`: current game tick for RNG.
+pub fn select_tactic(
+    npc: &mut Npc,
+    hero_x: i32,
+    hero_y: i32,
+    hero_dead: bool,
+    leader_idx: Option<usize>,
+    xtype: u16,
+    tick: u32,
+) {
+    let r = ai_rand(tick, npc.x as u32 ^ (npc.y as u32).wrapping_mul(3));
+
+    // === Goal overrides (checked every tick) ===
+
+    // Hero dead → flee or follow leader.
+    if hero_dead {
+        npc.goal = if leader_idx.is_some() {
+            Goal::Follower
+        } else {
+            Goal::Flee
+        };
+    }
+
+    // Vitality critically low → flee.
+    if npc.vitality < 2 {
+        npc.goal = Goal::Flee;
+    }
+
+    // High xtype + non-special race → flee (original: xtype > 59 && race != special).
+    if xtype > 59 && npc.race < 4 {
+        npc.goal = Goal::Flee;
+    }
+
+    // === Non-hostile goal modes (bypass tactic tree) ===
+    match npc.goal {
+        Goal::Flee => {
+            npc.tactic = Tactic::Backup;
+            return;
+        }
+        Goal::Follower => {
+            npc.tactic = Tactic::Follow;
+            return;
+        }
+        Goal::Stand => {
+            set_course(npc, hero_x, hero_y, SC_AIM);
+            npc.state = NpcState::Still;
+            return;
+        }
+        Goal::None | Goal::User | Goal::Leader => {
+            npc.state = NpcState::Still;
+            return;
+        }
+        _ => {} // Attack/Archer goals continue to tactic tree.
+    }
+
+    // === Close-range melee check (every tick, bypasses re-aim gate) ===
+    let xd = (hero_x - npc.x as i32).abs();
+    let yd = (hero_y - npc.y as i32).abs();
+
+    let is_melee = npc.weapon < 4; // weapons 0-3 are melee (dirk, mace, sword, etc.)
+    if is_melee {
+        let mut thresh = 14 - goal_value(&npc.goal);
+        if npc.race == 7 {
+            // DKnight
+            thresh = 16;
+        }
+        if xd < thresh && yd < thresh {
+            // Close-range melee: aim directly and fight.
+            set_course(npc, hero_x, hero_y, SC_DIRECT);
+            npc.state = NpcState::Fighting;
+            return;
+        }
+    }
+
+    // === Recalculation gate (probabilistic, varies by goal) ===
+    let gate_mask = match npc.goal {
+        Goal::Attack1 | Goal::Archer1 => 3, // ~25%
+        _ => 15,                             // ~6.25%
+    };
+    if (r & gate_mask) != 0 {
+        return; // Keep current tactic this tick.
+    }
+
+    // === Tactic decision tree ===
+
+    // Snake race + turtle eggs special case.
+    if npc.race == 4 {
+        // RACE_SNAKE
+        npc.tactic = Tactic::EggSeek;
+        return;
+    }
+
+    // No weapon → confused.
+    if npc.weapon == 0 {
+        npc.tactic = Tactic::Random;
+        return;
+    }
+
+    // Low vitality + 50% chance → evade.
+    if npc.vitality < 6 && (r >> 8) & 1 == 0 {
+        npc.tactic = Tactic::Evade;
+        return;
+    }
+
+    // Archer-specific range brackets.
+    let is_archer = matches!(npc.goal, Goal::Archer1 | Goal::Archer2);
+    if is_archer {
+        if xd < 40 && yd < 30 {
+            npc.tactic = Tactic::Backup; // Too close.
+            return;
+        }
+        if xd < 70 && yd < 70 {
+            npc.tactic = Tactic::Shoot; // In range.
+            return;
+        }
+        // Far away → pursue.
+        npc.tactic = Tactic::Pursue;
+        return;
+    }
+
+    // Default melee → pursue.
+    npc.tactic = Tactic::Pursue;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,5 +510,106 @@ mod tests {
             reaim_a2 > reaim_a1,
             "Attack2 should re-aim more often: a1={reaim_a1}, a2={reaim_a2}"
         );
+    }
+
+    #[test]
+    fn test_select_tactic_dead_hero_causes_flee() {
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.tactic = Tactic::Pursue;
+        select_tactic(&mut npc, 200, 100, true, None, 0, 42);
+        assert_eq!(npc.goal, Goal::Flee);
+    }
+
+    #[test]
+    fn test_select_tactic_low_vitality_flees() {
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.vitality = 1;
+        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        assert_eq!(npc.goal, Goal::Flee);
+    }
+
+    #[test]
+    fn test_select_tactic_archer_close_backups() {
+        let mut backed_up = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Archer1;
+            npc.weapon = 4;
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 120, 110, false, None, 0, tick);
+            if npc.tactic == Tactic::Backup {
+                backed_up = true;
+                break;
+            }
+        }
+        assert!(backed_up, "Archer should select Backup when hero is close");
+    }
+
+    #[test]
+    fn test_select_tactic_archer_in_range_shoots() {
+        let mut shooting = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Archer1;
+            npc.weapon = 4;
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 160, 140, false, None, 0, tick);
+            if npc.tactic == Tactic::Shoot {
+                shooting = true;
+                break;
+            }
+        }
+        assert!(shooting, "Archer should select Shoot when hero is in range");
+    }
+
+    #[test]
+    fn test_select_tactic_melee_close_range_fighting() {
+        let mut fighting = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.weapon = 1;
+            select_tactic(&mut npc, 105, 105, false, None, 0, tick);
+            if npc.state == NpcState::Fighting {
+                fighting = true;
+                break;
+            }
+        }
+        assert!(fighting, "Melee NPC should enter Fighting at close range");
+    }
+
+    #[test]
+    fn test_select_tactic_no_weapon_confused() {
+        let mut confused = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.weapon = 0;
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            if npc.tactic == Tactic::Random {
+                confused = true;
+                break;
+            }
+        }
+        assert!(confused, "Weaponless NPC should get tactic=Random (confused)");
+    }
+
+    #[test]
+    fn test_select_tactic_flee_goal_stays_backup() {
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Flee;
+        npc.tactic = Tactic::Pursue;
+        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        assert_eq!(npc.tactic, Tactic::Backup);
+    }
+
+    #[test]
+    fn test_select_tactic_stand_goal_stays_still() {
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Stand;
+        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        assert_eq!(npc.state, NpcState::Still);
     }
 }
