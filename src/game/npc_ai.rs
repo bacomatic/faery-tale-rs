@@ -1,6 +1,105 @@
 //! NPC AI decision system — ports do_tactic/set_course/select_tactic from fmain.c/fmain2.c.
 
+use crate::game::actor::{Goal, Tactic};
 use crate::game::npc::{Npc, NpcState};
+
+/// Simple deterministic RNG for AI decisions.
+/// Uses the same LCG family as encounter.rs.
+fn ai_rand(tick: u32, salt: u32) -> u32 {
+    tick.wrapping_mul(2246822519)
+        .wrapping_add(salt)
+        .wrapping_mul(1664525)
+        .wrapping_add(1013904223)
+}
+
+/// Execute the current tactic — gates set_course behind a probabilistic check.
+/// Ports do_tactic from fmain2.c:2075.
+///
+/// `leader_idx`: if Some(i), the index of the leader NPC in `npcs` for Follow/Evade.
+/// `npcs`: read-only snapshot of NPC positions for Follow/Evade targets.
+pub fn do_tactic(
+    npc: &mut Npc,
+    hero_x: i32,
+    hero_y: i32,
+    leader_idx: Option<usize>,
+    npcs: &[(i32, i32)],
+    tick: u32,
+) {
+    let r = ai_rand(tick, npc.x as u32 ^ npc.y as u32);
+
+    // Probabilistic gate: ~12.5% for most goals, ~25% for Attack2/Archer2.
+    let mask = match npc.goal {
+        Goal::Attack2 | Goal::Archer2 => 3, // !(rand & 3) → 25%
+        _ => 7,                              // !(rand & 7) → 12.5%
+    };
+    if (r & mask) != 0 {
+        return; // No re-aim this tick.
+    }
+
+    match npc.tactic {
+        Tactic::Pursue => {
+            set_course(npc, hero_x, hero_y, SC_SMART);
+        }
+        Tactic::Shoot => {
+            // Check if aligned on cardinal/diagonal axis for firing.
+            let xd = (hero_x - npc.x as i32).abs();
+            let yd = (hero_y - npc.y as i32).abs();
+            let aligned = xd < 8 || yd < 8 || (xd > yd.saturating_sub(5) && xd < yd + 7);
+            if aligned && (r >> 8) & 1 == 0 {
+                set_course(npc, hero_x, hero_y, SC_AIM);
+                npc.state = NpcState::Shooting;
+            } else {
+                set_course(npc, hero_x, hero_y, SC_SMART);
+            }
+        }
+        Tactic::Random => {
+            npc.facing = ((r >> 4) & 7) as u8;
+            npc.state = NpcState::Walking;
+        }
+        Tactic::BumbleSeek => {
+            set_course(npc, hero_x, hero_y, SC_BUMBLE);
+        }
+        Tactic::Backup => {
+            set_course(npc, hero_x, hero_y, SC_FLEE);
+        }
+        Tactic::Follow => {
+            if let Some(li) = leader_idx {
+                if li < npcs.len() {
+                    let (lx, ly) = npcs[li];
+                    set_course(npc, lx, ly + 20, SC_SMART);
+                } else {
+                    npc.facing = ((r >> 4) & 7) as u8;
+                    npc.state = NpcState::Walking;
+                }
+            } else {
+                npc.facing = ((r >> 4) & 7) as u8;
+                npc.state = NpcState::Walking;
+            }
+        }
+        Tactic::Evade => {
+            if let Some(li) = leader_idx {
+                let neighbor = if li + 1 < npcs.len() {
+                    li + 1
+                } else if li > 0 {
+                    li - 1
+                } else {
+                    li
+                };
+                if neighbor < npcs.len() {
+                    let (nx, ny) = npcs[neighbor];
+                    set_course(npc, nx, ny + 20, SC_DEVIATE2);
+                }
+            }
+        }
+        Tactic::EggSeek => {
+            set_course(npc, 23087, 5667, SC_SMART);
+            npc.state = NpcState::Walking;
+        }
+        Tactic::Frust | Tactic::None => {
+            // Frustrated or idle — do nothing this tick.
+        }
+    }
+}
 
 /// set_course modes (from fmain2.c).
 pub const SC_SMART: u8 = 0; // Smart seek — suppress minor axis
@@ -96,6 +195,7 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::actor::{Goal, Tactic};
     use crate::game::npc::RACE_ENEMY;
 
     fn make_npc(x: i16, y: i16) -> Npc {
@@ -185,5 +285,89 @@ mod tests {
         // In BUMBLE mode it should keep the diagonal.
         set_course(&mut npc, 300, 130, SC_BUMBLE);
         assert_eq!(npc.facing, 3); // SE (not suppressed to E)
+    }
+
+    #[test]
+    fn test_do_tactic_pursue_gates_reaim() {
+        // do_tactic with Pursue should only re-aim ~12.5% of the time.
+        // Run 1000 iterations, count how many change facing.
+        let mut reaim_count = 0u32;
+        for tick in 0..1000u32 {
+            let mut npc = make_npc(100, 100);
+            npc.tactic = Tactic::Pursue;
+            npc.goal = Goal::Attack1;
+            npc.facing = 0; // facing North
+            do_tactic(&mut npc, 200, 100, None, &[], tick);
+            if npc.facing != 0 {
+                reaim_count += 1;
+            }
+        }
+        // ~12.5% = 125 ± margin. Should be between 50 and 250.
+        assert!(reaim_count > 50, "too few re-aims: {reaim_count}");
+        assert!(reaim_count < 250, "too many re-aims: {reaim_count}");
+    }
+
+    #[test]
+    fn test_do_tactic_random_sets_random_facing() {
+        let mut triggered = false;
+        for tick in 0..100u32 {
+            let mut npc = make_npc(100, 100);
+            npc.tactic = Tactic::Random;
+            npc.goal = Goal::Attack1;
+            npc.state = NpcState::Still;
+            do_tactic(&mut npc, 200, 100, None, &[], tick);
+            if npc.state == NpcState::Walking {
+                triggered = true;
+                break;
+            }
+        }
+        assert!(triggered, "Random tactic should trigger within 100 ticks");
+    }
+
+    #[test]
+    fn test_do_tactic_backup_flees() {
+        let mut triggered_away = false;
+        for tick in 0..100u32 {
+            let mut npc = make_npc(100, 100);
+            npc.tactic = Tactic::Backup;
+            npc.goal = Goal::Archer1;
+            npc.facing = 2; // East (toward hero)
+            do_tactic(&mut npc, 200, 100, None, &[], tick);
+            if npc.facing == 6 {
+                // West = away from hero at (200,100)
+                triggered_away = true;
+                break;
+            }
+        }
+        assert!(triggered_away, "Backup should eventually face away from hero");
+    }
+
+    #[test]
+    fn test_do_tactic_attack2_higher_reaim_rate() {
+        let mut reaim_a1 = 0u32;
+        let mut reaim_a2 = 0u32;
+        for tick in 0..1000u32 {
+            let mut npc1 = make_npc(100, 100);
+            npc1.tactic = Tactic::Pursue;
+            npc1.goal = Goal::Attack1;
+            npc1.facing = 0;
+            do_tactic(&mut npc1, 200, 100, None, &[], tick);
+            if npc1.facing != 0 {
+                reaim_a1 += 1;
+            }
+
+            let mut npc2 = make_npc(100, 100);
+            npc2.tactic = Tactic::Pursue;
+            npc2.goal = Goal::Attack2;
+            npc2.facing = 0;
+            do_tactic(&mut npc2, 200, 100, None, &[], tick);
+            if npc2.facing != 0 {
+                reaim_a2 += 1;
+            }
+        }
+        assert!(
+            reaim_a2 > reaim_a1,
+            "Attack2 should re-aim more often: a1={reaim_a1}, a2={reaim_a2}"
+        );
     }
 }
