@@ -33,31 +33,6 @@ pub const RACE_SHOPKEEPER: u8 = 0x88;
 /// Beggar race code (from fmain.c do_option GIVE case: race 0x8d).
 pub const RACE_BEGGAR: u8 = 0x8d;
 
-/// Compute 8-way compass direction (0=N..7=NW) from (sx,sy) toward (tx,ty).
-/// Mirrors the direction LUT in set_course (fmain2.c): uses com2[] mapping
-/// from (xsign, ysign) to compass direction.
-/// Returns 9 if at same position (STILL).
-fn direction_to_target(sx: i16, sy: i16, tx: i16, ty: i16) -> u8 {
-    let dx = tx as i32 - sx as i32;
-    let dy = ty as i32 - sy as i32;
-    if dx == 0 && dy == 0 {
-        return 9; // STILL
-    }
-    // Suppress minor axis if major > 2× minor (set_course mode-1 smart seek).
-    let adx = dx.abs();
-    let ady = dy.abs();
-    let eff_dx = if ady > adx * 2 { 0 } else { dx };
-    let eff_dy = if adx > ady * 2 { 0 } else { dy };
-    let xi = (eff_dx.signum() + 1) as usize;
-    let yi = (eff_dy.signum() + 1) as usize;
-    const COM2: [[u8; 3]; 3] = [
-        [7, 0, 1],   // dy: -1 (NW, N, NE)
-        [6, 9, 2],   // dy:  0 (W, STILL, E)
-        [5, 4, 3],   // dy: +1 (SW, S, SE)
-    ];
-    COM2[yi][xi]
-}
-
 /// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum NpcState {
@@ -262,18 +237,6 @@ mod tests {
         };
         npc.tick(None, false);
         assert!(npc.x > 0); // should have moved east
-    }
-
-    #[test]
-    fn test_npc_direction_to_hero() {
-        // Hero directly east of NPC → facing should be 2 (E)
-        assert_eq!(direction_to_target(100, 100, 200, 100), 2);
-        // Hero directly north → facing 0 (N)
-        assert_eq!(direction_to_target(100, 100, 100, 50), 0);
-        // Hero NE → facing 1 (NE)
-        assert_eq!(direction_to_target(100, 100, 200, 50), 1);
-        // Hero SW → facing 5 (SW)
-        assert_eq!(direction_to_target(100, 100, 50, 200), 5);
     }
 
     #[test]
