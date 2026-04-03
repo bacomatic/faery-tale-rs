@@ -58,7 +58,7 @@ All attack triggers set/clear the persistent `input.fight` flag:
 - **Keyboard (Kp0):** Already works — `KeyDown` sets true, `KeyUp` clears.
 - **Controller A button:** `ControllerButtonDown` sets `self.input.fight = true`. `ControllerButtonUp` clears it. No longer calls `do_option(GameAction::Fight)`.
 - **HI bar click:** Sets `self.input.fight = true` on `MouseButtonDown`. Clears on `MouseButtonUp`.
-- **`do_option(GameAction::Fight)`:** Removed as a combat entry point. If other code paths still dispatch this action, they set `input.fight = true` instead of calling combat directly.
+- **`do_option(GameAction::Fight)`:** The Fight arm in `do_option()` now sets `self.input.fight = true` instead of calling `apply_melee_combat()`. This covers any remaining code paths that dispatch `GameAction::Fight` (e.g., remapped key bindings going through the action system).
 
 The `apply_player_input()` fight branch remains responsible for:
 - Suppressing movement when `input.fight` is true
