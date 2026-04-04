@@ -1,15 +1,9 @@
 # Ignore build artifacts
 build/
 
-# Local RAG index/cache
-.rag/
-
 # Local environment overrides (template remains tracked as .env.example)
 .env
 .env.local
-
-# Ignore Amiga NDK header files I copy locally I won't distribute them due to copyright
-original/include_h
 
 ############################################################################################
 # Copied from https://github.com/github/gitignore/blob/main/Rust.gitignore

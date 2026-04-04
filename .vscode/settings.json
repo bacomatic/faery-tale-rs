@@ -3,17 +3,10 @@
         "**/.cargo/registry/src/**/*.rs": true,
         "**/lib/rustlib/src/rust/library/**/*.rs": true,
     },
-    "[m68k]": {
-        "editor.rulers": []
-    },
     "chat.tools.terminal.autoApprove": {
         "cargo test": true,
         "cargo build": true,
         "cargo run": true,
-        "/^bash scripts/plan_sync_check\\.sh$/": {
-            "approve": true,
-            "matchCommandLine": true
-        },
         "git remote": true
     },
     "makefile.configureOnOpen": false
