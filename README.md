@@ -9,13 +9,14 @@ A research and documentation project for reverse-engineering *The Faery Tale Adv
 ```
 (root)              Original source code (Aztec C + 68000 assembly) — READ ONLY
 docs/
-  ARCHITECTURE.md   System architecture overview with Mermaid diagrams
-  RESEARCH.md       Comprehensive mechanics reference (20 sections)
-  STORYLINE.md      Quest flows and NPC interactions as state diagrams
-  PROBLEMS.md       Open questions needing expert input
-  _discovery/       Raw findings from discovery agents (working notes)
-game/               Runtime binary assets (images, fonts, music, map sectors)
-ToArchive/          Original distribution package
+  ARCHITECTURE.md   System architecture overview, Mermaid diagrams, display geometry
+  RESEARCH.md       Comprehensive mechanics reference (20 numbered sections)
+  STORYLINE.md      Quest flows and NPC interactions as Mermaid state diagrams
+  PROBLEMS.md       Open questions that can't be answered from source code alone
+  world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
+  _discovery/       Raw findings from discovery agents — working notes, not final docs
+game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
+ToArchive/          Original distribution package — READ ONLY
 tools/              Verification scripts and 68k assembly testing
   run.sh            Venv wrapper — runs any tool script via .toolenv
   verify_asm.py     Assemble & execute 68k snippets (GNU as + machine68k)
@@ -49,30 +50,33 @@ The documentation is three-tiered:
   ```
 - **Python dependencies** are installed automatically into `.toolenv/` on first use of `tools/run.sh`
 
-## Agent Hierarchy
+## Agent Architecture: Flat Iterative Model
 
-Research is driven by AI agents in VS Code Copilot, organized in a strict delegation chain:
+Research is driven by AI agents in VS Code Copilot. Because VS Code does not support nested agent dispatch, all agents are dispatched **directly by the user** (the orchestrator). No agent can dispatch another agent.
 
 ```
-Orchestrator (/reverse-engineer prompt or user)
-  └── Researcher (one per topic — plans, reviews, writes docs)
-        ├── Discovery Agent (traces code, writes to _discovery/)
-        └── Experimenter Agent (runs verification scripts)
+User / Orchestrator
+  ├── @scanner      (one-time broad survey → _discovery/high_level_scan.md)
+  ├── @discovery    (traces code paths, writes to _discovery/)
+  ├── @researcher   (reviews discovery files, writes final docs)
+  └── @experimenter (writes/runs verification scripts under tools/)
 ```
 
-Each level has a defined role and must not do the work of levels below it. All agents enforce anti-drift rules: no guessing, no unsupported claims, structured escalation when stuck, and mandatory source citations for every documented fact.
+Work proceeds in iterative waves — dispatch one agent, review its output, then decide the next step. All agents enforce anti-drift rules: no guessing, no unsupported claims, structured escalation when stuck, and mandatory source citations for every documented fact.
 
 ### Agents
 
 | Agent | Role | Scope |
 |-------|------|-------|
-| `@researcher` | Coordinates research on a single topic — plans investigation, dispatches sub-agents, reviews findings, writes final docs | Reads source code, writes to `docs/`. Does NOT do systematic code exploration or write to `_discovery/`. |
+| `@scanner` | Broad codebase survey — shallow scan of all source files, produces a topic inventory | Reads source code, writes `docs/_discovery/high_level_scan.md`. Runs once. |
 | `@discovery` | Deep code exploration — traces mechanics across files, follows all references | Reads source code, writes raw findings to `docs/_discovery/`. Does NOT write final documentation. |
+| `@researcher` | Synthesizes discovery findings into final documentation | Reviews `docs/_discovery/` files, does lightweight verification reads, writes to `docs/`. Does NOT do systematic code exploration or write to `_discovery/`. |
 | `@experimenter` | Experimental verification — writes and runs scripts that mechanically validate claims | Reads source code, writes scripts and results under `tools/`. Does NOT write documentation. |
 
 **Example prompts:**
-- `@researcher How does the save/load system serialize actor state?`
-- `@researcher Trace the complete NPC dialogue flow for the turtle (race 7)`
+- `@discovery Trace the combat damage formula across fmain.c and fsubs.asm`
+- `@researcher Synthesize the save/load findings from _discovery/save-load.md into RESEARCH.md`
+- `@experimenter Verify the direction vector table from fsubs.asm`
 
 ### Prompts
 
@@ -96,12 +100,18 @@ Each level has a defined role and must not do the work of levels below it. All a
 | `docs-conventions` | `docs/**` | Source citation format (`file.c:LINE`), speech references (`speak(N)`), section numbering, read-only source protection |
 | `tools-conventions` | `tools/**` | Naming conventions, result format, source read-only constraint, tool reuse policy |
 
-### Typical Workflow
+### Iterative Wave Workflow
 
-1. **Investigate** — use `@researcher` or `/verify-mechanic` to trace a mechanic in the source code
-2. **Verify** — use `/run-experiment` to mechanically validate findings
-3. **Review** — examine the findings and approve corrections
-4. **Apply** — use `/update-doc` to write changes across all affected documentation files
+Research on any topic follows this cycle. The user drives every step.
+
+1. **Scan** (once): Dispatch `@scanner` → produces `docs/_discovery/high_level_scan.md`. Reuse across all topics.
+2. **Discover**: Dispatch `@discovery` for a specific topic → produces/updates a `docs/_discovery/<topic>.md` file.
+3. **Review**: Read the discovery file. If gaps remain, dispatch `@discovery` again with a narrower prompt.
+4. **Document**: Dispatch `@researcher` with the discovery file path → researcher reviews and writes to `docs/`.
+5. **Verify**: Dispatch `@experimenter` to validate specific claims → produces results in `tools/results/`.
+6. **Correct**: If verification finds issues, loop back to step 2 or 4.
+
+Each agent dispatch handles **exactly one topic** (e.g., "combat damage formula", not "combat system"). If a topic is too broad, decompose it into smaller topics before dispatching.
 
 ### Monitoring PROBLEMS.md
 
@@ -135,12 +145,12 @@ All source files are **read-only** — original 1987 artifacts preserved for ref
 | `fmain.c` | Core game loop, actors, combat, physics, rendering, UI |
 | `fmain2.c` | Quests, NPC dialogue, shops, brother succession, save/load |
 | `fsubs.asm` | Movement vectors, joystick handler, direction tables |
-| `fsupp.asm` | Assembly support routines |
-| `gdriver.asm` | Graphics driver: bitplane compositing, sprite rendering |
+| `fsupp.asm` | Assembly versions of colorplay, stillscreen, skipint (superseded) |
+| `gdriver.asm` | Audio driver: VBlank music interrupt, score/sample playback, tempo |
 | `narr.asm` | All in-game message text, indexed by speech number |
-| `terrain.c` | Terrain data decoding, region names |
+| `terrain.c` | Extracts terrain data from IFF landscape images into `terra` binary (build tool) |
 | `ftale.h` | Master header: structs, motion states, goal modes, constants |
 | `iffsubs.c` | IFF/ILBM image parser |
 | `hdrive.c` | Disk I/O and async asset loading |
-| `text.c` | Text rendering, HUD display |
-| `mtrack.c` | 4-channel music tracker/player |
+| `text.c` | Standalone font test program by Talin (not game-related) |
+| `mtrack.c` | Disk track writer: game assets to disk 1 (build tool) |
