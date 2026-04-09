@@ -98,7 +98,7 @@ The link order determines symbol resolution. Assembly modules (`fsubs.o`, `narr.
 | `mtrack.c` | ~218 | Tool | Writes game assets to disk 1 at specific block offsets |
 | `rtrack.c` | ~129 | Tool | Writes game assets to disk 2 (subset of disk 1 data) |
 | `copyimage.c` | ~79 | Tool | Raw disk sector copy utility (device → file) |
-| `text.c` | ~460 | Tool | Standalone font test program by Dave Joiner (not game-related) |
+| `text.c` | ~460 | Tool | Standalone font test program by Talin (not game-related) |
 | `form.c` | ~655 | Tool | Standalone form/screen editor "edform" by Talin (not game-related) |
 
 **Not linked** (present in repo but not compiled into any target):

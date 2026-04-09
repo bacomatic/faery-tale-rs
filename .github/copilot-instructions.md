@@ -173,7 +173,7 @@ Built from 8 object files linked by the makefile:
 | `mtrack.c` | Writes game assets to disk 1 at specific block offsets |
 | `rtrack.c` | Writes game assets to disk 2 (subset of disk 1 data) |
 | `copyimage.c` | Raw disk sector copy utility (device → file) |
-| `text.c` | Standalone font test program by Dave Joiner (not game-related) |
+| `text.c` | Standalone font test program by Talin (not game-related) |
 | `form.c` | Standalone form/screen editor "edform" by Talin (not game-related) |
 
 ### Not Linked
