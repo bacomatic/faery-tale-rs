@@ -28,6 +28,10 @@ RESEARCH.md is the single source of truth for game mechanics documentation. Edit
 
 When something cannot be determined from source code alone (magic numbers, platform-dependent behavior, gameplay intent vs. bugs), log it in `docs/PROBLEMS.md` using the entry template. Never guess or infer — file a problem for expert review.
 
+## Experiment Results
+
+Files in `tools/results/` are transient (gitignored) and must **never** be linked from documentation. When an experiment produces findings relevant to a doc entry, inline the key results directly — include the reproduction command (`python tools/<script>.py`), a bullet summary of findings, and any data tables needed to support the conclusion. The reader must be able to understand the evidence without access to `tools/results/`.
+
 ## Read-Only Source
 
 Never edit `.c`, `.asm`, `.h`, `.i`, `.p` files, `makefile`, `AztecC.Err`, `fta.br`, `notes`, or anything in `game/` or `ToArchive/`. These are original 1987 artifacts — read only to extract information for documentation.

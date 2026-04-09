@@ -13,15 +13,20 @@ docs/
   RESEARCH.md       Comprehensive mechanics reference (20 sections)
   STORYLINE.md      Quest flows and NPC interactions as state diagrams
   PROBLEMS.md       Open questions needing expert input
-  _sections/        Deep-dive files, one per RESEARCH.md section
-  superpowers/      Plans and specs for the research project itself
+  _discovery/       Raw findings from discovery agents (working notes)
 game/               Runtime binary assets (images, fonts, music, map sectors)
 ToArchive/          Original distribution package
+tools/              Verification scripts and 68k assembly testing
+  run.sh            Venv wrapper — runs any tool script via .toolenv
+  verify_asm.py     Assemble & execute 68k snippets (GNU as + machine68k)
+  validate_citations.py   Check doc citations against source files
+  extract_table.py        Pull data tables from source
+  requirements.txt  Python dependencies for .toolenv
 .github/
-  copilot-instructions.md   Workspace instructions for AI agents
-  agents/                   Custom agent definitions
-  prompts/                  Reusable task prompts
-  instructions/             File-scoped conventions
+  copilot-instructions.md   Workspace instructions and anti-drift rules
+  agents/                   Agent definitions (researcher, discovery, experimenter)
+  prompts/                  Task prompts (verify-mechanic, reverse-engineer, etc.)
+  instructions/             File-scoped conventions (docs, tools)
 ```
 
 ## Documentation
@@ -35,64 +40,91 @@ The documentation is three-tiered:
 | [STORYLINE.md](docs/STORYLINE.md) | Narrative layer: quest progression, NPC dialogue trees, event sequences |
 | [PROBLEMS.md](docs/PROBLEMS.md) | Open questions that can't be answered from source code alone |
 
-Each section in RESEARCH.md has a corresponding deep-dive in `docs/_sections/` (e.g., `section_03_characters.md` expands §3).
+## Prerequisites
 
-## Research Tools
+- **Python 3.10+** — for verification tools
+- **binutils-m68k-linux-gnu** — GNU cross-assembler for 68000, used by `verify_asm.py`
+  ```bash
+  sudo apt-get install binutils-m68k-linux-gnu
+  ```
+- **Python dependencies** are installed automatically into `.toolenv/` on first use of `tools/run.sh`
 
-This project includes AI agent customizations for VS Code Copilot to support structured reverse-engineering research.
+## Agent Hierarchy
 
-### Agent: `@researcher`
+Research is driven by AI agents in VS Code Copilot, organized in a strict delegation chain:
 
-A specialized agent for source code archaeology. Select it from the agent picker in Copilot Chat.
+```
+Orchestrator (/reverse-engineer prompt or user)
+  └── Researcher (one per topic — plans, reviews, writes docs)
+        ├── Discovery Agent (traces code, writes to _discovery/)
+        └── Experimenter Agent (runs verification scripts)
+```
 
-**What it does:** Reads original source code, traces game mechanics across files, cross-references multiple code paths, and reports findings with precise `file:line` citations. Has no terminal access and cannot edit source files.
+Each level has a defined role and must not do the work of levels below it. All agents enforce anti-drift rules: no guessing, no unsupported claims, structured escalation when stuck, and mandatory source citations for every documented fact.
+
+### Agents
+
+| Agent | Role | Scope |
+|-------|------|-------|
+| `@researcher` | Coordinates research on a single topic — plans investigation, dispatches sub-agents, reviews findings, writes final docs | Reads source code, writes to `docs/`. Does NOT do systematic code exploration or write to `_discovery/`. |
+| `@discovery` | Deep code exploration — traces mechanics across files, follows all references | Reads source code, writes raw findings to `docs/_discovery/`. Does NOT write final documentation. |
+| `@experimenter` | Experimental verification — writes and runs scripts that mechanically validate claims | Reads source code, writes scripts and results under `tools/`. Does NOT write documentation. |
 
 **Example prompts:**
 - `@researcher How does the save/load system serialize actor state?`
 - `@researcher Trace the complete NPC dialogue flow for the turtle (race 7)`
-- `@researcher What terrain types does prox() block, and at what thresholds?`
 
-### Prompt: `/verify-mechanic`
+### Prompts
 
-A structured verification workflow for investigating a specific game mechanic.
-
-**What it does:** Searches the source for all code paths implementing a mechanic, reads and traces the logic, cross-references at least two independent code paths, then compares findings against existing documentation. Reports what's correct, incorrect, and missing — and waits for approval before editing.
+| Prompt | Purpose |
+|--------|---------|
+| `/reverse-engineer` | Top-level orchestration — scans codebase, decomposes into topics, dispatches one researcher per topic sequentially |
+| `/verify-mechanic` | Structured verification of a specific game mechanic — traces code, cross-references paths, compares against existing docs |
+| `/run-experiment` | Dispatches the experimenter agent to write and run a verification script |
+| `/update-doc` | Applies approved changes to documentation files with citation enforcement |
 
 **Example invocations:**
-- `/verify-mechanic direction encoding`
-- `/verify-mechanic lava damage and rose protection`
+- `/reverse-engineer full codebase scan`
 - `/verify-mechanic combat hit calculation and bravery scaling`
+- `/run-experiment extract direction vectors from fsubs.asm`
+- `/update-doc fix key names in §8 rescue sequence`
 
-### Prompt: `/update-doc`
+### Instructions
 
-Applies approved changes to documentation files.
-
-**What it does:** Takes a described change and applies it to RESEARCH.md and the matching `_sections/` file together. Also checks ARCHITECTURE.md and STORYLINE.md for related content that may need updating. Enforces citation format and section numbering conventions.
-
-**Example invocations:**
-- `/update-doc fix key names in §8 rescue sequence to Green, Blue, Red, Grey, White`
-- `/update-doc add Crystal Shard terrain bypass subsection to §6`
-
-### Instruction: `docs-conventions`
-
-Auto-attaches whenever any file under `docs/` is being edited. Enforces:
-- Source citation format (`file.c:LINE` or `file.c:START-END`)
-- Speech reference format (`speak(N)`)
-- Section numbering conventions
-- Dual-update rule (RESEARCH.md + matching `_sections/` file)
-- Read-only source file protection
+| Instruction | Auto-attaches to | Enforces |
+|-------------|-------------------|----------|
+| `docs-conventions` | `docs/**` | Source citation format (`file.c:LINE`), speech references (`speak(N)`), section numbering, read-only source protection |
+| `tools-conventions` | `tools/**` | Naming conventions, result format, source read-only constraint, tool reuse policy |
 
 ### Typical Workflow
 
 1. **Investigate** — use `@researcher` or `/verify-mechanic` to trace a mechanic in the source code
-2. **Review** — examine the findings and approve corrections
-3. **Apply** — use `/update-doc` to write changes across all affected documentation files
+2. **Verify** — use `/run-experiment` to mechanically validate findings
+3. **Review** — examine the findings and approve corrections
+4. **Apply** — use `/update-doc` to write changes across all affected documentation files
 
 ### Monitoring PROBLEMS.md
 
-Agents are instructed to log questions in [PROBLEMS.md](docs/PROBLEMS.md) whenever they encounter something that can't be determined from source code alone — magic numbers, ambiguous variable names, platform-specific Amiga behavior, or cases where gameplay intent is unclear (intentional design vs. bug).
+Agents log questions in [PROBLEMS.md](docs/PROBLEMS.md) whenever they encounter something that can't be determined from source code alone — magic numbers, ambiguous variable names, platform-specific Amiga behavior, or cases where gameplay intent is unclear (intentional design vs. bug).
 
-**Check this file periodically.** Your play-testing experience and domain knowledge is needed to resolve these entries. When you can answer a question, add your resolution and move the entry to the Resolved section. Agents will incorporate your answers into the documentation on the next relevant edit.
+**Check this file periodically.** Your play-testing experience and domain knowledge is needed to resolve these entries.
+
+## Verification Tools
+
+All tools run via `tools/run.sh`, which manages a shared `.toolenv/` virtual environment:
+
+```bash
+# Validate source citations in documentation
+tools/run.sh validate_citations.py
+
+# Extract data tables from source
+tools/run.sh extract_table.py fsubs.asm xdir ydir
+
+# Assemble and execute 68k code to verify assembly logic
+tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
+```
+
+`verify_asm.py` uses `m68k-linux-gnu-as` (GNU cross-assembler) and `machine68k` (Musashi-based CPU emulator) to assemble and execute 68000 code snippets. It accepts Motorola syntax matching the FTA source files, supports labels, data directives, step-by-step tracing, initial register/memory setup, and JSON output. See [tools/README.md](tools/README.md) for full usage.
 
 ## Source Code Reference
 

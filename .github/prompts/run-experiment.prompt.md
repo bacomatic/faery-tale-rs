@@ -11,9 +11,14 @@ Run an experiment to verify the research claim described below. Follow the full 
 
 Read the relevant documentation and source code to understand what is being claimed. Identify the specific files, lines, data tables, or formulas involved.
 
-## Step 2: Check for existing tools
+## Step 2: Complete the Reuse Checklist (MANDATORY)
 
-List the `tools/` directory and check if an existing script already handles this type of verification. Prefer reusing or extending existing tools over creating new ones.
+List the `tools/` directory and read the Tool Inventory in the experimenter agent definition. For each existing tool, state whether it applies to this experiment and why. You must explicitly write one of:
+- "Extending `<script>.py` because: ..."
+- "Importing from `<script>.py` because it provides: ..."
+- "Creating new script because no existing tool provides: ... Checked: `<tool1>` (no, because ...), `<tool2>` (no, because ...)"
+
+**Do not proceed to Step 3 without completing this step.**
 
 ## Step 3: Write or extend a verification script
 

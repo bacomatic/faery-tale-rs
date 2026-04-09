@@ -18,6 +18,7 @@ docs/
   ARCHITECTURE.md   System architecture overview, Mermaid diagrams, display geometry
   RESEARCH.md       Comprehensive mechanics reference (20 numbered sections)
   STORYLINE.md      Quest flows and NPC interactions as Mermaid state diagrams
+  world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
   _discovery/       Raw findings from discovery agents — working notes, not final docs
   superpowers/      Plans and specs for the reverse-engineering project itself
 game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
@@ -32,6 +33,60 @@ Documentation is three-tiered:
 2. **RESEARCH.md** — Ground truth: 20 numbered sections covering every game mechanic with formulas, data tables, and code citations
 3. **STORYLINE.md** — Narrative layer: quest progression, NPC dialogue trees, event sequences as Mermaid diagrams
 4. **PROBLEMS.md** — Open questions that cannot be answered from source code alone, awaiting expert input
+5. **world_db.json** — Pre-computed spatial database cross-referencing all location-dependent game data (see [Spatial Database](#spatial-database) below)
+
+## Spatial Database
+
+`docs/world_db.json` is a machine-readable spatial index generated from the game's binary map data and hardcoded source tables. **Discovery agents must consult this file when investigating any location-dependent mechanic** — doors, encounters, quest triggers, object placement, terrain features, or reachability questions.
+
+The database contains:
+- **objects** (129): Every world object with pixel coords, region, sector, grid position, type, and place name
+- **doors** (86): All door/stair/gate transitions with outside and inside endpoints resolved to regions and sectors
+- **extents** (23): Encounter trigger zones (rectangles) with type codes and resolution to region/sector
+- **zones** (3): Hardcoded special zones (desert gate, fiery death box, astral plane)
+- **sector_terrain** (996): Per-sector terrain composition summaries across all 10 regions
+- **region_grids** (10): Full 64×32 tile grids per region, each tile classified by terrain type
+
+**How to use it**: Load the JSON and filter by region, sector, or coordinate range. For example, to find what's near a specific location, filter objects/doors/extents whose `region` matches, then check `grid_col`/`grid_row` proximity. The `place_name` field on objects and door endpoints gives the in-game location name from `narr.asm`.
+
+**Regeneration**: Run `python tools/decode_map_data.py --export-world-db` to regenerate from `game/image` and the hardcoded tables.
+
+## Agent Architecture: Flat Iterative Model
+
+Subagents **cannot dispatch other subagents**. All agents are dispatched directly by the orchestrator. Work proceeds in iterative waves — each wave dispatches one agent, reviews its output, then decides the next step.
+
+```
+Orchestrator (top-level agent or user)
+  ├── scanner      (one-time broad survey → _discovery/high_level_scan.md)
+  ├── discovery    (traces code paths, writes to _discovery/)
+  ├── researcher   (reviews discovery files, writes final docs)
+  └── experimenter (writes/runs verification scripts under tools/)
+```
+
+### Agent Roles
+
+- **Orchestrator** reads existing docs and discovery files, decomposes topics, dispatches agents one at a time, and reviews all output. It does NOT read source code in detail or do systematic exploration.
+- **Scanner Agent** performs a broad, shallow scan of all source files and writes a structured topic inventory to `docs/_discovery/high_level_scan.md`. It runs **once** — the output is a durable reference as long as the source code hasn't changed. It does NOT trace mechanics or write final documentation.
+- **Discovery Agent** traces mechanics across source files and writes raw findings to `docs/_discovery/`. It does NOT write final documentation or dispatch other agents.
+- **Researcher Agent** reviews discovery files in `docs/_discovery/`, synthesizes findings, and writes final documentation to `docs/`. It does NOT do systematic code exploration, dispatch agents, or write to `docs/_discovery/`.
+- **Experimenter Agent** writes and runs verification scripts under `tools/`. It does NOT write documentation or discovery files.
+
+### Iterative Wave Workflow
+
+Research on any topic follows this cycle. The orchestrator drives every step.
+
+1. **Scan** (once): Dispatch `scanner` → produces `docs/_discovery/high_level_scan.md`. Reuse this across all topics.
+2. **Discover**: Dispatch `discovery` agent for a specific topic → produces/updates a `docs/_discovery/<topic>.md` file.
+3. **Review**: Orchestrator reads the discovery file. If gaps remain, dispatch `discovery` again with a narrower prompt.
+4. **Document**: Dispatch `researcher` agent with the discovery file path → researcher reads it and writes to `docs/`.
+5. **Verify**: Dispatch `experimenter` agent to validate specific claims → produces results in `tools/results/`.
+6. **Correct**: If verification finds issues, loop back to step 2 or 4.
+
+Waves are sequential per topic. Independent topics may overlap, but no more than 2–3 concurrent dispatches.
+
+### Single-Topic Rule
+
+Each agent dispatch handles **exactly one topic** (e.g., "combat damage formula", not "combat system"). If a topic is too broad, decompose it into smaller topics before dispatching.
 
 ## Documentation Conventions
 
@@ -87,20 +142,45 @@ When reviewing another agent's work, read the actual artifact (discovery file, e
 
 ## Key Source Files (Quick Reference)
 
+### Game Executable (`fmain`)
+
+Built from 8 object files linked by the makefile:
+
 | File | Domain |
 |------|--------|
 | `fmain.c` | Core game loop, actors, combat, physics, rendering, UI |
-| `fmain2.c` | Quests, NPC dialogue, shops, brother succession, save/load, win condition |
+| `fmain2.c` | Quests, NPC dialogue, shops, brother succession, save/load, visual effects |
 | `fsubs.asm` | Movement vectors, joystick handler, direction tables, low-level subroutines |
-| `fsupp.asm` | Assembly support routines |
-| `gdriver.asm` | Graphics driver: bitplane compositing, sprite rendering, blitter ops |
+| `gdriver.asm` | Audio driver: VBlank music interrupt server, score/sample playback, tempo |
 | `narr.asm` | All in-game message text, indexed by speech number |
-| `terrain.c` | Terrain data decoding, region names |
+| `iffsubs.c` | IFF/ILBM image parser and ByteRun1 decompressor |
+| `hdrive.c` | Dual-path disk I/O (floppy raw sectors / hard drive file) |
+| `MakeBitMap.asm` | Bitplane allocation/deallocation |
+
+### Shared Headers
+
+| File | Domain |
+|------|--------|
 | `ftale.h` | Master header: struct definitions, motion states, goal modes, display constants |
-| `iffsubs.c` | IFF/ILBM image parser |
-| `hdrive.c` | Disk I/O and async asset loading |
-| `text.c` | Text rendering, HUD display |
-| `mtrack.c` | 4-channel music tracker/player |
+| `ftale.i` | Assembly struct definitions mirroring `ftale.h` |
+| `fincludes.c` | Precompiled header aggregator for Aztec C (`-hi amiga39.pre`) |
+
+### Offline Tools (not part of game executable)
+
+| File | Domain |
+|------|--------|
+| `terrain.c` | Extracts terrain data from IFF landscape images into `terra` binary |
+| `mtrack.c` | Writes game assets to disk 1 at specific block offsets |
+| `rtrack.c` | Writes game assets to disk 2 (subset of disk 1 data) |
+| `copyimage.c` | Raw disk sector copy utility (device → file) |
+| `text.c` | Standalone font test program by Dave Joiner (not game-related) |
+| `form.c` | Standalone form/screen editor "edform" by Talin (not game-related) |
+
+### Not Linked
+
+| File | Domain |
+|------|--------|
+| `fsupp.asm` | Assembly versions of `colorplay`, `stillscreen`, `skipint` — superseded by C versions in `fmain2.c` |
 
 ## Technical Context
 

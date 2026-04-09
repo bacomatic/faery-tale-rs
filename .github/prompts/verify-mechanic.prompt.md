@@ -1,5 +1,5 @@
 ---
-description: "Verify a game mechanic by reading original source code, citing specific lines, and updating documentation with findings"
+description: "Verify a game mechanic by reading original source code, citing specific lines, and reporting findings for documentation"
 agent: "agent"
 argument-hint: "Describe the mechanic or system to verify (e.g., 'direction encoding', 'lava damage', 'door system')"
 ---
