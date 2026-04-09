@@ -2,17 +2,34 @@
 
 This directory contains scripts that mechanically verify research claims made in the `docs/` documentation against the original 1987 source code. Scripts are created and run by the `@experimenter` agent, either standalone or as a subagent spawned by `@researcher`.
 
+## Setup
+
+All tools run from a shared virtual environment at `.toolenv/`. The `tools/run.sh` wrapper creates it automatically on first use:
+
+```bash
+# First run creates .toolenv and installs dependencies from tools/requirements.txt
+tools/run.sh verify_asm.py --help
+```
+
+`verify_asm.py` also requires the GNU 68k cross-assembler (system package):
+```bash
+sudo apt-get install binutils-m68k-linux-gnu
+```
+
 ## Quick Start
 
 ```bash
 # Validate all source citations in documentation
-python tools/validate_citations.py
+tools/run.sh validate_citations.py
 
 # Extract a data table from source and display it
-python tools/extract_table.py fsubs.asm xdir ydir
+tools/run.sh extract_table.py fsubs.asm xdir ydir
+
+# Assemble and execute a 68k snippet to verify assembly logic
+tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 
 # Run any script with --help for options
-python tools/<script>.py --help
+tools/run.sh <script>.py --help
 ```
 
 ## Naming Conventions
@@ -23,6 +40,31 @@ python tools/<script>.py --help
 | `extract_` | Pull data from source files | `extract_table.py` |
 | `verify_` | Test formulas/algorithms | `verify_combat_damage.py` |
 | `decode_` | Parse binary assets | `decode_map_sector.py` |
+
+## 68000 Assembly Verification
+
+`verify_asm.py` assembles and executes 68k code snippets using `m68k-linux-gnu-as` (GNU cross-assembler) and `machine68k` (Musashi-based CPU emulator). This prevents research errors from misunderstanding 68k assembly instructions in the FTA source code.
+
+**Examples:**
+```bash
+# Simple arithmetic with step-by-step trace
+tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
+
+# Set initial state and inspect specific registers
+tools/run.sh verify_asm.py -c "add.l d1,d0" --set-reg d0=100,d1=50 --regs d0
+
+# Memory operations
+tools/run.sh verify_asm.py -c "move.w (a0),d0" \
+  --set-reg a0=0x2000 --set-mem 0x2000=0xBEEF --regs d0 --mem 0x2000:4
+
+# Assembly from a file
+tools/run.sh verify_asm.py snippet.s --trace
+
+# JSON output for scripting
+tools/run.sh verify_asm.py -c "moveq #5,d0" --json
+```
+
+Uses Motorola syntax (matching the FTA source files) via `--register-prefix-optional`. Supports labels, `dc.b`/`dc.w`/`dc.l` data directives, and all 68000 addressing modes.
 
 ## Results
 
