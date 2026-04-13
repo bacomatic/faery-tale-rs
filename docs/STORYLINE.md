@@ -55,9 +55,9 @@ The quest begins in **Tambry** (sectors 64–69), a small village in the plains.
 
 **The Spectre and Crystal Shard**: The **Spectre** (visible only at night, `lightlevel < 40`) haunts a crypt near Marheim. *"HE has usurped my place as lord of undead. Bring me bones of the ancient King."* Finding the **King's Bone** (`stuff[29]`, `ob_list9[8]`) in the underground and giving it to the Spectre yields the **Crystal Shard** (`stuff[30]`): *"Take this crystal shard."* The Shard allows walking through terrain type 12 — spirit barriers in the dungeon passages leading to the Necromancer.
 
-**The Rose and Desert**: The **Rose** (`stuff[23]`) grants fire immunity in the lava zone — when in the `fiery_death` area, `stuff[23]` resets environmental damage to 0 (`fmain.c:1844`). With 5 Golden Statues, the hero can enter the desert through oasis doors (`stuff[25] >= 5` — `fmain.c:1919`). Without them, the desert tiles are overwritten to block passage (`fmain.c:3594`).
+**The Rose and Desert**: With 5 Golden Statues, the hero can enter the desert through oasis doors (`stuff[25] >= 5` — `fmain.c:1919`). Without them, the desert tiles are overwritten to block passage (`fmain.c:3594`). Inside the hidden city of **Azal** (region 8, doors 7–11), the hero finds the **Rose** (`stuff[23]`, `ob_list8[51]`). The Rose grants fire immunity in the lava zone — when in the `fiery_death` area, `stuff[23]` resets environmental damage to 0 (`fmain.c:1844`). This is essential for reaching the **Citadel of Doom** (door 16), which sits inside the volcanic `fiery_death` zone (region 6).
 
-**The Spirit Plane and Necromancer**: Through the desert dungeons and a stargate portal, the hero reaches the **Spirit Plane** (sectors 43–59, 100, 143–149) — a twisted maze where *"Space may twist, and time itself may run backwards!"* The Crystal Shard is needed to navigate its barriers. At the heart lies the **Necromancer's Arena** (sector 46, extent idx 4). The Necromancer (race 9, 50 HP) taunts: *"So this is the so-called Hero... Simply Pathetic."* He can only be damaged with the Bow or Magic Wand (`weapon >= 4`); lesser weapons are deflected: *"Stupid fool, you can't hurt me with that!"* Magic is also explicitly blocked in his arena (`extn->v3 == 9`): *"Your magic won't work here, fool!"*
+**The Spirit Plane and Necromancer**: Through the **Citadel of Doom** (door 16, region 6 volcanic), the hero enters the Doom castle interior (region 8, sectors 135–138). A stargate portal (door 15) leads from the castle to the **Spirit Plane** (sectors 43–59, 100, 143–149 in region 9) — a twisted maze where *"Space may twist, and time itself may run backwards!"* The Crystal Shard is needed to navigate its barriers. At the heart lies the **Necromancer's Arena** (sector 46, extent idx 4). The Necromancer (race 9, 50 HP) taunts: *"So this is the so-called Hero... Simply Pathetic."* He can only be damaged with the Bow or Magic Wand (`weapon >= 4`); lesser weapons are deflected: *"Stupid fool, you can't hurt me with that!"* Magic is also explicitly blocked in his arena (`extn->v3 == 9`): *"Your magic won't work here, fool!"*
 
 **Victory**: When the Necromancer falls, he transforms into a normal man (race 10, Woodcutter) and drops the **Talisman** (object 139, `leave_item(i, 139)` — `fmain.c:1754`). *"The Necromancer had been transformed into a normal man. All of his evil was gone."* Picking up the Talisman sets `stuff[22]`, which triggers `quitflag = TRUE`. The win sequence plays: *"Having defeated the villainous Necromancer and recovered the Talisman, [name] returned to Marheim where he wed the princess..."* A sunrise color animation plays over a victory image, and the tale ends.
 
@@ -101,12 +101,15 @@ flowchart TD
     GET_SUNSTONE --> FIGHT_WITCH[Use Sun Stone on Witch<br>speak 60]
     FIGHT_WITCH --> GET_LASSO[Witch drops Golden Lasso<br>fmain.c:1756]
 
-    EXPLORE --> GET_ROSE[Find Rose<br>Fire Immunity]
-
     DESERT --> OASIS_DOOR[Enter Oasis Door<br>DESERT type, fmain.c:1919]
-    OASIS_DOOR --> DUNGEON[Dungeon<br>Region 9]
-    DUNGEON --> STARGATE[Stargate Portal<br>fmain.c:254-255]
-    STARGATE --> SPIRIT_WORLD[Spirit Plane<br>narr.asm msg 11]
+    OASIS_DOOR --> AZAL[Hidden City of Azal<br>Region 8 buildings]
+    AZAL --> GET_ROSE[Find Rose<br>Fire Immunity, ob_list8 idx 51]
+
+    GET_ROSE --> CITADEL[Cross Lava to<br>Citadel of Doom, door 16]
+    GET_SHARD --> CITADEL
+    CITADEL --> DOOM_CASTLE[Castle Interior<br>Region 8 island 22]
+    DOOM_CASTLE --> STARGATE[Stargate Portal<br>door 15]
+    STARGATE --> SPIRIT_WORLD[Spirit Plane<br>Region 9]
     SPIRIT_WORLD --> NECRO_ARENA[Necromancer Arena<br>extent idx 4]
     NECRO_ARENA --> FIGHT_NECRO[Defeat Necromancer<br>50 HP, weapon >= 4 required<br>Magic blocked in arena]
     FIGHT_NECRO --> TALISMAN_DROP[Necromancer transforms<br>Drops Talisman obj 139]
@@ -662,7 +665,7 @@ From `_place_tbl` / `_place_msg` — `narr.asm:86-193`. Sector ranges determine 
 | 159–162 | Hidden City of Azal | Requires 5 Gold Statues |
 | 163 | Outlying Fort | Desert region |
 | 164–167 | Crystal Palace | Blue Key doors |
-| 171–174 | Citadel of Doom | — |
+| 171–174 | Citadel of Doom | Gateway to Spirit Plane (door 16, inside fiery_death zone) |
 | 176 | Pixle Grove | — |
 | 179 | Tombs of Hemsath | Stair to underground |
 | 180 | Forbidden Keep | — |
@@ -715,11 +718,12 @@ The doorlist (`fmain.c:240-325`, `DOORCOUNT = 86`) maps outdoor coordinates to i
 | Unreachable Castle (idx 67) | STAIR → region 8 | Princess rescue location |
 | Tombs (idx 20) | STAIR → region 9 | Underground dungeon |
 | Spider Exit (idx 70) | CAVE → region 9 | Spider pit area |
+| Citadel of Doom (idx 16) | STAIR → region 8 | Doom castle interior (sec 135–138) |
+| Stargate (idx 14-15) | STAIR bidirectional | Portal: Doom castle ↔ Spirit Plane |
 | Village (idx 31-39) | VWOOD/HWOOD → region 8 | 9 village doors |
 | City (idx 50-61) | Various → region 8 | 12 city doors |
 | Cabins (10 pairs) | VLOG/LOG → region 8 | Each cabin has yard + door |
-| Desert Oasis (idx 7-11) | DESERT → region 8 | Requires 5 Gold Statues |
-| Stargate (idx 14-15) | STAIR bidirectional | Portal between region 8 and 9 |
+| Desert Oasis (idx 7-11) | DESERT → region 8 | Hidden city of Azal buildings |
 
 **Desert gate**: All 5 oasis doors (type DESERT) require `stuff[25] >= 5` (Gold Statues) — `fmain.c:1919`.
 
