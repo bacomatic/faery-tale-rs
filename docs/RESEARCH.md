@@ -2695,6 +2695,8 @@ short brave, luck, kind, wealth, hunger, fatigue;
 
 These are part of a contiguous saved block starting at `map_x` (`fmain.c:557`), serialized as 80 bytes via `saveload((void *)&map_x, 80)` (`fmain2.c:1516`).
 
+> **Compiler caveat:** The source code assumes these variables are laid out contiguously in memory in declaration order. Disassembly of the `fmain` executable in this repository shows the Aztec C compiler scattered them across BSS — `map_y` is 2 bytes *below* `map_x`, `hero_x`/`hero_y` are 154+ bytes *above*, and `cheat1` is 474 bytes below. The 80-byte `saveload` call therefore captures `map_x` plus 78 bytes of unrelated variables. Save files from the original shipped release (tested with `game/A.faery` created from a release disk image) are correct, indicating the release was built with a compiler version that preserved declaration order. The `fmain` in this repository appears to have been compiled later with an optimizing toolchain that reorders globals. See [PROBLEMS.md §P21](PROBLEMS.md) for the full analysis.
+
 Vitality is per-actor (`struct shape.vitality` at `ftale.h:65`), NOT a global. The hero's vitality is `anim_list[0].vitality`.
 
 ### 14.2 Hunger System

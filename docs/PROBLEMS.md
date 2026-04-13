@@ -32,11 +32,11 @@ Unresolvable questions requiring expert input, runtime experiments, or informati
 
 **Impact**: The save file's 80-byte misc block captures `map_x` at offset 0 followed by 78 bytes of **unrelated BSS variables** (from earlier declarations that the linker placed above `map_x`). Variables essential for correct game state — `map_y`, `hero_x`, `hero_y`, `safe_x`, `safe_y`, `cheat1`, `riding`, `flying`, `wcarry`, `daynight` — are **never saved or restored**.
 
+**Root cause — repo executable only**: Save files created from the original shipped release (tested with `game/A.faery` from a release disk image) are correct — the 80-byte misc block contains all the expected variables in declaration order. The `fmain` binary in this repository was evidently compiled with a later version of the Aztec C toolchain that reorders BSS globals as an optimization, breaking the source code's assumption that `&map_x` through `&map_x+79` covers the intended variable block. This bug is specific to the repo's executable and does **not** affect the game as originally shipped.
+
 **Open questions**:
-1. **Does the game compensate?** Some variables may be derivable from other saved data (e.g., `anim_list[0].abs_x/abs_y` captures the hero's screen position, and `region_num` is saved separately). The game may partially reconstruct state on load.
-2. **What 40 shorts does the block actually contain?** Identifying the variables at A4-relative offsets -16472 through -16394 requires systematic disassembly of all code accessing those addresses.
-3. **Did this affect the shipped game?** The save/load bug may explain reported issues with save corruption or unexpected behavior after loading a saved game.
-4. **Is this an Aztec C quirk or a linker ordering issue?** Within a single declaration statement (`unsigned short map_x, map_y, ...`), the compiler reversed variable order (last declared at lowest address). Between statements, allocation order appears unrelated to source order.
+1. **What 40 shorts does the repo executable's block actually contain?** Identifying the variables at A4-relative offsets -16472 through -16394 requires systematic disassembly of all code accessing those addresses.
+2. **Which Aztec C version was used for the repo build?** The release was likely built with an earlier version that preserved declaration-order BSS layout.
 
 Reproduction: `python tools/decode_savegame.py game/A.faery` shows `map_x`=18892 (correct for post-revive) but `map_y`=0 at offset 2 (should be 15665).
 
