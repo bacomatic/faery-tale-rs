@@ -51,7 +51,7 @@ The quest begins in **Tambry** (sectors 64–69), a small village in the plains.
 
 **The Witch and Golden Lasso**: In **Grimwood** (Witch's Castle, sectors 96–99), the Witch hisses: *"Look into my eyes and Die!!"* Without the Sun Stone, all attacks are blocked: *"Stupid fool, you can't hurt me with that!"* USEing the Sun Stone when the witch is present makes her vulnerable. Killing her (race `0x89`) drops the **Golden Lasso** (`stuff[5]`, `leave_item(i, 27)` — `fmain.c:1756`). The lasso is the key to the swan.
 
-**The Swan**: The bird carrier normally provides basic flight. But when the hero rides the bird while holding the Golden Lasso (`active_carrier==11 && stuff[5]`), the bird becomes a **swan** — capable of flying over mountains and all terrain. The swan bypasses collision checks entirely (`goto newloc` skips `proxcheck()`), making the entire world accessible. Dismounting is blocked in lava zones and at high speed.
+**The Swan**: The bird carrier (`actor_file == 11`) can only be mounted when the hero has the Golden Lasso (`stuff[5]`) and is near the bird (`raftprox && wcarry == 3` — `fmain.c:1497-1502`). Without the lasso, the bird sits on the ground, unmountable. Once mounted (`riding = 11`), the swan uses momentum-based physics (`environ = -2`, velocity cap `e = 40` — `fmain.c:1582`) and bypasses terrain collision entirely (`goto newloc` skips `proxcheck()` — `fmain.c:1591-1594`), making the entire world accessible — mountains, water, lava, all flyable. Facing is derived from velocity, not joystick input (`set_course(0, -nvx, -nvy, 6)` — `fmain.c:1592`). Dismounting (fire button) is blocked in three cases: in the volcanic `fiery_death` zone (*"Ground is too hot for swan to land"* — `event(32)`, `fmain.c:1418`), at high velocity when `|vel_x| >= 15` or `|vel_y| >= 15` (*"Flying too fast to dismount"* — `event(33)`, `fmain.c:1427`), or silently when the landing terrain is impassable (`proxcheck` at two heights — `fmain.c:1421-1422`). On successful dismount, the hero is repositioned 14 pixels above the swan's position (`fmain.c:1420, 1424`).
 
 **The Spectre and Crystal Shard**: The **Spectre** (visible only at night, `lightlevel < 40`) haunts a crypt near Marheim. *"HE has usurped my place as lord of undead. Bring me bones of the ancient King."* Finding the **King's Bone** (`stuff[29]`, `ob_list9[8]`) in the underground and giving it to the Spectre yields the **Crystal Shard** (`stuff[30]`): *"Take this crystal shard."* The Shard allows walking through terrain type 12 — spirit barriers in the dungeon passages leading to the Necromancer.
 
@@ -156,8 +156,7 @@ Four transport modes exist, each unlocking new areas of the world. All carriers 
 |---------|-------|-------------|------------|-------------|
 | Raft | 1 | Automatic near water edges | Cross rivers/lakes | Water only; no steering |
 | Turtle | 5 | Save turtle eggs → talk to turtle → USE Sea Shell | Ocean travel | Water only; summoned via `move_extent(1,...)` |
-| Bird | 11 | Extent zone (idx 0); repositioned after princess rescue | Basic flight over land | Cannot cross mountains or lava |
-| Swan | 11 | Ride bird while holding Golden Lasso (`stuff[5]`) | Unrestricted flight over all terrain | Dismount blocked in lava (`event(32)`) and at speed (`event(33)`) |
+| Swan (bird) | 11 | Extent zone (idx 0); requires Golden Lasso (`stuff[5]`) to mount (`fmain.c:1498`) | Unrestricted flight over all terrain | Dismount blocked in lava (`event(32)`), at speed (`event(33)`), or on impassable terrain (`fmain.c:1421-1422`) |
 
 **Key interactions**:
 - All carriers suppress random encounters (`fmain.c:2081`)
