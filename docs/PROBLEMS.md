@@ -4,6 +4,44 @@ Unresolvable questions requiring expert input, runtime experiments, or informati
 
 ---
 
+## Open Problems
+
+### P21. `saveload(&map_x, 80)` saves wrong memory region — BSS layout mismatch
+
+**Source**: `fmain2.c:1507` — `saveload((void *)&map_x,80);`
+
+**Description**: The 80-byte "misc variables" save block is critically broken. The developer assumed that the variables declared together in `fmain.c:557-581` would be contiguous in memory starting at `&map_x`, but the Aztec C compiler scattered them across BSS:
+
+| Variable | Declared offset (source comment) | Actual A4-relative | Offset from &map_x |
+|----------|-----|-----------|---------|
+| map_x | 0 | -16472 | 0 ✓ |
+| map_y | 2 | -16474 | **-2** (below block) |
+| hero_x | 4 | -16318 | **+154** (above block) |
+| hero_y | 6 | -16316 | **+156** (above block) |
+| cheat1 | 18 | -16946 | **-474** (below block) |
+
+`saveload(&map_x, 80)` writes 80 bytes starting at A4-16472 going upward (to A4-16393). Of the intended save variables, only `map_x` itself is at offset 0 — the rest are scattered hundreds of bytes away and are **not included** in the save block.
+
+**Evidence**:
+- `map_x` confirmed at A4-16472 via `pea (-16472,a4)` at code+0xCED8 (the saveload call) and `addi.w #280,(-16472,a4)` at code+0x1B1E (cheat key handler)
+- `map_y` confirmed at A4-16474 via `subi.w #150,(-16474,a4)` at code+0x1ADA (cheat key handler)
+- `hero_x` confirmed at A4-16318 via `move.w #19036,(-16318,a4)` at code+0x6AB0 (revive function)
+- `hero_y` confirmed at A4-16316 via `move.w #15755,(-16316,a4)` at code+0x6AB6 (revive function)
+- `cheat1` confirmed at A4-16946 via 11 `tst.w (-16946,a4)` instructions matching 11 source-code tests
+- `sizeof(struct shape)` confirmed as 22 bytes via the computed `anix * sizeof(struct shape)` expression at code+0xCEFE–0xCF10
+
+**Impact**: The save file's 80-byte misc block captures `map_x` at offset 0 followed by 78 bytes of **unrelated BSS variables** (from earlier declarations that the linker placed above `map_x`). Variables essential for correct game state — `map_y`, `hero_x`, `hero_y`, `safe_x`, `safe_y`, `cheat1`, `riding`, `flying`, `wcarry`, `daynight` — are **never saved or restored**.
+
+**Open questions**:
+1. **Does the game compensate?** Some variables may be derivable from other saved data (e.g., `anim_list[0].abs_x/abs_y` captures the hero's screen position, and `region_num` is saved separately). The game may partially reconstruct state on load.
+2. **What 40 shorts does the block actually contain?** Identifying the variables at A4-relative offsets -16472 through -16394 requires systematic disassembly of all code accessing those addresses.
+3. **Did this affect the shipped game?** The save/load bug may explain reported issues with save corruption or unexpected behavior after loading a saved game.
+4. **Is this an Aztec C quirk or a linker ordering issue?** Within a single declaration statement (`unsigned short map_x, map_y, ...`), the compiler reversed variable order (last declared at lowest address). Between statements, allocation order appears unrelated to source order.
+
+Reproduction: `python tools/decode_savegame.py game/A.faery` shows `map_x`=18892 (correct for post-revive) but `map_y`=0 at offset 2 (should be 15665).
+
+---
+
 ## Resolved Problems
 
 These problems have been conclusively answered from the source code.

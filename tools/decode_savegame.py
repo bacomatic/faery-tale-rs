@@ -154,6 +154,10 @@ def decode_misc(data, offset, show_hex):
     """Decode the 80-byte misc variables block. fmain.c:557-590"""
     print("=" * 60)
     print("MISC VARIABLES (80 bytes at offset {:#06x})".format(offset))
+    print("  *** WARNING: field names below assume source declaration")
+    print("      order matches BSS layout.  Disassembly shows it does")
+    print("      not — only map_x at offset 0 is confirmed.  See")
+    print("      docs/PROBLEMS.md §P21. ***")
     print("=" * 60)
     if show_hex:
         print(hexdump(data, offset, 80))
