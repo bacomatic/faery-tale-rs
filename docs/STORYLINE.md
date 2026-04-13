@@ -508,7 +508,6 @@ sequenceDiagram
 sequenceDiagram
     participant Hero
     participant Spectre
-    participant Ghost as Ghost Brother
 
     Note over Spectre: Only visible at night<br>lightlevel < 40
 
