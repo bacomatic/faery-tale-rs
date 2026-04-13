@@ -35,6 +35,32 @@ Source: `blist[]` — `fmain.c:2807-2812`. Vitality = `15 + brave/4` — `fmain.
 
 Source: `narr.asm:302-336`. Counter: `princess` variable — `fmain.c:568`.
 
+### Narrative Walkthrough
+
+The quest begins in **Tambry** (sectors 64–69), a small village in the plains. Julian sets out with only a dirk, 20 gold pieces, and the mayor's plea. The world is large and nonlinear — there is no enforced quest order — but the item gates create a natural progression.
+
+**Early exploration**: The hero explores the plains around Tambry and the nearby farms and city of **Marheim** (sectors 80–95). Talking to **wizards** (when `kind >= 10`) yields cryptic hints: *"Kind deeds could gain thee a friend from the sea"*, *"The Witch lives in the dim forest of Grimwood"*, *"Only the light of the Sun can destroy the Witch's Evil."* **Beggars**, when given gold, offer prophecies: *"Seek two women, one Good, one Evil"*, *"Where is the hidden city?"*. **Rangers** give directions to the dragon's cave. **Priests** heal the hero's wounds on every visit (`vitality = 15 + brave/4`) and offer counsel about the spirit plane and teleport stones. The **King** at Marheim can only lament: *"I cannot help you, young man"* — until the princess is rescued.
+
+**The Turtle and Sea Shell**: In the swamp (region 2), the hero discovers **Turtle Eggs** at an extent zone. When the turtle carrier spawns, talking to it earns gratitude: *"Oh, thank you for saving my eggs!"* — and the **Sea Shell** (`stuff[6]`), which can be USEd anywhere to summon the turtle for ocean travel. This opens the coastlines and islands.
+
+**Princess Rescue**: The princess is imprisoned in the **Forbidden Keep** (sector 180), an "unreachable castle surrounded by unclimbable mountains" — accessible only through underground passages or (later) by swan. When the hero enters the princess extent zone with `ob_list8[9].ob_stat != 0`, the rescue cinematic plays. The hero is teleported to Marheim (5511, 33780), the **King** speaks: *"Here is a writ designating you as my official agent"* — granting the **Writ** (`stuff[28]`), 100 gold, and 3 of each key type. The bird extent is also repositioned from the southern mountains to the Marheim farmlands (`move_extent(0, 22205, 21231)`), a hidden reward. Each brother can trigger one rescue; the `princess` counter advances through Katra → Karla → Kandy.
+
+**The Five Golden Statues**: Five golden figurines of Azal-Car-Ithil are needed to enter the **Burning Waste** desert and reach the hidden city of **Azal** (sectors 159–162). Three statues sit on the ground: at **Seahold** (`ob_listg[6]`), in the **Ogre Den** (`ob_listg[7]`), and in the **Octagonal Room** (`ob_listg[8]`). The **Sorceress** at the Crystal Palace gives one on first visit: *"Welcome. Here is one of the five golden figurines you will need."* The **Priest** gives one when shown the Writ: *"Ah! You have a writ from the king. Here is one of the golden statues."* Both NPCs "give" statues by making invisible ground objects visible (`ob_stat = 1`), which the player picks up normally.
+
+**The Dark Knight and Sun Stone**: The **Knight of Dreams** (race 7, 40 HP) guards the **Pixie Grove** shrine (extent idx 15, Hidden Valley). *"None may enter the sacred shrine of the People who came Before!"* Defeating him grants access: *"You have earned the right to enter and claim the prize."* Inside the Elf Glade sanctuary, the **Sun Stone** (`stuff[7]`) awaits — the key to defeating the Witch.
+
+**The Witch and Golden Lasso**: In **Grimwood** (Witch's Castle, sectors 96–99), the Witch hisses: *"Look into my eyes and Die!!"* Without the Sun Stone, all attacks are blocked: *"Stupid fool, you can't hurt me with that!"* USEing the Sun Stone when the witch is present makes her vulnerable. Killing her (race `0x89`) drops the **Golden Lasso** (`stuff[5]`, `leave_item(i, 27)` — `fmain.c:1756`). The lasso is the key to the swan.
+
+**The Swan**: The bird carrier normally provides basic flight. But when the hero rides the bird while holding the Golden Lasso (`active_carrier==11 && stuff[5]`), the bird becomes a **swan** — capable of flying over mountains and all terrain. The swan bypasses collision checks entirely (`goto newloc` skips `proxcheck()`), making the entire world accessible. Dismounting is blocked in lava zones and at high speed.
+
+**The Spectre and Crystal Shard**: The **Spectre** (visible only at night, `lightlevel < 40`) haunts a crypt near Marheim. *"HE has usurped my place as lord of undead. Bring me bones of the ancient King."* Finding the **King's Bone** (`stuff[29]`, `ob_list9[8]`) in the underground and giving it to the Spectre yields the **Crystal Shard** (`stuff[30]`): *"Take this crystal shard."* The Shard allows walking through terrain type 12 — spirit barriers in the dungeon passages leading to the Necromancer.
+
+**The Rose and Desert**: The **Rose** (`stuff[23]`) grants fire immunity in the lava zone — when in the `fiery_death` area, `stuff[23]` resets environmental damage to 0 (`fmain.c:1844`). With 5 Golden Statues, the hero can enter the desert through oasis doors (`stuff[25] >= 5` — `fmain.c:1919`). Without them, the desert tiles are overwritten to block passage (`fmain.c:3594`).
+
+**The Spirit Plane and Necromancer**: Through the desert dungeons and a stargate portal, the hero reaches the **Spirit Plane** (sectors 43–59, 100, 143–149) — a twisted maze where *"Space may twist, and time itself may run backwards!"* The Crystal Shard is needed to navigate its barriers. At the heart lies the **Necromancer's Arena** (sector 46, extent idx 4). The Necromancer (race 9, 50 HP) taunts: *"So this is the so-called Hero... Simply Pathetic."* He can only be damaged with the Bow or Magic Wand (`weapon >= 4`); lesser weapons are deflected: *"Stupid fool, you can't hurt me with that!"* Magic is also explicitly blocked in his arena (`extn->v3 == 9`): *"Your magic won't work here, fool!"*
+
+**Victory**: When the Necromancer falls, he transforms into a normal man (race 10, Woodcutter) and drops the **Talisman** (object 139, `leave_item(i, 139)` — `fmain.c:1754`). *"The Necromancer had been transformed into a normal man. All of his evil was gone."* Picking up the Talisman sets `stuff[22]`, which triggers `quitflag = TRUE`. The win sequence plays: *"Having defeated the villainous Necromancer and recovered the Talisman, [name] returned to Marheim where he wed the princess..."* A sunrise color animation plays over a victory image, and the tale ends.
+
 ---
 
 ## 2. Quest Progression
@@ -82,7 +108,7 @@ flowchart TD
     DUNGEON --> STARGATE[Stargate Portal<br>fmain.c:254-255]
     STARGATE --> SPIRIT_WORLD[Spirit Plane<br>narr.asm msg 11]
     SPIRIT_WORLD --> NECRO_ARENA[Necromancer Arena<br>extent idx 4]
-    NECRO_ARENA --> FIGHT_NECRO[Defeat Necromancer<br>50 HP, needs Bow/Wand]
+    NECRO_ARENA --> FIGHT_NECRO[Defeat Necromancer<br>50 HP, weapon >= 4 required<br>Magic blocked in arena]
     FIGHT_NECRO --> TALISMAN_DROP[Necromancer transforms<br>Drops Talisman obj 139]
     TALISMAN_DROP --> PICK_TALISMAN[Pick Up Talisman<br>stuff 22 set]
     PICK_TALISMAN --> WIN[Win Sequence<br>win_colors plays]
@@ -108,16 +134,53 @@ Five golden figurines are required to access the desert and the hidden city of A
 |------|---------|-------------|---------|
 | Writ | stuff[28] | Princess rescue → `fmain2.c:1598` | Show to Priest for Gold Statue |
 | Gold Statues ×5 | stuff[25] | Various (§2.2) | Gate to desert/Azal |
-| Sun Stone | stuff[7] | Ground pickup, ob_list8[18] | Makes Witch vulnerable — `fmain2.c:231-233` |
+| Sun Stone | stuff[7] | Ground pickup, ob_list8[18] | Makes Witch vulnerable — `fmain2.c:231-233`. Also required for combat: without Sun Stone, all attacks on Witch are blocked (`speak(58)`) |
 | Golden Lasso | stuff[5] | Dropped by witch (race 0x89) on death — `fmain.c:1756` | Enables riding the Swan — `fmain.c:1498` |
 | Sea Shell | stuff[6] | Talk to Turtle with `active_carrier==5` | Summon Turtle for water travel |
 | Rose | stuff[23] | Ground pickup, ob_list8[51] | Fire immunity — `fmain.c:1844` |
 | Bone | stuff[29] | Ground pickup, ob_list9[8] | Give to Spectre for Shard |
-| Crystal Shard | stuff[30] | Give Bone to Spectre — `fmain.c:3503` | Walk through crystal walls — `fmain.c:1609` |
+| Crystal Shard | stuff[30] | Give Bone to Spectre — `fmain.c:3503` | Walk through terrain type 12 (crystal/spirit barriers) — `fmain.c:1609`. Required for navigating Spirit Plane |
 | Crystal Orb | stuff[12] | Pickups/containers | `secret_timer` — reveals secret passages |
 | Talisman | stuff[22] | Necromancer drops on death — `fmain.c:1754` | Picking it up wins the game |
 
 See [RESEARCH.md §10](RESEARCH.md#10-inventory--items) for full item mechanics.
+
+### 2.4 Transport Progression
+
+Four transport modes exist, each unlocking new areas of the world. All carriers share `anim_list[3]` (except the raft at `anim_list[1]`), meaning only one active carrier at a time.
+
+| Carrier | Actor | How Obtained | Capability | Restriction |
+|---------|-------|-------------|------------|-------------|
+| Raft | 1 | Automatic near water edges | Cross rivers/lakes | Water only; no steering |
+| Turtle | 5 | Save turtle eggs → talk to turtle → USE Sea Shell | Ocean travel | Water only; summoned via `move_extent(1,...)` |
+| Bird | 11 | Extent zone (idx 0); repositioned after princess rescue | Basic flight over land | Cannot cross mountains or lava |
+| Swan | 11 | Ride bird while holding Golden Lasso (`stuff[5]`) | Unrestricted flight over all terrain | Dismount blocked in lava (`event(32)`) and at speed (`event(33)`) |
+
+**Key interactions**:
+- All carriers suppress random encounters (`fmain.c:2081`)
+- All doors are blocked while mounted (`fmain.c:1901`)
+- Cannot talk to NPCs while riding swan/bird (`riding==11`, `fmain.c:2338`)
+- Freeze spell blocked when `riding > 1` (`fmain.c:3308`)
+- After combat, the turtle auto-resumes if turtle eggs are visible (`fmain2.c:274`)
+- Carrier and enemy shapes share memory — loading one unloads the other (`fmain.c:2730, 2791`)
+
+Source: `load_carrier()` — `fmain.c:2784-2802`. Extent zones — `fmain.c:2680-2720`.
+
+### 2.5 Magic Items
+
+Seven magic items (`stuff[9]`–`stuff[15]`) provide tactical advantages. All require weapon slot selection and are consumed on use via the MAGIC menu (`fmain.c:3301-3324`).
+
+| Item | stuff[] | Effect | Source |
+|------|---------|--------|--------|
+| Blue Stone | stuff[9] | Teleport to Great Stone Ring (sector 144) | `fmain.c:3312` |
+| Green Jewel | stuff[10] | Teleport to last-visited inn | `fmain.c:3315` |
+| Gold Ring | stuff[11] | Freeze all enemies on screen | `fmain.c:3308` — blocked when `riding > 1` |
+| Crystal Orb | stuff[12] | Start `secret_timer` — reveals hidden objects (`ob_stat == 5`) | `fmain.c:3310` |
+| Vial | stuff[13] | Full heal: vitality = `15 + brave/4` | `fmain.c:3319` |
+| Jade Skull | stuff[14] | Kill all enemies on screen | `fmain.c:3321` |
+| Red Gem | stuff[15] | *(Listed in `inv_list` but no effect code found)* | — |
+
+> **Note**: The Crystal Orb (`stuff[12]`) is uniquely valuable — it reveals hidden ground objects by setting `secret_timer`, which cycles `ob_stat` between 5 and 6 (visible/hidden) each frame. Objects with `ob_stat == 5` have their `race` temporarily set to 0, making them pickable.
 
 ---
 
@@ -159,12 +222,12 @@ flowchart TD
     HAS_WRIT -->|No| KIND_CHECK2{kind >= 10?}
     KIND_CHECK2 -->|No| S40["speak(40): Repent, Sinner!"]
     KIND_CHECK2 -->|Yes| ROTATE{daynight % 3}
-    ROTATE -->|0| S36["speak(36): Seek enemy on spirit plane"]
-    ROTATE -->|1| S37["speak(37): Seek power of the Stones"]
-    ROTATE -->|2| S38["speak(38): I shall Heal all your wounds<br>Vitality restored to max"]
+    ROTATE -->|0| S36["speak(36): Seek enemy on spirit plane<br>+ Vitality restored"]
+    ROTATE -->|1| S37["speak(37): Seek power of the Stones<br>+ Vitality restored"]
+    ROTATE -->|2| S38["speak(38): I shall Heal all your wounds<br>+ Vitality restored"]
 ```
 
-Source: `fmain.c:3382-3394`. Healing at `daynight%3==2` sets vitality to `15 + brave/4`.
+Source: `fmain.c:3382-3394`. The vitality restoration (`15 + brave/4`) occurs on **every** visit when `kind >= 10` and no Writ — the rotating message (`daynight % 3`) selects only the speech text, not whether healing occurs. All three speeches (36, 37, 38) are followed by the heal.
 
 ### 3.3 King
 
@@ -183,10 +246,10 @@ Source: `fmain.c:3398`. The King's main role is post-rescue: after `rescue()` fi
 flowchart TD
     TALK_SORC[Talk to Sorceress] --> FIRST_VISIT{ob_listg 9 .ob_stat == 0?}
     FIRST_VISIT -->|Yes first visit| S45["speak(45): Welcome. Here is a golden figurine<br>Sets ob_listg[9].ob_stat = 1"]
-    FIRST_VISIT -->|No already visited| SILENT[No additional dialogue]
+    FIRST_VISIT -->|No already visited| LUCK_BOOST["Silent luck boost:<br>if luck < rand64 then luck += 5"]
 ```
 
-Source: `fmain.c:3400-3403`. The sorceress gives one of the five required Gold Statues on first conversation.
+Source: `fmain.c:3400-3405`. On first visit, the sorceress gives a Gold Statue and speaks. On return visits, no speech plays but `luck` silently increases by 5 (if `luck < rand64()`) — a hidden mechanical reward for revisiting.
 
 ### 3.5 Bartender
 
@@ -258,6 +321,8 @@ flowchart TD
 ```
 
 Source: Talk — `fmain.c:3414`. Auto-speak — `fmain.c:2097`. Give Gold — `fmain.c:3498`. Giving gold (costs 2 `wealth`) may also increase `kind` stat — `fmain.c:3496`.
+
+> **Bug**: The beggar at `ob_list3[3]` (region 3, near Great Bog) has `goal=3`, which overflows the 3 beggar speeches (24–26) and reads `speak(27)` — the first wizard hint text ("Kind deeds could gain thee a friend from the sea"). Only goals 0–2 produce intended beggar dialogue.
 
 ### 3.11 Ranger
 
@@ -408,7 +473,7 @@ sequenceDiagram
 | Farm/City (region 5) | ob_list5[4] | 4 | Sun destroys Witch |
 | Indoors (region 8) | ob_list8[5] | 5 | Princess in unreachable castle |
 | Indoors (region 8) | ob_list8[6] | 6 | Tame the golden beast (Swan) |
-| Underground (region 9) | ob_list9[6] | 0 | Sea friend (Turtle) — same as goal 0 |
+| Underground (region 9) | ob_list9[6] | 6 | Tame the golden beast (Swan) — same hint as region 8 wizard |
 
 ### 5.2 Priest Interaction Flow
 
@@ -800,12 +865,14 @@ Source: `fmain.c:2870-2872`.
 | Topic | RESEARCH.md Section | STORYLINE.md Section |
 |-------|-------------------|---------------------|
 | Brother stats & succession | [§15 Brother Succession](RESEARCH.md#15-brother-succession) | [§4 Brother Succession](#4-brother-succession-narrative) |
-| Combat system | [§7 Combat](RESEARCH.md#7-combat-system) | [§5.4 Witch](#54-witch-combat-encounter), [§5.5 Necromancer](#55-necromancer-final-battle), [§5.6 Dark Knight](#56-dark-knight-knight-of-dreams) |
-| Dark Knight encounter | [§9.8 Dark Knight](RESEARCH.md#98-dark-knight-dknight) | [§5.6 Dark Knight](#56-dark-knight-knight-of-dreams) |
+| Carrier / transport system | [§14 Carrier System](RESEARCH.md#14-carrier-system) | [§2.4 Transport Progression](#24-transport-progression) |
+| Combat system | [§7 Combat](RESEARCH.md#7-combat-system) | [§3.6 Witch](#36-witch), [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
+| Dark Knight encounter | [§9.8 Dark Knight](RESEARCH.md#98-dark-knight-dknight) | [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
 | Dialogue dispatch | [§13 NPC Dialogue](RESEARCH.md#13-npc-dialogue--quests) | [§3 NPC Dialogue Trees](#3-npc-dialogue-trees) |
 | Door system | [§12 Doors](RESEARCH.md#12-door-system) | [§6.4 Door Connections](#64-door-connections) |
 | Encounter zones | [§9 Encounters](RESEARCH.md#9-encounter--spawning) | [§6.5 Peace Zones](#65-peace-zones) |
 | Inventory & items | [§10 Inventory](RESEARCH.md#10-inventory--items) | [§2.3 Key Quest Items](#23-key-quest-items) |
+| Magic items | [§10 Inventory](RESEARCH.md#10-inventory--items) | [§2.5 Magic Items](#25-magic-items) |
 | Princess rescue | [§16 Win Condition](RESEARCH.md#16-win-condition--princess-rescue) | [§7.2 Princess Rescue](#72-princess-rescue-sequence) |
 | Win condition | [§16 Win Condition](RESEARCH.md#16-win-condition--princess-rescue) | [§7.3 Win Sequence](#73-win-condition-sequence) |
 | World objects | [§11 World Objects](RESEARCH.md#11-world-objects) | [§2.2 Gold Statues](#22-gold-statue-sources) |

@@ -1,6 +1,6 @@
 # Discovery: NPC Dialogue & Quest Logic
 
-**Status**: complete
+**Status**: refined
 **Investigated**: 2026-04-05
 **Requested by**: orchestrator
 **Prompt summary**: Trace the complete NPC dialogue system, quest progression logic, speech tables, Talk/Give mechanics, rescue sequence, shop system, and all message tables.
@@ -270,7 +270,7 @@ From `inv_list[]` — `fmain.c:382-417` and `fmain.c:426-430`:
 4. Ogre Den — ob_listg[7] at (25737, 10662), ob_stat=1
 5. Octal Room — ob_listg[8] at (2910, 39023), ob_stat=1
 
-**Note**: Sorceress and Priest give statues through dialogue (their ob_listg entries track "already given") but the actual `stuff[STATBASE]++` increment is NOT visible in the Talk handler code for these two. The sorceress handler sets `ob_listg[9].ob_stat = 1` but doesn't explicitly do `stuff[25]++`. The three ground-placed statues at indices 6-8 ARE picked up through normal object pickup (their ob_id is STATUE). This needs verification — the increment for sorceress/priest statues may be implicit through a mechanism not traced here.
+**Mechanism**: The sorceress and priest don't directly increment `stuff[25]`. Their `ob_listg` entries (indices 9 and 10) have `ob_id=STATUE` and start with `ob_stat=0` (invisible). When the NPC "gives" the statue, it sets `ob_stat=1`, making the STATUE ground object visible at the NPC's location. The player then picks it up via normal item pickup, where the `itrans[]` table maps `STATUE(149)→stuff[25]`. All five statues ultimately reach the player through the same pickup mechanism — three are pre-placed on the ground, two are revealed by NPC dialogue.
 
 ### Quest State Gates
 
@@ -565,23 +565,23 @@ All three ultimately call `_extract` (the C `extract()` function) with a pointer
 
 ## Unresolved
 
-1. **Sorceress/Priest gold statue increment**: The sorceress talk handler (case 7) sets `ob_listg[9].ob_stat = 1` but no explicit `stuff[STATBASE]++` is visible. Similarly for priest (case 1) — sets `ob_listg[10].ob_stat = 1`. The five ground-placed statues (ob_listg[6-8]) have STATUE as their ob_id and would be picked up via normal object pickup. But how do sorceress and priest statue gifts increment `stuff[25]`? Possibly through a mechanism in `set_objects()` or `change_object()` not traced here. The `stuff[STATBASE] < 5` gate checks suggest all 5 must be in the stuff array.
+1. ~~**Sorceress/Priest gold statue increment**~~ **RESOLVED**: The sorceress/priest don't directly increment `stuff[25]`. Instead, `ob_listg[9]` and `ob_listg[10]` are initialized with `ob_id=STATUE` and `ob_stat=0` (invisible). When the NPC sets `ob_stat=1`, the STATUE object becomes a visible ground item at the NPC's location. The player then picks it up via normal item pickup, which hits the `itrans[]` table mapping `STATUE→stuff[25]` (`fmain2.c:982`: `STATUE,25`). All 5 gold statues: indices 6-8 start with ob_stat=1 (already on ground); indices 9-10 start with ob_stat=0 (revealed by sorceress/priest dialogue).
 
-2. **`ob_list8[2].ob_id = 4` in rescue()**: This changes slot 2 (originally noble, ob_id=6) to ob_id=4 (princess). Why? Possibly to place a rescued princess in the castle after rescue. But the noble is at position (5592,33764) which is in the king's castle area.
+2. ~~**`ob_list8[2].ob_id = 4` in rescue()**~~ **RESOLVED**: This changes the Noble NPC (setfig index 6, at coordinates 5592,33764 in the king's castle) to become a Princess NPC (setfig index 4). After rescue, the princess is teleported from the prison to the castle throne room area, so the noble is replaced with the rescued princess visually.
 
-3. **`move_extent(0,22205,21231)` in rescue()**: What extent is being moved and to where? Extent index 0 is the bird extent. Moving the bird after rescue — possibly to reposition the bird for the player's next phase of the quest.
+3. ~~**`move_extent(0,22205,21231)` in rescue()**~~ **RESOLVED**: Extent index 0 is the bird extent (etype=70, carrier type 11). After rescue, the bird extent is repositioned to coordinates (22205±250, 21231±200) — an area near the city of Marheim (region 5, farmlands). This makes the bird available near the king's castle for the player's next phase.
 
-4. **Speak(51) "Sorry, nothing to sell"**: Defined in narr.asm but no `speak(51)` call found in any source file. May be unreachable/unused content.
+4. **Speak(51) "Sorry, nothing to sell"**: Defined in narr.asm but no `speak(51)` call found in any source file. Unreachable/unused content. The BUY handler checks `race==0x88` (bartender) and breaks silently for non-bartenders — no message.
 
-5. **Speak(44) Necromancer transformation**: The necromancer death triggers speak(42) via `checkdead()` (DreamKnight death speech), not speak(44). Speech 44 ("The Necromancer had been transformed into a normal man") — no `speak(44)` call found. The necromancer transforms to race 10 (woodcutter) at `fmain.c:1751-1753` but the transformation narration appears to be unused.
+5. **Speak(44) Necromancer transformation**: No `speak(44)` call found. The necromancer transforms to race 10 (woodcutter) at `fmain.c:1749-1753` silently — speak(42) fires from `checkdead()` for the DreamKnight, not the Necromancer. Speech 44 text ("The Necromancer had been transformed into a normal man") exists in narr.asm but has no code trigger. Likely cut content.
 
-6. **Book item (stuff[26])**: Always disabled in GIVE menu. No specific quest usage found. What was its intended purpose?
+6. **Book item (stuff[26])**: Always disabled in GIVE menu (`menus[GIVE].enabled[6] = 8` hardcoded, `fmain.c:3540`). Found in world as BOOK object (ob_id=150, `fmain2.c:975`). Pickupable via `itrans[]` → `stuff[26]`. But no quest logic tests stuff[26]. Likely cut content or flavor item.
 
-7. **Herb item (stuff[27])**: No special quest-related code paths found beyond basic inventory handling.
+7. **Herb item (stuff[27])**: Pickupable via itrans (object 136→stuff[27], `fmain2.c:983`). No special quest-related code paths found. Standard inventory item with no mechanical effect.
 
-8. **Writ in GIVE menu**: The writ can be enabled in the GIVE submenu via `set_options()` — `fmain.c:3541` — but the GIVE handler has no code for hit==7. Was this intended as a "show writ to guard" mechanic that was never implemented?
+8. **Writ in GIVE menu**: Enabled when `stuff[28]!=0` (`fmain.c:3541`), but GIVE handler has no code for hit==7. Writ is checked passively during Talk → Priest. The GIVE menu slot appears to be a vestigial/cut feature.
 
-9. **Speech 9-11 vs ranger handler**: Speeches 9-11 are labeled as "woodcutter messages" in narr.asm comments but are not used by the ranger Talk handler. The ranger handler uses `speak(22)` for region 2, then `speak(53+goal)` for others. Speeches 9-11 might be early/alternate ranger dialogue that was superseded.
+9. **Speech 9-11 vs ranger handler**: Speeches 9-11 are labeled as "woodcutter messages" in narr.asm comments. The ranger Talk handler uses `speak(22)` for region 2, then `speak(53+goal)` for others (speeches 53-55). Speeches 9-11 are unreferenced in Talk code. They may have been early ranger dialogue replaced by the goal-based system, or intended for a separate "woodcutter" NPC type that was cut.
 
 ## Cross-Cutting Findings
 
@@ -595,6 +595,326 @@ All three ultimately call `_extract` (the C `extract()` function) with a pointer
 - **Necromancer transforms to woodcutter on death** (`fmain.c:1751-1753`): The dying animation completion handler doubles as a quest state transition — race change from 9→10 with vitality restored.
 - **Brother succession writes quest objects** (`fmain.c:2838-2843`): The revive/death system creates dead brother bones and ghost NPCs in the global object list.
 
+## Good Fairy Resurrection System
+
+Source: `fmain.c:1387-1407`.
+
+`goodfairy` is an `unsigned char` — `fmain.c:592`. Set to 0 at revive time — `fmain.c:2834`.
+
+### Trigger
+When `anim_list[0].state == DEAD || anim_list[0].state == FALL` — `fmain.c:1388`.
+
+### Frame-by-Frame Sequence
+`goodfairy` starts at 0. Each frame in the DEAD/FALL block, the logic is:
+
+1. **`goodfairy == 1`** → `revive(FALSE)` — resurrect at last safe location, same brother — `fmain.c:1389`
+2. **`--goodfairy < 20`** → no-op (comment: "resurrection effect/glow") — `fmain.c:1390`
+3. **`luck < 1 && goodfairy < 200`** → `revive(TRUE)` — **permanent death**, next brother starts — `fmain.c:1391`
+4. **`state == FALL && goodfairy < 200`** → `revive(FALSE)` — resurrect at safe location (fall recovery) — `fmain.c:1392-1393`
+5. **`goodfairy < 120`** → fairy sprite animation: place fairy object at `hero_x + goodfairy*2 - 20`, approaching player — `fmain.c:1394-1406`
+
+Since `goodfairy` is `unsigned char`, starting at 0:
+- Frame 1: `--goodfairy` wraps to 255. All conditions fail (255 not < 20, not < 200, not < 120).
+- Frames 2-56: goodfairy counts down from 255 → 200. All conditions still fail.
+- **Frame 57** (goodfairy reaches 199): If `luck < 1` → `revive(TRUE)` — **permanent death**. If `luck >= 1` and state is `FALL` → `revive(FALSE)` — fast fall recovery.
+- Frames 57-136: If luck >= 1 and state DEAD: goodfairy counts from 199 → 120. No action.
+- **Frame 137** (goodfairy reaches 119): Fairy sprite appears, positioned at `hero_x + 119*2 - 20 = hero_x + 218`. Approaches player over subsequent frames.
+- Frames 137-236: Fairy animates closer (goodfairy 119 → 20). Fairy at `hero_x + goodfairy*2 - 20`.
+- **Frame 237** (goodfairy reaches 19): `--goodfairy < 20` → glow effect (no-op). Continues for 18 more frames.
+- **Frame 255** (goodfairy reaches 1): `goodfairy == 1` → `revive(FALSE)` — **resurrection at safe spot**.
+
+### Key Insight
+- **`luck >= 1`**: Good fairy appears, player is resurrected at last safe spot (same brother continues).
+- **`luck < 1`**: Player dies permanently. Next brother starts (or game over if brother == 3).
+- **FALL state**: Faster recovery — revive(FALSE) at goodfairy=199 (~57 frames) regardless of luck, unless luck<1.
+
+### Fairy Approach Animation
+During `goodfairy < 120`, a fairy object (index 100 or 101, alternating with cycle) appears and approaches the player. It's placed at slot `anim_list[3]` with type OBJECTS, race 0xff.
+
+## Door/Key System
+
+### Door Types and Keys
+
+Defined at `fmain.c:1048-1077`:
+
+```c
+enum ky {NOKEY=0, GOLD, GREEN, KBLUE, RED, GREY, WHITE};
+```
+
+`open_list[17]` maps lockable doors to their key requirements — `fmain.c:1059-1077`:
+
+| Index | Door ID | Map Region | Key Required | Type Comment |
+|-------|---------|-----------|--------------|--------------|
+| 0 | 64 | 360 | GREEN | HSTONE |
+| 1 | 120 | 360 | NOKEY | HWOOD |
+| 2 | 122 | 360 | NOKEY | VWOOD |
+| 3 | 64 | 280 | GREY | HSTONE2 |
+| 4 | 77 | 280 | GREY | VSTONE2 |
+| 5 | 82 | 480 | KBLUE | CRYST (Crystal Palace) |
+| 6 | 64 | 480 | GREEN | OASIS |
+| 7 | 128 | 240 | WHITE | MARBLE |
+| 8 | 39 | 680 | GOLD | HGATE |
+| 9 | 25 | 680 | GOLD | VGATE |
+| 10 | 114 | 760 | RED | SECRET |
+| 11 | 118 | 760 | GREY | TUNNEL |
+| 12 | 136 | 800 | GOLD | GOLDEN |
+| 13 | 187 | 800 | NOKEY | HSTON3 |
+| 14 | 73 | 720 | NOKEY | VSTON3 |
+| 15 | 165 | 800 | GREEN | CABINET |
+| 16 | 210 | 840 | NOKEY | BLUE |
+
+### doorfind() Logic — `fmain.c:1081-1125`
+
+1. Check if terrain at (x,y) or (x±4,y) is type 15 (locked door) — `fmain.c:1083-1086`
+2. Find the leftmost/topmost extent of the door by checking adjacent tiles — `fmain.c:1088-1090`
+3. Look up sector_id from map data — `fmain.c:1094-1095`
+4. Iterate `open_list[17]` for matching `door_id` and `map_id` — `fmain.c:1097-1098`
+5. If match found AND (`keytype==0` [NOKEY door] OR `keytype` matches required key) — `fmain.c:1099`:
+   - Replace map tiles to "open" the door — `fmain.c:1100-1113`
+   - `viewstatus = 99` (force redraw) — `fmain.c:1115`
+   - Print "It opened." — `fmain.c:1117`
+   - Return TRUE — `fmain.c:1118`
+6. If no match or wrong key: print "It's locked." (only once per bump) — `fmain.c:1122-1123`
+
+### Key Usage in KEYS Menu — `fmain.c:3473-3489`
+
+1. Player selects a key type (hit 5-10 → key indices 0-5)
+2. `bumped = 0` — reset door bump flag
+3. If `stuff[hit+KEYBASE]` > 0 (has that key):
+   - Try `doorfind()` in 9 directions around the player (all 8 compass + center) — `fmain.c:3478-3481`
+   - If door opens: `stuff[hit+KEYBASE]--` — consume key — `fmain.c:3480`
+   - If no door found: "% tried a [key name] but it didn't fit." — `fmain.c:3483-3486`
+
+### Automatic Door Detection During Walking — `fmain.c:1607`
+When walking into terrain type 15 (door), `doorfind(xtest,ytest,0)` is called with keytype=0. This only opens NOKEY doors automatically. Locked doors require the KEYS menu.
+
+## Cheat Codes
+
+Activated when `cheat1` is TRUE (set at some point not traced). All cheat keys checked at `fmain.c:1293-1340`:
+
+| Key | Effect | Code |
+|-----|--------|------|
+| 'B' | Spawn bird carrier at player location, give lasso | `fmain.c:1293-1296` |
+| '.' | Give 3 random items, clear talisman | `fmain.c:1298-1299` |
+| 'R' | Trigger princess rescue | `fmain.c:1333` |
+| '=' | Print coordinates debug info | `fmain.c:1334` |
+| Ctrl+S (19) | Print sector/extent debug | `fmain.c:1335` |
+| Ctrl+R (18) | Advance daylight by 1000 | `fmain.c:1336` |
+| Ctrl+A (1) | Teleport 150 pixels north | `fmain.c:1337` |
+| Ctrl+B (2) | Teleport 150 pixels south | `fmain.c:1338` |
+| Ctrl+C (3) | Teleport 280 pixels east | `fmain.c:1339` |
+| Ctrl+D (4) | Teleport 280 pixels west | `fmain.c:1340` |
+
+Also: `fmain.c:3310` — cheat1 gates the MAP spell (case 9 in MAGIC) to work inside buildings (`if (cheat1==0 && region_num > 7) return;`).
+
+## Extent System — Full Map
+
+Source: `fmain.c:338-369`. `EXT_COUNT = 22` — `fmain.c:372`.
+
+| Index | Coordinates (x1,y1)-(x2,y2) | etype | v1 | v2 | v3 | Comment |
+|-------|-------------------------------|-------|----|----|----|---------| 
+| 0 | (2118,27237)-(2618,27637) | 70 | 0 | 1 | 11 | Bird extent (carrier type 11) |
+| 1 | (0,0)-(0,0) | 70 | 0 | 1 | 5 | Turtle extent (moveable) |
+| 2 | (6749,34951)-(7249,35351) | 70 | 0 | 1 | 10 | Dragon extent (carrier type 10) |
+| 3 | (4063,34819)-(4909,35125) | 53 | 4 | 1 | 6 | Spider pit (encounter type 6) |
+| 4 | (9563,33883)-(10144,34462) | 60 | 1 | 1 | 9 | Necromancer (forced spawn) |
+| 5 | (22945,5597)-(23225,5747) | 61 | 3 | 2 | 4 | Turtle eggs (snakes, type 4) |
+| 6 | (10820,35646)-(10877,35670) | 83 | 1 | 1 | 0 | Princess rescue trigger |
+| 7 | (19596,17123)-(19974,17401) | 48 | 8 | 8 | 2 | Graveyard (wraiths) |
+| 8 | (19400,17034)-(20240,17484) | 80 | 4 | 20 | 0 | Around city (peace zone, etype 80) |
+| 9 | (0x2400,0x8200)-(0x3100,0x8a00) | 52 | 3 | 1 | 8 | Astral plane (loraii, type 8) |
+| 10 | (5272,33300)-(6112,34200) | 81 | 0 | 1 | 0 | King's castle pax zone |
+| 11 | (11712,37350)-(12416,38020) | 82 | 0 | 1 | 0 | Sorceress pax zone |
+| 12 | (2752,33300)-(8632,35400) | 80 | 0 | 1 | 0 | Peace zone 1 (buildings) |
+| 13 | (10032,35550)-(12976,40270) | 80 | 0 | 1 | 0 | Peace zone 2 (specials) |
+| 14 | (4712,38100)-(10032,40350) | 80 | 0 | 1 | 0 | Peace zone 3 (cabins) |
+| 15 | (21405,25583)-(21827,26028) | 60 | 1 | 1 | 7 | Hidden valley (Dark Knight, forced spawn) |
+| 16 | (6156,12755)-(12316,15905) | 7 | 1 | 8 | 0 | Swamp region (encounter) |
+| 17 | (5140,34860)-(6260,37260) | 8 | 1 | 8 | 0 | Spider region |
+| 18 | (660,33510)-(2060,34560) | 8 | 1 | 8 | 0 | Spider region 2 |
+| 19 | (18687,15338)-(19211,16136) | 80 | 0 | 1 | 0 | Village peace zone |
+| 20 | (16953,18719)-(20240,17484) | 3 | 1 | 3 | 0 | Around village (encounters) |
+| 21 | (20593,18719)-(23113,22769) | 3 | 1 | 3 | 0 | Around city (encounters) |
+| 22 | (0,0)-(0x7fff,0x9fff) | 3 | 1 | 8 | 0 | Whole world fallback |
+
+### Extent Type Semantics (`etype`)
+
+| etype range | Meaning | Handler at |
+|-------------|---------|------------|
+| 0-49 | Regular random encounters (danger_level = 2+xtype or 5+xtype) | `fmain.c:2080-2093` |
+| 50-59 | Set group encounter (forced) | `fmain.c:2700-2714` |
+| 52 | Astral plane (immediate spawn of loraii) | `fmain.c:2695-2699` |
+| 60-61 | Special figure encounter (forced, check if already present) | `fmain.c:2687-2694` |
+| 70 | Carrier (bird/turtle/dragon) loading | `fmain.c:2717-2719` |
+| 80 | Peace zone (no encounters, no weapon drawing) | `fmain.c:2080-2081` check `xtype < 50` |
+| 81 | King's castle pax zone (weapon blocked with event(15)) | `fmain.c:1413` |
+| 82 | Sorceress pax zone (weapon blocked with event(16)) | `fmain.c:1414` |
+| 83 | Princess rescue trigger | `fmain.c:2684-2685` |
+| 84 | Bridge/special display zone | `fmain.c:2564-2566` |
+
+### Extent-Triggered Spawning — `fmain.c:2682-2719`
+
+When `xtype` changes (player enters new extent):
+1. **etype == 83 AND ob_list8[9].ob_stat**: `rescue()` triggered — `fmain.c:2684-2685`
+2. **etype 60/61**: Force-spawn special enemy if race doesn't match `extn->v3` or not enough animators — `fmain.c:2687-2694`
+3. **etype == 52**: Immediate encounter spawn (astral plane loraii) — `fmain.c:2695-2699`
+4. **etype 50-59 (and flag==1)**: Forced group encounter — `fmain.c:2700-2714`
+5. **etype == 70**: Load carrier (bird=11, turtle=5, dragon=10) — `fmain.c:2717-2719`
+
+### Necromancer Extent (Index 4)
+- etype=60, v3=9 (necromancer race)
+- When player enters: if `anim_list[3].race != 9` or `anix < 4`, force-spawn necromancer
+- The necromancer has 50 HP (`encounter_chart[9].hitpoints = 50`) — `fmain.c:62`
+- Magic is blocked: `if (extn->v3 == 9) { speak(59); break; }` — `fmain.c:3304`
+
+### Dark Knight Extent (Index 15)
+- etype=60, v3=7 (dknight race)
+- Hidden valley coordinates: (21405,25583)-(21827,26028)
+- Dark Knight has 40 HP (`encounter_chart[7].hitpoints = 40`) — `fmain.c:60`
+- `set_encounter()` gives dknight fixed position (21635,25762) — `fmain.c:2741`
+- Speaks on approach: speak(41) — `fmain.c:2101`
+- On death: speak(42) "Your prowess in battle is great..." — `fmain.c:2775`
+- Dark Knight behavior: threshold=16 for attack range, stands still facing player — `fmain.c:2163,2168-2169`
+
+## Necromancer Death Handler Detail
+
+Source: `fmain.c:1747-1756`
+
+When an enemy's DYING state timer (`an->tactic`) counts down to 0:
+
+```c
+if (s==DYING && !(--(an->tactic)))
+{   an->state = DEAD;
+    if (an->race == 0x09)
+    {   an->race = 10;      /* transform to woodcutter */
+        an->vitality = 10;  /* restore vitality */
+        an->state = STILL;  /* alive again */
+        an->weapon = 0;     /* unarmed */
+        leave_item(i,139);  /* drop Talisman (object 139) */
+    }
+    if (an->race == 0x89) leave_item(i,27); /* witch drops lasso (object 27=sunstone display) */
+}
+```
+
+The Necromancer death is unique — instead of staying DEAD, race changes to 10 (Woodcutter, which has 4 HP base and no aggression in encounter_chart). The talisman (object 139) is dropped at the necromancer's location via `leave_item()`, which places it in `ob_listg[0]` as a ground object.
+
+### Talisman Pickup → Win Condition
+`fmain.c:3244-3247`:
+```c
+if (stuff[22])
+{   quitflag = TRUE; viewstatus = 2;
+    map_message(); SetFont(rp,afont); win_colors();
+}
+```
+`stuff[22]` is set when the player picks up object 139 (Talisman) via the `itrans[]` table: `139,22` — `fmain2.c:983`.
+
+### itrans[] Object-to-Stuff Mapping Table
+
+Source: `fmain2.c:979-985`. Format: pairs of `{object_id, stuff_index}`:
+
+| Object ID | Stuff Index | Object Name | Stuff Name |
+|-----------|-------------|-------------|------------|
+| 11 (QUIVER) | 35 (ARROWBASE) | Quiver | Arrows |
+| 18 (B_STONE) | 9 | Blue Stone | Blue Stone |
+| 19 (G_JEWEL) | 10 | Green Jewel | Green Jewel |
+| 22 (VIAL) | 11 | Glass Vial | Glass Vial |
+| 21 (C_ORB) | 12 | Crystal Orb | Crystal Orb |
+| 23 (B_TOTEM) | 13 | Bird Totem | Bird Totem |
+| 17 (G_RING) | 14 | Gold Ring | Gold Ring |
+| 24 (J_SKULL) | 15 | Jade Skull | Jade Skull |
+| 145 (M_WAND) | 4 | Magic Wand | Magic Wand |
+| 27 | 5 | (Sun Stone display) | Golden Lasso |
+| 8 | 2 | (Sword obj) | Sword |
+| 9 | 1 | (Mace obj) | Mace |
+| 12 | 0 | (Dirk obj) | Dirk |
+| 10 | 3 | (Bow obj) | Bow |
+| 147 (ROSE) | 23 | Rose | Rose |
+| 148 (FRUIT) | 24 | Fruit | Fruit |
+| 149 (STATUE) | 25 | Gold Statue | Gold Statue |
+| 150 (BOOK) | 26 | Book | Book |
+| 151 (SHELL) | 6 | Sea Shell | Sea Shell |
+| 155 | 7 | (Sun Stone) | Sun Stone |
+| 136 | 27 | — | Herb |
+| 137 | 28 | — | Writ |
+| 138 | 29 | — | Bone |
+| 139 | 22 | — | **Talisman** |
+| 140 | 30 | — | **Crystal Shard** |
+| 25 (GOLD_KEY) | 16 | Gold Key | Gold Key |
+| 153 (GREEN_KEY) | 17 | Green Key | Green Key |
+| 114 (BLUE_KEY) | 18 | Blue Key | Blue Key |
+| 242 (RED_KEY) | 19 | Red Key | Red Key |
+| 26 (GREY_KEY) | 20 | Grey Key | Grey Key |
+| 154 (WHITE_KEY) | 21 | White Key | White Key |
+
+## Brother Succession System Detail
+
+### blist[] — Brother Stats — `fmain.c:2806-2812`
+
+```c
+struct bro blist[] = {
+    { 35,20,15,20,julstuff },  /* Julian: brave=35, luck=20, kind=15, wealth=20 */
+    { 20,35,15,15,philstuff }, /* Phillip: brave=20, luck=35, kind=15, wealth=15 */
+    { 15,20,35,10,kevstuff }   /* Kevin: brave=15, luck=20, kind=35, wealth=10 */
+};
+```
+
+### revive(new) — `fmain.c:2814-2912`
+
+When `new == TRUE` (new brother succession):
+
+1. **Stop music** — `fmain.c:2836`
+2. **Place dead brother bones/ghost** (if brother 1 or 2) — `fmain.c:2837-2841`:
+   - `ob_listg[brother].xc = hero_x; ob_listg[brother].yc = hero_y; ob_listg[brother].ob_stat = 1;` — bones at death location
+   - `ob_listg[brother+2].ob_stat = 3;` — ghost becomes active setfig
+3. **Re-enable princess** — `ob_list8[9].ob_stat = 3;` — `fmain.c:2843`
+4. **Load brother stats** from blist — `fmain.c:2844-2845`
+5. **Increment brother counter** — `fmain.c:2847`
+6. **Clear inventory** — `for (i=0; i<GOLDBASE; i++) stuff[i] = 0;` — `fmain.c:2849`
+7. **Give starting dirk** — `stuff[0] = an->weapon = 1;` — `fmain.c:2850`
+8. **Clear timers** — `secret_timer = light_timer = freeze_timer = 0;` — `fmain.c:2852`
+9. **Set safe location to Tambry** — `safe_x = 19036; safe_y = 15755; region_num = safe_r = 3;` — `fmain.c:2853`
+10. **Display placard** based on brother number — `fmain.c:2861-2868`:
+    - brother==1: placard_text(0) — Julian's quest start
+    - brother==2: placard_text(1) — Julian failed, then placard_text(2) — Phillip starts
+    - brother==3: placard_text(3) — Phillip failed, then placard_text(4) — Kevin starts
+    - brother>3: placard_text(5) — Game Over ("Stay at Home!")
+11. **If brother > 3**: `quitflag = TRUE; Delay(500);` — game ends — `fmain.c:2872`
+12. **Load shapes for new brother** — `fmain.c:2883`
+13. **Starting event messages** — `fmain.c:2888-2891`:
+    - event(9) — "% started the journey in his home village of Tambry"
+    - brother==1: print "." (continuation)
+    - brother==2: event(10) — "as had his brother before him."
+    - brother==3: event(11) — "as had his brothers before him."
+
+When `new == FALSE` (fairy resurrection):
+- `fade_down()` — `fmain.c:2894`
+- Skip placard display, brother doesn't change, inventory preserved
+
+### Common to both paths — `fmain.c:2896-2912`:
+- Teleport to last safe location (`safe_x`, `safe_y`)
+- Full vitality restore: `an->vitality = 15 + brave/4` — `fmain.c:2901`
+- Time reset to morning: `daynight = 8000; lightlevel = 300;` — `fmain.c:2905`
+- Hunger/fatigue reset to 0 — `fmain.c:2906`
+
+### Encounter Chart
+
+Source: `fmain.c:45-63`:
+
+| Race | Name | HP | Arms | Cleverness | Treasure | File |
+|------|------|----|------|------------|----------|------|
+| 0 | Ogre | 18 | 2 | 0 | 2 | 6 |
+| 1 | Orc | 12 | 4 | 1 | 1 | 6 |
+| 2 | Wraith | 16 | 6 | 1 | 4 | 7 |
+| 3 | Skeleton | 8 | 3 | 0 | 3 | 7 |
+| 4 | Snake | 16 | 6 | 1 | 0 | 8 |
+| 5 | Salamander | 9 | 3 | 0 | 0 | 7 |
+| 6 | Spider | 10 | 6 | 1 | 0 | 8 |
+| 7 | DKnight | 40 | 7 | 1 | 0 | 8 |
+| 8 | Loraii | 12 | 6 | 1 | 0 | 9 |
+| 9 | Necromancer | 50 | 5 | 0 | 0 | 9 |
+| 10 | Woodcutter | 4 | 0 | 0 | 0 | 9 |
+
 ## Refinement Log
 
 - 2026-04-05: Initial comprehensive discovery pass. Traced all TALK, GIVE, BUY handlers. Indexed all speeches, event messages, placard texts, and place/inside messages. Identified quest gates and progression flags.
+- 2025-06-19: Major refinement — resolved 3 of 9 Unresolved items (gold statue mechanism, ob_list8[2] change, move_extent in rescue). Added detailed sections: Good Fairy Resurrection System, Door/Key System (open_list with 17 door types), Cheat Codes, Full Extent Map with etype semantics, Necromancer death handler detail, itrans[] object-to-stuff mapping table, Brother Succession system detail, Encounter Chart. Verified all existing findings against source code. Status updated to complete.
