@@ -608,7 +608,27 @@ flowchart TD
 
 ### 6.1 Outdoor Regions
 
-The world is divided into 8 outdoor regions (0–7) plus 2 indoor regions (8–9). Region is computed from map coordinates — `fmain.c:2636-2643`.
+The world is divided into 8 outdoor regions (0–7) plus 2 indoor regions (8–9). The outdoor world is a **2×4 grid** computed from map coordinates: `x_col = ((map_x+151)>>14) & 1`, `y_row = ((map_y+64)>>13) & 7`, `region = x_col + y_row*2` — `fmain.c:2633-2637`.
+
+```
+          WEST (x=0)              EAST (x=1)
+       ┌─────────────────────┬─────────────────────┐
+ NORTH │  0 — Snow Land      │  1 — Witch Wood /   │
+ (y=0) │      (F1)           │      Maze Forest (F2)│
+       ├─────────────────────┼─────────────────────┤
+       │  2 — Swamp Land     │  3 — Plains /       │
+ (y=1) │      Great Bog (F3) │      Tambry (F4)    │
+       ├─────────────────────┼─────────────────────┤
+       │  4 — Desert /       │  5 — Bay / Marheim /│
+ (y=2) │      Azal (F5)      │      Farms (F6)     │
+       ├─────────────────────┼─────────────────────┤
+ SOUTH │  6 — Lava /         │  7 — Forest /       │
+ (y=3) │      Volcanic (F7)  │      Mountains (F8) │
+       └─────────────────────┴─────────────────────┘
+         Indoor regions (entered via doors):
+           8 — Building interiors (F9)
+           9 — Dungeons and caves (F10)
+```
 
 | Region | File | Description |
 |--------|------|-------------|
@@ -623,7 +643,7 @@ The world is divided into 8 outdoor regions (0–7) plus 2 indoor regions (8–9
 | 8 | F9 | Building interiors |
 | 9 | F10 | Dungeons and caves |
 
-Source: `file_index[]` — `fmain.c:615-625`.
+Source: `file_index[]` — `fmain.c:615-625`. Region formula — `fmain.c:2633-2637`.
 
 ### 6.2 Named Outdoor Locations
 
