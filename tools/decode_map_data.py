@@ -1198,6 +1198,134 @@ def cmd_export_world_db(image_file, output_path):
                 terrain[str(sec_num)] = summary
         all_sector_terrain[str(ri)] = terrain
 
+    # --- Compute connectivity islands per region ---
+    # Flood-fill passable (non-zero) tiles to identify disconnected areas.
+    # For indoor regions (8, 9), this reveals isolated buildings/rooms that
+    # cannot be reached by walking — only via doors.
+    from collections import deque as _deque
+
+    connectivity = {}
+    for ri in range(len(FILE_INDEX)):
+        grid = region_grids[str(ri)]['grid']
+        rows, cols = 32, 64
+        xreg, yreg = region_grids[str(ri)]['xreg'], region_grids[str(ri)]['yreg']
+        visited = [[False] * cols for _ in range(rows)]
+        islands = []
+
+        for r in range(rows):
+            for c in range(cols):
+                if grid[r][c] != 0 and not visited[r][c]:
+                    tiles = []
+                    queue = _deque([(r, c)])
+                    visited[r][c] = True
+                    while queue:
+                        cr, cc = queue.popleft()
+                        tiles.append((cr, cc))
+                        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            nr, nc = cr + dr, cc + dc
+                            if (0 <= nr < rows and 0 <= nc < cols
+                                    and not visited[nr][nc] and grid[nr][nc] != 0):
+                                visited[nr][nc] = True
+                                queue.append((nr, nc))
+
+                    sectors = sorted(set(grid[tr][tc] for tr, tc in tiles))
+                    min_col = min(tc for _, tc in tiles)
+                    max_col = max(tc for _, tc in tiles)
+                    min_row = min(tr for tr, _ in tiles)
+                    max_row = max(tr for tr, _ in tiles)
+                    islands.append({
+                        'island_id': len(islands),
+                        'tile_count': len(tiles),
+                        'sectors': sectors,
+                        'bounds': {
+                            'min_col': min_col, 'max_col': max_col,
+                            'min_row': min_row, 'max_row': max_row,
+                        },
+                        'pixel_bounds': {
+                            'x1': (min_col + xreg) * 256,
+                            'y1': (min_row + yreg) * 256,
+                            'x2': (max_col + xreg + 1) * 256,
+                            'y2': (max_row + yreg + 1) * 256,
+                        },
+                    })
+
+        # Build tile→island lookup for door/extent/object mapping
+        island_map = [[-1] * cols for _ in range(rows)]
+        visited3 = [[False] * cols for _ in range(rows)]
+        island_idx = 0
+        for r in range(rows):
+            for c in range(cols):
+                if grid[r][c] != 0 and not visited3[r][c]:
+                    queue = _deque([(r, c)])
+                    visited3[r][c] = True
+                    while queue:
+                        cr, cc = queue.popleft()
+                        island_map[cr][cc] = island_idx
+                        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            nr, nc = cr + dr, cc + dc
+                            if (0 <= nr < rows and 0 <= nc < cols
+                                    and not visited3[nr][nc] and grid[nr][nc] != 0):
+                                visited3[nr][nc] = True
+                                queue.append((nr, nc))
+                    island_idx += 1
+
+        # Map doors to islands
+        door_links = []
+        for di, door in enumerate(doors):
+            for side in ['outside', 'inside']:
+                ep = door[side]
+                if ep.get('region') == ri:
+                    gc = (ep['xc'] >> 8) - xreg
+                    gr = (ep['yc'] >> 8) - yreg
+                    if 0 <= gr < rows and 0 <= gc < cols:
+                        isl_id = island_map[gr][gc]
+                        door_links.append({
+                            'door_index': door['index'],
+                            'side': side,
+                            'grid_col': gc,
+                            'grid_row': gr,
+                            'island_id': isl_id if isl_id >= 0 else None,
+                        })
+
+        # Map extents to islands
+        extent_links = []
+        for ext in extents:
+            if ext.get('region') == ri:
+                cx = ((ext['x1'] + ext['x2']) // 2 >> 8) - xreg
+                cy = ((ext['y1'] + ext['y2']) // 2 >> 8) - yreg
+                if 0 <= cy < rows and 0 <= cx < cols:
+                    isl_id = island_map[cy][cx]
+                    extent_links.append({
+                        'extent_index': ext['index'],
+                        'grid_col': cx,
+                        'grid_row': cy,
+                        'island_id': isl_id if isl_id >= 0 else None,
+                    })
+
+        # Map objects to islands
+        object_links = []
+        for obj in objects:
+            if obj.get('region') == ri:
+                gc = (obj['xc'] >> 8) - xreg
+                gr = (obj['yc'] >> 8) - yreg
+                if 0 <= gr < rows and 0 <= gc < cols:
+                    isl_id = island_map[gr][gc]
+                    object_links.append({
+                        'object_index': obj['index'],
+                        'list_name': obj.get('list', ''),
+                        'grid_col': gc,
+                        'grid_row': gr,
+                        'island_id': isl_id if isl_id >= 0 else None,
+                    })
+
+        connectivity[str(ri)] = {
+            'island_count': len(islands),
+            'islands': islands,
+            'door_links': door_links,
+            'extent_links': extent_links,
+            'object_links': object_links,
+        }
+
     # --- Assemble database ---
     db = {
         'metadata': {
@@ -1226,6 +1354,7 @@ def cmd_export_world_db(image_file, output_path):
                 'place_names': 'narr.asm:86-223',
                 'terrain': 'game/image binary, terra blocks at offset 149',
                 'region_maps': 'game/image binary, region block offsets per file_index',
+                'connectivity': 'flood-fill of region grids; maps doors/extents/objects to islands',
             },
         },
         'regions': regions,
@@ -1245,6 +1374,7 @@ def cmd_export_world_db(image_file, output_path):
         'extents': extents,
         'zones': zones,
         'region_grids': region_grids,
+        'connectivity': connectivity,
         'sector_terrain': all_sector_terrain,
     }
 
@@ -1260,6 +1390,8 @@ def cmd_export_world_db(image_file, output_path):
     print(f'  {len(extents)} encounter extents')
     print(f'  {len(zones)} hardcoded zones')
     print(f'  {n_terrain} sector terrain summaries across {len(FILE_INDEX)} regions')
+    total_islands = sum(c['island_count'] for c in connectivity.values())
+    print(f'  {total_islands} connectivity islands across {len(FILE_INDEX)} regions')
 
 
 def main():
