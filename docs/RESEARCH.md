@@ -1444,13 +1444,14 @@ The dying animation uses `tactic` as a frame countdown from 7 to 0 (`fmain.c:171
 
 When the player is DEAD or FALL, `goodfairy` (unsigned char, starts at 0) undergoes a countdown (`fmain.c:1388-1407`):
 
-1. Frame 1: `--goodfairy` wraps 0→255
-2. Frames 255→200: If `luck < 1`, `revive(TRUE)` — **permanent death**, brother switch
-3. Frames 199→120: Idle
-4. Frames 119→20: Fairy sprite rescue animation
-5. Frame 1: `revive(FALSE)` — **fairy rescue**, same character returns
+1. **DYING phase** (before countdown): `checkdead()` sets `tactic = 7`, `state = DYING` (`fmain.c:2773-2774`). Tactic decrements each frame (7→0) — 7 frames of death animation (sprites 80/81 alternating, `fmain.c:1719-1724`). At tactic 0 → `state = DEAD`, corpse sprite (82). `goodfairy` countdown begins.
+2. **goodfairy 255→200** (~56 frames): Death sequence continues — corpse visible, death song plays. No code branches match in this range.
+3. **goodfairy 199→120** (~80 frames): **Luck gate** — `luck < 1` → `revive(TRUE)` (brother succession). FALL → `revive(FALSE)` (non-lethal). If `luck >= 1`: no visible effect, countdown continues.
+4. **goodfairy 119→20** (~100 frames): Fairy sprite flies toward hero (only reached if `luck >= 1`).
+5. **goodfairy 19→2** (~18 frames): Resurrection glow effect.
+6. **goodfairy 1**: `revive(FALSE)` — fairy rescue, same character returns.
 
-**Key threshold**: `luck < 1` triggers brother succession instead of fairy rescue. The system is deterministic — if luck remains ≥ 1 after the death penalty, the fairy always comes. Since each death costs 5 luck, the exact number of fairy rescues from starting stats is `floor((luck - 1) / 5)`: Julian: 3, Phillip: 6, Kevin: 3. Falls cost 2 luck each and reduce this total.
+**Design note**: The luck gate at `goodfairy < 200` is positioned *after* the death animation completes (255→200). This is a deliberate design choice — the death sequence (DYING animation + corpse + death song) always plays fully before the outcome is determined. Luck cannot change during the DEAD state — the four luck-modifying code paths all require the hero to be alive or interacting (`checkdead` guards with `state != DYING && state != DEAD`, pit falls require movement, sorceress requires TALK). So the gate is effectively a one-time decision: if luck ≥ 1 when the countdown crosses 200, the fairy is guaranteed to appear and rescue the hero. Since each death costs exactly 5 luck, the number of fairy rescues from starting stats is exactly `floor((luck - 1) / 5)`: Julian: 3, Phillip: 6, Kevin: 3. Falls cost 2 luck each and reduce this total.
 
 #### `revive()` — `fmain.c:2812-2900`
 
@@ -2888,13 +2889,13 @@ Timeline after hero enters DEAD/FALL state:
 
 | `goodfairy` Range | Behavior |
 |-------------------|----------|
-| 255–200 (frames 2–57) | Counting down. No visible effect. |
-| 199–120 (frames 58–137) | **Luck gate**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). Otherwise fairy proceeds. |
-| 119–20 (frames 138–237) | Fairy sprite visible, flying toward hero. `battleflag = FALSE`. AI suspended (`fmain.c:2112`). |
+| 255–200 (frames 2–57) | **Death sequence plays**. No code branches match — the death animation and death song always play fully before any rescue decision. |
+| 199–120 (frames 58–137) | **Luck gate**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). If `luck >= 1`: no visible effect, countdown continues. Since luck cannot change during DEAD state, this gate is effectively a one-time decision at the moment goodfairy first drops below 200. |
+| 119–20 (frames 138–237) | Fairy sprite visible, flying toward hero. Only reached if `luck >= 1`. `battleflag = FALSE`. AI suspended (`fmain.c:2112`). |
 | 19–2 (frames 238–255) | Resurrection glow effect. |
 | 1 (frame 256) | `revive(FALSE)` — fairy rescues hero, same brother continues. |
 
-**Key insight**: `checkdead()` subtracts `luck -= 5` on hero death. The fairy rescue system is deterministic: if luck remains ≥ 1 after the penalty, the fairy always appears and rescues the hero. If luck drops below 1, the brother is permanently lost and the next brother takes over. There is no random element — the number of available fairy rescues is exactly `floor((starting_luck - 1) / 5)` from base stats alone. FALL state always gets `revive(FALSE)` regardless of luck (pit falls are non-lethal) — `fmain.c:1392`.
+**Key insight**: `checkdead()` subtracts `luck -= 5` on hero death. The luck gate at `goodfairy < 200` is deliberately positioned after the death animation completes (255→200), so the player always sees the full death sequence before the outcome is determined. Luck cannot change during DEAD state — `checkdead` is guarded by `state != DYING && state != DEAD` (`fmain.c:2772`), pit fall luck loss requires movement (`fmain.c:1771`), and sorceress luck gain requires TALK interaction (`fmain.c:3402`). So if luck ≥ 1 when the gate first fires, the fairy is guaranteed. The system is fully deterministic with no random element. FALL state always gets `revive(FALSE)` regardless of luck (pit falls are non-lethal) — `fmain.c:1392`.
 
 ### 15.3 `blist` — Brother Base Stats
 

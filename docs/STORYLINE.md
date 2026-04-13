@@ -724,7 +724,7 @@ Certain areas prevent random encounters and/or weapon use. See [RESEARCH.md §9]
 
 ### 7.1 Fairy Rescue on Death
 
-The fairy rescue system is **deterministic**: if the hero has luck ≥ 1 after the death penalty, the fairy always appears. There is no random element. The system uses the `goodfairy` counter (unsigned char, starts at 0) which counts down when the hero is in DEAD or FALL state. See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
+The fairy rescue system is **deterministic**: if the hero has luck ≥ 1 after the death penalty, the fairy always appears. There is no random element — and since luck cannot change during the DEAD state, the outcome is fixed the moment the hero dies. The system uses the `goodfairy` counter (unsigned char, starts at 0) which counts down when the hero is in DEAD or FALL state. See [RESEARCH.md §7.9](RESEARCH.md#79-good-fairy--brother-succession).
 
 ```mermaid
 sequenceDiagram
@@ -734,25 +734,31 @@ sequenceDiagram
 
     Hero->>System: vitality < 1
     System->>System: checkdead(0, dtype)<br>luck -= 5, event(dtype)
-    System->>System: Hero state = DYING<br>tactic counts 7→0
-    System->>System: Hero state = DEAD<br>goodfairy = 0
+    System->>System: state = DYING, tactic = 7<br>Death animation plays (7 frames)
+    System->>System: tactic reaches 0<br>state = DEAD, goodfairy = 0
 
     Note over System: goodfairy wraps 0→255<br>Counts down each frame
+
+    Note over System: goodfairy 255→200 (~56 frames)<br>Death sequence continues<br>(corpse + death song always play fully)
+
+    Note over System: Luck is frozen during DEAD state<br>Outcome decided once at goodfairy < 200
 
     alt luck < 1 (deterministic — no fairy)
         System->>System: revive(TRUE)<br>Brother dies permanently
         System->>Hero: Next brother activated
     else luck >= 1 (deterministic — fairy guaranteed)
-        Note over Fairy: Frames 119→20: Fairy visible<br>Flies toward hero
+        Note over System: goodfairy 199→120: no visible effect
+        Note over Fairy: goodfairy 119→20: Fairy visible<br>Flies toward hero
+        Note over System: goodfairy 19→2: Resurrection glow
         Fairy->>Hero: goodfairy == 1
         System->>System: revive(FALSE)<br>Same brother continues
         System->>Hero: Respawn at safe_x, safe_y<br>Vitality = 15 + brave/4
     end
 ```
 
-Source: `fmain.c:1388-1403` (fairy logic), `fmain.c:2814-2911` (`revive()`).
+Source: `fmain.c:1388-1403` (fairy logic), `fmain.c:2769-2782` (`checkdead()`), `fmain.c:2814-2911` (`revive()`).
 
-**FALL state** (pit traps): Always rescued via `revive(FALSE)` regardless of luck — `fmain.c:1395`.
+**FALL state** (pit traps): Always rescued via `revive(FALSE)` regardless of luck — `fmain.c:1392`.
 
 ### 7.2 Princess Rescue Sequence
 
