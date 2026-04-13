@@ -223,8 +223,8 @@ The game uses the AmigaOS `View`/`ViewPort` system rather than directly construc
 
 - `v.ViewPort = &vp_text` → `vp_text.Next = &vp_page` → `vp_page.Next = NULL` (`fmain.c:804-806`)
 - `MrgCop(&v)` merges all viewports into a single Copper program that:
-  1. Sets hi-res mode, 4-plane pointers, and 16-color palette for `vp_text`
-  2. At scanline 143, switches to lo-res mode, 5-plane pointers, and 32-color palette for `vp_page`
+  1. Sets lo-res mode, 5-plane pointers, and 32-color palette for `vp_page` (scanlines 0–139)
+  2. At scanline 143, switches to hi-res mode, 4-plane pointers, and 16-color palette for `vp_text`
 
 ### 3.5 Hardware Sprite
 
@@ -256,7 +256,7 @@ The visible playfield is a **19×6 grid** of tiles, each **16×32 pixels** (`fma
 | Sector | — | `(tile >> 4) - xreg`, `(tile >> 3) - yreg` | 0–63 / 0–31 |
 | Region | `region_num` | `(xs>>6)&1 + ((ys>>5)&3)*2` | 0–9 |
 
-Sub-tile scroll offsets: `RxOffset = map_x & 15`, `RyOffset = map_y & 31` (`fmain.c:2611-2612`).
+Sub-tile viewport offsets: `RxOffset = map_x & 15`, `RyOffset = map_y & 31` (`fmain.c:2611-2612`). These are the low bits of the world position and update continuously as the view drifts by pixels within the current tile window.
 
 #### Two-Level Map Hierarchy
 
@@ -265,16 +265,21 @@ Sub-tile scroll offsets: `RxOffset = map_x & 15`, `RyOffset = map_y & 31` (`fmai
 
 `_genmini` (`fsubs.asm:1136-1207`) resolves world coordinates through this hierarchy to fill the 19×6 `minimap[]` buffer, which `_map_draw` then renders blindly.
 
-#### Full-Screen Draw vs. Incremental Scroll
+#### Full-Screen Draw vs. Incremental Tile Scroll
 
 | Condition | Action | Citation |
 |-----------|--------|----------|
 | `viewstatus == 99/98` | Full redraw: `gen_mini()` + `map_draw()` | `fmain.c:1989-2005` |
-| `dif_x/dif_y == ±1` | Blitter scroll + edge repair | `fmain.c:1999-2228` |
-| `dif_x == 0, dif_y == 0` | No scroll — game logic sub-block executes | `fmain.c:2009-2259` |
+| `dif_x/dif_y == ±1` | Incremental **tile** scroll + edge repair | `fmain.c:1980-1983,1999-2228` |
+| `dif_x == 0, dif_y == 0` | No tile scroll — game logic sub-block executes | `fmain.c:1980-1983,2009-2259` |
 | Large delta | Fallback to full `map_draw()` | `fmain.c:2230` |
 
-**Blitter scrolling** (`_scrollmap`, `fsubs.asm:1736-1797`): Shifts all 5 bitplanes by one tile in any of 8 directions using Amiga blitter DMA (`BLTCON0 = $09F0`, straight A→D copy). Exposed edges are then filled by `strip_draw()` (one column) or `row_draw()` (one row).
+The key distinction is that the renderer has **two different kinds of "scroll"**:
+
+1. **Continuous viewport drift**: every frame, `RxOffset` and `RyOffset` are set from the low bits of `map_x`/`map_y`, so the camera can move smoothly within the already-loaded 19×6 tile window (`fmain.c:2611-2612`).
+2. **Incremental tile scroll**: only when `img_x = map_x >> 4` or `img_y = map_y >> 5` changes does the engine call `scrollmap()` and repair the newly exposed row/column (`fmain.c:1980-1983,1998-2006,2220-2228`).
+
+**Blitter tile scrolling** (`_scrollmap`, `fsubs.asm:1736-1797`): Shifts all 5 bitplanes by one tile in any of 8 directions using Amiga blitter DMA (`BLTCON0 = $09F0`, straight A→D copy). Exposed edges are then filled by `strip_draw()` (one column) or `row_draw()` (one row).
 
 **Note**: `_map_draw` (`fsubs.asm:664`) uses CPU register-to-register moves for full-screen tile rendering, not the blitter.
 
@@ -365,7 +370,9 @@ On voice 2, `vce_stat` doubles as a sample-completion countdown (see §5.2).
 
 The VBlank server (`gdriver.asm:57`) always increments `timeclock` by `tempo` each frame, even when `nosound` is set — the game reuses it as a general-purpose timer (`gdriver.asm:63-67`).
 
-A separate `audio_int` handler is installed on interrupt #8 via `SetIntVector` (`gdriver.asm:453-457`) to manage sample completion on channel 2. It decrements `vce_stat` on voice 2 each audio interrupt; when the counter reaches zero, the channel is silenced (volume → 0, period → 2) (`gdriver.asm:264-282`).
+That same VBlank pass is also the music/SFX arbitration point. Before processing envelope changes or programming a new note, `dovoice` checks `vce_stat`; if it is nonzero, the music player skips that voice for the current tick rather than touching its Paula registers (`gdriver.asm:92-93`, `gdriver.asm:157-158`). On voice 2 this is how the music engine yields channel 2 to sample playback.
+
+A separate `audio_int` handler is installed on interrupt #8 via `SetIntVector` (`gdriver.asm:453-457`) to manage sample completion on channel 2. `_playsample` writes the sample into the `$B0-$B8` register block, sets `vce_stat+voice2` to 2 to disable note playback on that voice, and enables the channel 2 interrupt (`gdriver.asm:301-317`). `audio_int` then decrements that voice-2 `vce_stat` byte on each audio interrupt; when the counter reaches zero, the handler silences the channel (volume → 0, period → 2), after which the VBlank music code can resume driving voice 2 (`gdriver.asm:264-282`).
 
 #### Waveform & Envelope Data
 
@@ -525,9 +532,11 @@ graph TD
 
 ### 7.3 Scroll-Gated Logic
 
-The **most significant architectural decision** is that AI processing, encounter spawning, hunger/fatigue, day/night advancement, and most game logic (Phase 14) **only execute on frames where the map does not scroll**. During continuous scrolling, only actor movement, combat hit detection, and rendering occur. This naturally reduces computational load during the most expensive operation (blitter scrolling + tile repair + sprite rendering).
+The **most significant architectural decision** is that AI processing, encounter spawning, hunger/fatigue, day/night advancement, and most game logic (Phase 14) **only execute on frames where no tile scroll occurs**. Here "map scrolled" means `img_x = map_x >> 4` or `img_y = map_y >> 5` changed relative to the previously drawn tile window (`fmain.c:1980-1983`), causing `scrollmap()`/edge repair work. It does **not** mean the smooth per-frame viewport drift produced by `RxOffset`/`RyOffset` while the hero moves within the current tile window (`fmain.c:2611-2612`).
 
-**Implication**: A player walking continuously has slower hunger progression and fewer encounter checks than a player standing still (`fmain.c:2009-2259`).
+During tile-scroll frames, only actor movement, combat hit detection, map repair, and rendering occur; the Phase 14 "no motion" sub-block is skipped. This naturally reduces computational load during the most expensive render step (blitter tile scroll + edge repair + sprite rendering).
+
+**Implication**: A player walking continuously can still get smooth camera drift every frame, but hunger progression and encounter checks only run on frames where that movement does **not** cross a tile boundary (`fmain.c:2009-2259,2611-2612`).
 
 ### 7.4 Actor Processing
 
@@ -632,6 +641,49 @@ graph LR
     HERO --> TEXT
 ```
 
+### 8.3 Keyboard Translation Table (`keytrans`)
+
+`HandlerInterface` reads Amiga raw key events, masks off the up/down bit, looks up the raw code in `keytrans`, then restores the up/down bit onto the translated byte before queueing it for `getkey()` (`fsubs.asm:94-107,221-226,281-293`). Printable letter/number/punctuation keys mostly translate to their ASCII byte; the table below covers the **non-alphanumeric / special-key** entries.
+
+Physical key names follow the standard Amiga raw-key layout; keypad direction values are interpreted by `decode_mouse()` as `keydir - 20`, yielding the compass codes `0..7,9` (`fsubs.asm:1566-1571`).
+
+| Raw key | Physical key | `keytrans` value | Meaning in game |
+|---------|---------------|------------------|-----------------|
+| `0x1D` | Numeric keypad 1 | `26` | Southwest direction |
+| `0x1E` | Numeric keypad 2 | `25` | South direction |
+| `0x1F` | Numeric keypad 3 | `24` | Southeast direction |
+| `0x2D` | Numeric keypad 4 | `27` | West direction |
+| `0x2E` | Numeric keypad 5 | `29` | Center / no movement |
+| `0x2F` | Numeric keypad 6 | `23` | East direction |
+| `0x3D` | Numeric keypad 7 | `20` | Northwest direction |
+| `0x3E` | Numeric keypad 8 | `21` | North direction |
+| `0x3F` | Numeric keypad 9 | `22` | Northeast direction |
+| `0x40` | Space | `0x20` | ASCII space |
+| `0x41` | Backspace | `0x08` | Backspace |
+| `0x42` | Tab | `0x09` | Tab |
+| `0x43` | Numeric keypad Enter | `0x0D` | Return |
+| `0x44` | Return | `0x0D` | Return |
+| `0x45` | Escape | `0x1B` | Escape |
+| `0x46` | Delete | `0x7F` | Delete |
+| `0x47-0x49` | Unused raw-key slots | `0` | Ignored |
+| `0x4A` | Numeric keypad minus | `'-'` | ASCII minus |
+| `0x4B` | Unused raw-key slot | `0` | Ignored |
+| `0x4C` | Cursor Up | `1` | North (also used by cheat handler) |
+| `0x4D` | Cursor Down | `2` | South |
+| `0x4E` | Cursor Right | `3` | East |
+| `0x4F` | Cursor Left | `4` | West |
+| `0x50` | F1 | `10` | Function key 1 |
+| `0x51` | F2 | `11` | Function key 2 |
+| `0x52` | F3 | `12` | Function key 3 |
+| `0x53` | F4 | `13` | Function key 4 |
+| `0x54` | F5 | `14` | Function key 5 |
+| `0x55` | F6 | `15` | Function key 6 |
+| `0x56` | F7 | `16` | Function key 7 |
+| `0x57` | F8 | `17` | Function key 8 |
+| `0x58` | F9 | `18` | Function key 9 |
+| `0x59` | F10 | `19` | Function key 10 |
+| `0x5A-0x5F` | Keypad `(`, `)`, `/`, `*`, `+`, Help | `0` | Ignored / unmapped by the game |
+
 ---
 
 ## 9. Visual Effects
@@ -669,7 +721,7 @@ Gameplay uses `screen_size(156)` rather than the full 160, yielding a 312×194 v
 
 `fade_page(r,g,b,limit,colors)` (`fmain2.c:377-420`) scales each RGB channel of the 32-color palette by percentage. During gameplay (`limit=TRUE`), enforces minimum brightness floors (R≥10, G≥25, B≥60) and a blue tint bias for night scenes. Sky/water colors (indices 16–24) receive additional blue boosting at dusk/dawn. Region-specific color 31 overrides: amber for desert, green for astral plane with `secret_timer`, otherwise light blue (`fmain2.c:381-386`).
 
-`light_timer > 0` shifts the palette warmer (R boosted to ≥ G), creating a torch/spell glow effect (`fmain2.c:406`).
+`light_timer > 0` shifts the palette warmer (R boosted to ≥ G), creating the **Green Jewel's temporary light-magic effect** rather than a torch system (`fmain.c:3306`, `fmain2.c:406`).
 
 ### 9.5 Victory Sunrise (`win_colors`)
 
@@ -701,6 +753,8 @@ Both protection mechanisms trigger once during startup. After the intro sequence
 ### 10.1 Riddle System
 
 `copy_protect_junk()` (`fmain2.c:1309-1334`) presents 3 random fill-in-the-blank questions from the game manual. Eight question/answer pairs are stored in `narr.asm:63-85` and `fmain2.c:1306-1308` respectively. Comparison is case-sensitive (uppercase required), prefix-only — the loop walks the correct answer until its NUL terminator but does not verify length, so "LIGHTXYZ" would pass for "LIGHT" (`fmain2.c:1330-1331`). Failure triggers graceful exit (`fmain.c:1238`, `goto quit_all`).
+
+In practice, the **first** question is effectively deterministic on a normal startup path: the RNG seed starts at `seed1 = 19837325` (`fmain.c:682`), and the game reaches `copy_protect_junk()` directly after the intro/protection setup without any earlier `rand()` consumption on that path (`fmain.c:1212-1238`). The first `rand8()` draw in the question loop therefore resolves to index 1 (`fmain2.c:1315-1317`), so the opening prompt is ordinarily **"Make haste, but take...?"**
 
 After each correct answer, the entry is nulled (`answers[j] = NULL` at `fmain2.c:1333`) so the same question cannot repeat within a session.
 
@@ -737,8 +791,8 @@ When `cheat1` is non-zero, it gates the following debug keys in the main loop (`
 
 | Key | Effect | Citation |
 |-----|--------|----------|
-| `B` | Spawn carrier (boat) near hero | `fmain.c:1293` |
-| `.` | Add 3 items to a random gold slot | `fmain.c:1298` |
+| `B` | Summon the Swan near the hero; if the Swan is already the active carrier, also force `stuff[5] = 1` (granting the Golden Lasso flag) before reloading it | `fmain.c:1293-1296` |
+| `.` | Add 3 to a random `stuff[]` entry in the range 0-30 inclusive (`rnd(GOLDBASE)`, with `GOLDBASE = 31`) | `fmain.c:429,1298-1299` |
 | `R` | Call `rescue()` | `fmain.c:1333` |
 | `=` | Call `prq(2)` | `fmain.c:1334` |
 | Key 19 | Call `prq(3)` | `fmain.c:1335` |
@@ -849,7 +903,8 @@ Swan dismount is blocked in the lava zone (`fiery_death`, event 32: "Ground is t
 ### 13.3 Movement Physics
 
 - **Raft**: Follows hero position exactly on water/shore terrain (`fmain.c:1562-1572`).
-- **Turtle**: Moves at speed 3, constrained to terrain type 5 (water) when autonomous; mounted speed 3 on any terrain (`fmain.c:1512-1540,1599`).
+- **Turtle**: Intended to be a **water-only** carrier. When unmounted, its autonomous carrier logic probes candidate positions with `px_to_im()` and only commits moves where the terrain code is exactly 5 (water) (`fmain.c:1521-1542`). When mounted, the player's normal WALKING step is forced to speed 3 (`fmain.c:1599-1605`), but this should not be read as "the turtle can travel freely on land" — the design intent and carrier placement logic remain water-bound.
+- **Mounted-turtle exploit**: The rider can attack continuously in the direction of travel and use melee recoil to shove the mounted position across otherwise invalid terrain. `dohit()` pushes the attacker forward with `move_figure(i,fc,2)` after a successful hit (`fmain2.c:242-245`), and `move_figure()` applies only the generic `proxcheck()` collision test before rewriting `abs_x/abs_y` (`fmain2.c:322-329`). That bypasses the turtle carrier's explicit `px_to_im(...) == 5` water-only movement rule (`fmain.c:1521-1542`), enabling transit over terrain the turtle is not supposed to cross.
 - **Swan**: Inertial flight physics via `environ == -2` (`fmain.c:1581-1596`):
   - Velocity accumulates via directional acceleration
   - Max horizontal velocity ~32, max vertical ~40

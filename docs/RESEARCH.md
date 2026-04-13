@@ -1920,7 +1920,7 @@ All consumed on use (`--stuff[4+hit]` at `fmain.c:3365`). Guarded by `extn->v3 =
 | Index | Item | Effect | Source |
 |-------|------|--------|--------|
 | 9 | Blue Stone | Teleport via stone circle (only at sector 144) | `fmain.c:3306-3313` |
-| 10 | Green Jewel | `light_timer += 760` — illuminates dark areas | `fmain.c:3315` |
+| 10 | Green Jewel | `light_timer += 760` — temporary light-magic effect that brightens dark outdoor areas | `fmain.c:3306` |
 | 11 | Glass Vial | Heal: `vitality += rand8() + 4` (4–11), capped at `15 + brave/4` | `fmain.c:3317-3319` |
 | 12 | Crystal Orb | `secret_timer += 360` — reveals hidden passages | `fmain.c:3321` |
 | 13 | Bird Totem | Renders overhead map with player position | `fmain.c:3323-3340` |
@@ -3168,7 +3168,7 @@ The most significant architectural characteristic: AI processing, encounter spaw
 | `viewstatus` | char | `fmain.c:583` | Display state: 0=normal, 1/4=picking, 2=map-message, 3=fade-in, 98/99=rebuild. |
 | `battleflag` | char | `fmain.c:588` | TRUE if hostile actors within 300 px. Set per tick in AI loop. |
 | `freeze_timer` | short | `fmain.c:577` | Countdown. While >0: enemies frozen, daynight frozen, encounters suppressed. |
-| `light_timer` | short | `fmain.c:577` | Countdown. While >0: torch effect in `day_fade()`. |
+| `light_timer` | short | `fmain.c:577` | Countdown. While >0: Green Jewel light-magic effect in `day_fade()`. |
 | `secret_timer` | short | `fmain.c:577` | Countdown. While >0: secret passages visible. |
 | `riding` | short | `fmain.c:563` | 0=walking, 1=raft, 5=turtle, 11=swan. |
 | `anix` | short | `fmain.c:75` | Active actor count (typically 3–7). |
@@ -3454,7 +3454,7 @@ day_fade()
 }
 ```
 
-- **Torch bonus**: `light_timer > 0` adds 200 to red parameter (warm amber glow).
+- **Green Jewel light bonus**: `light_timer > 0` adds 200 to red parameter (warm amber glow).
 - **Update rate**: Every 4 ticks (`daynight & 3 == 0`) or during screen rebuild (`viewstatus > 97`).
 - **Indoor override**: `region_num >= 8` → always full brightness `(100,100,100)` with no day/night variation.
 
@@ -3478,7 +3478,7 @@ Defined at `fmain2.c:377-419`. Per-component palette scaler:
 - Blue shift factor: `g2 = (100-g)/3`
 
 **Per-color computation** (`fmain2.c:402-416`): For each of 32 palette entries, extracts 12-bit RGB components from `pagecolors[]`, then:
-- Torch effect (`fmain2.c:407`): if `light_timer` active and red < green, boosts red to match green.
+- Green Jewel light effect (`fmain2.c:407`): if `light_timer` active and red < green, boosts red to match green.
 - Scales: `r1 = (r × r1) / 1600`, `g1 = (g × g1) / 1600`, `b1 = (b × b1 + g2 × g1) / 100`.
 - Nighttime vegetation boost (`fmain2.c:412-413`): Colors 16–24 get extra blue at twilight (g 21–49: +2; g 50–74: +1).
 
@@ -3486,13 +3486,13 @@ Result written to `fader[]` and loaded via `LoadRGB4(&vp_page, fader, 32)`.
 
 #### Outdoor RGB at Key Times
 
-| Phase | lightlevel | r (no torch) | g | b |
+| Phase | lightlevel | r (no jewel effect) | g | b |
 |-------|------------|-------------|---|---|
 | Midnight | 0 | clamped 10 | clamped 25 | clamped 60 |
 | Dawn | 150 | 70 | 89 | 88 |
 | Noon | 300 | clamped 100 | clamped 100 | clamped 100 |
 
-With torch: red gets +200, so midnight red = 120 (warm amber tone even in darkness).
+With the Green Jewel effect active: red gets +200, so midnight red = 120 (warm amber tone even in darkness).
 
 ### 19.4 `fade_down` / `fade_normal` — Screen Transitions
 
