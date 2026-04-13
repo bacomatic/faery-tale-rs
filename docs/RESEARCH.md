@@ -1450,7 +1450,7 @@ When the player is DEAD or FALL, `goodfairy` (unsigned char, starts at 0) underg
 4. Frames 119→20: Fairy sprite rescue animation
 5. Frame 1: `revive(FALSE)` — **fairy rescue**, same character returns
 
-**Key threshold**: `luck < 1` triggers brother succession instead of fairy rescue. Since each death costs 5 luck, the number of fairy rescues before permanent death ≈ starting_luck / 5 (Julian: ~4, Phillip: ~7, Kevin: ~4).
+**Key threshold**: `luck < 1` triggers brother succession instead of fairy rescue. The system is deterministic — if luck remains ≥ 1 after the death penalty, the fairy always comes. Since each death costs 5 luck, the exact number of fairy rescues from starting stats is `floor((luck - 1) / 5)`: Julian: 3, Phillip: 6, Kevin: 3. Falls cost 2 luck each and reduce this total.
 
 #### `revive()` — `fmain.c:2812-2900`
 
@@ -2889,12 +2889,12 @@ Timeline after hero enters DEAD/FALL state:
 | `goodfairy` Range | Behavior |
 |-------------------|----------|
 | 255–200 (frames 2–57) | Counting down. No visible effect. |
-| 199–120 (frames 58–137) | **Luck check**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). |
+| 199–120 (frames 58–137) | **Luck gate**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). Otherwise fairy proceeds. |
 | 119–20 (frames 138–237) | Fairy sprite visible, flying toward hero. `battleflag = FALSE`. AI suspended (`fmain.c:2112`). |
 | 19–2 (frames 238–255) | Resurrection glow effect. |
 | 1 (frame 256) | `revive(FALSE)` — fairy rescues hero, same brother continues. |
 
-**Key insight**: `checkdead()` subtracts `luck -= 5` on hero death. If luck reaches < 1, the fairy cannot save the hero — the next brother takes over. FALL state always gets `revive(FALSE)` regardless of luck (pit falls are non-lethal) — `fmain.c:1392`.
+**Key insight**: `checkdead()` subtracts `luck -= 5` on hero death. The fairy rescue system is deterministic: if luck remains ≥ 1 after the penalty, the fairy always appears and rescues the hero. If luck drops below 1, the brother is permanently lost and the next brother takes over. There is no random element — the number of available fairy rescues is exactly `floor((starting_luck - 1) / 5)` from base stats alone. FALL state always gets `revive(FALSE)` regardless of luck (pit falls are non-lethal) — `fmain.c:1392`.
 
 ### 15.3 `blist` — Brother Base Stats
 
@@ -2908,7 +2908,7 @@ Defined at `fmain.c:2806-2812`:
 
 Each brother has an independent 35-byte inventory array (`ARROWBASE=35`): `julstuff`, `philstuff`, `kevstuff` — `fmain.c:432`.
 
-Design: Julian is the strongest fighter (highest bravery/HP), Phillip is most likely to be fairy-rescued (highest luck), Kevin is the diplomat (highest kindness, but weakest combatant).
+Design: Julian is the strongest fighter (highest bravery/HP), Phillip has the most fairy rescues available (highest luck — 6 rescues vs. 3 for the others), Kevin is the diplomat (highest kindness, but weakest combatant).
 
 ### 15.4 `revive()` — Resurrection and Succession
 

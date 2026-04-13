@@ -20,7 +20,7 @@ The quest spans a vast overworld divided into outdoor regions (snow, swamp, dese
 | Brother | Brave | Luck | Kind | Wealth | Starting Vitality | Defining Trait |
 |---------|-------|------|------|--------|-------------------|----------------|
 | Julian  | 35    | 20   | 15   | 20     | 23                | Strongest fighter |
-| Phillip | 20    | 35   | 15   | 15     | 20                | Most likely fairy rescue |
+| Phillip | 20    | 35   | 15   | 15     | 20                | Most fairy rescues (highest luck) |
 | Kevin   | 15    | 20   | 35   | 10     | 18                | Kindest; weakest combatant |
 
 Source: `blist[]` — `fmain.c:2807-2812`. Vitality = `15 + brave/4` — `fmain.c:2901`.
@@ -375,7 +375,7 @@ When the player talks to enemies, the speech index equals the enemy's `race` val
 
 ## 4. Brother Succession Narrative
 
-When a brother dies, the fairy rescue system determines the outcome based on the `luck` stat. If `luck >= 1` after the death penalty (`luck -= 5`), the fairy rescues the brother. If `luck < 1`, the brother is lost and the next brother takes over. See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
+When a brother dies, the fairy rescue system determines the outcome based on the `luck` stat. This is a deterministic system with no random element: if `luck >= 1` after the death penalty (`luck -= 5`), the fairy always rescues the brother. If `luck < 1`, the brother is permanently lost and the next brother takes over. Each brother's luck is a finite resource — Julian and Kevin can survive 3 deaths, Phillip can survive 6 (from starting stats alone). See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
 
 ### 4.1 Succession State Diagram
 
@@ -724,7 +724,7 @@ Certain areas prevent random encounters and/or weapon use. See [RESEARCH.md §9]
 
 ### 7.1 Fairy Rescue on Death
 
-The fairy rescue system uses the `goodfairy` counter (unsigned char, starts at 0) which counts down when the hero is in DEAD or FALL state. See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
+The fairy rescue system is **deterministic**: if the hero has luck ≥ 1 after the death penalty, the fairy always appears. There is no random element. The system uses the `goodfairy` counter (unsigned char, starts at 0) which counts down when the hero is in DEAD or FALL state. See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
 
 ```mermaid
 sequenceDiagram
@@ -739,12 +739,12 @@ sequenceDiagram
 
     Note over System: goodfairy wraps 0→255<br>Counts down each frame
 
-    alt luck < 1 (frame ~57, goodfairy < 200)
+    alt luck < 1 (deterministic — no fairy)
         System->>System: revive(TRUE)<br>Brother dies permanently
         System->>Hero: Next brother activated
-    else luck >= 1
-        Note over Fairy: Frames 137-199: Fairy visible<br>Flies toward hero
-        Fairy->>Hero: Frame 219: goodfairy == 1
+    else luck >= 1 (deterministic — fairy guaranteed)
+        Note over Fairy: Frames 119→20: Fairy visible<br>Flies toward hero
+        Fairy->>Hero: goodfairy == 1
         System->>System: revive(FALSE)<br>Same brother continues
         System->>Hero: Respawn at safe_x, safe_y<br>Vitality = 15 + brave/4
     end
