@@ -370,9 +370,11 @@ When the player talks to enemies, the speech index equals the enemy's `race` val
 | 2 | Wraith | `speak(2)`: "Doom!" |
 | 3 | Skeleton | `speak(3)`: "A clattering of bones" |
 | 4 | Snake | `speak(4)`: "A waste of time to talk to a snake" |
-| 5 | Salamander | `speak(5)` |
-| 6 | Loraii | `speak(6)`: "There was no reply." |
-| 7 | Necromancer | `speak(7)`: "Die, foolish mortal!" |
+| 5 | Salamander | `speak(5)`: "..." |
+| 6 | Spider | `speak(6)`: "There was no reply." |
+| 7 | DKnight | `speak(7)`: "Die, foolish mortal!" |
+
+**Note**: The `narr.asm` comments label speak(6) as "loraii" and speak(7) as "necromancer", reflecting an earlier race table before Spider (6) and DKnight (7) were inserted. Loraii (race 8) and Necromancer (race 9) have special auto-speak handlers (`speak(43)` for Necromancer on extent entry) that preempt the generic talk handler, so the misaligned speeches at indices 8–9 are never heard in normal gameplay.
 
 ---
 
@@ -500,7 +502,7 @@ sequenceDiagram
         else kind >= 10
             Note over Priest: Rotating advice + heal
             Priest->>Hero: speak(36/37/38) based on daynight%3
-            Note over Hero: If speak(38): vitality restored
+            Note over Hero: vitality restored (all 3 speeches heal)
         end
     end
 ```
@@ -654,19 +656,23 @@ From `_place_tbl` / `_place_msg` — `narr.asm:86-193`. Sector ranges determine 
 
 | Sector Range | Location Name | Notable Features |
 |-------------|--------------|-----------------|
+| 51 | Small Keep | — |
 | 64–69 | Village of Tambry | Starting location for all brothers |
 | 70–73 | Vermillion Manor | — |
 | 80–95 | City of Marheim | King's castle, shops, guards |
 | 96–99 | Witch's Castle | Witch encounter; Sun Stone needed |
 | 138–139 | Graveyard | High danger (79.7% spawn rate) |
 | 144 | Great Stone Ring | Blue Stone teleport destination |
-| 147 | Watchtower / Lighthouse | — |
+| 147 | Watchtower | — |
 | 148 | Old Castle | — |
 | 159–162 | Hidden City of Azal | Requires 5 Gold Statues |
 | 163 | Outlying Fort | Desert region |
 | 164–167 | Crystal Palace | Blue Key doors |
+| 168 | Log Cabin | — |
+| 170 | Dark Stone Tower | — |
 | 171–174 | Citadel of Doom | Gateway to Spirit Plane (door 16, inside fiery_death zone) |
-| 176 | Pixle Grove | — |
+| 176 | Pixle Grove | Troll cave entrance (door 64) |
+| 178 | Isolated Cabin | Swamp area |
 | 179 | Tombs of Hemsath | Stair to underground |
 | 180 | Forbidden Keep | — |
 | 208–221 | Great Bog | Swamp region |
@@ -675,33 +681,41 @@ From `_place_tbl` / `_place_msg` — `narr.asm:86-193`. Sector ranges determine 
 | 185–254 | Burning Waste | Desert region (broad range) |
 | 78, 187–239 | Mountains of Frost | Region-dependent display logic |
 
+> **Dead text**: `_place_msg[5]` = "Plain of Grief" (`narr.asm:171`) — defined but never referenced by any `_place_tbl` entry.
+
 ### 6.3 Named Indoor Locations
 
-From `_inside_tbl` / `_inside_msg` — `narr.asm:116-168`.
+Complete indoor location table from `_inside_tbl` / `_inside_msg` — `narr.asm:117-154, 199-226`. Earlier entries take priority when sectors overlap.
 
-| Sector Range | Location Name |
-|-------------|--------------|
-| 79–96 | Castle of King Mar |
-| 97–99 | Building (witch area) |
-| 104 | Inn |
-| 105–115 | Castle |
-| 114 | Tomb (crypt) |
-| 120, 116–119, 139–141 | Buildings (desert area) |
-| 125 | Cabin inside |
-| 127 | Elf glade sanctuary |
-| 135–138 | Castle (Doom tower) |
-| 142 | Lighthouse interior |
-| 150–161 | Stone maze |
-| 43–59, 100, 143–149 | Spirit Plane |
-| 46 | Final arena (Necromancer) |
-| 62 | Small building |
-| 65–66 | Tavern |
-| 2 | Small chamber |
-| 7 | Large chamber |
-| 4 | Long passageway |
-| 5–6 | Twisting tunnel |
-| 36 | Octagonal room |
-| 37–42 | Large room |
+| Sector Range | Message | Notes |
+|-------------|---------|-------|
+| 2 | Small chamber | Dungeon |
+| 7 | Large chamber | Dungeon |
+| 4 | Long passageway | Dungeon |
+| 5–6 | Twisting tunnel | Dungeon |
+| 9–10 | Forked intersection | Dungeon |
+| 30 | Keep interior | Forbidden Keep |
+| 19–33, 101, 130–134 | Stone corridor | Dungeon passages; King's Bone at sec 132 |
+| 36 | Octagonal room | Gold Statue pickup |
+| 37–42 | Large room | Dungeon |
+| 46 | Final arena | Necromancer encounter (special message) |
+| 43–59, 100, 143–149 | Spirit Plane | Twisted maze with type-12 barriers |
+| 62 | Small building | Village |
+| 65–66 | Tavern | Village |
+| 60–78 | Building | Generic building (overridden by above) |
+| 82, 86–87, 92, 94–95 | Building | City buildings; sec 92 = priest |
+| 97–99 | Building | Witch's Castle indoor area |
+| 120, 116–119, 139–141 | Building | Desert buildings (fort + Azal) |
+| 79–96 | Castle of King Mar | Overridden by above for 82+ |
+| 104 | Inn | Wayside inn |
+| 114 | Crypt | Tomb interior (Spectre quest) |
+| 105–115 | Castle | Generic castle; includes Seahold (115) |
+| 135–138 | Castle | Doom tower (Citadel interior) |
+| 125 | Cabin | Cabin interior |
+| 127 | Sanctuary of the temple | Elf Glade (Sun Stone) |
+| 142 | Unlocked and entered | Lighthouse |
+| 121–129 | Unlocked and entered | Generic door; sec 129 = princess rescue room |
+| 150–161 | Stone maze | Underground labyrinth |
 
 ### 6.4 Door Connections
 
