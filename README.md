@@ -15,6 +15,25 @@ The code is primarily written in Aztec C, with some 68000 assembly.
 I don't know whether it would be possible to actually get the game running on some other platform;
 but even so the code may have some historical interest.
 
+### Bug fixes by bacomatic
+
+This branch contains bug fixes against the original code.
+
+In no particular order:
+- De-K&R'ed the source, it was causing problems
+- Save files were attempting to write 80 bytes from map_x but Aztec C is moving global variables around so this was broken. Fixed by explicitly writing each variable separately.
+- The -pp arg (in makefile) being passed to cc caused 'char' to be compiled as unsigned, which lead to a number of bugs, replaced with -wn to suppress warnings about implicit char* to UBYTE* conversions. (should just add explicit casts in the code)
+
+Exploits fixed (Sorry, gotta play the game the way it was intended!):
+- Attacking the turtle is no longer allowed!
+- Heroes can no longer sleep-teleport through locked gates and doors.
+- An early exploit allowing infinite looting of an item while paused seems to have been previously fixed.
+
+
+The makefile has been updated to work with Aztec C 5.2a (at the least). It should properly generate the precompiled header and use it when compiling the .c files. It should also properly compile the .asm files using the Aztec C assembler.
+
+To build with Aztec C 5.2 installed, make sure you run the aztec.sh script to set up your environment, then simply run "make" in the project directory.
+
 ## Copyright status
 
 Under U.S. Copyright law, a creator may reclaim the copyright of their work after 35 years,
