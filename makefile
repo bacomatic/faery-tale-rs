@@ -1,13 +1,22 @@
-CFLAGS = -pp -hi amiga39.pre -qf
+; -pa = ANSI compiler mode
+; -qf = output errors and warnings to AztecC.Err
+CFLAGS = -pa -qf
 
 OBJS = fmain.o fsubs.o narr.o fmain2.o iffsubs.o gdriver.o makebitmap.o hdrive.o
 
-POBJS = fmain.p fmain2.p iffsubs.p
+AINC = AZTEC:incl_asm
 
-.c.p:
-	cc $(CFLAGS) -qsp -o $@ $*.c
+.asm.o:
+	as >asm.out -i$(AINC) $*.asm -o $@
 
-fmain: $(OBJS)
+.c.pre:
+	cc $(CFLAGS) -ho $@ $*.c
+
+.c.o:
+	cc $(CFLAGS) -hi fincludes.pre -o $@ $*.c
+
+fmain: fincludes.pre $(OBJS)
 	ln +c -o fmain $(OBJS) -lc
 
-proto: $(POBJS)
+clean:
+	@DELETE #?.o #?.pre fmain asm.out AztecC.Err QUIET

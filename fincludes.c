@@ -17,4 +17,16 @@
 #include "devices/input.h"
 #include "devices/inputevent.h"
 #include "devices/trackdisk.h"
+#include "devices/audio.h"
+#include "workbench/startup.h"
+
+/* Forward declarations for Amiga library functions */
+struct Library *OpenLibrary();
+struct Layer_Info *NewLayerInfo();
+struct TextFont *OpenFont();
+PLANEPTR AllocRaster();
+struct MsgPort *CreatePort();
+struct IORequest *CreateExtIO();
+APTR AllocMem();
+struct Layer *CreateUpfrontLayer();
 
