@@ -1,9 +1,5 @@
 /* include file for faery tale adventures - by Talin */
 
-#include "fmain.p"
-#include "fmain2.p"
-#include "iffsubs.p"
-
 #define free_chip(new,old,size) if (new!=old) FreeMem(new,size);
 
 /* motion states */
@@ -57,13 +53,13 @@ struct shape {
 	unsigned short	abs_x, abs_y, rel_x, rel_y;
 	char	type;
 	UBYTE	race;
-	char	index,visible, 	/* image index and on-screen flag */
-			weapon,			/* type of weapon carried */
-			environ,		/* environment variable */
+	char	index,visible; 	/* image index and on-screen flag */
+	BYTE	weapon;			/* type of weapon carried */
+	char	environ,		/* environment variable */
 			goal,tactic,	/* current goal mode and means to carry it out */
 			state, facing;	/* current movement state and facing */
 	short	vitality;		/* also original object number */
-	char	vel_x,vel_y;	/* velocity for slippery areas */
+	BYTE	vel_x,vel_y;	/* velocity for slippery areas */
 /*	APTR	source_struct;	*/ /* address of generating structure */
 };
 
@@ -117,4 +113,8 @@ struct	in_work {			/* input handler data area */
 	short	ticker;
 };
 
-
+/* function prototypes */
+#include "fmain.h"
+#include "fmain2.h"
+#include "iffsubs.h"
+#include "hdrive.h"
