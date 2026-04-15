@@ -5,17 +5,17 @@
 #include "graphics/gfxbase.h"
 #include "graphics/gfx.h"
 
-#define FORM	tags[0]
-#define ILBM	tags[1]
-#define BMHD	tags[2]
-#define CMAP	tags[3]
-#define GRAB	tags[4]
-#define BODY	tags[5]
-#define	CAMG	tags[6]
-#define	CRNG	tags[7]
+#define FOURCC(a,b,c,d) (((long)(a)<<24)|((long)(b)<<16)|((long)(c)<<8)|(long)(d))
 
-char *kluge = "FORMILBMBMHDCMAPGRABBODYCAMGCRNG";
-long *tags;
+#define IFF_FORM	FOURCC('F','O','R','M')
+#define IFF_ILBM	FOURCC('I','L','B','M')
+#define IFF_BMHD	FOURCC('B','M','H','D')
+#define IFF_CMAP	FOURCC('C','M','A','P')
+#define IFF_GRAB	FOURCC('G','R','A','B')
+#define IFF_BODY	FOURCC('B','O','D','Y')
+#define IFF_CAMG	FOURCC('C','A','M','G')
+#define IFF_CRNG	FOURCC('C','R','N','G')
+#define IFF_DEST	FOURCC('D','E','S','T')
 
 long file_length;
 long myfile;
@@ -85,24 +85,23 @@ unpackpic(filename,bitmap) char *filename; struct BitMap *bitmap;
 	if (myfile == 0)
 	{	printf("couldn't get file\n"); return FALSE; }
 
-	tags = (long *) kluge;
 	ReadHeader();
-	if (header != FORM)
+	if (header != IFF_FORM)
 	{	printf("Unrecognizable format\n"); Close(myfile); return FALSE; }
 	ReadLength(); file_length = blocklength;
 
 	while (file_length)
 	{	ReadHeader();
-		if (header == ILBM) ;
-		else if (header == BMHD)
+		if (header == IFF_ILBM) ;
+		else if (header == IFF_BMHD)
 		{	ReadLength(); Read(myfile,&bmhd,blocklength); }
-		else if (header == CMAP)
+		else if (header == IFF_CMAP)
 		{	ReadLength(); Read(myfile,&cmap,blocklength); }
-		else if (header == CAMG || header == CRNG || header == DEST)
+		else if (header == IFF_CAMG || header == IFF_CRNG || header == IFF_DEST)
 		{	ReadLength(); Seek(myfile,blocklength,0); }
-		else if (header == GRAB)
+		else if (header == IFF_GRAB)
 		{	ReadLength(); Read(myfile,&grab,blocklength); }
-		else if (header == BODY)
+		else if (header == IFF_BODY)
 		{	int i;
 			char *membuffer;
 
@@ -136,28 +135,26 @@ unpackpic(filename,bitmap) char *filename; struct BitMap *bitmap;
 }
 #endif
 
-unpackbrush(filename,bitmap,x,y)
-char *filename; struct BitMap *bitmap; short x,y;
+int unpackbrush(char *filename, struct BitMap *bitmap, short x, short y)
 {	int bitoffset = (x + (bitmap->BytesPerRow)*y);
 
 	myfile = Open(filename,1005);
 	if (myfile == 0) {	return FALSE; }
 
-	tags = (long *) kluge;
 	ReadHeader();
-	if (header != FORM)
+	if (header != IFF_FORM)
 	{	Close(myfile); return FALSE; }
 	ReadLength(); file_length = blocklength;
 
 	while (file_length)
 	{	ReadHeader();
-		if (header == ILBM) ;
-		else if (header == BMHD)
+		if (header == IFF_ILBM) ;
+		else if (header == IFF_BMHD)
 		{	ReadLength(); Read(myfile,&bmhd,blocklength); }
-		else if (header == CAMG || header == CRNG || header == DEST
-			|| header == CMAP || header == GRAB)
+		else if (header == IFF_CAMG || header == IFF_CRNG || header == IFF_DEST
+			|| header == IFF_CMAP || header == IFF_GRAB)
 		{	ReadLength(); Seek(myfile,blocklength,0); }
-		else if (header == BODY)
+		else if (header == IFF_BODY)
 		{	int i;
 
 			packdata = shape_mem;
