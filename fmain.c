@@ -2,7 +2,7 @@
 
 #include "ftale.h"
 
-/****** this section defines the variables used to communicate with the 
+/****** this section defines the variables used to communicate with the
 		graphics routines */
 
 #define PAGE_DEPTH 5
@@ -371,7 +371,7 @@ struct extent {
 
 #define EXT_COUNT 22
 
-unsigned char stone_list[] = 
+unsigned char stone_list[] =
 {	54,43, 71,77, 78,102, 66,121, 12,85, 79,40,
 	107,38, 73,21, 12,26, 26,53, 84,60 };
 
@@ -462,7 +462,7 @@ extern UBYTE hinor, hivar;
 
 struct SimpleSprite pointer = { 0,16,0,0,0 };
 
-long *sprite_data, _sprite_data[] = 
+long *sprite_data, _sprite_data[] =
 {	0,
 	0x80060000, 0x60010002, 0x40012000, 0x10030000,
 	0x08FE0001, 0x0581007F, 0x03000081, 0x06010101,
@@ -548,7 +548,7 @@ letter_list[] = {
 
 char	hit;	/* which menu we hit */
 
-/***** this section defines some variables that are used in maintaining 
+/***** this section defines some variables that are used in maintaining
 	   the playing map */
 
 extern UBYTE place_tbl[], inside_tbl[];
@@ -597,6 +597,7 @@ short	last_person;			/* last character near to player */
 UBYTE	witchindex;
 short	dayperiod;
 short	sleepwait;
+short	presleep_x, presleep_y;	/* hero position before sleeping */
 unsigned char	encounter_number, danger_level;
 unsigned short	encounter_x, encounter_y;	/* encounter origin */
 short mixflag, wt;
@@ -647,11 +648,10 @@ extern short minimap[114];
 long	LoadSeg(), seg;
 struct	DiskFontHeader *font;
 struct  TextFont *tfont, *afont;
-struct  TextAttr topaz_ta = { "topaz.font", 8, 0, FPF_ROMFONT };
+struct  TextAttr topaz_ta = { (UBYTE*)"topaz.font", 8, 0, FPF_ROMFONT };
 
-unsigned char 
-	*into_chip(),
-	*image_mem, *sector_mem, *map_mem, *shadow_mem, 
+unsigned char
+	*image_mem, *sector_mem, *map_mem, *shadow_mem,
 	*shape_mem,
 	*bmask_mem, *queue_mem,
 	*sample_mem,
@@ -666,9 +666,9 @@ unsigned char *nextshape, *tempshape;
 #define SCORE_SZ	5900
 
 unsigned char  *wavmem, *volmem, *scoremem;
-short new_wave[] = 
+short new_wave[] =
 { 	0x0000, 0x0000, 0x0000, 0x0000, 0x0005,
-	0x0202, 0x0101, 0x0103, 0x0004, 0x0504, 
+	0x0202, 0x0101, 0x0103, 0x0004, 0x0504,
 	0x0100, 0x0500 };
 
 UWORD	openflags;
@@ -686,7 +686,7 @@ long seed1 = 19837325, seed2 = 23098324;
 	others: slippery, fiery, changing, climbable, pit trap, danger,
 		noisy, magnetic, stinks, slides, slopes, whirlpool, etc.
 
-	mask applications : 
+	mask applications :
 		0 = never, 1 = when down, 2 = when right, 3 = always unless flying,
 		4 = only if below normal level, etc.
 */
@@ -725,7 +725,7 @@ BOOL			audio_open;
 
 struct BitMap work_bm;
 
-open_all()
+int open_all()
 {	register long i;
 	long file;
 
@@ -838,7 +838,7 @@ open_all()
 
 	ri_page1.BitMap = bm_page1;
 	ri_page2.BitMap = bm_page2;
-	ri_page1.RxOffset = ri_page2.RxOffset = 
+	ri_page1.RxOffset = ri_page2.RxOffset =
 		ri_page1.RyOffset = ri_page2.RyOffset = 0;
 	ri_page1.Next = ri_page2.Next = NULL;
 
@@ -947,7 +947,7 @@ open_all()
 	return 0;
 }
 
-close_all()
+void close_all()
 {	register long i;
 	if (TSTFN(AL_TERR)) FreeMem(terra_mem,1024);
 	if (TSTFN(AL_SAMPLE)) FreeMem(sample_mem,SAMPLE_SZ);
@@ -967,7 +967,7 @@ close_all()
 	FreeCprList(fp_page1.savecop);
 	FreeCprList(fp_page2.savecop);
 	FreeCprList(v.SHFCprList);
-	
+
 	if (vp_page.ColorMap) FreeColorMap(vp_page.ColorMap);
 	if (vp_text.ColorMap) FreeColorMap(vp_text.ColorMap);
 	for(i=0; i<PAGE_DEPTH; i++)
@@ -1020,7 +1020,7 @@ extern long myfile, header, blocklength;
 
 /* reads an IFF sample - shorten file format later */
 
-read_sample()
+void read_sample()
 {	long ifflen; register unsigned char *num, *smem; register long i;
 	register long sp_load, sp_count;
 
@@ -1078,7 +1078,7 @@ struct door_open {
 
 UBYTE *mapxy();
 
-doorfind(x,y,keytype) register USHORT x,y; register ULONG keytype;
+int doorfind(register USHORT x, register USHORT y, register ULONG keytype)
 {	UBYTE sec_id; short reg_id, j, k; register ULONG l;
 	if (px_to_im(x,y)==15) goto found;
 	x += 4; if (px_to_im(x,y)==15) goto found;
@@ -1132,7 +1132,7 @@ void main(int argc,char argv[])
 	short dif_x, dif_y, xstart, ystart, xstop, ystop;
 	unsigned short	xtest, ytest;
 	struct shape *an;
-		
+
 	if (argc == 0)
 	{	extern struct WBStartup *WBenchMsg;
 
@@ -1237,7 +1237,7 @@ no_intro:
 	k = TRUE;
 	if (copy_protect_junk()==0) goto quit_all;
 	Delay(20);
-	
+
 	ri_page1.RxOffset = ri_page2.RxOffset =
 		ri_page1.RyOffset = ri_page2.RyOffset = 0;
 
@@ -1276,7 +1276,7 @@ no_intro:
 		flasher++;
 
 		key = getkey();
-			
+
 		/* debug keys */
 
 		notpause = !(menus[GAME].enabled[5] & 1);
@@ -1362,7 +1362,7 @@ no_intro:
 			}
 		}
 
-		if (viewstatus == 2) 
+		if (viewstatus == 2)
 		{	Delay(200); viewstatus = 99; }
 		else if (viewstatus == 1 || viewstatus == 4)
 		{	if ((flasher & 16) && viewstatus == 1)
@@ -1406,6 +1406,7 @@ no_intro:
 			}
 		}
 		else if (inum==DYING || inum==SINK || inum == SLEEP);
+		else if (riding == 5); /* no fighting on the turtle */
 		else if (handler_data.qualifier&0x2000||keyfight||(*pia&(128))==0)
 		{	dif_x = anim_list[0].vel_x;
 			dif_y = anim_list[0].vel_y;
@@ -1640,7 +1641,7 @@ no_intro:
 				if (an->race == 4) dex = (cycle&2)+((d & 0xfe)<<2)+0x24;
 				if (k > 2)
 				{	if ( (j == 0) || ((j == 3) && (k > 5)) ||
-						((j == 4) && (k > 10)) ) 
+						((j == 4) && (k > 10)) )
 					{	if (hero_sector != 181) k--; goto raise; }
 				}
 				an->vel_x = ((short)(xtest - an->abs_x))*4;
@@ -1881,6 +1882,7 @@ no_intro:
 				{	if (fatigue < 50) event(25);
 					else
 					{	event(26);
+						presleep_x = hero_x; presleep_y = hero_y;
 						hero_y = (anim_list[0].abs_y |= 0x1f);
 						anim_list[0].state = SLEEP;
 					}
@@ -1896,7 +1898,7 @@ no_intro:
 
 		xtest = hero_x & 0xfff0;
 		ytest = hero_y & 0xffe0;
-		
+
 		if (riding) goto nodoor3;
 		if (region_num < 8)
 		{	while (k >= i)
@@ -1911,7 +1913,7 @@ no_intro:
 						i = j+1;
 				else if (d->yc1 > ytest) k = j-1;
 				else if (d->yc1 < ytest) i = j+1;
-				else 
+				else
 				{	if (d->type & 1)
 					{	if (hero_y & 0x10) goto nodoor; }
 					else if ((hero_x & 15) >6 ) goto nodoor;
@@ -1932,10 +1934,10 @@ no_intro:
 				if (i >= DOORCOUNT || k < 0) break;
 			}
 		}
-		else 
+		else
 		{	for (j=0; j<DOORCOUNT; j++)
 			{	struct door *d; d = &(doorlist[j]);
-				if (d->yc2==ytest && 
+				if (d->yc2==ytest &&
 					( d->xc2==xtest || (d->xc2==xtest-16 && d->type & 1)))
 				{	if (d->type & 1)
 					{	if ((hero_y & 0x10)==0) goto nodoor2; }
@@ -2017,7 +2019,8 @@ no_intro:
 						(fatigue < 30 && daynight > 9000 && daynight < 10000) ||
 						(battleflag && (rand64() == 0)) )
 					{	anim_list[0].state = STILL;
-						hero_y = (anim_list[0].abs_y &= 0xffe0);
+						anim_list[0].abs_x = hero_x = presleep_x;
+						anim_list[0].abs_y = hero_y = presleep_y;
 					}
 				}
 				if (!freeze_timer) /* no time in timestop */
@@ -2110,7 +2113,7 @@ no_intro:
 				{	short xd, yd, mode, tactic, r;
 
 					if (goodfairy && goodfairy < 120) break;
-					an = &(anim_list[i]);					
+					an = &(anim_list[i]);
 					if (an->type == CARRIER)
 					{	if ((daynight & 15) == 0)
 							set_course(i,hero_x,hero_y,5);
@@ -2190,7 +2193,7 @@ no_intro:
 					!actors_loading && !witchflag &&
 					anim_list[0].environ == 0 && safe_flag == 0 &&
 					anim_list[0].state != DEAD)
-					{	safe_r = region_num; 
+					{	safe_r = region_num;
 						safe_x = hero_x; safe_y = hero_y;
 						if (hunger > 30 && stuff[24])
 						{	stuff[24]--; hunger -= 30; event(37);  }
@@ -2209,9 +2212,13 @@ no_intro:
 							if (hunger > 90) event(2);
 						}
 						else if (fatigue > 170)
-						{	event(12); anim_list[0].state = SLEEP; }
+						{	event(12);
+							presleep_x = hero_x; presleep_y = hero_y;
+							anim_list[0].state = SLEEP;
+						}
 						else if (hunger > 140)
 						{	event(24); hunger = 130;
+							presleep_x = hero_x; presleep_y = hero_y;
 							anim_list[0].state = SLEEP;
 						}
 					}
@@ -2397,7 +2404,7 @@ no_intro:
 
 			/* if offscreen, should we skip?? */
 
-			if (an->weapon>0 && an->weapon<8 && 
+			if (an->weapon>0 && an->weapon<8 &&
 				(an->state<DEAD || an->state>=SHOOT1 || xtype>80))
 			{	if ((an->facing - 2) & 4) passmode = (pass^1);
 				else passmode = pass;
@@ -2622,7 +2629,7 @@ quit_all:
 
 /* asm */
 
-xfer(xtest,ytest,flag) register USHORT xtest, ytest, flag;
+void xfer(register USHORT xtest, register USHORT ytest, register USHORT flag)
 {	map_x += (xtest-hero_x);
 	map_y += (ytest-hero_y);
 	hero_x = anim_list[0].abs_x = xtest;
@@ -2644,7 +2651,7 @@ xfer(xtest,ytest,flag) register USHORT xtest, ytest, flag;
 	while (proxcheck(hero_x,hero_y,0)) hero_y++;
 }
 
-find_place(flag) short flag;
+void find_place(short flag)
 {	register UBYTE *tbl; char *ms; register long i;
 
 	findagain:
@@ -2719,7 +2726,7 @@ find_place(flag) short flag;
 			load_carrier(extn->v3);
 }
 
-load_actors()
+void load_actors()
 {	encounter_number = extn->v1 + rnd(extn->v2);
 	if ( actor_file != encounter_chart[encounter_type].file_id)
 	{	actor_file = encounter_chart[encounter_type].file_id;
@@ -2733,7 +2740,9 @@ load_actors()
 
 #define MAX_TRY 15
 
-set_encounter(i,spread) USHORT i, spread;
+int set_encounter(USHORT i, USHORT spread);
+
+int set_encounter(USHORT i, USHORT spread)
 {	register struct shape *an; USHORT xtest, ytest;
 	register long race, w, j;
 
@@ -2766,7 +2775,7 @@ set_encounter(i,spread) USHORT i, spread;
 	return TRUE;
 }
 
-checkdead(i,dtype) register long i, dtype;
+void checkdead(register long i, register long dtype)
 {	register struct shape *an;
 	an = &(anim_list[i]);
 	if (an->vitality < 1 && an->state != DYING && an->state != DEAD)
@@ -2781,7 +2790,7 @@ checkdead(i,dtype) register long i, dtype;
 	if (i == 0) prq(4);
 }
 
-load_carrier(n) short n;
+void load_carrier(short n)
 {	register struct shape *an;
 	register long i;
 	an = &(anim_list[3]);
@@ -2806,12 +2815,12 @@ load_carrier(n) short n;
 struct bro {
 	char	brave,luck,kind,wealth;
 	UBYTE	*stuff;
-} blist[] = 
+} blist[] =
 {	{ 35,20,15,20,julstuff },	/* julian's attributes */
 	{ 20,35,15,15,philstuff },	/* phillip's attributes */
 	{ 15,20,35,10,kevstuff } };	/* kevin's attributes */
 
-revive(new) short new;
+void revive(short new)
 {	/* new tells if this is a new character */
 	register struct bro *br;
 	register struct shape *an;
@@ -2858,7 +2867,7 @@ revive(new) short new;
 
 		map_message();
 		SetFont(rp,afont);
-		if (brother == 1) 
+		if (brother == 1)
 		{	placard_text(0);
 			rp_map.BitMap =  fp_drawing->ri_page->BitMap; SetRast(&rp_map,0);
 			rp_map.BitMap =  fp_viewing->ri_page->BitMap;
@@ -2889,7 +2898,7 @@ revive(new) short new;
 			if (brother == 1) print_cont(".");
 			else if (brother == 2) event(10);
 			else if (brother == 3) event(11);
-		}	
+		}
 	}
 	else fade_down();
 
@@ -2911,7 +2920,7 @@ revive(new) short new;
 	fiery_death = xtype = 0;
 }
 
-screen_size(x) register long x;
+void screen_size(register long x)
 {	register long y;
 
 	y = (x*5)/8;
@@ -2933,7 +2942,7 @@ screen_size(x) register long x;
 	pagechange();
 }
 
-setmood(now) char now;
+void setmood(char now)
 {	register long off;
 	if (anim_list[0].vitality == 0) off = (6*4);
 	else if (hero_x > 0x2400 && hero_x < 0x3100 &&
@@ -2956,7 +2965,7 @@ setmood(now) char now;
 	else stopscore();
 }
 
-gen_mini()
+void gen_mini()
 {	register unsigned long xr,yr; register long xs, ys;
 
 	/* lregion is what region are supposed to be in */
@@ -2990,7 +2999,7 @@ gen_mini()
 	genmini(img_x,img_y);
 }
 
-pagechange()
+void pagechange()
 {	register struct fpage *temp;
 
 	temp = fp_drawing; fp_drawing = fp_viewing; fp_viewing = temp;
@@ -3014,7 +3023,7 @@ extern struct IOStdReq *CreateStdIO();
 
 extern HandlerInterface();
 
-add_device()
+int add_device()
 {	SHORT error;
 
 	handler_data.laydown = handler_data.pickup = 0;
@@ -3036,7 +3045,7 @@ add_device()
 	return TRUE;
 }
 
-wrap_device()
+void wrap_device()
 {	inputRequestBlock->io_Command = IND_REMHANDLER;
 	inputRequestBlock->io_Data = (APTR)&handlerStuff;
 	DoIO((struct IORequest *)inputRequestBlock);
@@ -3045,7 +3054,7 @@ wrap_device()
 	DeletePort(inputDevPort);
 }
 
-print_options()
+void print_options()
 {	short i,j,x,y;
 	j = 0;
 	for (i = 0; i<menus[cmode].num; i++)
@@ -3067,7 +3076,7 @@ print_options()
 	}
 }
 
-propt(j,pena) short j,pena;
+void propt(short j, short pena)
 {	register long x,y,k,penb;
 
 	k = real_options[j];
@@ -3099,7 +3108,7 @@ extern char jtrans[];
 
 LONG	dbg;
 
-do_option(hit) short hit;
+void do_option(short hit)
 {	short dist;
 	USHORT y;
 	register ULONG i, j, x, k;
@@ -3124,7 +3133,7 @@ do_option(hit) short hit;
 			pagea.Planes[2] = data+64;
 			pagea.Planes[3] = data+96;
 			pagea.Planes[4] = data+128;
-		
+
 			for (j=0; j<GOLDBASE; j++)
 			{	num = stuff[j];
 				if (num>inv_list[j].maxshown) num = inv_list[j].maxshown;
@@ -3268,7 +3277,7 @@ do_option(hit) short hit;
 					anim_list[nearest].weapon = -1;
 					j = anim_list[nearest].race;
 					if (j & 0x80) j = 0;	/* setfigs have no treasure */
-					else 
+					else
 					{	j = (encounter_chart[j].treasure * 8) + rand8();
 						j = treasure_probs[j];
 					}
@@ -3309,7 +3318,7 @@ do_option(hit) short hit;
 		case 9:
 			if (cheat1==0 && region_num > 7) return;
 			bm_draw = fp_drawing->ri_page->BitMap;
-			planes = bm_draw->Planes; 
+			planes = bm_draw->Planes;
 			bigdraw(map_x,map_y);
 
 			i = (hero_x>>4) - ((secx + xreg)<<4) - 4;
@@ -3392,7 +3401,7 @@ do_option(hit) short hit;
 						prq(4);
 					}
 					break;
-			case 2: 
+			case 2:
 			case 3: speak(15); break;	/* guard */
 			case 4: if (ob_list8[9].ob_stat) speak(16); break;	/* princess - change speech */
 			case 5: if (ob_list8[9].ob_stat) speak(17); break;	/* king - change speech */
@@ -3418,7 +3427,7 @@ do_option(hit) short hit;
 		else if (an->type == CARRIER && active_carrier == 5)
 		{	if (stuff[6]) speak(57); /* check if has shell */
 			else { stuff[6] = 1; speak(56); }
-		}	
+		}
 		else if (an->type == ENEMY) { speak(an->race); }
 		break;
 	case BUY:
@@ -3440,7 +3449,7 @@ do_option(hit) short hit;
 			else print("Not enough money!");
 		}
 		break;
-	case GAME: 
+	case GAME:
 		if (hit==6) setmood(TRUE);
 		if (hit==8) gomenu(SAVEX);
 		if (hit==9) { svflag = FALSE; gomenu(FILE); }
@@ -3507,7 +3516,7 @@ do_option(hit) short hit;
 	set_options();
 }
 
-get_turtle()
+void get_turtle()
 {	for (i=0; i<25; i++)
 	{	set_loc();
 		if (px_to_im(encounter_x,encounter_y) == 5) break;
@@ -3517,14 +3526,14 @@ get_turtle()
 	load_carrier(5);
 }
 
-gomenu(mode) short mode;
+void gomenu(short mode)
 {	if (menus[GAME].enabled[5] & 1) return;
 	cmode = mode;
 	handler_data.lastmenu = 0;
 	print_options();
 }
 
-set_options()
+void set_options()
 {	register long i,j;
 	for (i=0; i<7; i++)
 	{	menus[MAGIC].enabled[i+5] = stuff_flag(i+9);
@@ -3542,10 +3551,10 @@ set_options()
 	menus[GIVE].enabled[8] = stuff_flag(29); /* bone */
 }
 
-load_all()
+void load_all()
 {	while (MAP_FLUX) load_new_region(); }
 
-load_new_region()
+void load_new_region()
 {	register struct need *nd; register long i;
 	register unsigned char *imem;
 	unsigned char *imem0;
@@ -3613,16 +3622,16 @@ load_new_region()
 	new_region = NO_REGION;
 }
 
-effect(num,speed) short num; long speed;
+void effect(short num, long speed)
 {	if (menus[GAME].enabled[7] & 1)
 	{	playsample(sample[num],sample_size[num]/2,speed); }
 }
 
-mod1save()
+void mod1save()
 {	/* save stuff */
-	saveload(julstuff,35);
-	saveload(philstuff,35);
-	saveload(kevstuff,35);
+	saveload((char *)julstuff,35);
+	saveload((char *)philstuff,35);
+	saveload((char *)kevstuff,35);
 	/* set stuff pointer */
 	stuff = blist[brother-1].stuff;
 

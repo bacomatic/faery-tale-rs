@@ -198,7 +198,7 @@ _set_course
 		bra		99$
 9$
 
-;	else 
+;	else
 ;	{	if (rand()&1) j += deviation; else j -= deviation;
 
 		jsr		_rand				; go left or right
@@ -227,7 +227,7 @@ _set_course
 
 extern char *stuff;
 
-dohit(i,j,fc,wt) short wt; register long j,i,fc;
+void dohit(register long i, register long j, register long fc, short wt)
 {	if (anim_list[0].weapon < 4 &&
 		(anim_list[j].race == 9 ||
 			(anim_list[j].race == 0x89 && stuff[7] == 0) ))
@@ -250,7 +250,7 @@ extern short nearest;
 extern short xtype;
 char	turtle_eggs;
 
-aftermath()
+void aftermath()
 {	register long dead, flee, i, j;
 	dead = flee = 0;
 	for (i=3; i<anix; i++)
@@ -274,7 +274,7 @@ aftermath()
 	if (turtle_eggs) get_turtle();
 }
 
-proxcheck(x,y,i) short x,y,i;
+int proxcheck(short x, short y, short i)
 {	register long x1, y1;
 	register long j;
 	if (anim_list[i].type != ENEMY || anim_list[i].race != 2) /* wraith */
@@ -294,7 +294,7 @@ proxcheck(x,y,i) short x,y,i;
 	return 0;
 }
 
-nearest_fig(constraint,dist) char constraint; short dist;
+int nearest_fig(char constraint, short dist)
 {	register long d,i;
 	nearest = 0;
 	for (i=1; i<anix2; i++)
@@ -308,7 +308,7 @@ nearest_fig(constraint,dist) char constraint; short dist;
 
 /* asm */
 
-calc_dist(a,b) register long a,b;
+int calc_dist(register long a, register long b)
 {	register long x,y; short dist;
 	x = anim_list[a].abs_x - anim_list[b].abs_x; if (x<0) x = -x;
 	y = anim_list[a].abs_y - anim_list[b].abs_y; if (y<0) y = -y;
@@ -319,7 +319,7 @@ calc_dist(a,b) register long a,b;
 
 /* asm */
 
-move_figure(fig,dir,dist) short fig,dir,dist;
+int move_figure(short fig, short dir, short dist)
 {	register unsigned short xtest,ytest;
 	xtest = newx(anim_list[fig].abs_x,dir,dist);
 	ytest = newy(anim_list[fig].abs_y,dir,dist);
@@ -348,7 +348,7 @@ struct compvars {
 extern UBYTE *nhinor, *nhivar;
 extern struct BitMap *bm_text, *bm_source;
 
-drawcompass(dir) short dir;
+void drawcompass(short dir)
 {	register long xr, yr, xs, ys;
 	xr = comptable[dir].xrect;
 	yr = comptable[dir].yrect;
@@ -374,7 +374,7 @@ extern short secret_timer, light_timer, freeze_timer;
 struct ViewPort vp_page;
 extern UWORD region_num, new_region;
 
-fade_page(r,g,b,limit,colors) short r,g,b,limit; USHORT *colors;
+void fade_page(short r, short g, short b, short limit, USHORT *colors)
 {	register long r1,b1,g1,g2;
 	short i;
 
@@ -422,7 +422,7 @@ extern struct RastPort *rp;
 
 /* asm */
 
-colorplay() /* teleport effect */
+void colorplay() /* teleport effect */
 {	register long i,j;
 	for (j=0; j<32; j++)
 	{	for (i=1; i<32; i++) fader[i]=bitrand(0xfff);
@@ -439,7 +439,7 @@ SHORT sg1, sg2;
 
 short db1, db2;
 
-ppick()
+void ppick()
 {	register long p;
 	if (prec == pplay) Delay(1);
 	else
@@ -492,7 +492,7 @@ prqx	movem.l	(sp)+,d0/d1/a1
 #define	TYMIN	5
 #define	TYMAX	44
 
-print(str) register char *str;
+void print(register char *str)
 {	register long l;
 	l = 0; while (str[l]) l++;
 	ScrollRaster(rp,0,10,TXMIN,TYMIN,TXMAX,TYMAX);
@@ -500,7 +500,7 @@ print(str) register char *str;
 	text(str,l);
 }
 
-print_cont(str) register char *str;
+void print_cont(register char *str)
 {	register long l = 0;
 	while (str[l]) l++;
 	text(str,l);
@@ -511,7 +511,7 @@ char *mbuf, mesbuf[200];
 extern char *datanames[];
 extern short brother;
 
-extract(start) register char *start;
+void extract(register char *start)
 {	register char *ss, *lbreak;
 	char *lstart, c; short i;
 
@@ -546,7 +546,7 @@ extract(start) register char *start;
 		}
 	}
 }
-			
+
 #asm
 ;msg(start,num) register char *start; register long num;
 ;{	while (num) if (*start++ == 0) num--;
@@ -576,20 +576,20 @@ msgx	move.l	a0,4(sp)
 
 #endasm
 
-announce_container(s) char *s;
+void announce_container(char *s)
 {	print(datanames[brother-1]);
 	print_cont(" found ");
 	print_cont(s);
 	print_cont(" containing ");
 }
 
-announce_treasure(s) char *s;
+void announce_treasure(char *s)
 {	print(datanames[brother-1]);
 	print_cont(" found ");
 	print_cont(s);
 }
 
-name()
+void name()
 {	print_cont(datanames[brother-1]); }
 
 extern struct RastPort rp_map, rp_text;
@@ -598,7 +598,7 @@ extern struct BitMap *bm_draw;
 extern struct fpage *fp_drawing, *fp_viewing;
 extern char	viewstatus;
 
-map_message()
+void map_message()
 {	fade_down();
 	rp = &rp_map;
 	rp_map.BitMap =  fp_drawing->ri_page->BitMap;
@@ -612,7 +612,7 @@ map_message()
 	viewstatus = 2;
 }
 
-message_off()
+void message_off()
 {	fade_down();
 	rp = &rp_text;
 	vp_text.Modes = HIRES | SPRITES;
@@ -620,15 +620,15 @@ message_off()
 	viewstatus = 3;
 }
 
-fade_down()
+void fade_down()
 {	register long i;
 	for (i=100; i>=0; i-=5) { fade_page(i,i,i,FALSE,pagecolors); Delay(1); } }
 
-fade_normal()
+void fade_normal()
 {	register long i;
 	for (i=0; i<=100; i+=5) { fade_page(i,i,i,FALSE,pagecolors); Delay(1); } }
 
-stillscreen()
+void stillscreen()
 {	fp_drawing->ri_page->RxOffset = fp_drawing->ri_page->RyOffset = 0;
 	pagechange();
 }
@@ -670,7 +670,7 @@ extern unsigned short safe_r;
 
 extern short actor_file, set_file;
 
-shape_read()
+void shape_read()
 {	nextshape = shape_mem;
 	read_shapes(3); prep(OBJECTS);
 	read_shapes(brother-1); prep(PHIL);
@@ -682,7 +682,7 @@ shape_read()
 	motor_off();
 }
 
-read_shapes(num) register long num;
+void read_shapes(register long num)
 {	long size; register long slot;
 
 	slot = cfiles[num].seq_num;
@@ -705,8 +705,7 @@ read_shapes(num) register long num;
 #if 0
 extern struct IOExtTD *lastreq, diskreqs[10], *diskreq1;
 
-load_track_range(f_block,b_count,buffer,dr)
-short f_block, b_count, dr; APTR buffer;
+void load_track_range(short f_block, short b_count, APTR buffer, short dr)
 {	short error;
 
 	lastreq = &(diskreqs[dr]);
@@ -719,15 +718,15 @@ short f_block, b_count, dr; APTR buffer;
 	SendIO((struct IORequest *)lastreq);
 }
 
-motor_off()
+void motor_off()
 {	diskreqs[9] = *diskreq1;
 	diskreqs[9].iotd_Req.io_Length = 0;
 	diskreqs[9].iotd_Req.io_Command = TD_MOTOR;
-	DoIO((struct IORequest *)&diskreqs[9]); 
+	DoIO((struct IORequest *)&diskreqs[9]);
 }
 #endif
 
-seekn()
+void seekn()
 {	cpytest();
 	/* diskreqs[9] = *diskreq1 */ ;
 
@@ -740,7 +739,7 @@ seekn()
 	motor_off(); */
 }
 
-prep(slot) short slot;
+void prep(short slot)
 {
 	WaitDiskIO(8); /* WaitIO((struct IORequest *)&diskreqs[8]); */
 	InvalidDiskIO(8); /* diskreqs[8].iotd_Req.io_Command = CMD_INVALID; */
@@ -749,7 +748,7 @@ prep(slot) short slot;
 		seq_list[slot].width,seq_list[slot].height,seq_list[slot].count);
 }
 
-load_next()
+void load_next()
 {	if (!IsReadLastDiskIO() || CheckLastDiskIO())
 	/* if (lastreq->iotd_Req.io_Command != CMD_READ || CheckIO((struct IORequest *)lastreq)) */
 		load_new_region();
@@ -757,7 +756,7 @@ load_next()
 
 extern unsigned char *(track[32]), *scoremem;
 
-read_score()
+void read_score()
 {	long file;
 	long packlen, sc_load, sc_count;
 	register long i;
@@ -778,7 +777,7 @@ read_score()
 char skipp;
 extern struct BitMap pagea, pageb;
 
-copypage(br1,br2,x,y) char *br1, *br2; short x,y;
+void copypage(char *br1, char *br2, short x, short y)
 {	if (skipp) return;
 	Delay(350);
 	BltBitMap(&pageb,0,0,&pagea,0,0,320,200,0xC0,0x1f,0);
@@ -793,7 +792,7 @@ char flip1[] = { 8,6,5,4,3,2,3,5,13,0,0, 13,5,3,2,3,4,5,6,8,0,0 };
 char flip2[] = { 7,5,4,3,2,1,1,1, 1,0,0,  1,1,1,1,2,3,4,5,7,0,0 };
 char flip3[] = {12,9,6,3,0,0,0,0, 0,0,0,  0,0,0,0,0,0,3,6,9,0,0 };
 
-flipscan()
+void flipscan()
 {	short i, scol, h; register long bcol, dcol, rate, wide;
 	struct BitMap *temp;
 	for (i=0; i<22; i++)
@@ -832,12 +831,12 @@ flipscan()
 	}
 }
 
-skipint()
+int skipint()
 {	return skipp = (getkey()==' ');}
 
 /* UBYTE *AllocMem(); */
 
-UBYTE *into_chip(oldpointer,size) register UBYTE *oldpointer; long size;
+UBYTE *into_chip(register UBYTE *oldpointer, long size)
 {	register UBYTE *newpointer; register long i;
 
 	if (TypeOfMem(oldpointer) & MEMF_CHIP) return oldpointer;
@@ -877,7 +876,7 @@ UBYTE fallstates[] = {
 char bow_x[32] = {
 	1,2,3,4,3,2,1,0, 3,2,0,-2,-3,-2,0,2,
 	-3,-3,-3,-3,-3,-3,-3,-2, 0,1,1,1,0,-2,-3,-2 };
-char bow_y[32] = { 
+char bow_y[32] = {
 	8,8,8,7,8,8,8,8, 11,12,13,13,13,13,13,12,
 	8,7,6,5,6,7,8,9, 12,12,12,12,12,12,11,12 };
 
@@ -914,7 +913,7 @@ struct Layer *layer, templayer, *oldlayer /*, *CreateUpfrontLayer() */ ;
 extern struct Layer_Info *li;
 SHORT	s1,s2;
 
-witch_fx(fp) register struct fpage *fp;
+void witch_fx(register struct fpage *fp)
 {	UBYTE	w1; register BYTE *w;
 	register struct RastPort *r;
 	SHORT	x1,y1,x2,y2,x3,y3,x4,y4;
@@ -973,14 +972,14 @@ enum obytes {
 	TURTLE=102,
 	BLUE_KEY=114,
 	M_WAND=145, MEAL, ROSE, FRUIT, STATUE, BOOK, SHELL,
-	GREEN_KEY=153, WHITE_KEY=154, RED_KEY=242, 
+	GREEN_KEY=153, WHITE_KEY=154, RED_KEY=242,
 };
 
 UBYTE itrans[] = {
 	QUIVER,35,
 	B_STONE,9,G_JEWEL,10,VIAL,11,C_ORB,12,B_TOTEM,13,G_RING,14,J_SKULL,15,
 	M_WAND,4, 27,5, 8,2, 9,1, 12,0, 10,3, ROSE,23, FRUIT,24, STATUE,25,
-	BOOK,26, SHELL,6, 155,7, 136,27, 137,28, 138,29, 139,22, 140,30, 
+	BOOK,26, SHELL,6, 155,7, 136,27, 137,28, 138,29, 139,22, 140,30,
 	GOLD_KEY,16,GREEN_KEY,17,BLUE_KEY,18,RED_KEY,19,GREY_KEY,20,WHITE_KEY,21,
 	0,0 };
 
@@ -1181,14 +1180,14 @@ short	glbobs = 11;
 
 short j1;
 
-do_objects()
+void do_objects()
 {	j1 = 2;
 	set_objects(ob_listg,glbobs,0x80);
 	set_objects(ob_table[region_num],mapobs[region_num],0);
 	if (j1>3) anix = j1;
 }
 
-leave_item(i,object) short i,object;
+void leave_item(short i, short object)
 {	ob_listg[0].xc = anim_list[i].abs_x;
 	ob_listg[0].yc = anim_list[i].abs_y + 10;
 	ob_listg[0].ob_id = object;
@@ -1197,7 +1196,7 @@ leave_item(i,object) short i,object;
 
 /* flag - 1=show, 2=take */
 
-change_object(id,flag) register long id, flag;
+void change_object(register long id, register long flag)
 {	register struct shape *an;
 	register struct object *ob;
 	an = anim_list + id;
@@ -1215,7 +1214,7 @@ extern struct {
 extern UBYTE *nextshape;
 extern char witchflag;
 
-set_objects(list,length,f) struct object *list; short length; long f;
+void set_objects(struct object *list, short length, long f)
 {	short xstart, ystart, i, k;
 	BYTE	cf, id;
 
@@ -1306,7 +1305,7 @@ short xx, yy;
 char *answers[] = {
 	"LIGHT","HEED","DEED","SIGHT","FLIGHT","CREED","BLIGHT","NIGHT" };
 
-copy_protect_junk()
+int copy_protect_junk()
 {	register char key; register long i, j;
 	register char *a, *b;
 	long h;
@@ -1398,7 +1397,7 @@ extern struct  TextFont *tfont, *afont;
 /* struct FileLock *Lock(), *flock; */
 BPTR flock;
 
-locktest(name,access) char *name; long access;
+int locktest(char *name, long access)
 {	flock = Lock(name,access);
 	if (flock) UnLock(flock);
 	return (int)flock;
@@ -1406,7 +1405,7 @@ locktest(name,access) char *name; long access;
 
 #define ADDR(ptr) (void *)((int)ptr << 2)
 
-cpytest()
+int cpytest()
 {	BOOL IsHardDrive(void);
 
 	if (IsHardDrive() == FALSE)
@@ -1439,7 +1438,7 @@ _cold	jmp		-4
 
 #endasm
 
-waitnewdisk()
+int waitnewdisk()
 {	short i;
 	for (i=0; i<300; i++)
 	{	if (handler_data.newdisk)
@@ -1451,6 +1450,18 @@ waitnewdisk()
 
 extern short cheat1;
 extern char quitflag;
+extern unsigned short safe_x, safe_y, img_x, img_y;
+extern short riding, flying, wcarry;
+extern short turtleprox, raftprox;
+extern short fatigue;
+extern USHORT hero_place;
+extern short active_carrier;
+extern short cmode;
+extern USHORT pad1, pad2, pad3;
+extern short hunger;
+extern short princess;
+extern USHORT daynight, lightlevel;
+extern short leader;
 
 struct extent {
 	UWORD x1, y1, x2, y2;
@@ -1471,7 +1482,7 @@ extern struct encounter {
 			file_id;
 } encounter_chart[5];
 
-savegame(hit) short hit;
+void savegame(short hit)
 {	long	i;
 	char	*name;
 	BOOL	hdrive = FALSE;
@@ -1503,8 +1514,47 @@ stest:
 	if (svflag) svfile = Open(name,1006);
 	else svfile = Open(name,1005);
 	if (svfile)
-	{	/* save misc variables */
-		saveload((void *)&map_x,80);
+	{	/* save misc variables - broken out to avoid compiler reordering */
+		saveload((void *)&map_x,2);
+		saveload((void *)&map_y,2);
+		saveload((void *)&hero_x,2);
+		saveload((void *)&hero_y,2);
+		saveload((void *)&safe_x,2);
+		saveload((void *)&safe_y,2);
+		saveload((void *)&safe_r,2);
+		saveload((void *)&img_x,2);
+		saveload((void *)&img_y,2);
+		saveload((void *)&cheat1,2);
+		saveload((void *)&riding,2);
+		saveload((void *)&flying,2);
+		saveload((void *)&wcarry,2);
+		saveload((void *)&turtleprox,2);
+		saveload((void *)&raftprox,2);
+		saveload((void *)&brave,2);
+		saveload((void *)&luck,2);
+		saveload((void *)&kind,2);
+		saveload((void *)&wealth,2);
+		saveload((void *)&hunger,2);
+		saveload((void *)&fatigue,2);
+		saveload((void *)&brother,2);
+		saveload((void *)&princess,2);
+		saveload((void *)&hero_sector,2);
+		saveload((void *)&hero_place,2);
+		saveload((void *)&daynight,2);
+		saveload((void *)&lightlevel,2);
+		saveload((void *)&actor_file,2);
+		saveload((void *)&set_file,2);
+		saveload((void *)&active_carrier,2);
+		saveload((void *)&xtype,2);
+		saveload((void *)&leader,2);
+		saveload((void *)&secret_timer,2);
+		saveload((void *)&light_timer,2);
+		saveload((void *)&freeze_timer,2);
+		saveload((void *)&cmode,2);
+		saveload((void *)&encounter_type,2);
+		saveload((void *)&pad1,2);
+		saveload((void *)&pad2,2);
+		saveload((void *)&pad3,2);
 
 		/* save region num */
 		saveload((void *)&region_num,2);
@@ -1550,14 +1600,14 @@ nosave:
 	SetFont(rp,afont);
 }
 
-saveload(buffer,length) char *buffer; long length;
+void saveload(char *buffer, long length)
 {	short err;
 	if (svflag) err = Write(svfile,buffer,length);
 	else err = Read(svfile,buffer,length);
 	if (err < 0) sverr = IoErr();
 }
 
-move_extent(e,x,y) short e,x,y;
+void move_extent(short e, short x, short y)
 {	register struct extent *ex;
 	ex = extent_list + e;
 	ex->x1 = x - 250;
@@ -1581,7 +1631,7 @@ extern short princess;
 
 extern struct TextFont *afont;
 
-rescue()
+void rescue()
 {	register long i;
 	map_message(); SetFont(rp,afont);
 	i = princess*3;
@@ -1602,7 +1652,7 @@ rescue()
 	for (i=16; i<22; i++) stuff[i] += 3;
 }
 
-win_colors()
+void win_colors()
 {	register long i, j;
 	placard_text(6); name(); placard_text(7); placard(); Delay(80);
 	bm_draw = fp_drawing->ri_page->BitMap;
@@ -1650,7 +1700,7 @@ _stuff_flag
 extern USHORT daynight, lightlevel;
 extern short light_timer;
 
-day_fade()
+void day_fade()
 {	register long ll;
 	if (light_timer) ll = 200; else ll = 0;
 	if ((daynight & 3) == 0 || viewstatus > 97)
@@ -1661,7 +1711,7 @@ day_fade()
 
 extern short leader;
 
-do_tactic(i,tactic) register long i,tactic;
+void do_tactic(register long i, register long tactic)
 {	register long r, f; register struct shape *an;
 	r = !(rand()&7);
 	an = &(anim_list[i]);
@@ -1674,7 +1724,7 @@ do_tactic(i,tactic) register long i,tactic;
 		yd = an->abs_y - anim_list[0].abs_y;
 		if (xd < 0) xd = -xd;
 		if (yd < 0) yd = -yd;
-		if ((rand()&1) && 
+		if ((rand()&1) &&
 			(xd < 8 || yd < 8 || ( xd>(yd-5) && xd<(yd+7) ) ))
 		{	set_course(i,hero_x,hero_y,5);
 			if (an->state < SHOOT1) an->state = SHOOT1;
@@ -1701,7 +1751,7 @@ do_tactic(i,tactic) register long i,tactic;
 
 extern short hunger;
 
-eat(amt)
+void eat(int amt)
 {	hunger -= amt;
 	if (hunger < 0) { hunger = 0; event(13); }
 	else print("Yum!");
@@ -1711,7 +1761,7 @@ short minimap[120];
 
 extern short encounter_x, encounter_y;
 
-set_loc()
+void set_loc()
 {	register long d,j;
 	j = rand8();			/* direction */
 	d = 150 + rand64();		/* distance */
