@@ -19,20 +19,23 @@ but even so the code may have some historical interest.
 
 This branch contains bug fixes against the original code.
 
+The makefile has been updated to work with Aztec C 5.2a (at the least). It should properly generate the precompiled header and use it when compiling the .c files. It should also properly compile the .asm files using the Aztec assembler.
+
+To build with Aztec C 5.2 installed, make sure you run the aztec.sh script to set up your environment. Assign AZTEC: to the installed location, e.g., "ASSIGN AZTEC: DH0:Aztec". Then just run "make" to build the game.
+
 In no particular order:
-- De-K&R'ed the source, it was causing problems
+- De-K&R'ed the source, it was causing problems with Aztec 5.2a
+- Removed prototype file generation as it was problematic with Aztec C 5.2 and not really necessary. Prototypes are now in corresponding .h files.
 - Save files were attempting to write 80 bytes from map_x but Aztec C is moving global variables around so this was broken. Fixed by explicitly writing each variable separately.
-- The -pp arg (in makefile) being passed to cc caused 'char' to be compiled as unsigned, which lead to a number of bugs, replaced with -wn to suppress warnings about implicit char* to UBYTE* conversions. (should just add explicit casts in the code)
+- The -pp arg (in makefile) being passed to cc caused 'char' to be compiled as unsigned, which lead to a number of bugs. Explicit casts were added to avoid ptr conversion warnings.
+- Switched to pure ANSI compiler mode.
+- Added FOURCC macros for the iff loader
 
 Exploits fixed (Sorry, gotta play the game the way it was intended!):
 - Attacking the turtle is no longer allowed!
-- Heroes can no longer sleep-teleport through locked gates and doors.
+- Heroes can no longer sleep-teleport through locked gates and doors. Position at time of sleep is saved and restored.
 - An early exploit allowing infinite looting of an item while paused seems to have been previously fixed.
 
-
-The makefile has been updated to work with Aztec C 5.2a (at the least). It should properly generate the precompiled header and use it when compiling the .c files. It should also properly compile the .asm files using the Aztec C assembler.
-
-To build with Aztec C 5.2 installed, make sure you run the aztec.sh script to set up your environment, then simply run "make" in the project directory.
 
 ## Copyright status
 
