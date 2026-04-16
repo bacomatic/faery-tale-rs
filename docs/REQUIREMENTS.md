@@ -168,6 +168,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-INPUT-004 | Combat stance shall activate when right mouse button, keyboard `0` key, or joystick button 1 is held. |
 | R-INPUT-005 | Hero walk speed shall be 5 pixels/frame on normal terrain. |
 | R-INPUT-006 | Movement shall be blocked by terrain with walkability 0 (impassable). |
+| R-INPUT-007 | If the hero has the crystal shard (`stuff[30]`), terrain type 12 shall be treated as passable. This is the sole gameplay effect of the shard. |
 
 ### User Stories
 
@@ -236,7 +237,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-NPC-004 | Wizard NPCs shall give hints based on their per-instance `goal` field (speeches 27–34). |
 | R-NPC-005 | Priest NPCs shall heal the player if kind is high, and give a golden statue if the player has a writ. |
 | R-NPC-006 | Sorceress shall give a figurine on first visit and luck boost on repeat visits. |
-| R-NPC-007 | Spectre NPCs shall accept bones and give crystal shards in return. |
+| R-NPC-007 | Spectre NPCs shall accept bones and give crystal shards in return. The shard (`stuff[30]`) enables the hero to pass through terrain type 12 barriers on the astral plane, which gate access to the Necromancer. |
 | R-NPC-008 | Ghost NPCs shall reveal the location of a dead brother's bones. |
 | R-NPC-009 | Bartender dialogue shall be context-dependent on fatigue and time of day. |
 | R-NPC-010 | GIVE handler: Gold costs 2 units, random kindness increase. Bones given to spectre yield crystal shard. |
@@ -261,7 +262,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-INV-003 | Body search on dead enemies shall roll weapon drop then treasure drop from probability tables. |
 | R-INV-004 | Equipment effects: weapon slot determines melee damage bonus; bow enables ranged attacks; wand enables fireballs. |
 | R-INV-005 | Inventory state shall be preserved per-brother (separate arrays for Julian, Phillip, Kevin). |
-| R-INV-006 | Key items (gold, silver, jade, crystal, ebony, bronze) shall be consumed when used to open locked doors. |
+| R-INV-006 | Key items (gold, green, blue, red, grey, white) shall be consumed when used to open locked doors. |
 
 ### User Stories
 
@@ -277,10 +278,10 @@ Each requirement is a testable statement. User stories follow the format:
 
 | ID | Requirement |
 |----|-------------|
-| R-QUEST-001 | The main quest shall follow: rescue princess → obtain writ from king → trade writ for statue at priest → collect 5 golden statues → enter hidden city → defeat necromancer → obtain talisman. |
+| R-QUEST-001 | The main quest shall follow: rescue princess → obtain writ from king → trade writ for statue at priest → collect 5 golden statues → enter hidden city → obtain crystal shard from spectre → defeat necromancer → obtain talisman. |
 | R-QUEST-002 | Up to 3 princesses (Katra, Karla, Kandy) shall be rescuable, tracked by the `princess` counter. |
 | R-QUEST-003 | The rescue sequence shall follow the 11-step documented flow: check captive flag → approach NPC → display text → update state → set princess-following mode → escort to extent boundary → grant reward. |
-| R-QUEST-004 | Quest flags: `ob_list8[9]` (princess captive), `ob_listg[9]` (sorceress), `ob_listg[10]` (priest), `stuff[22]` (talisman), `stuff[25]` (statues), `stuff[28]` (writ). |
+| R-QUEST-004 | Quest flags: `ob_list8[9]` (princess captive), `ob_listg[9]` (sorceress), `ob_listg[10]` (priest), `stuff[22]` (talisman), `stuff[25]` (statues), `stuff[28]` (writ), `stuff[30]` (crystal shard — terrain 12 bypass). |
 | R-QUEST-005 | Hidden city access in region 4 shall be blocked (tiles overwritten to impassable 254) when `stuff[25] < 5`. |
 | R-QUEST-006 | Win condition: when `stuff[22]` (talisman) becomes nonzero, set quit flag and launch victory sequence. |
 | R-QUEST-007 | Victory sequence: display placard → load `winpic` → black out → 55-step sunrise fade using `sun_colors[53]` → final fade to black. |
@@ -356,7 +357,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-SURV-009 | Wake conditions: fatigue == 0, OR (fatigue < 30 AND morning window 9000–10000), OR (enemy present AND 1-in-64 random). |
 | R-SURV-010 | Safe zone detection: no enemies, no witch, environ == 0, no danger flag, hero alive. Updated every 128 ticks. |
 | R-SURV-011 | Auto-eat: if hunger > 30 and hero has apples, consume one apple (−30 hunger) in safe zones. |
-| R-SURV-012 | Fiery death zone: `8802 < map_x < 13562`, `24744 < map_y < 29544`. Environ > 15 = instant death. Environ > 2 = −1 vitality/tick. Hero with fiery fruit: immune. |
+| R-SURV-012 | Fiery death zone: `8802 < map_x < 13562`, `24744 < map_y < 29544`. Environ > 15 = instant death. Environ > 2 = −1 vitality/tick. Hero with rose: immune. |
 
 ### User Stories
 

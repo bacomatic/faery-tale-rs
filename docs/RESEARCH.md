@@ -1,2325 +1,3056 @@
-# Game Mechanics Research -- The Faery Tale Adventure
+# The Faery Tale Adventure — Game Mechanics Research
 
-## Purpose
+Ground-truth documentation of every game mechanic, derived exclusively from the original 1987 source code. All claims are backed by file-and-line citations. Open questions are logged in [PROBLEMS.md](PROBLEMS.md).
 
-This document contains every game mechanic, formula, data table, and asset format specification needed to reimplement The Faery Tale Adventure (Amiga, 1987) from scratch. It is derived entirely from the original source code (Aztec C and 68000 assembly by Talin/David Joiner).
-
-### How to Read This Document
-
-Each section uses up to three documentation layers:
-
-- **Original** -- Describes the exact behavior as implemented in the original source code. This is the ground truth: what the game actually does, including quirks, edge cases, and limitations imposed by the Amiga hardware.
-- **Improvement** -- Suggestions for a modern reimplementation. These note places where the original design was constrained by 1987 hardware (floppy disk I/O, limited RAM, Amiga blitter) and could be simplified, made more robust, or made more data-driven.
-- **Asset** -- Format specifications for converting original binary data into modern formats. Each asset section describes the original binary layout and a recommended modern target format.
-
-### Source References
-
-All source references use the format `file:line` or `file:start-end`, pointing to files in the repository root. For example, `fmain.c:615-626` means lines 615 through 626 of `fmain.c`.
+> **Citation format**: `file.c:LINE` or `file.c:START-END`. Speech references: `speak(N)`.
 
 ---
 
-## Table of Contents
+## 1. Core Data Structures
 
-1. [Architecture Overview](#1-architecture-overview)
-2. [World Structure](#2-world-structure)
-3. [Characters & Animation](#3-characters--animation)
-4. [Combat System](#4-combat-system)
-5. [AI & Behavior](#5-ai--behavior)
-6. [Inventory & Items](#6-inventory--items)
-7. [NPCs & Dialogue](#7-npcs--dialogue)
-8. [Quest System](#8-quest-system)
-9. [Doors & Buildings](#9-doors--buildings)
-10. [Day/Night Cycle](#10-daynight-cycle)
-11. [Survival Mechanics](#11-survival-mechanics)
-12. [Magic System](#12-magic-system)
-13. [Death & Revival](#13-death--revival)
-14. [Audio System](#14-audio-system)
-15. [Rendering Pipeline](#15-rendering-pipeline)
-16. [World Navigation (Carriers)](#16-world-navigation-carriers)
-17. [Intro & Narrative](#17-intro--narrative)
-18. [Save/Load System](#18-saveload-system)
-19. [UI & Menu System](#19-ui--menu-system)
-20. [Asset Formats & Disk Layout](#20-asset-formats--disk-layout)
+### 1.1 struct shape — Actor Record
 
----
+The fundamental actor record, used for the player, NPCs, and enemies. Defined in C at `ftale.h:56-67` and mirrored with byte offsets in assembly at `ftale.i:5-22`.
 
-## 1. Architecture Overview
+| Offset | Size | Field | Type | Purpose |
+|--------|------|-------|------|---------|
+| 0 | 2 | `abs_x` | unsigned short | Absolute world X coordinate |
+| 2 | 2 | `abs_y` | unsigned short | Absolute world Y coordinate |
+| 4 | 2 | `rel_x` | unsigned short | Screen-relative X position |
+| 6 | 2 | `rel_y` | unsigned short | Screen-relative Y position |
+| 8 | 1 | `type` | char | Object type number |
+| 9 | 1 | `race` | UBYTE | Race (indexes `encounter_chart[]`) |
+| 10 | 1 | `index` | char | Current animation frame image index |
+| 11 | 1 | `visible` | char | On-screen visibility flag |
+| 12 | 1 | `weapon` | char | Weapon type: 0=none, 1=dagger, 2=mace, 3=sword, 4=bow, 5=wand |
+| 13 | 1 | `environ` | char | Environment/terrain state (see [P1](PROBLEMS.md)) |
+| 14 | 1 | `goal` | char | Current goal mode ([§2.2](#22-goal-modes)) |
+| 15 | 1 | `tactic` | char | Current tactical mode ([§2.3](#23-tactical-modes)) |
+| 16 | 1 | `state` | char | Motion/animation state ([§2.1](#21-motion-states)) |
+| 17 | 1 | `facing` | char | Direction facing (0–7, see [§5.1](#51-direction-encoding)) |
+| 18 | 2 | `vitality` | short | Hit points; doubles as original object index for NPCs |
+| 20 | 1 | `vel_x` | char | X velocity (slippery/ice physics) |
+| 21 | 1 | `vel_y` | char | Y velocity (slippery/ice physics) |
+| **22** | | | | **Total size** (`l_shape` in `ftale.i`) |
 
-The full system architecture, including a Mermaid diagram of all major subsystems, the complete game loop tick structure, and the asset loading pipeline, is documented in [ARCHITECTURE.md](ARCHITECTURE.md). For quest flows and scenario diagrams, see [STORYLINE.md](STORYLINE.md).
+A commented-out `APTR source_struct` field appears in both C and assembly definitions (`ftale.h:66`, `ftale.i:21`), suggesting a removed feature.
 
-The following table summarizes every subsystem, its primary source file(s), and its role:
-
-| # | Subsystem | Primary Source(s) | Description |
-|---|-----------|-------------------|-------------|
-| 1 | Game Loop | `fmain.c` | Main `while (!quitflag)` loop; orchestrates all per-tick processing |
-| 2 | World Structure | `fmain.c`, `terrain.c` | Coordinate system, region loading, sector maps, terrain data |
-| 3 | Characters & Animation | `fmain.c`, `fmain2.c`, `ftale.h` | Actor state machines, sprite animation sequences, movement physics |
-| 4 | Combat System | `fmain.c` | Melee resolution, missile flight, damage calculation, weapon reach |
-| 5 | AI & Behavior | `fmain.c` | Enemy goal/tactic evaluation, pathfinding via `set_course`/`do_tactic` |
-| 6 | Inventory & Items | `fmain.c`, `fmain2.c` | `stuff[]` array, item pickup/drop, equipment, gold/keys/items |
-| 7 | NPCs & Dialogue | `fmain2.c`, `narr.asm` | Character proximity detection, dialogue text, shop transactions |
-| 8 | Quest System | `fmain.c`, `fmain2.c` | Extent system, object state tracking, quest flag evaluation |
-| 9 | Doors & Buildings | `fmain.c`, `fmain2.c` | `doorlist[]` binary search, `xfer()` transitions, `find_place()` |
-| 10 | Day/Night Cycle | `fmain.c` | `daynight` counter (mod 24000), `lightlevel`, palette fading |
-| 11 | Survival Mechanics | `fmain.c` | Hunger, fatigue, health regeneration, starvation, forced sleep |
-| 12 | Magic System | `fmain.c`, `fmain2.c` | Spell items, fairy invocations, special effects |
-| 13 | Death & Revival | `fmain.c` | Brother succession, revival conditions, safe zone respawn |
-| 14 | Audio System | `mtrack.c`, `rtrack.c` | 4-channel music tracker, sound effect playback, mood switching |
-| 15 | Rendering Pipeline | `fmain.c`, `fsubs.asm`, `gdriver.asm` | Double-buffered 5-bitplane display, sprite compositing, terrain masking |
-| 16 | World Navigation | `fmain.c` | Turtle, bird, raft carrier logic; mounting/dismounting |
-| 17 | Intro & Narrative | `narr.asm`, `fmain2.c` | Title sequence, story text scrolling, cinematic transitions |
-| 18 | Save/Load System | `fmain2.c` | 8-slot save/load, binary state serialization |
-| 19 | UI & Menu System | `fmain.c`, `text.c` | HUD display, text scroller, menu input, placard screens |
-| 20 | Asset Formats | `terrain.c`, `iffsubs.c`, `hdrive.c` | Disk layout, IFF image parsing, sector-based async I/O |
-
----
-
-## 2. World Structure
-
-### 2.1 Coordinate System
-
-The game world uses a 32768 x 32768 coordinate space measured in pixels.
-
-```
-MAXCOORD = 16 * 16 * 128 = 32768
-MAXMASK  = MAXCOORD - 1  = 32767
-```
-Source: `fmain.c:632-633`
-
-Hero and actor positions are stored as `abs_x` and `abs_y` (unsigned 16-bit values). The global camera position is tracked by `map_x`, `map_y` (absolute map coordinates in pixels) and `img_x`, `img_y` (absolute sector coordinates). Source: `fmain.c:557-560`
-
-#### World Wrapping
-
-For outdoor regions (region_num < 8), the world wraps at the edges using a threshold of 300 pixels from each boundary:
+#### Actor Array
 
 ```c
-if (an->abs_x < 300)   an->abs_x = 32565;
-if (an->abs_x > 32565) an->abs_x = 300;
-if (an->abs_y < 300)   an->abs_y = 32565;
-if (an->abs_y > 32565) an->abs_y = 300;
+#define MAXSHAPES 25                    // fmain.c:68
+struct shape anim_list[20];             // fmain.c:70
+unsigned char anim_index[20];           // fmain.c:74 — depth-sort index
+short anix, anix2;                      // fmain.c:75 — monster allocation count
+short mdex;                             // fmain.c:76 — missile index
 ```
-Source: `fmain.c:1827-1832`
 
-This wrapping only applies to the hero (actor index `i==0`). If the hero is riding a carrier, the carrier's position is also updated to match. Indoor/dungeon regions (8, 9) do not wrap.
+- `anim_list[0]` — always the player-controlled hero
+- `anim_list[1-2]` — party members / carriers
+- `anim_list[3-6]` — enemy actors (up to 4; `anix` tracks count, max 7 per `fmain.c:2064`)
+- `anim_list[7-19]` — remaining slots for world objects and set-figures
 
-> **Improvement:** The original wrapping uses a hard-coded 300-pixel margin and jumps to `32565` rather than `MAXCOORD - 300` (which would be `32468`). The asymmetric thresholds (300 vs 32565, a gap of 203 pixels from `MAXCOORD`) are likely intentional to keep the hero away from exact boundaries where sector math could produce off-by-one errors. A modern reimplementation could use true modular wrapping (`pos = pos % MAXCOORD`) and eliminate the dead zones.
+`MAXSHAPES=25` governs the per-page rendering queue (`sshape[25]`), not the actor array size (`fmain.c:68` vs `fmain.c:70`).
 
-### 2.2 Region System
-
-The outdoor world is divided into 8 regions arranged in a 2-column by 4-row grid. Two additional regions cover indoor areas:
-
-| Index | ID | Description | Grid Position |
-|-------|----|-------------|---------------|
-| 0 | F1 | Snowy region | col=0, row=0 |
-| 1 | F2 | Witch wood | col=1, row=0 |
-| 2 | F3 | Swampy region | col=0, row=1 |
-| 3 | F4 | Plains and rocks | col=1, row=1 |
-| 4 | F5 | Desert area | col=0, row=2 |
-| 5 | F6 | Bay / city / farms | col=1, row=2 |
-| 6 | F7 | Volcanic | col=0, row=3 |
-| 7 | F8 | Forest and wilderness | col=1, row=3 |
-| 8 | F9 | Inside of buildings | (interior) |
-| 9 | F10 | Dungeons and caves | (interior) |
-
-The current region is computed from the hero's screen-center coordinates in `gen_mini()`:
+#### Missile System
 
 ```c
-xs = (map_x + 151) >> 8;   /* sector coords of middle screen */
-ys = (map_y + 64) >> 8;
-xr = (xs >> 6) & 1;        /* region column: 0 or 1 */
-yr = (ys >> 5) & 3;        /* region row: 0..3 */
-lregion = xr + yr + yr;    /* region index: 0..7 */
+struct missile {                        // fmain.c:78-85
+    unsigned short abs_x, abs_y;
+    char missile_type,                  // NULL, arrow, rock, 'thing', or fireball
+         time_of_flight,
+         speed,                         // 0 = unshot
+         direction,
+         archer;                        // ID of firing actor
+} missile_list[6];                      // 6 missiles max
 ```
-Source: `fmain.c:2971-2975`
 
-When `lregion != region_num`, a region transition is triggered by setting `new_region = lregion` and calling `load_all()`. Source: `fmain.c:2976`
+### 1.2 struct fpage — Double-Buffer Page State
 
-For indoor regions (region_num >= 8), the region is set directly and no coordinate-based calculation occurs. Source: `fmain.c:2978`
+Defined at `ftale.h:69-79` and `ftale.i:24-37`. Two instances: `fp_page1`, `fp_page2` (`fmain.c:443`).
 
-#### Region Asset Table: `file_index[10]`
+| Field | Type | Purpose |
+|-------|------|---------|
+| `ri_page` | RasInfo* | Amiga RasInfo for this page |
+| `savecop` | cprlist* | Copper list pointer |
+| `isv_x` | long | Page scroll X position |
+| `isv_y` | long | Page scroll Y position |
+| `obcount` | short | Number of objects queued for rendering |
+| `shape_queue` | sshape* | Pointer to rendering shape queue |
+| `backsave` | unsigned char* | Background save buffer |
+| `saveused` | long | How much of save buffer is used |
+| `witchx` | short | Witch effect X position (for erasure) |
+| `witchy` | short | Witch effect Y position |
+| `witchdir` | short | Witch effect direction |
+| `wflag` | short | Witch effect active flag |
 
-Each region's required assets are defined by a `struct need`:
+### 1.3 struct seq_info — Sprite Sheet Descriptor
 
-```c
-struct need {
-    USHORT image[4], terra1, terra2, sector, region, setchar;
-};
-```
-Source: `ftale.h:104-106`
+Defined at `ftale.h:81-88` and `ftale.i:39-47`. Array: `seq_list[7]` (`fmain.c:39`).
 
-The `file_index[10]` table maps each region to its disk sector addresses:
+| Field | Type | Purpose |
+|-------|------|---------|
+| `width` | short | Frame width in pixels |
+| `height` | short | Frame height in pixels |
+| `count` | short | Number of frames |
+| `location` | unsigned char* | Pointer to image data |
+| `maskloc` | unsigned char* | Pointer to mask data |
+| `bytes` | short | Bytes per frame |
+| `current_file` | short | Currently loaded file index |
 
-| Index | image[0..3] | terra1 | terra2 | sector | region | setchar | Description |
-|-------|-------------|--------|--------|--------|--------|---------|-------------|
-| 0 | 320,480,520,560 | 0 | 1 | 32 | 160 | 22 | Snowy region |
-| 1 | 320,360,400,440 | 2 | 3 | 32 | 160 | 21 | Witch wood |
-| 2 | 320,360,520,560 | 2 | 1 | 32 | 168 | 22 | Swampy region |
-| 3 | 320,360,400,440 | 2 | 3 | 32 | 168 | 21 | Plains and rocks |
-| 4 | 320,480,520,600 | 0 | 4 | 32 | 176 | 0 | Desert area |
-| 5 | 320,280,240,200 | 5 | 6 | 32 | 176 | 23 | Bay / city / farms |
-| 6 | 320,640,520,600 | 7 | 4 | 32 | 184 | 0 | Volcanic |
-| 7 | 320,280,240,200 | 5 | 6 | 32 | 184 | 24 | Forest and wilderness |
-| 8 | 680,720,800,840 | 8 | 9 | 96 | 192 | 0 | Inside of buildings |
-| 9 | 680,760,800,840 | 10 | 9 | 96 | 192 | 0 | Dungeons and caves |
+Sequence type constants (`ftale.h:90`):
 
-Source: `fmain.c:615-626`
+| Value | Name | Purpose |
+|-------|------|---------|
+| 0 | `PHIL` | Player character sprites |
+| 1 | `OBJECTS` | World object sprites |
+| 2 | `ENEMY` | Enemy sprites |
+| 3 | `RAFT` | Raft/vehicle sprites |
+| 4 | `SETFIG` | Set-piece figure sprites (NPCs) |
+| 5 | `CARRIER` | Carrier animal sprites |
+| 6 | `DRAGON` | Dragon sprites |
 
-The `current_loads` struct tracks what is already loaded to avoid redundant disk reads. Each field in `file_index` is compared against `current_loads`; only changed assets trigger a load. Source: `fmain.c:614`, `fmain.c:3548-3614`
+### 1.4 struct object — World Object Instance
 
-### 2.3 Sector Format
+Defined at `ftale.h:92-95` and `ftale.i:53-58`. 6 bytes per object; 250 objects per sector. Two arrays: `ob_listg[]`, `ob_list8[]` (`fmain.c:378`).
 
-Each region's map data consists of 256 sectors stored contiguously in memory at `sector_mem`.
+| Field | Type | Size | Purpose |
+|-------|------|------|---------|
+| `xc` | unsigned short | 2 | World X coordinate |
+| `yc` | unsigned short | 2 | World Y coordinate |
+| `ob_id` | char | 1 | Object type ID |
+| `ob_stat` | char | 1 | Status (0=inactive, 1+=active) |
 
-- **Sector size:** 128 bytes each (16 columns x 8 rows of tile indices)
-- **Total sector memory:** `SECTOR_SZ = (128 * 256) + 4096 = 36864` bytes
-- **Sector data offset:** 256 sectors x 128 bytes = 32768 bytes at `sector_mem[0..32767]`
-- **Region map offset:** `SECTOR_OFF = 128 * 256 = 32768` -- the 4096-byte region map starts at `map_mem = sector_mem + SECTOR_OFF`
+### 1.5 struct inv_item — Inventory Item Descriptor
 
-Source: `fmain.c:643-644`, `fmain.c:920`
+Defined at `ftale.h:97-104`. The `inv_list[]` table has 36 entries (`fmain.c:380-418`).
 
-Each byte in a sector is a tile index (0-255) into the currently loaded image set (5-bitplane, 16x16 pixel tiles). The image set is loaded into `image_mem` (81920 bytes = 5 planes x 256 tiles x 64 bytes per tile per plane). Source: `fmain.c:639-640`
+| Field | Type | Purpose |
+|-------|------|---------|
+| `image_number` | UBYTE | Display image number |
+| `xoff` | UBYTE | X offset on inventory screen |
+| `yoff` | UBYTE | Y offset on inventory screen |
+| `ydelta` | UBYTE | Y increment for stacking |
+| `img_off` | UBYTE | Sub-image offset |
+| `img_height` | UBYTE | Height of sub-image |
+| `maxshown` | UBYTE | Max displayable count (also gold value for coins) |
+| `name` | char* | Display name string |
 
-#### Region Map
+#### Inventory Index Ranges
 
-The 4096-byte region map at `map_mem` provides a higher-level overview of the sector layout. It is loaded separately from disk (8 sectors = 4096 bytes) and is used by the minimap generator `genmini()`. The playing map is 6 x 19 = 114 entries stored in `minimap[114]`. Source: `fmain.c:628-630`, `fmain.c:3560-3563`
+| Range | Constant | Contents | Source |
+|-------|----------|----------|--------|
+| 0–4 | — | Weapons: Dirk, Mace, Sword, Bow, Magic Wand | `fmain.c:427` |
+| 5–8 | — | Special: Golden Lasso, Sea Shell, Sun Stone, Arrows | `fmain.c:428` |
+| 9–15 | `MAGICBASE=9` | Magic items: Blue Stone, Green Jewel, Glass Vial, Crystal Orb, Bird Totem, Gold Ring, Jade Skull | `fmain.c:429` |
+| 16–21 | `KEYBASE=16` | Keys: Gold, Green, Blue, Red, Grey, White | `fmain.c:430` |
+| 22–24 | — | Quest/stat: Talisman, Rose, Fruit | `fmain.c:380-418` |
+| 25–30 | `STATBASE=25` | Collectibles: Gold Statue, Book, Herb, Writ, Bone, Shard | `fmain.c:430` |
+| 31–34 | `GOLDBASE=31` | Gold coins: 2gp, 5gp, 10gp, 100gp | `fmain.c:430` |
+| 35 | `ARROWBASE=35` | Quiver of arrows | `fmain.c:430` |
 
-The desert region (region 4) has a special case: if a quest condition is not met (`stuff[STATBASE] < 5`), four tiles at a specific location in `map_mem` are overwritten with tile 254, effectively blocking passage. Source: `fmain.c:3594-3597`
+Per-brother storage: `julstuff[35]`, `philstuff[35]`, `kevstuff[35]`; active inventory via `UBYTE *stuff` pointer (`fmain.c:432`).
 
-> **Asset Format: Sector Data**
->
-> - **Original:** 128 bytes raw binary per sector, 256 sectors contiguous (32768 bytes total). Each byte is a tile index (0-255) into the loaded image tileset.
-> - **Loading:** `load_track_range(nd->sector, 64, sector_mem, 0)` reads 64 disk sectors (32768 bytes) into `sector_mem`. Source: `fmain.c:3557`
-> - **Modern target:** JSON 2D array per sector (16 columns x 8 rows) or Tiled TMX tilemap format with 256 sectors as separate layers or chunked regions.
+### 1.6 struct need — Asset Loading Descriptor
 
-### 2.4 Terrain Data
+Defined at `ftale.h:106-108`. Array: `file_index[10]` (one per region F1–F10, `fmain.c:615-625`).
 
-Terrain metadata is stored in `terra_mem`, a 1024-byte buffer holding two 512-byte terrain sets (one per `terra1`/`terra2` index in the region's `file_index` entry). Source: `fmain.c:928`
+| Field | Type | Purpose |
+|-------|------|---------|
+| `image[4]` | USHORT | 4 image file indices needed |
+| `terra1` | USHORT | Terrain data file 1 |
+| `terra2` | USHORT | Terrain data file 2 |
+| `sector` | USHORT | Sector data file |
+| `region` | USHORT | Region data file |
+| `setchar` | USHORT | Set-character file needed |
 
-Each 512-byte terrain set contains data for 128 tiles (2 x 64 tiles from a loading pair), packed as 4 bytes per tile:
+### 1.7 struct in_work — Input Handler Data
 
-| Offset | Field | Description |
-|--------|-------|-------------|
-| 0 | `maptag` | Image/display characteristics for the tile |
-| 1 | `terrain` | Terrain type encoded as two nibbles (upper = mask mode, lower = property) |
-| 2 | `tiles` | Terrain feature mask data |
-| 3 | `big_colors` | Minimap color value for this tile |
+Defined at `ftale.h:110-119`. Single instance: `handler_data` (`fmain.c:694`). Passed to the interrupt handler as `a1`.
 
-Source: `terrain.c:60-64`, `terrain.c:70-74`
+| Offset | Field | Type | Purpose |
+|--------|-------|------|---------|
+| 0 | `xsprite` | short | Mouse pointer X (clamped 5–315) |
+| 2 | `ysprite` | short | Mouse pointer Y (clamped 147–195) |
+| 4 | `qualifier` | short | Input event qualifier (button/modifier state) |
+| 6 | `laydown` | UBYTE | Keyboard buffer write pointer (0–127) |
+| 7 | `pickup` | UBYTE | Keyboard buffer read pointer (0–127) |
+| 8 | `newdisk` | char | Disk-inserted event flag |
+| 9 | `lastmenu` | char | Last mouse-click menu character |
+| 10 | `gbase` | GfxBase* | GfxBase pointer for MoveSprite |
+| 14 | `pbase` | SimpleSprite* | Pointer sprite (NULL = no updates) |
+| 18 | `vbase` | ViewPort* | ViewPort for MoveSprite |
+| 22 | `keybuf[128]` | unsigned char | 128-byte circular keyboard buffer |
+| 150 | `ticker` | short | Timer heartbeat counter (0–16) |
 
-The `terrain.c` extraction tool reads these fields from each tileset image file by seeking past the image pixel data (`IPLAN_SZ = 5 * 64 * 64 = 20480` bytes) and reading 64 bytes each for `maptag`, `terrain`, `tiles`, and `big_colors`. Source: `terrain.c:86-91`
-
-Loading into memory uses `load_track_range`:
-- `terra1` loads into `terra_mem[0..511]` via channel 1. Source: `fmain.c:3567`
-- `terra2` loads into `terra_mem[512..1023]` via channel 2. Source: `fmain.c:3572`
-
-#### Terrain Properties (Lower Nibble)
-
-The lower nibble of the `terrain` byte encodes the physical terrain property:
-
-| Value | Property | Description |
-|-------|----------|-------------|
-| 0 | Normal | Freely passable terrain |
-| 1 | Impassable | Blocks all movement (walls, mountains, deep water edges) |
-| 2 | Sink | Character sinks (water, quicksand); triggers drowning/damage |
-| 3 | Slow/Brush | Movement is slowed (dense vegetation, mud) |
-| 4+ | (Reserved) | Additional types noted in comments: slippery, fiery, changing, climbable, pit trap, danger, noisy, magnetic, stinks, slides, slopes, whirlpool |
-
-Source: `fmain.c:684-687`
-
-Note: The source comments list terrain types 4-9+ but only values 1-3 have confirmed behavioral implementations in the movement code. The extended types may be partially implemented or reserved for future use.
-
-#### Mask Application Modes (Upper Nibble)
-
-The upper nibble of the `terrain` byte controls how sprites are masked (occluded) by terrain:
-
-| Value | Mode | Description |
-|-------|------|-------------|
-| 0 | Never | Sprite is never masked by this tile |
-| 1 | When down | Sprite masked only when moving downward (south) |
-| 2 | When right | Sprite masked only when moving rightward (east) |
-| 3 | Always (unless flying) | Sprite always masked by this tile, except when flying |
-| 4 | Below normal level | Sprite masked only if below the normal ground level |
-| 5-7 | (Extended) | Additional modes (implementation varies) |
-
-Source: `fmain.c:689-691`
-
-These mask modes enable the visual effect of characters walking behind trees, buildings, and other tall terrain features while remaining visible when flying or on different elevation levels.
-
-### 2.5 Tileset Names and Loading Pairs
-
-The game uses 17 named tilesets defined in `terrain.c:datanames[]`:
-
-| Index | Name | Description |
-|-------|------|-------------|
-| 0 | (space) | Empty/unused |
-| 1 | wild | Wilderness terrain |
-| 2 | build | Buildings and structures |
-| 3 | rock | Rocky terrain |
-| 4 | mountain1 | Mountain variant 1 |
-| 5 | tower | Tower structures |
-| 6 | castle | Castle structures |
-| 7 | field | Agricultural fields |
-| 8 | swamp | Swamp terrain |
-| 9 | palace | Palace structures |
-| 10 | mountain2 | Mountain variant 2 |
-| 11 | doom | Volcanic/doom terrain |
-| 12 | mountain3 | Mountain variant 3 |
-| 13 | under | Underground passages |
-| 14 | cave | Cave interiors |
-| 15 | furnish | Interior furnishings |
-| 16 | inside | Building interiors |
-| 17 | astral | Astral/magical plane |
-
-Source: `terrain.c:3-22`
-
-These tilesets are processed in 11 loading pairs via the `order[]` array, which maps pairs of tileset indices to the terrain data output. Each pair produces 512 bytes (2 x 64 tiles x 4 bytes):
-
-| Pair | order[] Indices | Tileset A | Tileset B | Region Usage |
-|------|-----------------|-----------|-----------|--------------|
-| 0 | 1, 9 | wild | palace | terra 0: F1, F5 |
-| 1 | 8, 10 | swamp | mountain2 | terra 1: F1, F3 |
-| 2 | 1, 2 | wild | build | terra 2: F2, F3, F4 |
-| 3 | 3, 5 | rock | tower | terra 3: F2, F4 |
-| 4 | 8, 12 | swamp | mountain3 | terra 4: F5, F7 |
-| 5 | 1, 6 | wild | castle | terra 5: F6, F8 |
-| 6 | 7, 4 | field | mountain1 | terra 6: F6, F8 |
-| 7 | 1, 11 | wild | doom | terra 7: F7 |
-| 8 | 13, 15 | under | furnish | terra 8: F9 |
-| 9 | 16, 17 | inside | astral | terra 9: F9, F10 |
-| 10 | 13, 14 | under | cave | terra 10: F10 |
-
-Source: `terrain.c:24-36`
-
-The "Region Usage" column cross-references against the `terra1`/`terra2` fields in `file_index[]`. For example, region F1 (index 0) has `terra1=0, terra2=1`, so it loads pair 0 (wild+palace) into the first 512 bytes and pair 1 (swamp+mountain2) into the second 512 bytes.
-
-### 2.6 Region Loading Process
-
-Region transitions are handled by `load_all()` and `load_new_region()`:
-
-1. `load_all()` spins in a loop calling `load_new_region()` until `MAP_STABLE` (i.e., `new_region >= NO_REGION`). Source: `fmain.c:3545-3546`
-2. `load_new_region()` compares each field of `file_index[new_region]` against `current_loads` and only issues disk reads for changed assets. Source: `fmain.c:3548-3614`
-3. Assets are loaded in this priority order: sectors, region map, terra1, terra2, then image planes (4 image sets x 5 planes each = up to 20 separate reads).
-4. Image loading returns after issuing reads for one changed image set (to allow interleaved processing). The caller loops back for subsequent image sets.
-5. After all reads complete, the function waits on all 7 I/O channels, turns off the disk motor, and commits the transition by setting `region_num = new_region` and `new_region = NO_REGION`.
-
-> **Improvement:** Replace sector-based disk I/O with direct file reads from a modern filesystem. The entire region loading system exists to manage floppy disk latency and can be replaced with synchronous file loads that complete in milliseconds. The `current_loads` caching is still useful to avoid redundant loads, but the async I/O channels and motor control are unnecessary.
-
-> **Asset Format: Terrain Data**
->
-> - **Original:** 512 bytes per terrain pair (2 sets x 64 tiles x 4 bytes). 11 pairs = 5632 bytes total in the "terra" file on disk. Each 4-byte entry packs `maptag`, `terrain` (upper nibble = mask mode, lower nibble = property), `tiles`, and `big_colors`.
-> - **Modern target:** JSON array of objects per tileset:
->   ```json
->   {
->     "tile_index": 0,
->     "maptag": 0,
->     "terrain_type": 1,
->     "terrain_subtype": 0,
->     "mask_mode": 3,
->     "minimap_color": 42
->   }
->   ```
->   Terrain properties and mask modes should use named enums (`"impassable"`, `"sink"`, `"slow"`) instead of packed nibbles, eliminating the need for bitmask extraction at runtime.
+Byte offsets confirmed from assembly equates at `fsubs.asm:60-62` and field access patterns at `fsubs.asm:74-76`, `fsubs.asm:101`, `fsubs.asm:144`, `fsubs.asm:191-196`.
 
 ---
 
-## 3. Characters & Animation
+## 2. Actor State Machine
 
-### 3.1 Shape Structure
+Actors are governed by three orthogonal state variables: **motion state** (animation/physics), **goal mode** (high-level AI objective), and **tactical mode** (low-level navigation behavior). These are stored in `shape.state`, `shape.goal`, and `shape.tactic` respectively ([§1.1](#11-struct-shape--actor-record)).
 
-Each on-screen actor is represented by a `struct shape` defined in `ftale.h:56-68`. The structure is 22 bytes and contains all per-actor state:
+### 2.1 Motion States
 
-| Offset | Field(s)            | Type             | Size    | Purpose |
-|--------|---------------------|------------------|---------|---------|
-| 0      | `abs_x`             | `unsigned short` | 2 bytes | Absolute world X position |
-| 2      | `abs_y`             | `unsigned short` | 2 bytes | Absolute world Y position |
-| 4      | `rel_x`             | `unsigned short` | 2 bytes | Screen-relative X position |
-| 6      | `rel_y`             | `unsigned short` | 2 bytes | Screen-relative Y position |
-| 8      | `type`              | `char`           | 1 byte  | Sprite sequence type (PHIL, ENEMY, OBJECTS, etc.) |
-| 9      | `race`              | `UBYTE`          | 1 byte  | Race/identity index for encounter table lookup |
-| 10     | `index`             | `char`           | 1 byte  | Current image/frame index within sprite sheet |
-| 11     | `visible`           | `char`           | 1 byte  | On-screen visibility flag |
-| 12     | `weapon`            | `char`           | 1 byte  | Weapon type carried (0=none, 1=dagger, 2=mace, 3=sword, 4=bow, 5=wand) |
-| 13     | `environ`           | `char`           | 1 byte  | Environment variable (terrain effects, etc.) |
-| 14     | `goal`              | `char`           | 1 byte  | Current AI goal mode (USER, ATTACK1, ATTACK2, FLEE, etc.) |
-| 15     | `tactic`            | `char`           | 1 byte  | Current tactical sub-goal (PURSUE, FOLLOW, RANDOM, etc.) |
-| 16     | `state`             | `char`           | 1 byte  | Current movement/animation state (WALKING, FIGHTING, etc.) |
-| 17     | `facing`            | `char`           | 1 byte  | Direction the actor is facing (0-7) |
-| 18     | `vitality`          | `short`          | 2 bytes | Hit points; also doubles as original object number for items |
-| 20     | `vel_x`             | `char`           | 1 byte  | X velocity (for slippery/ice areas) |
-| 21     | `vel_y`             | `char`           | 1 byte  | Y velocity (for slippery/ice areas) |
+Defined at `ftale.h:9-25` (canonical) and duplicated at `fmain.c:90-103`.
 
-> **Improvement note:** The struct mixes `char` and `UBYTE` types inconsistently (e.g., `type` is `char` but `race` is `UBYTE`). A modern reimplementation should use explicit sized types (`int8_t`, `uint8_t`, `uint16_t`, `int16_t`) throughout to avoid sign-extension bugs.
+| Value | Name | Purpose |
+|-------|------|---------|
+| 0–11 | *(fighting frames)* | Combat animation sub-states; figure selected via `statelist[facing*12 + state]` |
+| 12 | `WALKING` | Normal walk cycle |
+| 13 | `STILL` | Stationary/idle |
+| 14 | `DYING` | Death animation in progress |
+| 15 | `DEAD` | Fully dead |
+| 16 | `SINK` | Sinking (quicksand/water) |
+| 17 | `OSCIL` | Oscillation animation 1 (comment: "and 18") — vestigial, never assigned |
+| 18 | *(implicit)* | Oscillation animation 2 (paired with OSCIL) — vestigial, never assigned |
+| 19 | `TALKING` | Speaking/dialogue |
+| 20 | `FROZEN` | Frozen in place (freeze spell) |
+| 21 | `FLYING` | Vestigial — defined but never assigned; Swan uses WALKING + `riding` |
+| 22 | `FALL` | Falling; velocity-based with 25% friction per tick (`fmain.c:1737-1738`) |
+| 23 | `SLEEP` | Sleeping |
+| 24 | `SHOOT1` | Bow up — aiming |
+| 25 | `SHOOT3` | Bow fired, arrow given velocity |
 
-A commented-out field `source_struct` (an `APTR`) was apparently removed during development, suggesting the struct was once larger or linked back to a generating data structure.
+### 2.2 Goal Modes
 
-### 3.2 Actor Slot Allocation
+Defined at `ftale.h:29-39` (canonical) and duplicated at `fmain.c:107-117`.
 
-The game maintains a fixed array of 20 actor slots (`struct shape anim_list[20]`) declared in `fmain.c:70`. Slots have hardcoded roles:
+| Value | Name | Purpose |
+|-------|------|---------|
+| 0 | `USER` | Player-controlled |
+| 1 | `ATTACK1` | Attack stupidly (low cleverness) |
+| 2 | `ATTACK2` | Attack cleverly (high cleverness) |
+| 3 | `ARCHER1` | Archery attack style 1 |
+| 4 | `ARCHER2` | Archery attack style 2 |
+| 5 | `FLEE` | Run directly away from hero |
+| 6 | `STAND` | Stand still, face hero |
+| 7 | `DEATH` | Dead character |
+| 8 | `WAIT` | Wait to speak to hero |
+| 9 | `FOLLOWER` | Follow another character |
+| 10 | `CONFUSED` | Run around randomly |
 
-| Slot(s) | Role | Notes |
-|---------|------|-------|
-| 0       | Hero (player character) | Julian, Phillip, or Kevin depending on `brother` variable |
-| 1       | Raft | Type set to `RAFT`; positioned to match hero when riding |
-| 2       | Witch / set figure | Type set to `SETFIG`; used for NPCs like the witch, wizard, priest, royals |
-| 3-6     | Enemies / carriers | Slot 3 is primary enemy or carrier (turtle, bird, dragon); slots 4-6 for additional enemies in encounters |
-| 7-19    | Overflow objects / missiles | Populated dynamically for on-screen objects, items, and projectiles |
+ATTACK1 vs ATTACK2 is determined by the `cleverness` field in `encounter_chart[]` — dispatched at `fmain.c:2150`.
 
-Two index variables track the active population:
-- `anix` -- tracks the count of active enemies (iteration bound for enemy AI loops, e.g., `for (i=3; i<anix; i++)`)
-- `anix2` -- tracks total active actors including objects (used for proximity checks and object placement, e.g., `for (i=1; i<anix2; i++)`)
+### 2.3 Tactical Modes
 
-The slot 2 witch/NPC and slot 1 raft are always allocated even when unused, which simplifies rendering but wastes slots.
+Defined at `ftale.h:43-54` (canonical). `fmain.c:121-132` duplicates values 0–10 only; values 11–12 exist only in the header.
 
-> **Improvement note:** The rigid slot allocation (fixed slots for raft, witch) is fragile. A dynamic entity system with component-based assignment would be cleaner and allow more actors on screen.
+| Value | Name | Purpose |
+|-------|------|---------|
+| 0 | `FRUST` | Frustrated — try a different tactic |
+| 1 | `PURSUE` | Move toward hero |
+| 2 | `FOLLOW` | Move toward another character |
+| 3 | `BUMBLE_SEEK` | Bumble around seeking target |
+| 4 | `RANDOM` | Move in random direction |
+| 5 | `BACKUP` | Reverse current direction |
+| 6 | `EVADE` | Move 90° from hero |
+| 7 | `HIDE` | Seek hiding place (planned but never implemented) |
+| 8 | `SHOOT` | Shoot an arrow |
+| 9 | `SHOOTFRUST` | Arrows not connecting — re-evaluate |
+| 10 | `EGG_SEEK` | Snakes seeking turtle eggs |
+| 11 | `DOOR_SEEK` | Dark Knight blocking door (replaced by hardcoded logic) |
+| 12 | `DOOR_LET` | Dark Knight letting player pass (replaced by hardcoded logic) |
 
-### 3.3 Animation State Machine
+Source comment at `ftale.h:47`: "choices 2–5 can be selected randomly for getting around obstacles."
 
-Animation states are defined as `#define` constants in `fmain.c:89-103`. The `state` field of each `struct shape` holds one of these values:
+### 2.4 statelist — Animation Frame Lookup
 
-| Value(s) | Name | Description |
-|----------|------|-------------|
-| 0-8      | `FIGHTING` | Combat animation; value is the current position in the 9-state combat transition table |
-| 12       | `WALKING`  | Walk cycle active; frame selected by direction + cycle counter |
-| 13       | `STILL`    | Standing idle; no animation cycling |
-| 14       | `DYING`    | Death animation in progress (3-frame sequence) |
-| 15       | `DEAD`     | Death complete; actor remains on ground |
-| 16       | `SINK`     | Sinking into water/swamp (single frame) |
-| 17-18    | `OSCIL`    | Oscillation animation (2 alternating frames, e.g., sword-at-side idle) |
-| 19       | `TALKING`  | NPC conversation state |
-| 20       | `FROZEN`   | Actor cannot move or act (e.g., paralysis, cutscene) |
-| 21       | `FLYING`   | Airborne movement (used when riding bird/dragon) |
-| 22       | `FALL`     | Falling animation (pit traps, cliffs) |
-| 23       | `SLEEP`    | Sleeping state (single frame, index 66) |
-| 24       | `SHOOT1`   | Bow raised, aiming |
-| 25       | `SHOOT3`   | Bow fired, arrow given velocity |
+Defined at `fmain.c:143-205`. An array of 87 `struct state` entries (`fmain.c:138-142`):
 
-Note that values 9, 10, and 11 are unused gaps between FIGHTING (0-8) and WALKING (12).
+```c
+struct state { char figure, wpn_no, wpn_x, wpn_y; };
+```
 
-> **Improvement note:** The FIGHTING states 0-8 overlap numerically with goal mode values (USER=0, ATTACK1=1, ..., WAIT=8) in a confusing way. Although they are stored in different fields (`state` vs `goal`), the numeric collision invites bugs. A modern implementation should use distinct enum types.
+Maps `(motion_state, facing, frame)` → `(figure_image, weapon_overlay_index, weapon_x_offset, weapon_y_offset)`.
 
-### 3.4 State List Table
+#### Walk Sequences (8 frames each)
 
-The `statelist[87]` array (`fmain.c:154-204`) maps each animation frame index to its sprite figure number, weapon overlay index, and weapon position offset. The `struct state` for each entry contains:
+| Index Range | Direction | Source |
+|-------------|-----------|--------|
+| 0–7 | South | `fmain.c:148-149` |
+| 8–15 | West | `fmain.c:152-153` |
+| 16–23 | North | `fmain.c:156-157` |
+| 24–31 | East | `fmain.c:160-161` |
 
-- `figure` -- sprite frame number within the character sheet
-- `wpn_no` -- weapon sprite index from the OBJECTS sheet
-- `wpn_x`, `wpn_y` -- pixel offset of weapon relative to the character sprite origin
-
-| Index | Group | figure | wpn_no | wpn_x | wpn_y | Notes |
-|-------|-------|--------|--------|-------|-------|-------|
-| 0     | South walk | 0  | 11 | -2  | 11  | |
-| 1     | South walk | 1  | 11 | -3  | 11  | |
-| 2     | South walk | 2  | 11 | -3  | 10  | |
-| 3     | South walk | 3  | 11 | -3  | 9   | |
-| 4     | South walk | 4  | 11 | -3  | 10  | |
-| 5     | South walk | 5  | 11 | -3  | 11  | |
-| 6     | South walk | 6  | 11 | -2  | 11  | |
-| 7     | South walk | 7  | 11 | -1  | 11  | |
-| 8     | West walk  | 8  | 9  | -12 | 11  | |
-| 9     | West walk  | 9  | 9  | -11 | 12  | |
-| 10    | West walk  | 10 | 9  | -8  | 13  | |
-| 11    | West walk  | 11 | 9  | -4  | 13  | |
-| 12    | West walk  | 12 | 9  | 0   | 13  | |
-| 13    | West walk  | 13 | 9  | -4  | 13  | |
-| 14    | West walk  | 14 | 9  | -8  | 13  | |
-| 15    | West walk  | 15 | 9  | -11 | 12  | |
-| 16    | North walk | 16 | 14 | -1  | 1   | |
-| 17    | North walk | 17 | 14 | -1  | 2   | |
-| 18    | North walk | 18 | 14 | -1  | 3   | |
-| 19    | North walk | 19 | 14 | -1  | 4   | |
-| 20    | North walk | 20 | 14 | -1  | 3   | |
-| 21    | North walk | 21 | 14 | -1  | 2   | |
-| 22    | North walk | 22 | 14 | -1  | 1   | |
-| 23    | North walk | 23 | 14 | -1  | 1   | |
-| 24    | East walk  | 24 | 10 | 5   | 12  | |
-| 25    | East walk  | 25 | 10 | 3   | 12  | |
-| 26    | East walk  | 26 | 10 | 2   | 12  | |
-| 27    | East walk  | 27 | 10 | 3   | 12  | |
-| 28    | East walk  | 28 | 10 | 5   | 12  | |
-| 29    | East walk  | 29 | 10 | 6   | 12  | |
-| 30    | East walk  | 30 | 10 | 6   | 11  | |
-| 31    | East walk  | 31 | 10 | 6   | 12  | |
-| 32    | South fight | 32 | 11 | -2  | 12  | Arm down, weapon low |
-| 33    | South fight | 32 | 10 | 0   | 12  | Arm down, weapon diagonal |
-| 34    | South fight | 33 | 0  | 2   | 10  | Arm swing1, weapon horizontal |
-| 35    | South fight | 34 | 1  | 4   | 6   | Arm swing2, weapon raised |
-| 36    | South fight | 34 | 2  | 1   | 4   | Arm swing2, weapon diag up |
-| 37    | South fight | 34 | 3  | 0   | 4   | Arm swing2, weapon high |
-| 38    | South fight | 36 | 4  | -5  | 0   | Arm high, weapon up |
-| 39    | South fight | 36 | 5  | -10 | 1   | Arm high, weapon horizontal |
-| 40    | South fight | 35 | 12 | -5  | 5   | Arm middle, weapon raise fwd |
-| 41    | South fight | 36 | 0  | 0   | 6   | (extra south fight frame) |
-| 42    | South fight | 38 | 85 | -6  | 5   | (arrow/projectile frame) |
-| 43    | South fight | 37 | 81 | -6  | 5   | (bow frame) |
-| 44    | West fight  | 40 | 9  | -7  | 12  | Arm down, weapon low |
-| 45    | West fight  | 40 | 8  | -9  | 9   | Arm down, weapon diagonal |
-| 46    | West fight  | 41 | 7  | -10 | 5   | Arm swing1, weapon horizontal |
-| 47    | West fight  | 42 | 7  | -12 | 4   | Arm swing2, weapon raised |
-| 48    | West fight  | 42 | 6  | -12 | 3   | Arm swing2, weapon diag up |
-| 49    | West fight  | 42 | 5  | -12 | 3   | Arm swing2, weapon high |
-| 50    | West fight  | 44 | 5  | -8  | 3   | Arm high, weapon up |
-| 51    | West fight  | 44 | 14 | -7  | 6   | Arm high, weapon horizontal |
-| 52    | West fight  | 43 | 13 | -7  | 8   | Arm middle, weapon raise fwd |
-| 53    | West fight  | 42 | 5  | -12 | 3   | (extra west fight frame) |
-| 54    | West fight  | 46 | 86 | -3  | 0   | (arrow/projectile frame) |
-| 55    | West fight  | 45 | 82 | -3  | 0   | (bow frame) |
-| 56    | North fight | 48 | 14 | -3  | 0   | Arm down, weapon low |
-| 57    | North fight | 48 | 6  | -3  | -1  | Arm down, weapon diagonal |
-| 58    | North fight | 49 | 5  | -2  | -3  | Arm swing1, weapon horizontal |
-| 59    | North fight | 50 | 5  | -3  | -4  | Arm swing2, weapon raised |
-| 60    | North fight | 50 | 4  | 0   | 0   | Arm swing2, weapon diag up |
-| 61    | North fight | 50 | 3  | 3   | 0   | Arm swing2, weapon high |
-| 62    | North fight | 52 | 4  | 6   | 1   | Arm high, weapon up |
-| 63    | North fight | 52 | 15 | 7   | 3   | Arm high, weapon horizontal |
-| 64    | North fight | 51 | 14 | 1   | 6   | Arm middle, weapon raise fwd |
-| 65    | North fight | 50 | 4  | 0   | 0   | (extra north fight frame) |
-| 66    | North fight | 54 | 87 | 3   | 0   | (arrow/projectile frame) |
-| 67    | North fight | 53 | 83 | 3   | 0   | (bow frame) |
-| 68    | East fight  | 56 | 10 | 5   | 11  | Arm down, weapon low |
-| 69    | East fight  | 56 | 0  | 6   | 9   | Arm down, weapon diagonal |
-| 70    | East fight  | 57 | 1  | 10  | 6   | Arm swing1, weapon horizontal |
-| 71    | East fight  | 58 | 1  | 10  | 5   | Arm swing2, weapon raised |
-| 72    | East fight  | 58 | 2  | 7   | 3   | Arm swing2, weapon diag up |
-| 73    | East fight  | 58 | 3  | 6   | 3   | Arm swing2, weapon high |
-| 74    | East fight  | 60 | 4  | 1   | 0   | Arm high, weapon up |
-| 75    | East fight  | 60 | 3  | 3   | 2   | Arm high, weapon horizontal |
-| 76    | East fight  | 59 | 15 | 4   | 1   | Arm middle, weapon raise fwd |
-| 77    | East fight  | 58 | 4  | 5   | 1   | (extra east fight frame) |
-| 78    | East fight  | 62 | 84 | 3   | 0   | (arrow/projectile frame) |
-| 79    | East fight  | 61 | 80 | 3   | 0   | (bow frame) |
-| 80    | Death seq   | 47 | 0  | 5   | 11  | Death frame 1 |
-| 81    | Death seq   | 63 | 0  | 6   | 9   | Death frame 2 |
-| 82    | Death seq   | 39 | 0  | 6   | 9   | Death frame 3 (lying down) |
-| 83    | Sinking     | 55 | 10 | 5   | 11  | Sinking into water/swamp |
-| 84    | Oscillation | 64 | 10 | 5   | 11  | Idle oscillation frame 1 |
-| 85    | Oscillation | 65 | 10 | 5   | 11  | Idle oscillation frame 2 |
-| 86    | Sleep       | 66 | 10 | 5   | 11  | Sleeping figure |
-
-The walk sequences occupy indices 0-31 (4 directions, 8 frames each). Fight sequences occupy 32-79 (4 directions, 12 frames each -- 9 melee + 3 ranged). Special states occupy 80-86.
-
-### 3.5 Direction System
-
-The game uses 8 compass directions encoded as integers 0-7:
-
-| Value | Direction | Walk frame base | Fight frame base |
-|-------|-----------|----------------|-----------------|
-| 0     | South     | 0              | 32              |
-| 1     | Southwest | 0              | 32              |
-| 2     | West      | 8              | 44              |
-| 3     | Northwest | 8              | 44              |
-| 4     | North     | 16             | 56              |
-| 5     | Northeast | 16             | 56              |
-| 6     | East      | 24             | 68              |
-| 7     | Southeast | 24             | 68              |
-
-Diagonal directions share the frame set of their primary cardinal direction (SW uses South, NW uses West, etc.). This is encoded in the `diroffs[16]` array (`fmain.c:1010`):
+Walk base is selected via `diroffs[16]` (`fmain.c:1010`):
 
 ```c
 char diroffs[16] = {16,16,24,24,0,0,8,8,56,56,68,68,32,32,44,44};
 ```
 
-The array is indexed as `diroffs[d]` for walk frames (indices 0-7) and `diroffs[d+8]` for fight frames (indices 8-15). The layout groups the first 8 entries as walk base offsets and the second 8 as fight base offsets:
+Indices 0–7 select walk bases; indices 8–15 select fight/shoot bases.
 
-| Array index | Direction | Type  | Value (statelist base) |
-|-------------|-----------|-------|------------------------|
-| 0           | South     | Walk  | 16 (North walk)        |
-| 1           | SW        | Walk  | 16                     |
-| 2           | West      | Walk  | 24 (East walk)         |
-| 3           | NW        | Walk  | 24                     |
-| 4           | North     | Walk  | 0 (South walk)         |
-| 5           | NE        | Walk  | 0                      |
-| 6           | East      | Walk  | 8 (West walk)          |
-| 7           | SE        | Walk  | 8                      |
-| 8           | South     | Fight | 56 (North fight)       |
-| 9           | SW        | Fight | 56                     |
-| 10          | West      | Fight | 68 (East fight)        |
-| 11          | NW        | Fight | 68                     |
-| 12          | North     | Fight | 32 (South fight)       |
-| 13          | NE        | Fight | 32                     |
-| 14          | East      | Fight | 44 (West fight)        |
-| 15          | SE        | Fight | 44                     |
+#### Fight Sequences (12 states each)
 
-**Important subtlety:** The `diroffs` mapping is inverted -- direction 0 (South, facing the viewer) maps to `statelist` index 16 which is the "northwalk sequence" in the sprite sheet. This is because the sprite sheet names directions by the direction the character *walks toward on screen* (north = up), but the game's direction 0 means "facing south" (toward the camera), which uses the sprites drawn from behind (the "north walk" sprites). In other words, a character facing south (toward the player) uses sprite frames labeled "north" because those frames show the character's front.
+| Index Range | Direction | Source |
+|-------------|-----------|--------|
+| 32–43 | South | `fmain.c:164-169` |
+| 44–55 | West | `fmain.c:172-177` |
+| 56–67 | North | `fmain.c:180-185` |
+| 68–79 | East | `fmain.c:188-193` |
 
-### 3.6 Walk Cycle
+Each 12-entry block covers fight states 0–11: states 0–8 are weapon swing positions, state 9 duplicates a swing position, states 10–11 are ranged attack frames (bow/wand entries reference `wpn_no` indices 80+; see [P4](PROBLEMS.md)).
 
-Each walking direction uses 8 frames forming a looping cycle. The frame index into `statelist[]` is calculated as:
+#### Special States
 
-```
-statelist_index = diroffs[direction] + ((cycle + i) & 7)
-```
+| Index | Purpose | Source |
+|-------|---------|--------|
+| 80–82 | Death sequence (3 frames) | `fmain.c:196` |
+| 83 | Sinking | `fmain.c:198` |
+| 84–85 | Oscillation (2 frames) | `fmain.c:201` |
+| 86 | Asleep | `fmain.c:203` |
 
-Where:
-- `direction` is 0-7 (the actor's facing)
-- `cycle` is a continuously incrementing counter
-- `i` is a per-frame offset
-- The `& 7` mask wraps the 8-frame cycle
+### 2.5 trans_list — Fight Animation Transitions
 
-The walk animation creates a smooth stride by bouncing the weapon position up and down (visible in the `wpn_y` values oscillating by 1-2 pixels across the 8 frames of each direction).
-
-### 3.7 Combat Transition Table
-
-Combat uses a 9-state finite automaton defined in `trans_list[9]` (`fmain.c:139-148`). Each state represents a weapon position during a swing, and transitions are selected randomly using `rand4()` to pick one of 4 possible next states:
-
-| State | Description | Next[0] | Next[1] | Next[2] | Next[3] |
-|-------|-------------|---------|---------|---------|---------|
-| 0     | Arm down, weapon low | 1 | 8 | 0 | 1 |
-| 1     | Arm down, weapon diagonal down | 2 | 0 | 1 | 0 |
-| 2     | Arm swing1, weapon horizontal | 3 | 1 | 2 | 8 |
-| 3     | Arm swing2, weapon raised | 4 | 2 | 3 | 7 |
-| 4     | Arm swing2, weapon diag up | 5 | 3 | 4 | 6 |
-| 5     | Arm swing2, weapon high | 6 | 4 | 5 | 5 |
-| 6     | Arm high, weapon up | 8 | 5 | 6 | 4 |
-| 7     | Arm high, weapon horizontal | 8 | 6 | 7 | 3 |
-| 8     | Arm middle, weapon raise fwd | 0 | 6 | 8 | 2 |
-
-The combat state (0-8) is stored in the actor's `state` field (since `FIGHTING` is defined as 0). The actual sprite frame is looked up as `statelist[fight_base + combat_state]`, where `fight_base` is `diroffs[direction + 8]`.
-
-Each fight direction has 12 entries in `statelist`: indices 0-8 are the 9 melee combat poses, index 9 is an extra melee frame, and indices 10-11 are ranged weapon frames (arrow/projectile and bow).
-
-The random transition design means no two fights look the same -- the weapon swings through varied arcs rather than following a fixed pattern.
-
-### 3.8 Sprite Sequences
-
-The game organizes sprite data into 7 sequence types, defined by `enum sequences` in `ftale.h:88`:
-
-| Value | Name     | Purpose |
-|-------|----------|---------|
-| 0     | `PHIL`   | Player character sprites (Julian, Phillip, Kevin) -- 67 frames of walk, fight, death, and special animations |
-| 1     | `OBJECTS`| Item and weapon sprites -- 116 small (16x16) frames for inventory items, weapon overlays, projectiles |
-| 2     | `ENEMY`  | Enemy character sprites -- 64 frames per enemy type (ogre, ghost, dark knight, necromancer, snake) |
-| 3     | `RAFT`   | Raft vehicle -- 2 frames (directions), double-width (32px) |
-| 4     | `SETFIG` | Set figures (NPCs) -- 8 frames for wizard, priest, royals, bartender, witch, ranger, beggar |
-| 5     | `CARRIER`| Rideable creatures -- turtle (16 frames, 32px wide) or bird (8 frames, 64px wide) |
-| 6     | `DRAGON` | Dragon -- 5 frames, triple-width (48px), 40px tall |
-
-Each sequence type is tracked at runtime by a `struct seq_info` (`ftale.h:81-86`):
-
-| Field          | Type             | Purpose |
-|----------------|------------------|---------|
-| `width`        | `short`          | Width in 16-pixel word units |
-| `height`       | `short`          | Height in pixels |
-| `count`        | `short`          | Number of frames in the set |
-| `location`     | `unsigned char *` | Pointer to image bitplane data in memory |
-| `maskloc`      | `unsigned char *` | Pointer to mask bitplane data |
-| `bytes`        | `short`          | Bytes per bitplane per frame (`height * width * 2`) |
-| `current_file` | `short`          | Currently loaded file index |
-
-The game maintains a global array `seq_list[7]` (one entry per sequence type) in `fmain.c:41`.
-
-### 3.9 Character File Table
-
-The `cfiles[]` array (`fmain2.c:638-665`) defines all 18 character sprite sets that can be loaded from disk. Each entry specifies the sprite dimensions, frame count, disk location, and which sequence slot to load into:
-
-| Index | Character | Width | Height | Count | Blocks | Seq Slot | File ID | Notes |
-|-------|-----------|-------|--------|-------|--------|----------|---------|-------|
-| 0     | Julian    | 1     | 32     | 67    | 42     | PHIL     | 1376    | Player brother 1 |
-| 1     | Phillip   | 1     | 32     | 67    | 42     | PHIL     | 1418    | Player brother 2 |
-| 2     | Kevin     | 1     | 32     | 67    | 42     | PHIL     | 1460    | Player brother 3 |
-| 3     | Objects   | 1     | 16     | 116   | 36     | OBJECTS  | 1312    | Items, weapons, overlays |
-| 4     | Raft      | 2     | 32     | 2     | 3      | RAFT     | 1348    | Water vehicle |
-| 5     | Turtle    | 2     | 32     | 16    | 20     | CARRIER  | 1351    | Rideable turtle |
-| 6     | Ogre      | 1     | 32     | 64    | 40     | ENEMY    | 960     | Forest/mountain enemy |
-| 7     | Ghost     | 1     | 32     | 64    | 40     | ENEMY    | 1080    | Undead enemy |
-| 8     | Dark Knight | 1   | 32     | 64    | 40     | ENEMY    | 1000    | Also used for spiders |
-| 9     | Necromancer | 1   | 32     | 64    | 40     | ENEMY    | 1040    | Also farmer/Loraii |
-| 10    | Dragon    | 3     | 40     | 5     | 12     | DRAGON   | 1160    | Boss creature |
-| 11    | Bird      | 4     | 64     | 8     | 40     | CARRIER  | 1120    | Flying mount |
-| 12    | Snake/Salamander | 1 | 32   | 64    | 40     | ENEMY    | 1376    | Reptilian enemies |
-| 13    | Wizard/Priest | 1  | 32     | 8     | 5      | SETFIG   | 936     | NPC set |
-| 14    | Royal set | 1     | 32     | 8     | 5      | SETFIG   | 931     | King, princess, etc. |
-| 15    | Bartender | 1     | 32     | 8     | 5      | SETFIG   | 941     | Tavern NPC |
-| 16    | Witch     | 1     | 32     | 8     | 5      | SETFIG   | 946     | Witch NPC |
-| 17    | Ranger/Beggar | 1  | 32     | 8     | 5      | SETFIG   | 951     | Wilderness NPCs |
-
-Width is in 16-pixel word units (so width=1 means 16px, width=2 means 32px, width=4 means 64px). The `file_id` is a disk sector address for the raw track loader. The `numblocks` field indicates how many 512-byte disk blocks to read.
-
-Note that the `ENEMY` and `SETFIG` sequence slots are shared -- only one enemy type and one NPC set can be loaded at a time. When encountering a new enemy type or NPC, the game must reload the sprite data from disk, replacing whatever was previously in that slot.
-
-### 3.10 Sprite Data Format
-
-Sprite data uses the Amiga's native planar bitplane format. For each frame:
-
-1. **Bytes per plane per frame:** `bytes = height * width * 2` (width is in 16-pixel words, so `width * 2` gives bytes per scanline)
-2. **Image data:** 5 bitplanes (for 32-color depth), stored sequentially: plane 0, plane 1, ..., plane 4. Total image data = `bytes * 5`
-3. **Mask data:** 1 additional bitplane used for transparency masking during blitting. Total mask data = `bytes * 1`
-4. **Total per frame:** `bytes * 6`
-
-For a standard character sprite (16x32, width=1, height=32):
-- Bytes per plane = 32 * 1 * 2 = 64 bytes
-- 5 image planes = 320 bytes
-- 1 mask plane = 64 bytes
-- **Total per frame = 384 bytes**
-
-For the dragon (48x40, width=3, height=40):
-- Bytes per plane = 40 * 3 * 2 = 240 bytes
-- 5 image planes = 1,200 bytes
-- 1 mask plane = 240 bytes
-- **Total per frame = 1,440 bytes**
-
-Memory layout for a full character set (e.g., Julian with 67 frames):
-- Image planes: frames are stored with all 5 planes contiguous per frame, all frames sequential. `location` points to the start.
-- Mask planes: stored separately after all image data. `maskloc` points to the start.
-- The `read_shapes()` function (`fmain2.c:685-703`) loads image data first (`nextshape += size*5`), then sets `maskloc` to the next available address and generates the mask using `make_mask()`.
-
-The mask plane is not stored on disk -- it is computed at load time by ORing the 5 image bitplanes together. This saves disk space (one fewer plane to store) at the cost of a brief computation during loading.
-
-**Asset format -- modern conversion target:**
-- **Original:** Amiga planar bitplane format as described above. Data is loaded via raw disk sector reads using a custom track loader.
-- **Modern target:** PNG sprite sheet with alpha channel. One PNG per character set (e.g., `julian.png`, `ogre.png`), with frames arranged in a grid. A separate JSON metadata file would describe frame dimensions, counts, and animation sequence mappings. The mask plane maps directly to the PNG alpha channel.
-
----
-
-## 4. Combat System
-
-For the combat encounter flow diagram, see [STORYLINE.md Section 11](STORYLINE.md#11-combat-encounter-flow).
-
-The combat system handles melee attacks, missile (ranged) attacks, damage application, death
-processing, and loot generation. All combat logic runs each game tick as part of the main loop
-in `fmain.c`.
-
-### 4.1 Melee Hit Detection
-
-**Source:** `fmain.c:2238-2265`
-
-The melee loop iterates over all active actors (`i = 0` to `anix - 1`) each tick. It is an
-O(n^2) algorithm: for each attacker, it checks every other actor as a potential target.
-
-```
-for each actor i (0 to anix-1):
-    if i > 0 and freeze_timer active: break
-    if i == 1 (raft slot) or state >= WALKING (not fighting): skip
-
-    wt = actor's weapon type
-    if weapon has bit 2 set (bow/wand, weapon & 4): skip melee entirely
-
-    if wt >= 8: wt = 5              -- cap touch attacks at 5
-    wt += bitrand(2)                 -- random extension: 0, 1, or 2 added
-
-    -- Calculate strike point (projected from attacker position along facing)
-    xs = newx(abs_x, facing, wt * 2) + rand8() - 3
-    ys = newy(abs_y, facing, wt * 2) + rand8() - 3
-
-    -- Determine hit radius
-    if i == 0 (hero):  bv = (brave / 20) + 5    -- range 5-15
-    else (enemy):      bv = 2 + rand4()          -- range 2-5
-    if bv > 14: bv = 15                          -- hard cap at 15
-
-    for each potential target j (0 to anix-1):
-        if j == 1 (raft) or j == i (self) or target is DEAD or attacker is CARRIER: skip
-
-        xd = |target.abs_x - xs|
-        yd = |target.abs_y - ys|
-        if xd > yd: yd = xd         -- Chebyshev distance (max of deltas)
-
-        -- Hit condition
-        if (i == 0 OR rand256() > brave) AND yd < bv AND NOT freeze_timer:
-            dohit(i, j, facing, wt)
-            break                    -- only one hit per swing
-
-        -- Near miss: clash sound
-        else if yd < bv + 2 AND wt != 5 (not wand/touch):
-            effect(1, 150 + rand256())
-```
-
-**Key details:**
-
-- `newx(x, dir, speed)` and `newy(y, dir, speed)` project a point from position `(x,y)` along
-  direction `dir` by `speed` pixels. They use direction tables:
-  `xdir = {-2, 0, 2, 3, 2, 0, -2, -3}` and `ydir = {-2, -3, -2, 0, 2, 3, 2, 0}` for
-  directions 0-7 (S, SW, W, NW, N, NE, E, SE). The formula is:
-  `result = position + (dir_table[facing] * speed) / 2`.
-- The distance metric is Chebyshev distance (L-infinity norm): `max(|dx|, |dy|)`.
-- `rand8()` returns 0-7, so `rand8() - 3` gives jitter of -3 to +4 pixels.
-- `bitrand(2)` returns `rand() & 2`, yielding 0 or 2 (NOT 0, 1, or 2). This means weapon
-  reach extends by 0 or 2, never 1, creating a bimodal reach distribution.
-- The hero always hits if within range (no accuracy check). Enemies must pass
-  `rand256() > brave` -- at high bravery, enemies rarely land melee hits.
-- The bravery cap of 15 on hit radius means at 200+ bravery, the hero's effective melee
-  reach plateaus.
-- Touch attacks (weapon >= 8, capped to 5) have the same strike distance as a wand but use
-  melee logic, not ranged. The cap at 5 means touch attacks have reach `(5 + bitrand(2)) * 2`
-  = 10 or 14 pixels projected forward.
-
-### 4.2 The dohit() Function
-
-**Source:** `fmain2.c:230-247`
-
-Called when a melee or missile attack connects. Parameters: `i` = attacker index (-1 for arrow,
--2 for fireball), `j` = target index, `fc` = facing direction, `wt` = weapon type / damage.
+Defined at `fmain.c:136-146`. Nine entries of `struct transition`:
 
 ```c
-dohit(i, j, fc, wt)
-{
-    // Immunity check #1: weak weapons vs. magic creatures
-    // NOTE: checks anim_list[0].weapon (HERO's weapon), not attacker's
-    if (hero_weapon < 4 &&
-        (target.race == 9 ||                         // necromancer
-         (target.race == 0x89 && stuff[7] == 0)))    // witch without sun stone
-    {   speak(58);  // "You can't hurt me with that!"
-        return;
-    }
-
-    // Immunity check #2: undead completely immune to all attacks
-    if (target.race == 0x8a || target.race == 0x8b)  // spectre or ghost
-        return;  // silently ignored -- no feedback
-
-    // Apply damage
-    target.vitality -= wt;
-    if (target.vitality < 0) target.vitality = 0;
-
-    // Sound effects by attack type (mutually exclusive)
-    if (i == -1)       effect(2, 500 + rand64());     // arrow hit
-    else if (i == -2)  effect(5, 3200 + bitrand(511));// fireball hit
-    else if (j == 0)   effect(0, 800 + bitrand(511)); // hero hurt
-    else               effect(3, 400 + rand256());    // enemy hurt
-
-    // Push-back: move target 2 pixels in attack direction
-    // Dragons and set-figures are immovable
-    if (target.type != DRAGON && target.type != SETFIG)
-    {   if (move_figure(j, fc, 2) returned FALSE && i >= 0)
-            move_figure(i, fc, 2);   // push attacker instead if target blocked
-    }
-
-    checkdead(j, 5);
-}
+struct transition { char newstate[4]; };    // fmain.c:136-137
 ```
 
-**Key observations:**
+| Index | newstate[0] | [1] | [2] | [3] | Source |
+|-------|-------------|-----|-----|-----|--------|
+| 0 | 1 | 8 | 0 | 1 | `fmain.c:138` |
+| 1 | 2 | 0 | 1 | 0 | `fmain.c:139` |
+| 2 | 3 | 1 | 2 | 8 | `fmain.c:140` |
+| 3 | 4 | 2 | 3 | 7 | `fmain.c:141` |
+| 4 | 5 | 3 | 4 | 6 | `fmain.c:142` |
+| 5 | 6 | 4 | 5 | 5 | `fmain.c:143` |
+| 6 | 8 | 5 | 6 | 4 | `fmain.c:144` |
+| 7 | 8 | 6 | 7 | 3 | `fmain.c:145` |
+| 8 | 0 | 6 | 8 | 2 | `fmain.c:146` |
 
-- **Immunity bug:** The necromancer/witch immunity check uses `anim_list[0].weapon` (the
-  hero's current weapon) regardless of who the attacker is. If an enemy attacks another enemy,
-  the hero's weapon type still determines immunity. In practice this rarely matters because
-  enemies don't attack each other.
-- **Damage is the raw weapon type value** for melee (1-7, where 1=dirk, 2=mace, 3=sword,
-  5=wand/touch). For missiles, damage is `rand8() + 4` (range 4-11).
-- **Push-back reversal:** When the target can't be pushed back (terrain blocks), the attacker
-  is pushed forward instead. This creates the odd behavior of an attacker lunging into the
-  target when the target is cornered. Only applies to melee (i >= 0), not missiles.
-- `move_figure(fig, dir, dist)` attempts to move the figure and returns FALSE if
-  `proxcheck()` detects a collision at the destination.
+The `newstate[0]` column forms a forward cycle: 0→1→2→3→4→5→6→8→0 (state 7 reached via `newstate[3]` and feeds back into the cycle). `newstate[1]` traverses the reverse direction. This implements the sword swing arc animation. See [P3](PROBLEMS.md) for detailed index semantics.
 
-### 4.3 Missile System
+A random element selects which of the 4 transition paths to take: `trans_list[state].newstate[rand4()]` (`fmain.c:1712`).
 
-**Source:** `fmain.c:78-85` (struct), `fmain.c:2267-2301` (flight and collision)
+### 2.6 setfig_table — NPC Type Descriptors
 
-#### Missile Structure
+Defined at `fmain.c:21-37`. Maps NPC type index to image file and speech capability.
 
 ```c
-struct missile {
-    unsigned short  abs_x, abs_y;   // world position
-    char  missile_type;    // 0=empty, 1=arrow, 2=fireball, 3=spent fireball
-    char  time_of_flight;  // ticks since launch
-    char  speed;           // 0=unshot, 3=arrow, 5=wand/fireball
-    char  direction;       // 0-7 direction of travel
-    char  archer;          // actor index of shooter (avoid self-hit)
-} missile_list[6];         // 6 simultaneous missiles max
+struct { BYTE cfile_entry, image_base, can_talk; }
 ```
 
-#### Per-Tick Missile Processing
+| Index | NPC Type | cfile_entry | image_base | can_talk | Source |
+|-------|----------|-------------|------------|----------|--------|
+| 0 | Wizard | 13 | 0 | 1 | `fmain.c:24` |
+| 1 | Priest | 13 | 4 | 1 | `fmain.c:25` |
+| 2 | Guard (front) | 14 | 0 | 0 | `fmain.c:26` |
+| 3 | Guard (back) | 14 | 1 | 0 | `fmain.c:27` |
+| 4 | Princess | 14 | 2 | 0 | `fmain.c:28` |
+| 5 | King | 14 | 4 | 1 | `fmain.c:29` |
+| 6 | Noble | 14 | 6 | 0 | `fmain.c:30` |
+| 7 | Sorceress | 14 | 7 | 0 | `fmain.c:31` |
+| 8 | Bartender | 15 | 0 | 0 | `fmain.c:32` |
+| 9 | Witch | 16 | 0 | 0 | `fmain.c:33` |
+| 10 | Spectre | 16 | 6 | 0 | `fmain.c:34` |
+| 11 | Ghost | 16 | 7 | 0 | `fmain.c:35` |
+| 12 | Ranger | 17 | 0 | 1 | `fmain.c:36` |
+| 13 | Beggar | 17 | 4 | 1 | `fmain.c:37` |
 
-```
-if freeze_timer active: skip all missiles
+`cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables generic dialogue initiation.
 
-for each missile slot i (0 to 5):
-    s = speed * 2
+### 2.7 encounter_chart — Monster Combat Stats
 
-    -- Destroy missile if: empty (type 0), spent fireball (type 3),
-    -- speed is 0, or flight time exceeds 40 ticks
-    if missile_type == 0 or missile_type == 3 or s == 0 or time_of_flight++ > 40:
-        missile_type = 0; continue
-
-    -- Terrain collision
-    terrain = px_to_im(abs_x, abs_y)
-    if terrain == 1 (impassable) or terrain == 15 (door):
-        missile_type = 0; s = 0
-
-    -- Set hit radius by type
-    mt = 6                          -- arrow/wand bolt hit radius
-    if missile_type == 2: mt = 9    -- fireball has larger blast radius
-
-    -- Actor collision check
-    for each actor j (0 to anix-1):
-        if j == 0: bv = brave; else bv = 20
-        if j == 1 (raft) or j == archer (self) or target DEAD or CARRIER: skip
-
-        xd = |target.abs_x - abs_x|
-        yd = |target.abs_y - abs_y|
-        if xd > yd: yd = xd         -- Chebyshev distance
-
-        if (i != 0 OR bitrand(512) > bv) AND yd < mt:
-            if missile_type == 2: dohit(-2, j, direction, rand8()+4)  -- fireball
-            else:                  dohit(-1, j, direction, rand8()+4)  -- arrow
-            speed = 0
-            if missile_type == 2: missile_type = 3   -- fireball becomes spent
-            break
-
-    -- Advance missile position
-    abs_x = newx(abs_x, direction, s)
-    abs_y = newy(abs_y, direction, s)
-```
-
-**Missile slot 0 dodge bug:** The dodge condition `i != 0` checks the *missile slot index*,
-not the target actor index. Only missile slot 0 allows targets to dodge (via
-`bitrand(512) > bv`). Missiles in slots 1-5 always hit if within radius, bypassing the dodge
-check entirely. The `bv` variable is computed per-target (`brave` for hero, 20 for enemies)
-but is only used when `i == 0`. The developer's own comment `/* really?? */` on the bravery
-assignment line suggests uncertainty about this logic.
-
-**Arrow consumption:** Arrows are tracked in `stuff[8]`. On SHOOT3 state (bow release), if the
-hero has no arrows (`stuff[8] == 0`), the shot is cancelled with "No Arrows!" Otherwise
-`stuff[8]` is decremented. Enemies do not consume arrows.
-
-### 4.4 Shooting Mechanics
-
-**Source:** `fmain.c:1410-1439` (hero input), `fmain.c:1667-1709` (shot processing),
-`fmain.c:1481-1494` (dragon)
-
-#### State Machine
-
-Shooting uses two animation states:
-
-| State | Value | Description |
-|-------|-------|-------------|
-| SHOOT1 | 24 | Aiming -- bow raised or wand pointed |
-| SHOOT3 | 25 | Release -- arrow/bolt launched |
-
-#### Hero Shooting
-
-When the fire button is pressed:
-- **Bow (weapon 4):** Immediately enters SHOOT1. On button release, transitions to SHOOT3.
-  Arrow created with speed 3, `missile_type = 1`.
-- **Wand (weapon 5):** Enters SHOOT1 and immediately fires. Bolt created with speed 5,
-  `missile_type = 2` (fireball type). Transitions to SHOOT3 on same tick. Can fire repeatedly
-  while button held (if `state < SHOOT1`, re-enters SHOOT1).
-- **Melee weapons (0-3):** Enter FIGHTING state instead (states 0-8).
-
-Shooting is suppressed underwater (`k > 15`) and in peace zones (`xtype > 80`).
-
-#### Shot Origin
-
-Missile spawn position uses per-direction offset tables:
+Defined at `fmain.c:42-64`. Struct definition at `fmain.c:42-53`:
 
 ```c
-// Bow X offsets per direction (8 directions)
-char bowshotx[8] = { 0, 0, 3, 6, -3, -3, -3, -6 };
-
-// Bow Y offsets per direction
-char bowshoty[8] = { -6, -6, -1, 0, 6, 8, 0, -1 };
-
-// Wand Y offsets per direction (X uses bowshotx)
-char gunshoty[8] = { 2, 0, 4, 7, 9, 4, 7, 8 };
-```
-
-Missile origin: `abs_x + bowshotx[dir]`, `abs_y + bowshoty[dir]` (bow) or
-`abs_y + gunshoty[dir]` (wand).
-
-#### Enemy Shooting
-
-Enemies with ranged weapons (bow/wand) use the SHOOT tactic. When within line-of-sight
-(distance checks along cardinal/diagonal axes with tolerance), they face the hero, set state
-to SHOOT1, and on the next AI tick transition to SHOOT3.
-
-```c
-// fmain2.c:1671-1682 -- SHOOT tactic
-xd = |enemy.abs_x - hero.abs_x|
-yd = |enemy.abs_y - hero.abs_y|
-if (rand() & 1) AND (xd < 8 OR yd < 8 OR roughly diagonal):
-    set_course(i, hero_x, hero_y, 5)
-    if state < SHOOT1: state = SHOOT1
-else:
-    set_course(i, hero_x, hero_y, 0)   // pursue instead
-```
-
-#### Dragon Shooting
-
-**Source:** `fmain.c:1481-1494`
-
-Dragons fire fireballs with a 1/4 chance per tick (`rand4() == 0`). The fireball has speed 5,
-`missile_type = 2`, and always faces direction 5 (NE). Damage on hit is `rand8() + 4`
-(range 4-11), same as other missiles.
-
-```c
-if (actor.type == DRAGON)
-{   if (rand4() == 0)                   // 25% chance per tick
-    {   missile.speed = 5;
-        missile.missile_type = 2;        // fireball
-        effect(5, 1800 + rand256());     // fireball sound
-        actor.facing = 5;               // always faces NE (hardcoded)
-        // jump to dragshoot: sets missile position and direction
-    }
-}
-```
-
-### 4.5 Enemy Encounter Chart
-
-**Source:** `fmain.c:45-64`
-
-The `encounter_chart[11]` array defines base stats for all enemy types. Each entry contains:
-hitpoints, aggressive flag, arms tier (indexes into `weapon_probs`), cleverness (AI behavior
-modifier), treasure tier (indexes into `treasure_probs`), and sprite file ID.
-
-| # | Name | HP | Aggressive | Arms | Cleverness | Treasure | Sprite |
-|---|------|----|------------|------|------------|----------|--------|
-| 0 | Ogre | 18 | yes | 2 | 0 | 2 | 6 |
-| 1 | Orc | 12 | yes | 4 | 1 | 1 | 6 |
-| 2 | Wraith | 16 | yes | 6 | 1 | 4 | 7 |
-| 3 | Skeleton | 8 | yes | 3 | 0 | 3 | 7 |
-| 4 | Snake | 16 | yes | 6 | 1 | 0 | 8 |
-| 5 | Salamander | 9 | yes | 3 | 0 | 0 | 7 |
-| 6 | Spider | 10 | yes | 6 | 1 | 0 | 8 |
-| 7 | Dark Knight | 40 | yes | 7 | 1 | 0 | 8 |
-| 8 | Loraii | 12 | yes | 6 | 1 | 0 | 9 |
-| 9 | Necromancer | 50 | yes | 5 | 0 | 0 | 9 |
-| 10 | Woodcutter | 4 | no | 0 | 0 | 0 | 9 |
-
-**Field meanings:**
-
-- **HP:** Starting vitality for spawned enemies.
-- **Aggressive:** If TRUE, enemy attacks on sight. Woodcutter (10) is the only passive type.
-- **Arms:** Index into `weapon_probs` array (tier 0-7, each tier has 4 entries). Determines
-  which weapon the spawned enemy receives. See weapon probability table below.
-- **Cleverness:** AI behavior level. 0 = basic pursuit, 1 = uses flanking/evasion tactics.
-  Higher values enable more sophisticated combat AI state transitions.
-- **Treasure:** Index into `treasure_probs` array (tier 0-4, each tier has 8 entries).
-  Determines loot dropped on death. Tier 0 = no treasure. See treasure probability table below.
-- **Sprite:** Actor file ID for loading sprite graphics. File 6 = humanoid set 1 (ogre, orc),
-  file 7 = undead/reptile set (wraith, skeleton, salamander), file 8 = monster set (snake,
-  spider, dark knight), file 9 = special (loraii, necromancer, woodcutter).
-
-**Notes on specific enemies:**
-
-- **Snake (4):** Swamp region enemy. Arms tier 6 = touch attack. Cleverness 1.
-- **Salamander (5):** Lava region enemy. Arms tier 3 = melee weapons.
-- **Spider (6):** Spider pit enemy. Arms tier 6 = touch attack.
-- **Dark Knight (7):** Elf glade guardian. 40 HP, arms tier 7 = swords only. Guards shrines.
-- **Loraii (8):** Astral plane enemy. Arms tier 6 = touch attack.
-- **Necromancer (9):** Final arena boss. 50 HP, arms tier 5 = magic wand. Immune to weapons
-  below tier 4 (see dohit immunity).
-- **Woodcutter (10):** Non-aggressive NPC. No weapons, no treasure.
-
-### 4.6 Weapon Probability Table
-
-**Source:** `fmain2.c:860-868`
-
-The `weapon_probs[32]` array is organized as 8 tiers of 4 entries each. When an enemy spawns,
-one of the 4 entries in its arms tier is selected randomly to determine the weapon.
-
-Weapon codes: 0=none, 1=dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch attack.
-
-| Tier | Entry 0 | Entry 1 | Entry 2 | Entry 3 | Description |
-|------|---------|---------|---------|---------|-------------|
-| 0 | 0 | 0 | 0 | 0 | No weapons |
-| 1 | 1 | 1 | 1 | 1 | Dirks only |
-| 2 | 1 | 2 | 1 | 2 | 50% dirk, 50% mace |
-| 3 | 1 | 2 | 3 | 2 | 25% dirk, 50% mace, 25% sword |
-| 4 | 4 | 4 | 3 | 2 | 50% bow, 25% sword, 25% mace |
-| 5 | 5 | 5 | 5 | 5 | Magic wand only |
-| 6 | 8 | 8 | 8 | 8 | Touch attack only |
-| 7 | 3 | 3 | 3 | 3 | Swords only |
-
-**Damage per weapon type in melee:** The `wt` value after capping (touch attacks capped at 5)
-plus `bitrand(2)` (0 or 2) is both the reach multiplier and the damage dealt by `dohit()`.
-So a dirk does 1-3 damage per hit, a mace 2-4, a sword 3-5, and a touch attack 5-7.
-
-### 4.7 Treasure Probability Table
-
-**Source:** `fmain2.c:852-858`
-
-The `treasure_probs[40]` array is organized as 5 tiers of 8 entries each. When an enemy dies,
-one of the 8 entries in its treasure tier is selected randomly to determine the loot drop.
-
-| Tier | [0] | [1] | [2] | [3] | [4] | [5] | [6] | [7] | Description |
-|------|-----|-----|-----|-----|-----|-----|-----|-----|-------------|
-| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | No treasure |
-| 1 | 9 | 11 | 13 | 31 | 31 | 17 | 17 | 32 | Stones, vials, totems, gold, keys |
-| 2 | 12 | 14 | 20 | 20 | 20 | 31 | 33 | 31 | Keys, skulls, gold, nothing |
-| 3 | 10 | 10 | 16 | 16 | 11 | 17 | 18 | 19 | Magic items and keys |
-| 4 | 15 | 21 | 0 | 0 | 0 | 0 | 0 | 0 | Jade skull and white key (25% chance) |
-
-**Item codes referenced:** 0=nothing, 9=blue stone, 10=green stone, 11=amber stone,
-12=crystal shard, 13=jade totem, 14=skull, 15=jade skull, 16=gold key, 17=silver key,
-18=brass key, 19=glass key, 20=gold (currency), 21=white key, 31=gold (currency),
-32=gold (currency), 33=gold (currency).
-
-**Treasure tier usage by enemy:**
-
-- Tier 0 (no treasure): Snake, Salamander, Spider, Dark Knight, Loraii, Necromancer, Woodcutter
-- Tier 1: Orc
-- Tier 2: Ogre
-- Tier 3: Skeleton
-- Tier 4: Wraith
-
-### 4.8 checkdead() -- Death Processing
-
-**Source:** `fmain.c:2769-2782`
-
-Called after every hit to check if the target should die.
-
-```c
-checkdead(i, dtype)
-{
-    an = &anim_list[i];
-
-    if (an->vitality < 1 && an->state != DYING && an->state != DEAD)
-    {
-        an->vitality = 0;
-        an->tactic = 7;              // death countdown timer
-        an->goal = DEATH;
-        an->state = DYING;           // begin death animation
-
-        if (an->race == 7)           // dark knight
-            speak(42);               // "You have earned the right to enter"
-        else if (an->type == SETFIG && an->race != 0x89)  // setfig, not witch
-            kind -= 3;               // killing non-hostile NPCs hurts kindness
-
-        if (i != 0)                  // enemy died
-            brave++;                 // hero gains 1 bravery per kill
-        else                         // hero died
-        {   event(dtype);            // death event (dtype=5 from combat)
-            luck -= 5;
-            setmood(TRUE);           // set mood to sad
-        }
-
-        if (kind < 0) kind = 0;     // floor kindness at 0
-        prq(7);                      // refresh status display (enemy stats)
-    }
-
-    if (i == 0) prq(4);             // refresh hero vitality display (always, even if alive)
-}
-```
-
-**Key details:**
-
-- The `dtype` parameter is always 5 when called from `dohit()`. This triggers the death event
-  handler which processes brother succession (Julian -> Dorian -> Kevin).
-- `tactic = 7` serves as a death animation countdown. The DYING state plays a 7-frame
-  collapse animation, then transitions to DEAD.
-- `brave++` means bravery grows linearly with kills. Since bravery affects hit radius
-  (up to 15), enemy dodge chance (`rand256() > brave`), and arrow dodging
-  (`bitrand(512) > brave`), it is the primary combat progression stat.
-- Killing set-figures (quest NPCs like the dark knight) who are not the witch costs 3 kindness
-  points. The witch (race 0x89) is exempt because she is a legitimate combat target.
-- `prq(7)` and `prq(4)` trigger status bar redraws for the enemy counter and hero vitality
-  respectively.
-
-### 4.9 Improvement Notes
-
-1. **O(n^2) melee detection:** The nested loop (each attacker checks every target) scales
-   poorly. With up to 20 actor slots, this is 400 iterations per tick. Spatial partitioning
-   (grid cells or a spatial hash) would reduce this to near-linear.
-
-2. **Push-back reversal bug:** In `dohit()`, when `move_figure(j, fc, 2)` fails (target
-   blocked by terrain), the attacker is pushed forward in the same direction via
-   `move_figure(i, fc, 2)`. This means cornered enemies cause the hero to lunge into them,
-   and vice versa. The likely intent was to push the attacker *backward* (opposite direction),
-   but the same `fc` (facing) is used for both calls.
-
-3. **Missile dodge uses slot index instead of target index:** In the missile collision loop
-   (`fmain.c:2291`), the dodge condition `i != 0` tests the missile slot index, not the target
-   actor index `j`. This means only missile slot 0 allows dodge rolls; missiles in slots 1-5
-   are undodgeable. The developer's `/* really?? */` comment on the bravery assignment
-   suggests this was noticed but not corrected.
-
-4. **Bravery-based arrow dodging is unbalanced at high brave:** The hero's dodge formula
-   `bitrand(512) > brave` means at brave >= 512, the hero is completely immune to missile
-   slot 0. Combined with the slot index bug above, this creates inconsistent behavior --
-   the first missile fired can be dodged, but subsequent ones cannot.
-
-5. **Touch attack weapon reach inconsistency:** Touch attacks (weapon >= 8) are capped at
-   `wt = 5`, giving them the same reach calculation as a wand in melee. But wands skip melee
-   entirely (weapon & 4 is true for value 5: `5 & 4 = 4`, which is truthy). Touch attacks
-   with value 8 also have bit 2 clear (`8 & 4 = 0`), so they go through melee. The cap at 5
-   means a touch attack has identical reach to what a wand *would* have in melee, even though
-   wands never use melee. This is internally consistent but the reuse of value 5 for the cap
-   is coincidental rather than intentional.
-
-6. **Immunity check uses hero weapon for all attackers:** The `dohit()` immunity check
-   (`anim_list[0].weapon < 4`) always tests the hero's equipped weapon, even when the attacker
-   is an enemy or a missile. This means enemy-on-enemy attacks (rare but possible) or missile
-   hits are filtered by what the hero is holding.
-
----
-
-## 5. AI & Behavior
-
-All enemy AI runs once per game tick in the main loop at `fmain.c:2109-2184`. Each actor evaluates a two-level decision system: a **goal** (strategic intent) and a **tactic** (immediate movement behavior). Movement is resolved by `set_course()`, a pure 68000 assembly routine that converts a target position into a compass facing.
-
-### 5.1 Goal Modes
-
-**Original** -- Goals are the top-level behavioral state for each actor. Defined in `ftale.h:27-37`:
-
-| Value | Name       | Description |
-|-------|------------|-------------|
-| 0     | `USER`     | Player-controlled character. AI loop skips this actor. |
-| 1     | `ATTACK1`  | Melee attack, low intelligence (cleverness 0). Re-evaluates tactics with probability 1/4 (`!rand4()`) due to `(mode & 2) == 0` check. |
-| 2     | `ATTACK2`  | Melee attack, high intelligence (cleverness 1). Re-evaluates with base probability 1/16 (`!bitrand(15)`). `do_tactic` internally boosts action rate to 1/4 for this goal. |
-| 3     | `ARCHER1`  | Ranged attack, low intelligence (cleverness 0). Re-evaluates at 1/16 rate (the `mode & 2` check does NOT match mode 3, likely a bug). Prefers shooting at medium range, backs up if too close. |
-| 4     | `ARCHER2`  | Ranged attack, high intelligence (cleverness 1). Re-evaluates at 1/4 rate (the `mode & 2` check matches mode 4, likely unintended). Same shooting logic as ARCHER1. |
-| 5     | `FLEE`     | Run directly away from hero. Assigned when actor vitality drops below 2, or when the hero is dead and the actor has no leader. Always executes `do_tactic(i, BACKUP)`. |
-| 6     | `STAND`    | Face the hero but do not move. Calls `set_course(i, hero_x, hero_y, 0)` then forces state to STILL. Used by the Dark Knight (race 7) when vitality is nonzero. |
-| 7     | `DEATH`    | Dead actor. Not assigned in the AI loop; set by `checkdead()` at `fmain.c:2769`. AI loop skips dead actors via the `vitality < 1` check. |
-| 8     | `WAIT`     | Wait to speak to the hero. Actor state is forced to STILL with no movement. |
-| 9     | `FOLLOWER` | Follow another character. Assigned when the hero is dead and a leader exists. Executes `do_tactic(i, FOLLOW)`. |
-| 10    | `CONFUSED` | Run around randomly. Assigned when the actor has no weapon (`weapon < 1`). Tactic is forced to RANDOM. |
-
-Goals are assigned at spawn time based on the encounter chart: `ATTACK1 + cleverness` for melee, `ARCHER1 + cleverness` for ranged (`fmain.c:2761-2762`). The cleverness field is 0 or 1, selecting the "stupid" or "clever" variant.
-
-**Improvement** -- The goal system conflates strategic intent (attack, flee, follow) with intelligence level (ATTACK1 vs ATTACK2). A cleaner design would separate intent from AI parameters, allowing more than two intelligence tiers and independent tuning of re-evaluation rates.
-
-### 5.2 Tactical Modes
-
-**Original** -- Tactics are the immediate movement sub-goals. Defined in `ftale.h:42-54`:
-
-| Value | Name          | Movement Produced |
-|-------|---------------|-------------------|
-| 0     | `FRUST`       | All tactics frustrated. If actor has a bow (`weapon & 4`), pick a random tactic from 2-5. Otherwise pick from 3-4. Serves as a "stuck" recovery. |
-| 1     | `PURSUE`      | Move directly toward the hero. Calls `set_course(i, hero_x, hero_y, 0)` with 1/8 probability (1/4 for ATTACK2). |
-| 2     | `FOLLOW`      | Move toward the leader actor. Calls `set_course(i, leader.abs_x, leader.abs_y+20, 0)` with the standard action probability. If the actor IS the leader, tactic is changed to RANDOM. The +20 y-offset means followers trail slightly behind. |
-| 3     | `BUMBLE_SEEK` | Imprecise seeking. Calls `set_course(i, hero_x, hero_y, 4)` -- mode 4 disables axis pruning so the actor moves diagonally. 1/8 action probability. |
-| 4     | `RANDOM`      | Random wandering. Sets facing to `rand() & 7` and state to WALKING with 1/8 probability. No pathfinding at all. |
-| 5     | `BACKUP`      | Move away from the hero. Calls `set_course(i, hero_x, hero_y, 3)` -- mode 3 reverses both direction components. 1/8 action probability. |
-| 6     | `EVADE`       | Lateral dodge. Targets a neighboring actor's position rather than the hero: if `i == anix` then target is `anim_list[i-1]`, otherwise `anim_list[i+i]`. Calls `set_course` with mode 2 (deviation at close range). 1/8 action probability. **Bug note:** the code reads `i+i` (double the index), not `i+1` -- this is likely a typo that was never caught. |
-| 7     | `HIDE`        | Defined but never implemented in `do_tactic()`. Falls through without any action. |
-| 8     | `SHOOT`       | Ranged attack. Checks alignment: if the actor is roughly on axis with the hero (within 8 pixels on either axis, or close to a diagonal), randomly fires (50% chance) by calling `set_course(i, hero_x, hero_y, 5)` (face only, no walk) and setting state to SHOOT1. Otherwise, approaches with `set_course` mode 0. |
-| 9     | `SHOOTFRUST`  | Arrow-shooting frustrated. Handled identically to FRUST in the AI loop -- picks a random replacement tactic. |
-| 10    | `EGG_SEEK`    | Snake-specific. Moves toward the turtle egg location at hardcoded coordinates (23087, 5667). Only assigned when `actor.race == 4` and `turtle_eggs` is nonzero. |
-| 11    | `DOOR_SEEK`   | Dark Knight blocking a door. Defined in the header but never referenced in any C source file. Likely planned but unused or handled by a different mechanism. |
-| 12    | `DOOR_LET`    | Dark Knight allowing passage. Same as DOOR_SEEK -- defined but unreferenced. |
-
-Tactics 2-5 (FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP) are the "obstacle avoidance" pool. When an actor becomes frustrated (FRUST), one of these is selected randomly. Ranged actors get the wider pool (2-5); melee actors get the narrower pool (3-4).
-
-**Improvement** -- The 1/8 base action probability means most movement commands are silently dropped. This creates the sluggish, somewhat erratic enemy movement characteristic of the original game. A modern version could use cooldown timers instead of random drops for more predictable pacing. The EVADE tactic's `i+i` target selection is almost certainly a bug (should be `i+1`) -- it causes index-out-of-range behavior for actors with indices above 3.
-
-### 5.3 set_course() Algorithm
-
-**Original** -- Pure 68000 assembly at `fmain2.c:63-222`. This is the core pathfinding routine that converts a target position into a compass facing for a given actor.
-
-**Signature:** `set_course(object, target_x, target_y, mode)`
-
-**Compass direction table** (`fmain2.c:56`):
-```
-com2[9] = { 0, 1, 2, 7, 9, 3, 6, 5, 4 }
-```
-
-**Direction numbering** (from `fsubs.asm:1276-1277`):
-
-| Dir | Compass | dx  | dy  |
-|-----|---------|-----|-----|
-| 0   | NW      | -2  | -2  |
-| 1   | N       |  0  | -3  |
-| 2   | NE      | +2  | -2  |
-| 3   | E       | +3  |  0  |
-| 4   | SE      | +2  | +2  |
-| 5   | S       |  0  | +3  |
-| 6   | SW      | -2  | +2  |
-| 7   | W       | -3  |  0  |
-
-**Modes:**
-
-| Mode | Behavior |
-|------|----------|
-| 0    | Direct pursuit toward target. Axis pruning active. No deviation. |
-| 1    | Pursuit with close-range wobble. If Manhattan distance < 40, deviation = 1. |
-| 2    | Pursuit with close-range wobble. If Manhattan distance < 30, deviation = 1. (Note: the inline C comment says `deviation = 2` but the assembly uses `moveq #1,d4` -- the actual behavior is deviation = 1, same as mode 1 but with a tighter activation range.) |
-| 3    | Reverse direction (flee from target). Axis pruning active. |
-| 4    | Full diagonal movement. Axis pruning disabled. No deviation. |
-| 5    | Face only -- calculates facing but does not set state to WALKING. |
-| 6    | Raw vector -- target_x and target_y are treated as a direction vector, not a position. |
-
-**Full pseudocode:**
-
-```
-function set_course(object, target_x, target_y, mode):
-    actor = anim_list[object]
-
-    // Step 1: Calculate delta vector
-    if mode == 6:
-        xdif = target_x          // raw vector, use directly
-        ydif = target_y
-    else:
-        xdif = actor.abs_x - target_x
-        ydif = actor.abs_y - target_y
-
-    // Step 2: Determine absolute values and direction signs
-    xdir = 0
-    ydir = 0
-
-    if xdif > 0:
-        xabs = xdif
-        xdir = 1
-    else if xdif < 0:
-        xabs = -xdif
-        xdir = -1
-    else:
-        xabs = 0
-
-    if ydif > 0:
-        yabs = ydif
-        ydir = 1
-    else if ydif < 0:
-        yabs = -ydif
-        ydir = -1
-    else:
-        yabs = 0
-
-    // Step 3: Axis pruning (skip if mode == 4)
-    // Suppresses the lesser axis when one axis strongly dominates,
-    // producing cardinal (non-diagonal) movement.
-    if mode != 4:
-        if (xabs >> 1) > yabs:    // x dominates by 2:1
-            ydir = 0
-        if (yabs >> 1) > xabs:    // y dominates by 2:1
-            xdir = 0
-
-    // Step 4: Calculate deviation and apply reversals
-    deviation = 0
-    distance = xabs + yabs       // Manhattan distance
-
-    if mode == 1 and distance < 40:
-        deviation = 1
-    else if mode == 2 and distance < 30:
-        deviation = 1
-    else if mode == 3:
-        xdir = -xdir              // reverse both axes (flee)
-        ydir = -ydir
-
-    // Step 5: Convert (xdir, ydir) to compass direction via lookup
-    index = 4 - ydir*3 - xdir
-    j = com2[index]
-
-    // Step 6: Apply result
-    if j == 9:                    // (0,0) = no direction needed
-        actor.state = STILL
-    else:
-        // Randomly jitter the direction by deviation
-        // Note: assembly tests bit 1 (btst #1), not bit 0.
-        // The inline C comment says "rand()&1" but the actual
-        // assembly uses bit 1 of rand(). Still a 50/50 coin flip.
-        if rand() & 2:
-            j = j + deviation
-        else:
-            j = j - deviation
-        j = j & 7                 // wrap to 0-7
-        actor.facing = j
-        if mode != 5:             // mode 5 = face only, don't walk
-            actor.state = WALKING
-```
-
-**com2 lookup verification** -- the index `4 - ydir*3 - xdir` maps every (xdir, ydir) pair to a compass direction that points from the actor toward the target:
-
-| ydir | xdir | Index | com2 | Direction | Meaning |
-|------|------|-------|------|-----------|---------|
-| +1   | +1   | 0     | 0    | NW        | Actor is SE of target, move NW |
-| +1   |  0   | 1     | 1    | N         | Actor is S of target, move N |
-| +1   | -1   | 2     | 2    | NE        | Actor is SW of target, move NE |
-|  0   | +1   | 3     | 7    | W         | Actor is E of target, move W |
-|  0   |  0   | 4     | 9    | (none)    | Actor is at target, stop |
-|  0   | -1   | 5     | 3    | E         | Actor is W of target, move E |
-| -1   | +1   | 6     | 6    | SW        | Actor is NE of target, move SW |
-| -1   |  0   | 7     | 5    | S         | Actor is N of target, move S |
-| -1   | -1   | 8     | 4    | SE        | Actor is NW of target, move SE |
-
-**Improvement** -- `set_course` is the single most important routine to port. The pseudocode above is a complete, verified translation of the 68000 assembly. Key observations for reimplementation:
-
-- The axis pruning creates a preference for cardinal movement when one axis is twice the other. This produces the characteristic "L-shaped" paths where actors walk straight then turn.
-- Deviation (modes 1 and 2) adds a +/-1 jitter at close range, making enemies circle or weave slightly instead of walking in a straight line at the target. The jitter only activates within Manhattan distance 40 or 30.
-- Mode 3 (reverse) is used for BACKUP/flee. It reverses direction signs AFTER axis pruning, so fleeing actors also favor cardinal directions.
-- The `& 7` wrap means deviation can shift direction 0 to direction 7 (NW to W) or direction 7 to direction 0 (W to NW), creating smooth wraparound in the compass rose.
-- There is no obstacle awareness whatsoever. Actors that hit impassable terrain simply stop, which triggers the FRUST recovery on the next evaluation cycle.
-
-### 5.4 AI Decision Loop
-
-**Original** -- The complete per-tick AI logic at `fmain.c:2109-2184`. Runs once per main-loop iteration for every active actor from index 2 through `anix-1` (index 0 is the hero, index 1 is the raft).
-
-**Pre-loop state reset** (`fmain.c:2105-2108`):
-```
-actors_on_screen = FALSE
-leader = 0
-battle2 = battleflag
-battleflag = FALSE
-```
-
-**Full decision tree per actor:**
-
-```
-for i = 2 to anix-1:
-
-    // Good fairy active and in animation phase: skip all AI
-    if goodfairy != 0 and goodfairy < 120:
-        break   // exits the entire loop, not just this actor
-
-    actor = anim_list[i]
-
-    // Carrier type (flying mount): face hero every 16 ticks, skip rest
-    if actor.type == CARRIER:
-        if (daynight & 15) == 0:
-            set_course(i, hero_x, hero_y, 5)   // face only
-        continue
-
-    // Set figures (NPCs placed by map): skip entirely
-    if actor.type == SETFIG:
-        continue
-
-    mode = actor.goal
-    tactic = actor.tactic
-
-    // Distance check
-    xd = |actor.abs_x - hero_x|
-    yd = |actor.abs_y - hero_y|
-
-    if xd < 300 and yd < 300:          // within 300px box
-        actors_on_screen = TRUE
-        if actor.vitality < 1: continue  // dead, skip
-        if actor.visible or battle2:
-            battleflag = TRUE
-
-    // Re-evaluation roll: 1/16 chance per tick
-    r = !bitrand(15)                    // TRUE with probability 1/16
-
-    // Override goals based on hero state
-    if hero is DEAD or FALLING:
-        if leader == 0: mode = FLEE     // no one to follow, scatter
-        else: mode = FOLLOWER           // follow the designated leader
-
-    // Override goals based on actor state
-    // Special encounters (xtype > 59) don't flee unless race matches extent
-    else if actor.vitality < 2 or
-            (xtype > 59 and actor.race != extn->v3):
-        mode = FLEE
-
-    // === Tactic handling ===
-
-    // Frustrated: pick a random replacement tactic
-    if tactic == FRUST or tactic == SHOOTFRUST:
-        if actor.weapon & 4:            // has bow
-            do_tactic(i, rand4() + 2)   // random from {2,3,4,5}
-        else:
-            do_tactic(i, rand2() + 3)   // random from {3,4}
-
-    // Mid-shoot: advance shoot animation
-    else if actor.state == SHOOT1:
-        actor.state = SHOOT3
-
-    // Hostile modes (ATTACK1, ATTACK2, ARCHER1, ARCHER2)
-    else if mode <= ARCHER2:
-        // Boost re-evaluation for certain modes
-        if (mode & 2) == 0:             // ATTACK1 (1) or ARCHER2 (4)
-            r = !rand4()                // override: 1/4 chance
-
-        if r:   // re-evaluate tactic
-            if actor.race == 4 and turtle_eggs:
-                tactic = EGG_SEEK       // snakes prioritize eggs
-            else if actor.weapon < 1:
-                mode = CONFUSED          // unarmed -> wander
-                tactic = RANDOM
-            else if actor.vitality < 6 and rand2():
-                tactic = EVADE           // wounded -> dodge (50%)
-            else if mode >= ARCHER1:     // ranged attacker
-                if xd < 40 and yd < 30:
-                    tactic = BACKUP      // too close, back off
-                else if xd < 70 and yd < 70:
-                    tactic = SHOOT       // in range, fire
-                else:
-                    tactic = PURSUE      // too far, close in
-            else:
-                tactic = PURSUE          // melee: always close in
-
-        // Melee range check
-        thresh = 14 - mode               // ATTACK1=13, ATTACK2=12,
-                                         // ARCHER1=11, ARCHER2=10
-        if actor.race == 7: thresh = 16  // Dark Knight: wider melee range
-
-        if not (actor.weapon & 4) and xd < thresh and yd < thresh:
-            set_course(i, hero_x, hero_y, 0)
-            if actor.state >= WALKING:
-                actor.state = FIGHTING   // enter melee combat
-
-        // Dark Knight special: stand still facing direction 5 (south)
-        else if actor.race == 7 and actor.vitality > 0:
-            actor.state = STILL
-            actor.facing = 5
-
-        else:
-            do_tactic(i, tactic)
-
-    // Non-hostile modes
-    else if mode == FLEE:
-        do_tactic(i, BACKUP)
-
-    else if mode == FOLLOWER:
-        do_tactic(i, FOLLOW)
-
-    else if mode == STAND:
-        set_course(i, hero_x, hero_y, 0)
-        actor.state = STILL              // face hero, don't move
-
-    else if mode == WAIT:
-        actor.state = STILL              // completely stationary
-
-    // Save potentially modified goal back
-    actor.goal = mode
-
-    // First living actor becomes the leader
-    if leader == 0:
-        leader = i
-```
-
-**Key behaviors:**
-
-- **Leader election**: The first actor processed (lowest index >= 2) becomes the "leader." When the hero dies, other actors switch to FOLLOWER mode and follow this leader, creating a cluster effect rather than all enemies chasing a dead hero.
-- **Re-evaluation throttling**: The 1/16 base probability is overridden to 1/4 when `(mode & 2) == 0`. This bit test selects ATTACK1 (mode 1) and ARCHER2 (mode 4) for the faster rate, while ATTACK2 (mode 2) and ARCHER1 (mode 3) keep 1/16. This is likely a bug: the intent was probably to make "dumb" modes (cleverness 0 = ATTACK1, ARCHER1) more reactive, but the bit mask catches ARCHER2 (cleverness 1) instead of ARCHER1 (cleverness 0). Between re-evaluations, `do_tactic` further throttles actual movement commands to 1/8 probability. An enemy in PURSUE with the 1/16 rate moves toward the hero on average once every 128 ticks; with the 1/4 rate, once every 32 ticks.
-- **Dark Knight special case**: Race 7 actors (the Dark Knight boss) get a wider melee threshold (16 vs. 10-13) and a unique behavior: when not in melee range, they simply stand still facing south rather than pursuing.
-- **Good fairy abort**: When the good fairy is active (animation frames 1-119), the entire AI loop is aborted via `break`. This freezes all enemy AI during the fairy's appearance.
-
-**Improvement** -- The double-random throttle (re-evaluation probability times action probability) creates highly variable effective response times. A timer-based approach would be more predictable. The leader concept is simplistic -- it always picks the lowest-indexed living actor regardless of distance or relevance. The `goodfairy` check using `break` instead of `continue` is intentional (freezes all enemies, not just one) but fragile -- moving the fairy check outside the loop would be clearer.
-
-### 5.5 do_tactic() Implementation
-
-**Original** -- Defined at `fmain2.c:1664-1700`. Translates a tactic number into a concrete `set_course` call or state change.
-
-All tactics except RANDOM and SHOOT share a common action-probability gate: `r = !(rand() & 7)`, giving 1/8 chance of actually executing the movement command. ATTACK2 actors get a boosted rate of 1/4 (`!(rand() & 3)`).
-
-| Tactic | Target | set_course Mode | Notes |
-|--------|--------|-----------------|-------|
-| PURSUE (1) | hero position | 0 (direct) | Only moves with probability r. |
-| FOLLOW (2) | leader position (+20 y) | 0 (direct) | If actor is the leader, downgrades to RANDOM. The +20 offset makes followers trail behind vertically. |
-| BUMBLE_SEEK (3) | hero position | 4 (no axis pruning) | Diagonal-friendly seeking. Only moves with probability r. |
-| RANDOM (4) | (none) | (none) | Sets facing to a random direction and state to WALKING. Probability r. No set_course call. |
-| BACKUP (5) | hero position | 3 (reverse) | Moves away from the hero. Probability r. |
-| EVADE (6) | neighbor actor position (+20 y) | 2 (deviation near) | Targets another actor's position, not the hero's. Creates lateral movement. Probability r. |
-| HIDE (7) | (none) | (none) | Not implemented. Falls through do_tactic with no effect. |
-| SHOOT (8) | hero position | 5 (face only) or 0 (approach) | Checks axis alignment before firing. If roughly aligned and 50% chance: face hero and set state to SHOOT1. Otherwise: approach with mode 0. |
-| EGG_SEEK (10) | (23087, 5667) | 0 (direct) | Hardcoded turtle egg location. Forces state to WALKING regardless of probability gate. |
-| DOOR_SEEK (11) | -- | -- | Defined but never handled in do_tactic. Falls through with no effect. |
-| DOOR_LET (12) | -- | -- | Same as DOOR_SEEK -- defined but unimplemented. |
-
-**SHOOT alignment check detail** (`fmain2.c:1671-1682`):
-```
-xd = |actor.abs_x - hero.abs_x|
-yd = |actor.abs_y - hero.abs_y|
-if (rand() & 1) and (xd < 8 or yd < 8 or (xd > yd-5 and xd < yd+7)):
-    // Roughly on a cardinal axis or close to 45-degree diagonal
-    set_course(i, hero_x, hero_y, 5)   // face only
-    if state < SHOOT1: state = SHOOT1   // begin shoot animation
-else:
-    set_course(i, hero_x, hero_y, 0)   // approach to get aligned
-```
-
-The alignment check ensures arrows are only fired when the actor is approximately on a line with the hero -- along a cardinal direction (within 8 pixels) or near a diagonal (x and y distances within 5-7 of each other). This prevents arrows from being fired at odd angles where they would miss.
-
-**Improvement** -- The HIDE tactic (7), DOOR_SEEK (11), and DOOR_LET (12) are dead code -- defined as constants but never implemented. They may have been planned features that were cut. The EVADE tactic's neighbor-targeting logic (`i+i` instead of the likely intended `i+1`) means high-index actors target out-of-bounds or unrelated slots, producing erratic movement that coincidentally serves the "evasion" purpose. EGG_SEEK's hardcoded coordinates are fragile -- they point to the turtle egg area at (23087, 5667) and would break if the map layout changed.
-
-### 5.6 Encounter Generation
-
-**Original** -- Encounter spawning has two phases: placement of pending encounters (`fmain.c:2058-2078`) and generation of new encounter groups (`fmain.c:2080-2093`).
-
-#### Encounter Zones (extent_list)
-
-The world is divided into overlapping rectangular zones defined in `fmain.c:338-370`. Each zone has coordinates, an encounter type (`etype`), and parameters (v1 = base count, v2 = random count range, v3 = creature race or encounter_type index).
-
-| # | Zone | etype | v1 | v2 | v3 | Purpose |
-|---|------|-------|----|----|----|---------|
-| 0 | (2118,27237)-(2618,27637) | 70 | 0 | 1 | 11 | Bird carrier zone |
-| 1 | (0,0)-(0,0) | 70 | 0 | 1 | 5 | Turtle carrier (coords set dynamically) |
-| 2 | (6749,34951)-(7249,35351) | 70 | 0 | 1 | 10 | Dragon carrier zone |
-| 3 | (4063,34819)-(4909,35125) | 53 | 4 | 1 | 6 | Spider pit (forced encounter) |
-| 4 | (9563,33883)-(10144,34462) | 60 | 1 | 1 | 9 | Necromancer (special forced) |
-| 5 | (22945,5597)-(23225,5747) | 61 | 3 | 2 | 4 | Turtle eggs (special forced) |
-| 6 | (10820,35646)-(10877,35670) | 83 | 1 | 1 | 0 | Princess rescue trigger |
-| 7 | (19596,17123)-(19974,17401) | 48 | 8 | 8 | 2 | Graveyard (high danger) |
-| 8 | (19400,17034)-(20240,17484) | 80 | 4 | 20 | 0 | Around city (peace zone) |
-| 9 | (0x2400,0x8200)-(0x3100,0x8A00) | 52 | 3 | 1 | 8 | Astral plane (Loraii) |
-| 10 | (5272,33300)-(6112,34200) | 81 | 0 | 1 | 0 | King's castle (peace) |
-| 11 | (11712,37350)-(12416,38020) | 82 | 0 | 1 | 0 | Sorceress (peace) |
-| 12 | (2752,33300)-(8632,35400) | 80 | 0 | 1 | 0 | Peace zone 1 (buildings) |
-| 13 | (10032,35550)-(12976,40270) | 80 | 0 | 1 | 0 | Peace zone 2 (specials area) |
-| 14 | (4712,38100)-(10032,40350) | 80 | 0 | 1 | 0 | Peace zone 3 (cabins) |
-| 15 | (21405,25583)-(21827,26028) | 60 | 1 | 1 | 7 | Hidden valley (Dark Knight) |
-| 16 | (6156,12755)-(12316,15905) | 7 | 1 | 8 | 0 | Swamp region |
-| 17 | (5140,34860)-(6260,37260) | 8 | 1 | 8 | 0 | Spider forest region |
-| 18 | (660,33510)-(2060,34560) | 8 | 1 | 8 | 0 | Spider forest region 2 |
-| 19 | (18687,15338)-(19211,16136) | 80 | 0 | 1 | 0 | Village (peace) |
-| 20 | (16953,18719)-(20240,17484) | 3 | 1 | 3 | 0 | Around village |
-| 21 | (20593,18719)-(23113,22769) | 3 | 1 | 3 | 0 | Around city |
-| 22 | (0,0)-(0x7FFF,0x9FFF) | 3 | 1 | 8 | 0 | Whole world (default fallback) |
-
-Zone scanning is first-match: the extent_list is iterated in order, and the first zone containing the hero's position is used (`fmain.c:2675-2679`). This means smaller zones must appear before larger ones to take priority.
-
-**etype ranges:**
-- **0-49**: Normal encounter zones. Random encounters can spawn. The etype value directly influences danger level.
-- **50-59**: Forced encounter zones. Encounters spawn immediately on entry (spiders, astral plane).
-- **60-61**: Special forced encounters. Specific creature types are loaded on entry (Necromancer, turtle eggs, Dark Knight).
-- **70**: Carrier zones. Load a flying mount (bird, turtle, dragon) instead of enemies.
-- **80**: Peace zones. No random encounters (xtype >= 50 suppresses generation).
-- **81-83**: Special peace zones with triggered events (King's greeting, Sorceress's greeting, Princess rescue).
-
-#### Phase 1: Placing Pending Encounters
-
-At `fmain.c:2058-2078`, every 16 ticks (`daynight & 15 == 0`):
-
-```
-if encounter_number > 0 and not actors_loading:
-    mixflag = rand()                     // random mixing of encounter types
-    if xtype > 49: mixflag = 0           // no mixing in special zones
-    wt = rand4()                         // weapon tier randomizer
-    if (xtype & 3) == 0: mixflag = 0    // no mixing for etype multiples of 4
-
-    for k = 1 to 10:                     // try up to 10 placement locations
-        set_loc()                        // pick random point 150-213 pixels
-                                         // from hero in a random direction
-        if terrain at (encounter_x, encounter_y) is passable:
-            // Place in new slots (indices 3-6)
-            while encounter_number > 0 and anix < 7:
-                if set_encounter(anix, 63): anix++
-                encounter_number--
-            // Recycle dead actor slots (indices 3-6)
-            for i = 3 to 6:
-                if encounter_number == 0: break
-                if anim_list[i].state == DEAD and
-                   (not visible or race == 2):  // wraiths can respawn visibly
-                    set_encounter(i, 63)
-                    encounter_number--
-            break
-```
-
-`set_loc()` (`fmain2.c:1714-1720`) picks a spawn point at distance 150 + rand64() (150-213 pixels) from the hero in a random compass direction.
-
-`set_encounter()` (`fmain.c:2736-2767`) places a single actor:
-- For the Dark Knight extent (v3 == 7): uses a hardcoded spawn position (21635, 25762).
-- Otherwise: picks a random position within a +/-31 pixel spread of the encounter center, retrying up to 15 times if the location is blocked.
-- Sets race from encounter_type (with random mixing if mixflag bit 1 is set).
-- Assigns weapon from the weapon probability table based on `encounter_chart[race].arms * 4 + wt`.
-- Sets goal to ATTACK1/ATTACK2 or ARCHER1/ARCHER2 based on cleverness and weapon type.
-- Sets vitality from encounter_chart hitpoints.
-
-#### Phase 2: Generating New Encounters
-
-At `fmain.c:2080-2093`, every 32 ticks (`daynight & 31 == 0`):
-
-```
-if no actors on screen and not loading actors and
-   no active carrier and xtype < 50:       // only in normal zones
-
-    if region_num > 7:                      // indoors
-        danger_level = 5 + xtype
-    else:                                   // outdoors
-        danger_level = 2 + xtype
-
-    if rand64() <= danger_level:            // 0-63 roll vs danger
-        encounter_type = rand4()            // random base type (0-3)
-
-        // Region-specific overrides
-        if xtype == 7 and encounter_type == 2:
-            encounter_type = 4              // swamp: wraith -> snake
-        if xtype == 8:
-            encounter_type = 6              // spider zone: force spiders
-            mixflag = 0
-        if xtype == 49:
-            encounter_type = 2              // etype 49: force wraiths
-            mixflag = 0
-
-        load_actors()                       // sets encounter_number,
-                                            // loads sprite data if needed
-```
-
-`load_actors()` (`fmain.c:2722-2731`) sets `encounter_number = extn->v1 + rnd(extn->v2)` (base count plus a random value from 0 to v2-1). If the required actor sprite file differs from the currently loaded one, it reloads from disk and resets the active enemy count.
-
-**Danger level math**: With xtype values ranging from 0 to ~8 in normal zones:
-- Outdoor base danger: 2-10. Chance of spawn per 32-tick cycle: 3/64 to 11/64 (roughly 5% to 17%).
-- Indoor base danger: 5-13. Chance of spawn: 6/64 to 14/64 (roughly 9% to 22%).
-- The graveyard (etype 48) has extreme danger: 2 + 48 = 50, giving 51/64 (80%) spawn chance per cycle.
-
-**Improvement** -- The terrain check in Phase 1 (`px_to_im(encounter_x, encounter_y) == 0`) only tests the center point, not the actor's collision box. Actors can spawn partially overlapping impassable terrain. The encounter_type override logic for specific xtypes (7, 8, 49) is hardcoded and would benefit from a data-driven approach. The "whole world" fallback extent (entry 22) means no position is ever unmatched, but its etype of 3 creates a nonzero base danger everywhere -- there is no truly safe wilderness. The `(xtype & 3) == 0` check for disabling mixflag means zones with etype values that are multiples of 4 (0, 4, 8, 48, 52) always produce homogeneous encounter groups, while others may mix in adjacent race types.
-
----
-
-## 6. Inventory & Items
-
-### 6.1 Inventory Structure
-
-Each brother has a private 35-element `UBYTE` array tracking item counts:
-
-```c
-UBYTE julstuff[35], philstuff[35], kevstuff[35];
-UBYTE *stuff;  /* points to current brother's array */
-```
-
-The `stuff` pointer is redirected to the active brother's array on character switch. All pickup, use, and display logic indexes through `stuff[]`.
-
-The struct definition (`ftale.h:95`):
-
-```c
-struct inv_item {
-    UBYTE image_number;           /* sprite image index */
-    UBYTE xoff, yoff;             /* display position on inventory screen */
-    UBYTE ydelta;                 /* y increment per stacked item */
-    UBYTE img_off, img_height;    /* vertical sub-image offset and height */
-    UBYTE maxshown;               /* max items rendered visually */
-    char *name;
+struct encounter {
+    char hitpoints, agressive, arms, cleverness, treasure, file_id;
 };
 ```
 
-### 6.2 Complete Item Table
+| Index | Monster | HP | Aggressive | Arms | Cleverness | Treasure | File ID | Source |
+|-------|---------|-----|------------|------|------------|----------|---------|--------|
+| 0 | Ogre | 18 | TRUE | 2 | 0 | 2 | 6 | `fmain.c:54` |
+| 1 | Orcs | 12 | TRUE | 4 | 1 | 1 | 6 | `fmain.c:55` |
+| 2 | Wraith | 16 | TRUE | 6 | 1 | 4 | 7 | `fmain.c:56` |
+| 3 | Skeleton | 8 | TRUE | 3 | 0 | 3 | 7 | `fmain.c:57` |
+| 4 | Snake | 16 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:58` |
+| 5 | Salamander | 9 | TRUE | 3 | 0 | 0 | 7 | `fmain.c:59` |
+| 6 | Spider | 10 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:60` |
+| 7 | DKnight | 40 | TRUE | 7 | 1 | 0 | 8 | `fmain.c:61` |
+| 8 | Loraii | 12 | TRUE | 6 | 1 | 0 | 9 | `fmain.c:62` |
+| 9 | Necromancer | 50 | TRUE | 5 | 0 | 0 | 9 | `fmain.c:63` |
+| 10 | Woodcutter | 4 | 0 | 0 | 0 | 0 | 9 | `fmain.c:64` |
 
-All 36 entries from `inv_list[]` (`fmain.c:380-424`):
+**Field semantics:**
 
-| Slot | Name | image_number | xoff | yoff | ydelta | img_off | img_height | maxshown | Category |
-|------|------|-------------|------|------|--------|---------|------------|----------|----------|
-| 0 | Dirk | 12 | 10 | 0 | 0 | 0 | 8 | 1 | Weapon |
-| 1 | Mace | 9 | 10 | 10 | 0 | 0 | 8 | 1 | Weapon |
-| 2 | Sword | 8 | 10 | 20 | 0 | 0 | 8 | 1 | Weapon |
-| 3 | Bow | 10 | 10 | 30 | 0 | 0 | 8 | 1 | Weapon |
-| 4 | Magic Wand | 17 | 10 | 40 | 0 | 8 | 8 | 1 | Weapon |
-| 5 | Golden Lasso | 27 | 10 | 50 | 0 | 0 | 8 | 1 | Weapon |
-| 6 | Sea Shell | 23 | 10 | 60 | 0 | 8 | 8 | 1 | Weapon |
-| 7 | Sun Stone | 27 | 10 | 70 | 0 | 8 | 8 | 1 | Weapon |
-| 8 | Arrows | 3 | 30 | 0 | 3 | 7 | 1 | 45 | Ammo |
-| 9 | Blue Stone | 18 | 50 | 0 | 9 | 0 | 8 | 15 | Magic |
-| 10 | Green Jewel | 19 | 65 | 0 | 6 | 0 | 5 | 23 | Magic |
-| 11 | Glass Vial | 22 | 80 | 0 | 8 | 0 | 7 | 17 | Magic |
-| 12 | Crystal Orb | 21 | 95 | 0 | 7 | 0 | 6 | 20 | Magic |
-| 13 | Bird Totem | 23 | 110 | 0 | 10 | 0 | 9 | 14 | Magic |
-| 14 | Gold Ring | 17 | 125 | 0 | 6 | 0 | 5 | 23 | Magic |
-| 15 | Jade Skull | 24 | 140 | 0 | 10 | 0 | 9 | 14 | Magic |
-| 16 | Gold Key | 25 | 160 | 0 | 5 | 0 | 5 | 25 | Key |
-| 17 | Green Key | 25 | 172 | 0 | 5 | 8 | 5 | 25 | Key |
-| 18 | Blue Key | 114 | 184 | 0 | 5 | 0 | 5 | 25 | Key |
-| 19 | Red Key | 114 | 196 | 0 | 5 | 8 | 5 | 25 | Key |
-| 20 | Grey Key | 26 | 208 | 0 | 5 | 0 | 5 | 25 | Key |
-| 21 | White Key | 26 | 220 | 0 | 5 | 8 | 5 | 25 | Key |
-| 22 | Talisman | 11 | 0 | 80 | 0 | 8 | 8 | 1 | Status |
-| 23 | Rose | 19 | 0 | 90 | 0 | 8 | 8 | 1 | Status |
-| 24 | Fruit | 20 | 0 | 100 | 0 | 8 | 8 | 1 | Status |
-| 25 | Gold Statue | 21 | 232 | 0 | 10 | 8 | 8 | 5 | Status |
-| 26 | Book | 22 | 0 | 110 | 0 | 8 | 8 | 1 | Status |
-| 27 | Herb | 8 | 14 | 80 | 0 | 8 | 8 | 1 | Status |
-| 28 | Writ | 9 | 14 | 90 | 0 | 8 | 8 | 1 | Status |
-| 29 | Bone | 10 | 14 | 100 | 0 | 8 | 8 | 1 | Status |
-| 30 | Shard | 12 | 14 | 110 | 0 | 8 | 8 | 1 | Status |
-| 31 | 2 Gold Pieces | 0 | 0 | 0 | 0 | 0 | 0 | 2 | Gold |
-| 32 | 5 Gold Pieces | 0 | 0 | 0 | 0 | 0 | 0 | 5 | Gold |
-| 33 | 10 Gold Pieces | 0 | 0 | 0 | 0 | 0 | 0 | 10 | Gold |
-| 34 | 100 Gold Pieces | 0 | 0 | 0 | 0 | 0 | 0 | 100 | Gold |
-| 35 | quiver of arrows | 0 | 0 | 0 | 0 | 0 | 0 | 0 | Special |
+- **`hitpoints`** — Base vitality assigned at spawn.
+- **`agressive`** — TRUE = hostile on sight; 0 = passive. Only the Woodcutter (index 10) is non-aggressive.
+- **`arms`** — Indexes into `weapon_probs[]` (`fmain2.c:860-868`): `weapon_probs[arms*4 + rnd(4)]` selects the weapon type at spawn (`fmain.c:2758`).
+- **`cleverness`** — 0 = goal ATTACK1 (stupid pursuit), 1 = goal ATTACK2 (clever pursuit with more frequent re-evaluation).
+- **`treasure`** — Indexes into `treasure_probs[]` (`fmain2.c:852-858`): `treasure_probs[treasure*8 + rnd(8)]` selects loot on body search (`fmain.c:3273`).
+- **`file_id`** — Image file index for loading monster sprites.
 
-**Note:** Slot 35 ("quiver of arrows") is used as a temporary counter during pickup (`stuff[ARROWBASE]`). After pickup, it is converted: `stuff[8] += stuff[ARROWBASE] * 10`. Gold piece entries (31-34) are never stored in `stuff[]`; their `maxshown` field doubles as the gold value added to `wealth` on loot.
+#### weapon_probs — Weapon Selection Table
 
-### 6.3 Index Range Constants
+Defined at `fmain2.c:860-868`. 8 groups of 4 entries (32 total). Indexed by `arms * 4 + rnd(4)`:
 
-Defined at `fmain.c:426-430`:
+| Group | Values | Weapons |
+|-------|--------|---------|
+| 0 | 0,0,0,0 | None |
+| 1 | 1,1,1,1 | All daggers |
+| 2 | 1,2,1,2 | Daggers and maces |
+| 3 | 1,2,3,2 | Mostly maces, some swords |
+| 4 | 4,4,3,2 | Bows and swords |
+| 5 | 5,5,5,5 | All magic wands |
+| 6 | 8,8,8,8 | Touch attack |
+| 7 | 3,3,3,3 | All swords |
 
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `MAGICBASE` | 9 | First magic item slot (Blue Stone) |
-| `KEYBASE` | 16 | First key slot (Gold Key) |
-| `STATBASE` | 25 | First status/quest item slot (Gold Statue) |
-| `GOLDBASE` | 31 | First gold entry; also upper bound for inventory display loop |
-| `ARROWBASE` | 35 | Temporary arrow counter slot; also array size for `stuff[]` |
+Weapon type 8 ("touch attack") is not in the standard weapon enum (0–5) and represents contact damage from monsters like Wraiths and Spiders.
 
-The inventory display loop (`fmain.c:3128`) iterates `j` from 0 to `GOLDBASE` (exclusive), so gold entries are never rendered on the inventory screen.
+#### treasure_probs — Loot Selection Table
 
-Category ranges:
-- **Weapons:** 0-8 (slots 0-4 are melee/ranged weapons, 5-7 are special items, 8 is arrows)
-- **Magic items:** 9-15 (Blue Stone through Jade Skull)
-- **Keys:** 16-21 (six colored keys)
-- **Status/quest items:** 22-30 (Talisman, Rose, Fruit, statues, quest items)
-- **Gold:** 31-34 (display-only entries for loot messages)
-- **Temp:** 35 (quiver counter)
+Defined at `fmain2.c:852-858`. 5 groups of 8 entries (40 total). Indexed by `treasure * 8 + rnd(8)`:
 
-### 6.4 Object Byte Enums
+| Group | Values | Loot Type |
+|-------|--------|-----------|
+| 0 | 0,0,0,0,0,0,0,0 | Nothing |
+| 1 | 9,11,13,31,31,17,17,32 | Stones, vials, totems, gold, keys |
+| 2 | 12,14,20,20,20,31,33,31 | Keys, skulls, gold |
+| 3 | 10,10,16,16,11,17,18,19 | Magic items and keys |
+| 4 | 15,21,0,0,0,0,0,0 | Jade Skull and White Key (rare) |
 
-The `enum obytes` (`fmain2.c:967-977`) maps world object IDs (the `ob_id` byte in the object list) to semantic constants:
+---
 
-```c
-enum obytes {
-    QUIVER     = 11,
-    MONEY      = 13,
-    URN        = 14,    /* implicit: MONEY+1 */
-    CHEST      = 15,    /* implicit: MONEY+2 */
-    SACKS      = 16,    /* implicit: MONEY+3 */
-    G_RING     = 17,    /* implicit: MONEY+4 */
-    B_STONE    = 18,
-    G_JEWEL    = 19,
-    SCRAP      = 20,    /* 0x14 - scrap of paper */
-    C_ORB      = 21,
-    VIAL       = 22,
-    B_TOTEM    = 23,
-    J_SKULL    = 24,
-    GOLD_KEY   = 25,
-    GREY_KEY   = 26,
-    FOOTSTOOL  = 31,
-    TURTLE     = 102,
-    BLUE_KEY   = 114,
-    M_WAND     = 145,
-    MEAL       = 146,   /* implicit: M_WAND+1 (apple) */
-    ROSE       = 147,
-    FRUIT      = 148,
-    STATUE     = 149,
-    BOOK       = 150,
-    SHELL      = 151,
-    GREEN_KEY  = 153,
-    WHITE_KEY  = 154,
-    RED_KEY    = 242,
-};
+## 3. Random Number Generation
+
+### 3.1 Algorithm
+
+The RNG is a **Linear Congruential Generator (LCG)** implemented in 68000 assembly at `fsubs.asm:299-306`:
+
+```
+seed1 = low16(seed1) × 45821 + 1       (mulu.w produces 32-bit result)
+output = ror32(seed1, 6) & 0x7FFFFFFF   (rotate, then clear sign bit)
 ```
 
-Note the non-contiguous numbering: IDs jump from 31 to 102 to 114 to 145+, reflecting the sparse object ID space in the world data.
+Instruction-by-instruction:
 
-### 6.5 Item Translation Table
+| Line | Instruction | Effect |
+|------|-------------|--------|
+| `fsubs.asm:300` | `move.l _seed1,d0` | Load 32-bit state |
+| `fsubs.asm:301` | `mulu.w #45821,d0` | Unsigned 16×16→32 multiply (uses only low 16 bits of d0) |
+| `fsubs.asm:302` | `addq.l #1,d0` | Increment by 1 |
+| `fsubs.asm:303` | `move.l d0,_seed1` | Store updated state |
+| `fsubs.asm:304` | `ror.l #6,d0` | Rotate right 6 bits (mixes high/low bits) |
+| `fsubs.asm:305` | `and.l #$7fffffff,d0` | Clear sign bit → non-negative 31-bit result |
 
-The `itrans[]` table (`fmain2.c:979-985`) maps world object IDs to inventory slot indices. It is stored as a flat array of `{object_id, slot}` pairs, terminated by `{0, 0}`:
+**Critical limitation**: The 68000 `mulu.w` instruction operates on the low 16 bits of `d0` only. The upper 16 bits of `seed1` are always a deterministic function of the low 16 bits. The effective state space is 2^16, giving a maximum period of **65536** — not 2^32 (see [P7](PROBLEMS.md)).
 
-| Object ID | Constant | Inventory Slot | Item Name |
-|-----------|----------|---------------|-----------|
-| 11 | QUIVER | 35 | quiver of arrows |
-| 18 | B_STONE | 9 | Blue Stone |
-| 19 | G_JEWEL | 10 | Green Jewel |
-| 22 | VIAL | 11 | Glass Vial |
-| 21 | C_ORB | 12 | Crystal Orb |
-| 23 | B_TOTEM | 13 | Bird Totem |
-| 17 | G_RING | 14 | Gold Ring |
-| 24 | J_SKULL | 15 | Jade Skull |
-| 145 | M_WAND | 4 | Magic Wand |
-| 27 | (raw) | 5 | Golden Lasso |
-| 8 | (raw) | 2 | Sword |
-| 9 | (raw) | 1 | Mace |
-| 12 | (raw) | 0 | Dirk |
-| 10 | (raw) | 3 | Bow |
-| 147 | ROSE | 23 | Rose |
-| 148 | FRUIT | 24 | Fruit |
-| 149 | STATUE | 25 | Gold Statue |
-| 150 | BOOK | 26 | Book |
-| 151 | SHELL | 6 | Sea Shell |
-| 155 | (raw) | 7 | Sun Stone |
-| 136 | (raw) | 27 | Herb |
-| 137 | (raw) | 28 | Writ |
-| 138 | (raw) | 29 | Bone |
-| 139 | (raw) | 22 | Talisman |
-| 140 | (raw) | 30 | Shard |
-| 25 | GOLD_KEY | 16 | Gold Key |
-| 153 | GREEN_KEY | 17 | Green Key |
-| 114 | BLUE_KEY | 18 | Blue Key |
-| 242 | RED_KEY | 19 | Red Key |
-| 26 | GREY_KEY | 20 | Grey Key |
-| 154 | WHITE_KEY | 21 | White Key |
-| 0 | (terminator) | 0 | -- |
+The `ror.l #6` rotation scrambles bit positions so low state bits contribute to high output bits and vice versa, but it does not increase the period. The output is 31 bits wide from a 16-bit state, so many 31-bit values can never appear.
 
-Lookup is a linear scan: iterate pairs until `itrans[k] == 0` or a match is found. Unknown object IDs (not in this table) are silently ignored with a `break` (the commented-out "unknown thing" message at `fmain.c:3198` was disabled).
+### 3.2 Function Family
 
-### 6.6 Pickup Logic
+All functions declared at `fsubs.asm:296-297` and implemented at `fsubs.asm:299-340`:
 
-The pickup handler is in `do_option()` when `cmode == ITEMS` and `hit == 6` (`fmain.c:3147-3287`). It finds the nearest object within range 30 (`nearest_fig(0,30)`) and dispatches on the object's `index & 0xff` byte (the object ID `j`):
+| Function | Location | Returns | Formula |
+|----------|----------|---------|---------|
+| `rand()` | `fsubs.asm:299-306` | 0 to 0x7FFFFFFF (31-bit) | Base LCG output |
+| `bitrand(x)` | `fsubs.asm:308-310` | `rand() & x` | Masked random |
+| `rand2()` | `fsubs.asm:312-314` | 0 or 1 | `rand() & 1` |
+| `rand4()` | `fsubs.asm:316-318` | 0–3 | `rand() & 3` |
+| `rand8()` | `fsubs.asm:320-322` | 0–7 | `rand() & 7` |
+| `rand64()` | `fsubs.asm:324-326` | 0–63 | `rand() & 63` |
+| `rand256()` | `fsubs.asm:328-330` | 0–255 | `rand() & 255` |
+| `rnd(n)` | `fsubs.asm:332-338` | 0 to n−1 | `(rand() & 0xFFFF) % n` |
 
-#### 6.6.1 Special-Case Objects
+The `bitrand`/`randN` variants use bitwise AND, so they produce uniform results only when the mask is a power-of-two minus one. `rnd(n)` uses a true modulo operation via the 68000 `divu.w` instruction (`fsubs.asm:335-337`).
 
-| Object ID | Hex | Condition | Action |
-|-----------|-----|-----------|--------|
-| 0x0d (13) | MONEY | always | `wealth += 50`; announce "50 gold pieces" |
-| 0x14 (20) | SCRAP | always | Trigger `event(17)`; then `event(19)` if region > 7, else `event(18)`; remove object |
-| 148 | FRUIT (apple) | `hunger < 15` | Store in inventory: `stuff[24]++`; trigger `event(36)` |
-| 148 | FRUIT (apple) | `hunger >= 15` | Eat immediately: `eat(30)` (restores 30 hunger) |
-| 102 | TURTLE | always | `break` -- cannot be taken |
-| 28 | (bones) | always | Inherit dead brother's inventory; `vitality & 0x7f` identifies which brother (1=Julian, else Philip); adds all `julstuff[k]` or `philstuff[k]` to current `stuff[k]` for `k` in 0..GOLDBASE-1; also hides bone objects (`ob_listg[3].ob_stat = ob_listg[4].ob_stat = 0`) |
-| 0x1d (29) | (empty chest) | always | `break` -- skip |
-| 31 | FOOTSTOOL | always | `break` -- skip |
+### 3.3 Seeding
 
-#### 6.6.2 Container Loot (Chest, Urn, Sacks)
+**Initial value**: `seed1 = 19837325` (hex `0x012ED98D`), declared at `fmain.c:682`.
 
-When the object is a container (`j` is 0x0e/URN, 0x0f/CHEST, or 0x10/SACKS), a `rand4()` roll (0-3) determines loot:
+A second variable `seed2 = 23098324` is declared on the same line but **never referenced** anywhere in the codebase (vestigial).
 
-| Roll | Tier | Loot |
-|------|------|------|
-| 0 | Empty | "nothing." |
-| 1 | Single item | One random item: `rand8() + 8` gives slot 8-15; if slot 8 then replaced with ARROWBASE (quiver). Increment `stuff[i]`. |
-| 2 | Two items | Two different random items from slots 8-15. If either roll is 8, it becomes 100 gold (`wealth += 100`, slot set to GOLDBASE+3=34). |
-| 3 | Three of same | Roll `rand8() + 8`. If slot 8: instead give 3 random keys (`rand8() + KEYBASE`, clamped to valid range). Otherwise: 3 copies of the rolled item. |
+**No runtime reseeding**: There is no code that writes to `seed1` other than the `_rand` function itself (`fsubs.asm:303`). The seed is not derived from system time, VBlank counter, user input timing, or any other entropy source.
 
-The item pool for container loot draws from slots 8-15 (Arrows, Blue Stone, Green Jewel, Glass Vial, Crystal Orb, Bird Totem, Gold Ring, Jade Skull). There is no level scaling or regional variation.
+The developer `notes` file contains a single line (`notes:1`): *"Need to initialize random number generator."* — indicating Talin was aware of this limitation but the TODO was never addressed.
 
-#### 6.6.3 Known Items via itrans[]
+### 3.4 Copy-Protection Entropy
 
-For any object ID not matching the special cases or containers, the code performs a linear scan of `itrans[]`:
+The only source of sequence variation between game sessions is the copy-protection input loop at `fmain2.c:1327`:
 
 ```c
-for (k=0; itrans[k]; k += 2) {
-    if (j == itrans[k]) {
-        i = itrans[k+1];
-        stuff[i]++;
-        announce_treasure("a ");
-        print_cont(inv_list[i].name);
-        print_cont(".");
-        goto pickup;
-    }
+while (TRUE) { key = getkey(); ... rand(); }
+```
+
+Each keystroke iteration calls `rand()` with the result discarded. Since different players type at different speeds, the RNG state has advanced by a variable (but uncontrolled) number of steps before gameplay begins. This provides incidental — not intentional — seed variation.
+
+### 3.5 Usage Summary
+
+The RNG is called pervasively across combat, AI, encounters, loot, movement, sound, and visual effects. Key usage categories:
+
+| Domain | Example | Source |
+|--------|---------|--------|
+| AI re-evaluation | `!bitrand(15)` — 1/16 chance per tick | `fmain.c:2132` |
+| Tactic selection | `rand4()+2` (ranged), `rand2()+3` (melee) | `fmain.c:2142-2143` |
+| Hit detection | `rand256() > brave` — bravery dodge check | `fmain.c:2260` |
+| Encounter spawn | `rand64() <= danger_level` | `fmain.c:2085` |
+| Loot generation | `rand4()` selects chest tier (0–3) | `fmain.c:3201` |
+| Movement deviation | `rand4()` hunger stumble; `rand2()` direction | `fmain.c:1442-1443` |
+| Fight transition | `rand4()` selects `trans_list` path | `fmain.c:1712` |
+| Sound pitch | `rand256()` or `bitrand(511)` for variation | `fmain.c:1680`, `fmain2.c:239` |
+
+---
+
+## 4. Input System
+
+### 4.1 Handler Architecture
+
+The game installs a custom Amiga input event handler at priority 51 — one higher than Intuition's 50 — so it intercepts all input events before the operating system.
+
+**Installation** — `add_device()` at `fmain.c:3017-3036`:
+
+1. Clears keyboard buffer: `handler_data.laydown = handler_data.pickup = 0` (`fmain.c:3020`)
+2. Creates a message port and I/O request (`fmain.c:3021-3022`)
+3. Configures `struct Interrupt handlerStuff`:
+   - `is_Data = &handler_data` — the `struct in_work` instance (`fmain.c:3025`)
+   - `is_Code = HandlerInterface` — assembly entry point (`fmain.c:3026`)
+   - `is_Node.ln_Pri = 51` (`fmain.c:3027`)
+4. Opens `input.device` and sends `IND_ADDHANDLER` (`fmain.c:3029-3035`)
+
+**Teardown** — `wrap_device()` at `fmain.c:3038-3046`: sends `IND_REMHANDLER`, closes device, frees port.
+
+**Initialization before install** (`fmain.c:785-788`):
+- `xsprite = ysprite = 320` — initial cursor position
+- `gbase = GfxBase` — graphics library base
+- `pbase = 0` — no sprite initially (set to `&pointer` later at `fmain.c:1258`)
+- `vbase = &vp_text` — assigned after display setup (`fmain.c:943`)
+
+### 4.2 Interrupt Handler
+
+`_HandlerInterface` at `fsubs.asm:63-218` receives `a0` = input event chain, `a1` = `&handler_data`. It iterates the linked list of events and processes each by type:
+
+#### TIMER Events (type 6) — `fsubs.asm:72-80`
+
+Heartbeat mechanism: increments `ticker` (offset 150) each TIMER event. When `ticker` reaches 16, resets to 0 and synthesizes a fake RAWKEY event (keycode `$E0` — key-up for undefined scancode `$60`). This prevents the game loop from stalling when no real input arrives.
+
+#### RAWKEY Events (type 1) — `fsubs.asm:82-110`
+
+1. Reads qualifier word; ignores repeat keys (bit 9 set) (`fsubs.asm:90-92`)
+2. Extracts 7-bit scancode and up/down flag (bit 7) (`fsubs.asm:94-96`)
+3. Ignores scancodes > `$5A` (`fsubs.asm:97-98`)
+4. **Nullifies the event** (sets type to 0) so Intuition never sees it (`fsubs.asm:100`)
+5. Translates via `keytrans[]` table: `translated = keytrans[scancode]` (`fsubs.asm:102`)
+6. Restores up/down bit: `output = translated | original_bit7` (`fsubs.asm:103-104`)
+7. Writes to circular `keybuf[laydown]` and advances `laydown` pointer with `& $7F` wrap (`fsubs.asm:106-112`)
+
+#### RAWMOUSE Events (type 2) — `fsubs.asm:114-159`
+
+**Button change detection**: XORs new qualifier with old to detect transitions (`fsubs.asm:117`).
+
+**Left button release**: replays `lastmenu` character with bit 7 set (key-up) and clears `lastmenu` (`fsubs.asm:123-127`).
+
+**Left button press** in menu area (X: 215–265):
+- Computes character: `(ysprite - 144) / 9 * 2 + 'a' + column` where column = 1 if X ≥ 240 (`fsubs.asm:139-148`)
+- Queues character in `keybuf`; saves as `lastmenu` (`fsubs.asm:149-156`)
+
+**Left button press** outside menu: `d2 = 9` (no direction) (`fsubs.asm:130`).
+
+#### DISKIN Events (type $10) — `fsubs.asm:160-161`
+
+Sets `handler_data.newdisk = 1` — the disk-inserted flag read by the game loop.
+
+#### Mouse Position Update (all events) — `fsubs.asm:163-200`
+
+Applied for every event regardless of type:
+1. Adds delta from event fields (`ie_X`, `ie_Y`) to `xsprite`/`ysprite` (`fsubs.asm:166-167`)
+2. Clamps X to 5–315, Y to 147–195 (`fsubs.asm:169-180`)
+3. If `pbase` ≠ NULL: calls `MoveSprite(gbase, pbase, x*2, y-143)` (`fsubs.asm:184-199`)
+   - X is doubled for hi-res sprite positioning
+   - Y offset −143 maps to ViewPort-relative coordinates
+
+The Y clamp of 147–195 confines the pointer to the 48-pixel status bar area — the mouse never enters the playfield.
+
+### 4.3 Keyboard Buffer — getkey()
+
+`_getkey` at `fsubs.asm:281-295`: reads the next translated keycode from the 128-byte circular FIFO. Returns 0 if buffer empty, or the translated key with bit 7 = up/down flag.
+
+Called from the game loop at `fmain.c:1278`: `key = getkey()`.
+
+### 4.4 keytrans Table — Scancode Translation
+
+Defined at `fsubs.asm:221-226`. A 91-byte table translating Amiga raw scancodes (0–`$5A`) to game-internal key codes.
+
+**Numpad → Direction codes (20–29)**:
+
+```
+7=NW(20)   8=N(21)    9=NE(22)
+4=W(27)    5=stop(29)  6=E(23)
+1=SW(26)   2=S(25)    3=SE(24)
+```
+
+| Scancode | Numpad Key | keytrans | Direction (val−20) | Compass |
+|----------|-----------|----------|-------------------|---------|
+| `$3D` | 7 | 20 | 0 | NW |
+| `$3E` | 8 | 21 | 1 | N |
+| `$3F` | 9 | 22 | 2 | NE |
+| `$2F` | 6 | 23 | 3 | E |
+| `$1D` | 1 | 26 | 6 | SW |
+| `$1E` | 2 | 25 | 5 | S |
+| `$1F` | 3 | 24 | 4 | SE |
+| `$2D` | 4 | 27 | 7 | W |
+| `$2E` | 5 | 29 | 9 | Stop/center |
+
+Cursor keys (`$4C`–`$4F`) translate to values 1–4 (used as cheat movement keys at `fmain.c:1339-1342`), **not** direction codes 20–29.
+
+Function keys F1–F10 (`$50`–`$59`) translate to values 10–19 (`fsubs.asm:225`).
+
+### 4.5 Direction Decoder — decode_mouse()
+
+`_decode_mouse` at `fsubs.asm:1488-1590`, called every frame from `fmain.c:1376`. Determines the current movement direction from three sources in priority order:
+
+```mermaid
+flowchart TD
+    A[decode_mouse called] --> B{Mouse button held?}
+    B -->|Yes| C{Cursor X > 265?}
+    C -->|No| D["dir = 9 (menu area)"]
+    C -->|Yes| E[Map cursor to 3×3 grid → compass dir]
+    B -->|No| F{Joystick deflected?}
+    F -->|Yes| G["com2[4 + yjoy*3 + xjoy] → compass dir"]
+    F -->|No| H{keydir in 20–29?}
+    H -->|Yes| I["dir = keydir − 20"]
+    H -->|No| J["dir = 9 (no input)"]
+    D --> K[Update oldir, redraw compass if changed]
+    E --> K
+    G --> K
+    I --> K
+    J --> K
+```
+
+**Mouse direction** (highest priority, `fsubs.asm:1492-1529`): When either mouse button is held (`qualifier & $6000`), the cursor position maps to a 3×3 compass grid if X > 265. Otherwise direction = 9 (menu area, no movement).
+
+**Joystick direction** (`fsubs.asm:1531-1560`): Reads JOY1DAT register at `$dff00c`. High byte = Y axis, low byte = X axis. Decoded via XOR of adjacent bits to extract direction per axis, then indexed through `com2[]`.
+
+**Keyboard direction** (lowest priority, `fsubs.asm:1565-1576`): Uses the stored `keydir` value (set when numpad keys 20–29 are pressed at `fmain.c:1288`). `keydir − 20` gives the compass direction.
+
+When the resolved direction changes from `oldir`, `drawcompass()` is called to update the compass highlight (`fsubs.asm:1578-1585`).
+
+### 4.6 com2 — Direction Lookup Table
+
+Defined at `fsubs.asm:1486` and `fmain2.c:155-162`. Converts (xjoy, yjoy) sign pairs to compass directions via the formula `com2[4 + yjoy*3 + xjoy]` (for joystick) or `com2[4 − 3*ydir − xdir]` (for `set_course`):
+
+```
+com2[9] = {0, 1, 2, 7, 9, 3, 6, 5, 4}
+```
+
+| yjoy\\xjoy | −1 | 0 | +1 |
+|---|---|---|---|
+| −1 | 0 (NW) | 1 (N) | 2 (NE) |
+| 0 | 7 (W) | 9 (stop) | 3 (E) |
+| +1 | 6 (SW) | 5 (S) | 4 (SE) |
+
+### 4.7 Combat & Walk Triggers
+
+The game loop reads input qualifier bits and hardware registers to determine action:
+
+**Combat trigger** (`fmain.c:1409`):
+```
+qualifier & 0x2000 (right mouse)  ||  keyfight  ||  (CIA-A $bfe001 bit 7 == 0)
+```
+
+The joystick fire button is read directly from CIA-A PRA register at `$bfe001` bit 7 (active low), **bypassing** the input.device handler entirely (`fmain.c:1272`).
+
+**Walk trigger** (`fmain.c:1447`):
+```
+qualifier & 0x4000 (left mouse)  ||  keydir != 0
+```
+
+**Fight mode toggle**: The '0' key (numpad 0) sets `keyfight = TRUE` on key-down and clears on key-up (`fmain.c:1290-1291`), providing a keyboard alternative to holding the fire button.
+
+### 4.8 letter_list — Keyboard Shortcuts
+
+Defined at `fmain.c:537-556`. A 38-entry table (`#define LMENUS 38`, `fmain.c:533`) mapping translated key characters to `(menu, choice)` pairs:
+
+```c
+struct letters { char letter, menu, choice; };
+```
+
+| Key | Menu | Choice | Action |
+|-----|------|--------|--------|
+| `I` | ITEMS (0) | 5 | Items menu |
+| `T` | ITEMS (0) | 6 | Take |
+| `?` | ITEMS (0) | 7 | Look |
+| `U` | ITEMS (0) | 8 | Use |
+| `G` | ITEMS (0) | 9 | Give |
+| `Y` | TALK (2) | 5 | Yell |
+| `S` | TALK (2) | 6 | Say |
+| `A` | TALK (2) | 7 | Ask |
+| `Space` | GAME (4) | 5 | Pause |
+| `M` | GAME (4) | 6 | Music toggle |
+| `F` | GAME (4) | 7 | Sound toggle |
+| `Q` | GAME (4) | 8 | Quit |
+| `L` | GAME (4) | 9 | Load |
+| `O` | BUY (3) | 5 | Buy item |
+| `R` | BUY (3) | 6 | Buy item |
+| `8` | BUY (3) | 7 | Buy item |
+| `C` | BUY (3) | 8 | Buy Mace |
+| `W` | BUY (3) | 9 | Buy Sword |
+| `B` | BUY (3) | 10 | Buy Bow |
+| `E` | BUY (3) | 11 | Buy Totem |
+| `V` | SAVEX (5) | 5 | Save |
+| `X` | SAVEX (5) | 6 | Exit |
+| F1–F7 | MAGIC (1) | 5–11 | Magic spells 1–7 |
+| `1`–`7` | USE (8) | 0–6 | Use item slots 1–7 |
+| `K` | USE (8) | 7 | Use key |
+
+The game loop processes keys at `fmain.c:1278-1355` in priority order: view dismissal → direction keys → fight toggle → mouse-click menu → cheat keys → `letter_list` scan.
+
+---
+
+## 5. Movement & Direction
+
+### 5.1 Direction Encoding
+
+The game uses a compass-rose system with 10 values. Defined implicitly by the `xdir`/`ydir` vector tables at `fsubs.asm:1276-1277` and referenced throughout the codebase:
+
+| Value | Direction | xdir | ydir |
+|-------|-----------|------|------|
+| 0 | NW | −2 | −2 |
+| 1 | N | 0 | −3 |
+| 2 | NE | +2 | −2 |
+| 3 | E | +3 | 0 |
+| 4 | SE | +2 | +2 |
+| 5 | S | 0 | +3 |
+| 6 | SW | −2 | +2 |
+| 7 | W | −3 | 0 |
+| 8 | Still | 0 | 0 |
+| 9 | Still | 0 | 0 |
+
+Values 8 and 9 both map to zero movement. `oldir = 9` signals "no direction input" (`fsubs.asm:1577`).
+
+The vectors are **not** unit vectors. Cardinal directions have magnitude 3, diagonals have magnitude 2 per axis (displacement √8 ≈ 2.83). This produces near-parity between cardinal and diagonal movement speed.
+
+### 5.2 Position Update Functions — newx / newy
+
+#### newx (`fsubs.asm:1280-1295`)
+
+```
+newx(x, dir, speed):
+    if dir > 7: return x
+    return (x + (xdir[dir] * speed) >> 1) & 0x7FFF
+```
+
+Steps:
+1. Load `x`, `dir`, `speed` from stack (`fsubs.asm:1282-1286`)
+2. If `dir > 7`: return `x` unchanged (`fsubs.asm:1287-1288`)
+3. `xdir[dir] * speed` — signed 16×16→32 multiply via `muls.w` (`fsubs.asm:1292`)
+4. `lsr.w #1` — logical right shift by 1 (`fsubs.asm:1293`)
+5. Add to `x` and mask to 15-bit `& 0x7FFF` (`fsubs.asm:1294-1295`)
+
+**Note**: Step 4 uses `lsr.w` (logical shift), not `asr.w` (arithmetic). For negative products this introduces a +1 pixel bias, but the result is clamped to 15 bits (`& 0x7FFF`) in step 5, making the difference negligible.
+
+#### newy (`fsubs.asm:1298-1318`)
+
+Same formula as `newx` using `ydir[]`, plus one additional step: **preserves bit 15** of the original y coordinate:
+
+```asm
+and.l  #$07fff,d0      ; mask to 15 bits    (fsubs.asm:1315)
+and.w  #$8000,d1       ; extract bit 15     (fsubs.asm:1316)
+or.w   d1,d0           ; restore bit 15     (fsubs.asm:1317)
+```
+
+Bit 15 of `abs_y` is preserved through movement calculations but is never tested, set, or read by any other code — it has no functional effect.
+
+### 5.3 set_course — Pathfinding
+
+`set_course(object, target_x, target_y, mode)` at `fmain2.c:57-228`. Sets an actor's facing direction based on a target position and one of 7 pathfinding modes.
+
+#### Direction Computation (`fmain2.c:69-109`)
+
+1. **Mode 6 special case**: uses target_x/target_y directly as xdif/ydif without subtracting from current position (`fmain2.c:79-80`)
+2. **All other modes**: `xdif = self.abs_x − target_x`, `ydif = self.abs_y − target_y` (`fmain2.c:85-88`)
+3. Computes `xdir = sign(xdif)`, `ydir = sign(ydif)` (`fmain2.c:90-109`)
+
+#### Directional Snapping (`fmain2.c:113-126`)
+
+For mode ≠ 4: if one axis dominates, the minor axis is zeroed:
+- `(|xdif| >> 1) > |ydif|` → `ydir = 0` (mostly horizontal)
+- `(|ydif| >> 1) > |xdif|` → `xdir = 0` (mostly vertical)
+
+Mode 4 skips snapping, always allowing diagonal movement.
+
+#### com2 Lookup (`fmain2.c:155-168`)
+
+Converts the sign pair to compass direction: `j = com2[4 − 3*ydir − xdir]` (see [§4.6](#46-com2--direction-lookup-table)).
+
+If `j == 9` (actor is at target): sets `state = STILL` and returns (`fmain2.c:165-168`).
+
+#### Random Deviation (`fmain2.c:172-179`)
+
+If `j ≠ 9` and deviation > 0:
+- `if (rand() & 2)`: `j += deviation` else `j −= deviation`
+- `j = j & 7` (wraps to valid direction)
+
+The random test checks bit 1 of `rand()` (`btst #1`), not bit 0.
+
+#### Mode Summary
+
+| Mode | Behavior | Deviation | Source |
+|------|----------|-----------|--------|
+| 0 | Toward target with snapping | 0 | `fmain2.c:113-187` |
+| 1 | Toward target + deviation when distance < 40 | 1 | `fmain2.c:136-139` |
+| 2 | Toward target + deviation when distance < 30 | 1 (stale comment says 2) | `fmain2.c:143-146` |
+| 3 | Away from target (reverses direction) | 0 | `fmain2.c:149-152` |
+| 4 | Toward target without snapping (always allows diagonal) | 0 | `fmain2.c:113` |
+| 5 | Toward target with snapping; does NOT set state to WALKING | 0 | `fmain2.c:183-187` |
+| 6 | Uses target_x/target_y as raw direction vector | 0 | `fmain2.c:79-80` |
+
+**Important**: These mode numbers are NOT the same as tactical mode constants. `do_tactic()` (`fmain2.c:1664-1700`) maps AI tactics to `set_course` modes:
+
+| Tactic | set_course mode | Target |
+|--------|----------------|--------|
+| PURSUE (1) | 0 | Hero |
+| FOLLOW (2) | 0 | Leader (+20 Y offset) |
+| BUMBLE_SEEK (3) | 4 | Hero (no snap) |
+| BACKUP (5) | 3 | Hero (reversed) |
+| EVADE (6) | 2 | Neighboring actor (+20 Y offset) |
+| SHOOT (8) | 5 | Hero (no walk) |
+| EGG_SEEK (10) | 0 | Fixed coords (23087, 5667) |
+| RANDOM (4) | *(none)* | Sets `facing = rand()&7` directly (`fmain2.c:1686`) |
+
+Most tactics only call `set_course` when a random check passes — `!(rand()&7)` = 1/8 chance per tick (`fmain2.c:1670`), upgraded to `!(rand()&3)` = 1/4 for ATTACK2 goal (`fmain2.c:1669`). This creates sluggish, organic NPC movement.
+
+### 5.4 move_figure — Position Commit with Collision
+
+`move_figure(fig, dir, dist)` at `fmain2.c:322-330`:
+
+```c
+xtest = newx(anim_list[fig].abs_x, dir, dist);
+ytest = newy(anim_list[fig].abs_y, dir, dist);
+if (proxcheck(xtest, ytest, fig)) return FALSE;
+anim_list[fig].abs_x = xtest;
+anim_list[fig].abs_y = ytest;
+return TRUE;
+```
+
+Used primarily for combat knockback (`fmain2.c:250`: `move_figure(j, fc, 2)`). Normal per-tick walking is handled **inline** in the main game loop (`fmain.c:1596-1650`), which performs `newx`/`newy` and `proxcheck` directly, then applies terrain effects, velocity, and animation.
+
+#### proxcheck — Collision Detection (`fmain2.c:277-296`)
+
+Two-phase collision test:
+
+1. **Terrain**: calls `prox(x, y)` (`fsubs.asm:1604-1622`) which checks terrain at `(x+4, y+2)` and `(x−4, y+2)`. Returns terrain code if blocked. Wraiths (`race == 2`) skip terrain checks entirely (`fmain2.c:279`). Hero (`i==0`) can pass terrain codes 8 and 9 (`fmain2.c:280`).
+2. **Actors**: loops through all actors; if another living actor (not self, not slot 1, not type 5/raft) is within an 11×9 pixel bounding box, returns 16 (`fmain2.c:284-290`).
+
+Returns: 0 = clear, terrain code = terrain-blocked, 16 = actor-blocked.
+
+#### Player Collision Deviation (`fmain.c:1612-1626`)
+
+When the player walks into a wall:
+1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1613-1617`)
+2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1620-1624`)
+3. All three blocked: `frustflag++` (`fmain.c:1654-1660`). At `frustflag > 20`: scratching-head animation. At `frustflag > 40`: special animation index 40.
+
+### 5.5 World Wrapping
+
+#### Coordinate Masking
+
+Both `_newx` and `_newy` mask results with `& 0x7FFF` — clamping to the 15-bit range [0, 32767]. This provides implicit wrapping on arithmetic overflow.
+
+#### Hero Wrap Boundaries (`fmain.c:1831-1839`)
+
+For outdoor regions (`region_num < 8`) only, applied to the hero (index 0):
+
+```c
+if (abs_x < 300)      abs_x = 32565;
+else if (abs_x > 32565) abs_x = 300;
+else if (abs_y < 300)  abs_y = 32565;
+else if (abs_y > 32565) abs_y = 300;
+```
+
+This creates a toroidal world with wrap boundaries at 300 and 32565. Indoor regions (`region_num ≥ 8`) do not wrap. NPCs are never wrapped — they can exist at any coordinate.
+
+#### Relative Positioning — wrap() (`fsubs.asm:1350-1356`)
+
+Sign-extends a 15-bit coordinate difference to 16-bit signed:
+
+```asm
+btst  #14,d0          ; if bit 14 set (≥ 16384) →
+or.w  #$8000,d0       ;   set bit 15 (treat as negative)
+```
+
+Called at `fmain.c:1846-1854` to compute screen-relative positions:
+
+```c
+rel_x = wrap(abs_x - map_x - 8);
+rel_y = wrap(abs_y - map_y - 26);
+```
+
+### 5.6 Camera Tracking — map_adjust()
+
+`_map_adjust(x, y)` at `fsubs.asm:1359-1437`. Adjusts the global camera position (`map_x`, `map_y`) to follow the hero.
+
+**Dead zone**: ±20 pixels X, ±10 pixels Y. Within the dead zone, the camera does not scroll. Outside, it scrolls 1 pixel per tick (`fsubs.asm:1389-1397`, `fsubs.asm:1410-1419`).
+
+**Large jumps**: If the hero-to-camera delta exceeds 70 pixels X or 44/24 pixels Y, the camera snaps immediately instead of scrolling (`fsubs.asm:1377-1387`, `fsubs.asm:1398-1407`).
+
+The asymmetric Y thresholds (−24 vs +44) account for the player sprite being offset from screen center — more visible space exists below the character than above.
+
+### 5.7 Velocity System
+
+The `vel_x`/`vel_y` fields in `struct shape` (signed bytes, offset 20–21) implement ice/slippery physics.
+
+#### Ice Physics (`fmain.c:1581-1597`)
+
+When `environ == −2` (terrain type 7, ice):
+
+```
+vel_x += xdir[dir]    (directional impulse from input)
+vel_y += ydir[dir]
+```
+
+Velocity is clamped to magnitude limits (`e = 42` normally, `e = 40` when riding swan). Position updates use `abs_x += vel_x / 4`, giving a maximum displacement of 8–10 pixels per tick.
+
+On swan/ice, facing is derived from velocity rather than input: `set_course(0, −nvx, −nvy, 6)` (`fmain.c:1592`).
+
+#### Normal Walking — Velocity Recording (`fmain.c:1646-1647`)
+
+After each non-ice movement step, velocity is recorded as displacement × 4:
+
+```c
+vel_x = ((short)(xtest - abs_x)) * 4;
+vel_y = ((short)(ytest - abs_y)) * 4;
+```
+
+This feeds the swan dismount check: the hero can only dismount when `|vel_x| < 15 && |vel_y| < 15` (`fmain.c:1420-1425`), preventing high-speed dismount.
+
+#### FALL State Friction (`fmain.c:1737-1738`)
+
+During FALL state, velocity decays by 25% per tick:
+
+```c
+vel_x = (vel_x * 3) / 4;
+vel_y = (vel_y * 3) / 4;
+```
+
+Velocity halves approximately every 3 ticks. Position continues updating by `vel / 4` on ice (`fmain.c:1743-1744`).
+
+### 5.8 Movement Speed by Terrain
+
+Speed value `e` passed to `newx`/`newy` during WALKING (`fmain.c:1599-1604`):
+
+| Condition | Speed | Effect |
+|-----------|-------|--------|
+| Hero riding raft (`riding==5`) | 3 | Fast overland |
+| `environ == −3` (terrain 8) | −2 | Direction reversal zone (near Necromancer); reverses player input |
+| `environ == −2` (terrain 7) | N/A | Ice physics (velocity-based, no direct speed) |
+| `environ == −1` (terrain 6) | 4 | Fast terrain |
+| `environ == 2` or `> 6` | 1 | Wading / deep water |
+| Default | 2 | Normal walking |
+
+For non-hero actors: `e = 1` in water/deep terrain, `e = 2` otherwise (with the same environ exceptions above).
+
+Negative speed (−2 for terrain 8) causes backward movement along the current facing direction — the `newx`/`newy` `muls.w` handles the sign inversion.
+
+### 5.9 Hunger Stumble (`fmain.c:1442-1445`)
+
+When `hunger > 120`, there is a 1/4 chance (`!rand4()`) per walking tick that the direction is deflected by ±1 (50/50 via `rand()&1`):
+
+```c
+if (!rand4()) {
+    d = (rand() & 1) ? d + 1 : d - 1;
+    d &= 7;
 }
-break;  /* unknown objects silently ignored */
 ```
 
-#### 6.6.4 Post-Pickup Processing
+This creates visible stumbling/disorientation, crossing over with the input system to affect movement.
 
-After any successful pickup (`goto pickup` label, `fmain.c:3241`):
+---
 
-1. **Object removal:** `change_object(nearest, 2)` -- sets the object's status to 2 (inventory/removed).
-2. **Arrow conversion:** `stuff[8] += stuff[ARROWBASE] * 10` -- quiver pickups are converted to 10 arrows each.
-3. **Talisman check:** If `stuff[22]` (Talisman) is nonzero, the game ends: `quitflag = TRUE`, triggers the victory map message sequence.
+## 6. Terrain & Collision
 
-### 6.7 Body Search (Dead Enemy Loot)
+### 6.1 Terrain Decode Chain — `px_to_im`
 
-When the nearest figure is an enemy (not an object) with `vitality == 0` or the freeze timer is active (`fmain.c:3250-3284`):
+The `_px_to_im` function (`fsubs.asm:542-620`) converts absolute pixel coordinates `(x, y)` to a terrain type value (0–15). The chain has four stages.
 
-**Weapon drop:**
-1. Read enemy weapon value: `i = anim_list[nearest].weapon`; clamp to 0 if > 5.
-2. If nonzero, add to inventory: `stuff[i-1]++` (weapon slot = weapon value - 1).
-3. **Auto-equip:** If `i > anim_list[0].weapon`, upgrade the hero's weapon: `anim_list[0].weapon = i`.
-4. **Bow special case:** If the weapon is a Bow (value 4), also award `rand8() + 2` arrows (2-9) to `stuff[8]`, mark body as searched, and return.
+#### Stage 1: Sub-Tile Bit Selection (`fsubs.asm:548-559`)
 
-**Treasure drop:**
-1. Read enemy race: `j = anim_list[nearest].race`.
-2. If `j & 0x80`, it is a set-figure (NPC): no treasure (`j = 0`).
-3. Otherwise: `j = encounter_chart[j].treasure * 8 + rand8()` -- index into `treasure_probs[]`.
-4. `j = treasure_probs[j]` -- the resulting inventory slot (or 0 for nothing).
-5. If `j >= GOLDBASE`: add `inv_list[j].maxshown` to `wealth` (gold).
-6. If `j < GOLDBASE` and nonzero: `stuff[j]++`.
+A mask byte `d4` selects one of 8 spatial zones within a 16×32 image tile:
 
-After searching, the enemy's weapon is set to -1 to prevent re-searching.
+```
+d4 = 0x80                      ; start at bit 7
+if bit 3 of x set: d4 >>= 4   ; select east/west half
+if bit 3 of y set: d4 >>= 1   ; select north/south quarter
+if bit 4 of y set: d4 >>= 2   ; further subdivide vertically
+```
 
-### 6.8 Treasure Probability Table
+The 8 sub-tile zones allow a single tile to be partially passable — e.g., a wall tile with a walkable gap on one side.
 
-The `treasure_probs[]` array (`fmain2.c:852-858`) has 5 tiers of 8 entries each, indexed by `encounter_chart[race].treasure * 8 + rand8()`:
+#### Stage 2: Pixel to Sector Coordinates (`fsubs.asm:561-589`)
 
-| Tier | treasure | Entries (inventory slots) | Contents |
-|------|----------|--------------------------|----------|
-| 0 | 0 | 0, 0, 0, 0, 0, 0, 0, 0 | Always nothing |
-| 1 | 1 | 9, 11, 13, 31, 31, 17, 17, 32 | Blue Stone, Glass Vial, Bird Totem, 2gp, 2gp, Green Key, Green Key, 5gp |
-| 2 | 2 | 12, 14, 20, 20, 20, 31, 33, 31 | Crystal Orb, Gold Ring, Grey Key, Grey Key, Grey Key, 2gp, 10gp, 2gp |
-| 3 | 3 | 10, 10, 16, 16, 11, 17, 18, 19 | Green Jewel x2, Gold Key x2, Glass Vial, Green Key, Blue Key, Red Key |
-| 4 | 4 | 15, 21, 0, 0, 0, 0, 0, 0 | Jade Skull, White Key (25% chance each), nothing (75%) |
+```
+imx = x >> 4           ; pixel to image-tile X (16 px/tile)
+imy = y >> 5           ; pixel to image-tile Y (32 px/tile)
+secx = (imx >> 4) - xreg
+secy = (imy >> 3) - yreg
+```
 
-Enemy treasure tiers (from `encounter_chart[]`):
+Sector X wrapping (`fsubs.asm:567-572`): if bit 6 of `secx` is set, clamp to 0 or 63 based on bit 5. Sector Y clamped to 0–31 (`fsubs.asm:577-579`).
 
-| Race | Enemy | Treasure Tier |
+Map grid index: `secy * 128 + secx + xreg` (`fsubs.asm:581-583`).
+
+#### Stage 3: Sector Tile Lookup (`fsubs.asm:590-604`)
+
+```
+sec_num  = map_mem[map_index]
+local_imx = imx & 15
+local_imy = imy & 7
+offset   = sec_num * 128 + local_imy * 16 + local_imx
+image_id = sector_mem[offset]
+```
+
+Each sector is 16 columns × 8 rows = 128 tile IDs.
+
+#### Stage 4: Terrain Attribute Lookup (`fsubs.asm:606-616`)
+
+```
+terra_index = image_id * 4
+tbit = terra_mem[terra_index + 2]      ; sub-tile collision mask
+if (tbit & d4) == 0: return 0          ; passable
+else: return terra_mem[terra_index + 1] >> 4   ; terrain type (high nibble)
+```
+
+The AND of the sub-tile mask (`d4` from Stage 1) with the tile feature byte enables per-zone collision — only if the specific zone's bit is set does the terrain type apply.
+
+### 6.2 Terrain Types
+
+Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source comment at `fmain.c:685-686` lists basic categories. Behavior is determined across `fmain.c:1770-1795` and `fsubs.asm:1596-1609`:
+
+| Value | Meaning | `environ` Set | Gameplay Effect |
+|-------|---------|---------------|-----------------|
+| 0 | Open/passable | 0 | No effect — walkable ground |
+| 1 | Impassable | — | Blocked by `_prox` at both probes (`fsubs.asm:1596-1597`, `1606-1607`) |
+| 2 | Shallow water | 2 | Slow (speed 1, `fmain.c:1603`); gradual drowning if no turtle item (`fmain.c:1844-1846`) |
+| 3 | Medium water | 5 | Same as type 2 with deeper `environ` |
+| 4 | Deep water | 10 | Sinking begins at environ 15 (`fmain.c:1795`) |
+| 5 | Very deep water | 30 | Death at environ 30 (`fmain.c:1784-1793`); sector 181 triggers underwater teleport to region 9 instead (`fmain.c:1784-1791`) |
+| 6 | Slippery | −1 | Speed becomes 4 (`fmain.c:1601`, `1771`) |
+| 7 | Velocity ice | −2 | Momentum-based physics with directional impulse (`fmain.c:1580-1595`) |
+| 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); reverses player input near Necromancer area |
+| 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1776-1783`) |
+| 10+ | Blocked | — | `_prox` blocks at second probe point (`fsubs.asm:1608-1609`); first probe blocks at ≥10 (`fsubs.asm:1598-1599`) |
+| 12 | Crystal wall | — | Blocked unless `stuff[30]` (crystal shard) is held (`fmain.c:1611`). Exists only in terra set 8 (under+furnish, Region 8 building interiors) — tile index 93, found in 12 sectors: small chambers, twisting tunnels, forked intersections, and doom tower. **Not present** in the spirit world or dungeons (terra set 10 maps tile 93 to type 1/impassable). |
+| 15 | Door | — | Triggers `doorfind()` attempt when player bumps it (`fmain.c:1609`) |
+
+#### Environ Effects
+
+The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. Key thresholds:
+
+- `environ > 15`: instant death — `vitality = 0` (`fmain.c:1845`)
+- `environ > 2`: gradual drowning — `vitality--` per tick (`fmain.c:1846`)
+- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`)
+
+Water damage is gated by the `fiery_death` flag (`fmain.c:1843`); see [P17](PROBLEMS.md).
+
+### 6.3 Collision Detection
+
+#### `_prox` — Terrain Probe (`fsubs.asm:1590-1614`)
+
+Two terrain probes at offset positions from the actor's feet:
+
+**Probe 1** (`fsubs.asm:1593-1599`): `(x+4, y+2)`
+- Blocks if terrain type == 1 (impassable) or terrain type ≥ 10
+
+**Probe 2** (`fsubs.asm:1601-1609`): `(x−4, y+2)`
+- Blocks if terrain type == 1 or terrain type ≥ 8
+
+The probes have **asymmetric thresholds**: the right probe blocks at ≥10 while the left blocks at ≥8. This means terrain types 8–9 (lava, pit) block only at the left probe. The original source has a comment error at `fsubs.asm:1603` — the comment says `; x + 4` but the instruction is `subq #4,d0` (x − 4).
+
+Returns the blocking terrain code, or 0 if both probes pass.
+
+#### `proxcheck` — Full Collision Test (`fmain2.c:277-293`)
+
+Wraps `_prox` with three additional layers:
+
+1. **Wraith bypass** (`fmain2.c:279-280`): Actors with `race == 2` (wraith) skip terrain collision entirely.
+2. **Player override** (`fmain2.c:281-283`): For the hero (`i==0`), terrain types 8 and 9 are treated as passable — the player walks *into* lava and pits (they cause effects but don't block).
+3. **Actor collision** (`fmain2.c:285-292`): Checks all active actors for bounding-box overlap (22×18 pixels: `|dx| < 11`, `|dy| < 9`). Skips self, slot 1 (raft/companion), CARRIER type (type 5), and DEAD actors. Returns 16 on actor collision.
+
+#### Player Collision Deviation (`fmain.c:1612-1626`)
+
+When the player's movement is terrain-blocked, the game auto-deviates:
+
+1. Try `dir + 1` (clockwise) — if clear, commit
+2. Try `dir − 2` (counterclockwise from original) — if clear, commit
+3. All three blocked: `frustflag++` — at 20+, scratching-head animation (`fmain.c:1654-1660`)
+
+### 6.4 Movement Speed by Terrain
+
+Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](#58-movement-speed-by-terrain):
+
+| Condition | Speed | Source |
+|-----------|-------|--------|
+| Riding raft (`riding==5`) | 3 | `fmain.c:1599` |
+| `environ == −3` (lava) | −2 | `fmain.c:1600` |
+| `environ == −1` (slippery) | 4 | `fmain.c:1601` |
+| `environ == 2` or `> 6` | 1 | `fmain.c:1603` |
+| Default | 2 | `fmain.c:1604` |
+
+Crystal shard (`stuff[30]`) overrides terrain type 12 blocking: `if (stuff[30] && j==12) goto newloc` (`fmain.c:1611`).
+
+### 6.5 Memory Layout
+
+#### `sector_mem` — Sector Tile Data
+
+Allocated as `SECTOR_SZ = (128 * 256) + 4096 = 36864` bytes (`fmain.c:643`):
+
+- **Bytes 0–32767**: 256 sectors × 128 bytes each. Each sector is a 16×8 grid of tile IDs (one byte per tile).
+- **Bytes 32768–36863**: Region map data (`map_mem`), pointed to via `map_mem = sector_mem + SECTOR_OFF` where `SECTOR_OFF = 32768` (`fmain.c:921`).
+
+#### `map_mem` — Region Map Grid
+
+4096 bytes (part of `sector_mem` allocation). Organized as 128 columns × 32 rows. Each byte is a sector number (0–255). Indexed by `secy * 128 + secx + xreg`. The `xreg`/`yreg` values are region origin offsets set during region loading.
+
+#### `terra_mem` — Terrain Attributes
+
+Allocated as 1024 bytes in MEMF_CHIP (`fmain.c:928`). Two halves of 512 bytes, loaded from separate terrain data tracks:
+
+- `terra_mem[0..511]`: from `TERRA_BLOCK + nd->terra1` (`fmain.c:3567`)
+- `terra_mem[512..1023]`: from `TERRA_BLOCK + nd->terra2` (`fmain.c:3572`)
+
+where `TERRA_BLOCK = 149` (`fmain.c:608`).
+
+Each image tile has a 4-byte entry:
+
+| Byte | Name | Purpose |
+|------|------|---------|
+| 0 | `maptag` | Image characteristics / mask data (used by `maskit`: `fmain.c:2595`) |
+| 1 | terrain | High nibble = terrain type (0–15); low nibble = mask application rule |
+| 2 | `tiles` | 8-bit sub-tile collision bitmask |
+| 3 | `big_colors` | Dominant tile color (used for rendering) |
+
+512 bytes / 4 = 128 entries per half — supports up to 128 distinct image tiles per terrain file.
+
+### 6.6 Region Loading
+
+Each region has a `struct need` entry (`ftale.h:106-108`) in the `file_index[10]` array (`fmain.c:615-625`). The `terra1`/`terra2` fields select which terrain attribute files to load:
+
+| Region | Description | terra1 | terra2 | Source |
+|--------|-------------|--------|--------|--------|
+| 0 (F1) | Snowy region | 0 | 1 | `fmain.c:615` |
+| 1 (F2) | Witch wood | 2 | 3 | `fmain.c:616` |
+| 2 (F3) | Swampy region | 2 | 1 | `fmain.c:617` |
+| 3 (F4) | Plains and rocks | 2 | 3 | `fmain.c:618` |
+| 4 (F5) | Desert area | 0 | 4 | `fmain.c:619` |
+| 5 (F6) | Bay/city/farms | 5 | 6 | `fmain.c:620` |
+| 6 (F7) | Volcanic | 7 | 4 | `fmain.c:621` |
+| 7 (F8) | Forest/wilderness | 5 | 6 | `fmain.c:622` |
+| 8 (F9) | Inside buildings | 8 | 9 | `fmain.c:623` |
+| 9 (F10) | Dungeons/caves | 10 | 9 | `fmain.c:624` |
+
+Terrain data is only reloaded when `terra1` or `terra2` differ from `current_loads` (`fmain.c:3565-3573`), avoiding redundant disk I/O when adjacent regions share terrain files.
+
+### 6.7 Mask Application Rules
+
+The low nibble of `terra_mem[image_id * 4 + 1]` controls sprite occlusion during rendering (`fmain.c:2579-2596`, comment at `fmain.c:689-691`):
+
+| Value | Rule | Source |
+|-------|------|--------|
+| 0 | Never apply mask | `fmain.c:2580` |
+| 1 | Apply when sprite is below (down) | `fmain.c:2582` |
+| 2 | Apply when sprite is to the right | `fmain.c:2584` |
+| 3 | Always apply (unless flying) | `fmain.c:2586` |
+| 4 | Only when down AND right | `fmain.c:2588` |
+| 5 | Only when down OR right | `fmain.c:2590` |
+| 6 | Full mask if above ground level; partial otherwise | `fmain.c:2592` |
+| 7 | Only when close to top (`ystop > 20`) | `fmain.c:2596` |
+
+An exception: `hero_sector == 48` (bridge) skips mask rule 3 to prevent incorrect occlusion (`fmain.c:2588`).
+
+### 6.8 `terrain.c` — Offline Tool
+
+The `terrain.c` file is a standalone build tool (not part of the game runtime) that generates the `terra` binary from IFF landscape image files.
+
+**Algorithm** (`terrain.c:47-73`): Iterates landscape files in pairs via an `order[]` array (`terrain.c:24-35`). For each pair, calls `load_images()` which seeks past `IPLAN_SZ = 5 * 64 * 64 = 20480` bytes of image data (`terrain.c:76-84`) and reads 4 arrays of 64 bytes: `maptag`, `terrain`, `tiles`, `big_colors`. Each pair produces 512 bytes of output.
+
+**Pairing order** (`terrain.c:24-35`):
+
+| Pair | Files | Output Bytes |
 |------|-------|--------------|
-| 0 | Ogre | 2 |
-| 1 | Orcs | 1 |
-| 2 | Wraith | 4 |
-| 3 | Skeleton | 3 |
-| 4 | Snake | 0 |
-| 5 | Salamander | 0 |
-| 6 | Spider | 0 |
-| 7 | Dark Knight | 0 |
-| 8 | Loraii | 0 |
-| 9 | Necromancer | 0 |
-| 10 | Woodcutter | 0 |
+| 0 | wild + palace | 0–511 |
+| 1 | swamp + mountain2 | 512–1023 |
+| 2 | wild + build | 1024–1535 |
+| 3 | rock + tower | 1536–2047 |
+| 4 | swamp + mountain3 | 2048–2559 |
+| 5 | wild + castle | 2560–3071 |
+| 6 | field + mountain1 | 3072–3583 |
+| 7 | wild + doom | 3584–4095 |
+| 8 | under + furnish | 4096–4607 |
+| 9 | inside + astral | 4608–5119 |
+| 10 | under + cave | 5120–5631 |
 
-### 6.9 Random Treasure Table
+Total: 11 pairs × 512 = 5632 bytes.
 
-The `rand_treasure[16]` array (`fmain2.c:987-992`) is used elsewhere for random treasure generation:
+### 6.9 Region & Place Names
 
-```c
-UBYTE rand_treasure[] = {
-    SACKS, SACKS, SACKS, SACKS,      /* 25% sacks (obj 16) */
-    CHEST, MONEY, GOLD_KEY, QUIVER,   /* 6.25% each */
-    GREY_KEY, GREY_KEY, GREY_KEY, RED_KEY,  /* 18.75% grey key, 6.25% red key */
-    B_TOTEM, VIAL, WHITE_KEY, CHEST   /* 6.25% each */
-};
+#### Outdoor Places (`narr.asm:86-193`)
+
+The `_place_tbl` is a 3-byte-entry lookup table: `{sector_low, sector_high, msg_index}`. When `hero_sector` falls within the range, the corresponding `_place_msg` string is displayed. The table is scanned sequentially (`fmain.c:2660-2663`) — first match wins, so overlapping ranges resolve by index order.
+
+Selected entries:
+
+| Sector Range | Place Name |
+|-------------|------------|
+| 64–69 | Village of Tambry |
+| 70–73 | Vermillion Manor |
+| 80–95 | City of Marheim |
+| 96–99 | Witch's castle |
+| 138–139 | Graveyard |
+| 144 | Great stone ring |
+| 159–162 | Hidden city of Azal |
+| 164–167 | Crystal Palace |
+| 171–174 | Citadel of Doom |
+| 176 | Pixle Grove |
+| 208–221 | Great Bog |
+| 243 | Oasis |
+
+Special mountain logic (`fmain.c:2664-2668`): When message #4 (mountains) matches, region modifiers apply — odd regions suppress the message; regions > 3 change it to "Plain of Grief" (message 5).
+
+#### Indoor Places (`narr.asm:116-168`)
+
+Same 3-byte format, used when `region_num > 7` (`fmain.c:2656`). Selected entries:
+
+| Sector Range | Place Name |
+|-------------|------------|
+| 43–59, 100, 143–149 | Spirit world |
+| 60–78, 82, 86–87, 92–99, 116–120, 139–141 | Building (various) |
+| 65–66 | Tavern |
+| 79–96 | Castle of King Mar |
+| 105–115, 135–138 | Castle |
+| 150–161 | Stone maze |
+
+#### `hero_sector` Computation (`fsubs.asm:1207-1221`)
+
+Computed in `_genmini` from the hero's high-byte coordinates:
+
+```
+sec_offset = ((hero_y_high - yreg) << 7) + hero_x_high
+hero_sector = map_mem[sec_offset]
 ```
 
-This table maps a random 4-bit index to an object ID. Sacks are the most common result (25%), followed by Grey Keys (18.75%).
+For indoor regions (`region_num > 7`), 256 is added to `hero_sector` to select the indoor lookup table (`fmain.c:2655-2656`).
 
-### 6.10 Equipment Effects
+#### `mapxy` — Tile Pointer Lookup (`fsubs.asm:1085-1130`)
 
-**Weapon equip on body search:**
-When looting a weapon from a dead enemy, the game compares the weapon value `i` against the hero's current weapon `anim_list[0].weapon`. If the looted weapon is strictly better (higher numeric value), it auto-equips:
-
-```c
-if (i > anim_list[0].weapon) anim_list[0].weapon = i;
-```
-
-The weapon hierarchy by value:
-| Value | Weapon | Slot |
-|-------|--------|------|
-| 1 | Dirk | 0 |
-| 2 | Mace | 1 |
-| 3 | Sword | 2 |
-| 4 | Bow | 3 |
-| 5 | Magic Wand | 4 |
-
-Weapons 6+ (Golden Lasso, Sea Shell, Sun Stone) are clamped out in body search (`if (i > 5) i = 0`), so they can only be obtained from world objects, not enemy drops.
-
-**Inventory display:**
-The ITEMS screen renders all items from slot 0 to GOLDBASE-1 by blitting their sprite image repeatedly based on `stuff[j]` count (capped at `maxshown` for display). Each copy is offset by `ydelta` pixels vertically.
-
-### 6.11 Improvement Notes
-
-- **Linear itrans[] scan:** The `itrans[]` lookup is O(n) with ~31 entries. A hash map or direct-indexed array (256 entries, indexed by object ID) would give O(1) lookup. Given the small table size this is not a performance concern in practice.
-- **No level scaling on container loot:** Container contents are drawn from a fixed pool (magic items in slots 8-15) regardless of game progression, region, or difficulty. Early containers can yield powerful late-game items.
-- **UBYTE overflow on stuff[i]:** Item counts are stored as `UBYTE` (0-255). There is no bounds check on `stuff[i]++`. Accumulating more than 255 of any item would silently wrap to 0. In practice, `maxshown` limits only the display, not the count.
-- **Dead code:** The "unknown thing" announcement (`fmain.c:3198`) is commented out; unknown objects are silently dropped instead of being reported to the player.
-- **Talisman instant-win:** Picking up item 22 (Talisman) immediately triggers the victory sequence with no confirmation, which could be surprising if obtained accidentally.
+A variant of `_px_to_im` that returns a *pointer* into `sector_mem` rather than a terrain type. Takes image coordinates (already divided by tile size) instead of pixel coordinates. Used by `doorfind()` and sleeping-spot detection (`fmain.c:1876-1887`) to read or modify the actual tile ID at a map position.
 
 ---
 
-## 7. NPCs & Dialogue
+## 7. Combat System
 
-All non-enemy, non-player characters in the game are represented as "setfig" entities. Each NPC type is defined in a lookup table that controls which graphic file to load, which image within that file to use, and whether the NPC turns to face the player when spoken to. For NPC dialogue tree diagrams, see [STORYLINE.md Sections 5-7](STORYLINE.md#5-npc-dialogue-trees).
+### 7.1 Damage Formula — `dohit()`
 
-### 7.1 SetFig Table
+`dohit(i, j, fc, wt)` at `fmain2.c:230-248` applies damage from attacker `i` to defender `j`.
 
-The `setfig_table[14]` array (`fmain.c:22-39`) defines every NPC type:
+- `i`: attacker index (−1 = arrow, −2 = fireball, 0 = player, 3+ = monster)
+- `j`: defender index
+- `fc`: attacker's facing direction (0–7)
+- `wt`: damage amount (weapon code, possibly modified)
 
-| Index | NPC Type   | cfile_entry | image_base | can_talk | Notes |
-|------:|------------|------------:|-----------:|---------:|-------|
-|     0 | Wizard     |          13 |          0 |        1 | Turns to face player |
-|     1 | Priest     |          13 |          4 |        1 | Turns to face player |
-|     2 | Guard      |          14 |          0 |        0 | Front-facing |
-|     3 | Guard      |          14 |          1 |        0 | Back-facing variant |
-|     4 | Princess   |          14 |          2 |        0 | |
-|     5 | King       |          14 |          4 |        1 | Turns to face player |
-|     6 | Noble      |          14 |          6 |        0 | Lord Trane |
-|     7 | Sorceress  |          14 |          7 |        0 | |
-|     8 | Bartender  |          15 |          0 |        0 | Tavern keeper |
-|     9 | Witch      |          16 |          0 |        0 | |
-|    10 | Spectre    |          16 |          6 |        0 | |
-|    11 | Ghost      |          16 |          7 |        0 | Dead brother |
-|    12 | Ranger     |          17 |          0 |        1 | Turns to face player |
-|    13 | Beggar     |          17 |          4 |        1 | Spelled "begger" in source |
+**Damage application** (`fmain2.c:236-237`):
 
-The `can_talk` flag controls whether the NPC enters the `TALKING` state (state 19) and turns to face the player (tactic set to 15) when spoken to. NPCs with `can_talk == 0` still respond to dialogue -- they simply do not animate a facing change.
+```c
+anim_list[j].vitality -= wt;
+if (anim_list[j].vitality < 0) anim_list[j].vitality = 0;
+```
 
-The `cfile_entry` selects which graphics file to load (files 13-17 contain NPC sprites). The `image_base` is an offset within that file to the first frame of the NPC's animation.
+Damage equals `wt` directly — the weapon code IS the damage value. Vitality floors at 0.
 
-### 7.2 Complete Speech Catalogue
+#### Immunity Checks (`fmain2.c:231-235`)
 
-All 61 speech entries are defined in `narr.asm:351-518`. The `%` character is a substitution marker replaced at runtime with the active hero's name (Julian, Dorian, or Kevin).
+| Target | Condition | Effect | Source |
+|--------|-----------|--------|--------|
+| Necromancer (`race 9`) | `weapon < 4` | Immune; `speak(58)` | `fmain2.c:231-233` |
+| Witch (`race 0x89`) | `weapon < 4` AND no Sun Stone (`stuff[7]==0`) | Immune; `speak(58)` | `fmain2.c:232-233` |
+| Spectre (`race 0x8a`) | Always | Completely immune, silent return | `fmain2.c:234` |
+| Ghost (`race 0x8b`) | Always | Completely immune, silent return | `fmain2.c:234` |
 
-| # | Label | Full Text |
-|--:|-------|-----------|
-| 0 | Ogre speech | "% attempted to communicate with the Ogre but a guttural snarl was the only response." |
-| 1 | Orc speech | "Human must die!" said the goblin-man." |
-| 2 | Wraith speech | "Doom!" wailed the wraith." |
-| 3 | Skeleton speech | "A clattering of bones was the only reply." |
-| 4 | Snake speech | "% knew that it is a waste of time to talk to a snake." |
-| 5 | Salamander speech | "..." |
-| 6 | Loraii speech | "There was no reply." |
-| 7 | Necromancer speech | "Die, foolish mortal!" he said." |
-| 8 | Shout warning | "No need to shout, son!" he said." |
-| 9 | Ranger message 1 | "Nice weather we're having, isn't it?" queried the ranger." |
-| 10 | Ranger message 2 | "Good luck, sonny!" said the ranger. "Hope you win!"" |
-| 11 | Ranger message 3 | "If you need to cross the lake" said the ranger, "There's a raft just north of here."" |
-| 12 | Bartender message 1 | "Would you like to buy something?" said the tavern keeper. "Or do you just need lodging for the night?"" |
-| 13 | Bartender message 2 | "Good Morning." said the tavern keeper. "Hope you slept well."" |
-| 14 | Bartender message 3 | "Have a drink!" said the tavern keeper."" |
-| 15 | Guard message | "State your business!" said the guard. [newline] "My business is with the king." stated %, respectfully." |
-| 16 | Princess message | "Please, sir, rescue me from this horrible prison!" pleaded the princess." |
-| 17 | King message 1 | "I cannot help you, young man." said the king. "My armies are decimated, and I fear that with the loss of my children, I have lost all hope."" |
-| 18 | King message 2 | "Here is a writ designating you as my official agent. Be sure and show this to the Priest before you leave Marheim." |
-| 19 | King message 3 | "I'm afraid I cannot help you, young man. I already gave the golden statue to the other young man." |
-| 20 | Noble message | "If you could rescue the king's daughter," said Lord Trane, "The King's courage would be restored."" |
-| 21 | Give bone (wrong NPC) | "Sorry, I have no use for it."" |
-| 22 | Ranger (region 2) | "The dragon's cave is directly north of here." said the ranger."" |
-| 23 | Beggar plea | "Alms! Alms for the poor!"" |
-| 24 | Beggar prophecy 1 | "I have a prophecy for you, m'lord." said the beggar. "You must seek two women, one Good, one Evil."" |
-| 25 | Beggar prophecy 2 | "Lovely Jewels, glint in the night - give to us the gift of Sight!" he said." |
-| 26 | Beggar prophecy 3 | "Where is the hidden city? How can you find it when you cannot even see it?" said the beggar." |
-| 27 | Wizard hint 1 | "Kind deeds could gain thee a friend from the sea."" |
-| 28 | Wizard hint 2 | "Seek the place that is darker than night - There you shall find your goal in sight!" said the wizard, cryptically." |
-| 29 | Wizard hint 3 | "Like the eye itself, a crystal Orb can help to find things concealed."" |
-| 30 | Wizard hint 4 | "The Witch lives in the dim forest of Grimwood, where the very trees are warped to her will. Her gaze is Death!"" |
-| 31 | Wizard hint 5 | "Only the light of the Sun can destroy the Witch's Evil."" |
-| 32 | Wizard hint 6 | "The maiden you seek lies imprisoned in an unreachable castle surrounded by unclimbable mountains."" |
-| 33 | Wizard hint 7 | "Tame the golden beast and no mountain may deny you! But what rope could hold such a creature?"" |
-| 34 | Wizard hint 8 | "Just what I needed!" he said." |
-| 35 | Wizard hostile | "Away with you, young ruffian!" said the Wizard. "Perhaps you can find some small animal to torment if that pleases you!"" |
-| 36 | Priest hint 1 | "You must seek your enemy on the spirit plane. It is hazardous in the extreme. Space may twist, and time itself may run backwards!"" |
-| 37 | Priest hint 2 | "When you wish to travel quickly, seek the power of the Stones." he said." |
-| 38 | Priest hint 3 | "Since you are brave of heart, I shall Heal all your wounds." [newline] Instantly % felt much better." |
-| 39 | Priest (writ exchange) | "Ah! You have a writ from the king. Here is one of the golden statues of Azal-Car-Ithil. Find all five and you'll find the vanishing city."" |
-| 40 | Priest hostile | "Repent, Sinner! Thou art an uncouth brute and I have no interest in your conversation!"" |
-| 41 | Dream Knight block | "Ho there, young traveler!" said the black figure. "None may enter the sacred shrine of the People who came Before!"" |
-| 42 | Dream Knight pass | "Your prowess in battle is great." said the Knight of Dreams. "You have earned the right to enter and claim the prize."" |
-| 43 | Necromancer taunt | "So this is the so-called Hero who has been sent to hinder my plans. Simply Pathetic. Well, try this, young Fool!"" |
-| 44 | Necromancer defeated | "% gasped. The Necromancer had been transformed into a normal man. All of his evil was gone." |
-| 45 | Sorceress message | "%." said the Sorceress. "Welcome. Here is one of the five golden figurines you will need." [newline] "Thank you." said %." |
-| 46 | Witch message | "Look into my eyes and Die!!" hissed the witch. [newline] "Not a chance!" replied %" |
-| 47 | Spectre message | "The Spectre spoke. "HE has usurped my place as lord of undead. Bring me bones of the ancient King and I'll help you destroy him."" |
-| 48 | Spectre (bones given) | "% gave him the ancient bones. [newline] "Good! That spirit now rests quietly in my halls. Take this crystal shard."" |
-| 49 | Ghost message | "%..." said the apparition. "I am the ghost of your dead brother. Find my bones -- there you will find some things you need." |
-| 50 | Gold given (generic) | "% gave him some gold coins. [newline] "Why, thank you, young sir!"" |
-| 51 | Buy from non-seller | "Sorry, but I have nothing to sell."" |
-| 52 | Buy from no one | *(empty string)* |
-| 53 | Ranger direction 1 | "The dragon's cave is east of here." said the ranger."" |
-| 54 | Ranger direction 2 | "The dragon's cave is west of here." said the ranger."" |
-| 55 | Ranger direction 3 | "The dragon's cave is south of here." said the ranger."" |
-| 56 | Turtle (give shell) | "Oh, thank you for saving my eggs, kind man!" said the turtle. "Take this seashell as a token of my gratitude."" |
-| 57 | Turtle (has shell) | "Just hop on my back if you need a ride somewhere." said the turtle." |
-| 58 | Witch/Necro immune | "Stupid fool, you can't hurt me with that!"" |
-| 59 | Necro magic block | "Your magic won't work here, fool!"" |
-| 60 | Witch vulnerable | "The Sunstone has made the witch vulnerable!" |
+The Necromancer and Witch can only be damaged by ranged weapons (bow ≥ 4 or wand = 5). The Witch becomes vulnerable to all weapons when the player holds the Sun Stone (`stuff[7] != 0`). Spectre and Ghost (dead brothers) are non-combatants, intentionally immune to all damage with no feedback.
 
-### 7.3 Talk Ranges
+#### Knockback (`fmain2.c:243-245`)
 
-The TALK menu offers three sub-commands that differ in detection range (`fmain.c:3368`):
+After damage, the defender is pushed 2 pixels in the attacker's facing direction via `move_figure(j, fc, 2)`. If knockback succeeds and the attacker is melee (`i >= 0`), the attacker also slides 2 pixels forward (follow-through). DRAGON and SETFIG types are immune to knockback.
 
-| Command | Key | Range (px) | Behavior |
-|---------|-----|------------|----------|
-| Yell    | Y   | 100        | `nearest_fig(1, 100)` -- finds NPCs at long range |
-| Say     | S   | 50         | `nearest_fig(1, 50)` -- normal conversation range |
-| Ask     | A   | 50         | `nearest_fig(1, 50)` -- same range as Say |
+Every `dohit()` call ends with `checkdead(j, 5)` (`fmain2.c:246`).
 
-If the player Yells and the nearest NPC is within 35 pixels (too close), the NPC responds with speech 8: *"No need to shout, son!"* and the conversation is aborted. This is the only mechanical difference between Yell and Say/Ask -- once range-check passes, all three commands use the same dialogue logic.
+### 7.2 Hit Detection — Melee Swing
 
-A dead NPC (`state == DEAD`) is silently ignored regardless of range.
+The hit detection loop runs once per frame for every actor in a fighting state (`fmain.c:2237-2264`):
 
-### 7.4 TALK Handler -- Decision Tree
+#### Strike Point (`fmain.c:2247-2248`)
 
-When the player talks to a SETFIG, the handler at `fmain.c:3372-3416` extracts the NPC type as `k = an->race & 0x7f` (strips the 0x80 SETFIG flag) and dispatches on it:
+```c
+xs = newx(anim_list[i].abs_x, fc, wt+wt) + rand8()-3;
+ys = newy(anim_list[i].abs_y, fc, wt+wt) + rand8()-3;
+```
 
-**Case 0 -- Wizard:**
-- If `kind < 10` (player is unkind): speak(35) -- *"Away with you, young ruffian!"*
-- Else: speak(27 + `an->goal`) -- one of speeches 27-34, selected by the wizard's per-instance `goal` field (0-7). Each wizard instance is placed in the world with a fixed goal value, so different wizards give different progressive hints.
+The strike point extends `wt * 2` pixels in the attacker's facing direction, with ±3 to ±4 pixels random jitter per axis. Longer weapons probe further from the attacker.
 
-**Case 1 -- Priest:**
-- If player has Writ (`stuff[28]` is nonzero):
-  - If `ob_listg[10].ob_stat == 0` (statue not yet given): speak(39) -- gives golden statue, sets `ob_listg[10].ob_stat = 1`
-  - Else (`ob_listg[10].ob_stat != 0`): speak(19) -- *"I already gave the golden statue to the other young man."*
-- Else if `kind < 10` (player is unkind): speak(40) -- *"Repent, Sinner!"*
-- Else (kind and no writ): speak(36 + `daynight % 3`) -- one of three rotating hints (speeches 36-38). Also fully heals the player (`vitality = 15 + brave/4`) and refreshes the status display (`prq(4)`).
+#### Hit Window — Bravery as Reach (`fmain.c:2249-2250`)
 
-**Case 2, 3 -- Guards:**
-- speak(15) -- *"State your business!"* Both front and back guard variants give the same response.
+```c
+if (i==0) bv = (brave/20)+5; else bv = 2 + rand4();
+if (bv > 14) bv = 15;
+```
 
-**Case 4 -- Princess:**
-- If `ob_list8[9].ob_stat` is set (princess rescue flag): speak(16) -- *"Please, sir, rescue me!"*
-- If flag is not set: no speech (silent). This means the princess only speaks after a specific game event triggers her flag.
+| Attacker | Reach (`bv`) | Notes |
+|----------|-------------|-------|
+| Player | `(brave / 20) + 5`, max 15 | Grows with kills; Julian starts at 6, maxes at 15 at brave=200 |
+| Monster | `2 + rand4()` = 2–5 | Re-rolled each frame |
 
-**Case 5 -- King:**
-- If `ob_list8[9].ob_stat` is set: speak(17) -- *"I cannot help you, young man..."*
-- If flag is not set: no speech (silent).
+#### Target Matching (`fmain.c:2252-2263`)
 
-**Case 6 -- Noble (Lord Trane):**
-- speak(20) -- *"If you could rescue the king's daughter..."*
+Uses **Chebyshev distance** (max of |dx|, |dy|) from strike point to target. All conditions must be true for a hit:
 
-**Case 7 -- Sorceress:**
-- If `ob_listg[9].ob_stat` is already set (previously visited):
-  - If `luck < rand64()`: `luck += 5` (luck boost). Silent -- no speech played.
-  - If `luck >= rand64()`: nothing happens (diminishing returns).
-- Else (first visit): speak(45) -- gives golden figurine, sets `ob_listg[9].ob_stat = 1`.
-- Always calls `prq(7)` to refresh display.
+1. Distance < `bv` (reach)
+2. `freeze_timer == 0`
+3. **Player attacks** (`i==0`): automatic hit
+4. **Monster attacks** (`i > 0`): must pass `rand256() > brave` — bravery acts as dodge probability
 
-**Case 8 -- Bartender:**
-Three states based on time and fatigue:
-- If `fatigue < 5` (well-rested): speak(13) -- *"Good Morning. Hope you slept well."*
-- Else if `dayperiod > 7` (late in the day): speak(12) -- *"Would you like to buy something?"*
-- Else: speak(14) -- *"Have a drink!"*
+Monster hit probability: `(256 − brave) / 256`. At Julian's starting brave of 35, monsters land 86% of swings. At brave=100, only 61%.
 
-**Case 9 -- Witch:**
-- speak(46) -- *"Look into my eyes and Die!!"*
+Near-miss sound plays when distance < `bv + 2` and weapon ≠ wand: `effect(1, 150 + rand256())` (`fmain.c:2263`).
 
-**Case 10 -- Spectre:**
-- speak(47) -- *"HE has usurped my place as lord of undead. Bring me bones..."*
+### 7.3 Missile Combat (`fmain.c:2266-2299`)
 
-**Case 11 -- Ghost:**
-- speak(49) -- *"I am the ghost of your dead brother. Find my bones..."*
+Arrows and fireballs use the `missile_list[6]` system ([§1.1](#11-struct-shape--actor-record)).
 
-**Case 12 -- Ranger:**
-- If `region_num == 2`: speak(22) -- *"The dragon's cave is directly north of here."*
-- Else: speak(53 + `an->goal`) -- per-instance goal selects one of speeches 53-55, giving directional hints (east/west/south). Each ranger is placed in the world with a goal (0-2) corresponding to the relative direction of the dragon's cave from that location.
+| Property | Arrow | Fireball |
+|----------|-------|----------|
+| Hit radius (`mt`) | 6 pixels | 9 pixels |
+| Damage | `rand8() + 4` = 4–11 | `rand8() + 4` = 4–11 |
+| `dohit` attacker code | −1 | −2 |
+| Source | `fmain.c:2280-2281` | `fmain.c:2280-2281` |
 
-**Case 13 -- Beggar:**
-- speak(23) -- *"Alms! Alms for the poor!"*
+Dodge check: for player target (`j==0`), `bv = brave`; for monsters, `bv = 20`. Only missile slot 0 has the dodge check `bitrand(512) > bv` — slots 1–5 always hit if in range (`fmain.c:2289`). With 6 slots assigned round-robin (`mdex` at `fmain.c:1479`), ~17% of projectiles are dodge-eligible. This limits dodge frequency since projectiles are already harder to aim than melee.
 
-### 7.5 GIVE Handler
+#### Special Ranged Attacks
 
-The GIVE menu (`fmain.c:3490-3506`) offers four items: Gold, Book, Writ, and Bone. Only Gold and Bone have implemented give-to-NPC logic:
+| Attacker | Damage | Rate | Source |
+|----------|--------|------|--------|
+| Witch (`fmain.c:2375`) | `rand2() + 1` = 1–2 | When `witchflag` set and distance < 100 | `fmain.c:2375` |
+| Dragon (`fmain.c:1489-1497`) | 4–11 (fireball) | 25% per frame (`rand4()==0`) | `fmain.c:1493` |
 
-**Gold (hit == 5):**
-- Requires `wealth > 2`. Deducts 2 gold.
-- Random kindness increase: if `rand64() > kind`, increment `kind` by 1.
-- Refreshes status (`prq(4)`) and luck display (`prq(7)`).
-- If target is a beggar (race `0x8d`): speak(24 + `goal`) -- one of speeches 24-26, a prophecy selected by the beggar's per-instance `goal` field (0-2).
-- Otherwise: speak(50) -- generic gold-giving thanks.
+### 7.4 Weapon Types & Damage
 
-**Bone (hit == 8):**
-- Requires `stuff[29]` (player has the Bone item).
-- If target is NOT the spectre (race != `0x8a`): speak(21) -- *"Sorry, I have no use for it."*
-- If target IS the spectre: speak(48) -- *"Good! Take this crystal shard."* Removes the bone (`stuff[29] = 0`) and calls `leave_item(nearest_person, 140)` which drops item 140 (crystal shard) at the spectre's map position.
+| Code | Name | Type | Damage Range | Strike Range (`wt*2`) | Source |
+|------|------|------|-------------|----------------------|--------|
+| 0 | None | Melee | 0–2 | 0–4 px | `fmain.c:2244-2245` |
+| 1 | Dirk | Melee | 1–3 | 2–6 px | `fmain.c:2244-2245` |
+| 2 | Mace | Melee | 2–4 | 4–8 px | `fmain.c:2244-2245` |
+| 3 | Sword | Melee | 3–5 | 6–10 px | `fmain.c:2244-2245` |
+| 4 | Bow | Ranged | 4–11 | mt=6 | `fmain.c:2292-2293` |
+| 5 | Wand | Ranged | 4–11 | mt=9 | `fmain.c:2292-2293` |
+| 8 | Touch | Melee | 5–7 | 10–14 px | `fmain.c:2244-2245` |
 
-### 7.6 Carrier Dialogue (Turtle)
+Melee damage formula: `wt + bitrand(2)` where `wt` is the weapon code (clamped to 5 for touch attacks: `if (wt >= 8) wt = 5` at `fmain.c:2245`). Missile damage: `rand8() + 4` for both arrows and fireballs.
 
-When the player talks to a CARRIER type and `active_carrier == 5` (the turtle), a separate path handles it (`fmain.c:3418-3421`):
+Touch attack (code 8) is monster-only, used by Wraiths, Snakes, Spiders, and Loraii (arms group 6 in `weapon_probs[]`).
 
-- If player already has the sea shell (`stuff[6]`): speak(57) -- *"Just hop on my back if you need a ride."*
-- Else: gives the shell (`stuff[6] = 1`), speak(56) -- *"Thank you for saving my eggs! Take this seashell."*
+### 7.5 Swing State Machine
 
-### 7.7 Enemy Dialogue
+The 9-state `trans_list[]` (`fmain.c:138-146`, detailed in [§2.5](#25-trans_list--fight-animation-transitions)) drives the sword swing animation. Each tick, a random transition is selected: `trans_list[state].newstate[rand4()]` (`fmain.c:1712`).
 
-Talking to an ENEMY type entity triggers `speak(an->race)` (`fmain.c:3422`), indexing directly into the speech table using the enemy's race number. Enemy races 0-7 map to speeches 0-7:
+The forward cycle through `newstate[0]` traces: 0→1→2→3→4→5→6→8→0 (state 7 reached via other paths). Monsters that reach states 6 or 7 (overhead swings) are forced to state 8 (`fmain.c:1715`).
 
-| Race | Enemy | Speech |
-|-----:|-------|--------|
-| 0 | Ogre | Guttural snarl |
-| 1 | Orc | "Human must die!" |
-| 2 | Wraith | "Doom!" |
-| 3 | Skeleton | Clattering bones |
-| 4 | Snake | Waste of time to talk |
-| 5 | Salamander | "..." |
-| 6 | Loraii | No reply |
-| 7 | Necromancer | "Die, foolish mortal!" |
+Fight entry:
+- **Player** (`fmain.c:1431-1436`): melee weapon → `state = FIGHTING`; ranged weapon → `state = SHOOT1`
+- **Enemy** (`fmain.c:2166`): transitions from WALKING to FIGHTING when within melee threshold
 
-### 7.8 Improvement Notes
+### 7.6 Post-Kill Rewards — `aftermath()`
 
-- **Wizard/Ranger goal is opaque:** Both wizard and ranger dialogue depends on a per-instance `goal` field baked into the map data. The player has no way to know which hint a given wizard will provide or which direction a ranger will indicate -- there is no visual or contextual distinction between instances. This means the hint system is effectively random from the player's perspective unless they memorize NPC locations.
+`aftermath()` (`fmain2.c:253-275`) fires when `battleflag` transitions from TRUE to FALSE (`fmain.c:2192`). It counts dead and fleeing enemies for status messages but does **not** grant experience or loot directly. Rewards come from:
 
-- **Sorceress luck boost has diminishing returns:** On repeat visits, the luck boost (`luck += 5`) only fires if `luck < rand64()`. As luck increases, the probability of getting the boost decreases. The check is also silent -- no speech is played on repeat visits regardless of whether the boost succeeds or fails, giving the player no feedback.
+1. **`checkdead()`** (`fmain.c:2769-2784`): Each enemy kill grants `brave++` (`fmain.c:2777`).
+2. **Body search** (`fmain.c:3254-3281`): The "Get" action near a dead body yields:
+   - **Weapon drop**: The monster's weapon code (1–5). If better than current, auto-equips. Bow drops also give `rand8() + 2` = 2–9 arrows (`fmain.c:3265-3268`).
+   - **Treasure**: Indexed by `treasure_probs[encounter_chart[race].treasure * 8 + rand8()]` (`fmain.c:3273`). SetFig races (`race & 0x80`) yield no treasure.
 
-- **King is silent after princess rescue:** Both the king (case 5) and princess (case 4) only speak when `ob_list8[9].ob_stat` is set. Before that flag is triggered, talking to them produces no response at all. After the rescue event sets the flag, the king says *"I cannot help you"* -- there is no triumphant or grateful response. This feels like a missing dialogue state or a bug where speech 18 (the writ-giving speech) was intended to be triggered here but is never reached through normal TALK.
+### 7.7 Treasure Drop Tables
 
-- **Spectre drops crystal shard at its position, not into inventory:** The `leave_item(nearest_person, 140)` call places the crystal shard as a ground item at the spectre's map coordinates. The player must then pick it up separately. Every other quest reward (golden statue from priest, shell from turtle, figurine from sorceress) is placed directly into inventory via the `stuff[]` array. This inconsistency may be intentional (the spectre is undead and cannot hand things over) or an oversight.
+`treasure_probs[]` at `fmain2.c:852-858` (5 groups of 8 entries, indexed by `treasure * 8 + rand8()`):
 
-- **Beggar prophecies are fixed per instance:** Each beggar's `goal` (0-2) determines which prophecy they give when paid. Paying the same beggar repeatedly always yields the same hint. The player must find all three beggars to hear all three prophecies.
+**Group 0** (treasure=0): No drops. Used by Snake, Salamander, Spider, DKnight, Loraii, Necromancer, Woodcutter.
 
-- **Guard dialogue is a fixed exchange:** The guard speech (15) includes both the guard's challenge and the hero's response as a single narrated exchange. The player has no actual choice in the interaction.
+**Group 1** (treasure=1, used by Orcs):
+
+| Roll | Index | Item |
+|------|-------|------|
+| 0 | 9 | Blue Stone |
+| 1 | 11 | Glass Vial |
+| 2 | 13 | Bird Totem |
+| 3–4 | 31 | 2 Gold Pieces |
+| 5–6 | 17 | Green Key |
+| 7 | 32 | 5 Gold Pieces |
+
+**Group 2** (treasure=2, used by Ogres):
+
+| Roll | Index | Item |
+|------|-------|------|
+| 0 | 12 | Crystal Orb |
+| 1 | 14 | Gold Ring |
+| 2–4 | 20 | Grey Key |
+| 5, 7 | 31 | 2 Gold Pieces |
+| 6 | 33 | 10 Gold Pieces |
+
+**Group 3** (treasure=3, used by Skeletons):
+
+| Roll | Index | Item |
+|------|-------|------|
+| 0–1 | 10 | Green Jewel |
+| 2–3 | 16 | Gold Key |
+| 4 | 11 | Glass Vial |
+| 5 | 17 | Green Key |
+| 6 | 18 | Blue Key |
+| 7 | 19 | Red Key |
+
+**Group 4** (treasure=4, used by Wraiths):
+
+| Roll | Index | Item |
+|------|-------|------|
+| 0 | 15 | Jade Skull |
+| 1 | 21 | White Key |
+| 2–7 | 0 | Nothing (`j==0` treated as no treasure in the body search code) |
+
+### 7.8 Death System — `checkdead()`
+
+`checkdead(i, dtype)` at `fmain.c:2769-2784`. Triggers when `vitality < 1` and state is not already DYING or DEAD:
+
+| Effect | Condition | Source |
+|--------|-----------|--------|
+| Set `goal=DEATH`, `state=DYING`, `tactic=7` | Always | `fmain.c:2774` |
+| DKnight death speech: `speak(42)` | `race == 7` | `fmain.c:2775` |
+| `kind -= 3` | SETFIG type, not witch (`race != 0x89`) | `fmain.c:2776` |
+| `brave++` | Enemy (`i > 0`) | `fmain.c:2777` |
+| `event(dtype)`, `luck -= 5`, `setmood(TRUE)` | Player (`i == 0`) | `fmain.c:2777` |
+
+Death event messages (from `narr.asm:11+`): dtype 5 = hit/killed, 6 = drowned, 7 = burned, 8 = turned to stone.
+
+The dying animation uses `tactic` as a frame countdown from 7 to 0 (`fmain.c:1718-1728`). After countdown, state transitions to DEAD with sprite index 82.
+
+#### Special Death Drops (`fmain.c:1751-1756`)
+
+| Monster | On Death | Source |
+|---------|----------|--------|
+| Necromancer (`race 0x09`) | Transforms to Woodcutter (race 10, vitality 10); drops Talisman (object 139) | `fmain.c:1751-1753` |
+| Witch (`race 0x89`) | Drops Golden Lasso (object 27) | `fmain.c:1756` |
+
+### 7.9 Good Fairy & Brother Succession
+
+When the player is DEAD or FALL, `goodfairy` (unsigned char, starts at 0) undergoes a countdown (`fmain.c:1388-1407`):
+
+1. **DYING phase** (before countdown): `checkdead()` sets `tactic = 7`, `state = DYING` (`fmain.c:2773-2774`). Tactic decrements each frame (7→0) — 7 frames of death animation (sprites 80/81 alternating, `fmain.c:1719-1724`). At tactic 0 → `state = DEAD`, corpse sprite (82). `goodfairy` countdown begins.
+2. **goodfairy 255→200** (~56 frames): Death sequence continues — corpse visible, death song plays. No code branches match in this range.
+3. **goodfairy 199→120** (~80 frames): **Luck gate** — `luck < 1` → `revive(TRUE)` (brother succession). FALL → `revive(FALSE)` (non-lethal). If `luck >= 1`: no visible effect, countdown continues.
+4. **goodfairy 119→20** (~100 frames): Fairy sprite flies toward hero (only reached if `luck >= 1`).
+5. **goodfairy 19→2** (~18 frames): Resurrection glow effect.
+6. **goodfairy 1**: `revive(FALSE)` — fairy rescue, same character returns.
+
+**Design note**: The luck gate at `goodfairy < 200` is positioned *after* the death animation completes (255→200). This is a deliberate design choice — the death sequence (DYING animation + corpse + death song) always plays fully before the outcome is determined. Luck cannot change during the DEAD state — the four luck-modifying code paths all require the hero to be alive or interacting (`checkdead` guards with `state != DYING && state != DEAD`, pit falls require movement, sorceress requires TALK). So the gate is effectively a one-time decision: if luck ≥ 1 when the countdown crosses 200, the fairy is guaranteed to appear and rescue the hero. Since each death costs exactly 5 luck, the number of fairy rescues from starting stats is exactly `floor((luck - 1) / 5)`: Julian: 3, Phillip: 6, Kevin: 3. Falls cost 2 luck each and reduce this total.
+
+#### `revive()` — `fmain.c:2812-2900`
+
+**`revive(TRUE)` — New brother**:
+- `brother` increments: 1→Julian, 2→Phillip, 3→Kevin, 4+→game over
+- Stats reset from `blist[]` (`fmain.c:2803-2805`): Julian {brave=35, luck=20, kind=15, wealth=20}, Phillip {brave=20, luck=35, kind=15, wealth=15}, Kevin {brave=15, luck=20, kind=35, wealth=10}
+- Inventory wiped: `for (i=0; i<GOLDBASE; i++) stuff[i] = 0` (`fmain.c:2849`)
+- Starting weapon: Dirk (weapon 1) (`fmain.c:2850`)
+- Vitality: `15 + brave/4` (`fmain.c:2897`)
+- Dead brother's body and ghost placed in world (`fmain.c:2840-2844`)
+
+**`revive(FALSE)` — Fairy rescue**: No stat changes. Returns to last safe position (`safe_x`, `safe_y`). Vitality restored to `15 + brave/4`.
+
+### 7.10 Bravery & Luck in Combat
+
+Bravery serves dual duty as passive experience and active combat stat:
+
+| Effect | Formula | Source |
+|--------|---------|--------|
+| Melee reach | `(brave / 20) + 5`, max 15 | `fmain.c:2249` |
+| Monster dodge chance | `rand256() > brave` must pass for hit | `fmain.c:2260` |
+| Missile dodge (slot 0) | `bitrand(512) > brave` | `fmain.c:2289` |
+| Starting vitality | `15 + brave / 4` | `fmain.c:2897` |
+| Growth | +1 per enemy kill | `fmain.c:2777` |
+
+This creates a **compounding feedback loop**: more kills → higher brave → longer reach + better dodge + more HP → more kills. Combat gets progressively easier.
+
+Luck decreases by 5 per player death (`fmain.c:2777`) and by 2 per ledge fall (`fmain.c:1783`). When depleted, the next death is permanent — there is no fairy rescue.
 
 ---
 
-## 8. Quest System
+## 8. AI System
 
-The Faery Tale Adventure tracks quest progress through a combination of trigger zones (`extent_list[]`), scattered object status fields (`ob_listg[]`, `ob_list8[]`), inventory slots (`stuff[]`), and a stone ring teleportation network. There is no centralized quest state machine -- the game checks ad-hoc flags in response to zone transitions, NPC interactions, and item pickups. For quest flow diagrams, see [STORYLINE.md Section 1](STORYLINE.md#1-main-quest-progression). For special event diagrams (graveyard, spider pit, hidden valley, etc.), see [STORYLINE.md Section 14](STORYLINE.md#14-special-event-diagrams).
+Goal modes and tactical modes are enumerated in [§2.2](#22-goal-modes) and [§2.3](#23-tactical-modes). This section covers runtime behavior and decision-making.
 
-### 8.1 Extent Table
+### 8.1 Goal Mode Assignment
 
-The `extent_list[23]` array (`fmain.c:338-370`) defines rectangular trigger zones across the world map. Each entry specifies a bounding box and a type code that controls what happens when the hero enters the zone.
+**At spawn** (`fmain.c:2761-2763`):
 
 ```c
-struct extent {
-    UWORD x1, y1, x2, y2;   /* bounding rectangle */
-    UBYTE etype, v1, v2, v3; /* type, count, random range, encounter type */
-};
+if (an->weapon & 4) an->goal = ARCHER1 + encounter_chart[race].cleverness;
+else an->goal = ATTACK1 + encounter_chart[race].cleverness;
 ```
 
-The constant `EXT_COUNT` is defined as 22 (`fmain.c:372`), so only entries 0-21 are scanned. The 23rd entry (index 22, "whole world") serves as the fallback when no other extent matches.
+Ranged weapon → ARCHER1 (cleverness=0) or ARCHER2 (cleverness=1). Melee → ATTACK1 or ATTACK2.
 
-| Idx | x1 | y1 | x2 | y2 | etype | v1 | v2 | v3 | Description |
-|----:|-----:|------:|-----:|------:|------:|---:|---:|---:|-------------|
-| 0 | 2118 | 27237 | 2618 | 27637 | 70 | 0 | 1 | 11 | Bird extent |
-| 1 | 0 | 0 | 0 | 0 | 70 | 0 | 1 | 5 | Turtle extent |
-| 2 | 6749 | 34951 | 7249 | 35351 | 70 | 0 | 1 | 10 | Dragon extent |
-| 3 | 4063 | 34819 | 4909 | 35125 | 53 | 4 | 1 | 6 | Spider pit |
-| 4 | 9563 | 33883 | 10144 | 34462 | 60 | 1 | 1 | 9 | Necromancer |
-| 5 | 22945 | 5597 | 23225 | 5747 | 61 | 3 | 2 | 4 | Turtle eggs |
-| 6 | 10820 | 35646 | 10877 | 35670 | 83 | 1 | 1 | 0 | Princess extent |
-| 7 | 19596 | 17123 | 19974 | 17401 | 48 | 8 | 8 | 2 | Graveyard extent |
-| 8 | 19400 | 17034 | 20240 | 17484 | 80 | 4 | 20 | 0 | Around city (peace) |
-| 9 | 0x2400 | 0x8200 | 0x3100 | 0x8A00 | 52 | 3 | 1 | 8 | Astral plane |
-| 10 | 5272 | 33300 | 6112 | 34200 | 81 | 0 | 1 | 0 | King pax |
-| 11 | 11712 | 37350 | 12416 | 38020 | 82 | 0 | 1 | 0 | Sorceress pax |
-| 12 | 2752 | 33300 | 8632 | 35400 | 80 | 0 | 1 | 0 | Peace 1 -- buildings |
-| 13 | 10032 | 35550 | 12976 | 40270 | 80 | 0 | 1 | 0 | Peace 2 -- specials |
-| 14 | 4712 | 38100 | 10032 | 40350 | 80 | 0 | 1 | 0 | Peace 3 -- cabins |
-| 15 | 21405 | 25583 | 21827 | 26028 | 60 | 1 | 1 | 7 | Hidden valley |
-| 16 | 6156 | 12755 | 12316 | 15905 | 7 | 1 | 8 | 0 | Swamp region |
-| 17 | 5140 | 34860 | 6260 | 37260 | 8 | 1 | 8 | 0 | Spider region |
-| 18 | 660 | 33510 | 2060 | 34560 | 8 | 1 | 8 | 0 | Spider region |
-| 19 | 18687 | 15338 | 19211 | 16136 | 80 | 0 | 1 | 0 | Village (peace) |
-| 20 | 16953 | 18719 | 20240 | 17484 | 3 | 1 | 3 | 0 | Around village |
-| 21 | 20593 | 18719 | 23113 | 22769 | 3 | 1 | 3 | 0 | Around city |
-| 22 | 0 | 0 | 0x7FFF | 0x9FFF | 3 | 1 | 8 | 0 | Whole world (fallback) |
+**Runtime transitions** in the AI loop (`fmain.c:2130-2182`):
 
-Note: The turtle extent (index 1) has coordinates `(0,0,0,0)`. It is never matched by the bounding-box check. Instead, the turtle is dynamically repositioned at runtime via `move_extent()`, which centers a 500x400 extent around a given coordinate.
+| Condition | New Goal | Source |
+|-----------|----------|--------|
+| Hero dead/falling, no leader | FLEE | `fmain.c:2133-2134` |
+| Hero dead/falling, leader exists | FOLLOWER | `fmain.c:2135-2136` |
+| Vitality < 2 | FLEE | `fmain.c:2138` |
+| Special encounter mismatch (`xtype > 59`, race ≠ extent v3) | FLEE | `fmain.c:2139-2140` |
+| Weapon < 1 (unarmed) | CONFUSED | `fmain.c:2151-2152` |
+| Vitality < 1 | DEATH (via `checkdead`) | `fmain.c:2774` |
 
-### 8.2 Extent Type Meanings
+### 8.2 `do_tactic()` Dispatch (`fmain2.c:1664-1699`)
 
-The `etype` field determines what behavior the zone triggers:
+All tactical movement is rate-limited by a random gate:
+
+```c
+r = !(rand() & 7);                    // 12.5% chance (fmain2.c:1666)
+if (an->goal == ATTACK2) r = !(rand() & 3);  // 25% for clever melee (fmain2.c:1669)
+```
+
+When `r` is 0, the actor continues its previous trajectory unchanged.
+
+| Tactic | `set_course` Mode | Target | Rate-limited? | Source |
+|--------|-------------------|--------|---------------|--------|
+| PURSUE (1) | 0 (smart seek) | Hero | Yes | `fmain2.c:1670` |
+| SHOOT (8) | 0 or 5 (face only) | Hero | **No** | `fmain2.c:1671-1682` |
+| RANDOM (4) | *(direct)* | Random dir | Facing only | `fmain2.c:1684` |
+| BUMBLE_SEEK (3) | 4 (no snap) | Hero | Yes | `fmain2.c:1686` |
+| BACKUP (5) | 3 (reverse) | Hero | Yes | `fmain2.c:1687` |
+| FOLLOW (2) | 0 (smart seek) | Leader+20y | Yes | `fmain2.c:1688-1691` |
+| EVADE (6) | 2 (close proximity) | Neighboring actor | Yes | `fmain2.c:1693-1695` |
+| EGG_SEEK (10) | 0 (smart seek) | Fixed (23087, 5667) | Yes | `fmain2.c:1697-1699` |
+
+SHOOT is the only tactic that fires every tick — it checks axis alignment with the hero and transitions between approaching (mode 0) and aiming/shooting (mode 5).
+
+**RANDOM note** (`fmain2.c:1684`): `an->state = WALKING` is intentionally unconditional — the actor must always be walking. Only the facing direction changes when `r` is non-zero.
+
+**EVADE** (`fmain2.c:1693`): `f = i+i` doubles the actor index instead of incrementing. With at most 4 active enemies, `i` maxes around 5, so `f` stays within `anim_list[20]` bounds in practice. The dead-code branch `if (i == anix) f = i-1` can never execute since the calling loop uses `i < anix`.
+
+**Unused tactics**: HIDE (7) was planned but never implemented. DOOR_SEEK (11) and DOOR_LET (12) were replaced by hardcoded DKnight logic (`fmain.c:2162-2169`). None have a case in `do_tactic()`.
+
+### 8.3 AI Main Loop (`fmain.c:2109-2183`)
+
+The AI loop processes actors 2 through `anix-1` (skipping player and raft). Processing order:
+
+1. **Goodfairy suspend** (`fmain.c:2112`): If fairy resurrection active (`goodfairy > 0 && < 120`), all AI halts.
+2. **CARRIER type** (`fmain.c:2114-2117`): Every 16 ticks, face player with `set_course(i, hero_x, hero_y, 5)`. No other AI.
+3. **SETFIG type** (`fmain.c:2119`): Skipped entirely — SETFIGs use special dialogue/rendering, not real-time AI.
+4. **Distance & battle detection** (`fmain.c:2123-2131`): Within 300×300 pixels sets `actors_on_screen = TRUE` and `battleflag = TRUE`.
+5. **Random reconsider** (`fmain.c:2132`): `r = !bitrand(15)` → 1/16 (6.25%) base probability of reconsidering tactics.
+6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health → FLEE; unarmed → CONFUSED.
+7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random tactic: ranged picks from {FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP}; melee picks from {BUMBLE_SEEK, RANDOM}.
+8. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
+9. **FLEE** (`fmain.c:2172`): `do_tactic(i, BACKUP)`.
+10. **FOLLOWER** (`fmain.c:2173`): `do_tactic(i, FOLLOW)`.
+11. **STAND** (`fmain.c:2174-2176`): Face hero, force STILL state.
+12. **WAIT** (`fmain.c:2178`): Force STILL state, no facing change.
+13. **CONFUSED** and others: No processing — actor continues last trajectory.
+
+At loop end, `leader` is set to the first living active enemy (`fmain.c:2183`).
+
+#### Hostile AI Detail (`fmain.c:2146-2171`)
+
+For modes ≤ ARCHER2, reconsider frequency is adjusted:
+
+```c
+if ((mode & 2) == 0) r = !rand4();    // 25% for ATTACK1 and ARCHER2
+```
+
+This creates a non-obvious pattern: ATTACK1 and ARCHER2 reconsider often (25%), while ATTACK2 and ARCHER1 keep the base 6.25% rate.
+
+Tactic assignment when reconsidering (`r == TRUE`):
+
+| Condition | Tactic | Source |
+|-----------|--------|--------|
+| `race==4 && turtle_eggs` | EGG_SEEK | `fmain.c:2150` |
+| `weapon < 1` | RANDOM (mode→CONFUSED) | `fmain.c:2151-2152` |
+| `vitality < 6 && rand2()` | EVADE | `fmain.c:2153-2154` |
+| Archer, xd<40 && yd<30 | BACKUP | `fmain.c:2156` |
+| Archer, xd<70 && yd<70 | SHOOT | `fmain.c:2157` |
+| Archer, far away | PURSUE | `fmain.c:2158` |
+| Melee, default | PURSUE | `fmain.c:2160` |
+
+Melee engagement threshold: `thresh = 14 − mode` (`fmain.c:2162`). DKnight (race 7) overrides to 16 (`fmain.c:2163`). Within threshold, the enemy enters FIGHTING state. Outside, `do_tactic(i, tactic)` is called.
+
+**DKnight special behavior** (`fmain.c:2168-2169`): When alive and not in melee range, DKnight stays STILL facing south (direction 5), overriding all tactical movement.
+
+### 8.4 Frustration Cycle
+
+When an actor is blocked during movement, `tactic` is set to FRUST (`fmain.c:1660-1661`). Next tick, the AI loop catches FRUST and selects a random escape tactic:
+
+```
+walk → blocked → FRUST → random tactic → walk → ...
+```
+
+This loop prevents enemies from getting permanently stuck on obstacles.
+
+### 8.5 Cleverness Effects
+
+The `cleverness` field in `encounter_chart[]` ([§2.7](#27-encounter_chart--monster-combat-stats)) is 0 or 1. Its effects span multiple systems:
+
+| Property | Cleverness 0 | Cleverness 1 |
+|----------|-------------|-------------|
+| Goal mode | ATTACK1 / ARCHER1 | ATTACK2 / ARCHER2 |
+| `do_tactic` rate | 12.5% per tick | 25% per tick (ATTACK2 only) |
+| Tactic reconsider | 25% (ATTACK1) or 6.25% (ARCHER1) | 6.25% (ATTACK2) or 25% (ARCHER2) |
+| Melee threshold | 13 (ATTACK1) or 11 (ARCHER1) | 12 (ATTACK2) or 10 (ARCHER2) |
+
+ATTACK2 is the most distinctive: it reconsiders tactics rarely (6.25%) but executes them twice as often (25% vs 12.5%). This creates persistent, aggressive behavior — the actor commits to a tactic and follows through energetically.
+
+Clever enemies (cleverness=1): Orcs, Wraith, Snake, Spider, DKnight, Loraii. Stupid enemies (cleverness=0): Ogre, Skeleton, Salamander, Necromancer, Woodcutter.
+
+### 8.6 CONFUSED Mode
+
+Assigned when a hostile actor loses its weapon (`weapon < 1`, `fmain.c:2151-2152`). On the first tick, `do_tactic(i, RANDOM)` runs. On subsequent ticks, CONFUSED (value 10) fails all goal-mode checks in the dispatch chain (none match), so **no AI processing occurs** — the actor continues walking in its last random direction until blocked.
+
+---
+
+## 9. Encounter & Spawning
+
+### 9.1 `extent_list` — Zone Definitions
+
+`extent_list[]` at `fmain.c:339-371` defines 22 rectangular zones plus a whole-world sentinel at index 22. Each zone specifies encounter rules via `struct extent` (`fmain.c:333-337`):
+
+```c
+struct extent { UWORD x1, y1, x2, y2; UBYTE etype, v1, v2, v3; };
+```
+
+`EXT_COUNT = 22` (`fmain.c:372`). The extent scan is first-match (`fmain.c:2676-2679`) — lower indices have higher priority.
+
+| Idx | Location | etype | v1 | v2 | v3 | Category |
+|-----|----------|-------|----|----|----|----------|
+| 0 | Bird (swan) | 70 | 0 | 1 | 11 | Carrier |
+| 1 | Turtle (movable) | 70 | 0 | 1 | 5 | Carrier |
+| 2 | Dragon | 70 | 0 | 1 | 10 | Carrier |
+| 3 | Spider pit | 53 | 4 | 1 | 6 | Forced encounter |
+| 4 | Necromancer | 60 | 1 | 1 | 9 | Special figure |
+| 5 | Turtle eggs | 61 | 3 | 2 | 4 | Special figure |
+| 6 | Princess rescue | 83 | 1 | 1 | 0 | Peace (special) |
+| 7 | Graveyard | 48 | 8 | 8 | 2 | Regular (very high danger) |
+| 8 | Around city | 80 | 4 | 20 | 0 | Peace zone |
+| 9 | Astral plane | 52 | 3 | 1 | 8 | Forced encounter |
+| 10 | King's domain | 81 | 0 | 1 | 0 | Peace + weapon block |
+| 11 | Sorceress domain | 82 | 0 | 1 | 0 | Peace + weapon block |
+| 12–14 | Buildings/cabins | 80 | 0 | 1 | 0 | Peace zone |
+| 15 | Hidden valley | 60 | 1 | 1 | 7 | Special figure (DKnight) |
+| 16 | Swamp region | 7 | 1 | 8 | 0 | Regular (swamp) |
+| 17–18 | Spider regions | 8 | 1 | 8 | 0 | Regular (spiders) |
+| 19 | Village | 80 | 0 | 1 | 0 | Peace zone |
+| 20–21 | Around village/city | 3 | 1 | 3 | 0 | Regular (low danger) |
+| *22* | *Whole world* | *3* | *1* | *8* | *0* | *Sentinel fallback* |
+
+Only extents 0 and 1 (bird/turtle) are persisted in savegames — `fmain2.c:1530`. The turtle extent starts at `(0,0,0,0)` (unreachable) and is repositioned via `move_extent()` during gameplay.
+
+### 9.2 Extent Categories
+
+The `etype` field determines zone behavior (`fmain.c:2674-2720`):
 
 | etype Range | Category | Behavior |
-|:------------|:---------|:---------|
-| 0-49 | Random encounters | `etype` is an encounter chart index. `v1` = minimum count, `v2` = random range, `v3` = encounter type override (0 = use chart). |
-| 50-59 | Set group | Fixed encounter group. Type 52 = astral plane (loads loraii immediately). Type 53 = spider pit. |
-| 60-61 | Special figure | Force-spawns a unique NPC at the zone center. 60 = single figure (necromancer, hidden valley creature). 61 = multiple figures (turtle eggs). |
-| 70 | Carrier | Loads a rideable creature: bird (actor file 11), turtle (actor file 5), or dragon (actor file 10). |
-| 80 | Peace zone | No random combat encounters. Used for towns, cabins, and safe areas. |
-| 81 | King pax | Peace zone around the king's area. |
-| 82 | Sorceress pax | Peace zone around the sorceress's area. |
-| 83 | Princess | Triggers the `rescue()` sequence if the princess is currently captive. |
+|-------------|----------|----------|
+| 0–49 | Regular encounter zone | Sets `xtype`; random encounters per danger timer |
+| 50–59 | Forced group encounter | Monsters spawn immediately on entry; `v1` = count, `v3` = monster type |
+| 52 | Astral plane (special) | Forces `encounter_type = 8` (Loraii); synchronous load (`fmain.c:2696`) |
+| 60–61 | Special figure | Unique NPC spawned at extent center if not already present |
+| 70 | Carrier | Loads bird/turtle/dragon via `load_carrier(v3)` (`fmain.c:2716-2719`) |
+| 80 | Peace zone | Blocks random encounters (`xtype ≥ 50` fails the `xtype < 50` check) |
+| 81 | King peace | Peace + weapon draw blocked: `event(15)` ("Even % would not be stupid enough…") |
+| 82 | Sorceress peace | Peace + weapon draw blocked: `event(16)` ("A great calming influence…") |
+| 83 | Princess rescue | Triggers `rescue()` if `ob_list8[9].ob_stat` set (`fmain.c:2684-2685`) |
 
-### 8.3 Extent Detection Logic
+### 9.3 `find_place` — Zone Detection (`fmain.c:2647-2720`)
 
-The `find_place()` function (`fmain.c:2675-2715`) performs a linear scan of the extent table on every movement tick:
+Called every frame as `find_place(2)` (`fmain.c:2049`). Two phases:
+
+**Phase 1 — Place name** (`fmain.c:2649-2673`): Looks up `hero_sector` (masked to 8 bits) in `_place_tbl` (outdoor, `narr.asm:86`) or `_inside_tbl` (indoor when `region_num > 7`, `narr.asm:117`). Linear scan of 3-byte entries `{sector_low, sector_high, msg_index}` — first match wins.
+
+**Phase 2 — Extent detection** (`fmain.c:2674-2720`): Linear scan of `extent_list[0..21]`. Tests `hero_x > x1 && hero_x < x2 && hero_y > y1 && hero_y < y2` (exclusive bounds). First match wins; if none, the sentinel (index 22, etype=3) applies.
+
+Priority ordering ensures specific zones override general ones: the graveyard (idx 7, etype 48) takes priority over the surrounding city peace zone (idx 8, etype 80); the spider pit (idx 3, etype 53) overrides overlapping peace zones (idx 12–14).
+
+### 9.4 Danger Level & Spawn Logic
+
+Two periodic checks drive random encounters (`fmain.c:2058-2091`):
+
+#### Placement Check — Every 16 Frames (`fmain.c:2058-2078`)
+
+Places already-loaded monsters into anim_list slots 3–6. Up to 10 random locations are tried via `set_loc()` (`fmain2.c:1714-1720`), which picks a random point 150–213 pixels from the hero. Each location must have terrain type 0 (walkable) per `px_to_im()` (`fmain.c:2063`). Dead enemy slots are recycled when all 4 slots are full.
+
+#### Danger Check — Every 32 Frames (`fmain.c:2080-2091`)
+
+Conditions: no actors on screen, no pending load, no active carrier, `xtype < 50`.
+
+Danger level formula (`fmain.c:2082-2083`):
+
+```
+Indoor (region_num > 7): danger_level = 5 + xtype
+Outdoor:                 danger_level = 2 + xtype
+```
+
+Spawn probability: `rand64() <= danger_level` → `(danger_level + 1) / 64`.
+
+| Zone | xtype | Outdoor Danger | Probability |
+|------|-------|----------------|-------------|
+| Whole world / around village/city | 3 | 5 | 6/64 = 9.4% |
+| Swamp region | 7 | 9 | 10/64 = 15.6% |
+| Spider region | 8 | 10 | 11/64 = 17.2% |
+| Graveyard | 48 | 50 | 51/64 = 79.7% |
+
+Monster type selection (`fmain.c:2086-2090`): base is `rand4()` (0–3 → ogre, orc, wraith, skeleton), with region overrides:
+
+| Override | Condition | Monster | Source |
+|----------|-----------|---------|--------|
+| Swamp (xtype=7) | Wraith roll (2) → Snake | Snake (4) | `fmain.c:2087-2088` |
+| Spider region (xtype=8) | All rolls forced | Spider (6) | `fmain.c:2089` |
+| xtype=49 | All rolls forced | Wraith (2) | `fmain.c:2090` |
+
+#### Monster Count — `load_actors()` (`fmain.c:2722-2735`)
 
 ```c
-extn = extent_list;
-for (i=0; i<EXT_COUNT; i++)          /* EXT_COUNT = 22 */
-{   if (hero_x > extn->x1 && hero_x < extn->x2 &&
-        hero_y > extn->y1 && hero_y < extn->y2) break;
-    extn++;
+encounter_number = extn->v1 + rnd(extn->v2);
+```
+
+| Zone | v1 | v2 | Count Range |
+|------|----|----|-------------|
+| Whole world | 1 | 8 | 1–8 |
+| Around village/city | 1 | 3 | 1–3 |
+| Spider pit | 4 | 1 | 4 (forced) |
+| Graveyard | 8 | 8 | 8–15 |
+
+Only 4 enemy actor slots (indices 3–6) exist, so excess `encounter_number` resolves over time as the placement check recycles dead slots.
+
+### 9.5 `set_encounter` — Actor Placement (`fmain.c:2736-2770`)
+
+`set_encounter(i, spread)` places a single enemy in slot `i`. Up to 15 placement attempts (`MAX_TRY`):
+
+- **DKnight fixed position**: If `extn->v3 == 7`, hardcoded at (21635, 25762) (`fmain.c:2741`). The placement loop is skipped, leaving variable `j` uninitialized — the subsequent `j == MAX_TRY` check reads garbage (technically a bug, but harmless in practice).
+- **Normal**: Random offset from encounter origin: `encounter_x + bitrand(spread) - spread/2` (`fmain.c:2743-2744`). Accept if `proxcheck == 0`.
+- **Astral special**: Also accept if `px_to_im == 7` (ice terrain, `fmain.c:2746`).
+
+#### Race Mixing (`fmain.c:2753-2755`)
+
+When `mixflag & 2` (and encounter_type ≠ snake): `race = (encounter_type & 0xFFFE) + rand2()`. This allows adjacent types to mix: ogre↔orc (0↔1), wraith↔skeleton (2↔3). `mixflag` is disabled (`= 0`) for `xtype > 49` or `xtype` divisible by 4 (`fmain.c:2059-2060`).
+
+#### Weapon Selection (`fmain.c:2756-2758`)
+
+```c
+w = encounter_chart[race].arms * 4 + wt;
+an->weapon = weapon_probs[w];
+```
+
+`wt` is re-randomized per enemy if `mixflag & 4` (`fmain.c:2756`). Otherwise all enemies in a batch share the same weapon slot index.
+
+`weapon_probs[]` at `fmain2.c:860-868` (8 groups of 4):
+
+| Group | Values | Weapons |
+|-------|--------|---------|
+| 0 | 0,0,0,0 | None |
+| 1 | 1,1,1,1 | All dirks |
+| 2 | 1,2,1,2 | Dirks and maces |
+| 3 | 1,2,3,2 | Mostly maces, some swords |
+| 4 | 4,4,3,2 | Bows and swords |
+| 5 | 5,5,5,5 | All magic wands |
+| 6 | 8,8,8,8 | Touch attack |
+| 7 | 3,3,3,3 | All swords |
+
+### 9.6 Special Extents
+
+#### Carriers — Bird, Turtle, Dragon (etype 70)
+
+`load_carrier(n)` at `fmain.c:2784-2804` places the carrier in anim_list[3]:
+
+| v3 | Carrier | Type Set | Notes |
+|----|---------|----------|-------|
+| 11 | Swan (bird) | CARRIER | Requires Golden Lasso (`stuff[5]`) to mount (`fmain.c:1498`) |
+| 5 | Turtle | CARRIER | Extent starts at (0,0,0,0), must be repositioned via `move_extent()` |
+| 10 | Dragon | DRAGON | Has its own fireball attack logic |
+
+Carrier extent position: set to a 500×400 box centered on a point via `move_extent()` at `fmain2.c:1560-1566`.
+
+#### Spider Pit (etype 53, index 3)
+
+Forced encounter: spawns `v1=4` spiders (`v3=6`) immediately on entry. `mixflag=0, wt=0` — no mixing, all spiders get the same touch attack weapon.
+
+#### Necromancer / DKnight (etype 60)
+
+Spawns unique NPC at extent center. Only spawns if the NPC isn't already present (`anim_list[3].race != v3` or `anix < 4`, `fmain.c:2687-2693`).
+
+#### Princess Rescue (etype 83, index 6)
+
+When entered and `ob_list8[9].ob_stat` is set (princess captured), calls `rescue()` (`fmain2.c:1584-1605`): displays placard text, increments `princess` counter, teleports hero to (5511, 33780), and repositions the bird extent via `move_extent(0, 22205, 21231)`.
+
+### 9.7 Peace Zones
+
+Extents with etype 80–83 set `xtype ≥ 50`, which fails the `xtype < 50` guard on the danger check (`fmain.c:2081`). This completely suppresses random encounters.
+
+Additional enforcement for etype 81 (King's domain) and 82 (Sorceress domain): drawing a weapon triggers `event(15)` or `event(16)` respectively — admonishing messages that prevent combat initiation.
+
+The `aggressive` field in `encounter_chart[]` is defined for all monster types but is **never read** by any runtime code (`fmain.c:44`). Peace zones rely entirely on the extent system, not per-monster aggression flags.
+
+### 9.8 Dark Knight (DKnight)
+
+The Dark Knight — called "DKnight" in source, "Knight of Dreams" in narrative text — is a unique fixed-position enemy guarding the elf glade entrance in the hidden valley.
+
+#### 9.8.1 Identity
+
+`encounter_chart[7]` at `fmain.c:61`:
+
+```
+{ 40, TRUE, 7, 1, 0, 8 }   /* 7 - DKnight - elf glade */
+```
+
+| Field | Value | Meaning |
+|-------|-------|---------|
+| hitpoints | 40 | Highest non-boss HP (Necromancer has 50) |
+| aggressive | TRUE | (field never read at runtime — see §9.7) |
+| arms | 7 | `weapon_probs[28–31]` = `3,3,3,3` → sword only (`fmain2.c:867`) |
+| cleverness | 1 | Goal = ATTACK1 + 1 = ATTACK2 |
+| treasure | 0 | Group 0 — no treasure drops |
+| file_id | 8 | `cfiles[8]` = `{ 1,32,64, 40, ENEMY, 1000 }` (`fmain2.c:653`) |
+
+The sprite data (`cfiles[8]`) specifies a 16×32-pixel sprite with 64 animation frames, loaded from disk blocks 1000–1039. Spiders (encounter\_type 6, file\_id 8) reference the same `cfiles` entry; the two enemy types share a single sprite sheet on disk. The comment at `fmain2.c:653` reads `/* dknight file (spiders) */`.
+
+#### 9.8.2 Spawning
+
+The DKnight spawns via `extent_list[15]` at `fmain.c:360`:
+
+```
+{ 21405, 25583, 21827, 26028, 60, 1, 1, 7 }   /* hidden valley */
+```
+
+- **etype 60** — special figure encounter (shared with the Necromancer).
+- **v3 = 7** — encounter\_type 7 (race 7, DKnight).
+- Zone bounds: (21405, 25583) to (21827, 26028), a 422×445 world-unit rectangle.
+
+**Spawn trigger** (`fmain.c:2688-2691`): on zone entry, if `anim_list[3].race != extn->v3` or `anix < 4`, a new DKnight is spawned. The DKnight **respawns every time** the player re-enters the hidden valley.
+
+**Hardcoded position** (`fmain.c:2741`): `if (extn->v3==7) { xtest = 21635; ytest = 25762; }` — the random-placement loop is skipped entirely. This fixed positioning is unique to the DKnight among all encounter types.
+
+**Bug — uninitialized `j`**: Because the placement loop is skipped, variable `j` (declared at `fmain.c:2738`) is never assigned. The subsequent `if (j==MAX_TRY) return FALSE;` at `fmain.c:2749` reads an indeterminate value. This is technically undefined behavior but harmless in practice — a garbage register value is unlikely to equal exactly 15.
+
+#### 9.8.3 AI Behavior
+
+The DKnight bypasses the normal tactic system with hardcoded logic at `fmain.c:2162-2169`:
+
+- **Melee threshold override** (`fmain.c:2163`): `if (an->race == 7) thresh = 16;` — normal ATTACK2 enemies use `thresh = 14 - mode` = 12. The DKnight's effective engagement radius is 33% larger.
+- **In range** (xd < 16 AND yd < 16): Enters FIGHTING state and attacks the hero with its sword (`fmain.c:2164-2166`).
+- **Out of range** (`fmain.c:2168-2169`): `an->state = STILL; an->facing = 5;` — stands motionless facing south (direction 5). Does **not** pursue. Does **not** call `do_tactic()`.
+- **No fleeing** (`fmain.c:2139-2140`): For etype 60 zones (`xtype > 59`), actors whose race matches `extn->v3` are exempt from flee mode. Since the DKnight's race (7) matches v3 (7), it never flees, even at vitality 1.
+
+This "stand still facing south" behavior is the door-blocking mechanic: the DKnight physically obstructs passage at its fixed position and only engages when the hero comes within melee range.
+
+#### 9.8.4 Vestigial DOOR\_SEEK / DOOR\_LET
+
+`ftale.h:53-54` defines two goal modes that were evidently planned for the DKnight:
+
+```
+#define DOOR_SEEK  11   /* dknight blocking door */
+#define DOOR_LET   12   /* dknight letting pass */
+```
+
+Neither constant is referenced in any `.c` file. No code ever assigns `goal = 11` or `goal = 12`. The `do_tactic()` switch at `fmain2.c:1664-1700` has no case for either value. These were presumably replaced by the simpler hardcoded logic described above; `fmain.c:121-131` redefines goal constants up to CONFUSED (10) and omits DOOR\_SEEK/DOOR\_LET entirely.
+
+#### 9.8.5 Speech
+
+Two race-specific messages are triggered for the DKnight:
+
+| Event | Call | narr.asm | Text |
+|-------|------|----------|------|
+| Proximity | `speak(41)` at `fmain.c:2101` | `narr.asm:462-465` | *"Ho there, young traveler!" said the black figure. "None may enter the sacred shrine of the People who came Before!"* |
+| Death | `speak(42)` at `fmain.c:2775` | `narr.asm:466-469` | *"Your prowess in battle is great." said the Knight of Dreams. "You have earned the right to enter and claim the prize."* |
+
+The proximity speech fires when the DKnight is `nearest_person` and the hero is nearby (`fmain.c:2094-2103`). The death speech fires inside `checkdead()` when DKnight vitality drops below 1 — it is the only race-specific death speech triggered directly in `checkdead()`.
+
+#### 9.8.6 Quest Connection
+
+The DKnight guards `doorlist[48]` — the **elf glade** entrance (`fmain.c:288`):
+
+```
+{ 0x5470, 0x6480, 0x2c80, 0x8d80, HSTONE, 1 }   /* elf glade */
+```
+
+The door's outside coordinates (21616, 25728) are 19 pixels from the DKnight's fixed position (21635, 25762). There is no programmatic gate — no code checks whether the DKnight is alive to enable or disable passage. The "door" is simply the DKnight's physical body blocking the path. Because the DKnight respawns on zone re-entry, the player must defeat it each time.
+
+Inside the elf glade, `ob_list8[18]` at `fmain2.c:1092` places the **Sun Stone** (`stuff[7]`), the "prize" referenced in `speak(42)`. The Sun Stone is required to damage the Witch: without it (`stuff[7] == 0`), melee attacks against the Witch (race `0x89`) are blocked with `speak(58)` (`fmain2.c:231-233`). For the full witch combat flow, see [STORYLINE.md §5.4](STORYLINE.md#54-witch-combat-encounter).
+
+On death, the only lasting mechanical effect is `brave++` (`fmain.c:2777`). Bravery affects max vitality (`15 + brave/4`, `fmain.c:2901`), combat strength (`brave/20 + 5`, `fmain.c:2249`), and enemy hit chance (`rand256() > brave`, `fmain.c:2260`). No quest flags are set and no inventory items are granted.
+
+---
+
+## 10. Inventory & Items
+
+### 10.1 `inv_list` — Complete Item Table
+
+The 36-entry `inv_list[]` table (`fmain.c:380-424`) is described structurally in [§1.5](#15-struct-inv_item--inventory-item-descriptor). The complete item catalogue with gameplay semantics:
+
+#### Weapons (stuff[0–4])
+
+| Index | Item | Melee Damage | Notes |
+|-------|------|-------------|-------|
+| 0 | Dirk | 1–3 | Starting weapon for each brother |
+| 1 | Mace | 2–4 | Purchasable (30 gold) |
+| 2 | Sword | 3–5 | Purchasable (45 gold) |
+| 3 | Bow | 4–11 (missile) | Purchasable (75 gold); consumes arrows |
+| 4 | Magic Wand | 4–11 (missile) | Fires fireballs; no ammo cost |
+
+Weapon is equipped via USE menu: `anim_list[0].weapon = hit + 1` (`fmain.c:3448-3451`). The bow consumes one arrow per shot (`stuff[8]--` at `fmain.c:1677`); when arrows run out mid-combat, auto-switches to the next best weapon (`fmain.c:1693`).
+
+#### Special Items (stuff[5–8])
+
+| Index | Item | Effect |
+|-------|------|--------|
+| 5 | Golden Lasso | Enables mounting the swan carrier (`fmain.c:1498`). Dropped by the Witch (race `0x89`) on death (`fmain.c:1756`). Requires Sun Stone first — see below. |
+| 6 | Sea Shell | USE calls `get_turtle()` to summon sea turtle carrier near water (`fmain.c:3458-3461`). Blocked inside rectangle `(11194–21373, 10205–16208)`. Obtained from turtle NPC dialogue (`fmain.c:3419-3420`), or ground pickup in ob_list2/ob_list8 at `(10344, 36171)`. |
+| 7 | Sun Stone | Makes the Witch (race `0x89`) vulnerable to melee weapons (`fmain2.c:231-233`). Without it, attacks on the witch produce `speak(58)`: "Stupid fool, you can't hurt me with that!" Ground pickup at `(11410, 36169)` in ob_list8 (`fmain2.c:1092`). |
+| 8 | Arrows | Integer count (max display 45). Consumed by bow. Purchased in batches of 10 for 10 gold. |
+
+#### Magic Consumables (stuff[9–15], `MAGICBASE=9`)
+
+All consumed on use (`--stuff[4+hit]` at `fmain.c:3365`). Guarded by `extn->v3 == 9` check — magic doesn't work in certain areas (`fmain.c:3304`).
+
+| Index | Item | Effect | Source |
+|-------|------|--------|--------|
+| 9 | Blue Stone | Teleport via stone circle (only at sector 144) | `fmain.c:3306-3313` |
+| 10 | Green Jewel | `light_timer += 760` — temporary light-magic effect that brightens dark outdoor areas | `fmain.c:3306` |
+| 11 | Glass Vial | Heal: `vitality += rand8() + 4` (4–11), capped at `15 + brave/4` | `fmain.c:3317-3319` |
+| 12 | Crystal Orb | `secret_timer += 360` — reveals hidden passages | `fmain.c:3321` |
+| 13 | Bird Totem | Renders overhead map with player position | `fmain.c:3323-3340` |
+| 14 | Gold Ring | `freeze_timer += 100` — freezes all enemies (disabled while riding) | `fmain.c:3342-3348` |
+| 15 | Jade Skull | Kill spell: kills all visible enemies with `vitality > 0`, `type == ENEMY`, `race < 7`. **Decrements `brave`** per kill. | `fmain.c:3350-3363` |
+
+The Jade Skull's `brave--` per kill is notable — it's the only item that *reduces* bravery, counterbalancing the kill-based `brave++` from normal combat.
+
+#### Keys (stuff[16–21], `KEYBASE=16`)
+
+| Index | Key |
+|-------|-----|
+| 16 | Gold Key |
+| 17 | Green Key |
+| 18 | Blue Key |
+| 19 | Red Key |
+| 20 | Grey Key |
+| 21 | White Key |
+
+Used via the KEYS submenu (`fmain.c:3468-3485`). The handler tries 9 directions from the hero's position, calling `doorfind(x, y, keytype)` (`fmain.c:1081-1123`). On success, the key is consumed (`stuff[hit + KEYBASE]--`). `doorfind()` matches terrain type 15 (door tile) nearby and checks the `open_list[]` for matching `keytype`.
+
+#### Quest & Stat Items (stuff[22–30])
+
+| Index | Item | Effect | Source |
+|-------|------|--------|--------|
+| 22 | Talisman | **Win condition**: collecting triggers end sequence (`fmain.c:3244-3247`). Dropped by the Necromancer (race `0x09`) on death (`fmain.c:1754`). The Necromancer transforms to a normal man (race 10) and speaks `speak(44)`. | `fmain.c:3244` |
+| 23 | Rose | **Lava immunity**: forces `environ = 0` in the `fiery_death` zone (`map_x` 8802–13562, `map_y` 24744–29544) — `fmain.c:1384-1385`, `fmain.c:1844`. Without it, `environ > 15` kills instantly; `environ > 2` drains vitality per tick. Only protects the player (actor 0), not carriers or NPCs. Ground pickup at `(5473, 38699)` in ob_list8 (`fmain2.c:1128`). | `fmain.c:1844` |
+| 24 | Fruit | **Portable food**: auto-consumed when `hunger > 30` at safe points (`fmain.c:2195-2196`), reducing hunger by 30. On pickup, stored only when `hunger < 15`; otherwise eaten immediately via `eat(30)` (`fmain.c:3166`). 10 fruits placed in ob_list8 (`fmain2.c:1129-1138`). | `fmain.c:2195` |
+| 25 | Gold Statue | **Desert gate key**: need 5 to access the city of Azal. Dual-gated: DESERT door type blocked when `stuff[25] < 5` (`fmain.c:1919`), AND region 4 map tiles overwritten to impassable sector 254 at load time (`fmain.c:3594-3596`). See [§10.1.1](#1011-gold-statue-locations) for all 5 locations. | `fmain.c:1919` |
+| 26 | Book | Vestigial — defined in inventory system but no world placement, no handler, not obtainable | — |
+| 27 | Herb | Vestigial — defined in inventory system but no world placement, no handler, not obtainable | — |
+| 28 | Writ | **Royal commission**: obtained from `rescue()` after saving the princess (`fmain2.c:1598`). Also grants `princess++`, 100 gold, and 3 of each key type (`stuff[16..21] += 3`). Shown to Priest triggers `speak(39)` and reveals a gold statue (`fmain.c:3383-3386`). GIVE menu entry exists but has no handler — the Writ functions only as a passive dialogue check. | `fmain.c:3383` |
+| 29 | Bone | **Spectre trade**: found underground at `(3723, 39340)` in ob_list9 (`fmain2.c:1167`). Given to Spectre (race `0x8a`): `speak(48)` "Take this crystal shard", drops crystal shard (`fmain.c:3501-3503`). Non-spectre NPCs reject it: `speak(21)`. | `fmain.c:3501` |
+| 30 | Crystal Shard | **Dungeon hidden passages**: overrides terrain type 12 blocking in collision check (`fmain.c:1609`). Type-12 walls (terra set 8, tile 93) appear in dungeon labyrinth sectors (2, 3, 5–9, 11–12, 35) and doom tower sectors 137–138 near the stargate portal to the spirit world. Never consumed. Obtained from Spectre trade (see Bone above). | `fmain.c:1611` |
+
+##### 10.1.1 Gold Statue Locations
+
+All 5 statues use object ID `STATUE` (149), mapped to `stuff[25]` via `itrans`.
+
+| # | Source | Location | How Obtained |
+|---|--------|----------|-------------|
+| 1 | `ob_listg[6]` — `fmain2.c:1006` | Seahold `(11092, 38526)` | Ground pickup (ob_stat=1) |
+| 2 | `ob_listg[7]` — `fmain2.c:1007` | Ogre Den `(25737, 10662)` | Ground pickup (ob_stat=1) |
+| 3 | `ob_listg[8]` — `fmain2.c:1008` | Octagonal Room `(2910, 39023)` | Ground pickup (ob_stat=1) |
+| 4 | `ob_listg[9]` — `fmain2.c:1009` | Sorceress `(12025, 37639)` | Talk to Sorceress — `speak(45)`, revealed on first visit (`fmain.c:3402-3403`) |
+| 5 | `ob_listg[10]` — `fmain2.c:1010` | Priest `(6700, 33766)` | Show Writ to Priest — `speak(39)`, requires `stuff[28]` (`fmain.c:3383-3386`) |
+
+Wizard hint — `speak(39)`: "Find all five and you'll find the vanishing city" (`narr.asm:437-439`).
+
+##### 10.1.2 Quest Progression Chain
+
+The quest items form a dependency graph. Items listed at the same indent level are independent.
+
+```mermaid
+flowchart TD
+    START["Start: Julian with a Dirk"] --> EXPLORE["Explore world"]
+
+    EXPLORE --> TURTLE["Find turtle eggs → talk to turtle<br/>Sea Shell (stuff[6])"]
+    EXPLORE --> SUNSTONE["Find Sun Stone (stuff[7])<br/>ob_list8: (11410, 36169)"]
+    EXPLORE --> ROSE["Find Rose (stuff[23])<br/>ob_list8: (5473, 38699)"]
+    EXPLORE --> BONE["Find Bone (stuff[29])<br/>ob_list9: (3723, 39340)"]
+    EXPLORE --> STATUES_GROUND["Find 3 ground statues<br/>Seahold, Ogre Den, Octagonal Room"]
+    EXPLORE --> SORCERESS["Talk to Sorceress<br/>→ Gold Statue #4"]
+
+    TURTLE --> WATER["Turtle carrier<br/>→ cross water bodies"]
+    SUNSTONE --> WITCH["Kill Witch (race 0x89)<br/>→ drops Golden Lasso (stuff[5])"]
+    WITCH --> BIRD["Mount swan carrier<br/>→ fly over mountains"]
+    BIRD --> RESCUE["Rescue Princess<br/>→ Writ (stuff[28]) + 100 gold + keys"]
+    RESCUE --> PRIEST["Show Writ to Priest<br/>→ Gold Statue #5"]
+
+    BONE --> SPECTRE["Give Bone to Spectre<br/>→ Crystal Shard (stuff[30])"]
+    SPECTRE --> CRYSTAL["Pass hidden walls in dungeon<br/>(terrain type 12, doom tower)"]
+    CRYSTAL --> STARGATE["Stargate portal<br/>→ Spirit World"]
+
+    ROSE --> LAVA["Traverse lava region<br/>(fiery_death zone)"]
+
+    STATUES_GROUND --> DESERT{"5 Gold Statues?"}
+    SORCERESS --> DESERT
+    PRIEST --> DESERT
+    DESERT -->|"stuff[25] ≥ 5"| AZAL["Enter city of Azal<br/>(DESERT doors + region 4 map)"]
+
+    STARGATE --> NECRO
+    AZAL --> NECRO["Defeat Necromancer in Spirit World<br/>→ drops Talisman (stuff[22])"]
+    NECRO --> WIN["WIN: Talisman triggers<br/>end sequence"]
+```
+
+**Key dependencies**: Sun Stone → Witch → Lasso → Bird → Princess → Writ → Priest Statue is the critical path for the 5-statue gate. The Bone → Shard → dungeon hidden walls → stargate chain provides access to the spirit world where the Necromancer resides. The Rose → lava traversal is required for the volcanic region.
+
+#### Gold (stuff[31–34], `GOLDBASE=31`)
+
+Gold items are handled specially: `inv_list[j].maxshown` holds the gold value (2, 5, 10, 100), which is added to the `wealth` variable instead of `stuff[]` (`fmain.c:3278`).
+
+### 10.2 `stuff[]` Array — Inventory Storage
+
+```c
+UBYTE *stuff, julstuff[ARROWBASE], philstuff[ARROWBASE], kevstuff[ARROWBASE];
+```
+(`fmain.c:432`)
+
+Three static arrays of 35 elements (indices 0–34), one per brother. The `stuff` pointer is bound to the current brother via `blist[brother-1].stuff` (`fmain.c:2848`, `fmain.c:3628`).
+
+Index 35 (`ARROWBASE`) is used as a temporary accumulator for quiver pickups — set to 0 before Take, then `stuff[8] += stuff[ARROWBASE] * 10` after pickup (`fmain.c:3150`, `fmain.c:3243`).
+
+On brother succession (`revive(TRUE)`): all items wiped (`fmain.c:2849`), starting loadout is one Dirk (`fmain.c:2850`). All three inventories are saved/loaded (`fmain.c:3623-3628`).
+
+### 10.3 `itrans` — World Object to Inventory Mapping
+
+`itrans[]` at `fmain2.c:979-985` maps world object IDs (`ob_id`) to `stuff[]` indices via pairs terminated by `0,0`:
+
+| World Object ID | Name | → stuff[] Index | Inventory Item |
+|-----------------|------|----------------|----------------|
+| 11 (QUIVER) | Quiver | 35 | Arrows (×10) |
+| 18 (B_STONE) | Blue Stone | 9 | Blue Stone |
+| 19 (G_JEWEL) | Green Jewel | 10 | Green Jewel |
+| 22 (VIAL) | Glass Vial | 11 | Glass Vial |
+| 21 (C_ORB) | Crystal Orb | 12 | Crystal Orb |
+| 23 (B_TOTEM) | Bird Totem | 13 | Bird Totem |
+| 17 (G_RING) | Gold Ring | 14 | Gold Ring |
+| 24 (J_SKULL) | Jade Skull | 15 | Jade Skull |
+| 145 (M_WAND) | Magic Wand | 4 | Magic Wand |
+| 27 | — | 5 | Golden Lasso |
+| 8 | — | 2 | Sword |
+| 9 | — | 1 | Mace |
+| 12 | — | 0 | Dirk |
+| 10 | — | 3 | Bow |
+| 147 (ROSE) | Rose | 23 | Rose |
+| 148 (FRUIT) | Fruit | 24 | Fruit |
+| 149 (STATUE) | Gold Statue | 25 | Gold Statue |
+| 150 (BOOK) | Book | 26 | Book |
+| 151 (SHELL) | Sea Shell | 6 | Sea Shell |
+| 155 | — | 7 | Sun Stone |
+| 136 | — | 27 | Herb |
+| 137 | — | 28 | Writ |
+| 138 | — | 29 | Bone |
+| 139 | — | 22 | Talisman |
+| 140 | — | 30 | Crystal Shard |
+| 25 (GOLD_KEY) | Gold Key | 16 | Gold Key |
+| 153 (GREEN_KEY) | Green Key | 17 | Green Key |
+| 114 (BLUE_KEY) | Blue Key | 18 | Blue Key |
+| 242 (RED_KEY) | Red Key | 19 | Red Key |
+| 26 (GREY_KEY) | Grey Key | 20 | Grey Key |
+| 154 (WHITE_KEY) | White Key | 21 | White Key |
+
+The `enum obytes` at `fmain2.c:968-977` defines constants for many of these IDs.
+
+Lookup logic (`fmain.c:3186-3194`): linear scan of pairs until the `0,0` terminator. On match, increments `stuff[index]` and announces the pickup.
+
+#### Special-Cased World Objects
+
+These bypass `itrans` in the Take handler (`fmain.c:3155-3183`):
+
+| ob_id | Item | Special Handling |
+|-------|------|-----------------|
+| 13 (MONEY) | Gold bag | `wealth += 50` |
+| 20 (SCRAP) | Scrap | `event(17)` + region-specific event |
+| 28 | Dead brother bones | Recovers dead brother's full inventory |
+| 15 (CHEST) | Chest | Container → random loot |
+| 14 (URN) | Brass urn | Container → random loot |
+| 16 (SACKS) | Sacks | Container → random loot |
+| 102 (TURTLE) | Turtle eggs | Cannot be taken |
+| 31 (FOOTSTOOL) | Footstool | Cannot be taken |
+
+### 10.4 `jtrans` — Shop System
+
+`jtrans[]` at `fmain2.c:850` defines 7 purchasable items as `(stuff_index, price)` pairs:
+
+| Menu Label | Item | Price | Notes | Source |
+|------------|------|-------|-------|--------|
+| Food | (special) | 3 gold | Calls `eat(50)` — reduces hunger by 50 | `fmain.c:3434` |
+| Arrow | Arrows | 10 gold | Adds 10 arrows (`stuff[8] += 10`) | `fmain.c:3435` |
+| Vial | Glass Vial | 15 gold | `stuff[11]++` | `fmain.c:3436` |
+| Mace | Mace | 30 gold | `stuff[1]++` | `fmain.c:3436` |
+| Sword | Sword | 45 gold | `stuff[2]++` | `fmain.c:3436` |
+| Bow | Bow | 75 gold | `stuff[3]++` | `fmain.c:3436` |
+| Totem | Bird Totem | 20 gold | `stuff[13]++` | `fmain.c:3436` |
+
+Menu labels from `fmain.c:501`: `"Food ArrowVial Mace SwordBow  Totem"`.
+
+Purchase requires proximity to a shopkeeper (`race == 0x88`) and `wealth > price` (`fmain.c:3424-3430`). Food is special — it doesn't add to `stuff[0]` (that's Dirk); instead calls `eat(50)`.
+
+### 10.5 Container Loot (`fmain.c:3198-3239`)
+
+When a container (chest, urn, sacks) is opened, `rand4()` determines the tier:
+
+| Roll | Result | Details |
+|------|--------|---------|
+| 0 | Nothing | `"nothing."` |
+| 1 | One item | `rand8() + 8` → indices 8–15 (arrows or magic items). Index 8 → quiver. |
+| 2 | Two items | Two different random items from same range. Index 8 → 100 gold. |
+| 3 | Three of same | Three copies. Index 8 → 3 random keys (`KEYBASE` to `KEYBASE+5`). |
+
+### 10.6 Menu System
+
+#### Menu Modes (`fmain.c:494`)
+
+```c
+enum cmodes {ITEMS=0, MAGIC, TALK, BUY, GAME, SAVEX, KEYS, GIVE, USE, FILE};
+```
+
+Menu item availability is managed by `set_options()` (`fmain.c:3526-3542`), which calls `stuff_flag(index)` — returns 10 (enabled) if `stuff[index] > 0`, else 8 (disabled). The Book in the GIVE menu is **hardcoded disabled**: `menus[GIVE].enabled[6] = 8` (`fmain.c:3540`).
+
+#### GIVE Mode (`fmain.c:3486-3506`)
+
+| Menu Hit | Action | Source |
+|----------|--------|--------|
+| Gold | Give 2 gold to NPC. `wealth -= 2`. If `rand64() > kind`, `kind++`. Beggars (`0x8d`) give goal speech. | `fmain.c:3488-3498` |
+| Writ | Handled via TALK/Priest interaction, not GIVE handler | `fmain.c:3383-3386` |
+| Bone | Give to Spectre (`0x8a`): `speak(48)`, drops crystal shard | `fmain.c:3501-3503` |
+
+---
+
+## 11. World Objects
+
+### 11.1 `struct object`
+
+Defined at `ftale.h:92-95`, each world object is a compact 6-byte record:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `xc` | `unsigned short` | World X coordinate (pixel-space, 0–65535) |
+| `yc` | `unsigned short` | World Y coordinate (pixel-space, 0–65535) |
+| `ob_id` | `char` | Object type identifier (see [§11.3](#113-object-id-registry)) |
+| `ob_stat` | `char` | Object status code (see below) |
+
+#### ob_stat Values
+
+Defined in comment at `fmain2.c:998`:
+
+| Value | Meaning | Effect in `set_objects` |
+|-------|---------|------------------------|
+| 0 | Non-existent / disabled | Skipped — `fmain2.c:1262` |
+| 1 | On ground (pickable) | Rendered as OBJECTS type, `race=1` — `fmain2.c:1291` |
+| 2 | In inventory / taken | Skipped — `fmain2.c:1262` |
+| 3 | Setfig (NPC character) | NPC with `state=STILL` — `fmain2.c:1265-1282` |
+| 4 | Dead setfig | NPC with `state=DEAD` — `fmain2.c:1275` |
+| 5 | Hidden (revealed by Look) | Rendered as OBJECTS type, `race=0` — `fmain2.c:1290` |
+| 6 | Cabinet item | Rendered as OBJECTS type, `race=2` — `fmain2.c:1289` |
+
+The `race` values assigned to OBJECTS entries encode interaction behavior: `race=0` means not directly pickable (revealed by Look), `race=1` means normal ground item, `race=2` means cabinet item.
+
+### 11.2 Region Object Lists
+
+Objects are organized into 10 regional lists plus one global list. Each list is a static array of `struct object`. The global list is processed every tick; the regional list is processed only for the player's current region.
+
+#### ob_listg — Global Objects (11 entries)
+
+Defined at `fmain2.c:1001-1012`. `glbobs = 11` (`fmain2.c:1180`). These objects are checked regardless of region.
+
+| Index | ob_id | Initial ob_stat | Purpose |
+|-------|-------|----------------|---------|
+| 0 | 0 | 0 | **Drop slot** — overwritten by `leave_item()` for dynamically dropped items |
+| 1 | 28 (bones) | 0 | Dead brother 1 (Julian) — coordinates filled at death |
+| 2 | 28 (bones) | 0 | Dead brother 2 (Phillip) — coordinates filled at death |
+| 3 | 11 (ghost) | 0 | Ghost brother 1 — activated during succession |
+| 4 | 11 (ghost) | 0 | Ghost brother 2 — activated during succession |
+| 5 | 10 (spectre) | 3 | Spectre NPC — toggles visibility with day/night |
+| 6 | STATUE | 1 | Gold statue — Seahold |
+| 7 | STATUE | 1 | Gold statue — Ogre Den |
+| 8 | STATUE | 1 | Gold statue — Octal Room |
+| 9 | STATUE | 0 | Gold statue — Sorceress (hidden until first talk) |
+| 10 | STATUE | 0 | Gold statue — Priest (hidden until writ presented) |
+
+Key runtime mutations:
+- `ob_listg[0]` overwritten by `leave_item()` — `fmain2.c:1191-1195`
+- `ob_listg[1-2]` get death coordinates during brother succession — `fmain.c:2839-2840`
+- `ob_listg[3-4]` activated as ghost setfigs (stat=3) — `fmain.c:2841`; cleared when bones picked up — `fmain.c:3174`
+- `ob_listg[5]` stat toggles: `lightlevel < 40` → stat=3 (visible), else stat=2 (hidden) — `fmain.c:2027-2028`
+- `ob_listg[9]` set to stat=1 on sorceress first talk — `fmain.c:3403`
+- `ob_listg[10]` set to stat=1 on presenting writ to priest — `fmain.c:3384-3385`
+
+#### Regional Lists (ob_list0–ob_list9)
+
+Each outdoor region (0–7) has a small set of pre-placed objects plus 10 `TENBLANKS` slots reserved for random treasure. Regions 8 (building interiors) and 9 (underground) have larger fixed lists and are excluded from random scatter.
+
+| Region | List | Initial Count | Description |
+|--------|------|---------------|-------------|
+| 0 | `ob_list0` | 3 | Snow Land — 3 rangers |
+| 1 | `ob_list1` | 1 | Maze Forest North — turtle eggs |
+| 2 | `ob_list2` | 5 | Swamp Land — 2 wizards, ranger, sacks, shell |
+| 3 | `ob_list3` | 12 | Tambry / Manor area — mixed NPCs and items |
+| 4 | `ob_list4` | 3 | Desert — 2 dummies + beggar |
+| 5 | `ob_list5` | 5 | Farm & City — beggar, 2 wizards, ring, chest |
+| 6 | `ob_list6` | 1 | Lava Plain — dummy object |
+| 7 | `ob_list7` | 1 | Southern Mountains — dummy object |
+| 8 | `ob_list8` | 77 (61+16) | Building Interiors — NPCs, items, and 16 hidden Look items |
+| 9 | `ob_list9` | 9 | Underground — 4 wands, 2 chests, wizard, money, king's bone |
+
+Source: `fmain2.c:1013-1177` for list data, `fmain2.c:1181` for initial counts.
+
+**ob_list8** is the largest list. Indices 0–15 are setfig NPCs (priest, king, nobles, guards, wizards, princesses, sorceress, witch, bartenders). Indices 16–60 are ground items (footstools, urns, chests, vials, bird totems, keys, fruits, rose, scraps, shells). Indices 61–76 are hidden Look items with `ob_stat=5` (keys, jewels, skulls, money, totems) — `fmain2.c:1071-1168`.
+
+### 11.3 Object ID Registry
+
+The `enum obytes` at `fmain2.c:967-977` defines named constants for object types:
+
+| Value | Constant | Description |
+|-------|----------|-------------|
+| 0–10 | (setfig NPCs) | Wizard (0), Priest (1), Guard (2/3), Princess (4), King (5), Noble (6), Sorceress (7), Bartender (8), Witch (9), Spectre (10) |
+| 11 | `QUIVER` | Quiver of arrows |
+| 13 | `MONEY` | 50 gold pieces — `fmain.c:3157` |
+| 14 | `URN` | Brass urn (container) |
+| 15 | `CHEST` | Chest (container) |
+| 16 | `SACKS` | Sacks (container) |
+| 17–24 | `G_RING`..`J_SKULL` | Magic/quest items (ring, stone, jewel, scrap, orb, vial, totem, skull) |
+| 25–26 | `GOLD_KEY`, `GREY_KEY` | Keys |
+| 28 | (dead brother) | Brother's bones — `fmain.c:3172-3176` |
+| 29 | 0x1d | Opened/empty chest — `fmain2.c:1208` |
+| 31 | `FOOTSTOOL` | Cannot be taken — `fmain.c:3186` |
+| 102 | `TURTLE` | Turtle eggs — cannot be taken — `fmain.c:3170` |
+| 114 | `BLUE_KEY` | Blue key |
+| 139 | (talisman) | Dropped by necromancer on death — `fmain.c:1754` |
+| 140 | (crystal shard) | Dropped when giving bone to spectre — `fmain.c:3503` |
+| 145–151 | `M_WAND`..`SHELL` | Wand, meal, rose, fruit, statue, book, shell |
+| 153–154 | `GREEN_KEY`, `WHITE_KEY` | Keys |
+| 242 | `RED_KEY` | Red key |
+
+The `itrans[]` table at `fmain2.c:979-985` maps `ob_id` values to `stuff[]` inventory indices as terminator-delimited pairs. See [§10.3](#103-itrans--world-object-to-inventory-mapping) for the full mapping.
+
+### 11.4 Management Arrays
+
+#### ob_table[10]
+
+Maps region numbers to object list pointers — `fmain2.c:1178-1179`:
+
+```c
+struct object *ob_table[10] = {
+    ob_list0, ob_list1, ob_list2, ob_list3, ob_list4,
+    ob_list5, ob_list6, ob_list7, ob_list8, ob_list9 };
+```
+
+#### mapobs[10]
+
+Tracks current entry count per region — `fmain2.c:1181`. Initial values: `{ 3, 1, 5, 12, 3, 5, 1, 1, 77, 9 }`. This array is **mutable**: when random treasure is distributed, `mapobs[region_num]` is incremented per new object — `fmain2.c:1234`.
+
+#### dstobs[10]
+
+Tracks whether random treasure has been distributed — `fmain2.c:1182`. Initial values: `{ 0,0,0,0,0,0,0,0,1,1 }`. Regions 8 and 9 start as 1 (excluded from random scatter). Set to 1 after distribution — `fmain2.c:1238`.
+
+### 11.5 `do_objects` — Per-Tick Processing
+
+Defined at `fmain2.c:1184-1189`, called every tick from `fmain.c:2304`:
+
+1. Sets `j1 = 2` — starting anim_list index for setfig NPCs (0=hero, 1=carrier are reserved)
+2. Calls `set_objects(ob_listg, glbobs, 0x80)` — processes global objects with flag `0x80`
+3. Calls `set_objects(ob_table[region_num], mapobs[region_num], 0)` — processes regional objects
+4. If `j1 > 3`, updates `anix = j1` — adjusts the setfig/enemy boundary in anim_list
+
+### 11.6 `set_objects` — Region Load and Rendering
+
+Defined at `fmain2.c:1218-1301`. Called twice per tick by `do_objects`.
+
+**Random treasure distribution** (`fmain2.c:1225-1238`): On first region load (when `dstobs[region_num] == 0` and `new_region >= 10`), 10 random objects are scattered. Items are selected from `rand_treasure[]` (`fmain2.c:987-992`):
+
+| Distribution | Items |
+|-------------|-------|
+| 4/16 | SACKS |
+| 3/16 | GREY_KEY |
+| 2/16 | CHEST |
+| 1/16 each | MONEY, GOLD_KEY, QUIVER, RED_KEY, B_TOTEM, VIAL, WHITE_KEY |
+
+Positions are randomized within the region's quadrant, rejecting non-traversable terrain via `px_to_im()` — `fmain2.c:1232`.
+
+**Per-object processing** (`fmain2.c:1240-1301`): For each object, performs a screen-bounds check, then:
+
+- **Setfigs** (ob_stat 3/4): Loads sprite file via `setfig_table[id]`, creates anim_list entry with `type=SETFIG`, `race = id + 0x80`, `vitality = 2 + id*2`, `goal = i` (list index). Dead setfigs (stat=4) get `state=DEAD`. Witch presence sets `witchflag = TRUE` — `fmain2.c:1258`.
+- **Items** (ob_stat 1/5/6): Creates anim_list entry with `type=OBJECTS`, `index=ob_id`, `vitality = i + f` (list index + global flag `0x80`).
+- **Resource limit**: Returns early if `anix2 >= 20` — `fmain2.c:1242`.
+
+### 11.7 `change_object` — Object State Mutation
+
+Defined at `fmain2.c:1200-1208`. Decodes the anim_list entry's `vitality` field to locate the original `struct object`: bit 7 selects global vs. regional list (`vitality & 0x80`), bits 0–6 give the list index (`vitality & 0x7f`).
+
+- Normal objects: sets `ob_stat = flag`
+- Chests: changes `ob_id` from `CHEST` (15) to `0x1d` (29, empty chest) instead — `fmain2.c:1208`
+
+Callers:
+- Take handler: `change_object(nearest, 2)` — marks taken — `fmain.c:3242`
+- Look handler: `change_object(i, 1)` — reveals hidden items — `fmain.c:3294`
+
+### 11.8 `leave_item` — Drop Item in World
+
+Defined at `fmain2.c:1191-1196`. Always uses `ob_listg[0]` (the dedicated drop slot), setting coordinates to the actor's position (+10 Y offset) and `ob_stat=1`.
+
+Callers:
+- Necromancer death (race `0x09`) → talisman (139): `leave_item(i, 139)` — `fmain.c:1754`
+- Witch death (race `0x89`) → golden lasso (27): `leave_item(i, 27)` — `fmain.c:1756`
+- Bone given to spectre → crystal shard (140): `leave_item(nearest_person, 140)` — `fmain.c:3503`
+
+**Limitation**: Only one dynamically dropped item can exist at a time. Each call overwrites the previous `ob_listg[0]` contents.
+
+### 11.9 Save/Load of Object State
+
+Object state is fully persisted — `fmain2.c:1522-1527`:
+
+1. `ob_listg` — 66 bytes (11 × 6)
+2. `mapobs` — 20 bytes (10 × 2, current counts including random additions)
+3. `dstobs` — 20 bytes (10 × 2, distribution flags)
+4. All 10 regional lists — variable size based on current `mapobs[i]`
+
+---
+
+## 12. Door System
+
+### 12.1 `struct door` and `doorlist[86]`
+
+Defined at `fmain.c:233-325`. Each door connects an outdoor coordinate (`xc1, yc1`) to an indoor coordinate (`xc2, yc2`):
+
+```c
+struct door {
+    unsigned short xc1, yc1;  /* outside image coords */
+    unsigned short xc2, yc2;  /* inside image coords */
+    char type;                /* door visual/orientation type */
+    char secs;                /* 1=buildings (region 8), 2=dungeons (region 9) */
+};
+```
+
+`DOORCOUNT = 86` (`fmain.c:231`). The table is sorted by `xc1` (ascending) to support binary search during outdoor→indoor transitions.
+
+#### Door Type Constants (`fmain.c:210-229`)
+
+Horizontal types have bit 0 set (`type & 1`):
+
+| Constant | Value | Orientation | Entries in doorlist |
+|----------|-------|-------------|---------------------|
+| HWOOD | 1 | Horizontal | 16 |
+| VWOOD | 2 | Vertical | 3 |
+| HSTONE | 3 | Horizontal | 11 |
+| CRYST | 7 | Horizontal | 2 |
+| BLACK | 9 | Horizontal | 5 |
+| MARBLE | 10 | Vertical | 7 |
+| LOG | 11 | Horizontal | 10 |
+| HSTON2 | 13 | Horizontal | 12 |
+| VSTON2 | 14 | Vertical | 2 |
+| STAIR | 15 | Horizontal | 4 |
+| DESERT | 17 | Horizontal | 5 |
+| CAVE/VLOG | 18 | Vertical | 14 (4 cave + 10 cabin yard) |
+
+**CAVE and VLOG share value 18** — `fmain.c:228-229`. Code checking `d->type == CAVE` also catches VLOG entries. Both use the same teleportation offset.
+
+Unused types: VSTONE (4), HCITY (5), VCITY (6) are defined but never appear in `doorlist[]`. SECRET (8) appears only in `open_list[]`.
+
+#### secs Field
+
+| Value | Target Region | Description |
+|-------|--------------|-------------|
+| 1 | 8 | Building interiors (F9 image set) — `fmain.c:624` |
+| 2 | 9 | Dungeons and caves (F10 image set) — `fmain.c:625` |
+
+Region assignment at `fmain.c:1926`: `if (d->secs == 1) new_region = 8; else new_region = 9;`
+
+#### Notable Patterns
+
+- **Entries 0–3 identical** — four copies of the same desert fort door at `fmain.c:240-243`. Editing artifact; functionally harmless.
+- **Cabin pairs** — 10 cabins, each with a VLOG "yard" door and a LOG "cabin" door (20 entries total).
+- **Crystal palace** (idx 21–22) — two adjacent doors for the same building.
+- **Stargate** (idx 14–15) — bidirectional portal. Entry 14 goes outdoor→region 8, entry 15 goes region 8→region 9.
+- **Village cluster** (idx 31–39) — 9 doors for the village.
+- **City cluster** (idx 50–61) — 12 doors for Marheim.
+
+### 12.2 `doorfind` Algorithm
+
+Defined at `fmain.c:1081-1128`. Opens LOCKED doors (terrain tile type 15) by modifying map tiles. This system is **separate** from the `doorlist[]` teleportation system — `doorfind` operates on `open_list[]`.
+
+Algorithm:
+1. **Locate terrain type 15** — tries `px_to_im(x,y)`, `px_to_im(x+4,y)`, `px_to_im(x-8,y)` — `fmain.c:1083-1085`
+2. **Find top-left corner** — scans left (up to 2×16 px) and down (32 px) — `fmain.c:1087-1089`
+3. **Convert to image coordinates** — `x >>= 4; y >>= 5` — `fmain.c:1090-1091`
+4. **Get sector/region IDs** — `sec_id = *(mapxy(x,y))`, `reg_id = current_loads.image[(sec_id >> 6)]` — `fmain.c:1093-1095`
+5. **Search `open_list[17]`** — match `map_id == reg_id && door_id == sec_id`, with key check `keytype == 0 || keytype == open_list[j].keytype` — `fmain.c:1097-1118`
+6. **Replace tiles** — writes new tile IDs into `sector_mem` via `mapxy()`. Placement varies by `above` field — `fmain.c:1100-1114`
+7. **Failure** — prints "It's locked." (suppressed by `bumped` flag) — `fmain.c:1121-1123`
+
+Collision-triggered: when the player bumps terrain type 15, `doorfind(xtest, ytest, 0)` is called automatically — `fmain.c:1607`. This opens only NOKEY doors.
+
+### 12.3 Door Types & Keys (`open_list`)
+
+#### Key Enum (`fmain.c:1049`)
+
+```c
+enum ky {NOKEY=0, GOLD=1, GREEN=2, KBLUE=3, RED=4, GREY=5, WHITE=6};
+```
+
+#### `struct door_open` (`fmain.c:1053-1058`)
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `door_id` | UBYTE | Sector tile ID of the closed door |
+| `map_id` | USHORT | Image block number identifying the door's region |
+| `new1` | UBYTE | Primary replacement tile ID |
+| `new2` | UBYTE | Secondary replacement tile ID (0 = none) |
+| `above` | UBYTE | Tile placement: 0=none, 1=above, 2=side, 3=back, 4=special cabinet |
+| `keytype` | UBYTE | Key needed: 0=none, 1–6 per enum |
+
+#### `open_list[17]` (`fmain.c:1059-1078`)
+
+| Idx | Key | Comment |
+|-----|-----|---------|
+| 0 | GREEN | HSTONE door (outdoor stone buildings) |
+| 1 | NOKEY | HWOOD door (unlocked wooden doors) |
+| 2 | NOKEY | VWOOD door (unlocked vertical wooden doors) |
+| 3 | GREY | HSTONE2 door |
+| 4 | GREY | VSTONE2 door |
+| 5 | KBLUE | CRYST (crystal palace interiors) |
+| 6 | GREEN | OASIS entrance |
+| 7 | WHITE | MARBLE (keep doors) |
+| 8 | GOLD | HGATE (gates) |
+| 9 | GOLD | VGATE (vertical gates) |
+| 10 | RED | SECRET passage |
+| 11 | GREY | TUNNEL |
+| 12 | GOLD | GOLDEN door (special 3-tile layout) |
+| 13 | NOKEY | HSTON3 (unlocked) |
+| 14 | NOKEY | VSTON3 (unlocked) |
+| 15 | GREEN | CABINET (special 4-tile layout) |
+| 16 | NOKEY | BLUE door (unlocked) |
+
+#### Key Usage — Menu Handler (`fmain.c:3472-3488`)
+
+Player selects a key, then all 9 directions (0–8) at 16-pixel distance are checked via `doorfind(x, y, keytype)`. On success, the key is consumed (`stuff[hit+KEYBASE]--`).
+
+**Door tile changes are transient** — they modify live `sector_mem` data only. Changes are lost when the sector reloads from disk. No save mechanism preserves opened door tiles.
+
+### 12.4 Region Transitions
+
+#### Outdoor → Indoor (`fmain.c:1894-1935`)
+
+Triggered when `region_num < 8` and the hero's aligned position matches a doorlist entry:
+
+1. **Align** to 16×32 tile grid: `xtest = hero_x & 0xfff0; ytest = hero_y & 0xffe0` — `fmain.c:1898-1899`
+2. **Riding check**: `if (riding) goto nodoor3` — cannot enter doors while mounted — `fmain.c:1901`
+3. **Binary search** on `doorlist` by `xc1` — `fmain.c:1903-1913`
+4. **Orientation check**: horizontal doors skip if `hero_y & 0x10` is set; vertical doors skip if `(hero_x & 15) > 6` — `fmain.c:1914-1916`
+5. **DESERT gate**: `if (d->type == DESERT && stuff[STATBASE] < 5) break` — need ≥5 gold statues — `fmain.c:1919`
+6. **Destination offset** by type — `fmain.c:1920-1923`:
+   - CAVE/VLOG: `xc2 + 24, yc2 + 16`
+   - Horizontal: `xc2 + 16, yc2`
+   - Vertical: `xc2 - 1, yc2 + 16`
+7. **Teleport**: `xfer(xtest, ytest, FALSE)` — `fmain.c:1927`
+8. **Visual transition**: `fade_page(100,100,100,TRUE,pagecolors)` — `fmain.c:1929`
+
+#### Indoor → Outdoor (`fmain.c:1936-1954`)
+
+Triggered when `region_num >= 8` and the hero matches a doorlist's `xc2/yc2`:
+
+1. **Linear scan** through all 86 entries — `fmain.c:1937`
+2. **Match on `xc2/yc2`** with wider hit zone for horizontal doors — `fmain.c:1938-1939`
+3. **Destination offset** — `fmain.c:1943-1946`:
+   - CAVE/VLOG: `xc1 - 4, yc1 + 16`
+   - Horizontal: `xc1 + 16, yc1 + 34`
+   - Vertical: `xc1 + 20, yc1 + 16`
+4. **Teleport**: `xfer(xtest, ytest, TRUE)` — TRUE recalculates region from position — `fmain.c:1948`
+5. **No fade** — exiting is instant, unlike entering
+
+#### Quicksand → Dungeon (`fmain.c:1784-1791`)
+
+A non-door transition. When the player fully sinks (`environ == 30`) at `hero_sector == 181`: teleport to `(0x1080, 34950)` in region 9. NPCs in the same quicksand die.
+
+---
+
+## 13. NPC Dialogue & Quests
+
+### 13.1 Setfig NPCs
+
+Defined at `fmain.c:22-36`, the `setfig_table[]` maps 14 NPC types:
+
+| Index | NPC | cfile | image_base | can_talk | Race |
+|-------|-----|-------|------------|----------|------|
+| 0 | Wizard | 13 | 0 | Yes | 0x80 |
+| 1 | Priest | 13 | 4 | Yes | 0x81 |
+| 2 | Guard | 14 | 0 | No | 0x82 |
+| 3 | Guard (back) | 14 | 1 | No | 0x83 |
+| 4 | Princess | 14 | 2 | No | 0x84 |
+| 5 | King | 14 | 4 | Yes | 0x85 |
+| 6 | Noble | 14 | 6 | No | 0x86 |
+| 7 | Sorceress | 14 | 7 | No | 0x87 |
+| 8 | Bartender | 15 | 0 | No | 0x88 |
+| 9 | Witch | 16 | 0 | No | 0x89 |
+| 10 | Spectre | 16 | 6 | No | 0x8a |
+| 11 | Ghost | 16 | 7 | No | 0x8b |
+| 12 | Ranger | 17 | 0 | Yes | 0x8c |
+| 13 | Beggar | 17 | 4 | Yes | 0x8d |
+
+`can_talk` controls only the talking animation (15-tick timer) — `fmain.c:3376-3379`. All 14 types have speech dispatch code regardless.
+
+Race code: `id + 0x80` (OR'd with 0x80 in `set_objects` — `fmain2.c:1280`). Vitality: `2 + id*2` (`fmain2.c:1274`). The `goal` field stores the object list index — `fmain2.c:1275` — which selects variant dialogue for wizards, rangers, and beggars.
+
+### 13.2 Talk System
+
+Entry point: `do_option()` at `fmain.c:3367-3422`.
+
+**Submenu** (`fmain.c:497`): `"Yell Say  Ask  "` — three options (hit values 5, 6, 7):
+
+| Option | Range | Special Behavior |
+|--------|-------|-----------------|
+| Yell (hit=5) | `nearest_fig(1,100)` — 100 units | If target within 35 units: `speak(8)` "No need to shout!" — `fmain.c:3374` |
+| Say (hit=6) | `nearest_fig(1,50)` — 50 units | Standard dispatch |
+| Ask (hit=7) | `nearest_fig(1,50)` — 50 units | Functionally identical to Say |
+
+All three share the same dispatch logic after the range check. There is no separate Ask handler.
+
+#### Dispatch Logic (`fmain.c:3375-3422`)
+
+1. If no target or target is DEAD → break
+2. **SETFIG**: switch on `k = an->race & 0x7f` (setfig index)
+3. **CARRIER** with `active_carrier == 5` (turtle): shell dialogue — `fmain.c:3418-3421`
+4. **ENEMY**: `speak(an->race)` — enemy race directly indexes the speech table — `fmain.c:3422`
+
+#### NPC-Specific Speech
+
+**Wizard** (`fmain.c:3380-3381`):
+- `kind < 10` → `speak(35)` — "Away with you, ruffian!"
+- `kind >= 10` → `speak(27 + an->goal)` — goal selects from 8 different hints (speak 27–34)
+
+**Priest** (`fmain.c:3382-3394`):
+- Has writ (`stuff[28]`): if `ob_listg[10].ob_stat == 0` → `speak(39)`, gives gold statue, sets stat=1. Else → `speak(19)` — "already gave the statue"
+- `kind < 10` → `speak(40)` — "Repent, Sinner!"
+- `kind >= 10` → `speak(36 + daynight%3)` — rotating hints. Also heals player to max vitality (`15 + brave/4`) — `fmain.c:3390-3391`
+
+**Bartender** (`fmain.c:3405-3407`):
+- `fatigue < 5` → `speak(13)` — "Good Morning"
+- `fatigue >= 5 && dayperiod > 7` → `speak(12)` — "Would you like to buy something?"
+- Else → `speak(14)` — "Have a drink!"
+
+**Other NPCs**: Guard → `speak(15)`, Princess → `speak(16)` (gated by `ob_list8[9].ob_stat`), King → `speak(17)` (same gate), Noble → `speak(20)`, Sorceress → `speak(45)` (first visit gives statue, luck boost on returns — `fmain.c:3400-3402`), Witch → `speak(46)`, Spectre → `speak(47)`, Ghost → `speak(49)`, Ranger → region-based (`speak(22)` in region 2, else `speak(53+goal)` — `fmain.c:3411-3413`), Beggar → `speak(23)` — `fmain.c:3414`.
+
+#### Proximity Auto-Speech (`fmain.c:2094-2102`)
+
+Certain NPCs speak automatically when near the player, independent of the Talk menu:
+- Beggar (0x8d) → `speak(23)`
+- Witch (0x89) → `speak(46)`
+- Princess (0x84) → `speak(16)` (only if `ob_list8[9].ob_stat` set)
+- Necromancer (race 9) → `speak(43)`
+- DreamKnight (race 7) → `speak(41)`
+
+Tracked by `last_person` to prevent re-triggering for the same NPC.
+
+### 13.3 Give System
+
+Entry point: `do_option()` at `fmain.c:3490-3508`.
+
+Menu: `"Gold Book Writ Bone "` (`fmain.c:506`).
+
+| Action | Condition | Effect | Citation |
+|--------|-----------|--------|----------|
+| Gold (hit=5) | `wealth > 2` | `wealth -= 2`. If `rand64() > kind` → `kind++`. Beggar: `speak(24+goal)`. Others: `speak(50)`. | `fmain.c:3493-3500` |
+| Book (hit=6) | ALWAYS DISABLED | Hardcoded disabled in `set_options` — `fmain.c:3540` | `fmain.c:3540` |
+| Writ (hit=7) | `stuff[28] != 0` | **No handler code** — menu enabled but no processing. Writ is checked passively during Priest Talk. | — |
+| Bone (hit=8) | `stuff[29] != 0` | Non-spectre: `speak(21)`. Spectre (0x8a): `speak(48)`, `stuff[29]=0`, drops crystal shard (140). | `fmain.c:3501-3503` |
+
+### 13.4 Quest Progression Flags
+
+Quest state is tracked via object list `ob_stat` fields, not dedicated flag variables:
+
+| Flag | Meaning | Set | Cleared |
+|------|---------|-----|---------|
+| `ob_list8[9].ob_stat` | Princess captive | `revive(TRUE)` → 3 (`fmain.c:2843`) | `rescue()` → 0 (`fmain2.c:1601`) |
+| `ob_listg[9].ob_stat` | Sorceress statue given | First talk → 1 (`fmain.c:3403`) | — |
+| `ob_listg[10].ob_stat` | Priest statue given | Writ presented → 1 (`fmain.c:3384-3385`) | — |
+| `ob_listg[5].ob_stat` | Spectre visible | `lightlevel < 40` → 3, else → 2 (`fmain.c:2027-2028`) | — |
+| `ob_listg[1-2].ob_stat` | Dead brother bones | Brother death → 1 (`fmain.c:2839`) | Bones picked up → 0 (implicit) |
+| `ob_listg[3-4].ob_stat` | Ghost brothers | Brother death → 3 (`fmain.c:2841`) | Bones picked up → 0 (`fmain.c:3174`) |
+
+#### Gold Statue Sources (5 needed for desert gate)
+
+| # | Source | Mechanism |
+|---|--------|-----------|
+| 1 | Sorceress (first talk) | `ob_listg[9].ob_stat` → 1 — `fmain.c:3400-3401` |
+| 2 | Priest (talk with writ) | `ob_listg[10].ob_stat` → 1 — `fmain.c:3384-3385` |
+| 3 | Seahold (ob_listg[6]) | Ground pickup at (11092, 38526) |
+| 4 | Ogre Den (ob_listg[7]) | Ground pickup at (25737, 10662) |
+| 5 | Octal Room (ob_listg[8]) | Ground pickup at (2910, 39023) |
+
+**Note**: The sorceress and priest talk handlers set `ob_listg[].ob_stat = 1` but no explicit `stuff[25]++` is visible in the talk code. The three ground statues are picked up through normal `itrans` object pickup. Whether the dialogue-given statues increment `stuff[25]` through an untraced mechanism requires further investigation; see [P21](PROBLEMS.md).
+
+#### Quest State Gates
+
+| Gate | Condition | Citation |
+|------|-----------|----------|
+| Desert/Azal entrance | `stuff[STATBASE] < 5` blocks DESERT doors | `fmain.c:1919` |
+| Azal city map | `stuff[25] < 5` → tiles overwritten to 254 | `fmain.c:3594-3596` |
+| King's castle pax | `xtype == 81` → `event(15)` — weapon sheathed | `fmain.c:1413` |
+| Sorceress pax | `xtype == 82` → `event(16)` — calming influence | `fmain.c:1414` |
+| Witch invulnerability | `weapon < 4 && (race==9 \|\| (race==0x89 && stuff[7]==0))` | `fmain2.c:231-233` |
+| Necromancer invulnerability | `weapon < 4` blocks damage to race 9 | `fmain2.c:231-232` |
+| Spectre/Ghost immunity | Absolute — `dohit()` returns early for 0x8a/0x8b | `fmain2.c:234` |
+| Magic blocked in necro arena | `extn->v3 == 9` → `speak(59)` | `fmain.c:3305` |
+| Crystal shard passwall | `stuff[30] && j==12` → bypass terrain 12 | `fmain.c:1609` |
+| Rose lava protection | `stuff[23]` → `environ = 0` | `fmain.c:1844` |
+| Golden lasso + bird | `stuff[5]` needed to ride bird carrier | `fmain.c:1498` |
+
+### 13.5 `rescue()` — Princess Rescue
+
+Defined at `fmain2.c:1584-1604`. Triggered when the player enters the princess extent (`xtype == 83`) and `ob_list8[9].ob_stat` is set — `fmain.c:2684-2685`.
+
+Sequence:
+1. Display rescue narrative: `placard_text(8 + princess*3)` through three princess-specific texts — `fmain2.c:1588-1591`
+2. `princess++` — increment counter — `fmain2.c:1594`
+3. Teleport to king's castle: `xfer(5511, 33780, 0)` — `fmain2.c:1596`
+4. `ob_list8[2].ob_id = 4` — place a princess NPC in the castle — `fmain2.c:1597`
+5. `stuff[28] = 1` — give writ — `fmain2.c:1598`
+6. `speak(18)` — king gives writ speech — `fmain2.c:1599`
+7. `wealth += 100` — gold reward — `fmain2.c:1600`
+8. `ob_list8[9].ob_stat = 0` — clear princess captive flag — `fmain2.c:1601`
+9. `stuff[16..21] += 3` — give 3 of each key type — `fmain2.c:1602`
+
+Three princesses: Katra (princess=0), Karla (princess=1), Kandy (princess=2). The `princess` counter persists across brother succession.
+
+### 13.6 Shop System
+
+**Bartender identification**: setfig index 8, race `0x88`. BUY menu only works with race `0x88` — `fmain.c:3426`.
+
+**`jtrans[]`** (`fmain2.c:850`) defines 7 purchasable items as `{stuff_index, price}` pairs:
+
+| Item | Price | Effect | Citation |
+|------|-------|--------|----------|
+| Food | 3 | `eat(50)` — reduces hunger by 50 | `fmain.c:3433-3434` |
+| Arrows | 10 | `stuff[8] += 10` | `fmain.c:3435` |
+| Vial | 15 | `stuff[11]++` | `fmain.c:3436` |
+| Mace | 30 | `stuff[1]++` | `fmain.c:3436` |
+| Sword | 45 | `stuff[2]++` | `fmain.c:3436` |
+| Bow | 75 | `stuff[3]++` | `fmain.c:3436` |
+| Totem | 20 | `stuff[13]++` | `fmain.c:3436` |
+
+Menu: `"Food ArrowVial Mace SwordBow  Totem"` (`fmain.c:501`). Purchase requires `wealth > price` — `fmain.c:3430`.
+
+### 13.7 Win Condition
+
+1. Kill Necromancer (race 9) — requires bow or wand (`weapon >= 4`)
+2. On necromancer death: transforms to race 10 (woodcutter), talisman (139) dropped — `fmain.c:1751-1756`
+3. Pick up talisman → `stuff[22]` → `quitflag = TRUE; viewstatus = 2` → `win_colors()` — `fmain.c:3244-3247`
+4. Win sequence: `placard_text(6)`, `name()`, `placard_text(7)` + win picture — `fmain2.c:1605-1607`
+
+### 13.8 Message Tables
+
+#### Event Messages (`narr.asm:11-74`)
+
+Called via `event(n)` — `fmain2.c:554-558`. Key entries:
+
+| Index | Text | Usage |
+|-------|------|-------|
+| 0–2 | Hunger warnings ("rather hungry", "very hungry", "starving!") | `fmain.c:2203-2209` |
+| 3–4 | Fatigue warnings ("getting tired", "getting sleepy") | `fmain.c:2218-2219` |
+| 5–7 | Death messages (combat, drowning, lava) | `checkdead()` dtype |
+| 12 | "couldn't stay awake any longer!" | Forced sleep — `fmain.c:2211` |
+| 15–16 | Pax zone messages | `fmain.c:1413-1414` |
+| 17–19 | Paper pickup and regionally-variant text | `fmain.c:3163-3168` |
+| 22–23 | Shop purchases | `fmain.c:3433-3434` |
+| 24 | "passed out from hunger!" | `fmain.c:2213` |
+| 27 | "perished in the hot lava!" | `fmain.c:1847` |
+| 28–31 | Time-of-day announcements | `fmain.c:2033` |
+| 36–37 | Fruit pickup/auto-eat | `fmain.c:3166`, `fmain.c:2196` |
+
+#### Speech Table (`narr.asm:347+`)
+
+0-indexed, null-terminated strings. Entries 0–7 are enemy talk responses (directly indexed by race). Entries 8–60 cover NPC dialogue, sub-indexed by NPC type and conditional state. See [§13.2](#132-talk-system) for the full dispatch logic.
+
+#### Placard Texts (`narr.asm:230-343`)
+
+Formatted narrative screens with XY positioning. Entries 0–5 cover brother succession/game-over, 6–7 the win sequence, 8–18 princess rescues (3 sets of 3 texts + 2 shared post-rescue texts), and 19 the copy protection prompt.
+
+---
+
+## 14. Hunger, Fatigue & Stats
+
+### 14.1 Player Stats Overview
+
+Six core stats are declared as global `short` variables at `fmain.c:565`:
+
+```c
+short brave, luck, kind, wealth, hunger, fatigue;
+```
+
+These are part of a contiguous saved block starting at `map_x` (`fmain.c:557`), serialized as 80 bytes via `saveload((void *)&map_x, 80)` (`fmain2.c:1516`).
+
+> **Compiler caveat:** The source code assumes these variables are laid out contiguously in memory in declaration order. Disassembly of the `fmain` executable in this repository shows the Aztec C compiler scattered them across BSS — `map_y` is 2 bytes *below* `map_x`, `hero_x`/`hero_y` are 154+ bytes *above*, and `cheat1` is 474 bytes below. The 80-byte `saveload` call therefore captures `map_x` plus 78 bytes of unrelated variables. Save files from the original shipped release (tested with `game/A.faery` created from a release disk image) are correct, indicating the release was built with a compiler version that preserved declaration order. The `fmain` in this repository appears to have been compiled later with an optimizing toolchain that reorders globals. See [PROBLEMS.md §P21](PROBLEMS.md) for the full analysis.
+
+Vitality is per-actor (`struct shape.vitality` at `ftale.h:65`), NOT a global. The hero's vitality is `anim_list[0].vitality`.
+
+### 14.2 Hunger System
+
+#### Increment
+
+Hunger increases by 1 every 128 game ticks — `fmain.c:2199-2201`:
+
+```c
+if ((daynight & 127) == 0 && anim_list[0].vitality &&
+        anim_list[0].state != SLEEP)
+{   hunger++;
+```
+
+Conditions: `(daynight & 127) == 0`, hero alive, not sleeping.
+
+#### Thresholds
+
+| Hunger | Effect | Citation |
+|--------|--------|----------|
+| 35 | `event(0)` — "getting rather hungry" | `fmain.c:2203` |
+| 60 | `event(1)` — "getting very hungry" | `fmain.c:2204` |
+| >90 | `event(2)` — "starving!" (every 8th tick when `(hunger & 7)==0`) | `fmain.c:2209` |
+| >100 | HP damage: `vitality -= 2` (every 8th tick, only when `vitality > 5`) | `fmain.c:2207-2208` |
+| >120 | Movement wobble: direction shifted ±1 with 75% probability | `fmain.c:1442-1445` |
+| >140 | Forced sleep: `event(24)` "passed out!", hunger reset to 130, `state = SLEEP` | `fmain.c:2213-2215` |
+
+#### Auto-Eating
+
+When `(daynight & 127) == 0` in a safe zone, if `hunger > 30` and `stuff[24] > 0` (has Fruit): `stuff[24]--; hunger -= 30; event(37)` — `fmain.c:2195-2196`.
+
+### 14.3 Fatigue System
+
+#### Increment
+
+Fatigue increases by 1 alongside hunger, same conditions — `fmain.c:2202`.
+
+#### Thresholds
+
+| Fatigue | Effect | Citation |
+|---------|--------|----------|
+| 70 | `event(3)` — "getting tired" | `fmain.c:2218` |
+| 90 | `event(4)` — "getting sleepy" | `fmain.c:2219` |
+| >160 | HP damage: `vitality -= 2` (same check as hunger >100) | `fmain.c:2207-2208` |
+| >170 | Forced sleep: `event(12)` (only when `vitality <= 5`) | `fmain.c:2211-2212` |
+
+The HP damage at `fmain.c:2206-2208` fires when **either** `hunger > 100` OR `fatigue > 160`, each 8th hunger tick:
+
+```c
+if (anim_list[0].vitality > 5)
+{   if (hunger > 100 || fatigue > 160)
+    {   anim_list[0].vitality -= 2; prq(4); }
+```
+
+The forced-sleep at `fatigue > 170` is in the `else` branch — only fires when `vitality <= 5`.
+
+### 14.4 Sleep Mechanics
+
+**Voluntary sleep** (`fmain.c:1876-1886`): Inside buildings (region 8), standing on bed terrain tiles (161, 52, 162, 53) increments `sleepwait`. After 30 ticks:
+- `fatigue < 50` → `event(25)` "not sleepy" — no sleep
+- `fatigue >= 50` → `event(26)` "decided to lie down and sleep", `state = SLEEP`
+
+**Sleep processing** (`fmain.c:2013-2020`): While sleeping:
+- `daynight += 63` — time advances rapidly
+- `fatigue--` (if > 0) — fatigue decrements per frame
+- Wake conditions: `fatigue == 0`, or `fatigue < 30 && daynight ∈ [9000,10000)` (morning), or combat with 1/64 chance per tick
+- On waking: `state = STILL`, Y-position snapped to grid
+
+### 14.5 `eat()` Function
+
+Defined at `fmain2.c:1704-1707`:
+
+```c
+eat(amt)
+{   hunger -= amt;
+    if (hunger < 0) { hunger = 0; event(13); }
+    else print("Yum!");
 }
 ```
 
-The first matching extent wins. If no extent matches within the first 22 entries, `extn` falls through to index 22 -- the "whole world" fallback entry. The check uses strict inequality (not >=), so exact boundary coordinates do not match.
+| Food Source | Amount | Citation |
+|-------------|--------|----------|
+| Pickup fruit (hungry) | `eat(30)` | `fmain.c:3167` |
+| Buy food from shop | `eat(50)` | `fmain.c:3433` |
+| Auto-eat fruit in safe zone | `hunger -= 30` (direct, not via `eat()`) | `fmain.c:2196` |
 
-When the detected extent type changes (i.e., `xtype != extn->etype`), the following dispatch logic runs:
+When hunger < 15, picked-up fruit is stored instead: `stuff[24]++; event(36)` — `fmain.c:3166`.
 
-1. **Type 83 (princess):** If `ob_list8[9].ob_stat` is nonzero (princess is captive), calls `rescue()`. Clears `flag` to 0 and jumps back to `findagain` to re-evaluate position after the teleport.
+### 14.6 Vitality / HP
 
-2. **Type 60 or 61 (special figure):** If the special figure is not already present (`anim_list[3].race != extn->v3` or `anix < 4`), forces an encounter spawn at the center of the extent zone. Sets `encounter_x`/`encounter_y` to the midpoint of the bounding box.
+**Max HP formula**: `15 + brave/4`
 
-3. **Type 52 (astral plane):** Sets `encounter_type = 8` and immediately loads loraii actors. Does not wait for random encounter roll.
+Used at:
+- Natural healing cap — `fmain.c:2042`
+- Revive — `fmain.c:2901`
+- Heal vial cap — `fmain.c:3350-3351`
+- Priest healing — `fmain.c:3391`
 
-4. **Type >= 50 with `flag == 1`:** Forces a spawn at the hero's current position. Sets `encounter_type` from `extn->v3`, spawns `extn->v1` enemies via `set_encounter()` into animation slots 3-6.
+**Natural healing**: Every 1024 ticks (`(daynight & 0x3ff) == 0`), hero gains +1 vitality up to max — `fmain.c:2041-2044`. During sleep, `daynight` advances by 63 per frame, so healing occurs approximately 63× faster.
 
-5. **Type 70 (carrier):** If no carrier is active, or the hero is not riding and the current actor file differs, calls `load_carrier(extn->v3)` to load the rideable creature.
+**Heal vial**: `vitality += rand8() + 4` (4–11 HP), capped at max — `fmain.c:3349-3352`.
 
-6. **Type < 70:** Clears `active_carrier` to 0, dismissing any currently loaded mount.
+**Priest healing**: Full heal to `15 + brave/4` — `fmain.c:3390-3391`. Requires `kind >= 10`.
 
-### 8.4 Quest State Flags
+**Damage sources**:
+- Combat hits: `vitality -= wt` — `fmain2.c:236`
+- Hunger/fatigue: `-2 HP` per tick — `fmain.c:2208`
+- Drowning (`environ == 30`): `-1 HP` per 8 ticks — `fmain.c:1850`
+- Lava (`environ > 2`): `-1 HP` per tick; instant death at `environ > 15` — `fmain.c:1845-1846`
+- Rose (`stuff[23]`) prevents lava damage by forcing `environ = 0` — `fmain.c:1844`
 
-Quest progress is tracked through scattered object status fields and inventory slots rather than a unified quest state variable. The following flags control the main quest flow:
+### 14.7 Stat Changes
 
-| Variable | Meaning | Values |
-|:---------|:--------|:-------|
-| `ob_list8[9].ob_stat` | Princess captive status | Nonzero = captive, 0 = rescued. Reset to 3 on brother death. |
-| `ob_listg[9].ob_stat` | Sorceress golden figurine | 0 = not yet given, 1 = figurine dropped on ground (first visit triggers speak(45)). |
-| `ob_listg[10].ob_stat` | Priest golden statue | 0 = not yet given, 1 = statue given (requires writ). |
-| `ob_listg[1-2].ob_stat` | Dead brother bones | Set to 1 when brother 1 or 2 dies; records their death position for bone pickup. |
-| `ob_listg[3-4].ob_stat` | Dead brother ghosts | Set to 3 when the corresponding brother dies; cleared to 0 when bones are recovered. |
-| `stuff[22]` | Talisman | Nonzero = talisman in inventory, triggers win condition on pickup. |
-| `stuff[25]` | Gold statues (`STATBASE`) | Count of golden statues collected. 5 required to reveal the hidden city. |
-| `stuff[28]` | Writ | Set to 1 by `rescue()`. Required for priest to give golden statue. |
-| `princess` | Rescue counter | Incremented each time `rescue()` is called. Controls which placard text set is displayed (messages offset by `princess * 3`). |
+#### Bravery
 
-The `princess` variable is declared as `extern short princess` in `fmain2.c:1580`. On each brother death, `ob_list8[9].ob_stat` is reset to 3 (`fmain.c:2843`), making the princess captive again and requiring a re-rescue with the new brother. The new brother also starts with empty inventory (`stuff[i] = 0` for `i < GOLDBASE`), losing the writ and all keys.
+| Change | Condition | Citation |
+|--------|-----------|----------|
+| +1 | Kill any non-hero actor | `fmain.c:2777` |
+| −1 | Per target killed by Jade Skull (Wand of Death) | `fmain.c:3359` |
 
-### 8.5 The rescue() Function
+Initial values: Julian=35, Phillip=20, Kevin=15 — `fmain.c:2810-2812`.
 
-The `rescue()` function (`fmain2.c:1584-1603`) executes the complete princess rescue sequence. It is triggered when the hero enters the princess extent zone (index 6) while `ob_list8[9].ob_stat` is nonzero:
+Bravery also affects combat: hero melee hit range = `(brave/20) + 5` (`fmain.c:2249`), hero missile bravery = full `brave` value (`fmain.c:2283`), and enemies must roll `rand256() > brave` to hit the hero (`fmain.c:2260`).
 
-1. **Display rescue placard:** Calls `map_message()` and switches to `afont`. Computes placard text offset as `princess * 3`, then displays three consecutive placard messages (8+i, 9+i, 10+i) interleaved with the hero's `name()`. Calls `placard()` and waits 380 ticks (approximately 7.6 seconds at 50 ticks/second).
+#### Luck
 
-2. **Display aftermath placard:** Clears the display area, then shows placard messages 17-18 with the hero's name. Waits another 380 ticks. Calls `message_off()` to dismiss the placard.
+| Change | Condition | Citation |
+|--------|-----------|----------|
+| −5 | Hero death | `fmain.c:2777` |
+| −2 | Fall into pit | `fmain.c:1771` |
+| +5 (probabilistic) | Sorceress talk: `if (luck < rand64()) luck += 5` | `fmain.c:3402` |
+| Clamped ≥ 0 | On HUD redraw | `fmain2.c:461` |
 
-3. **Increment princess counter:** `princess++` -- tracks how many times the princess has been rescued (affects placard text selection on subsequent rescues).
+Initial values: Julian=20, Phillip=35, Kevin=20. Luck < 1 after death triggers brother succession instead of fairy rescue — `fmain.c:1391`.
 
-4. **Teleport hero:** `xfer(5511, 33780, 0)` -- teleports the hero to the king's throne area. The third argument `0` means the region is not recalculated from coordinates.
+#### Kindness
 
-5. **Relocate bird extent:** `move_extent(0, 22205, 21231)` -- moves extent index 0 (the bird) to a new location centered at (22205, 21231), creating a 500x400 zone around it.
+| Change | Condition | Citation |
+|--------|-----------|----------|
+| −3 | Kill non-witch setfig | `fmain.c:2776` |
+| +1 (probabilistic) | Give gold: `if (rand64() > kind) kind++` | `fmain.c:3496` |
+| Clamped ≥ 0 | In `checkdead` | `fmain.c:2778` |
 
-6. **Update princess NPC:** `ob_list8[2].ob_id = 4` -- sets an object's ID to 4 (princess type), presumably spawning or repositioning the princess NPC at the castle.
+Initial values: Julian=15, Phillip=15, Kevin=35. Below 10, wizards and priests give dismissive dialogue — `fmain.c:3380`, `fmain.c:3388`.
 
-7. **Grant writ:** `stuff[28] = 1` -- gives the hero the writ document, which is a prerequisite for the priest to hand over a golden statue.
+#### Wealth
 
-8. **King's speech:** `speak(18)` -- the king's acknowledgment and writ-giving speech. This is triggered automatically, not through the TALK system.
+| Change | Condition | Citation |
+|--------|-----------|----------|
+| +50 | Loot gold bag (MONEY) | `fmain.c:3158` |
+| +100 | Container gold | `fmain.c:3213` |
+| +100 | Princess rescue reward | `fmain2.c:1600` |
+| variable | Corpse loot (`inv_list[j].maxshown` for gold items) | `fmain.c:3279` |
+| −price | Buy item from shop | `fmain.c:3431` |
+| −2 | Give gold to NPC | `fmain.c:3495` |
 
-9. **Grant gold:** `wealth += 100` -- adds 100 gold to the hero's wealth.
+Initial values: Julian=20, Phillip=15, Kevin=10.
 
-10. **Clear princess flag:** `ob_list8[9].ob_stat = 0` -- marks the princess as rescued, preventing re-triggering of the rescue sequence.
+### 14.8 HUD Display
 
-11. **Grant keys:** `for (i=16; i<22; i++) stuff[i] += 3` -- gives 3 of every key type (indices 16-21 correspond to Gold Key, Silver Key, Jade Key, Crystal Key, Ebony Key, and Bronze Key).
+Rendered via the print queue (`ppick()` at `fmain2.c:441`):
 
-After `rescue()` returns, `find_place()` sets `flag = 0` and jumps back to `findagain` to re-evaluate the hero's new position (now at the throne area rather than the princess zone).
+- **prq(7)**: `Brv`, `Lck`, `Knd`, `Wlth` — `fmain2.c:461-465`
+- **prq(4)**: `Vit` — `fmain2.c:458`
 
-### 8.6 Win Condition
+Hunger and fatigue are **not** displayed on the HUD — communicated only through event messages.
 
-The victory condition is checked in the item pickup handler (`fmain.c:3244-3248`). After any object is picked up and added to inventory:
+---
+
+## 15. Brother Succession
+
+### 15.1 `checkdead` — Death Detection
+
+Defined at `fmain.c:2769-2781`. Triggers when `an->vitality < 1` and actor is not already DYING/DEAD:
+
+```c
+an->vitality = 0; an->tactic = 7;
+an->goal = DEATH; an->state = DYING;
+```
+
+Hero-specific effects (`i == 0`): `event(dtype)` (death message), `luck -= 5`, `setmood(TRUE)` — `fmain.c:2777`.
+
+NPC effects (`i != 0`): if SETFIG and not witch (0x89) → `kind -= 3`; if DreamKnight (race 7) → `speak(42)`. Always `brave++` — `fmain.c:2775-2777`.
+
+Death types: 5=combat, 6=drowning, 27=lava. Transition DYING→DEAD occurs when `tactic` counts to 0 — `fmain.c:1747-1748`.
+
+### 15.2 Fairy Rescue Mechanism
+
+Defined at `fmain.c:1388-1403`. Activates when hero's state is DEAD or FALL. Uses `goodfairy` counter (`unsigned char`, starts at 0, declared `fmain.c:592`).
+
+Timeline after hero enters DEAD/FALL state:
+
+| `goodfairy` Range | Behavior |
+|-------------------|----------|
+| 255–200 (frames 2–57) | **Death sequence plays**. No code branches match — the death animation and death song always play fully before any rescue decision. |
+| 199–120 (frames 58–137) | **Luck gate**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). If `luck >= 1`: no visible effect, countdown continues. Since luck cannot change during DEAD state, this gate is effectively a one-time decision at the moment goodfairy first drops below 200. |
+| 119–20 (frames 138–237) | Fairy sprite visible, flying toward hero. Only reached if `luck >= 1`. `battleflag = FALSE`. AI suspended (`fmain.c:2112`). |
+| 19–2 (frames 238–255) | Resurrection glow effect. |
+| 1 (frame 256) | `revive(FALSE)` — fairy rescues hero, same brother continues. |
+
+**Key insight**: `checkdead()` subtracts `luck -= 5` on hero death. The luck gate at `goodfairy < 200` is deliberately positioned after the death animation completes (255→200), so the player always sees the full death sequence before the outcome is determined. Luck cannot change during DEAD state — `checkdead` is guarded by `state != DYING && state != DEAD` (`fmain.c:2772`), pit fall luck loss requires movement (`fmain.c:1771`), and sorceress luck gain requires TALK interaction (`fmain.c:3402`). So if luck ≥ 1 when the gate first fires, the fairy is guaranteed. The system is fully deterministic with no random element. FALL state always gets `revive(FALSE)` regardless of luck (pit falls are non-lethal) — `fmain.c:1392`.
+
+### 15.3 `blist` — Brother Base Stats
+
+Defined at `fmain.c:2806-2812`:
+
+| Brother | brave | luck | kind | wealth | stuff | Starting HP (`15+brave/4`) |
+|---------|-------|------|------|--------|-------|---------------------------|
+| Julian (`blist[0]`) | 35 | 20 | 15 | 20 | `julstuff` | 23 |
+| Phillip (`blist[1]`) | 20 | 35 | 15 | 15 | `philstuff` | 20 |
+| Kevin (`blist[2]`) | 15 | 20 | 35 | 10 | `kevstuff` | 18 |
+
+Each brother has an independent 35-byte inventory array (`ARROWBASE=35`): `julstuff`, `philstuff`, `kevstuff` — `fmain.c:432`.
+
+Design: Julian is the strongest fighter (highest bravery/HP), Phillip has the most fairy rescues available (highest luck — 6 rescues vs. 3 for the others), Kevin is the diplomat (highest kindness, but weakest combatant).
+
+### 15.4 `revive()` — Resurrection and Succession
+
+Defined at `fmain.c:2814-2911`. `revive(new)` where `new=TRUE` means brother succession, `new=FALSE` means fairy rescue/fall recovery.
+
+#### Common Setup (both paths)
+
+- `anim_list[1]` placed as RAFT, `anim_list[2]` as SETFIG (reset carriers)
+- `handler_data.laydown = handler_data.pickup = 0`
+- `battleflag = goodfairy = mdex = 0`
+
+#### New Brother Path (`new == TRUE`)
+
+1. **Place dead brother ghost** (`fmain.c:2837-2841`): Only for brothers 1 (Julian) and 2 (Phillip) — Kevin has no successor.
+   - `ob_listg[brother].xc/yc = hero_x/hero_y; ob_stat = 1` — bones at death location
+   - `ob_listg[brother+2].ob_stat = 3` — ghost setfig activated
+
+2. **Load new brother stats** (`fmain.c:2843-2847`):
+   - `ob_list8[9].ob_stat = 3` — re-enable princess as captive
+   - Load stats from `blist[brother]`: `brave, luck, kind, wealth`
+   - `stuff` pointer switches to new brother's inventory array
+   - `brother++`
+
+3. **Clear inventory** (`fmain.c:2849-2850`): Zero first 31 slots (`GOLDBASE`). Give one Dirk: `stuff[0] = an->weapon = 1`.
+
+4. **Reset position/timers** (`fmain.c:2852-2853`): `secret_timer = light_timer = freeze_timer = 0`. Spawn at `(19036, 15755)` in region 3 (Tambry area).
+
+5. **Display placard** — brother-specific narrative text:
+   - Brother 1 (Julian): `placard_text(0)` — "Rescue the Talisman!"
+   - Brother 2 (Phillip): `placard_text(1)` + `placard_text(2)` — Julian failed / Phillip sets out
+   - Brother 3 (Kevin): `placard_text(3)` + `placard_text(4)` — Phillip failed / Kevin takes quest
+
+6. **Load sprites**: `shape_read()` → `read_shapes(brother-1)` for correct character sprite — `fmain.c:2882`.
+
+7. **Journey message** (`fmain.c:2885-2892`): `event(9)` — "started the journey in Tambry", with brother-specific suffix (`event(10)` or `event(11)` for subsequent brothers).
+
+#### Fairy Rescue Path (`new == FALSE`)
+
+Skips ghost placement, stat/inventory reset, and placard text. Hero respawns at current `safe_x, safe_y` with current stats. Only vitality, hunger, and fatigue are reset.
+
+#### Common Finalization (both paths) (`fmain.c:2896-2907`)
+
+- Position: `hero_x = safe_x, hero_y = safe_y`
+- Vitality: `15 + brave/4` (full HP)
+- Time: `daynight = 8000, lightlevel = 300` (daytime)
+- `hunger = fatigue = 0`
+- `an->state = STILL; an->race = -1`
+
+### 15.5 `mod1save` — Inventory Serialization
+
+Defined at `fmain.c:3621-3630`. Serializes all three brothers' inventory arrays (35 bytes each) and the missile list. After loading, `stuff = blist[brother-1].stuff` reassigns the active inventory pointer.
+
+### 15.6 Picking Up Dead Brother's Bones
+
+When a living brother picks up bones (ob_id 28) — `fmain.c:3173-3177`:
+
+- Both ghost setfigs cleared: `ob_listg[3].ob_stat = ob_listg[4].ob_stat = 0`
+- Dead brother's inventory merged: `for (k=0; k<GOLDBASE; k++) stuff[k] += dead_brother_stuff[k]`
+- Index 1 = Julian's stuff, index 2 = Phillip's stuff
+
+### 15.7 Game Over
+
+When `brother > 3` (all three dead) — `fmain.c:2870-2872`:
+- `placard_text(5)`: "And so ends our sad tale. The Lesson of the Story: Stay at Home!"
+- `quitflag = TRUE`
+- `Delay(500)` — 10-second pause (500 ticks at 50Hz)
+
+### 15.8 What Persists Across Brothers
+
+| Persists | Resets |
+|----------|--------|
+| Princess counter (`princess`) | Stats (loaded fresh from `blist`) |
+| Quest flags (`ob_listg`, `ob_list8` stats) | Inventory (zeroed; only a Dirk given) |
+| Object world state (all `ob_list` data) | Position (back to Tambry 19036, 15755) |
+| `dstobs[]` distribution flags | Hunger / fatigue (→ 0) |
+| | Timers (secret, light, freeze → 0) |
+| | `daynight` (→ 8000), `lightlevel` (→ 300) |
+
+---
+
+## 16. Win Condition & Princess Rescue
+
+### 16.1 Princess Rescue Trigger
+
+Each brother's journey can include rescuing a captured princess. The trigger is extent-based — `fmain.c:2684-2685`:
+
+```c
+if (xtype == 83 && ob_list8[9].ob_stat)
+{   rescue(); flag = 0; goto findagain; }
+```
+
+The princess extent (index 6) covers coordinates 10820–10877, 35646–35670 — `fmain.c:346`. The flag `ob_list8[9].ob_stat` must be nonzero (set to 3 by `revive()` at `fmain.c:2843`). A cheat shortcut exists: `'R' && cheat1` at `fmain.c:1333`.
+
+### 16.2 `rescue()` Function
+
+Defined at `fmain2.c:1584-1603`. Performs the full princess rescue sequence:
+
+1. `map_message()` + `SetFont(rp,afont)` — enter fullscreen text mode with Amber font.
+2. Compute text offset `i = princess*3` — indexes princess-specific placard text (`fmain2.c:1587`).
+3. Display rescue story: `placard_text(8+i)`, `name()`, `placard_text(9+i)`, `name()`, `placard_text(10+i)`, then `placard()` + `Delay(380)` (~7.6 sec).
+4. Clear inner rectangle, display post-rescue text (`placard_text(17)` + `name()` + `placard_text(18)`), `Delay(380)`.
+5. `message_off()` — restore normal display.
+6. `princess++` — advance counter (`fmain2.c:1594`).
+7. `xfer(5511,33780,0)` — teleport hero near king's castle (`fmain2.c:1595`).
+8. `move_extent(0,22205,21231)` — reposition bird extent (`fmain2.c:1596`).
+9. `ob_list8[2].ob_id = 4` — place rescued princess NPC in castle (`fmain2.c:1597`).
+10. `stuff[28] = 1` — give Writ item (`fmain2.c:1598`).
+11. `speak(18)` — king says "Here is a writ designating you as my official agent…"
+12. `wealth += 100` — reward 100 gold (`fmain2.c:1600`).
+13. `ob_list8[9].ob_stat = 0` — clear princess-captured flag (`fmain2.c:1601`).
+14. `for (i=16; i<22; i++) stuff[i] += 3` — give +3 of each key type (`fmain2.c:1602`).
+
+### 16.3 Princess Counter
+
+Declared at `fmain.c:568` as `short princess`. There are exactly three princesses:
+
+| `princess` | Name | Placard Text Indices (8+i×3) |
+|------------|------|------------------------------|
+| 0 | Katra | 8, 9, 10 — `narr.asm:298-305` |
+| 1 | Karla | 11, 12, 13 — `narr.asm:307-314` |
+| 2 | Kandy | 14, 15, 16 — `narr.asm:316-322` |
+
+The counter persists across brother succession — `revive()` at `fmain.c:2830-2850` does NOT reset `princess`. However, `ob_list8[9].ob_stat` IS reset to 3 during `revive()` (`fmain.c:2843`), enabling each new brother to trigger a rescue with different text. After `princess >= 3`, no further rescues can fire because `ob_list8[9].ob_stat` stays 0 after the third `rescue()` call.
+
+### 16.4 Necromancer and the Talisman
+
+The Necromancer is the final boss — race 9, 50 HP, arms 5 (wand) — `fmain.c:62`. Its extent is at coordinates 9563–10144, 33883–34462 — `fmain.c:343`.
+
+On death (`fmain.c:1750-1755`):
+- Transforms to Woodcutter: `an->race = 10`, `an->vitality = 10`, `an->state = STILL`, `an->weapon = 0`.
+- Drops the Talisman: `leave_item(i, 139)`.
+
+World object 139 maps to `stuff[22]` via the `itrans` lookup — `fmain2.c:983`.
+
+Proximity speech: `speak(43)` when near — `fmain.c:2099-2100`.
+
+### 16.5 Win Check and Victory Sequence
+
+After every item pickup, the win condition fires — `fmain.c:3244-3247`:
 
 ```c
 if (stuff[22])
@@ -2328,2968 +3059,676 @@ if (stuff[22])
 }
 ```
 
-Slot 22 is the Talisman. The Talisman is dropped by the Necromancer (the game's final boss) when defeated. Picking it up sets `quitflag = TRUE` to end the game loop and `viewstatus = 2` to signal the victory state, then immediately launches the victory sequence.
+The `win_colors()` function at `fmain2.c:1605-1636` plays the victory sequence:
 
-The Talisman check runs on every item pickup, not just for the Talisman specifically. This means it checks slot 22 as a side effect of any pickup. A cheat code (`fmain.c:1299`) explicitly sets `stuff[22] = 0` to prevent accidental wins during testing.
+1. Display victory placard: `placard_text(6)` + `name()` + `placard_text(7)` — "Having defeated the villanous Necromancer and recovered the Talisman…" (`narr.asm:288-296`). `placard()` + `Delay(80)`.
+2. Load win picture: `unpackbrush("winpic", bm_draw, 0, 0)` — IFF image from `game/winpic`.
+3. Black out both viewports and hide HUD: `vp_text.Modes = HIRES | SPRITES | VP_HIDE`.
+4. Expand playfield: `screen_size(156)`.
+5. Sunrise animation — 55 frames (i=25 down to −29): slides a window across the `sun_colors[]` gradient table (`fmain2.c:1569-1578`, 53 entries of 12-bit RGB values). Colors 2–27 fade in progressively, colors 29–30 transition through reds. First frame pauses 60 ticks; subsequent frames at 9 ticks each. Total: ~555 ticks ≈ 11.1 seconds.
+6. Final pause `Delay(30)`, then blackout via `LoadRGB4(&vp_page, blackcolors, 32)`.
 
-### 8.7 Victory Sequence -- win_colors()
+### 16.6 `quitflag` and Game Termination
 
-The `win_colors()` function (`fmain2.c:1605-1636`) displays the ending cinematic:
+Declared at `fmain.c:590`. Controls the main loop `while (!quitflag)` at `fmain.c:1270`.
 
-1. **Display victory placard:** `placard_text(6)` + hero `name()` + `placard_text(7)` -- shows the victory message (e.g., "Julian defeated the Necromancer and recovered the Talisman... returned to Marheim where he wed the princess..."). Calls `placard()` and waits 80 ticks.
+| Trigger | Citation | Meaning |
+|---------|----------|---------|
+| `quitflag = FALSE` | `fmain.c:1269` | Reset at game start |
+| `quitflag = TRUE` | `fmain.c:2872` | All brothers dead — game over |
+| `quitflag = TRUE` | `fmain.c:3245` | Talisman picked up — victory |
+| `quitflag = TRUE` | `fmain.c:3466` | SAVEX menu → Exit option |
 
-2. **Load victory image:** `unpackbrush("winpic", bm_draw, 0, 0)` -- loads and decompresses the victory illustration into the drawing page bitmap.
+After the loop exits: `stopscore()` at `fmain.c:2616`, then `close_all()` at `fmain.c:2619-2620`.
 
-3. **Black out display:** Loads `blackcolors` into both page and text viewports to create a blank screen before the fade-in.
+### 16.7 Complete Quest Chain
 
-4. **Reconfigure viewport:** Sets text viewport to `HIRES | SPRITES | VP_HIDE` and adjusts `screen_size(156)`.
-
-5. **Sunrise fade-in:** A 55-step loop (from `i=25` down to `i=-29`) gradually fades in colors using the `sun_colors[53]` table, which progresses from deep blue/black through purple/red to golden tones. Each color register 2-27 is set from `sun_colors[i+j]`, creating a sweep effect across the palette. Registers 0 and 31 remain black, while registers 1 and 28 are forced to white (0xFFF).
-
-6. **Red glow on final registers:** During the first portion (`i > -14`), registers 29 and 30 are set to 0x800 and 0x400 (deep reds). In the tail portion, they fade through calculated values.
-
-7. **Final fade to black:** After the loop completes, waits 30 ticks and loads `blackcolors` across the full page viewport.
-
-### 8.8 Hidden City Reveal
-
-The hidden city in the desert is gated by the number of golden statues the player has collected. During map loading (`fmain.c:3594-3597`):
-
-```c
-if (new_region == 4 && stuff[STATBASE] < 5)    /* are we in desert sector */
-{   i = ((11*128)+26);
-    map_mem[i] = map_mem[i+1] = map_mem[i+128] = map_mem[i+129] = 254;
-}
-```
-
-When the hero enters region 4 (desert) with fewer than 5 golden statues (`stuff[25]`, since `STATBASE = 25`), four tiles at map memory offset `(11*128)+26` (a 2x2 block at row 11, column 26 within the 128-column region map) are overwritten with tile 254. Tile 254 is impassable, effectively walling off the hidden city entrance.
-
-When the hero has collected 5 or more golden statues, this overwrite does not occur, and the tiles remain at their original passable values, allowing entry.
-
-This modification is performed in RAM only. It is applied every time the region is loaded, so the blocking is consistent as long as the statue count is below 5. However, the original tile values are never saved -- the blocking relies on re-applying the patch on each load. If the game were to save while in the desert region with the tiles already patched, the patched values would not persist to the save file (the region data is reloaded fresh).
-
-### 8.9 Stone Ring Teleportation Network
-
-The `stone_list[]` array (`fmain.c:374-376`) defines 11 stone ring locations as sector coordinate pairs:
-
-| Stone # | Sector X | Sector Y |
-|--------:|---------:|---------:|
-| 0 | 54 | 43 |
-| 1 | 71 | 77 |
-| 2 | 78 | 102 |
-| 3 | 66 | 121 |
-| 4 | 12 | 85 |
-| 5 | 79 | 40 |
-| 6 | 107 | 38 |
-| 7 | 73 | 21 |
-| 8 | 12 | 26 |
-| 9 | 26 | 53 |
-| 10 | 84 | 60 |
-
-Teleportation is triggered as a magic item use (case 5 in the item handler, `fmain.c:3326-3347`) and requires three conditions:
-
-1. **Sector 144:** `hero_sector == 144` -- the hero must be standing on a special sector type (stone ring sector).
-2. **Center tile position:** `(hero_x & 255)/85 == 1` and `(hero_y & 255)/64 == 1` -- the hero must be in the center tile of the sector. The `/85` and `/64` divisions partition the 256-unit sector into 3 horizontal and 4 vertical zones; zone (1,1) is the center.
-3. **Stone match:** A linear scan of `stone_list[]` checks if `hero_x>>8` and `hero_y>>8` (the hero's sector coordinates) match any stone entry.
-
-When all three conditions are met, the destination stone is computed:
-
-```c
-i += (anim_list[0].facing + 1);
-if (i > 10) i -= 11;
-```
-
-The hero's facing direction (0-3 for the four cardinal directions, stored in `anim_list[0].facing`) is added to the current stone index plus 1. If the result exceeds 10, it wraps around modulo 11. This means the destination depends on which direction the hero faces when activating the stone -- facing different directions from the same stone teleports to different destinations, allowing access to any stone in the network from any other.
-
-The destination position preserves the hero's sub-sector offset:
-
-```c
-x = (stone_list[i+i] << 8) + (hero_x & 255);
-y = (stone_list[i+i+1] << 8) + (hero_y & 255);
-```
-
-The `colorplay()` effect (`fmain2.c:425-432`) plays during teleportation: 32 frames of random palette cycling, where each color register 1-31 is set to a random 12-bit RGB value (`bitrand(0xFFF)`) and displayed for 1 tick. This creates a brief psychedelic flash. After the effect, `xfer(x, y, TRUE)` performs the actual teleport, and if the hero is riding a carrier, the carrier is repositioned to match.
-
-If the hero is not on sector 144, not at the center tile, or not at a recognized stone location, the function returns without consuming the magic item charge (it falls through to `return` before `case 7`, avoiding the use-count decrement that would otherwise follow).
-
-### 8.10 Improvement Notes
-
-> **Quest state tracked through scattered object fields.** There is no quest state machine or progress tracker. Quest flags are spread across `ob_listg[]`, `ob_list8[]`, `stuff[]`, and the `princess` counter. A proper quest state struct or bitmask would make the game's progression logic auditable and reduce the risk of desynchronization (e.g., having a writ but no princess rescue having occurred).
-
-> **Extent linear scan with implicit ordering is fragile.** The `find_place()` extent scan is order-dependent -- first match wins. Overlapping extents (e.g., the "around city" peace zone at index 8 overlaps with the graveyard at index 7 and the "around village" zone at index 20) rely on array ordering for correct priority. Adding or reordering entries could change game behavior in subtle ways. A spatial hash or explicit priority field would be safer.
-
-> **Hidden city map memory modification is lost on reload.** The tile 254 overwrite at `map_mem[(11*128)+26]` is an in-RAM patch applied during region loading. It works reliably because it re-patches on every load. However, the approach is brittle -- it modifies raw map data rather than using a proper gate/door mechanism. Any code that caches or pre-loads region data could bypass the check.
-
-> **Princess rescue grants 3 of every key type.** The loop `for (i=16; i<22; i++) stuff[i] += 3` gives 3 copies of all 6 key types, plus 100 gold and a writ. Combined with the fact that rescue is repeatable (each brother death resets the princess captive flag), a player who deliberately dies and re-rescues accumulates large key stocks. This is very generous and may have been intended to prevent softlocks where a player uses all keys before reaching critical doors.
-
-> **Turtle extent starts at (0,0,0,0).** The turtle extent (index 1) has null coordinates and is never matched until `move_extent()` repositions it dynamically. This works but is non-obvious -- the intent is only clear from the comment "turtle extent" and knowledge of how `move_extent()` is called elsewhere.
+1. **Rescue princess** (up to 3 times): Enter princess extent with `ob_list8[9].ob_stat` set. Rewards: Writ, 100 gold, +3 of each key, bird repositioned.
+2. **Show Writ to Priest**: Talk to priest (setfig race 1) with `stuff[28]` — `fmain.c:3383-3386`. Priest speaks(39), reveals a golden statue (`ob_listg[10].ob_stat = 1`).
+3. **Collect 5 golden figurines** (`stuff[25]`): Sorceress gives one via `speak(45)` at `fmain.c:3404-3406`; priest gives one with writ; others from world objects.
+4. **Defeat the Necromancer**: Only bow (weapon 4) or wand (weapon 5) can damage due to combat immunity. On death → drops Talisman (world object 139).
+5. **Pick up the Talisman**: `stuff[22]` set → `quitflag = TRUE` → `win_colors()` victory sequence.
 
 ---
 
-## 9. Doors & Buildings
+## 17. Main Game Loop
 
-The game world uses a unified door system to connect outdoor locations (regions 0-7) with interior spaces. Region 8 holds building interiors and region 9 holds dungeon interiors. Every door is a bidirectional portal defined by a pair of coordinates -- one outdoor, one indoor -- plus metadata controlling its visual type and destination region.
+### 17.1 Initialization
 
-### 9.1 Door Structure
+The `main()` function at `fmain.c:1129` performs initialization:
 
-Defined at `fmain.c:233-238`:
+1. **Workbench startup** (`fmain.c:1136-1139`): Sets current directory from Workbench message if `argc == 0`.
+2. **`open_all()`** (`fmain.c:1142`): Opens graphics/layers libraries, allocates bitmaps, loads font, sets up disk I/O. Defined at `fmain.c:728`.
+3. **Display setup** (`fmain.c:1145-1156`): Configures viewports, clears page bitmaps, sets screen size to 156.
+4. **Title screen** (`fmain.c:1160-1163`): Displays `titletext` via `ssp()`, waits 50 ticks.
+5. **Audio/font setup** (`fmain.c:1165-1168`): Sets text font/pens, loads music (`read_score()`), loads sound effects (`read_sample()`).
+6. **Image memory** (`fmain.c:1173-1175`): Sets up 5 bitplane pointers for `pagea`/`pageb`.
+7. **Music start** (`fmain.c:1177`): Plays title score from `track[12..15]`.
+8. **Intro sequence** (`fmain.c:1183-1206`): Loads `page0` brush, animates screen open, shows story pages (`p1a`/`p1b`, `p2a`/`p2b`, `p3a`/`p3b`). Skippable via `skipint()`.
+9. **Post-intro** (`fmain.c:1207-1243`): Loads shadow data, loads `hiscreen` brush (status bar), displays copy protection placard, calls `revive(TRUE)` for first brother.
+10. **Viewport config** (`fmain.c:1246-1260`): Text viewport at `PAGE_HEIGHT` offset, page viewport 140×288, loads text colors, sets `viewstatus = 99`, `cmode = 0`.
+11. **Loop entry** (`fmain.c:1269`): `cheat1 = quitflag = FALSE`, enters main loop.
 
-```c
-struct door {
-    unsigned short xc1, yc1;  /* outdoor image coords (regions 0-7) */
-    unsigned short xc2, yc2;  /* indoor image coords (region 8 or 9) */
-    char type;                /* visual/behavioral type (HWOOD, VSTONE, etc.) */
-    char secs;                /* sector join: 1 = buildings (region 8), 2 = dungeons (region 9) */
-};
-```
+### 17.2 Tick Structure
 
-- **xc1, yc1** -- Outdoor (overworld) position in pixel coordinates, relative to the full overworld map.
-- **xc2, yc2** -- Indoor position in pixel coordinates within the interior region.
-- **type** -- Determines the door's visual appearance and orientation. Odd values are horizontal doors; even values are vertical. This distinction matters for collision detection and destination offset calculation.
-- **secs** -- Which interior region this door connects to: `1` maps to region 8 (buildings, towns, keeps), `2` maps to region 9 (dungeons, caves).
+The main loop at `fmain.c:1270` is `while (!quitflag)`. Each iteration is one game tick. The 24 phases execute in strict order:
 
-### 9.2 Door Types
+1. **Tick Counters** (`fmain.c:1274-1275`): `cycle++; flasher++`. `cycle` is a local `short`; `flasher` is a global `char` for blink effects.
+2. **Input Processing** (`fmain.c:1277-1365`): `getkey()` reads from circular buffer (`fsubs.asm:281`). Dispatches direction keys, combat toggle ('0'), cheat keys, menu shortcuts via `letter_list[]`, and mouse-click keycodes (≥ 0x61). Also handles `viewstatus` sub-loops: state 1/4 uses `continue` (skip rest of tick); state 2 delays 200 ticks.
+3. **Mouse/Joystick Decode** (`fmain.c:1376`): `decode_mouse()` — reads pointer/joystick, computes `oldir` and qualifier bits (`fsubs.asm:1489`).
+4. **Pause Gate** (`fmain.c:1378`): If paused (`menus[GAME].enabled[5] & 1`), `Delay(1)` and `continue` — skips all remaining phases.
+5. **Timer Decrements** (`fmain.c:1380-1382`): Decrements `light_timer`, `secret_timer`, `freeze_timer` if nonzero.
+6. **Fiery Death Zone** (`fmain.c:1384-1385`): Sets `fiery_death` flag if player is in volcanic region (map_x 8802–13562, map_y 24744–29544).
+7. **Player State Resolution** (`fmain.c:1387-1459`): Reads `anim_list[0].state`, resolves fire-button combat/shoot, direction-based walking, death/fairy rescue, hunger-induced direction drift (`fmain.c:1443-1446`).
+8. **Carrier Proximity** (`fmain.c:1462-1472`): Computes `raftprox` (1 = within 16 px, 2 = within 9 px) between player and carrier (`anim_list[wcarry]`).
+9. **Actor Processing Loop** (`fmain.c:1476-1826`): `for (i=0; i<anix; i++)` — iterates all active actors. Per-actor: freeze check, type dispatch (DRAGON/CARRIER/SETFIG/RAFT), movement state machine (WALKING/STILL/SHOOT/FIGHTING/DYING/DEAD), death processing (race 0x09 drops talisman at `fmain.c:1754`), terrain/environment update, sprite index assignment, screen coordinate calculation.
+10. **Post-Actor Updates** (`fmain.c:1829-1833`): Copies `hero_x`/`hero_y` from `anim_list[0]`. Resets `sleepwait` if moving.
+11. **Bed/Sleep Check** (`fmain.c:1835-1849`): Only in `region_num == 8` (buildings). Checks sleep-spot tiles (161, 52, 162, 53). At `sleepwait == 30`: enters SLEEP if `fatigue >= 50`.
+12. **Door Check** (`fmain.c:1853-1955`): Binary search through sorted `doorlist[]` (outdoor) or linear search (indoor). On match: `xfer()` to destination, `find_place(2)`, `fade_page()`.
+13. **Map Generation & Scroll** (`fmain.c:1959-2010`): Sets draw target, restores sprite backgrounds via `rest_blit()`, undoes witch FX, computes scroll delta. If `MAP_FLUX`: `load_next()`. Full redraw for `viewstatus` 99/98/3; incremental `scrollmap()` for ±1 deltas.
+14. **No-Motion Sub-Block** (`fmain.c:2009-2259`): Executes only when map didn't scroll (`dif_x == 0 && dif_y == 0`). Contains the bulk of periodic game logic — see [§17.3](#173-no-motion-sub-block).
+15. **Melee Combat Hit Detection** (`fmain.c:2262-2296`): For each non-WALKING actor: computes weapon reach via `newx()`/`newy()`, checks distance to all other actors. Player bravery range: `bv = (brave/20) + 5`, capped at 15.
+16. **Missile Processing** (`fmain.c:2298-2340`): Iterates `missile_list[0..5]`. Checks terrain/actor collision. Hit: `dohit(-1,...)` for arrows, `dohit(-2,...)` for fireballs. Expires at `time_of_flight > 40`.
+17. **Object Processing** (`fmain.c:2342-2343`): `do_objects()` (`fmain2.c:1184`) — processes global and region-specific objects, sets up display entries.
+18. **Missile Sprite Setup** (`fmain.c:2345-2362`): Adds active missiles to `anim_list` as OBJECTS type. Max `anix2 = 20`.
+19. **Sprite Sorting** (`fmain.c:2367-2393`): Bubble sort of `anim_index[]` by Y coordinate for painter's-algorithm draw order. Dead actors sort at y−32, sinking actors at y+32. Also finds `nearest_person`.
+20. **Map Strip Repair** (`fmain.c:2396-2397`): After scroll: `strip_draw()` for new columns (`fsubs.asm:782`), `row_draw()` for new rows (`fsubs.asm:819`).
+21. **Witch Visual Effects** (`fmain.c:2399-2410`): Sets witch distortion parameters. If witch active and within 100 px, deals damage via `dohit(-1,0,...)`.
+22. **Sprite Rendering** (`fmain.c:2412-2609`): Multi-pass render for each sorted actor: clips to screen, handles environment offsets, blits via `save_blit()` → `mask_blit()` → `shape_blit()`.
+23. **Page Flip** (`fmain.c:2611-2614`): Sets scroll offsets, calls `pagechange()` — swaps drawing/viewing pages, rebuilds copper list, waits for vertical blank via `WaitBOVP(&vp_text)`.
+24. **Fade Completion** (`fmain.c:2615`): If `viewstatus == 3`: `fade_normal()`, then `viewstatus = 0`.
 
-Defined at `fmain.c:213-229`. Values 12 and 16 are unused (gap in the enum). Note that `CAVE` and `VLOG` share value 18.
+### 17.3 No-Motion Sub-Block
 
-| Value | Name   | Description               | Orientation |
-|-------|--------|---------------------------|-------------|
-| 1     | HWOOD  | Wooden door               | Horizontal  |
-| 2     | VWOOD  | Wooden door               | Vertical    |
-| 3     | HSTONE | Stone door                | Horizontal  |
-| 4     | VSTONE | Stone door (unused in doorlist) | Vertical |
-| 5     | HCITY  | City door (unused in doorlist) | Horizontal |
-| 6     | VCITY  | City door (unused in doorlist) | Vertical |
-| 7     | CRYST  | Crystal palace door       | Horizontal (odd) |
-| 8     | SECRET | Secret door               | Vertical (even) |
-| 9     | BLACK  | Black/dark door           | Horizontal (odd) |
-| 10    | MARBLE | Marble keep door          | Vertical (even) |
-| 11    | LOG    | Log cabin door            | Horizontal (odd) |
-| 13    | HSTON2 | Stone door variant 2      | Horizontal  |
-| 14    | VSTON2 | Stone door variant 2      | Vertical    |
-| 15    | STAIR  | Stairway                  | Horizontal (odd) |
-| 17    | DESERT | Desert oasis door         | Horizontal (odd) |
-| 18    | CAVE   | Cave entrance             | Vertical (even) |
-| 18    | VLOG   | Log cabin yard (alias for CAVE) | Vertical (even) |
+Phase 14 only runs when the map did not scroll. It contains all periodic game logic, organized as sub-phases:
 
-The odd/even distinction controls transition logic: `(type & 1)` tests horizontal orientation. Horizontal doors check `hero_y & 0x10` for alignment; vertical doors check `(hero_x & 15)`.
+- **14a** Print Queue (`fmain.c:2009`): `ppick()` — processes one deferred display command.
+- **14b** Sleep Advancement (`fmain.c:2012-2021`): `daynight += 63` (64× speed). Wakes on fatigue=0, dawn (daynight 9000–10000 with fatigue < 30), or battle.
+- **14c** Day/Night Cycle (`fmain.c:2022-2037`): `daynight++` wraps at 24000. `lightlevel = daynight/40`, mirrored at 300. Spectre visibility at lightlevel < 40. Time-of-day events at period changes (see [§19](#19-daynight-cycle)).
+- **14d** Day Fade (`fmain.c:2039`): `day_fade()` adjusts palette (see [§19.2](#192-day_fade--palette-interpolation)).
+- **14e** Vitality Regen (`fmain.c:2041-2046`): Every 1024 ticks: vitality++ if below `15+brave/4`.
+- **14f** Freeze Gate (`fmain.c:2048`): If `freeze_timer`, skip to `stasis`.
+- **14g** Find Place (`fmain.c:2050`): `find_place(2)` — determines `hero_sector`, `hero_place`, `xtype`.
+- **14h** Actor Loading (`fmain.c:2052-2056`): Checks async disk I/O for enemy sprite data.
+- **14i** Encounter Placement (`fmain.c:2057-2077`): Every 16 ticks: places queued encounters via `set_loc()`/`set_encounter()`, up to 10 attempts.
+- **14j** Random Encounters (`fmain.c:2078-2095`): Every 32 ticks if no actors on screen: `danger_level = 2 + xtype` (outdoor) or `5 + xtype` (indoor). `rand64() <= danger_level` → `load_actors()`.
+- **14k** NPC Proximity Speech (`fmain.c:2096-2106`): Beggar `speak(23)`, witch `speak(46)`, princess `speak(16)`, necromancer `speak(43)`, dark knight `speak(41)`.
+- **14l** AI Loop (`fmain.c:2107-2211`): `for (i=2; i<anix; i++)` — evaluates goal/tactics: FLEE, PURSUE, SHOOT, EVADE, BACKUP. Calls `do_tactic(i, tactic)`.
+- **14m** Battle Transitions (`fmain.c:2212-2215`): Start: `setmood(1)`. End: `aftermath()`.
+- **14n** Safe Zone (`fmain.c:2216-2224`): Every 128 ticks: records `safe_r/safe_x/safe_y` respawn point. Auto-eats food if `hunger > 30`.
+- **14o** Mood Music (`fmain.c:2225`): Every 8 ticks (non-battle): `setmood(0)`.
+- **14p** Hunger/Fatigue (`fmain.c:2226-2258`): Every 128 ticks: `hunger++; fatigue++`. Threshold events and forced sleep.
 
-### 9.3 Complete Door Table
+### 17.4 Scroll-Gated Logic
 
-All 86 entries from `doorlist[]` (`fmain.c:240-326`). The table is sorted by xc1 (outdoor X coordinate) -- this ordering is critical for the binary search used during outdoor-to-indoor transitions.
+The most significant architectural characteristic: AI processing, encounter spawning, hunger/fatigue, day/night advancement, and most game logic (Phase 14) only execute on frames where the map does not scroll. During continuous scrolling, only actor movement/animation, combat, and rendering occur. This naturally reduces computational load during scrolling but means a walking player has slower hunger progression and fewer encounter checks than a stationary one.
 
-| Index | xc1    | yc1    | xc2    | yc2    | Type   | Secs | Label                |
-|-------|--------|--------|--------|--------|--------|------|----------------------|
-| 0     | 0x1170 | 0x5060 | 0x2870 | 0x8b60 | HWOOD  | 1    | desert fort           |
-| 1     | 0x1170 | 0x5060 | 0x2870 | 0x8b60 | HWOOD  | 1    | desert fort           |
-| 2     | 0x1170 | 0x5060 | 0x2870 | 0x8b60 | HWOOD  | 1    | desert fort           |
-| 3     | 0x1170 | 0x5060 | 0x2870 | 0x8b60 | HWOOD  | 1    | desert fort           |
-| 4     | 0x1390 | 0x1b60 | 0x1980 | 0x8c60 | CAVE   | 2    | dragon cave           |
-| 5     | 0x1770 | 0x6aa0 | 0x2270 | 0x96a0 | BLACK  | 1    | pass fort             |
-| 6     | 0x1970 | 0x62a0 | 0x1f70 | 0x96a0 | BLACK  | 1    | gate fort             |
-| 7     | 0x1aa0 | 0x4ba0 | 0x13a0 | 0x95a0 | DESERT | 1    | oasis #1              |
-| 8     | 0x1aa0 | 0x4c60 | 0x13a0 | 0x9760 | DESERT | 1    | oasis #4              |
-| 9     | 0x1b20 | 0x4b60 | 0x1720 | 0x9560 | DESERT | 1    | oasis #2              |
-| 10    | 0x1b80 | 0x4b80 | 0x1580 | 0x9580 | DESERT | 1    | oasis #3              |
-| 11    | 0x1b80 | 0x4c40 | 0x1580 | 0x9740 | DESERT | 1    | oasis #5              |
-| 12    | 0x1e70 | 0x3b60 | 0x2880 | 0x9c60 | HSTONE | 1    | west keep             |
-| 13    | 0x2480 | 0x33a0 | 0x2e80 | 0x8da0 | HWOOD  | 1    | swamp shack           |
-| 14    | 0x2960 | 0x8760 | 0x2b00 | 0x92c0 | STAIR  | 1    | stargate forwards     |
-| 15    | 0x2b00 | 0x92c0 | 0x2960 | 0x8780 | STAIR  | 2    | stargate backwards    |
-| 16    | 0x2c00 | 0x7160 | 0x2af0 | 0x9360 | BLACK  | 1    | doom tower            |
-| 17    | 0x2f70 | 0x2e60 | 0x3180 | 0x9a60 | HSTONE | 1    | lakeside keep         |
-| 18    | 0x2f70 | 0x63a0 | 0x1c70 | 0x96a0 | BLACK  | 1    | plain fort            |
-| 19    | 0x3180 | 0x38c0 | 0x2780 | 0x98c0 | HWOOD  | 1    | road's end inn        |
-| 20    | 0x3470 | 0x4b60 | 0x0470 | 0x8ee0 | STAIR  | 2    | tombs                 |
-| 21    | 0x3DE0 | 0x1BC0 | 0x2EE0 | 0x93C0 | CRYST  | 1    | crystal palace        |
-| 22    | 0x3E00 | 0x1BC0 | 0x2F00 | 0x93C0 | CRYST  | 1    | crystal palace        |
-| 23    | 0x4270 | 0x2560 | 0x2e80 | 0x9a60 | HSTONE | 1    | coast keep (DB)       |
-| 24    | 0x4280 | 0x3bc0 | 0x2980 | 0x98c0 | HWOOD  | 1    | friendly inn          |
-| 25    | 0x45e0 | 0x5380 | 0x25d0 | 0x9680 | MARBLE | 1    | mountain keep         |
-| 26    | 0x4780 | 0x2fc0 | 0x2580 | 0x98c0 | HWOOD  | 1    | forest inn            |
-| 27    | 0x4860 | 0x6640 | 0x1c60 | 0x9a40 | VLOG   | 1    | cabin yard #7         |
-| 28    | 0x4890 | 0x66a0 | 0x1c90 | 0x9aa0 | LOG    | 1    | cabin #7              |
-| 29    | 0x4960 | 0x5b40 | 0x2260 | 0x9a40 | VLOG   | 1    | cabin yard #6         |
-| 30    | 0x4990 | 0x5ba0 | 0x2290 | 0x9aa0 | LOG    | 1    | cabin #6              |
-| 31    | 0x49a0 | 0x3cc0 | 0x0ba0 | 0x82c0 | VWOOD  | 1    | village #2            |
-| 32    | 0x49d0 | 0x3dc0 | 0x0bd0 | 0x84c0 | VWOOD  | 1    | village #1.a          |
-| 33    | 0x49d0 | 0x3e00 | 0x0bd0 | 0x8500 | VWOOD  | 1    | village #1.b          |
-| 34    | 0x4a10 | 0x3c80 | 0x0d10 | 0x8280 | HWOOD  | 1    | village #3            |
-| 35    | 0x4a10 | 0x3d40 | 0x0f10 | 0x8340 | HWOOD  | 1    | village #5            |
-| 36    | 0x4a30 | 0x3dc0 | 0x0e30 | 0x85c0 | HWOOD  | 1    | village #7            |
-| 37    | 0x4a60 | 0x3e80 | 0x1060 | 0x8580 | HWOOD  | 1    | village #8            |
-| 38    | 0x4a70 | 0x3c80 | 0x1370 | 0x8280 | HWOOD  | 1    | village #4            |
-| 39    | 0x4a80 | 0x3d40 | 0x1190 | 0x8340 | HWOOD  | 1    | village #6            |
-| 40    | 0x4c70 | 0x3260 | 0x2580 | 0x9c60 | HSTONE | 1    | crag keep             |
-| 41    | 0x4d60 | 0x5440 | 0x1f60 | 0x9c40 | VLOG   | 1    | cabin #2              |
-| 42    | 0x4d90 | 0x4380 | 0x3080 | 0x8d80 | HSTON2 | 1    | crypt                 |
-| 43    | 0x4d90 | 0x54a0 | 0x1f90 | 0x9ca0 | LOG    | 1    | cabin yard #2         |
-| 44    | 0x4de0 | 0x6b80 | 0x29d0 | 0x9680 | MARBLE | 1    | river keep            |
-| 45    | 0x5360 | 0x5840 | 0x2260 | 0x9840 | VLOG   | 1    | cabin yard #3         |
-| 46    | 0x5390 | 0x58a0 | 0x2290 | 0x98a0 | LOG    | 1    | cabin #3              |
-| 47    | 0x5460 | 0x4540 | 0x1c60 | 0x9840 | VLOG   | 1    | cabin yard #1         |
-| 48    | 0x5470 | 0x6480 | 0x2c80 | 0x8d80 | HSTONE | 1    | elf glade             |
-| 49    | 0x5490 | 0x45a0 | 0x1c90 | 0x98a0 | LOG    | 1    | cabin #1              |
-| 50    | 0x55f0 | 0x52e0 | 0x16e0 | 0x83e0 | MARBLE | 1    | main castle           |
-| 51    | 0x56c0 | 0x53c0 | 0x1bc0 | 0x84c0 | HSTON2 | 1    | city #15.a            |
-| 52    | 0x56c0 | 0x5440 | 0x19c0 | 0x8540 | HSTON2 | 1    | city #17              |
-| 53    | 0x56f0 | 0x51a0 | 0x19f0 | 0x82a0 | HSTON2 | 1    | city #10              |
-| 54    | 0x5700 | 0x5240 | 0x1df0 | 0x8340 | VSTON2 | 1    | city #12              |
-| 55    | 0x5710 | 0x5440 | 0x1c10 | 0x8640 | HSTON2 | 1    | city #18              |
-| 56    | 0x5730 | 0x5300 | 0x1a50 | 0x8400 | HSTON2 | 1    | city #14              |
-| 57    | 0x5730 | 0x5380 | 0x1c30 | 0x8480 | VSTON2 | 1    | city #15.b            |
-| 58    | 0x5750 | 0x51a0 | 0x1c60 | 0x82a0 | HSTON2 | 1    | city #11              |
-| 59    | 0x5750 | 0x5260 | 0x2050 | 0x8360 | HSTON2 | 1    | city #13              |
-| 60    | 0x5760 | 0x53c0 | 0x2060 | 0x84c0 | HSTON2 | 1    | city #16              |
-| 61    | 0x5760 | 0x5440 | 0x1e60 | 0x8540 | HSTON2 | 1    | city #19              |
-| 62    | 0x5860 | 0x5d40 | 0x1c60 | 0x9a40 | VLOG   | 1    | cabin yard #4         |
-| 63    | 0x5890 | 0x5da0 | 0x1c90 | 0x9ca0 | LOG    | 1    | cabin #4              |
-| 64    | 0x58c0 | 0x2e60 | 0x0ac0 | 0x8860 | CAVE   | 2    | troll cave            |
-| 65    | 0x5960 | 0x6f40 | 0x2260 | 0x9a40 | VLOG   | 1    | cabin yard #9         |
-| 66    | 0x5990 | 0x6fa0 | 0x2290 | 0x9ca0 | LOG    | 1    | cabin #9              |
-| 67    | 0x59a0 | 0x6760 | 0x2aa0 | 0x8b60 | STAIR  | 1    | unreachable castle    |
-| 68    | 0x59e0 | 0x5880 | 0x27d0 | 0x9680 | MARBLE | 1    | farm keep             |
-| 69    | 0x5e70 | 0x1a60 | 0x2580 | 0x9a60 | HSTONE | 1    | north keep            |
-| 70    | 0x5ec0 | 0x2960 | 0x11c0 | 0x8b60 | CAVE   | 2    | spider exit           |
-| 71    | 0x6060 | 0x7240 | 0x1960 | 0x9c40 | VLOG   | 1    | cabin yard #10        |
-| 72    | 0x6090 | 0x72a0 | 0x1990 | 0x9ca0 | LOG    | 1    | cabin #10             |
-| 73    | 0x60f0 | 0x32c0 | 0x25f0 | 0x8bc0 | HSTONE | 1    | mammoth manor         |
-| 74    | 0x64c0 | 0x1860 | 0x03c0 | 0x8660 | CAVE   | 2    | maze cave 2           |
-| 75    | 0x6560 | 0x5d40 | 0x1f60 | 0x9a40 | VLOG   | 1    | cabin yard #5         |
-| 76    | 0x6590 | 0x5da0 | 0x1f90 | 0x98a0 | LOG    | 1    | cabin #5              |
-| 77    | 0x65c0 | 0x1a20 | 0x04b0 | 0x8840 | BLACK  | 2    | maze cave 1           |
-| 78    | 0x6670 | 0x2a60 | 0x2b80 | 0x9a60 | HSTONE | 1    | glade keep            |
-| 79    | 0x6800 | 0x1b60 | 0x2af0 | 0x9060 | BLACK  | 1    | witch's castle        |
-| 80    | 0x6b50 | 0x4380 | 0x2850 | 0x8d80 | HSTON2 | 1    | light house           |
-| 81    | 0x6be0 | 0x7c80 | 0x2bd0 | 0x9680 | MARBLE | 1    | lonely keep           |
-| 82    | 0x6c70 | 0x2e60 | 0x2880 | 0x9a60 | HSTONE | 1    | sea keep              |
-| 83    | 0x6d60 | 0x6840 | 0x1f60 | 0x9a40 | VLOG   | 1    | cabin yard #8         |
-| 84    | 0x6d90 | 0x68a0 | 0x1f90 | 0x9aa0 | LOG    | 1    | cabin #8              |
-| 85    | 0x6ee0 | 0x5280 | 0x31d0 | 0x9680 | MARBLE | 1    | point keep            |
+### 17.5 Global Control Flags
 
-**Notable patterns:**
-- Entries 0-3 are identical duplicates (desert fort) -- likely copy-paste artifacts or placeholders for multiple entrance tiles on one building.
-- Cabins always appear in pairs: a VLOG "yard" entry followed by a LOG "cabin" entry at a nearby coordinate, sharing the same cabin number.
-- The stargate (entries 14-15) is unique: it connects region 8 to region 8 (secs=1 forward, secs=2 backward), functioning as a bidirectional stairway between two interior areas.
-- The crystal palace has two entries (21-22) at xc1 values 0x3DE0 and 0x3E00, 32 pixels apart -- two adjacent entrance tiles.
-- All village doors (31-39) cluster tightly around xc1=0x49a0-0x4a80 and use VWOOD or HWOOD types.
-- City doors (51-61) similarly cluster near xc1=0x56c0-0x5760 and exclusively use HSTON2/VSTON2 types.
+| Flag | Type | Declared | Purpose |
+|------|------|----------|---------|
+| `quitflag` | char | `fmain.c:590` | Loop termination. TRUE on win, game-over, or exit. |
+| `viewstatus` | char | `fmain.c:583` | Display state: 0=normal, 1/4=picking, 2=map-message, 3=fade-in, 98/99=rebuild. |
+| `battleflag` | char | `fmain.c:588` | TRUE if hostile actors within 300 px. Set per tick in AI loop. |
+| `freeze_timer` | short | `fmain.c:577` | Countdown. While >0: enemies frozen, daynight frozen, encounters suppressed. |
+| `light_timer` | short | `fmain.c:577` | Countdown. While >0: Green Jewel light-magic effect in `day_fade()`. |
+| `secret_timer` | short | `fmain.c:577` | Countdown. While >0: secret passages visible. |
+| `riding` | short | `fmain.c:563` | 0=walking, 1=raft, 5=turtle, 11=swan. |
+| `anix` | short | `fmain.c:75` | Active actor count (typically 3–7). |
+| `fiery_death` | local | `fmain.c:1384` | TRUE if in volcanic zone. Computed each tick. |
 
-### 9.4 Door Opening Logic
+### 17.6 Region Loading
 
-The `doorfind()` function (`fmain.c:1081-1125`) handles opening locked doors when the player uses a key or bumps into a door tile.
+Region transitions are triggered by crossing outdoor boundaries (`gen_mini()` at `fmain.c:2959-2992`), door transitions (`fmain.c:1924-1932`), or respawn (`fmain.c:2903`).
 
-#### Key Types
+- `MAP_FLUX` / `MAP_STABLE`: `new_region < NO_REGION(10)` means transition in progress — `fmain.c:612-613`.
+- `load_all()` (`fmain.c:3545`): Blocking loop — `while (MAP_FLUX) load_new_region()`.
+- `load_next()` (`fmain2.c:752`): Non-blocking incremental loader called during Phase 13.
+- `load_new_region()` (`fmain.c:3547-3617`): Loads sector data, region map, terrain blocks, and 5 image planes incrementally. Desert gate check at `fmain.c:3600`: if `new_region == 4` and `stuff[STATBASE] < 5`, blocks desert map squares.
 
-Defined as an enum at `fmain.c:1048`:
+### 17.7 Frame Timing
 
-```c
-enum ky {NOKEY=0, GOLD, GREEN, KBLUE, RED, GREY, WHITE};
-```
+The frame rate is locked to vertical blank. `pagechange()` at `fmain.c:2993-3005` calls `WaitBOVP(&vp_text)`, blocking until the next VBLANK period. On PAL Amiga this is ~50 Hz, NTSC ~60 Hz. One main loop iteration = one frame = one VBLANK.
 
-| Value | Name  | Numeric |
-|-------|-------|---------|
-| 0     | NOKEY | 0       |
-| 1     | GOLD  | 1       |
-| 2     | GREEN | 2       |
-| 3     | KBLUE | 3       |
-| 4     | RED   | 4       |
-| 5     | GREY  | 5       |
-| 6     | WHITE | 6       |
-
-#### Algorithm
-
-1. **Tile scan** -- Checks the tile at the hero's pixel position using `px_to_im(x, y)`. If tile ID is not 15 (the "door" tile), tries x+4 and x-8 as minor offsets. Returns FALSE if no door tile is found within that range.
-
-2. **Origin trace** -- Once a door tile is found, traces left (`x-16` twice) and down (`y+32`) to find the top-left origin of the door. This locates multi-tile doors by walking to their origin corner.
-
-3. **Sector/region calc** -- Converts pixel coords to tile coords (`x >>= 4`, `y >>= 5`), reads the sector ID from the map via `mapxy(x,y)`, then looks up the region ID from `current_loads.image[(sec_id >> 6)]`.
-
-4. **open_list scan** -- Iterates through all 17 `open_list` entries, matching on both `map_id == reg_id` and `door_id == sec_id`.
-
-5. **Key check** -- If a match is found, checks whether `keytype == 0` (NOKEY, no key required) or the provided `keytype` matches the entry's required key.
-
-6. **Tile replacement** -- On success, replaces the door tile(s) with "opened" tile IDs:
-   - `new1` always replaces the origin tile.
-   - If `new2` is non-zero, placement depends on the `above` field:
-     - `above == 1`: `new2` placed at `(x, y-1)` -- one tile above.
-     - `above == 3`: `new2` placed at `(x-1, y)` -- one tile to the left (back).
-     - `above == 4`: Special 2x2 replacement -- tiles 87, 86, 88 placed at `(x, y-1)`, `(x+1, y)`, `(x+1, y-1)` respectively (the CABINET case).
-     - `above == 2`: `new2` placed at `(x+1, y)` -- one tile to the right (side).
-     - Any other value for `above`: `new2` at `(x+1, y)` and `above` itself at `(x+2, y)` -- a 3-tile-wide door.
-   - Sets `viewstatus = 99` to force a screen redraw and prints "It opened."
-
-7. **Failure** -- If no match or wrong key, prints "It's locked." (unless `bumped` is already set or a key was used), sets `bumped = 1`, returns FALSE.
-
-### 9.5 Open List Table
-
-All 17 entries from `open_list[]` (`fmain.c:1059-1077`). Each entry defines how a specific door tile in a specific map region can be opened, and what tiles replace it when opened.
-
-| Index | door_id | map_id | new1 | new2 | above | keytype | Comment  |
-|-------|---------|--------|------|------|-------|---------|----------|
-| 0     | 64      | 360    | 123  | 124  | 2     | GREEN   | HSTONE   |
-| 1     | 120     | 360    | 125  | 126  | 2     | NOKEY   | HWOOD    |
-| 2     | 122     | 360    | 127  | 0    | 0     | NOKEY   | VWOOD    |
-| 3     | 64      | 280    | 124  | 125  | 2     | GREY    | HSTONE2  |
-| 4     | 77      | 280    | 126  | 0    | 0     | GREY    | VSTONE2  |
-| 5     | 82      | 480    | 84   | 85   | 2     | KBLUE   | CRYST    |
-| 6     | 64      | 480    | 105  | 106  | 2     | GREEN   | OASIS    |
-| 7     | 128     | 240    | 154  | 155  | 1     | WHITE   | MARBLE   |
-| 8     | 39      | 680    | 41   | 42   | 2     | GOLD    | HGATE    |
-| 9     | 25      | 680    | 27   | 26   | 3     | GOLD    | VGATE    |
-| 10    | 114     | 760    | 116  | 117  | 1     | RED     | SECRET   |
-| 11    | 118     | 760    | 116  | 117  | 1     | GREY    | TUNNEL   |
-| 12    | 136     | 800    | 133  | 134  | 135   | GOLD    | GOLDEN   |
-| 13    | 187     | 800    | 76   | 77   | 2     | NOKEY   | HSTON3   |
-| 14    | 73      | 720    | 75   | 0    | 0     | NOKEY   | VSTON3   |
-| 15    | 165     | 800    | 85   | 86   | 4     | GREEN   | CABINET  |
-| 16    | 210     | 840    | 208  | 209  | 2     | NOKEY   | BLUE     |
-
-**Notes on the open_list:**
-- The same `door_id` (64) appears in three different map regions (360, 280, 480), each with different replacement tiles and key requirements. The `map_id` disambiguates.
-- Entry 12 (GOLDEN) is special: `above=135` means it is a 3-tile-wide door, placing `new2` (134) at `(x+1, y)` and the `above` value (135) at `(x+2, y)`.
-- Entry 15 (CABINET) uses `above=4`, triggering the special 2x2 replacement pattern with hard-coded tiles 87, 86, 88.
-
-### 9.6 Door Transition Logic
-
-The main loop handles door transitions at `fmain.c:1894-1955`. The hero's position is masked to tile boundaries (`hero_x & 0xfff0`, `hero_y & 0xffe0`) and checked against the door table. If `riding` is true, door transitions are skipped entirely.
-
-#### Outdoor to Indoor (region < 8) -- Binary Search
-
-When the hero is in the overworld (regions 0-7), a **binary search** is performed over `doorlist[]` (`fmain.c:1902-1933`):
-
-1. The search operates on the xc1-sorted array with indices `i=0` to `k=DOORCOUNT-1`.
-2. At each step, `j = (k + i) / 2` picks the midpoint.
-3. Comparison order:
-   - If `d->xc1 > xtest`: search left half (`k = j-1`).
-   - If `d->xc1 + 16 < xtest`: search right half (`i = j+1`).
-   - If `d->xc1 < xtest` and door is not horizontal (`type & 1 == 0`): search right (`i = j+1`). This allows vertical doors a 16-pixel-wide match window.
-   - If `d->yc1 > ytest`: search left (`k = j-1`).
-   - If `d->yc1 < ytest`: search right (`i = j+1`).
-   - Otherwise: match found.
-
-4. **Orientation check** on match:
-   - Horizontal doors (`type & 1`): reject if `hero_y & 0x10` is set (hero must be in the top half of the tile row).
-   - Vertical doors: reject if `(hero_x & 15) > 6` (hero must be near the left edge of the tile).
-
-5. **DESERT special case**: If `d->type == DESERT`, the transition is blocked unless `stuff[STATBASE] >= 5` (the player must have collected at least 5 statues). This is the only non-key prerequisite in the door system.
-
-6. **Destination calculation** by type:
-   - `CAVE`: `xtest = xc2 + 24`, `ytest = yc2 + 16` (offset into cave interior).
-   - Horizontal (`type & 1`): `xtest = xc2 + 16`, `ytest = yc2` (centered on door width).
-   - Vertical (default): `xtest = xc2 - 1`, `ytest = yc2 + 16` (offset to side of door).
-
-7. **Region assignment**: `new_region = 8` if `secs == 1`, else `new_region = 9`.
-8. Calls `xfer(xtest, ytest, FALSE)` followed by `find_place(2)` and a fade transition.
-
-#### Indoor to Outdoor (region >= 8) -- Linear Scan
-
-When the hero is indoors (`fmain.c:1936-1955`), a **linear scan** of all 86 doors is performed:
-
-1. For each door, checks `d->yc2 == ytest` and either `d->xc2 == xtest` or `(d->xc2 == xtest - 16 && type & 1)` (horizontal doors are 2 tiles wide).
-
-2. **Orientation check** (reversed from entry):
-   - Horizontal doors: reject if `(hero_y & 0x10) == 0` (hero must be in the bottom half).
-   - Vertical doors: reject if `(hero_x & 15) < 2` (hero must not be at the far left edge).
-
-3. **Destination calculation** by type:
-   - `CAVE`: `xtest = xc1 - 4`, `ytest = yc1 + 16`.
-   - Horizontal (`type & 1`): `xtest = xc1 + 16`, `ytest = yc1 + 34`.
-   - Vertical (default): `xtest = xc1 + 20`, `ytest = yc1 + 16`.
-
-4. Calls `xfer(xtest, ytest, TRUE)` and `find_place(FALSE)`.
-
-**Note the asymmetry:** outdoor-to-indoor uses binary search (O(log n)) because doorlist is sorted by xc1, while indoor-to-outdoor uses linear scan (O(n)) because the indoor coordinates (xc2) are not sorted.
-
-### 9.7 The xfer() Function
-
-The `xfer()` function (`fmain.c:2625-2645`) performs the actual teleportation:
-
-```c
-xfer(xtest, ytest, flag)
-register USHORT xtest, ytest, flag;
-{
-    map_x += (xtest - hero_x);       /* adjust map scroll position */
-    map_y += (ytest - hero_y);
-    hero_x = anim_list[0].abs_x = xtest;  /* set hero position */
-    hero_y = anim_list[0].abs_y = ytest;
-
-    encounter_number = 0;             /* clear any active encounter */
-    if (flag)                         /* flag=TRUE when exiting indoors */
-    {   xtest = (map_x + 151) >> 8;
-        ytest = (map_y + 64) >> 8;
-        xtest = (xtest >> 6) & 1;    /* bit 6: east/west half (0 or 1) */
-        ytest = (ytest >> 5) & 7;    /* bits 5-7: north/south band (0-7) */
-        new_region = xtest + (ytest + ytest);  /* region = x + 2*y */
-    }
-    keydir = 0;                       /* reset key direction */
-    load_all();                       /* load map data for new region */
-    gen_mini();                       /* regenerate minimap (sets xreg, yreg) */
-    viewstatus = 99;                  /* force full screen redraw */
-    setmood(TRUE);                    /* update music for new area */
-    while (proxcheck(hero_x, hero_y, 0)) hero_y++;  /* nudge down if colliding */
-}
-```
-
-**Key details:**
-- **Coordinate adjustment**: `map_x`/`map_y` (the viewport scroll offsets) are shifted by the same delta as the hero, maintaining the camera's relative position.
-- **Region calculation** (when `flag` is TRUE, i.e., exiting to overworld): The overworld is divided into a 2x8 grid of regions. The X bit selects east (1) or west (0); the Y bits select which row (0-7). The formula `new_region = xtest + 2*ytest` produces region numbers 0-15, though only 0-7 are used for overworld tiles (the map is 2 columns by 4 rows = 8 regions).
-- When `flag` is FALSE (entering indoors), the region was already set by the caller (`new_region = 8` or `9`), so no recalculation is needed.
-- **Collision nudge**: After teleporting, if the destination overlaps a solid object (`proxcheck`), the hero is pushed downward pixel by pixel until clear.
-- `load_all()` triggers a full reload of map sectors, tilesets, and sprites for the destination region.
-
-### 9.8 Improvement Notes
-
-- **Binary/linear search asymmetry** -- The indoor-to-outdoor path uses O(n) linear scan because xc2 values are unsorted. A hash map keyed on `(xc2, yc2)` would give O(1) lookup in both directions. Alternatively, maintaining a second copy of the door table sorted by xc2 would allow binary search for exits as well.
-
-- **Hard-coded coordinates** -- All 86 door entries are compiled directly into the executable. Externalizing this to a data file would allow modding, easier testing, and potential runtime patching without recompilation.
-
-- **DESERT door is the only non-key prerequisite** -- The statue count check (`stuff[STATBASE] >= 5`) is special-cased inline at `fmain.c:1919`. A more general approach would add a "prerequisite" field to the door struct, supporting arbitrary conditions (quest flags, item counts, etc.) without type-specific code.
-
-- **Duplicate entries (indices 0-3)** -- Four identical "desert fort" entries appear at the start of doorlist. These may be copy-paste artifacts, or they may represent multiple entrance tiles that all lead to the same interior. Since the binary search stops at the first match, only one of these can ever be reached via the standard search path. The others occupy space and could cause confusion.
-
-- **CAVE/VLOG alias** -- `CAVE` and `VLOG` are both defined as value 18. The transition logic only checks for `type == CAVE` explicitly, so VLOG doors follow the default (vertical) path rather than the CAVE-specific offset calculation. This works correctly because VLOG represents cabin yards (not actual caves), but the shared numeric value is a potential source of bugs if new code checks `type == CAVE` and inadvertently matches yard doors.
-
-- **open_list linear scan** -- The 17-entry open_list is scanned linearly on every door interaction attempt. While small enough to not matter on the Amiga, a lookup table indexed by `(map_id, door_id)` would be cleaner.
+Exceptions: `continue` statements at `fmain.c:1374` (viewstatus 1/4) and `fmain.c:1378` (pause) skip page-flip and use `Delay(1)` instead.
 
 ---
 
-## 10. Day/Night Cycle
+## 18. Menu System
 
-The game simulates a continuous day/night cycle using a single counter that drives lighting changes, time-of-day events, and sleep mechanics.
+### 18.1 `menus[10]` Structure
 
-### Day Counter
-
-The master time variable `daynight` is a 16-bit unsigned integer that increments by 1 each game tick (approximately 1/60th of a second on NTSC). It wraps back to 0 when it reaches 24000, producing a full day/night cycle of 24000 ticks (~6.7 minutes real time).
+Defined at `fmain.c:517-531`:
 
 ```c
-/* fmain.c:2023-2024 */
-if (!freeze_timer)          /* no time advancement during timestop */
+struct menu {
+    char    *label_list;
+    char    num, color;
+    char    enabled[12];
+} menus[10];
+```
+
+Each `enabled[i]` byte encodes state and behavior — `fmain.c:512-513`:
+- **Bit 0** (`& 1`): highlight/selected toggle
+- **Bit 1** (`& 2`): visibility — entry displayed only if set
+- **Bits 2–7** (`& 0xfc`): action type (`atype`)
+
+| atype | Behavior |
+|-------|----------|
+| 0 | Top-bar navigation: switch `cmode` to `hit` |
+| 4 | Toggle: XOR bit 0, call `do_option(hit)` |
+| 8 | Immediate action: highlight, `do_option(hit)` |
+| 12 | One-shot highlight: set bit 0, `do_option(hit)` |
+
+Common encoded values: 2 = visible nav item, 3 = visible + highlighted, 6 = visible toggle (off), 7 = visible toggle (on), 8 = hidden action, 10 = visible action.
+
+Ten menu modes — `fmain.c:494`:
+
+```c
+enum cmodes {ITEMS=0, MAGIC, TALK, BUY, GAME, SAVEX, KEYS, GIVE, USE, FILE};
+```
+
+| Mode | Label List | Entries | Color | Purpose |
+|------|-----------|---------|-------|---------|
+| ITEMS (0) | `label2` | 10 | 6 | List/Take/Look/Use/Give |
+| MAGIC (1) | `label6` | 12 | 5 | Stone/Jewel/Vial/Orb/Totem/Ring/Skull |
+| TALK (2) | `label3` | 8 | 9 | Yell/Say/Ask |
+| BUY (3) | `label5` | 12 | 10 | Food/Arrow/Vial/Mace/Sword/Bow/Totem |
+| GAME (4) | `label4` | 10 | 2 | Pause/Music/Sound/Quit/Load |
+| SAVEX (5) | `label8` | 7 | 0 | Save/Exit |
+| KEYS (6) | `label9` | 11 | 8 | Gold/Green/Blue/Red/Grey/White |
+| GIVE (7) | `labelA` | 9 | 10 | Gold/Book/Writ/Bone |
+| USE (8) | `label7` | 10 | 8 | Dirk/Mace/Sword/Bow/Wand/Lasso/Shell/Key/Sun |
+| FILE (9) | `labelB` | 10 | 5 | Slots A–H |
+
+Menus ITEMS through GAME (modes 0–4) share a top bar of 5 entries (indices 0–4) drawn from `label1` ("Items Magic Talk Buy  Game"). Entries 5+ come from each menu's `label_list`. USE and FILE skip the top bar — for `cmode >= USE`, labels draw directly from `menus[cmode].label_list` (`fmain.c:3088`).
+
+### 18.2 Display: `print_options`, `propt`, `gomenu`
+
+**`print_options()`** at `fmain.c:3048-3068` renders the right-side menu panel on `rp_text2` (hi-res status bitmap). Iterates `menus[cmode]` entries; for each where `(enabled[i] & 2) != 0` (visible), assigns `real_options[j] = i` and calls `propt(j, highlight)`. Layout: 2 columns (x=430/482), 6 rows spaced 9 px, starting at y=8.
+
+**`propt(j, pena)`** at `fmain.c:3070-3090` draws a single label. Background pen varies:
+- USE: pen 14. FILE: pen 13. Top bar (k<5): pen 4.
+- KEYS: `keycolors[k-5]` where `keycolors = {8, 6, 4, 2, 14, 1}` — `fmain.c:519`.
+- SAVEX: pen = entry index. Others: `menus[cmode].color`.
+
+**`gomenu(mode)`** at `fmain.c:3521-3525`: Sets `cmode`, resets `handler_data.lastmenu`, calls `print_options()`. **Blocked if paused** — checks `menus[GAME].enabled[5] & 1`.
+
+**`real_options[12]`** at `fmain.c:515`: Indirection array mapping visible screen positions to actual `enabled[]` indices. Built by `print_options()`. Mouse/keyboard handlers index through `real_options[inum]` — `fmain.c:1304-1306`.
+
+### 18.3 `set_options` — Dynamic Availability
+
+Defined at `fmain.c:3527-3543`. Called at the end of every `do_option()` (`fmain.c:3507`). Updates `enabled[]` arrays based on current inventory:
+
+- **MAGIC** (indices 5–11): `menus[MAGIC].enabled[i+5] = stuff_flag(i+9)` — magic items `stuff[9..15]`.
+- **USE** (indices 0–6): `menus[USE].enabled[i] = stuff_flag(i)` — weapons `stuff[0..6]`.
+- **KEYS** (indices 5–10): `menus[KEYS].enabled[i+5] = stuff_flag(i+16)` — keys `stuff[16..21]`. Also `menus[USE].enabled[7] = 10` if any key owned, else 8.
+- **USE Sun**: `menus[USE].enabled[8] = stuff_flag(7)` — Sun Stone `stuff[7]`.
+- **GIVE Gold**: `enabled[5] = 10 if wealth > 2`, else 8.
+- **GIVE Book**: Always 8 (hidden) — `fmain.c:3540`.
+- **GIVE Writ/Bone**: `stuff_flag(28)` / `stuff_flag(29)`.
+
+`stuff_flag(n)` at `fmain2.c:1639-1648` returns 8 if `stuff[n] == 0` (hidden), 10 if owned (visible).
+
+### 18.4 `do_option` Dispatch
+
+Defined at `fmain.c:3102-3507`. Dispatches on `cmode` and `hit` (menu entry index):
+
+#### ITEMS (`fmain.c:3110-3297`)
+
+| hit | Label | Action |
+|-----|-------|--------|
+| 5 | List | Renders full inventory screen. Iterates `stuff[0..GOLDBASE-1]`, draws item icons. Sets `viewstatus=4`. |
+| 6 | Take | `nearest_fig(0,30)`: gold pieces (0x0d) → +50 wealth; food (148) → eat; brother's bones (28) → recover inventory; containers (chest/urn/sack) → random loot via `rand4()`; other → `itrans[]` lookup. Dead bodies → extract weapon+treasure. **Win check**: `stuff[22]` (Talisman) set → `quitflag = TRUE` — `fmain.c:3244`. |
+| 7 | Look | Scans nearby OBJECTS within range 40. Found → `event(38)`, else `event(20)`. |
+| 8 | Use | `gomenu(USE)` |
+| 9 | Give | `gomenu(GIVE)` |
+
+#### MAGIC (`fmain.c:3299-3367`)
+
+Guard: `stuff[4+hit] == 0` → `event(21)` "if only I had some magic!". Blocked in necromancer extent: `speak(59)` — `fmain.c:3301-3302`.
+
+| hit | Spell | Effect |
+|-----|-------|--------|
+| 5 | Stone | Teleport via standing stones; requires `hero_sector==144`, uses `stone_list[]` — `fmain.c:3327-3348` |
+| 6 | Jewel | `light_timer += 760` — `fmain.c:3305` |
+| 7 | Vial | `vitality += rand8()+4`, capped at `15+brave/4` — `fmain.c:3349-3352` |
+| 8 | Orb | `secret_timer += 360` — `fmain.c:3306` |
+| 9 | Totem | Map view: renders big map with hero marker, `viewstatus=1` — `fmain.c:3308-3323` |
+| 10 | Ring | `freeze_timer += 100`. Blocked if `riding > 1`. — `fmain.c:3307` |
+| 11 | Skull | Kills all visible enemies with `race < 7`. Decrements `brave`. — `fmain.c:3353-3360` |
+
+After use: `--stuff[4+hit]`; if depleted, `set_options()` — `fmain.c:3363`.
+
+#### TALK (`fmain.c:3368-3425`)
+
+| hit | Label | Range |
+|-----|-------|-------|
+| 5 | Yell | `nearest_fig(1, 100)` |
+| 6 | Say | `nearest_fig(1, 50)` |
+| 7 | Ask | `nearest_fig(1, 50)` |
+
+NPC responses switch on `an->race & 0x7f`: Wizard(0)→`speak(35/27+goal)`, Priest(1)→checks writ/heals, Guard(2,3)→`speak(15)`, Princess(4)→`speak(16)`, King(5)→`speak(17)`, Noble(6)→`speak(20)`, Sorceress(7)→luck boost or `speak(45)`, Innkeeper(8)→`speak(13/12/14)` based on fatigue/time, Witch(9)→`speak(46)`, Spectre(10)→`speak(47)`, Ghost(11)→`speak(49)`, Ranger(12)→`speak(22/53+goal)`, Beggar(13)→`speak(23)` — `fmain.c:3385-3415`.
+
+#### BUY (`fmain.c:3426-3442`)
+
+Requires shopkeeper (race `0x88`). Uses `jtrans[]` pairs (item_index, cost) — `fmain.c:3426`:
+
+| Menu | Item | Cost |
+|------|------|------|
+| Food | eat(50) | 3 |
+| Arrow | `stuff[8] += 10` | 10 |
+| Vial | `stuff[11]++` | 15 |
+| Mace | `stuff[1]++` | 30 |
+| Sword | `stuff[2]++` | 45 |
+| Bow | `stuff[3]++` | 75 |
+| Totem | `stuff[13]++` | 20 |
+
+#### GAME (`fmain.c:3443-3447`)
+
+| hit | Label | Action |
+|-----|-------|--------|
+| 5 | Pause | Toggle via atype=4 bit flip; gates `notpause` at `fmain.c:1282` |
+| 6 | Music | `setmood(TRUE)` — `fmain.c:3444` |
+| 7 | Sound | Toggle bit only; checked elsewhere in sound playback |
+| 8 | Quit | `gomenu(SAVEX)` |
+| 9 | Load | `svflag = FALSE; gomenu(FILE)` |
+
+#### SAVEX (`fmain.c:3467-3469`)
+
+| hit | Action |
+|-----|--------|
+| 5 | Save: `svflag = TRUE; gomenu(FILE)` |
+| 6 | Exit: `quitflag = TRUE` |
+
+#### USE (`fmain.c:3448-3466`)
+
+| hit | Action |
+|-----|--------|
+| 0–4 | Equip weapon: `anim_list[0].weapon = hit+1` (Dirk/Mace/Sword/Bow/Wand) |
+| 6 | Shell/Turtle: calls `get_turtle()` |
+| 7 | Key: `gomenu(KEYS)` if any key owned |
+| 8 | Sunstone: if `witchflag`, `speak(60)` |
+
+Returns to ITEMS: `gomenu(ITEMS)` — `fmain.c:3464`.
+
+#### KEYS (`fmain.c:3473-3485`)
+
+Converts `hit -= 5` to key index 0–5 (Gold/Green/Blue/Red/Grey/White). If `stuff[hit+KEYBASE] > 0`: scans 9 directions around hero via `doorfind(x, y, hit+1)`. If door found, decrements key. Returns to ITEMS.
+
+#### GIVE (`fmain.c:3490-3506`)
+
+Requires `nearest_person != 0`.
+
+| hit | Action |
+|-----|--------|
+| 5 | Gold: wealth − 2, random `kind++`. Beggar → `speak(24+goal)`, else `speak(50)`. |
+| 8 | Bone: if spectre (0x8a) → `speak(48)`, drops crystal shard (item 140). |
+
+#### FILE (`fmain.c:3470-3472`)
+
+Calls `savegame(hit)` — slot 0–7 (A–H). `svflag` determines save vs. load. Returns to GAME.
+
+### 18.5 Keyboard Shortcuts
+
+Defined via `letter_list[38]` at `fmain.c:537-547`:
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| I | List inventory | Y | Yell |
+| T | Take | S | Say |
+| ? | Look | A | Ask |
+| U | Use submenu | Space | Pause toggle |
+| G | Give submenu | M | Music toggle |
+| O | Buy food | F | Sound toggle |
+| R | Buy arrows | Q | Quit |
+| 8 | Buy vial | L | Load |
+| C | Buy mace | V | Save |
+| W | Buy sword | X | Exit |
+| B | Buy bow | 1–7 | Equip/use items |
+| E | Buy totem | K | Keys submenu |
+| F1–F7 | Magic spells (keycodes 10–16) | | |
+
+The keyboard handler at `fmain.c:1343-1360` loops through `letter_list`, matches the key, sets `cmode` and `hit`, checks `hitgo` and `atype`, then calls `do_option(hit)`.
+
+**SAVEX guard** (`fmain.c:1350`): V and X shortcuts are blocked unless `cmode == SAVEX`, preventing accidental save/exit.
+
+**KEYS special** (`fmain.c:1341-1343`): If `cmode == KEYS` and key is '1'–'6', calls `do_option(key - '1' + 5)` directly.
+
+---
+
+## 19. Day/Night Cycle
+
+### 19.1 `daynight` Counter
+
+Declared at `fmain.c:572` as `USHORT daynight`. Cycles from 0 to 23999, representing one full day. Incremented once per non-scrolling tick — `fmain.c:2023-2024`:
+
+```c
+if (!freeze_timer)
     if ((daynight++) >= 24000) daynight = 0;
 ```
 
-Time does **not** advance during freeze spells (`freeze_timer > 0`). During sleep, `daynight` advances by +63 per tick unconditionally (this is not gated on `freeze_timer`), plus the normal +1 increment if `freeze_timer` is zero, yielding +64 effective ticks per game frame under normal sleeping conditions.
+Does NOT advance when `freeze_timer` is active (time-stop spell). Initialized to 8000 (morning) during `revive()` — `fmain.c:2905`. During sleep, advances 64× faster: `daynight += 63` — `fmain.c:2014`.
 
-### Light Level Calculation
+#### `lightlevel` — Brightness Curve
 
-The light level is derived from `daynight` as a triangle wave:
+Computed at `fmain.c:2025-2026`:
 
 ```c
-/* fmain.c:2025-2026 */
 lightlevel = daynight / 40;
 if (lightlevel >= 300) lightlevel = 600 - lightlevel;
 ```
 
-This produces a value ranging from 0 (midnight, `daynight=0`) to 300 (midday, `daynight=12000`) and back to 0 at `daynight=24000`. The triangle wave shape means light increases linearly from midnight to midday, then decreases linearly from midday to midnight.
+This creates a **triangular wave** peaking at 300 (noon) and bottoming at 0 (midnight):
 
-| daynight | lightlevel | Time of Day |
-|----------|------------|-------------|
-| 0        | 0          | Midnight    |
-| 6000     | 150        | Early morning |
-| 8000     | 200        | Morning     |
-| 12000    | 300        | Midday (peak) |
-| 18000    | 150        | Evening     |
-| 24000    | 0          | Midnight (wraps) |
+| daynight | lightlevel | Phase |
+|----------|------------|-------|
+| 0 | 0 | Midnight (darkest) |
+| 6000 | 150 | Dawn |
+| 12000 | 300 | Noon (brightest) |
+| 18000 | 150 | Dusk |
+| 23999 | 1 | Just before midnight |
 
-When `lightlevel < 40`, the turtle companion object (`ob_listg[5]`) switches to state 3 (glowing); otherwise it uses state 2 (normal). This provides a visual nighttime indicator.
+#### `dayperiod` — Time-of-Day Events
 
-### Time Periods and Events
+Computed as `daynight / 2000` (values 0–11) — `fmain.c:2029-2036`. Transitions trigger text events:
 
-The day is divided into 12 periods of 2000 ticks each. When the period changes, time-of-day events fire:
+| Period | daynight Range | Event | Message |
+|--------|---------------|-------|---------|
+| 0 | 0–1999 | `event(28)` | "It was midnight." — `narr.asm:45` |
+| 4 | 8000–9999 | `event(29)` | "It was morning." — `narr.asm:46` |
+| 6 | 12000–13999 | `event(30)` | "It was midday." — `narr.asm:47` |
+| 9 | 18000–19999 | `event(31)` | "Evening was drawing near." — `narr.asm:48` |
 
-```c
-/* fmain.c:2029-2037 */
-i = (daynight / 2000);
-if (i != dayperiod)
-{   switch (dayperiod = i) {
-    case 0:  event(28); break;    /* "midnight" */
-    case 4:  event(29); break;    /* "morning"  */
-    case 6:  event(30); break;    /* "midday"   */
-    case 9:  event(31); break;    /* "evening"  */
-    }
-}
-```
+Periods 1–3, 5, 7–8, 10–11 are silent transitions.
 
-| Period | daynight Range | Event | Description |
-|--------|---------------|-------|-------------|
-| 0      | 0 - 1999      | 28    | Midnight    |
-| 4      | 8000 - 9999   | 29    | Morning     |
-| 6      | 12000 - 13999 | 30    | Midday      |
-| 9      | 18000 - 19999 | 31    | Evening     |
+### 19.2 `day_fade` — Palette Interpolation
 
-Periods 1-3, 5, 7-8, and 10-11 have no associated events.
-
-### Palette Fading Algorithm (fade_page)
-
-The `day_fade()` function bridges the day counter to the palette system. It is called every 4th tick (when `daynight & 3 == 0`) or during screen transitions (`viewstatus > 97`):
+Defined at `fmain2.c:1653-1660`. Called every tick from Phase 14d (`fmain.c:2039`):
 
 ```c
-/* fmain2.c:1653-1660 */
 day_fade()
 {   register long ll;
     if (light_timer) ll = 200; else ll = 0;
     if ((daynight & 3) == 0 || viewstatus > 97)
-        if (region_num < 8)     /* no night cycle inside buildings */
-            fade_page(lightlevel-80+ll, lightlevel-61, lightlevel-62, TRUE, pagecolors);
+        if (region_num < 8)
+             fade_page(lightlevel-80+ll, lightlevel-61, lightlevel-62, TRUE, pagecolors);
         else fade_page(100, 100, 100, TRUE, pagecolors);
 }
 ```
 
-Inside buildings (region >= 8), full brightness is always used (100, 100, 100). The `light_timer` spell adds +200 to the red channel percentage, simulating a warm magical light. The red, green, and blue percentages are offset differently from `lightlevel`, creating color temperature shifts: red is reduced most (lightlevel-80), then blue (lightlevel-62), then green (lightlevel-61).
+- **Green Jewel light bonus**: `light_timer > 0` adds 200 to red parameter (warm amber glow).
+- **Update rate**: Every 4 ticks (`daynight & 3 == 0`) or during screen rebuild (`viewstatus > 97`).
+- **Indoor override**: `region_num >= 8` → always full brightness `(100,100,100)` with no day/night variation.
 
-The core `fade_page()` algorithm (`fmain2.c:377-419`) processes all 32 palette entries:
+### 19.3 `fade_page` — RGB Component Fading
 
-**Step 1 -- Region palette overrides** (color 31 only):
-- Region 4 (volcanic/fire area): color 31 = `0x0980` (orange)
-- Region 9 (dungeon): color 31 = `0x00f0` (bright green) if `secret_timer` active, else `0x0445` (dark blue-gray)
-- All other regions: color 31 = `0x0bdf` (sky blue)
+Defined at `fmain2.c:377-419`. Per-component palette scaler:
 
-**Step 2 -- Clamp input percentages** to 0-100 range.
+**Color 31 override** (`fmain2.c:381-386`):
 
-**Step 3 -- Apply night minimums** (when `limit` is TRUE, which is always the case for day_fade calls):
-- Red minimum: 10%
-- Green minimum: 25%
-- Blue minimum: 60%
-- Compute blue night-shift factor: `g2 = (100 - g) / 3`
+| Region | Color 31 | Meaning |
+|--------|----------|---------|
+| 4 (desert) | `0x0980` | Orange-brown desert sky |
+| 9 (dungeon), `secret_timer` active | `0x00f0` | Bright green (secret revealed) |
+| 9 (dungeon), normal | `0x0445` | Dark grey-blue |
+| All others | `0x0bdf` | Light blue sky |
 
-This ensures nights are never pitch black, with blue being the most preserved channel -- creating the characteristic blue-tinted nighttime look.
+**Clamping** (with `limit=TRUE`) — `fmain2.c:389-400`:
+- Red: min 10, max 100
+- Green: min 25, max 100
+- Blue: min 60, max 100
+- Blue shift factor: `g2 = (100-g)/3`
 
-**Step 4 -- Per-color processing** (for each of 32 colors):
+**Per-color computation** (`fmain2.c:402-416`): For each of 32 palette entries, extracts 12-bit RGB components from `pagecolors[]`, then:
+- Green Jewel light effect (`fmain2.c:407`): if `light_timer` active and red < green, boosts red to match green.
+- Scales: `r1 = (r × r1) / 1600`, `g1 = (g × g1) / 1600`, `b1 = (b × b1 + g2 × g1) / 100`.
+- Nighttime vegetation boost (`fmain2.c:412-413`): Colors 16–24 get extra blue at twilight (g 21–49: +2; g 50–74: +1).
 
-```c
-/* fmain2.c:403-416 */
-for (i=0; i<32; i++)
-{   r1 = (colors[i] & 0x0f00) >> 4;    /* extract red (0-240 range) */
-    g1 = colors[i] & 0x00f0;            /* extract green (0-240 range) */
-    b1 = colors[i] & 0x000f;            /* extract blue (0-15 range) */
-    if (light_timer && (r1 < g1)) r1 = g1;  /* warm light: boost red to green */
-    r1 = (r * r1) / 1600;               /* scale red */
-    g1 = (g * g1) / 1600;               /* scale green */
-    b1 = (b * b1 + (g2 * g1)) / 100;    /* scale blue + night shift */
-    if (limit)
-    {   if (i >= 16 && i <= 24 && g > 20)
-        {   if (g < 50) b1 += 2; else if (g < 75) b1++; }
-        if (b1 > 15) b1 = 15;
-    }
-    fader[i] = (r1 << 8) + (g1 << 4) + b1;
-}
-```
+Result written to `fader[]` and loaded via `LoadRGB4(&vp_page, fader, 32)`.
 
-The processing pipeline per color:
-1. **Extract** r, g, b from the 12-bit Amiga RGB word. Red and green are shifted into 0-240 range; blue stays in 0-15 range.
-2. **Light spell warmth**: If `light_timer` is active and the color's red component is less than its green, red is boosted to match green. This shifts greens toward yellow/warm tones.
-3. **Scale red and green**: `r1 = (r_pct * r_raw) / 1600`. The divisor of 1600 normalizes the 0-240 raw range with the 0-100 percentage to produce a 0-15 output.
-4. **Scale blue with night shift**: `b1 = (b_pct * b_raw + g2 * g1_scaled) / 100`. The `g2` term (`(100-g)/3`) adds extra blue proportional to how dark it is (lower green percentage = more blue boost), using the already-scaled green value. This creates the blue shift at night.
-5. **Twilight boost**: Colors 16-24 (typically sky/horizon palette entries) get extra blue during twilight when green percentage is between 20 and 75. If `g < 50`, blue gains +2; if `g < 75`, blue gains +1.
-6. **Cap blue** at 15 (maximum for 4-bit channel).
-7. **Compose** final 12-bit RGB: `(r1 << 8) + (g1 << 4) + b1`.
+#### Outdoor RGB at Key Times
 
-The final palette is loaded to hardware via `LoadRGB4(&vp_page, fader, 32)`.
+| Phase | lightlevel | r (no jewel effect) | g | b |
+|-------|------------|-------------|---|---|
+| Midnight | 0 | clamped 10 | clamped 25 | clamped 60 |
+| Dawn | 150 | 70 | 89 | 88 |
+| Noon | 300 | clamped 100 | clamped 100 | clamped 100 |
 
-### Sleep Mechanics
+With the Green Jewel effect active: red gets +200, so midnight red = 120 (warm amber tone even in darkness).
 
-Sleep is triggered in two ways: voluntarily by standing on a bed, or involuntarily from extreme fatigue or starvation.
+### 19.4 `fade_down` / `fade_normal` — Screen Transitions
 
-**Voluntary sleep (bed detection)**:
+Defined at `fmain2.c:623-630`:
 
-```c
-/* fmain.c:1875-1890 */
-if (region_num == 8)    /* inside buildings only */
-{   i = *(mapxy(hero_x>>4, hero_y>>5));
-    /* bed tile IDs: 161, 52, 162, 53 */
-    if (i == 161 || i == 52 || i == 162 || i == 53)
-    {   sleepwait++;
-        if (sleepwait == 30)
-        {   if (fatigue < 50) event(25);    /* "not tired enough" */
-            else
-            {   event(26);                   /* "falls asleep" */
-                hero_y = (anim_list[0].abs_y |= 0x1f);
-                anim_list[0].state = SLEEP;
-            }
-        }
-    }
-    else sleepwait = 0;
-}
-```
+- **`fade_down()`**: Steps all channels from 100 to 0 in increments of 5 (21 steps, `Delay(1)` each). Fades screen to black.
+- **`fade_normal()`**: Steps all channels from 0 to 100 in increments of 5. Fades back to full brightness.
 
-The hero must be in region 8 (interior buildings) and stand on a bed tile (161, 52, 162, or 53) for 30 consecutive ticks (~0.5 seconds). If `fatigue < 50`, the game displays a "not tired" message. Otherwise, the hero's Y coordinate is snapped to a 32-pixel boundary (OR with `0x1f`) and the state changes to SLEEP.
+Both use `limit=FALSE` — no night clamping or blue shift. Used for map messages, door transitions, and other screen changes.
 
-**Sleep progression**:
+### 19.5 `setmood` — Music Selection
 
-```c
-/* fmain.c:2013-2021 */
-if (anim_list[0].state == SLEEP)
-{   daynight += 63;
-    if (fatigue) fatigue--;
-    if (fatigue == 0 ||
-        (fatigue < 30 && daynight > 9000 && daynight < 10000) ||
-        (battleflag && (rand64() == 0)) )
-    {   anim_list[0].state = STILL;
-        hero_y = (anim_list[0].abs_y &= 0xffe0);
-    }
-}
-```
+Defined at `fmain.c:2936-2957`. Selects one of 7 four-channel music tracks based on game state:
 
-Each tick while sleeping:
-- `daynight` advances by +63 (plus the normal +1 from the main counter increment, totaling +64 per tick)
-- `fatigue` decrements by 1
-- The hero wakes when any of these conditions is met:
-  - `fatigue` reaches 0 (fully rested)
-  - `fatigue < 30` AND it is morning (`daynight` between 9000-10000) -- natural morning wake-up
-  - An enemy is present (`battleflag`) AND a 1-in-64 random chance succeeds -- combat interrupts sleep
+| Track Offset | Indices | Condition | Music |
+|-------------|---------|-----------|-------|
+| 0 | track[0–3] | `lightlevel > 120` (outdoor day) | Day theme |
+| 4 | track[4–7] | `battleflag` | Battle theme |
+| 8 | track[8–11] | `lightlevel ≤ 120` (outdoor night) | Night theme |
+| 12 | track[12–15] | (intro/title) | Title theme |
+| 16 | track[16–19] | Astral plane coordinates | Astral theme |
+| 20 | track[20–23] | `region_num > 7` (indoor) | Indoor theme |
+| 24 | track[24–27] | `vitality == 0` (death) | Death theme |
 
-On waking, the hero's Y coordinate is re-aligned downward (AND with `0xffe0`, clearing the low 5 bits).
+Priority (highest first): Dead → Astral plane → Battle → Indoor → Day/Night outdoor.
+
+Day/night music crossover: `lightlevel > 120` = day, `≤ 120` = night. Crossover at daynight ≈ 4800 (dawn) and ≈ 19200 (dusk).
+
+Playback at `fmain.c:2951-2956`: if music enabled (`menus[GAME].enabled[6] & 1`), `now=1` → `playscore()` (immediate), `now=0` → `setscore()` (crossfade). Mood re-evaluated every 8 ticks via `fmain.c:2198`.
+
+Indoor waveform tweak (`fmain.c:2945-2946`): dungeons (region 9) use `new_wave[10] = 0x0307`; buildings (region 8) use `0x0100`.
+
+### 19.6 Gameplay Effects
+
+**Spectre visibility** (`fmain.c:2027-2028`): `lightlevel < 40` (deep night, daynight < 1600 or > 22400) → `ob_listg[5].ob_stat = 3` (visible/interactive). Otherwise stat = 2 (hidden).
+
+**Sleep** (`fmain.c:2014-2021`): Time passes 64× faster. Wake conditions: fatigue = 0, OR fatigue < 30 and daynight 9000–10000 (morning), OR battle interruption (`battleflag && rand64() == 0`). Inn guests wake at morning.
+
+**Encounter spawning** (`fmain.c:2058-2091`): Checked every 16/32 ticks. Rate is constant regardless of day/night — `danger_level` depends on `region_num` and `xtype`, not `lightlevel`.
+
+**Innkeeper dialogue** (`fmain.c:3407`): `dayperiod > 7` (evening/night) triggers lodging speech.
+
+**Vitality recovery** (`fmain.c:2041-2045`): Every 1024 ticks, regenerates 1 HP if below max. Tied to `daynight` counter but not time-of-day dependent.
+
+### 19.7 Palette Data
+
+**`pagecolors[32]`** at `fmain2.c:367-372`: Hardcoded 32-color base palette in 12-bit Amiga RGB. Same for all outdoor regions (0–7). Faded dynamically by `fade_page()` each tick.
+
+**`textcolors[20]`** at `fmain.c:476-479`: Status bar palette (hi-res viewport). NOT affected by day/night fading.
+
+**`blackcolors[32]`** at `fmain.c:481-482`: All-zero palette for instant blackout transitions.
+
+**`sun_colors[53]`** at `fmain2.c:1569-1578`: Sunrise/sunset gradient for the victory sequence `win_colors()` (see [§16.5](#165-win-check-and-victory-sequence)).
+
+**`introcolors[32]`** at `fmain.c:484-488`: Title/intro screen palette, separate from gameplay.
+
+**`colorplay()`** at `fmain2.c:425-431`: Teleportation effect — 32 frames of random 12-bit colors for all palette entries (except color 0). Used at `fmain.c:3336`.
 
 ---
 
-## 11. Survival Mechanics
+## 20. Text & Message Display
 
-The survival system tracks hunger and fatigue on parallel timers, with escalating penalties that can ultimately kill the hero.
+### 20.1 Display Architecture
 
-### Hunger
+The game uses a split-screen Amiga display with two ViewPorts:
 
-Hunger is incremented by 1 every 128 game ticks (`daynight & 127 == 0`), provided the hero is alive and not sleeping. At 60 ticks per second, this means hunger increases roughly once every 2.1 seconds.
+- **`vp_page`** — lo-res (288×140) playfield for the game world — `fmain.c:14` (`PAGE_HEIGHT 143`), `fmain.c:811-813`.
+- **`vp_text`** — hi-res (640×57) status bar at bottom — `fmain.c:16` (`TEXT_HEIGHT 57`), `fmain.c:815-818`.
 
-**Thresholds and effects** (`fmain.c:2199-2220`):
+Key RastPort assignments — `fmain.c:448`:
+- `rp_map` — for drawing on playfield pages (used during `map_message()` story screens).
+- `rp_text` — for scrolling message text (backed by `bm_scroll`, a 1-bitplane 640×57 bitmap sharing plane 0 with `bm_text` — `fmain.c:832`, `fmain.c:938`).
+- `rp_text2` — for hi-res status bar labels/menus (backed by `bm_text`, a 4-bitplane 640×57 bitmap — `fmain.c:835`).
+- `rp` — global pointer swapped between `rp_map` and `rp_text` as needed.
 
-| Hunger Value | Effect |
-|-------------|--------|
-| 35          | event(0) -- first hunger warning message |
-| 60          | event(1) -- increased hunger warning |
-| 90          | event(4) -- severe hunger warning (one-time, at exactly 90) |
-| > 90        | event(2) -- starvation warning (fires every 8 hunger ticks when > 90, if vitality > 5) |
-| > 100       | Vitality reduced by 2 (every 8 hunger ticks, if vitality > 5; combined with fatigue > 160 check) |
-| > 140       | event(24) -- hero collapses; hunger reset to 130; forced SLEEP state |
+### 20.2 Font System
 
-The damage at hunger > 100 occurs in a combined check:
+Two fonts:
+
+1. **Topaz 8** (`tfont`) — ROM font, loaded via `OpenFont(&topaz_ta)` — `fmain.c:650`, `fmain.c:779`. Used for status bar labels, menu text, and map-mode text.
+2. **Amber 9** (`afont`) — custom disk font from `fonts/Amber/9` — `fmain.c:774-782`. Loaded via `LoadSeg` (not `OpenDiskFont`), cast through `DiskFontHeader`. Used for in-game scrolling messages and placard text. Applied at `fmain.c:1168`: `SetFont(rp,afont); SetAPen(rp,10); SetBPen(rp,11)`.
+
+Note: [text.c](text.c) is a standalone test program referencing `"sapphire.font"` at size 19 — unrelated to the game's font system.
+
+### 20.3 `_ssp` — Scrolling String Print
+
+Defined at `fsubs.asm:497-536`. Prints a formatted string to the current `rp` with embedded positioning commands.
+
+**Escape code**: `XY` (byte value 128, `$80`) — `fsubs.asm:228`.
+
+**String format**: Segments of printable ASCII (bytes 1–127) interspersed with `XY, x_half, y` positioning commands. The X coordinate is stored at half value and doubled during rendering (`add.w d0,d0` — `fsubs.asm:529`).
+
+**Algorithm** (`fsubs.asm:501-531`):
+1. Read byte. If 0: exit. If 128 (`XY`): read next two bytes as (x/2, y), call `GfxBase->Move(rp, x×2, y)`.
+2. Otherwise: scan forward counting printable bytes, call `GfxBase->Text(rp, buffer, count)`.
+3. Loop until null terminator.
+
+**Example** — title text at `fsubs.asm:236-241`:
+```asm
+_titletext  dc.b  XY,(160-26*4)/2,33,$22,"The Faery Tale Adventure",$22
+```
+Called via `ssp(titletext)` at `fmain.c:1163`.
+
+### 20.4 `_placard` — Decorative Border
+
+Defined at `fsubs.asm:382-475`. Despite the name, this is a **visual effect**, not a text routine. Draws a recursive fractal line pattern on `rp_map` using offset tables `xmod`/`ymod` (±4 pixel deltas — `fsubs.asm:381-382`).
+
+The pattern is mirror-symmetric: draws lines at original position, center-mirrored at (284,124), and two 90°/270° rotations. Uses 16×15 outer iterations with 5 inner passes. Color 1 for most lines, color 24 for the first inner pass — `fsubs.asm:411-414`.
+
+Called during story sequences: `placard()` renders after `placard_text()` — e.g., `fmain.c:2869-2870`.
+
+### 20.5 `_placard_text` — Story Message Dispatch
+
+Defined at `narr.asm:235-248`. Indexes into the `mst` pointer table (20 story messages) and tail-calls `_ssp`:
+
+| Index | Message | Citation |
+|-------|---------|----------|
+| 0 | Julian's quest intro | `narr.asm:252-259` |
+| 1 | Julian's failure | `narr.asm:261-264` |
+| 2 | Phillip sets out | `narr.asm:266-269` |
+| 3 | Phillip's failure | `narr.asm:271-274` |
+| 4 | Kevin sets out | `narr.asm:276-283` |
+| 5 | Game over | `narr.asm:284-287` |
+| 6–7 | Victory / Talisman recovered | `narr.asm:288-296` |
+| 8–10 | Princess Katra rescue | `narr.asm:298-305` |
+| 11–13 | Princess Karla rescue | `narr.asm:307-314` |
+| 14–16 | Princess Kandy rescue | `narr.asm:316-322` |
+| 17–18 | After seeing princess home | `narr.asm:330-335` |
+| 19 | Copy protection intro | `narr.asm:337-347` |
+
+Line width constraints (per `narr.asm:1-2`): max 36 chars for scroll text, 29 for placard text.
+
+### 20.6 `_prdec` — Decimal Number Printing
+
+Defined at `fsubs.asm:342-378`. Converts a number to ASCII digits in `numbuf[11]` (`fmain.c:492`), then calls `GfxBase->Text()`:
+
+1. `ion6` subroutine (`fsubs.asm:367-377`): divides by 10 repeatedly, stores ASCII digits (`$30` + remainder) right-to-left, space-fills leading positions.
+2. Adjusts pointer to display the requested number of digits.
+3. Renders via `GfxBase->Text(rp, buffer, length+1)` — `fsubs.asm:350-353`.
+
+Usage: `prdec(anim_list[0].vitality, 3)` — `fmain2.c:461`; `prdec(brave, 3)` — `fmain2.c:464`.
+
+### 20.7 `_move` / `_text` — Low-Level Wrappers
+
+Both at `fsubs.asm:477-495`. Thin wrappers around Amiga GfxBase routines using the global `_rp`:
+
+- **`_move(x, y)`** (`fsubs.asm:477-485`): Calls `GfxBase->Move(rp, x, y)`.
+- **`_text(string, length)`** (`fsubs.asm:487-495`): Calls `GfxBase->Text(rp, string, length)`.
+
+### 20.8 Print Queue (`prq` / `ppick`)
+
+A deferred display system using a 32-entry circular buffer — `fmain2.c:434-435`:
 
 ```c
-/* fmain.c:2205-2216 */
-else if ((hunger & 7) == 0)
-{   if (anim_list[0].vitality > 5)
-    {   if (hunger > 100 || fatigue > 160)
-        {   anim_list[0].vitality -= 2; prq(4); }
-        if (hunger > 90) event(2);
-    }
-    else if (fatigue > 170)
-    {   event(12); anim_list[0].state = SLEEP; }
-    else if (hunger > 140)
-    {   event(24); hunger = 130;
-        anim_list[0].state = SLEEP;
-    }
-}
+char print_que[32];
+short prec=0, pplay=0;
 ```
 
-Note: The `(hunger & 7) == 0` check means damage and collapse checks only fire every 8th hunger increment, not every tick. The `else if` chain means that when vitality is 5 or below, damage stops but forced sleep from fatigue (> 170) or starvation collapse (hunger > 140) can still occur.
+**`prq(n)`** at `fmain2.c:473-488` (inline assembly): enqueues a command byte. Silently drops if buffer full.
 
-Separately, after the damage block, lines 2218-2219 handle one-time warnings: `fatigue == 70` triggers event(3) and `hunger == 90` triggers event(4). These are in an `if/else if`, so if both fatigue reaches 70 and hunger reaches 90 on the same tick (possible since they increment together), only the fatigue warning fires.
+**`ppick()`** at `fmain2.c:443-470`: dequeues and executes one command per call. Called from Phase 14a (`fmain.c:2009`):
 
-### Fatigue
+| Code | Action | Citation |
+|------|--------|----------|
+| 2 | Debug: coords + available memory | `fmain2.c:449-451` |
+| 3 | Debug: position, sector, extent | `fmain2.c:452-456` |
+| 4 | Display vitality at (245,52) | `fmain2.c:457-459` |
+| 5 | Refresh menu via `print_options()` | `fmain2.c:460` |
+| 7 | Full stat bar: Brv/Lck/Knd/Wlth | `fmain2.c:461-466` |
+| 10 | Print "Take What?" | `fmain2.c:467` |
 
-Fatigue increments on the **same** 128-tick timer as hunger:
+If queue empty: `Delay(1)` — yields to OS.
 
-```c
-/* fmain.c:2201 */
-fatigue++;
-```
+### 20.9 `print` / `print_cont` — C Text Output
 
-**Thresholds and effects**:
+**`print(str)`** at `fmain2.c:495-500`: Scrolls the text region up 10 pixels via `ScrollRaster(rp, 0, 10, TXMIN, TYMIN, TXMAX, TYMAX)`, then renders at (TXMIN, 42). Bounds: `TXMIN=16`, `TYMIN=5`, `TXMAX=400`, `TYMAX=44` — `fmain2.c:490-493`.
 
-| Fatigue Value | Effect |
-|--------------|--------|
-| 70           | event(3) -- first tiredness warning |
-| > 160        | Vitality reduced by 2 (every 8 hunger ticks, combined with hunger > 100 check; requires vitality > 5) |
-| > 170        | event(12) -- forced sleep (only when vitality <= 5) |
+**`print_cont(str)`** at `fmain2.c:502-505`: Continues on the same line without scrolling.
 
-Fatigue is reduced during sleep (decremented by 1 per tick). Since sleep advances time at +64 ticks per game frame, a hero with fatigue of 100 would need 100 frames (~1.7 seconds real time) to fully rest.
+Both use the global `rp` (set to `rp_text` during gameplay — `fmain.c:1167`). Text colors: pen 10 foreground, pen 11 background, JAM2 mode — `fmain.c:1168`.
 
-### Health Regeneration
+### 20.10 `extract` — Template Engine
 
-```c
-/* fmain.c:2041-2046 */
-if ((daynight & 0x3ff) == 0)
-{   if (anim_list[0].vitality < (15 + brave/4) && anim_list[0].state != DEAD)
-    {   anim_list[0].vitality++;
-        prq(4);
-    }
-}
-```
+Defined at `fmain2.c:515-548`. Performs word-wrapping and hero name substitution:
 
-Health regenerates by 1 point every 1024 ticks of the day counter (`0x3ff` = 1023, so the check fires when the low 10 bits are all zero). At ~60 ticks/second, this is approximately once every 17 seconds. Since a full day cycle is 24000 ticks, regeneration fires roughly 23 times per day cycle (24000 / 1024 = ~23.4).
+- Uses local buffer `mesbuf[200]` — `fmain2.c:509`.
+- Scans input character by character, max 37 chars per line — `fmain2.c:523`.
+- `%` character → substitutes `datanames[brother-1]` (Julian/Phillip/Kevin) — `fmain2.c:528-530`, `fmain.c:604`.
+- Carriage return (13) forces line break.
+- At wrap boundary: calls `print(lstart)` to output line.
 
-The maximum vitality is `15 + brave/4`, where `brave` is the hero's bravery stat. Dead heroes do not regenerate. The `prq(4)` call triggers a status display update.
+### 20.11 Message Dispatch (`speak`, `event`, `msg`)
 
-### Safe Zones
+Three inline-assembly functions at `fmain2.c:557-577` that index into null-terminated string tables and tail-call `extract()`:
 
-Every 128 ticks, the game evaluates whether the current position qualifies as a safe zone for respawn purposes:
+- **`event(n)`** — uses `_event_msg` table (`narr.asm:10-30`): hunger, drowning, journey start, etc.
+- **`speak(n)`** — uses `_speeches` table (`narr.asm:351+`): NPC dialogue indexed by speech number.
+- **`msg(table, n)`** — generic: takes explicit string table and index.
 
-```c
-/* fmain.c:2188-2197 */
-if ((daynight & 127) == 0 &&
-    !actors_on_screen &&        /* no enemies visible */
-    !actors_loading &&          /* no enemies loading */
-    !witchflag &&               /* no witch encounter active */
-    anim_list[0].environ == 0 && /* hero on solid ground */
-    safe_flag == 0 &&           /* no active danger flag */
-    anim_list[0].state != DEAD) /* hero is alive */
-{   safe_r = region_num;
-    safe_x = hero_x; safe_y = hero_y;
-    if (hunger > 30 && stuff[24])
-    {   stuff[24]--; hunger -= 30; event(37); }
-}
-```
+Common handler `msg1` (`fmain2.c:572-577`): skips `n` null-terminated strings to find the target, then calls `extract()`.
 
-All six conditions must be true simultaneously for the safe zone to update. When updated, `safe_r`, `safe_x`, and `safe_y` record the current region and coordinates for respawn.
+### 20.12 Location Messages
 
-Additionally, if hunger exceeds 30 and the hero has apples (`stuff[24]` > 0), one apple is automatically consumed, reducing hunger by 30 and triggering event(37). This auto-eat behavior only occurs during safe zone updates, meaning the hero will not eat apples while enemies are present, while in dangerous terrain, or while dead.
+**`find_place()`** at `fmain.c:2653-2680`: Called from Phase 14g. Determines `hero_sector`, selects appropriate message table:
+- Outdoor (`region_num < 8`): `_place_tbl` / `_place_msg` — `narr.asm:100-148`, `narr.asm:164-195`.
+- Indoor (`region_num > 7`): `_inside_tbl` / `_inside_msg` — `narr.asm:199-223`.
 
-### Fiery Death Zone
+Each table entry is 3 bytes: `{min_sector, max_sector, message_index}`. Scans until `hero_sector` falls within range — `fmain.c:2663`. Mountain messages (index 4) vary by region — `fmain.c:2668-2671`.
 
-A rectangular region of the world map is designated as the fiery death zone (the volcanic/lava area):
+**`map_message()`** at `fmain2.c:601-613`: Switches to fullscreen text overlay — fades down, clears playfield, hides status bar (`VP_HIDE`), sets `rp = &rp_map`, `viewstatus = 2`.
 
-```c
-/* fmain.c:1384-1385 */
-fiery_death =
-    (map_x > 8802 && map_x < 13562 && map_y > 24744 && map_y < 29544);
-```
+**`message_off()`** at `fmain2.c:615-620`: Returns to gameplay — fades down, restores `rp = &rp_text`, shows status bar, sets `viewstatus = 3`.
 
-The coordinate bounds define a roughly 4760 x 4800 pixel area. The `fiery_death` flag is recalculated every tick based on current map position.
+**`name()`** at `fmain2.c:593`: Prints current brother's name via `print_cont(datanames[brother-1])`.
 
-**Effects on all actors** (`fmain.c:1843-1848`):
+### 20.13 Status Bar & HUD
 
-```c
-if (fiery_death)
-{   if (i == 0 && stuff[23]) an->environ = 0;    /* hero with fiery fruit: immune */
-    else if (an->environ > 15) an->vitality = 0;  /* deep: instant death */
-    else if (an->environ > 2) an->vitality--;      /* sinking: gradual damage */
-    checkdead(i, 27);
-}
-```
+The status bar occupies `vp_text` (640×57 hi-res). Color palette from `textcolors[20]` (`fmain.c:476-479`) — NOT affected by day/night fading.
 
-- **Hero with fiery fruit** (`stuff[23]`): `environ` is reset to 0 each tick, preventing sinking into lava. Only the hero (actor index 0) benefits from this item.
-- **Environ > 15**: Instant death (vitality set to 0). The actor has sunk too deep.
-- **Environ > 2**: Lose 1 vitality per tick. The actor is partway submerged.
-- **Environ <= 2**: No damage yet, but sinking is likely in progress.
+**Stat display** via print queue:
+- `prq(7)`: Full stat line at y=52 — `Brv:` at x=14, `Lck:` at x=90, `Knd:` at x=168, `Wlth:` at x=321 — `fmain2.c:461-466`.
+- `prq(4)`: Vitality at (245,52) — `fmain2.c:457-459`.
 
-For enemies and NPCs in the fiery zone (`fmain.c:2451-2454`), those with `environ > 0` are shown as dying/burning rather than rendered normally.
+**Menu display**: `print_options()` renders on `rp_text2`. Two columns (x=430, x=482), 6 rows at 9 px spacing, starting at y=8. Each label is 5 characters — `fmain.c:3064-3067`.
 
-### Design Notes
+### 20.14 Compass
 
-- **Hunger and fatigue are synchronized**: Both increment on the exact same 128-tick boundary, meaning the hero faces compounding penalties. A hero who is both very hungry (> 100) and very tired (> 160) takes 2 vitality damage per 8-increment cycle from the combined check, not separate damage from each source.
-- **Health regeneration is relatively slow**: At 1 HP per ~17 seconds and a maximum HP of 15 + brave/4, recovering from near-death takes significant time. With maximum bravery (brave = 40, yielding max HP of 25), full regeneration from 1 HP would take roughly 6.8 minutes of real time (24 regen events * 17 seconds each).
-- **Safe zone requires all conditions simultaneously**: The six conditions for safe zone updates are quite restrictive. In hostile areas with frequent enemy spawns, the safe point may not update for extended periods, potentially causing the hero to respawn far from where they died.
-- **Fiery fruit only protects the hero**: The `stuff[23]` check is gated on `i == 0` (the hero's actor index). Companion NPCs, mounts, and any allied characters receive no protection from the fiery fruit and will take full lava damage.
-- **Sleep fatigue threshold is asymmetric**: Voluntary sleep requires `fatigue >= 50`, but involuntary collapse from fatigue only occurs at > 170 (and only when vitality <= 5). There is a wide band (50-170) where the hero can sleep voluntarily but will not be forced to.
-- **Morning wake-up window is narrow**: The natural wake condition (`fatigue < 30 && daynight > 9000 && daynight < 10000`) only spans 1000 ticks out of 24000. If the hero is sleeping through this window with fatigue >= 30, they will continue sleeping until fatigue drops below 30 or reaches 0.
+**`drawcompass()`** at `fmain2.c:351-365`. Two 48×24 pixel bitmaps stored as raw bitplane data in assembly:
+- `_hinor` — base compass (all directions normal) — `fsubs.asm:249-260`.
+- `_hivar` — highlighted direction segments — `fsubs.asm:262-275`.
 
----
+Copied to chip RAM at init (`fmain.c:944-945`). Direction regions defined in `comptable[10]` (`fmain2.c:332-344`): 8 cardinal/ordinal rectangles plus 2 null entries.
 
-## 12. Magic System
+Rendering: blits full normal compass to `bm_text` at (567,15), then overlays the highlighted direction segment from `_hivar`. Only bitplane 2 differs between the two images — `bm_source->Planes[2]` is swapped (`fmain2.c:357-361`).
 
-Magic items are activated through the `MAGIC` menu in `do_option()` (`fmain.c:3301-3366`).
-The menu slot maps to a `hit` value (5-11), and each magic item is stored in
-the `stuff[]` array at index `4 + hit` (i.e., `stuff[9]` through `stuff[15]`),
-which corresponds to `inv_list[]` indices 9-15 (MAGICBASE=9 through 15).
-
-### Magic Item Table
-
-| hit | stuff[] | inv_list[] | Item Name    | Effect                                      | Source Reference     |
-|-----|---------|------------|--------------|----------------------------------------------|----------------------|
-| 5   | 9       | 9          | Blue Stone   | Stone Ring teleport                          | fmain.c:3326-3347    |
-| 6   | 10      | 10         | Green Jewel  | `light_timer += 760` (illumination)          | fmain.c:3306         |
-| 7   | 11      | 11         | Glass Vial   | Heal: vitality += rand8()+4, capped at max   | fmain.c:3348-3354    |
-| 8   | 12      | 12         | Crystal Orb  | Display world map with hero marker           | fmain.c:3309-3325    |
-| 9   | 13      | 13         | Bird Totem   | `secret_timer += 360` (reveal secrets)       | fmain.c:3307         |
-| 10  | 14      | 14         | Gold Ring    | `freeze_timer += 100` (time stop); blocked if riding > 1 | fmain.c:3308 |
-| 11  | 15      | 15         | Jade Skull   | Mass kill all enemies with race < 7          | fmain.c:3355-3363    |
-
-### Preconditions
-
-Before any magic item can be used, two checks occur (`fmain.c:3302-3304`):
-
-1. **Inventory check**: `hit < 5 || stuff[4+hit] == 0` triggers `event(21)` ("if only I had some Magic!") and aborts.
-2. **Necromancer arena restriction**: If `extn->v3 == 9`, calls `speak(59)` ("Your magic won't work here!") and aborts. This prevents magic use in the necromancer's arena.
-
-### Stone Ring Teleport (Blue Stone, hit=5)
-
-Source: `fmain.c:3326-3347`
-
-The stone ring is a network of 11 standing stones scattered across the overworld.
-Their coordinates are stored in `stone_list[]` (`fmain.c:374-376`):
-
-```c
-unsigned char stone_list[] =
-{   54,43, 71,77, 78,102, 66,121, 12,85, 79,40,
-    107,38, 73,21, 12,26, 26,53, 84,60 };
-```
-
-Each pair is (sector_x, sector_y) for stones 0 through 10.
-
-**Preconditions:**
-
-- `hero_sector == 144` -- the hero must be standing on a stone ring tile type.
-- `(hero_x & 255) / 85 == 1` and `(hero_y & 255) / 64 == 1` -- the hero must be near the center of the tile (sub-tile position check). If the position check fails, the function returns without decrementing the use count (the charge is not consumed).
-
-**Destination calculation:**
-
-1. The hero's current sector coordinates are extracted: `x = hero_x >> 8`, `y = hero_y >> 8`.
-2. The code scans `stone_list[]` for a matching (x, y) pair to identify which stone index `i` the hero is standing on.
-3. The destination index is computed: `i += (anim_list[0].facing + 1); if (i > 10) i -= 11;` -- this is effectively `(current_stone + facing + 1) % 11`. The hero's facing direction determines which of the 11 stones is the teleport target.
-4. New absolute coordinates are built: `x = (stone_list[dest*2] << 8) + (hero_x & 255)`, preserving the sub-tile offset within the destination sector.
-5. `colorplay()` triggers the visual teleport effect.
-6. `xfer(x, y, TRUE)` performs the actual map transfer with region loading.
-7. If the hero is riding a carrier, the carrier's position is synced to the hero's new position.
-
-**Fallthrough behavior:** If the stone ring teleport succeeds (the `break` on line 3342 is reached inside the scanning loop), execution ends. If the hero is on sector 144 and centered but no matching stone is found in the scan loop, execution falls through into case 7 (Heal). This appears to be a bug or intentional "consolation heal" -- the Blue Stone case lacks a terminal `break` after the for-loop, so a failed scan will grant a healing effect.
-
-### Crystal Orb Map (hit=9)
-
-Source: `fmain.c:3309-3325`
-
-- **Indoor restriction**: `if (cheat1==0 && region_num > 7) return;` -- the orb only works in outdoor regions (0-7). Region numbers above 7 are indoor/dungeon areas. The check is bypassed if `cheat1` (debug mode) is active. The `return` exits `do_option()` entirely without decrementing the use count.
-- Calls `bigdraw(map_x, map_y)` to render the full overworld map onto the drawing page's bitmap.
-- Computes the hero's position in map-pixel space and draws a white "+" marker (color 31) at that location if it falls within the visible area (0 < i < 320, 0 < j < 143).
-- Sets `viewstatus = 1` and calls `stillscreen()` to display the map, then `prq(5)` to update the display queue.
-
-### Jade Skull Mass Kill (hit=11)
-
-Source: `fmain.c:3355-3363`
-
-- Iterates over all active actors from index 1 to `anix` (the current active actor count).
-- For each actor: if `an->vitality > 0` AND `an->type == ENEMY` AND `an->race < 7`, the actor is instantly killed (`vitality = 0`, then `checkdead(i, 0)` is called to trigger the death animation and state transition).
-- **Brave penalty**: For each kill, `brave--` is decremented. This is in addition to the `brave++` that `checkdead()` awards for a normal kill, so the net effect is zero change to brave per Jade Skull kill (the `brave++` in `checkdead` on line 2777 fires for `i != 0`, then `brave--` on line 3359 cancels it).
-- The `race < 7` check excludes special enemies (race 7 is the dark knight, higher values are other special figures). Only common monsters can be killed this way.
-- If `battleflag` is still set after the massacre, calls `event(34)` to announce the battle outcome.
-
-### Usage Depletion
-
-After the switch statement completes (`fmain.c:3365`):
-
-```c
-if (!--stuff[4+hit]) set_options();
-```
-
-The item's charge count is decremented. If it reaches zero, `set_options()` rebuilds the menu system to remove the depleted item from the MAGIC menu. Each magic item has a finite number of charges determined by how many units were collected (the `maxshown` field in `inv_list[]` defines the display cap, not the use cap -- actual charges equal the `stuff[]` count for that slot).
-
-Note: The Stone Ring and Crystal Orb cases use `return` (not `break`) on failure conditions, which exits `do_option()` entirely and skips the depletion line. This means failed uses do not consume a charge.
-
----
-
-## 13. Death & Revival
-
-For the brother lifecycle state diagram and death/revival flow, see [STORYLINE.md Sections 2 and 4](STORYLINE.md#2-brother-lifecycle).
-
-### Death Detection: checkdead()
-
-Source: `fmain.c:2769-2782`
-
-```c
-checkdead(i, dtype)
-```
-
-Called when an actor may have died. If `an->vitality < 1` and the actor is not already in DYING or DEAD state:
-
-- Sets vitality to 0, tactic to 7 (death tactic), goal to DEATH, state to DYING.
-- **Special messages**: Race 7 (dark knight) triggers `speak(42)`. SETFIG types with `race != 0x89` cause `kind -= 3` (kindness penalty for killing non-hostile set figures).
-- **If actor index != 0** (not the hero): `brave++` (bravery reward for kills).
-- **If actor index == 0** (the hero): `event(dtype)` displays the death event message, `luck -= 5`, and `setmood(TRUE)` updates the music mood.
-- Clamps `kind` to minimum 0.
-- If the hero (i==0), always calls `prq(4)` to update the status display.
-
-### Good Fairy Mechanic
-
-Source: `fmain.c:1387-1407`
-
-The `goodfairy` variable (`fmain.c:592`) is an unsigned char that serves as a countdown timer after the hero enters the DEAD or FALL state. The main loop checks this each frame when the hero's state is DEAD or FALL:
-
-```c
-if (inum == DEAD || inum == FALL)
-{   if (goodfairy == 1) { revive(FALSE); inum = STILL; }
-    else if (--goodfairy < 20) ; /* do resurrection effect/glow */
-    else if (luck < 1 && goodfairy < 200) { revive(TRUE); inum = STILL; }
-    else if (anim_list[0].state == FALL && goodfairy < 200)
-    {   revive(FALSE); inum = STILL; }
-    else if (goodfairy < 120)
-    {   /* display fairy sprite approaching hero */
-        an = anim_list + 3;
-        anix = 4;
-        an->abs_x = hero_x + goodfairy*2 - 20;
-        an->abs_y = hero_y;
-        an->type = OBJECTS;
-        an->index = 100 + (cycle & 1);
-        an->state = STILL;
-        an->weapon = an->environ = 0;
-        an->race = 0xff;
-        actors_on_screen = TRUE;
-        battleflag = FALSE;
-    }
-}
-```
-
-**Exact trigger sequence** (goodfairy counts down from 255 each frame):
-
-The `goodfairy` variable is reset to 0 by `revive()` at line 2834. When the hero dies, `goodfairy` is an unsigned char, so `--goodfairy` from 0 wraps to 255. The countdown proceeds:
-
-| goodfairy range | Behavior |
-|----------------|----------|
-| 255-200        | No visible effect (falls through all conditions) |
-| 199-120        | **Luck check**: If `luck < 1`, calls `revive(TRUE)` -- brother succession (luck exhausted, no fairy save). If state is FALL (not full death), calls `revive(FALSE)` -- fairy revival. Otherwise continues countdown. |
-| 119-20         | **Fairy sprite display**: The fairy appears at position `hero_x + goodfairy*2 - 20`, moving toward the hero as goodfairy decreases. The sprite alternates between index 100 and 101 based on `cycle & 1` for a wing-flap animation. |
-| 19-2           | **Resurrection glow**: `--goodfairy < 20` is true, the empty branch executes (visual effect handled elsewhere). |
-| 1              | **Fairy revival**: `revive(FALSE)` is called -- the hero is revived in place at the safe zone. |
-
-**Key observations:**
-
-- The `luck < 1` check at goodfairy < 200 means a hero with zero or negative luck gets no fairy rescue and immediately proceeds to brother succession (`revive(TRUE)`).
-- A FALL state (non-lethal collapse, e.g., from drowning) gets fairy revival without the luck check, as long as goodfairy < 200.
-- The fairy sprite is only visible during the 119-20 range, creating a brief ~100-frame animation of the fairy approaching.
-- During the fairy approach (`goodfairy < 120`), enemy AI is suppressed: `if (goodfairy && goodfairy < 120) break;` at line 2112 exits the actor update loop.
-
-### revive() Function
-
-Source: `fmain.c:2814-2912`
-
-```c
-revive(new) short new;
-```
-
-The `new` parameter determines whether this is a **brother succession** (TRUE) or a **fairy revival** (FALSE).
-
-#### Common Setup (Always Executed)
-
-Before the `if (new)` branch, the function resets two fixed actors:
-
-- **Slot 1 (Raft)**: Positioned at (13668, 14470), type = RAFT, index/weapon/environ zeroed.
-- **Slot 2 (Set Figure)**: Positioned at (13668, 15000), type = SETFIG, index/weapon zeroed.
-- **Slot 0 (Hero)**: type = PHIL, goal = USER (restores player control).
-- Clears: `battleflag`, `goodfairy`, `mdex`, handler pickup/laydown flags.
-
-#### Brother Succession Path (new == TRUE)
-
-Triggered when the fairy cannot save the hero (luck < 1).
-
-1. **Stop music**: `stopscore()`.
-2. **Save bones**: If `brother > 0 && brother < 3` (i.e., brother is 1 or 2, meaning Julian or Phillip -- checked before the increment), the dying hero's position is saved into `ob_listg[brother]` as a bones object (`ob_stat = 1`), and `ob_listg[brother+2].ob_stat = 3` activates the associated ghost NPC. Note: Kevin's bones are NOT saved (brother=3 fails the `< 3` check), and at game start brother=0 which also fails the `> 0` check.
-3. **Reset princess**: `ob_list8[9].ob_stat = 3` resets the princess state. This is intentional -- each brother has a different princess storyline.
-4. **Load brother stats**: `br = blist + brother` loads the next brother's base attributes from `blist[]`:
-
-   | Brother | Index | brave | luck | kind | wealth | stuff array |
-   |---------|-------|-------|------|------|--------|-------------|
-   | Julian  | 0     | 35    | 20   | 15   | 20     | julstuff[]  |
-   | Phillip | 1     | 20    | 35   | 15   | 15     | philstuff[] |
-   | Kevin   | 2     | 15    | 20   | 35   | 10     | kevstuff[]  |
-
-5. **Increment brother counter**: `brother++` (so brother=1 means Julian has died and Phillip is active).
-6. **Clear inventory**: `for (i=0; i<GOLDBASE; i++) stuff[i] = 0;` wipes all inventory slots (GOLDBASE=31). Then `stuff[0] = an->weapon = 1` gives the new brother a single Dirk.
-7. **Clear magic timers**: `secret_timer = light_timer = freeze_timer = 0`.
-8. **Reset to village**: `safe_x = 19036; safe_y = 15755; region_num = safe_r = 3` -- hardcoded coordinates for the village safe zone in region 3.
-9. **Display story placard**: The placard system shows narrative text explaining the brother transition:
-
-   | brother (after ++) | First Placard | Second Placard | Meaning                          |
-   |--------------------|---------------|----------------|----------------------------------|
-   | 1 (Julian starts)  | placard_text(0) | (none)       | Julian's introduction; also clears both screen buffers |
-   | 2 (Phillip starts) | placard_text(1) | placard_text(2) | Julian has fallen; Phillip's quest begins |
-   | 3 (Kevin starts)   | placard_text(3) | placard_text(4) | Phillip has fallen; Kevin's quest begins |
-   | 4+ (all dead)      | placard_text(5) | (none)       | All brothers have fallen          |
-
-   Each placard is displayed with `Delay(120)` (approximately 2.4 seconds at 50 ticks/sec).
-
-10. **Game over check**: `if (brother > 3) { quitflag = TRUE; Delay(500); }` -- the "Stay at Home!" ending. The 500-tick delay (~10 seconds) lets the player read the final placard before the game terminates.
-11. **Load new sprites**: `actor_file = 6; set_file = 13; shape_read();` loads the default actor and set-figure sprite sheets.
-12. **Display place name**: If `brother < 4`, sets `hero_place = 2` and calls `event(9)` (the village announcement), plus brother-specific events: `event(10)` for Phillip, `event(11)` for Kevin. Julian gets only `print_cont(".")`.
-
-#### Fairy Revival Path (new == FALSE)
-
-- Simply calls `fade_down()` for a screen fade effect. No brother transition, no inventory reset, no placard.
-
-#### Common Path (Both Branches)
-
-After the `if/else`, regardless of revival type:
-
-1. **Teleport to safe zone**: `hero_x = an->abs_x = safe_x; hero_y = an->abs_y = safe_y;` -- positions hero at the last saved safe zone (or the village for new brothers).
-2. **Map alignment**: `map_x = hero_x - 144; map_y = hero_y - 90;` centers the viewport.
-3. **Load region**: `new_region = safe_r; load_all();` loads the safe zone's region data.
-4. **Max vitality**: `an->vitality = (15 + brave/4)` -- full health, which depends on the brother's brave stat.
-5. **Reset state**: `environ = 0` (outdoors), `state = STILL`, `race = -1` (hero).
-6. **Morning**: `daynight = 8000; lightlevel = 300` -- revival always happens at dawn.
-7. **Clear needs**: `hunger = fatigue = 0`.
-8. **Reset actors**: `anix = 3` -- only hero, raft, and set figure remain active (clears all encounter actors).
-9. **Rebuild menus**: `set_options()`.
-10. **Display updates**: `prq(7); prq(4)` refreshes map and status displays.
-11. **View mode**: If `brother > 3`, sets `viewstatus = 2` (game over screen); otherwise `viewstatus = 3` with `setmood(TRUE)` (normal play with music update).
-12. **Clear flags**: `fiery_death = xtype = 0`.
-
-### Brother Variant Summary
-
-| Property         | Julian (brother=1) | Phillip (brother=2) | Kevin (brother=3) |
-|------------------|--------------------|---------------------|--------------------|
-| brave            | 35                 | 20                  | 15                 |
-| luck             | 20                 | 35                  | 20                 |
-| kind             | 15                 | 15                  | 35                 |
-| wealth           | 20                 | 15                  | 10                 |
-| stuff array      | julstuff[35]       | philstuff[35]       | kevstuff[35]       |
-| Max HP           | 15 + 35/4 = 23     | 15 + 20/4 = 20     | 15 + 15/4 = 18    |
-| Sprite cfile     | cfiles[0] (sector 1376)  | cfiles[1] (sector 1418) | cfiles[2] (sector 1460) |
-| Death placard    | placard(0)         | placard(1)+placard(2) | placard(3)+placard(4) |
-| Intro event      | event(9) + "."     | event(9) + event(10) | event(9) + event(11) |
-| Bones saved at   | ob_listg[1]        | ob_listg[2]         | (not saved, brother=3 fails <3 check) |
-
-**Design notes:**
-
-- Julian is the bravest (highest combat damage cap), Phillip the luckiest (best fairy revival chance), and Kevin the kindest (least kindness penalty from NPC interactions). This creates a natural difficulty progression since wealth and max HP decrease with each brother.
-- Each brother's `stuff` array is independent (`julstuff`, `philstuff`, `kevstuff`), all 35 bytes (ARROWBASE). When a brother's bones are found later by a sibling, their inventory can be recovered (see `fmain.c:3173-3177`).
-- The princess state reset (`ob_list8[9].ob_stat = 3`) on each succession is intentional -- the game's narrative has each brother potentially rescuing a different princess.
-- The "Stay at Home!" ending (brother > 3) uses `Delay(500)` which is approximately 10 seconds, giving the player time to read the final failure placard before `quitflag` terminates the main loop.
-
----
-
-## 14. Audio System
-
-The Faery Tale Adventure uses a custom 4-channel music engine running entirely from vertical blank (VBlank) interrupt code, with a separate audio interrupt for sound effect completion. The engine is implemented in 68000 assembly (`gdriver.asm`) with C-level orchestration in `fmain.c` and `fmain2.c`.
-
-### 14.1 Music Engine Overview
-
-The music engine is a 4-voice tracker that drives the Amiga's four DMA audio channels directly via hardware registers at `$DFF0A0`-`$DFF0DF`. It is initialized by calling `init_music(new_wave, wavmem, volmem)` which:
-
-1. Stores three handle pointers in `_vblank_data`: the instrument table (`ins_handle`), waveform memory (`wav_handle`), and volume envelope memory (`vol_handle`).
-2. Sets the initial tempo to 150.
-3. Sets `nosound` to inhibit playback until a score is loaded.
-4. Installs a VBlank interrupt server (`_vblank_server`) on interrupt level 5 via `AddIntServer`.
-5. Installs an audio interrupt handler (`audio_int`) on interrupt level 8 via `SetIntVector` for sound effect completion on channel 2.
-
-**Waveform data** (`wavmem`): 8 waveforms of 128 bytes each = 1024 bytes total (`S_WAVBUF = 128 * 8`). Each waveform is raw 8-bit signed PCM representing one cycle of a synthesized instrument tone. Loaded from the file `v6` at offset 0.
-
-**Volume envelopes** (`volmem`): 10 envelopes of 256 bytes each = 2560 bytes total (`S_VOLBUF = 10 * 256`). Each envelope is a sequence of volume levels (0-64) applied frame-by-frame after a note starts. A value with bit 7 set (negative/>=128) signals "hold at current level." Loaded from `v6` at offset 1024 (immediately after waveforms).
-
-Both buffers are allocated as a single contiguous CHIP memory block of `VOICE_SZ` = 3584 bytes (`S_WAVBUF + S_VOLBUF`), with `volmem = wavmem + S_WAVBUF`.
-
-**Source:** `fmain.c:663-668`, `fmain.c:911-914`, `fmain.c:931-936`, `gdriver.asm:423-464`
-
-### 14.2 Score Loading
-
-Scores are loaded from the `songs` file by `read_score()` in `fmain2.c:760-776`.
-
-The system supports **28 tracks** total (7 moods x 4 channels). Score memory (`scoremem`) is a single 5900-byte buffer allocated from general memory (not chip memory).
-
-Loading procedure:
-```
-read_score():
-    open "songs" file
-    for i = 0 to 27:
-        read 4-byte packlen (big-endian long)
-        if (packlen * 2 + accumulated_load) > 5900: break
-        track[i] = scoremem + accumulated_offset
-        read (packlen * 2) bytes of packed note data
-        accumulated_offset += (packlen * 2)
-    close file
-```
-
-Key details:
-- The 4-byte length prefix (`packlen`) is in units of 16-bit words; actual byte count is `packlen * 2`.
-- The `track[]` array holds 32 pointers (declared as `unsigned char *(track[32])`), though only 28 are used for music (indices 0-27).
-- The 5900-byte limit is a hard cap -- loading stops if any track would exceed it.
-
-**Source:** `fmain2.c:758-776`, `fmain.c:1013`
-
-### 14.3 Sample Loading
-
-Sound effect samples are loaded by `read_sample()` in `fmain.c:1023-1042`.
-
-The raw sample data is read from **disk sectors 920-930** (11 sectors = 5632 bytes) into `sample_mem`, which is allocated as CHIP memory of `SAMPLE_SZ = 5632` bytes.
-
-The data contains **6 samples**, each with a 4-byte big-endian length prefix:
-
-```
-read_sample():
-    load_track_range(920, 11, sample_mem, 8)   -- async disk read
-    WaitDiskIO(8)                               -- wait for completion
-    smem = sample_mem
-    for i = 0 to 5:
-        read 4 bytes from smem -> ifflen (big-endian)
-        sample[i] = smem                        -- points past length prefix
-        sample_size[i] = ifflen
-        smem += ifflen                          -- advance to next sample
-```
-
-The `sample[]` array stores pointers into `sample_mem`; `sample_size[]` stores lengths. Samples are raw 8-bit signed PCM at varying playback rates (specified per-call in Amiga period units).
-
-**Source:** `fmain.c:645`, `fmain.c:926`, `fmain.c:1023-1042`, `mtrack.c:51` (disk layout showing sectors 920-930)
-
-### 14.4 Mood Sets
-
-The game defines **7 musical moods**, each consisting of 4 tracks (one per Amiga audio channel). The mood system is indexed by track offset into the `track[]` array:
-
-| Mood Index | Track Indices | Name | Trigger Condition |
-|------------|---------------|------|-------------------|
-| 0 | 0-3 | Day Outdoor | `lightlevel > 120` and not in battle, not dead, not indoor/astral |
-| 1 | 4-7 | Battle | `battleflag` is set (enemies visible and aggressive) |
-| 2 | 8-11 | Night | `lightlevel <= 120` (fallback when no higher-priority mood applies) |
-| 3 | 12-15 | Intro | Played directly at startup via `playscore(track[12],...,track[15])` |
-| 4 | 16-19 | Indoor | Hero within coordinate box: `hero_x` in `[0x2400, 0x3100]`, `hero_y` in `[0x8200, 0x8A00]` |
-| 5 | 20-23 | Astral | `region_num > 7` (astral plane and similar regions) |
-| 6 | 24-27 | Death | `anim_list[0].vitality == 0` (hero is dead) |
-
-The offset calculation in `setmood()` is `off = mood_index * 4`, then `track[off]` through `track[off+3]` are the four channel tracks.
-
-### 14.5 Instrument Table (`new_wave`)
-
-The instrument table maps instrument numbers to waveform/envelope pairs. It is passed to `init_music()` as the `ins_handle` and used by the `set_voice` command in track data.
-
-```c
-short new_wave[] = {
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0005,
-    0x0202, 0x0101, 0x0103, 0x0004, 0x0504,
-    0x0100, 0x0500
-};
-```
-
-Each 16-bit entry encodes: high byte = waveform index (0-7), low byte = volume envelope index (0-9). The `set_voice` command in track data indexes this table. During `playscore()`, the first 4 entries are loaded as default instruments for voices 1-4.
-
-Note: Entry at index 10 (`new_wave[10]`) is dynamically modified by `setmood()` when entering astral regions: set to `0x0307` for `region_num == 9`, or `0x0100` for other astral regions.
-
-**Source:** `fmain.c:669-672`, `gdriver.asm:237-242`, `gdriver.asm:376-380`
-
-### 14.6 `setmood()` Logic
-
-`setmood(now)` in `fmain.c:2936-2957` selects the current mood based on game state. The `now` parameter controls whether to restart playback immediately or just queue the score.
-
-**Priority evaluation** (first match wins):
-
-1. **Dead** (`anim_list[0].vitality == 0`): `off = 24` (mood 6 -- Death)
-2. **Indoor** (hero coordinates in range `0x2400 < hero_x < 0x3100` and `0x8200 < hero_y < 0x8A00`): `off = 16` (mood 4 -- Indoor)
-3. **Battle** (`battleflag` is true): `off = 4` (mood 1 -- Battle)
-4. **Astral/Underground** (`region_num > 7`): `off = 20` (mood 5 -- Astral). Also patches `new_wave[10]` for region-specific timbre.
-5. **Day** (`lightlevel > 120`): `off = 0` (mood 0 -- Day Outdoor)
-6. **Night** (fallback): `off = 8` (mood 2 -- Night)
-
-After determining the offset:
-- If music is enabled (menu toggle checked via `menus[GAME].enabled[6] & 1`):
-  - `now == TRUE`: calls `playscore()` -- immediately resets all voices, clears timeclock, sets track pointers to both `trak_beg` and `trak_ptr`, zeros all event counters, and enables DMA. This causes a hard restart of the music.
-  - `now == FALSE`: calls `setscore()` -- only updates `trak_beg` pointers (loop start), leaving `trak_ptr` (current playback position) unchanged. The new score will begin on the next natural loop point.
-- If music is disabled: calls `stopscore()` which zeros all volumes, kills DMA, and sets `nosound` flag.
-
-**Callers:** `setmood(TRUE)` on death, battle start, region transitions, menu toggle. `setmood(0)` periodically (every 8th `daynight` tick when not in battle) for gradual day/night transitions.
-
-**Source:** `fmain.c:2936-2957`, `gdriver.asm:338-405`
-
-### 14.7 Sound Effects
-
-Sound effects use `effect(num, speed)` in `fmain.c:3616-3619`:
-
-```c
-effect(num, speed) short num; long speed;
-{   if (menus[GAME].enabled[7] & 1)
-    {   playsample(sample[num], sample_size[num]/2, speed); }
-}
-```
-
-Effects are gated by the sound effects menu toggle (`menus[GAME].enabled[7] & 1`). The `playsample()` assembly routine plays the sample on **channel 2** (Amiga audio channel B), temporarily overriding whatever music track is on that channel by setting `vce_stat` to 2 (a countdown for the audio interrupt handler). The sample length is divided by 2 because the Amiga hardware length register counts in 16-bit words.
-
-The **6 samples** (indices 0-5) and their typical usage with speed values (Amiga period units):
-
-| Sample | Usage | Typical Speed (Period) | Approximate Hz |
-|--------|-------|----------------------|----------------|
-| 0 | Hero hit/injured | 800 + random(0-511) | ~4,400 Hz |
-| 1 | Weapon swing/miss | 150 + random(0-255) | ~23,800 Hz |
-| 2 | Ranged hit (arrow/spell) | 500 + random(0-63) | ~7,100 Hz |
-| 3 | Enemy hit | 400 + random(0-255) | ~8,900 Hz |
-| 4 | Door/interaction | 400 + random(0-255) | ~8,900 Hz |
-| 5 | Environmental/splash | 1800-3200 + random | ~1,100-2,000 Hz |
-
-Period-to-Hz conversion: The Amiga Paula chip clock is 3,546,895 Hz (PAL) or 3,579,545 Hz (NTSC). Playback frequency = clock / period. For example, period 400 at NTSC = 3,579,545 / 400 = ~8,949 Hz.
-
-**Source:** `fmain.c:3616-3619`, `fmain2.c:238-241`, `fmain.c:1488,1680,1690,2262`, `gdriver.asm:296-322`
-
-### 14.8 `gdriver.asm` Internals -- Track Data Format
-
-The music engine in `gdriver.asm` is the authoritative (and only) reference for the custom tracker format. The assembly implements a VBlank-driven sequencer.
-
-#### 15.8.1 VBlank Data Structure
-
-The `_vblank_data` block is the central state, with the following layout:
-
-| Offset | Name | Size | Description |
-|--------|------|------|-------------|
-| 0 | `nosound` | byte | Sound inhibit flag (non-zero = muted) |
-| 1 | `flag_codes` | byte | VBlank sync flag (cleared each frame) |
-| 2 | `tempo` | word | Tempo value added to timeclock each VBlank |
-| 4 | `ins_handle` | long | Pointer to instrument table (`new_wave[]`) |
-| 8 | `vol_handle` | long | Pointer to volume envelope memory |
-| 12 | `wav_handle` | long | Pointer to waveform memory |
-| 16 | `timeclock` | long | Master time counter (accumulates tempo each VBlank) |
-| 24+ | voices 1-4 | 28 bytes each | Per-voice state (4 voices, 112 bytes total) |
-
-#### 15.8.2 Per-Voice State
-
-Each voice occupies 28 bytes (`voice_sz = 28`) starting at offset `vbase` (24):
-
-| Offset | Name | Size | Description |
-|--------|------|------|-------------|
-| +0 | `wave_num` | byte | Current waveform index (0-7) |
-| +1 | `vol_num` | byte | Current volume envelope index (0-9) |
-| +2 | `vol_delay` | byte | Volume delay/freeze (non-zero = pause envelope) |
-| +3 | `vce_stat` | byte | Voice status flags (see below) |
-| +4 | `event_start` | long | Timeclock value when next event begins |
-| +8 | `event_stop` | long | Timeclock value when current note's sustain ends |
-| +12 | `vol_list` | long | Pointer to current position in volume envelope |
-| +16 | `trak_ptr` | long | Current read position in track data |
-| +20 | `trak_beg` | long | Start-of-track pointer (for loop restart) |
-| +24 | `trak_stk` | long | Loop stack pointer (reserved, not used in this code) |
-
-**Voice status flags** (`vce_stat`):
-- Bit 2 (`TIE` = 4): Tied note (not observed in use)
-- Bit 3 (`CHORD` = 8): Chorded note (not observed in use)
-- Bit 4 (`REST` = 16): Rest state
-- Bit 5 (`ENDTK` = 32): Track ended
-- When `vce_stat` is non-zero, the voice is in a "sample playing" or special state and note events are suppressed until it clears. The `playsample()` routine sets this to 2 as a countdown.
-
-#### 15.8.3 Note Encoding (Track Data Format)
-
-Track data is a stream of 2-byte command/value pairs. Each event is read as:
-
-```
-byte 0: command byte (d3)
-byte 1: value byte (d2)
-```
-
-**Command byte interpretation:**
-
-| Command | Value | Description |
-|---------|-------|-------------|
-| 0-127 | Note index (0-127) | **Play note.** Command byte is the SMUS note number; value byte encodes duration. |
-| 128 (`$80`) | Duration value | **Rest.** Same duration encoding as notes, but no sound is produced. |
-| 129 (`$81`) | Instrument number (0-15) | **Set instrument.** Looks up `ins_handle[value]` to set `wave_num` for the current voice. Immediately reads the next command (no time consumed). |
-| 144 (`$90`) | Tempo value (0-255) | **Set tempo.** Writes value to the global `tempo` word, affecting all voices. Immediately reads the next command. |
-| 255 (`$FF`) | 0 or non-zero | **End of track.** If value == 0, track stops (clears `trak_ptr`, silences voice). If value != 0, track loops (resets `trak_ptr` to `trak_beg`). |
-| Other (130-143, 145-254) | -- | Treated as no-op, skipped; immediately reads next command. |
-
-**Note command details (command byte 0-127):**
-
-The command byte directly indexes the `ptable` period/offset table. Each entry is 4 bytes: a 16-bit period value and a 16-bit waveform offset. The period controls pitch; the offset selects a portion of the 128-byte waveform for higher octaves (shorter wavelength = higher pitch).
-
-The value byte encodes duration with modifier flags:
-- Bit 7: Chord flag (cleared before use -- note plays simultaneously with the previous)
-- Bit 6: Tie flag (cleared before use -- note is tied to the next)
-- Bits 0-5: Duration index into the `notevals` table (0-63)
-
-**Duration table (`notevals`)** -- 64 entries representing standard musical durations in timeclock counts:
-
-| Index | Counts | Musical Value |
-|-------|--------|---------------|
-| 0 | 26880 | Whole note |
-| 1 | 13440 | Half note |
-| 2 | 6720 | Quarter note |
-| 3 | 3360 | Eighth note |
-| 4 | 1680 | Sixteenth note |
-| 5 | 840 | Thirty-second note |
-| 6 | 420 | Sixty-fourth note |
-| 7 | 210 | 128th note |
-| 8-15 | 40320-315 | Dotted versions (1.5x of corresponding straight values) |
-| 16-23 | 17920-140 | Triplet versions (2/3 of corresponding straight values) |
-| 24-31 | 26880-210 | Duplicate of straight values (row 0-7) |
-| 32-39 | 21504-168 | Additional subdivision set |
-| 40-47 | 32256-252 | Additional dotted set |
-| 48-55 | 23040-180 | Additional triplet set |
-| 56-63 | 34560-270 | Additional extended set |
-
-At the default tempo of 150, with VBlank at 50 Hz (PAL) or 60 Hz (NTSC), the timeclock advances 150 counts per frame. A quarter note (6720 counts) lasts 6720/150 = 44.8 frames = ~0.75 seconds at 60 Hz NTSC, giving approximately 80 BPM.
-
-#### 15.8.4 Period Table (`ptable`)
-
-The period table contains 84 entries (7 octave ranges x 12 notes), each as a period/offset pair:
-
-```
-ptable:
-  Octave 0 (low):   periods 1440-1076, offset 0  (full 128-byte waveform, length=32 words)
-  Octave 1:         periods 1016-538,  offset 0  (full 128-byte waveform)
-  Octave 2:         periods 720-269,   offset 0  (full 128-byte waveform)
-  Octave 3:         periods 508-269,   offset 16 (64-byte subset, length=16 words)
-  Octave 4:         periods 508-269,   offset 24 (32-byte subset, length=8 words)
-  Octave 5:         periods 508-269,   offset 28 (16-byte subset, length=4 words)
-  Octave 6 (high):  periods 254-135,   offset 28 (16-byte subset, length=4 words)
-```
-
-Higher octaves use shorter segments of the waveform (offset from the start), which reduces aliasing at high frequencies. The hardware length register is set to `32 - offset` (in words), so the DMA loops over the reduced waveform segment.
-
-#### 15.8.5 Note Playback Sequence
-
-Each VBlank frame, for each of the 4 voices:
-
-1. If `trak_ptr` is NULL, skip this voice.
-2. Check `timeclock >= event_start`: if yes, read the next event from the track.
-3. If not yet time for a new event, and `vce_stat == 0` (not playing a sample):
-   - Check `timeclock >= event_stop`: if yes, set volume to 0 (gap between notes).
-   - Otherwise, advance the volume envelope: read next byte from `vol_list`, write to volume register unless the value is negative (hold).
-4. When processing a new note event:
-   - Look up the waveform pointer using `wave_num` and `wav_handle`.
-   - Look up the volume envelope using `vol_num` and `vol_handle`, read initial volume.
-   - Calculate `event_stop = event_start + duration - 300` (300-count gap for note separation).
-   - Calculate next `event_start = event_start + duration`.
-   - If the note is a rest (command byte = 128), zero volume; otherwise, load waveform pointer, length, and period into the Amiga audio registers.
-
-#### 15.8.6 Audio Interrupt Handler
-
-The `audio_int` routine handles sound effect completion on channel 2 (`voice2`). It is triggered by the Amiga audio interrupt (level 8). The handler:
-
-1. Clears the interrupt request and enable bits.
-2. Checks `vce_stat` for `voice2` -- if non-zero, decrements it.
-3. When `vce_stat` reaches zero, stops the sample (zeroes volume, sets period to 2) and leaves the interrupt disabled.
-4. While `vce_stat > 0`, re-enables the interrupt for continued playback.
-
-This means sound effects have a fixed duration of 2 interrupt cycles before the music voice resumes on channel 2.
-
-### 14.9 Asset Formats for Extraction
-
-**Music scores** (from `songs` file):
-- Format: Sequence of tracks, each prefixed by 4-byte big-endian word count.
-- Track data: Stream of 2-byte command/value pairs as documented in 15.8.3.
-- Extraction target: JSON (preserving raw events) or conversion to MIDI (mapping note indices through the period table to standard MIDI notes).
-
-**Waveforms** (from `v6` file, offset 0-1023):
-- 8 waveforms, 128 bytes each, raw 8-bit signed PCM.
-- Represent single-cycle waveform shapes (looped by hardware).
-- Extraction target: individual WAV files (set sample rate to match typical playback period, e.g., 8363 Hz for period 428).
-
-**Volume envelopes** (from `v6` file, offset 1024-3583):
-- 10 envelopes, 256 bytes each.
-- Each byte is a volume level (0-64) or hold marker (bit 7 set).
-- Extraction target: JSON arrays of integer values.
-
-**Sound effect samples** (from disk sectors 920-930):
-- 6 samples, each with 4-byte big-endian length prefix, followed by raw 8-bit signed PCM.
-- Total data: 5632 bytes across 11 disk sectors.
-- Extraction target: individual WAV files. Sample rate must be derived from the Amiga period value used at playback time (varies per call site; see table in 15.7).
-
-### 14.10 Limitations and Improvement Notes
-
-- **Custom tracker format is undocumented** outside of `gdriver.asm`. The command byte encoding and duration table are the only reference for parsing score data.
-- **No volume ramping on mood changes.** `playscore()` immediately zeros all volumes and restarts from the beginning; `setscore()` only updates loop points but still causes an abrupt transition when the current track reaches its end.
-- **Sample speeds are in Amiga period units** and need conversion to Hz for modern playback: `Hz = 3,579,545 / period` (NTSC) or `Hz = 3,546,895 / period` (PAL).
-- **Sound effects always use channel 2**, temporarily muting whatever music track is assigned to that channel. There is no dynamic channel allocation.
-- **No note-off velocity** -- note gaps are a fixed 300 timeclock counts regardless of note duration, which can cause audible clicks on short notes.
-- **The chord and tie flags** (bits 7 and 6 of the value byte) are defined but immediately cleared in `note_comm` (`bclr #7,d2; bclr #6,d2`), suggesting they were planned but not fully implemented.
-- **Loop stack** (`trak_stk`) is allocated in the voice structure but never used, suggesting planned but unimplemented nested loop/repeat support.
-
----
-
-## 15. Rendering Pipeline
-
-The Faery Tale Adventure uses a split-screen display with two Amiga viewports, double-buffered game rendering via custom blitter routines, and a 12-step sprite compositing pipeline that includes per-tile terrain masking for depth occlusion. The entire rendering path is hand-tuned for the Amiga's custom chipset, with all sprite operations performed through direct blitter programming in 68000 assembly (`fsubs.asm`).
-
-### 15.1 Display Layout
-
-The display is constructed from two Amiga ViewPorts stacked vertically within a single View:
-
-| Viewport | Purpose | Resolution | Bitplanes | Colors | Position |
-|----------|---------|------------|-----------|--------|----------|
-| `vp_page` | Game world | 288x140 pixels (low-res) | 5 | 32 | DxOffset=16, DyOffset=0 |
-| `vp_text` | Text/HUD area | 640x57 pixels (hi-res) | 4 | 16 | DxOffset=0, DyOffset=143 (`PAGE_HEIGHT`) |
-
-The combined display occupies approximately 320x200 pixels of screen area. The game viewport is slightly narrower than full low-res (288 vs 320) to provide the 16-pixel left margin needed for smooth horizontal scrolling without visible tearing at the edges.
-
-Key constants (`fmain.c:8-16`):
-- `PAGE_DEPTH` = 5 (bitplanes per game page)
-- `PHANTA_WIDTH` = 320 (bitmap width including scroll margin)
-- `RAST_HEIGHT` = 200 (full raster height)
-- `PAGE_HEIGHT` = 143 (game viewport vertical extent)
-- `TEXT_HEIGHT` = 57 (HUD area height)
-
-The text viewport uses `HIRES | SPRITES | VP_HIDE` modes, providing double horizontal resolution for legible text while sharing the same vertical scan. The `VP_HIDE` flag is set initially and cleared when the HUD becomes active.
-
-**Source:** `fmain.c:799-818`, `fmain.c:826-832`, `fmain.c:856-857`
-
-### 15.2 Double Buffering
-
-The game uses a classic double-buffer scheme with two `struct fpage` instances that swap roles each frame:
-
-```
-struct fpage {                    (ftale.h:70-79)
-    struct RasInfo *ri_page;      // viewport scroll state + bitmap pointer
-    struct cprlist *savecop;      // cached copper list for this page
-    long isv_x, isv_y;           // last drawn scroll position (tile coords)
-    short obcount;                // number of sprites drawn this frame
-    struct sshape *shape_queue;   // array of sprite backsave descriptors
-    unsigned char *backsave;      // background save buffer base
-    long saveused;                // bytes consumed in backsave buffer
-    short witchx, witchy;         // witch FX position for this frame
-    short witchdir, wflag;        // witch rotation angle and active flag
-};
-```
-
-Two global pointers track the current roles:
-- `fp_drawing` -- the page being rendered to (off-screen)
-- `fp_viewing` -- the page currently displayed
-
-Each page has its own `RasInfo` (controlling scroll offsets), copper list cache, shape queue (up to `MAXSHAPES` = 25 entries), and backsave buffer for sprite background restoration.
-
-The bitmap memory is allocated as two independent 5-bitplane buffers of 320x200 pixels (`bm_page1`, `bm_page2`), each requiring 5 x 8000 = 40,000 bytes of chip memory.
-
-**Page swap** is performed by `pagechange()` (`fmain.c:2993-3006`):
-
-```
-pagechange():
-    temp = fp_drawing
-    fp_drawing = fp_viewing          // swap roles
-    fp_viewing = temp
-    vp_page.RasInfo = temp->ri_page  // point viewport at newly-drawn page
-    v.LOFCprList = temp->savecop     // restore cached copper list
-    MakeVPort(&v, &vp_page)          // rebuild copper instructions
-    MrgCop(&v)                       // merge all viewport copper lists
-    LoadView(&v)                     // activate on next vertical blank
-    temp->savecop = v.LOFCprList     // cache the newly built copper list
-    WaitBOVP(&vp_text)              // sync to bottom of visible frame
-```
-
-The copper list caching (`savecop`) avoids redundant `MakeVPort` calls when the viewport configuration has not changed between frames.
-
-**Source:** `fmain.c:443`, `fmain.c:849-853`, `fmain.c:879-884`, `ftale.h:70-79`, `fmain.c:2993-3006`
-
-### 15.3 Scrolling
-
-The game world scrolls in 8 directions at tile granularity, with pixel-smooth sub-tile positioning via Amiga hardware scroll registers.
-
-**Tile-level scrolling:** The map position is tracked in pixel coordinates (`map_x`, `map_y`). Tile coordinates are derived as `img_x = map_x >> 4` (16-pixel tile width) and `img_y = map_y >> 5` (32-pixel tile height). Each frame, the scroll delta is computed against the drawing page's last position:
-
-```
-dif_x = img_x - fp_drawing->isv_x    // tile columns moved
-dif_y = img_y - fp_drawing->isv_y     // tile rows moved
-```
-
-For single-tile movements, `scrollmap(direction)` (`fsubs.asm:1736`) performs a hardware blitter copy to shift the entire bitmap by one tile, then the exposed edge is repaired:
-
-| Direction | scrollmap arg | Edge repair |
-|-----------|--------------|-------------|
-| Right     | 0 | `strip_draw(0)` -- left column |
-| Down-right | 1 | strip + row |
-| Down      | 2 | `row_draw(0)` -- top row |
-| Down-left | 3 | strip + row |
-| Left      | 4 | `strip_draw(36)` -- right column |
-| Up-left   | 5 | strip + row |
-| Up        | 6 | `row_draw(10)` -- bottom row |
-| Up-right  | 7 | strip + row |
-
-Both `strip_draw()` (`fsubs.asm:781`) and `row_draw()` (`fsubs.asm:818`) are blitter-based tile rendering routines that draw a single column or row of map tiles from the tile image data.
-
-For movements larger than one tile in either axis (e.g., teleportation), the entire map is redrawn via `map_draw()`.
-
-**Sub-tile smooth scrolling:** After all sprites are composited, the drawing page's `RasInfo` offsets are set to the sub-tile pixel remainder:
-
-```
-fp_drawing->ri_page->RxOffset = map_x & 15;   // 0-15 pixel horizontal offset
-fp_drawing->ri_page->RyOffset = map_y & 31;    // 0-31 pixel vertical offset
-```
-
-The Amiga hardware applies these offsets during display fetch, shifting the visible window within the larger bitmap without any CPU or blitter cost.
-
-**Source:** `fmain.c:1980-1986`, `fmain.c:1997-2230`, `fmain.c:2363-2364`, `fmain.c:2611-2612`, `fsubs.asm:781-819`, `fsubs.asm:1736`
-
-### 15.4 Sprite Compositing Pipeline
-
-The core rendering loop (`fmain.c:2381-2609`) processes each sprite through a 12-step pipeline. Before the loop begins, the previous frame's sprites are erased by restoring saved backgrounds in reverse order (`fmain.c:1969-1972`):
-
-```
-for i = obcount down to 1:
-    rest_blit(shape_queue[i-1].backsave)    // restore background
-```
-
-Then the drawing page's shape counter and save buffer are reset (`fmain.c:2378`), and the main loop iterates over all sprites in Z-sorted order:
-
-**Step 1 -- Initialize pass state** (`fmain.c:2389-2409`): Determine if the sprite has a weapon requiring a second rendering pass. Weapons drawn in front of or behind the character depend on facing direction. Bows, hand weapons, and the magic staff each have unique frame selection logic.
-
-**Step 2 -- Determine type and frame** (`fmain.c:2448-2465`): Resolve the sprite's animation type (`atype`) and frame index (`inum`). Types include `PHIL` (player), `ENEMY`, `OBJECTS`, `CARRIER`, `RAFT`, `SETFIG`, and `DRAGON`. Special cases handle fiery death (objects frame 0x58), falling enemies, race-specific frame offsets, and raft substitution.
-
-**Step 3 -- Compute screen position** (`fmain.c:2411-2413`, `2468-2470`): Convert the sprite's relative position (`rel_x`, `rel_y`) to screen coordinates, then add the sub-tile scroll offsets (`map_x & 15`, `map_y & 31`). The ground level is set to `ystart + 32` for depth calculations.
-
-**Step 4 -- Apply sinking/riding/death adjustments** (`fmain.c:2489-2511`): Modify the visible portion of the sprite based on environment:
-- Riding a turtle (`riding==11`): clip bottom 16 pixels
-- In shallow water (`environ==2`): clip bottom 10 pixels
-- Deeply sunk (`environ > 29`): replace with drowning bubble sprite (objects 97-98, 8px tall)
-- Partially sunk (`environ > 2`): shift `ystart` down by `environ` pixels
-
-**Step 5 -- Clip to viewport** (`fmain.c:2513-2524`): Reject sprites entirely off-screen (x > 319, y > 173, or negative bounds). Clip remaining sprites to the visible area (0-319 horizontal, 0-173 vertical). Compute `xoff`/`yoff` to index into the sprite's source data for the visible portion.
-
-**Step 6 -- Compute blitter parameters** (`fmain.c:2527-2558`): Calculate word-aligned blit dimensions (`blitwide`, `blithigh`), source/destination offsets, modulos, and shift value for sub-word alignment. The blitter size word encodes height in the upper 10 bits and width in the lower 6 bits: `blitsize = (blithigh << 6) + blitwide`.
-
-**Step 7 -- Allocate backsave** (`fmain.c:2535-2550`): For small sprites (savesize < 64 bytes), reuse the unused bottom portion of bitmap planes (`planes[crack] + 192*40`). Larger sprites allocate from the page's sequential backsave buffer. If the buffer exceeds 74x80 bytes (5920), compositing stops for the frame.
-
-**Step 8 -- save_blit** (`fsubs.asm:1953`): Copy the background region that will be covered by the sprite into the backsave buffer. This is a 5-plane blitter copy from the drawing bitmap.
-
-**Step 9 -- Terrain masking** (`fmain.c:2560-2598`): Build a per-column occlusion mask from terrain data (see Section 16.5 below). Certain sprite types skip masking entirely: carriers, arrows, specific object indices (100-101), and certain NPC races (0x85, 0x87).
-
-**Step 10 -- mask_blit** (`fsubs.asm:1908`): Combine the sprite's shape mask with the terrain occlusion mask (`bmask_mem`) and the background planes to produce a composite mask. This is a multi-source blitter operation using all four blitter channels.
-
-**Step 11 -- shape_blit** (`fsubs.asm:1836`): Blit the actual sprite image data through the composite mask onto the drawing bitmap. The shape data is stored as 5 sequential bitplanes per frame, with a separate single-plane mask. Each bitplane is blitted individually with the same mask.
-
-**Step 12 -- Weapon pass** (`fmain.c:2608`): If the sprite has a weapon (`pass == 1`), loop back to Step 1 with `passmode` toggled to render the weapon overlay as a separate sprite.
-
-After all sprites are composited, `obcount` records the total number of drawn shapes for the reverse-order restoration on the next frame.
-
-**Source:** `fmain.c:1966-1972`, `fmain.c:2378-2609`, `fsubs.asm:1800-2030`
-
-### 15.5 Terrain Masking
-
-Terrain masking creates the illusion of depth by partially hiding sprites behind terrain features such as trees, buildings, and walls. The system operates on a per-tile-column, per-tile-row basis using precomputed terrain data loaded from disk.
-
-**Data flow:**
-
-1. **Minimap lookup** (`fmain.c:2577-2578`): For each word column (`xm`) and tile row (`ym`) that the sprite overlaps, compute an index into `minimap[]` (a 19x6 = 114-entry array mapping viewport tile positions to terrain tile IDs). The minimap is regenerated by `genmini()` (`fsubs.asm:1136`) whenever the scroll position changes.
-
-2. **Terrain data lookup** (`fmain.c:2578-2579`): The minimap value indexes into `terra_mem[]`, a 1024-byte chip memory buffer containing terrain properties. Each terrain entry occupies 4 bytes, accessed as `terra_mem[cm]` (mask shape index) and `terra_mem[cm+1] & 15` (mask mode). The terrain data is loaded from disk in two 512-byte halves corresponding to the current region's terrain sets.
-
-3. **Mask mode switch** (`fmain.c:2584-2594`): The low nibble of `terra_mem[cm+1]` selects one of 8 masking behaviors:
-
-| Mode | Condition to skip masking | Meaning |
-|------|--------------------------|---------|
-| 0 | Always skip | No occlusion (flat ground) |
-| 1 | Skip if first column (`xm==0`) | Right-side-only occlusion (e.g., tree trunk on right) |
-| 2 | Skip if `ystop > 35` | Top-only occlusion (e.g., low wall, sprite feet visible) |
-| 3 | Skip if `hero_sector==48` and not NPC index 1 | Bridge -- hero walks over, others occluded |
-| 4 | Skip if first column OR `ystop > 35` | Combined right-side + top-only |
-| 5 | Skip if first column AND `ystop > 35` | Right-side and top combined (OR logic) |
-| 6 | If not bottom row, use full mask (tile 64) | Two-story buildings -- full occlusion above ground floor |
-| 7 | Skip if `ystop > 20` | Stricter top-only (shorter features) |
-
-4. **Mask application** (`fmain.c:2595`): When masking applies, `maskit(xm, ym, blitwide, terra_mem[cm])` (`fsubs.asm:1047`) writes the terrain mask shape into `bmask_mem`, the per-frame occlusion buffer. The mask shape byte (`terra_mem[cm]`) indexes into `shadow_mem`, a chip memory buffer of precomputed 1-bitplane mask patterns.
-
-**Special cases for falling sprites** (`fmain.c:2580-2583`): Falling sprites (state `FALL`) skip masking for terrain entries at index <= 220 (standard terrain), but use mode 3 for high-index entries (e.g., pit edges).
-
-The occlusion buffer (`bmask_mem`) is cleared to zero (`clear_blit`) before each sprite. After terrain masking writes the occlusion pattern, `mask_blit` combines it with the sprite's own transparency mask to produce the final composite mask used by `shape_blit`.
-
-**Source:** `fmain.c:2560-2598`, `fsubs.asm:897-1100`, `fmain.c:928` (terra_mem alloc), `fmain.c:3565-3573` (terrain loading)
-
-### 15.6 Z-Sorting
-
-Sprites are sorted back-to-front by Y-coordinate using a bubble sort (`fmain.c:2327-2359`), which the original author explicitly noted as "YUCKY AWFUL WASTEFUL BUBBLE SORT!! YUCK!!":
-
-```
-for i = 0 to anix2-1:
-    anim_index[i] = i                          // initialize identity mapping
-for i = 0 to anix2-1:
-    for j = 1 to anix2-1:
-        k1 = anim_index[j-1]; k2 = anim_index[j]
-        y1 = anim_list[k1].abs_y; y2 = anim_list[k2].abs_y
-        // depth adjustments:
-        if k1 is dead OR (k2 is hero AND riding) OR k1 is index 1: y1 -= 32
-        if k2 is dead OR (k1 is hero AND riding) OR k2 is index 1: y2 -= 32
-        if k1 is deeply sunk (environ > 25): y1 += 32
-        if k2 is deeply sunk (environ > 25): y2 += 32
-        if y2 < y1: swap anim_index[j-1], anim_index[j]
-```
-
-The depth adjustments serve specific gameplay purposes:
-- **Dead actors (-32):** Corpses render behind living sprites so they do not overlap standing characters.
-- **Riding hero (-32):** When mounted on a turtle or bird, the hero renders behind nearby ground-level sprites to avoid the mount obscuring other characters.
-- **Index 1 (-32):** Actor slot 1 (typically the mount or special companion) is pushed back in draw order.
-- **Sinking actors (+32):** Actors deeply submerged in water or quicksand render in front, so their visible portion (just the head/bubbles) is not covered by sprites standing on solid ground behind them.
-
-The sort operates on `anim_index[]`, an indirection array of up to 20 entries, so the actual `anim_list[]` entries are never moved. With a maximum of ~20 active sprites, the O(n^2) cost is negligible on period hardware.
-
-**Source:** `fmain.c:2327-2359`, `fmain.c:74`
-
-### 15.7 Color Palettes
-
-The game uses four distinct color palettes, all stored as arrays of Amiga 12-bit RGB values (`USHORT`, format `0x0RGB` where each channel is 0-15):
-
-**Game palette** -- `pagecolors[32]` (`fmain2.c:367-371`):
-```
-0x000 0xFFF 0xE96 0xB63 0x631 0x07BF 0x333 0xDB8
-0x223 0x445 0x889 0xBBC 0x521 0x941 0xF82 0xFC7
-0x040 0x070 0x0B0 0x6F6 0x005 0x009 0x00D 0x37F
-0xC00 0xF50 0xFA0 0xFF6 0xEB6 0xEA5 0x00F 0xBDF
-```
-Color 31 is overridden per-region: volcanic (region 4) = `0x0980`, dungeon with active secret (region 9) = `0x00F0`, default = `0x0BDF`.
-
-**Text palette** -- `textcolors[20]` (`fmain.c:476-479`):
-```
-0x000 0xFFF 0xC00 0xF60 0x00F 0xC0F 0x090 0xFF0
-0xF90 0xF0C 0xA50 0xFDB 0xEB7 0xCCC 0x888 0x444
-0x000 0xDB0 0x740 0xC70
-```
-
-**Intro palette** -- `introcolors[32]` (`fmain.c:484-488`): Used during title screen and story page sequences.
-
-**Black palette** -- `blackcolors[32]` (`fmain.c:481-482`): All zeros, used for fade-to-black transitions.
-
-**Day/night fading** -- `fade_page(r, g, b, limit, colors)` (`fmain2.c:377-419`): Applies per-channel brightness scaling to the base palette. Parameters `r`, `g`, `b` are percentages (0-100). When `limit` is set (night mode), minimum thresholds prevent total darkness: red >= 10%, green >= 25%, blue >= 60%. An additional blue boost is applied to green vegetation colors (indices 16-24) during twilight to simulate moonlight. The `light_timer` flag (from the light spell) forces red channels up to green levels, simulating warm torch light.
-
-The fading formula per color entry:
-```
-r1 = (r * red_channel) / 1600
-g1 = (g * green_channel) / 1600
-b1 = (b * blue_channel + green_excess * g1) / 100
-fader[i] = (r1 << 8) + (g1 << 4) + b1
-LoadRGB4(&vp_page, fader, 32)
-```
-
-**Source:** `fmain2.c:366-419`, `fmain.c:476-488`, `fmain.c:481-482`
-
-### 15.8 Special Effects
-
-**Witch FX -- Rotating vision cone** (`fmain2.c:917-965`):
-
-The witch character has a visible "line of sight" rendered as a filled quadrilateral that rotates around her position. The effect is drawn directly onto the game bitmap using Amiga graphics library area-fill operations.
-
-Implementation:
-1. Create a temporary clip layer over the map area (304x192 pixels) via `CreateUpfrontLayer`.
-2. Look up two pairs of endpoints from `witchpoints[]`, a 256-entry sine/cosine table (64 points x 4 bytes). The two line pairs represent the edges of the vision cone, offset by the witch's rotation angle (`witchdir`). One pair uses `witchdir + 63` (nearly opposite), the other `witchdir + 1`.
-3. For each edge, compute the cross product against the hero's position to determine which side the hero is on: `s = dx * dy1 - dy * dx1`. If `sg1 > 0` and `sg2 < 0`, the hero is within the vision cone and takes damage.
-4. Draw the quadrilateral using `AreaMove`/`AreaDraw`/`AreaEnd` with `COMPLEMENT` draw mode, which XORs the filled polygon against the existing bitmap -- making the vision cone visible as a color-inverted region.
-5. Clean up the temporary layer and raster.
-
-The witch's rotation direction changes randomly: if the cross product `s1 > 0`, the cone tends to rotate toward the hero.
-
-**Teleport colorplay** (`fmain2.c:425-432`):
-
-A 32-frame color animation that signals teleportation:
-```
-for j = 0 to 31:
-    for i = 1 to 31:
-        fader[i] = bitrand(0xFFF)    // random 12-bit RGB
-    LoadRGB4(&vp_page, fader, 32)
-    Delay(1)                          // ~1/50 second per frame
-```
-
-Color 0 (background) is never randomized, preserving the border. The effect lasts approximately 0.64 seconds at 50 Hz PAL timing.
-
-**Intro page flip -- Columnar reveal** (`fmain2.c:781-833`):
-
-Story pages are revealed through a 22-step columnar animation (`flipscan()`). The source image is in `pagea`, the destination in `pageb`, composited through the drawing page:
-
-- **Steps 0-10 (right half):** Copy the right half of `pageb` as a base. Then blit vertical strips from `pagea` at decreasing intervals (rate: 8,6,5,4,3,2,3,5,13 pixels), starting from center and spreading rightward. Each strip's vertical offset is computed by `page_det()` to create a slight arc effect.
-- **Steps 11-21 (left half):** Reverse the process for the left half, replacing `pagea` strips with `pageb` strips, progressively covering the old image.
-
-Per-step timing is controlled by `flip3[]` delays: longer pauses at the start (12,9,6,3 ticks) and end, with zero delays during the fast middle portion. Each step calls `pagechange()` to display the intermediate result.
-
-The `copypage()` wrapper (`fmain2.c:781-790`) orchestrates the full sequence: delay 7 seconds, blit `pageb` as background, unpack two IFF brushes (image + text) into `pageb`, then run `flipscan()`.
-
-**Source:** `fmain2.c:917-965`, `fmain2.c:425-432`, `fmain2.c:781-833`
-
-### 15.9 Asset Formats
-
-#### Color Palettes
-
-- **Original format:** 12-bit Amiga RGB, stored as packed `USHORT` values in `0x0RGB` format. Each color channel (R, G, B) occupies one nibble with values 0-15.
-- **Modern conversion:** Multiply each 4-bit channel by 17 (0x11) to expand to 8-bit: e.g., `0xE96` becomes RGB(0xEE, 0x99, 0x66). This preserves the exact color ratios.
-- **Storage:** Inline C arrays (`pagecolors[]`, `textcolors[]`, `introcolors[]`) compiled into the executable. Loaded at runtime via `LoadRGB4()` which writes directly to the viewport's copper list color registers.
-
-#### IFF Brushes
-
-- **Original format:** Standard Amiga IFF/ILBM (Interleaved Bitmap) files. These are packed planar bitmaps with optional compression, loaded by `unpackbrush()`.
-- **Files used:**
-
-| Filename | Purpose | Context |
-|----------|---------|---------|
-| `page0` | Title screen | Intro sequence, copied to both page bitmaps |
-| `p1a`, `p1b` | Story page 1 (image + text) | Columnar reveal via `copypage()` |
-| `p2a`, `p2b` | Story page 2 | Columnar reveal |
-| `p3a`, `p3b` | Story page 3 | Columnar reveal |
-| `hiscreen` | HUD/status bar graphics | Loaded into `bm_text` at game start |
-| `winpic` | Victory/save screen | Displayed on game completion or save |
-
-- **Modern conversion:** Standard PNG images, one per original IFF file. Dimensions and content preserved exactly; palette embedded or referenced separately.
-
-### 15.10 Improvement Notes
-
-**Z-sort algorithm:** The original bubble sort is O(n^2) with n passes regardless of pre-sortedness. Since the sprite list changes minimally between frames (most sprites move by small increments), an insertion sort would be nearly O(n) on average for this nearly-sorted data. The author's own comment ("YUCKY AWFUL WASTEFUL BUBBLE SORT!! YUCK!!") confirms this was a known compromise.
-
-**Blitter operations per sprite:** Each sprite requires 3 blitter passes: `save_blit` (backup background), `mask_blit` (combine masks), and `shape_blit` (render image). On modern hardware with GPU acceleration, all three operations collapse into a single textured draw call with alpha blending or stencil testing. The terrain occlusion mask can be pre-rendered into a depth/stencil buffer rather than computed per-sprite.
-
-**Color depth:** The original 12-bit palette (4096 possible colors, 32 active) should be expanded to 24-bit RGB for modern displays. Multiply each channel by 17 for faithful conversion. A "retro mode" option should preserve the 12-bit quantization and limited palette for authenticity. The day/night fading algorithm (`fade_page`) can operate at full 24-bit precision, eliminating the visible banding in dark scenes caused by the original 4-bit-per-channel quantization.
-
-**Backsave buffer limits:** The original 5920-byte backsave limit (74 x 80 bytes) can cause sprites to be silently dropped when many large sprites overlap. Modern implementations should use dynamic allocation with no hard limit, or pre-allocate sufficient buffer for the worst case (25 sprites at maximum size).
-
-**Scroll optimization:** The `scrollmap` blitter-based tile shift and edge repair is specific to planar bitmap hardware. Modern tile-map renderers should use GPU tile batching with camera offset, eliminating the concept of "edge repair" entirely. The sub-tile smooth scrolling (RxOffset/RyOffset) maps directly to fractional camera position in a modern 2D engine.
-
----
-
-## 16. World Navigation (Carriers)
-
-The game features four rideable/interactive entities that occupy anim_list slot 3 (the "carrier slot"). Each has distinct movement physics and activation conditions. The global variable `active_carrier` tracks whether a turtle or bird is loaded, and `riding` indicates the current mount state.
-
-### Proximity Detection
-
-Before each frame's movement loop, the engine computes proximity between the hero (anim_list[0]) and the carrier entity:
-
-```c
-if (active_carrier) wcarry = 3; else wcarry = 1;
-xstart = anim_list[0].abs_x - anim_list[wcarry].abs_x - 4;
-ystart = anim_list[0].abs_y - anim_list[wcarry].abs_y - 4;
-if (xstart < 16 && xstart > -16 && ystart < 16 && ystart > -16)
-    raftprox = 1;                       /* within 16px: nearby */
-if (xstart < 9 && xstart > -9 && ystart < 9 && ystart > -9)
-    raftprox = 2;                       /* within 9px: close enough to board */
-```
-
-- `raftprox=1` -- hero is within 16 pixels (nearby).
-- `raftprox=2` -- hero is within 9 pixels (close enough to ride/board).
-- `wcarry` selects which anim_list entry to check: slot 3 if an active carrier exists, slot 1 (raft) otherwise.
-
-### Raft
-
-- **Type:** `RAFT` (anim_list slot 1).
-- **Initial position:** (13668, 14470), set during `revive()`.
-- **Activation:** Requires `wcarry==1` (no active carrier) and `raftprox==2` (within 9 pixels).
-- **Terrain check:** The raft only follows the hero if the hero's position maps to water terrain (px_to_im returns 3, 4, or 5: `j < 3 || j > 5` rejects non-water).
-- **Movement:** The raft has no autonomous movement -- it snaps directly to the hero's coordinates each frame:
-  ```c
-  xtest = anim_list[0].abs_x;
-  ytest = anim_list[0].abs_y;
-  an->abs_x = xtest;
-  an->abs_y = ytest;
-  riding = 1;
-  ```
-- **Effect:** While `riding==1`, the hero cannot drown (`if (i==0 && raftprox) k = 0`).
-- **Display:** When the bird carrier is loaded but not ridden (`riding==0 && actor_file==11`), the bird is rendered as a `RAFT`-type sprite with index 1 (grounded swan).
-
-### Turtle
-
-- **Type:** `CARRIER`, `actor_file=5`.
-- **Extent zone:** extent_list[1] -- coordinates are dynamically set via `get_turtle()` when the player uses the turtle item.
-- **Summoning:** From the USE menu, using the turtle item calls `get_turtle()`, which finds a random water tile (px_to_im == 5) within 25 attempts, positions extent_list[1] at that location, and calls `load_carrier(5)`.
-- **Summoning restriction:** The turtle cannot be summoned within the central region (hero_x between 11194-21373, hero_y between 10205-16208).
-- **Boarding:** Requires `raftprox && wcarry==3` (active carrier within proximity). Sets `riding=5`.
-- **Animation:** `dex = d+d` (direction doubled). If the hero is walking, adds walk cycle: `dex += (cycle&1)`.
-- **Autonomous movement (unridden):** The turtle follows water paths using direction probing:
-  1. Try current direction `d` -- move 3 pixels. If terrain is water (px_to_im == 5), accept.
-  2. Try `d+1` (turn right). If water, accept.
-  3. Try `d-1` (original minus 1, net effect). If water, accept.
-  4. Try `d-2` (one more left). If water, accept.
-  5. Only update position if final terrain check confirms water.
-- **Ridden movement:** Hero direction is imposed on the turtle. Speed is 3 pixels/frame (via `riding==5` branch in walk code: `e = 3`).
-
-### Bird (Swan)
-
-- **Type:** `CARRIER`, `actor_file=11`.
-- **Extent zone:** extent_list[0] at (2118,27237)-(2618,27637).
-- **Boarding requirement:** `raftprox && wcarry==3 && stuff[5]` -- proximity to bird AND hero possesses the lasso (inventory slot 5).
-- **Riding state:** `riding=11`. While riding, `anim_list[0].environ = -2` (airborne environment).
-- **Movement physics:** Velocity-based with acceleration and speed capping:
-  ```c
-  nvx = an->vel_x + newx(20,d,2) - 20;   /* acceleration in facing direction */
-  nvy = an->vel_y + newy(20,d,2) - 20;
-  if (abs(nvx) < e-8) an->vel_x = nvx;    /* cap horizontal: 32 for bird */
-  if (abs(nvy) < e) an->vel_y = nvy;       /* cap vertical: 40 for bird */
-  xtest = an->abs_x + an->vel_x/4;        /* position = pos + velocity/4 */
-  ytest = an->abs_y + an->vel_y/4;
-  ```
-  The speed limit `e` is 40 when `riding==11` (bird), 42 for turtle airborne paths. The `/4` divisor provides smooth sub-pixel movement.
-- **Direction:** `set_course(0, -nvx, -nvy, 6)` computes the bird's visual facing from its velocity vector.
-- **Dismount conditions:**
-  - Hero presses action button while riding (`riding==11`).
-  - **Fiery terrain check:** If `fiery_death` is true (hero is in the lava region: map_x 8802-13562, map_y 24744-29544), displays event 32: "Ground is too hot for swan to land."
-  - **Speed check:** If hero offset from bird exceeds 15px in either axis, displays event 33: "Flying too fast to dismount."
-  - **Safe landing:** If within 15px offset AND `proxcheck` confirms no collision at landing position (14px above bird), sets `riding=0` and adjusts hero Y.
-- **Grounded display:** When not riding and actor_file is 11, the bird renders as RAFT type with sprite index 1.
-
-### Dragon
-
-- **Type:** `DRAGON`, `actor_file=10`.
-- **Extent zone:** extent_list[2] at (6749,34951)-(7249,35351) (dragon cave area).
-- **Hostile:** The dragon is an enemy, not a rideable carrier.
-- **Sprite format:** 3x40 sprites (seq_list[DRAGON] dimensions).
-- **Combat behavior:**
-  - Each frame, 1/4 chance (`rand4()==0`) of shooting a fireball.
-  - Fireball: `ms->speed = 5`, `ms->missile_type = 2`, sound effect at pitch 1800 + rand256().
-  - Animation index: `dex = rand2() + 1` during attack, 0 at rest, 3 when dying, 4 when dead.
-  - Facing is set to 5 during attacks (fixed direction).
-- **Vitality:** 50 HP (set in `load_carrier()`).
-
-### load_carrier()
-
-```c
-load_carrier(n) short n;
-```
-
-Spawns a carrier entity into anim_list slot 3:
-
-1. **Type assignment:** `n==10` sets type `DRAGON`, otherwise `CARRIER`.
-2. **Extent index:** `n==10` -> extent 2 (dragon), `n==5` -> extent 1 (turtle), else extent 0 (bird).
-3. **Sprite loading:** If `actor_file != n`, loads shape data from disk into `seq_list[ENEMY].location`, calls `read_shapes(n)` and `prep(an->type)`, then `motor_off()` to stop floppy drive.
-4. **Initial position:** Placed at extent zone origin + offset: `x1 + 250`, `y1 + 200`.
-5. **State initialization:** index, weapon, environ = 0; state = STILL; vitality = 50.
-6. **Tracking:** `anix = 4` (4 active animation entries); `an->race = actor_file = active_carrier = n`.
-
----
-
-## 17. Intro & Narrative
-
-### Intro Sequence
-
-The intro plays during `main()` initialization (`fmain.c:1157-1210`):
-
-1. **Legal text display:** `ssp(titletext)` renders the title/legal text on the screen using the placard text renderer. Foreground pen set to 1 (white on dark blue background via `SetRGB4` color 0 = 0,0,6).
-2. **Pause:** `Delay(50)` -- 1 second wait (50 ticks at 50Hz).
-3. **Font and text setup:** Switches to scroll text rastport (`rp_text`), sets font to `afont`, colors to pen 10 foreground / pen 11 background.
-4. **Load audio:** `read_score()` loads music module, `read_sample()` loads sound effects.
-5. **Another pause:** `Delay(50)` -- 1 more second.
-6. **Viewport setup:** Configures dual-page bitmap planes (5 bitplanes, 8000 bytes each, page offsets at +40000).
-7. **Music start:** `playscore(track[12], track[13], track[14], track[15])` -- plays the intro music (tracks 12-15).
-8. **Black palette:** `LoadRGB4(&vp_text, blackcolors, 32)` -- sets text viewport to all black.
-9. **Screen prime:** Two `pagechange()` calls to initialize double-buffering.
-10. **Skip check:** `if (skipint()) goto no_intro` -- player can press space to skip.
-11. **Title image:** `unpackbrush("page0", &pageb, 0, 0)` loads the title screen IFF brush. Blits to both display pages.
-12. **Zoom-in:** Loop from `i=0` to `i=160` step 4, calling `screen_size(i)` -- opens the viewport from zero height to full (160 scanlines), creating a vertical zoom-in effect on the title image.
-13. **Skip check:** `if (skipint()) goto end_intro`.
-14. **Story pages:** Three pages displayed with columnar-reveal animation:
-    - `copypage("p1a", "p1b", 21, 29)` -- first story page.
-    - `copypage("p2a", "p2b", 20, 29)` -- second story page.
-    - `copypage("p3a", "p3b", 20, 33)` -- third story page.
-    Each `copypage` loads two IFF images and performs a column-by-column page-flip reveal (flipscan animation).
-15. **Final pause:** `if (!skipp) Delay(190)` -- 3.8 second pause on last page (unless skip pressed).
-16. **Zoom-out:** Loop from `i=156` to `i=0` step -4, calling `screen_size(i)` -- closes the viewport back down.
-
-After the intro, `copy_protect_junk()` is called (line 1238). Failure returns 0 and exits.
-
-### Copy Protection
-
-The `copy_protect_junk()` function (`fmain2.c:1309-1336`) implements a riddle-based copy protection system:
-
-1. Three questions are asked sequentially (`h=0` to `h<3`).
-2. Each question index `j` is chosen randomly via `rand8()`, rerolling if that question was already used (the answer pointer is NULLed after use).
-3. The question text is displayed by calling `question(j)`, which indexes into the `_question` table in `narr.asm`.
-4. Player types an answer (max 9 characters, backspace supported).
-5. Answer is compared character-by-character against the expected answer string. Case-sensitive.
-6. If `NO_PROTECT` is defined at compile time, answer checking is skipped.
-7. On any wrong answer, the function returns FALSE (0), causing the game to exit.
-
-### Copy Protection Questions (narr.asm:63-81)
-
-The 8 questions and their expected answers:
-
-| # | Question | Answer |
-|---|----------|--------|
-| 0 | "To Quest for the...?" | LIGHT |
-| 1 | "Make haste, but take...?" | HEED |
-| 2 | "Scorn murderous...?" | DEED |
-| 3 | "Summon the...?" | SIGHT |
-| 4 | "Wing forth in...?" | FLIGHT |
-| 5 | "Hold fast to your...?" | CREED |
-| 6 | "Defy Ye that...?" | BLIGHT |
-| 7 | "In black darker than...?" | NIGHT |
-
-The answers are rhyming words found in the game manual's verse. The answer table is defined in `fmain2.c:1306-1307`:
-```c
-char *answers[] = {
-    "LIGHT","HEED","DEED","SIGHT","FLIGHT","CREED","BLIGHT","NIGHT" };
-```
-
-### Event Messages (narr.asm:11-58)
-
-The `_event_msg` table contains 39 null-terminated strings (indices 0-38), triggered by `event(n)` calls throughout the game:
-
-| # | Message |
-|---|---------|
-| 0 | "% was getting rather hungry." |
-| 1 | "% was getting very hungry." |
-| 2 | "% was starving!" |
-| 3 | "% was getting tired." |
-| 4 | "% was getting sleepy." |
-| 5 | "% was hit and killed!" |
-| 6 | "% was drowned in the water!" |
-| 7 | "% was burned in the lava." |
-| 8 | "% was turned to stone by the witch." |
-| 9 | "% started the journey in his home village of Tambry" |
-| 10 | "as had his brother before him." |
-| 11 | "as had his brothers before him." |
-| 12 | "% just couldn't stay awake any longer!" |
-| 13 | "% was feeling quite full." |
-| 14 | "% was feeling quite rested." |
-| 15 | "Even % would not be stupid enough to draw weapon in here." |
-| 16 | "A great calming influence comes over %, preventing him from drawing his weapon." |
-| 17 | "% picked up a scrap of paper." |
-| 18 | 'It read: "Find the turtle!"' |
-| 19 | 'It read: "Meet me at midnight at the Crypt. Signed, the Wraith Lord."' |
-| 20 | "% looked around but discovered nothing." |
-| 21 | "% does not have that item." |
-| 22 | "% bought some food and ate it." |
-| 23 | "% bought some arrows." |
-| 24 | "% passed out from hunger!" |
-| 25 | "% is not sleepy." |
-| 26 | "% was tired, so he decided to lie down and sleep." |
-| 27 | "% perished in the hot lava!" |
-| 28 | "It was midnight." |
-| 29 | "It was morning." |
-| 30 | "It was midday." |
-| 31 | "Evening was drawing near." |
-| 32 | "Ground is too hot for swan to land." |
-| 33 | "Flying too fast to dismount." |
-| 34 | '"They\'re all dead!" he cried.' |
-| 35 | "No time for that now!" |
-| 36 | "% put an apple away for later." |
-| 37 | "% ate one of his apples." |
-| 38 | "% discovered a hidden object." |
-
-The `%` character is substituted with the current brother's name at display time.
-
-### Place Name Tables (narr.asm:86-154)
-
-The engine uses two lookup tables to determine location names. When the hero enters a new terrain sector, the sector number is tested against ranges in these tables. The first matching range triggers its associated message.
-
-Each entry is 3 bytes: `low_sector, high_sector, message_index`.
-
-#### Outdoor Places (_place_tbl) -- 29 entries
-
-| Low | High | Msg# | Location |
-|-----|------|------|----------|
-| 51 | 51 | 19 | Small keep |
-| 64 | 69 | 2 | Village (Tambry) |
-| 70 | 73 | 3 | Vermillion Manor |
-| 80 | 95 | 6 | Marheim |
-| 96 | 99 | 7 | Witch's castle |
-| 138 | 139 | 8 | Graveyard |
-| 144 | 144 | 9 | Stone ring |
-| 147 | 147 | 10 | Lighthouse |
-| 148 | 148 | 20 | Small castle |
-| 159 | 162 | 17 | Desert city (Azal) |
-| 163 | 163 | 18 | Desert fort |
-| 164 | 167 | 12 | Crystal Palace |
-| 168 | 168 | 21 | Log cabin |
-| 170 | 170 | 22 | Dark fort |
-| 171 | 174 | 14 | Doom tower |
-| 176 | 176 | 13 | Pixie shrine |
-| 178 | 178 | 23 | Swamp cabin |
-| 179 | 179 | 24 | Tomb |
-| 180 | 180 | 25 | Unreachable castle |
-| 175 | 180 | 0 | Lava / elf (nil) |
-| 208 | 221 | 11 | Swamp (great Bog) |
-| 243 | 243 | 16 | Oasis |
-| 250 | 252 | 0 | Nil (interface) |
-| 255 | 255 | 26 | Dragon cave |
-| 78 | 78 | 4 | Mountain type |
-| 187 | 239 | 4 | Mountain type |
-| 0 | 79 | 0 | Nil |
-| 185 | 254 | 15 | Desert (Burning Waste) |
-| 0 | 255 | 0 | Nil (catch-all) |
-
-Note: Table is scanned top-to-bottom; first match wins. Overlapping ranges are resolved by order (e.g., sector 208 matches "Swamp" before it could match "Desert").
-
-#### Indoor Places (_inside_tbl) -- 31 entries
-
-| Low | High | Msg# | Location |
-|-----|------|------|----------|
-| 2 | 2 | 2 | Small chamber |
-| 7 | 7 | 3 | Large chamber |
-| 4 | 4 | 4 | Long passageway |
-| 5 | 6 | 5 | Twisting tunnel |
-| 9 | 10 | 6 | Forked intersection |
-| 30 | 30 | 7 | Keep interior |
-| 19 | 33 | 14 | Stone corridor |
-| 101 | 101 | 14 | Stone corridor |
-| 130 | 134 | 14 | Stone corridor |
-| 36 | 36 | 13 | Octagonal room |
-| 37 | 42 | 12 | Large room |
-| 46 | 46 | 0 | Final arena (special) |
-| 43 | 59 | 11 | Spirit world |
-| 100 | 100 | 11 | Spirit world |
-| 143 | 149 | 11 | Spirit world |
-| 62 | 62 | 16 | Small building |
-| 65 | 66 | 18 | Tavern |
-| 60 | 78 | 17 | Building |
-| 82 | 82 | 17 | Building |
-| 86 | 87 | 17 | Building |
-| 92 | 92 | 17 | Priest's building |
-| 94 | 95 | 17 | Small buildings |
-| 97 | 99 | 17 | Building |
-| 120 | 120 | 17 | Building (desfort) |
-| 116 | 119 | 17 | Building (desert) |
-| 139 | 141 | 17 | Building (desert) |
-| 79 | 96 | 9 | Palace of King Mar |
-| 104 | 104 | 19 | Inn |
-| 114 | 114 | 20 | Tomb inside |
-| 105 | 115 | 8 | Castle |
-| 135 | 138 | 8 | Castle (doom tower) |
-| 125 | 125 | 21 | Cabin inside |
-| 127 | 127 | 10 | Elf glade inside |
-| 142 | 142 | 22 | Unlocked (lighthouse) |
-| 121 | 129 | 22 | Unlocked/entered |
-| 150 | 161 | 15 | Stone maze |
-| 0 | 255 | 0 | Nil (catch-all) |
-
-### Place Messages (narr.asm:164-227)
-
-#### Outdoor Place Messages (_place_msg) -- 27 entries
-
-| # | Message |
-|---|---------|
-| 0 | (no message) |
-| 1 | (do not change) |
-| 2 | "% returned to the village of Tambry." |
-| 3 | "% came to Vermillion Manor." |
-| 4 | "% reached the Mountains of Frost" |
-| 5 | "% reached the Plain of Grief." |
-| 6 | "% came to the city of Marheim." |
-| 7 | "% came to the Witch's castle." |
-| 8 | "% came to the Graveyard." |
-| 9 | "% came to a great stone ring." |
-| 10 | "% came to a watchtower." |
-| 11 | "% traveled to the great Bog." |
-| 12 | "% came to the Crystal Palace." |
-| 13 | "% came to mysterious Pixle Grove." |
-| 14 | "% entered the Citadel of Doom." |
-| 15 | "% entered the Burning Waste." |
-| 16 | "% found an oasis." |
-| 17 | "% came to the hidden city of Azal." |
-| 18 | "% discovered an outlying fort." |
-| 19 | "% came to a small keep." |
-| 20 | "% came to an old castle." |
-| 21 | "% came to a log cabin." |
-| 22 | "% came to a dark stone tower." |
-| 23 | "% came to an isolated cabin." |
-| 24 | "% came to the Tombs of Hemsath." |
-| 25 | "% reached the Forbidden Keep." |
-| 26 | "% found a cave in the hillside." |
-
-#### Indoor Place Messages (_inside_msg) -- 22 entries
-
-| # | Message |
-|---|---------|
-| 0 | (no message) |
-| 1 | (do not change) |
-| 2 | "% came to a small chamber." |
-| 3 | "% came to a large chamber." |
-| 4 | "% came to a long passageway." |
-| 5 | "% came to a twisting tunnel." |
-| 6 | "% came to a forked intersection." |
-| 7 | "He entered the keep." |
-| 8 | "He entered the castle." |
-| 9 | "He entered the castle of King Mar." |
-| 10 | "He entered the sanctuary of the temple." |
-| 11 | "% entered the Spirit Plane." |
-| 12 | "% came to a large room." |
-| 13 | "% came to an octagonal room." |
-| 14 | "% traveled along a stone corridor." |
-| 15 | "% came to a stone maze." |
-| 16 | "He entered a small building." |
-| 17 | "He entered the building." |
-| 18 | "He entered the tavern." |
-| 19 | "He went inside the inn." |
-| 20 | "He entered the crypt." |
-| 21 | "He walked into the cabin." |
-| 22 | "He unlocked the door and entered." |
-
-### Placard Text (narr.asm:230-347)
-
-Story placards are displayed during intro sequences and narrative events. The `_placard_text` function indexes into a table of 20 message pointers and calls `ssp()` to render them. Text uses embedded XY positioning commands (byte 128 followed by x/2 and y coordinates) and ETX (0) terminators.
-
-Key story messages:
-- **msg1:** Julian's quest begins -- the Mayor's plea to rescue the Talisman.
-- **msg2:** Julian fails and does not return.
-- **msg3:** Phillip sets out to find his brother.
-- **msg4:** Phillip meets the same fate.
-- **msg5:** Kevin takes up the quest as a last resort.
-- **msg6:** Game over -- "Stay at Home!" (all brothers dead).
-- **msg7/7a:** Victory -- hero defeats the Necromancer, recovers Talisman, weds the princess.
-- **msg8/8a/8b:** Hero rescued Katra (Princess 1), pledges love but continues quest.
-- **msg9/9a/9b:** Hero rescued Karla (Katra's sister, Princess 2), same pledge.
-- **msg10/10a/10b:** Hero rescued Kandy (third sister, Princess 3), same pledge.
-- **msg11/11a:** After seeing the princess home, hero sets out again with a king's gift in gold.
-- **msg12:** Copy protection preamble -- addresses the player as "game seeker" and challenges them to prove fitness.
-
-### Text Rendering System
-
-Three text display functions handle all in-game narrative:
-
-- **`print(str)`** (`fmain2.c:495`): Scrolls the text viewport up by 10 pixels (`ScrollRaster`), then renders the string at the bottom line. Used for single-line messages.
-
-- **`print_cont(str)`** (`fmain2.c:503`): Continues printing at the current cursor position without scrolling. Used to append text to the current line.
-
-- **`extract(start)`** (`fmain2.c:514`): Word-wrapping text renderer. Processes a full message string:
-  - Wraps at 37 characters per line (constant in loop: `for (; i<37; i++)`).
-  - Tracks last space position as the preferred break point (`lbreak`).
-  - `%` is substituted with the current brother's name (`datanames[brother-1]`).
-  - Carriage return (13) forces a line break.
-  - Null (0) terminates the message.
-  - Each wrapped line is passed to `print()` for scrolling display.
-  - Uses a 200-byte buffer (`mesbuf[200]`).
-
-- **`ssp(str)`** (`fsubs.asm:497`): Low-level placard text renderer used for intro screens. Processes embedded control codes:
-  - `XY` (byte 128): Next two bytes are x/2 and y coordinates; calls `Move()` to position cursor (x is doubled).
-  - `ETX` (byte 0): Terminates rendering.
-  - All other bytes are accumulated and rendered via Amiga `Text()` GfxBase call.
-
-String macros documented in `narr.asm:157-162` (used in source comments, not runtime):
-- `@` = " entered the "
-- `#` = " came to "
-- `$` = "the "
-- `^` = " castle"
-- `[` = " of "
-- `%` = substitute character name
-
----
-
-## 18. Save/Load System
-
-### Save Menu Flow
-
-The save/load system is accessed through the in-game menu hierarchy:
-
-1. **GAME menu** (`fmain.c:3443-3447`):
-   - Hit 6: `setmood(TRUE)` -- toggle mood.
-   - Hit 8: `gomenu(SAVEX)` -- opens the Save/Quit submenu.
-   - Hit 9: `svflag = FALSE; gomenu(FILE)` -- opens File menu for loading.
-
-2. **SAVEX menu** (`fmain.c:3465-3468`):
-   - Hit 6: `quitflag = TRUE` -- quit without saving.
-   - Hit 5: `svflag = TRUE; gomenu(FILE)` -- opens File menu for saving.
-
-3. **FILE menu** (`fmain.c:3469-3472`):
-   - Selects slot (hit value 0-7, mapped to letters A-H).
-   - Calls `savegame(hit)`.
-   - Returns to GAME menu.
-
-The `svflag` variable determines direction: TRUE = save, FALSE = load.
-
-### savegame() Function (fmain2.c:1474-1551)
-
-Handles both saving and loading via the shared `saveload()` primitive:
-
-#### Disk Detection
-
-The function probes for a writable disk in priority order:
-1. Hard drive: checks for "image" directory with `locktest()`. If found, strips the "df1:" prefix from the save path.
-2. DF1: checks with `locktest("df1:", ACCESS_WRITE)`.
-3. DF0: checks with `locktest("df0:", ACCESS_WRITE)` AND confirms it is not the game disk (`!locktest("df0:winpic", ACCESS_READ)`).
-4. If no writable disk found, prompts "Insert a writable disk in ANY drive." and waits via `waitnewdisk()`.
-
-#### File Naming
-
-```c
-char savename[] = "df1:A.faery";
-```
-
-The slot letter is inserted at position 4: `savename[4] = 'A' + hit` (slots A through H). The drive letter at position 2 may be changed to '0' or '1'. On hard drive, the "df1:" prefix is skipped (name starts at offset 4: "A.faery").
-
-File is opened with AmigaDOS mode 1006 (MODE_NEWFILE) for saves, 1005 (MODE_OLDFILE) for loads.
-
-### Save Data Layout
-
-Data is written/read as sequential binary blocks with no headers, magic numbers, or version information:
-
-| Order | Data | Size (bytes) |
-|-------|------|-------------|
-| 1 | Misc variables (starting at `&map_x`) | 80 |
-| 2 | Region number (`region_num`) | 2 |
-| 3 | Animation list length + padding (`&anix`) | 6 |
-| 4 | Animation list (`anim_list`) | `anix * sizeof(struct shape)` |
-| 5 | Julian's inventory (`julstuff`) | 35 |
-| 6 | Phillip's inventory (`philstuff`) | 35 |
-| 7 | Kevin's inventory (`kevstuff`) | 35 |
-| 8 | Missile list (`missile_list`) | `6 * sizeof(struct missile)` |
-| 9 | Extent list (`extent_list`) | `2 * sizeof(struct extent)` |
-| 10 | Global object list (`ob_listg`) | `glbobs * sizeof(struct object)` |
-| 11 | Map object counts (`mapobs`) | 20 |
-| 12 | Destination object counts (`dstobs`) | 20 |
-| 13 | Per-region object tables (10 regions) | `mapobs[i] * sizeof(struct object)` each |
-
-#### The 80-byte Misc Variables Block
-
-Starting at `&map_x` (fmain.c:557-581), this block captures 80 contiguous bytes of game state:
-
-```
-map_x, map_y          (2+2 = 4 bytes, unsigned short)
-hero_x, hero_y        (2+2 = 4 bytes)
-safe_x, safe_y, safe_r (2+2+2 = 6 bytes)
-img_x, img_y          (2+2 = 4 bytes)
-cheat1                 (2 bytes)
-riding, flying, wcarry (2+2+2 = 6 bytes)
-turtleprox, raftprox   (2+2 = 4 bytes)
-brave, luck, kind, wealth, hunger, fatigue (6*2 = 12 bytes)
-brother                (2 bytes)
-princess               (2 bytes)
-hero_sector            (2 bytes)
-hero_place             (2 bytes)
-daynight, lightlevel   (2+2 = 4 bytes)
-actor_file, set_file   (2+2 = 4 bytes)
-active_carrier         (2 bytes)
-xtype                  (2 bytes)
-leader                 (2 bytes)
-secret_timer, light_timer, freeze_timer (2+2+2 = 6 bytes)
-cmode                  (2 bytes)
-encounter_type         (2 bytes)
-pad1-pad7              (7*2 = 14 bytes)
-```
-
-Total: 80 bytes.
-
-### mod1save() (fmain.c:3621-3631)
-
-Called from within `savegame()` to save/load the three brothers' inventories and missile state:
-
-```c
-mod1save()
-{
-    saveload(julstuff, 35);               /* Julian's 35 inventory slots */
-    saveload(philstuff, 35);              /* Phillip's 35 inventory slots */
-    saveload(kevstuff, 35);               /* Kevin's 35 inventory slots */
-    stuff = blist[brother-1].stuff;       /* restore active stuff pointer */
-    saveload((void *)missile_list, 6 * sizeof(struct missile));
-}
-```
-
-After loading inventories, the `stuff` pointer is reassigned to point to the current brother's inventory array, since the pointer itself is not saved.
-
-### saveload() Primitive (fmain2.c:1553-1558)
-
-```c
-saveload(buffer, length) char *buffer; long length;
-{
-    if (svflag) err = Write(svfile, buffer, length);
-    else err = Read(svfile, buffer, length);
-    if (err < 0) sverr = IoErr();
-}
-```
-
-A single function handles both directions based on `svflag`. No checksums, no byte-swapping, no compression.
-
-### Post-Load Cleanup (fmain2.c:1541-1548)
-
-After a successful load:
-```c
-wt = encounter_number = 0;
-shape_read(); set_options(); viewstatus = 99;
-prq(4); prq(7);
-encounter_type = actors_loading = 0;
-```
-
-This reloads shape graphics for the current region, refreshes the menu option states, forces a full status bar redraw (`viewstatus = 99`), clears the text area, and resets encounter state.
-
-After save or load completes, the function checks for the game disk: if not on hard drive, it loops waiting for the user to reinsert the game disk (checks for "df0:winpic").
-
-### File Format Characteristics
-
-- **Format:** Raw sequential binary dump -- structures are written directly from memory.
-- **No headers:** No magic number, no version field, no file size marker.
-- **No versioning:** Save files are tied to the exact structure layouts of the compiled binary. Any change to struct sizes or variable ordering would silently corrupt loads.
-- **Variable-length sections:** The animation list and object tables have variable sizes (driven by `anix`, `glbobs`, `mapobs[i]`), making the file format implicitly dependent on saved count values.
-- **8 slots:** Files named A.faery through H.faery.
-- **Platform-dependent:** Big-endian (68000), raw struct padding included.
-
-### Asset Format: Save Games
-
-| Aspect | Original (Amiga) | Modern (Recommended) |
-|--------|------------------|----------------------|
-| Format | Raw binary state dump | JSON with named fields and version |
-| Endianness | Big-endian (68000 native) | Platform-independent |
-| Versioning | None | Schema version field |
-| Validation | None | Checksums, magic number |
-| Structure | Sequential memory dumps | Named key-value pairs |
-| Slot naming | A.faery - H.faery | Descriptive names or auto-save |
-
----
-
-## 19. UI & Menu System
-
-### Menu Modes
-
-Ten menu modes are defined in the `cmodes` enum (`fmain.c:494`):
-
-| Value | Name    | Purpose                        |
-|------:|---------|--------------------------------|
-|     0 | ITEMS   | Inventory actions              |
-|     1 | MAGIC   | Cast spells (magic items)      |
-|     2 | TALK    | Conversation actions           |
-|     3 | BUY     | Purchase items from shops      |
-|     4 | GAME    | System options (pause, music)  |
-|     5 | SAVEX   | Save/exit confirmation         |
-|     6 | KEYS    | Key inventory (colored keys)   |
-|     7 | GIVE    | Give items to NPCs             |
-|     8 | USE     | Use weapons/items directly     |
-|     9 | FILE    | Save file slot selection (A-H) |
-
-The global `cmode` tracks the currently active menu mode. Selecting a top-row label (indices 0-4: Items/Magic/Talk/Buy/Game) with `atype == 0` switches `cmode` to that label's index.
-
-### Label Strings
-
-Each label array contains 5-character fixed-width entries concatenated into a single string. The menu system indexes into these by `entry_index * 5`.
-
-| Array    | Contents                                                         | Used By    |
-|----------|------------------------------------------------------------------|------------|
-| `label1` | `Items Magic Talk  Buy   Game `                                  | Top row (shared by modes 0-4) |
-| `label2` | `List  Take  Look  Use   Give `                                  | ITEMS      |
-| `label3` | `Yell  Say   Ask  `                                              | TALK       |
-| `label4` | `Pause Music Sound Quit  Load `                                  | GAME       |
-| `label5` | `Food  Arrow Vial  Mace  Sword Bow   Totem`                      | BUY        |
-| `label6` | `Stone Jewel Vial  Orb   Totem Ring  Skull`                      | MAGIC      |
-| `label7` | `Dirk  Mace  Sword Bow   Wand  Lasso Shell Key   Sun   Book `   | USE        |
-| `label8` | `Save  Exit `                                                    | SAVEX      |
-| `label9` | `Gold  Green Blue  Red   Grey  White`                            | KEYS       |
-| `labelA` | `Gold  Book  Writ  Bone `                                        | GIVE       |
-| `labelB` | `  A     B     C     D     E     F     G     H  `               | FILE       |
-
-For modes 0-7, the first 5 entries (indices 0-4) display from `label1` (the shared top row: Items/Magic/Talk/Buy/Game). Entries at index 5 and above display from the mode-specific label array. For modes USE and FILE (>= 8), all entries display from their own label array directly (`fmain.c:3089-3091`).
-
-### Menu Structure
-
-The `menus[10]` array (`fmain.c:521-531`) defines each menu's label source, entry count, display color, and initial enable flags for up to 12 entries:
-
-| Index | Mode   | label_list | num | color | enabled[0..11]                              |
-|------:|--------|------------|----:|------:|---------------------------------------------|
-|     0 | ITEMS  | `label2`   |  10 |     6 | `3,2,2,2,2,10,10,10,10,10,0,0`             |
-|     1 | MAGIC  | `label6`   |  12 |     5 | `2,3,2,2,2,8,8,8,8,8,8,8`                  |
-|     2 | TALK   | `label3`   |   8 |     9 | `2,2,3,2,2,10,10,10,0,0,0,0`               |
-|     3 | BUY    | `label5`   |  12 |    10 | `2,2,2,3,2,10,10,10,10,10,10,10`            |
-|     4 | GAME   | `label4`   |  10 |     2 | `2,2,2,2,3,6,7,7,10,10,0,0`                |
-|     5 | SAVEX  | `label8`   |   7 |     0 | `2,2,2,2,2,10,10,0,0,0,0,0` (note: only 7) |
-|     6 | KEYS   | `label9`   |  11 |     8 | `2,2,2,2,2,10,10,10,10,10,10,0` (note: 11) |
-|     7 | GIVE   | `labelA`   |   9 |    10 | `2,2,2,2,2,10,0,0,0,0,0,0`                 |
-|     8 | USE    | `label7`   |  10 |     8 | `10,10,10,10,10,10,10,10,10,0,10,10`        |
-|     9 | FILE   | `labelB`   |  10 |     5 | `10,10,10,10,10,10,10,10,0,0,0,0`           |
-
-The `num` field is the total number of entries the menu can display (including the shared top-row entries for modes 0-7). The `color` field is the Amiga pen color used for rendering the option background.
-
-### Option Enable Flags
-
-Each byte in the `enabled[12]` array encodes both display state and behavior type (`fmain.c:512-513`):
-
-| Bits  | Mask   | Meaning                                                  |
-|-------|--------|----------------------------------------------------------|
-| Bit 0 | `0x01` | Selected/highlighted (1 = on, 0 = off)                   |
-| Bit 1 | `0x02` | Displayed (1 = visible, 0 = hidden)                      |
-| 2-7   | `0xFC` | Type code                                                |
-
-Type codes (from bits 2-7):
-
-| Value | Behavior       | Description                                                 |
-|------:|----------------|-------------------------------------------------------------|
-|     0 | Unchangeable   | Top-row labels (Items/Magic/Talk/Buy/Game) -- mode switches |
-|     4 | Toggle         | Flips bit 0 on each press (e.g., Pause, Music, Sound)      |
-|     8 | Immediate      | Fires action on press, no toggle state (e.g., spell cast)   |
-|    12 | Radio          | Sets bit 0 on, does not clear siblings (e.g., key colors)  |
-
-Common combined values seen in the `enabled[]` arrays:
-
-- `2` = displayed, not selected, type 0 (unchangeable/mode-switch) -- top-row items
-- `3` = displayed + selected, type 0 -- the currently active mode's top-row entry
-- `6` = displayed, not selected, type 4 (toggle) -- e.g., Pause
-- `7` = displayed + selected, type 4 (toggle) -- e.g., Music/Sound initially on
-- `8` = not displayed, type 8 (immediate) -- hidden immediate-action slot
-- `10` = displayed, not selected, type 8 (immediate) -- visible immediate-action slot
-
-### print_options and propt
-
-`print_options()` (`fmain.c:3048-3068`) rebuilds the on-screen menu display:
-
-1. Iterates through `menus[cmode].enabled[]` up to `menus[cmode].num` entries.
-2. Skips entries where bit 1 (displayed) is clear.
-3. Populates `real_options[j]` with the logical index `i` for each visible entry, then calls `propt(j, selected)`.
-4. Blanks any remaining slots (up to 12) and sets their `real_options[]` to -1.
-
-`propt(j, pena)` (`fmain.c:3070-3092`) renders a single option:
-
-- `j` is the physical screen slot (0-11). Even slots render at x=430, odd at x=482. Y position = `(j/2) * 9 + 8`.
-- `pena` is the foreground pen (0=deselected, 1=selected).
-- Background pen (`penb`) depends on mode: USE uses pen 14, FILE uses pen 13, top-row items (k<5) use pen 4, KEYS uses `keycolors[k-5]` (palette: 8,6,4,2,14,1 for gold/green/blue/red/grey/white), SAVEX uses index as pen, otherwise uses `menus[cmode].color`.
-- Label text: for USE/FILE modes, reads directly from the mode's `label_list`. For other modes, indices <5 read from `label1` (shared top row), indices >=5 read from the mode-specific `label_list` at offset `(k-5)*5`.
-
-### Keyboard Mapping
-
-The `letter_list[38]` array (`fmain.c:537-547`) maps key presses to menu actions:
-
-| Letter | Menu  | Choice | Action                    |
-|--------|-------|-------:|---------------------------|
-| `I`    | ITEMS |      5 | List items                |
-| `T`    | ITEMS |      6 | Take                      |
-| `?`    | ITEMS |      7 | Look                      |
-| `U`    | ITEMS |      8 | Use                       |
-| `G`    | ITEMS |      9 | Give                      |
-| `Y`    | TALK  |      5 | Yell                      |
-| `S`    | TALK  |      6 | Say                       |
-| `A`    | TALK  |      7 | Ask                       |
-| ` `    | GAME  |      5 | Pause (space bar)         |
-| `M`    | GAME  |      6 | Music toggle              |
-| `F`    | GAME  |      7 | Sound toggle              |
-| `Q`    | GAME  |      8 | Quit                      |
-| `L`    | GAME  |      9 | Load                      |
-| `O`    | BUY   |      5 | Food                      |
-| `R`    | BUY   |      6 | Arrow                     |
-| `8`    | BUY   |      7 | Vial                      |
-| `C`    | BUY   |      8 | Mace                      |
-| `W`    | BUY   |      9 | Sword                     |
-| `B`    | BUY   |     10 | Bow                       |
-| `E`    | BUY   |     11 | Totem                     |
-| `V`    | SAVEX |      5 | Save                      |
-| `X`    | SAVEX |      6 | Exit                      |
-| 10     | MAGIC |      5 | Stone (function key F1)   |
-| 11     | MAGIC |      6 | Jewel (function key F2)   |
-| 12     | MAGIC |      7 | Vial (function key F3)    |
-| 13     | MAGIC |      8 | Orb (function key F4)     |
-| 14     | MAGIC |      9 | Totem (function key F5)   |
-| 15     | MAGIC |     10 | Ring (function key F6)    |
-| 16     | MAGIC |     11 | Skull (function key F7)   |
-| `1`    | USE   |      0 | Dirk                      |
-| `2`    | USE   |      1 | Mace                      |
-| `3`    | USE   |      2 | Sword                     |
-| `4`    | USE   |      3 | Bow                       |
-| `5`    | USE   |      4 | Wand                      |
-| `6`    | USE   |      5 | Lasso                     |
-| `7`    | USE   |      6 | Shell                     |
-| `K`    | USE   |      7 | Key                       |
-
-Note: Values 10-16 for the MAGIC hotkeys are translated Amiga raw keycodes for function keys F1-F7 (after the input handler's `keytrans` table mapping in `fsubs.asm`). The SAVEX menu hotkeys (`V`/`X`) are blocked unless the player is already in SAVEX mode (`fmain.c:1350`).
-
-### Input Handler
-
-The `struct in_work` (`ftale.h:108-118`) is the shared data area between the input handler (running at interrupt level in `fsubs.asm`) and the main game loop:
-
-| Offset | Field       | Type            | Description                                            |
-|-------:|-------------|-----------------|--------------------------------------------------------|
-|      0 | `xsprite`   | `short`         | Mouse/sprite X position (accumulated from deltas)      |
-|      2 | `ysprite`   | `short`         | Mouse/sprite Y position (accumulated from deltas)      |
-|      4 | `qualifier` | `short`         | Intuition input qualifier (button state, shift, etc.)  |
-|      6 | `laydown`   | `UBYTE`         | Write pointer into circular `keybuf` (0-127)           |
-|      7 | `pickup`    | `UBYTE`         | Read pointer from circular `keybuf` (0-127)            |
-|      8 | `newdisk`   | `char`          | Disk-change flag (set to 1 on DISKIN event)            |
-|      9 | `lastmenu`  | `char`          | Last menu button click value (for release detection)   |
-|     10 | `gbase`     | `GfxBase *`     | Graphics library base pointer                          |
-|     14 | `pbase`     | `SimpleSprite*` | Pointer sprite structure                               |
-|     18 | `vbase`     | `ViewPort *`    | Viewport for sprite positioning                        |
-|     22 | `keybuf`    | `UBYTE[128]`    | Circular key buffer (128 entries, 7-bit index wrap)    |
-|    150 | `ticker`    | `short`         | Timer tick counter (counts TIMER events, wraps at 16)  |
-
-The input handler (`_HandlerInterface` in `fsubs.asm`) processes Amiga InputEvents in a chain:
-
-1. **TIMER events**: Increments `ticker`. When `ticker` reaches 16, injects a synthetic key-up event for code `$60` (shift release) and resets `ticker` to 0. This provides a periodic heartbeat.
-2. **RAWKEY events**: Ignores repeats (qualifier bit 9). Translates raw keycodes via `keytrans` table (128 entries), preserves up/down bit (bit 7), stores translated code into `keybuf` at `laydown` index. Advances `laydown` with 7-bit wrap (`& 0x7F`). Drops input on buffer overflow (when `laydown` would equal `pickup`).
-3. **RAWMOUSE button events**: Detects left button state changes via XOR of old and new qualifier bit 14 (`0x4000`). On button-down, converts sprite position to a menu slot: X range 215-265 selects the menu area, Y is mapped as `(ysprite - 144) / 9 * 2 + 0x61`, with X >= 240 adding 1 for the right column. The result is a synthetic keycode (`0x61`+) placed into `keybuf`. On button-up, the stored `lastmenu` value is sent with bit 7 set (release). Mouse qualifier is always stored to `in_work.qualifier`.
-4. **DISKIN events**: Sets `newdisk` flag to 1.
-5. **Mouse movement**: Accumulates `ie_X`/`ie_Y` deltas into `xsprite`/`ysprite`, clamps to screen bounds, and calls `MoveSprite` to update the hardware pointer.
-
-### Key Handling in the Main Loop
-
-The main loop key processing (`fmain.c:1283-1363`) reads translated keycodes from `keybuf` and processes them in priority order:
-
-1. **View status interrupt**: If `viewstatus` is nonzero and `notpause` is true, any key-down sets `viewstatus = 99` (triggers redraw/dismiss), and the key is consumed.
-
-2. **Dead state**: If the hero's state is `DEAD`, all input is ignored.
-
-3. **Direction keys** (codes 20-29): Sets `keydir` to the key value. These codes come from the `keytrans` table in `fsubs.asm`, mapping cursor/numpad keys to direction indices 20-29 (direction = code - 20, values 0-8 map to the 8 compass directions plus center).
-
-4. **Direction release**: If `(key & 0x7F) == keydir`, clears `keydir` to 0 (stop moving).
-
-5. **Fight toggle**: Key `0` down sets `keyfight = TRUE`, key `0` up clears it. This allows keyboard-initiated combat.
-
-6. **Cheat keys** (only when `cheat1` is true):
-   - `B` -- Summon turtle (load carrier 11)
-   - `.` -- Add 3 random inventory items, refresh options
-   - `R` -- Rescue (teleport to safety)
-   - `=` -- Print coordinates and available memory
-   - Code 19 -- Print location/sector debug info
-   - Code 18 -- Advance daynight by 1000 ticks
-   - Codes 1-4 -- Teleport hero +/-150 Y or +/-280 X
-
-7. **KEYS mode special**: When `cmode == KEYS`, number keys `1`-`6` directly trigger `do_option(key - '1' + 5)` to select colored keys. Any other key exits to ITEMS menu.
-
-8. **Menu option clicks** (codes >= `0x61`): These are synthetic codes from mouse clicks on menu slots. The code maps to a physical slot index (`inum = (key & 0x7F) - 0x61`), which indexes into `real_options[]` to get the logical menu entry. On mouse-up (bit 7 set), the option is deselected visually. On mouse-down, the action depends on the option's type:
-   - **Toggle (4)**: Flips bit 0 in `enabled[]`, redraws, calls `do_option()`.
-   - **Immediate (8)**: Highlights, calls `do_option()`.
-   - **Radio (12)**: Sets bit 0 (select), highlights, calls `do_option()`.
-   - **Unchangeable (0), index < 5**: Switches `cmode` to the selected top-row mode, redraws menu via `prq(5)`.
-   - **Unchangeable (0), index >= 5**: Just redraws with current state (no action).
-
-9. **Letter hotkeys**: If the game is unpaused (or key is space), scans `letter_list[38]` for a matching key. SAVEX hotkeys are blocked unless already in SAVEX mode. On match, switches `cmode` to the letter's menu, reads the option type, toggles if type 4, and calls `do_option()` followed by `print_options()`.
-
-### Mouse, Joystick, and Compass
-
-`decode_mouse()` (`fsubs.asm:1489-1584`) determines the hero's movement direction from three input sources in priority order:
-
-1. **Mouse (compass click)**: If either mouse button is held (qualifier bits `0x6000`), the sprite position is mapped to one of 9 compass regions:
-   - X axis: left column (<=292), middle (292-300), right (>300)
-   - Y axis: upper (<166), middle (166-174), lower (>174)
-   - X <= 265 produces direction 9 (no direction / center)
-   - The 3x3 grid maps to directions: `{0,1,2 / 7,9,3 / 6,5,4}` (N,NE,E clockwise, 9=center)
-
-2. **Joystick**: Reads Amiga hardware joy registers (`$DFF00C`/`$DFF00D`) directly. Combines left/forward and right/back bits via XOR to produce signed X/Y joystick values (-1, 0, +1). If both axes are zero, falls through to keyboard. Otherwise computes `4 + yjoy*3 + xjoy` and indexes into `com2` lookup table: `{0,1,2,7,9,3,6,5,4}` to get a direction 0-8.
-
-3. **Keyboard**: If `keydir` is set (from direction key codes 20-29), direction = `keydir - 20`. If keydir is out of range, direction defaults to 9 (none) and keydir is cleared.
-
-The resulting direction (0-8, or 9 for none) is compared against `oldir`. If changed, `oldir` is updated and `drawcompass(dir)` is called to update the compass display.
-
-**Fight detection** in the main loop (`fmain.c:1409`): the hero enters combat state if `qualifier & 0x2000` (right mouse button), `keyfight` is true (keyboard `0` held), or joystick button 1 is pressed (`*pia & 128 == 0`, reading CIA-A port).
-
-### Compass Display
-
-`drawcompass(dir)` (`fmain2.c:351-363`) renders a compass indicator on the HUD using bitplane blits:
-
-1. First clears the compass area by blitting the base compass image (`nhinor` plane) to `bm_text` at position (567, 15), size 48x24.
-2. If `dir < 9` (a valid direction), blits the highlighted region from `nhivar` (highlight plane) using the `comptable[dir]` rectangle:
-
-| Dir | Name   | xrect | yrect | xsize | ysize |
-|----:|--------|------:|------:|------:|------:|
-|   0 | N      |     0 |     0 |    16 |     8 |
-|   1 | NE     |    16 |     0 |    16 |     9 |
-|   2 | E      |    32 |     0 |    16 |     8 |
-|   3 | SE     |    30 |     8 |    18 |     8 |
-|   4 | S      |    32 |    16 |    16 |     8 |
-|   5 | SW     |    16 |    13 |    16 |    11 |
-|   6 | W      |     0 |    16 |    16 |     8 |
-|   7 | NW     |     0 |     8 |    18 |     8 |
-|   8 | Center |     0 |     0 |     1 |     1 | (effectively no highlight) |
-|   9 | None   |     0 |     0 |     1 |     1 | (skipped -- dir >= 9)      |
-
-### Stats Display
-
-The HUD stats are rendered through the print queue system (`prq` function in `fmain2.c:442-470`). Queue entry values trigger specific display updates:
-
-- **`prq(4)`** -- Vitality bar: Renders `"Vit:"` followed by the hero's vitality value at screen position (245, 52).
-- **`prq(7)`** -- Character stats: Renders all four stats at Y=52:
-  - `"Brv:"` at X=14 (bravery)
-  - `"Lck:"` at X=90 (luck)
-  - `"Knd:"` at X=168 (kindness)
-  - `"Wlth:"` at X=321 (wealth)
-- **`prq(5)`** -- Calls `print_options()` to redraw the current menu.
-- **`prq(2)`** -- Debug: prints coordinates and available memory (cheat mode).
-- **`prq(3)`** -- Debug: prints hero sector/extent info (cheat mode).
-- **`prq(10)`** -- Prints "Take What?" prompt.
-
-Stats are stored in global `short` variables: `brave`, `luck`, `kind`, `wealth`, `hunger`, `fatigue` (`fmain.c:565`). Vitality is per-actor in `anim_list[i].vitality`. Maximum hero vitality is `15 + brave/4`.
-
-### set_options
-
-`set_options()` (`fmain.c:3527-3543`) dynamically updates menu enabled flags based on the player's current inventory. It calls `stuff_flag(index)` which returns 10 (displayed + immediate) if `stuff[index] > 0`, or 8 (hidden + immediate) if the item count is zero.
-
-Updates performed:
-
-- **MAGIC menu** (entries 5-11): `stuff_flag(i+9)` for magic items at `stuff` indices 9-15 (Stone, Jewel, Vial, Orb, Totem, Ring, Skull).
-- **USE menu** (entries 0-6): `stuff_flag(i)` for weapons at `stuff` indices 0-6 (Dirk, Mace, Sword, Bow, Wand, Lasso, Shell).
-- **KEYS menu** (entries 5-10): `stuff_flag(i+16)` for keys at `stuff` indices 16-21 (Gold, Green, Blue, Red, Grey, White). If any key is present (returns 10), `USE[7]` (Key slot) is also set to 10.
-- **USE menu entry 8**: `stuff_flag(7)` for Sunstone at `stuff` index 7.
-- **GIVE menu**:
-  - Entry 5 (Gold): Set to 10 if `wealth > 2`, else 8.
-  - Entry 6 (Book): Always set to 8 (immediate but hidden -- presumably always available as a give option).
-  - Entry 7 (Writ): `stuff_flag(28)`.
-  - Entry 8 (Bone): `stuff_flag(29)`.
-
-### Improvement Notes
-
-- **No mouse support in game view**: The mouse only controls the compass (via button-held region detection) and menu clicks. There is no point-and-click movement or interaction in the game viewport. A modern reimplementation should consider adding direct mouse-driven navigation and object interaction.
-- **10 menu modes over-engineered**: The 10-mode system with shared top-row labels and mode-specific sub-labels creates unnecessary complexity. A context-sensitive menu that adapts to the current situation (combat, NPC proximity, shop) would be simpler and more intuitive.
-- **128-byte keybuf oversized**: The circular key buffer in `in_work` is 128 bytes, but the game processes keys every frame. Even at the slowest frame rates, this is far more buffer than needed. A 16-32 entry buffer would suffice and reduce the struct size.
-- **Cheat code enabling not shown in source**: The `cheat1` flag gates debug/cheat functionality, but the mechanism for setting `cheat1` to true is not present in the available source files. It may be set via an external tool, a hidden key sequence not in `keytrans`, or a compile-time flag.
-
----
-
-## 20. Asset Formats & Disk Layout
-
-### 20.1 Disk Image Structure
-
-All game data (except IFF brushes, fonts, music scores, and voice instrument data) resides in a single 901,120-byte `image` file. This is a raw sector dump of an Amiga DD floppy disk:
-
-- **Sector size**: 512 bytes
-- **Total sectors**: 1,760 (901,120 / 512)
-- **Tracks**: 160 (80 cylinders x 2 sides), 11 sectors per track
-
-Data is read via `load_track_range(start_sector, count, buffer, io_channel)` (defined in `hdrive.c:119`). On floppy, this issues an async `CMD_READ` through the trackdisk device. On hard drive installs, the `image` file is opened as a flat file and seeked to `start_sector * 512`. Source: `hdrive.c:35-41`, `hdrive.c:119-139`.
-
-The `copyimage.c` utility program creates the `image` file by reading raw sectors from a device and writing them sequentially to a file. It takes command-line arguments: device name, unit, first sector, count, and output filename. Source: `copyimage.c:26-78`.
-
-### 20.2 Sector Allocation Map
-
-Reconstructed from all `load_track_range()` calls in the source code. Each entry shows the sector range, byte size, purpose, and source reference.
-
-| Sectors | Bytes | Content | Source |
-|---------|-------|---------|--------|
-| 0-31 | 16,384 | _Unused / boot blocks_ | (no load references found) |
-| 32-95 | 32,768 | Sector map — outdoor regions (F1-F8) | `fmain.c:3557` — `load_track_range(nd->sector, 64, sector_mem, 0)` |
-| 96-159 | 32,768 | Sector map — indoor regions (F9-F10) | `fmain.c:3557` — sector field = 96 for regions 8-9 |
-| 149-159 | 5,632 | Terrain property tables (11 sets, 1 sector each) | `fmain.c:3567-3572` — `TERRA_BLOCK(149) + terra_id` |
-| 160-167 | 4,096 | Region map — outdoor A (F1-F2) | `fmain.c:3562` — `load_track_range(nd->region, 8, map_mem, 0)` |
-| 168-175 | 4,096 | Region map — outdoor B (F3-F4) | region field = 168 |
-| 176-183 | 4,096 | Region map — outdoor C (F5-F6) | region field = 176 |
-| 184-191 | 4,096 | Region map — outdoor D (F7-F8) | region field = 184 |
-| 192-199 | 4,096 | Region map — indoor (F9-F10) | region field = 192 |
-| 200-239 | 20,480 | Image bank — _used by F6, F8_ (image[1]=280 for F6/F8) | See note below |
-| 240-279 | 20,480 | Image bank — _used by F6, F8_ (image[2]=240 for F6/F8) | |
-| 280-319 | 20,480 | Image bank — _used by F2, F4_ (image[1]=360 area) | |
-| 320-359 | 20,480 | Image bank — shared image[0] for F1-F8 outdoor | `fmain.c:3579-3587`, image[0]=320 for F1-F4 |
-| 360-399 | 20,480 | Image bank — F2/F4 image[1] | image[1]=360 |
-| 400-439 | 20,480 | Image bank — F2/F4 image[2] | image[2]=400 |
-| 440-479 | 20,480 | Image bank — F2/F4 image[3] | image[3]=440 |
-| 480-519 | 20,480 | Image bank — F1 image[1] | image[1]=480 |
-| 520-559 | 20,480 | Image bank — F1/F3 image[2] | image[2]=520 |
-| 560-599 | 20,480 | Image bank — F1/F3 image[3] | image[3]=560 |
-| 600-639 | 20,480 | Image bank — F5 image[3] | image[3]=600 |
-| 640-679 | 20,480 | Image bank — F7 image[1] | image[1]=640 |
-| 680-719 | 20,480 | Image bank — F9 image[0] | image[0]=680 |
-| 720-759 | 20,480 | Image bank — F9 image[1] | image[1]=720 |
-| 760-799 | 20,480 | Image bank — F10 image[1] | image[1]=760 |
-| 800-839 | 20,480 | Image bank — F9/F10 image[2] | image[2]=800 |
-| 840-879 | 20,480 | Image bank — F9/F10 image[3] | image[3]=840 |
-| 880 | 512 | Copy protection check sector | `fmain2.c:1430` — checks `buffer[123] == 230` |
-| 881-895 | 7,680 | _Gap / unused_ | No load references |
-| 896-919 | 12,288 | Shadow masks (SHADOW_SZ) | `fmain.c:1222` — `load_track_range(896, 24, shadow_mem, 0)` |
-| 920-930 | 5,632 | Sound effect samples (SAMPLE_SZ) | `fmain.c:1028` — `load_track_range(920, 11, sample_mem, 8)` |
-| 931-935 | 2,560 | Setfig sprites — royal set | `cfiles[14]`: file_id=931, numblocks=5 |
-| 936-940 | 2,560 | Setfig sprites — wizard/priest | `cfiles[13]`: file_id=936, numblocks=5 |
-| 941-945 | 2,560 | Setfig sprites — bartender | `cfiles[15]`: file_id=941, numblocks=5 |
-| 946-950 | 2,560 | Setfig sprites — witch | `cfiles[16]`: file_id=946, numblocks=5 |
-| 951-955 | 2,560 | Setfig sprites — ranger/beggar | `cfiles[17]`: file_id=951, numblocks=5 |
-| 956-959 | 2,048 | _Gap_ | No load references |
-| 960-999 | 20,480 | Enemy sprites — ogre | `cfiles[6]`: file_id=960, numblocks=40 |
-| 1000-1039 | 20,480 | Enemy sprites — dark knight (spiders) | `cfiles[8]`: file_id=1000, numblocks=40 |
-| 1040-1079 | 20,480 | Enemy sprites — necromancer (farmer/loraii) | `cfiles[9]`: file_id=1040, numblocks=40 |
-| 1080-1119 | 20,480 | Enemy sprites — ghost | `cfiles[7]`: file_id=1080, numblocks=40 |
-| 1120-1159 | 20,480 | Carrier sprites — bird | `cfiles[11]`: file_id=1120, numblocks=40 |
-| 1160-1171 | 6,144 | Dragon sprites | `cfiles[10]`: file_id=1160, numblocks=12 |
-| 1172-1311 | 71,680 | _Gap_ | No load references |
-| 1312-1347 | 18,432 | Object sprites | `cfiles[3]`: file_id=1312, numblocks=36 |
-| 1348-1350 | 1,536 | Raft sprites | `cfiles[4]`: file_id=1348, numblocks=3 |
-| 1351-1370 | 10,240 | Carrier sprites — turtle | `cfiles[5]`: file_id=1351, numblocks=20 |
-| 1371-1375 | 2,560 | _Gap_ | No load references |
-| 1376-1417 | 21,504 | Player sprites — Julian / snake+salamander | `cfiles[0]`: file_id=1376, numblocks=42; also `cfiles[12]`: file_id=1376, numblocks=40 |
-| 1418-1459 | 21,504 | Player sprites — Phillip | `cfiles[1]`: file_id=1418, numblocks=42 |
-| 1460-1501 | 21,504 | Player sprites — Kevin | `cfiles[2]`: file_id=1460, numblocks=42 |
-| 1502-1759 | 132,096 | _Remainder / unused_ | No load references |
-
-**Notes on the map above:**
-
-- Sectors 96-159 serve double duty: they hold indoor sector maps (loaded as 64 contiguous sectors starting at 96), and the terrain tables overlay the range 149-159 (loaded as individual sectors via `TERRA_BLOCK + offset`). This overlap is safe because terrain data for indoor regions is loaded from different offsets than the sector map data that occupies the same physical sectors.
-- Image banks span sectors 200-879. Each bank occupies 40 sectors (20,480 bytes = 5 bitplanes x 4,096 bytes/plane). The image[0..3] values from `file_index[]` select which banks to load. Many banks are shared across regions.
-- The large gap at sectors 1172-1311 (71,680 bytes) may contain additional data not referenced in the surviving source code, or may be reserved space on the original floppy layout.
-- The `cfiles[12]` entry (snake and salamander) shares file_id 1376 with Julian (`cfiles[0]`), loading 40 of the same 42 blocks. This likely means the snake/salamander sprites were packed into the same disk region as Julian.
-
-### 20.3 The file_index Table
-
-Each region's required disk assets are defined by `struct need` (`ftale.h:104-106`):
-
-```c
-struct need {
-    USHORT image[4], terra1, terra2, sector, region, setchar;
-};
-```
-
-The `file_index[10]` array (`fmain.c:615-626`) maps all 10 regions:
-
-| Idx | Region | image[0] | image[1] | image[2] | image[3] | terra1 | terra2 | sector | region | setchar |
-|-----|--------|----------|----------|----------|----------|--------|--------|--------|--------|---------|
-| 0 | F1 — Snow | 320 | 480 | 520 | 560 | 0 | 1 | 32 | 160 | 22 |
-| 1 | F2 — Witch wood | 320 | 360 | 400 | 440 | 2 | 3 | 32 | 160 | 21 |
-| 2 | F3 — Swamp | 320 | 360 | 520 | 560 | 2 | 1 | 32 | 168 | 22 |
-| 3 | F4 — Plains | 320 | 360 | 400 | 440 | 2 | 3 | 32 | 168 | 21 |
-| 4 | F5 — Desert | 320 | 480 | 520 | 600 | 0 | 4 | 32 | 176 | 0 |
-| 5 | F6 — Bay/city | 320 | 280 | 240 | 200 | 5 | 6 | 32 | 176 | 23 |
-| 6 | F7 — Volcanic | 320 | 640 | 520 | 600 | 7 | 4 | 32 | 184 | 0 |
-| 7 | F8 — Forest | 320 | 280 | 240 | 200 | 5 | 6 | 32 | 184 | 24 |
-| 8 | F9 — Buildings | 680 | 720 | 800 | 840 | 8 | 9 | 96 | 192 | 0 |
-| 9 | F10 — Dungeons | 680 | 760 | 800 | 840 | 10 | 9 | 96 | 192 | 0 |
-
-The `setchar` field indexes into `cfiles[]` to select the setfig character sprite set for the region (e.g., 21=witch wood NPC set, 22=snow region set). A value of 0 means no setfig characters for that region. Note: the setchar field is defined in the struct but its loading is not directly visible in the surviving `load_new_region()` code — it may be handled elsewhere or was part of cut functionality.
-
-### 20.4 The cfiles Table — Sprite Sector Addresses
-
-The `cfiles[]` array (`fmain2.c:638-665`) maps each sprite set to its disk location and dimensions:
-
-```c
-struct cfile_info {
-    UBYTE  width, height, count;   /* sprite dimensions (in 16px units) and frame count */
-    UBYTE  numblocks;              /* disk sectors to load */
-    UBYTE  seq_num;                /* which seq_list slot to populate */
-    USHORT file_id;                /* starting sector on disk */
-};
-```
-
-| Index | Description | Width | Height | Count | Blocks | Slot | Sector |
-|-------|-------------|-------|--------|-------|--------|------|--------|
-| 0 | Julian | 1 | 32 | 67 | 42 | PHIL | 1376 |
-| 1 | Phillip | 1 | 32 | 67 | 42 | PHIL | 1418 |
-| 2 | Kevin | 1 | 32 | 67 | 42 | PHIL | 1460 |
-| 3 | Objects | 1 | 16 | 116 | 36 | OBJECTS | 1312 |
-| 4 | Raft | 2 | 32 | 2 | 3 | RAFT | 1348 |
-| 5 | Turtle | 2 | 32 | 16 | 20 | CARRIER | 1351 |
-| 6 | Ogre | 1 | 32 | 64 | 40 | ENEMY | 960 |
-| 7 | Ghost | 1 | 32 | 64 | 40 | ENEMY | 1080 |
-| 8 | Dark knight (spiders) | 1 | 32 | 64 | 40 | ENEMY | 1000 |
-| 9 | Necromancer (farmer) | 1 | 32 | 64 | 40 | ENEMY | 1040 |
-| 10 | Dragon | 3 | 40 | 5 | 12 | DRAGON | 1160 |
-| 11 | Bird | 4 | 64 | 8 | 40 | CARRIER | 1120 |
-| 12 | Snake/salamander | 1 | 32 | 64 | 40 | ENEMY | 1376 |
-| 13 | Wizard/priest | 1 | 32 | 8 | 5 | SETFIG | 936 |
-| 14 | Royal set | 1 | 32 | 8 | 5 | SETFIG | 931 |
-| 15 | Bartender | 1 | 32 | 8 | 5 | SETFIG | 941 |
-| 16 | Witch | 1 | 32 | 8 | 5 | SETFIG | 946 |
-| 17 | Ranger/beggar | 1 | 32 | 8 | 5 | SETFIG | 951 |
-
-The `width` field is measured in 16-pixel word units (1 = 16px wide, 2 = 32px, 3 = 48px, 4 = 64px). The `height` field is in pixels. Source: `fmain2.c:638-665`.
-
-### 20.5 Tileset Image Format
-
-Tileset images use the Amiga's planar bitmap format with 5 bitplanes, supporting 32 colors.
-
-**Memory layout constants** (`fmain.c:638-644`):
-
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `QPLAN_SZ` | 4,096 | 1 bitplane of 64 tiles (one "quarter set") |
-| `IPLAN_SZ` | 16,384 | 1 bitplane of 256 tiles (full bank) |
-| `IMAGE_SZ` | 81,920 | 5 bitplanes x 256 tiles = full image buffer |
-| `SHADOW_SZ` | 12,288 | 8,192 + 4,096 background masks |
-| `SECTOR_SZ` | 36,864 | 256 sectors x 128 bytes + 4,096 region map |
-
-**Tile geometry**: Each tile is 16x16 pixels. At 1 bit per pixel per plane, one tile occupies 2 bytes/row x 16 rows = 32 bytes per plane.
-
-**Bank structure**: Each of the 4 image banks holds 64 tiles (one "quarter" of the 256-tile set):
-- 64 tiles x 32 bytes/tile = 2,048 bytes per plane per quarter... but the code uses `QPLAN_SZ = 4,096`, suggesting either 128 tiles per quarter or additional data per tile.
-- Looking more carefully: `IPLAN_SZ = 16,384` for 256 tiles in one plane = 64 bytes/tile/plane. This means each tile row is 4 bytes wide (32 pixels wide per tile? No — more likely the tiles are stored in a bitmap grid). The actual layout is: tiles are arranged in a 256-wide pixel bitmap (16 tiles across x 16 pixels = 256 pixels), with 16 rows of tiles (16 tiles x 16 pixels = 256 pixels tall). One plane = 256/8 bytes per row = 32 bytes/row x 256 rows = 8,192 bytes. But `IPLAN_SZ = 16,384`, which is 2x that — suggesting a 512-pixel wide or 512-pixel tall arrangement, or that additional terrain metadata is appended.
-
-**Revised calculation**: Given `IPLAN_SZ = 16,384` and 256 tiles of 16x16 pixels:
-- 256 tiles at 32 bytes/plane/tile = 8,192 bytes per plane for raw tile data
-- But `IPLAN_SZ = 16,384` = 2 x 8,192, implying the bitmap is stored as a 256x256 pixel grid (32 bytes/row x 256 rows x 2 = not quite right either)
-- Most likely: tiles are stored in a bitmap that is 32 bytes wide (256 pixels) by 64 rows (one plane per tile strip), totaling 32 x 512 = 16,384. This would mean tiles are arranged 16 across and 32 down, giving 512 tiles capacity, but only 256 used per bank.
-
-**Disk loading**: Each bank is loaded as 5 reads of 8 sectors each (40 sectors = 20,480 bytes = 5 planes x 4,096 bytes). The code at `fmain.c:3579-3587`:
-
-```c
-load_track_range(nd->image[i]+0,  8, imem, 3);   imem += IPLAN_SZ;  /* plane 0 */
-load_track_range(nd->image[i]+8,  8, imem, 4);   /* plane 1 */
-load_track_range(nd->image[i]+16, 8, imem, 5);   /* plane 2 */
-load_track_range(nd->image[i]+24, 8, imem, 6);   /* plane 3 */
-load_track_range(nd->image[i]+32, 8, imem, 7);   /* plane 4 */
-```
-
-Wait — each plane load is 8 sectors = 4,096 bytes, but `imem` advances by `IPLAN_SZ` (16,384) between planes. This means each plane's 4,096 bytes of disk data is loaded into a 16,384-byte stride. The full 256-tile image uses `IPLAN_SZ * 5 = 81,920` bytes total (`IMAGE_SZ`), but each bank only loads `4,096 * 5 = 20,480` bytes from disk, placed at `QPLAN_SZ` (4,096) offsets within each `IPLAN_SZ` plane.
-
-The 4 banks tile into memory as:
-- Bank 0: offsets 0, IPLAN_SZ, 2*IPLAN_SZ, 3*IPLAN_SZ, 4*IPLAN_SZ (first 4,096 bytes of each plane)
-- Bank 1: offsets QPLAN_SZ, IPLAN_SZ+QPLAN_SZ, ... (next 4,096 bytes of each plane)
-- Bank 2: offsets 2*QPLAN_SZ, ... (third 4,096 bytes)
-- Bank 3: offsets 3*QPLAN_SZ, ... (fourth 4,096 bytes)
-
-This gives: `IPLAN_SZ = 4 * QPLAN_SZ = 16,384` per plane, consistent with 4 quarter-banks of 64 tiles each = 256 total tiles. Each tile is 16x16, 32 bytes/plane, so 64 tiles = 2,048 bytes/plane... but `QPLAN_SZ = 4,096`. The extra 2,048 bytes per quarter-plane likely hold terrain property data appended after the tile graphics (matching the terrain table structure: 64 tiles x 4 bytes x 4 properties = 1,024 bytes terrain + 2,048 bytes tile graphics = 3,072, plus additional padding to reach 4,096).
-
-**Summary**: Each image bank on disk = 40 sectors = 20,480 bytes (5 planes of 4,096 bytes each). Four banks compose a full 256-tile image set. Total image buffer = 81,920 bytes.
-
-### 20.6 Sprite Format
-
-Sprites use 5 bitplanes plus a 1-bit mask plane (6 planes total). The mask is not stored on disk; it is generated at load time by `make_mask()` (`fmain2.c:748-749`).
-
-**Dimensions**: The `width` field in `cfiles[]` is in 16-pixel (2-byte) units. The `height` is in pixels.
-
-**Bytes per frame per plane** (`fmain2.c:690`):
-```c
-seq_list[slot].bytes = cfiles[num].height * cfiles[num].width * 2;
-```
-
-This gives: `height * width * 2` bytes per plane per frame (where `width` is the 16px-unit count, so `width * 2` = bytes per row).
-
-**Worked example — standard character sprite (1 x 32, e.g., Julian)**:
-- Width = 1 (16 pixels), Height = 32 pixels
-- Bytes per plane per frame = 32 x 1 x 2 = 64 bytes
-- 5 bitplanes per frame = 64 x 5 = 320 bytes of image data
-- 1 mask plane per frame = 64 bytes
-- Total per frame (in memory) = 384 bytes
-- Julian has 67 frames: 67 x 320 = 21,440 bytes image + 67 x 64 = 4,288 bytes mask = 25,728 total
-- Disk storage = 42 sectors x 512 = 21,504 bytes (image data only; mask is computed)
-
-**Worked example — dragon sprite (3 x 40)**:
-- Width = 3 (48 pixels), Height = 40 pixels
-- Bytes per plane per frame = 40 x 3 x 2 = 240 bytes
-- 5 planes per frame = 1,200 bytes image
-- 5 frames: 5 x 1,200 = 6,000 bytes image
-- Disk = 12 sectors = 6,144 bytes (6,000 image bytes + 144 slack)
-
-**Worked example — bird sprite (4 x 64)**:
-- Width = 4 (64 pixels), Height = 64 pixels
-- Bytes per plane per frame = 64 x 4 x 2 = 512 bytes
-- 5 planes per frame = 2,560 bytes
-- 8 frames: 8 x 2,560 = 20,480 bytes
-- Disk = 40 sectors = 20,480 bytes (exact fit)
-
-**Memory layout** (`fmain2.c:696-701`):
-```c
-load_track_range(cfiles[num].file_id, cfiles[num].numblocks, nextshape, 8);
-nextshape += size * 5;                    /* advance past 5 image planes */
-seq_list[slot].maskloc = nextshape;       /* mask goes right after */
-nextshape += size;                        /* advance past 1 mask plane */
-```
-
-Disk data contains 5 interleaved bitplanes per frame. After loading, `make_mask()` ORs all 5 planes together to produce the mask plane.
-
-### 20.7 IFF/ILBM Format
-
-IFF (Interchange File Format) brushes are used for static images: the hi-res title screen (`hiscreen`), intro story placards, and other UI graphics. These are standard Amiga IFF/ILBM files loaded from the AmigaDOS filesystem, not from the `image` disk sectors.
-
-The IFF parser in `iffsubs.c` recognizes these chunk types:
-
-| Chunk ID | Purpose |
-|----------|---------|
-| FORM | Container — must be first, value = total file length |
-| ILBM | Type identifier — Interleaved Bitmap |
-| BMHD | Bitmap Header — width, height, planes, compression mode |
-| CMAP | Color Map — RGB triplets (3 bytes each, up to 32 colors) |
-| GRAB | Grab point — x/y hotspot for brush alignment |
-| BODY | Image body — actual pixel data |
-| CAMG | Amiga viewport mode flags (skipped) |
-| CRNG | Color range cycling info (skipped) |
-
-**BitMapHeader structure** (`iffsubs.c:28-38`):
-```c
-typedef struct {
-    short  width, height;       /* image dimensions in pixels */
-    short  xpic, ypic;         /* position within page */
-    UBYTE  nPlanes;            /* number of bitplanes (typically 5) */
-    UBYTE  masking;            /* mask type */
-    UBYTE  compression;        /* 0=none, 1=ByteRun1 RLE */
-    UBYTE  pad1;
-    short  transcolor;         /* transparent color index */
-    short  xAspect, yAspect;  /* pixel aspect ratio */
-    short  pageWidth, pageHeight;
-} BitMapHeader;
-```
-
-**`unpackbrush()` function** (`iffsubs.c:139-189`):
-
-1. Opens the file and reads the FORM header. Validates it matches the FORM tag.
-2. Reads `blocklength` to determine total ILBM data size.
-3. Iterates through chunks:
-   - **BMHD**: Reads the full `BitMapHeader` to get dimensions and compression mode.
-   - **CMAP, GRAB, CAMG, CRNG**: Skipped (seeked past).
-   - **BODY**: Reads entire body into `shape_mem` as a temporary buffer. Then decompresses into the target bitmap.
-4. Body decompression operates row by row, plane by plane:
-   - Calculates `bytecount = ((width + 15) / 8) & 0xFFFE` (word-aligned byte width)
-   - For each scanline, unpacks one row for each of up to 5 bitplanes
-   - Each row advances by `bitmap->BytesPerRow` in the destination
-5. The bit offset calculation `(x + bitmap->BytesPerRow * y)` positions the brush at coordinates (x, y) within the destination bitmap.
-
-**Compression (ByteRun1 RLE)**: When `compression == 1`, the `unpack_line()` assembly routine (in `fsubs.asm`, commented-out C version at `iffsubs.c:223-239`) decodes:
-- Byte N >= 0: Copy next N+1 bytes literally
-- Byte N < 0 and N != -128: Repeat next byte (1-N) times
-- Byte N == -128: No-op (skip)
-
-Source: `iffsubs.c:1-274`
-
-### 20.8 Font Format
-
-The game loads the Amber font via the Amiga `LoadSeg()` call rather than the standard `OpenDiskFont()` API:
-
-```c
-seg = LoadSeg("fonts/Amber/9");
-font = (struct DiskFontHeader *) ((seg << 2) + 8);
-```
-
-Source: `fmain.c:774-776`
-
-This loads the font as a raw executable segment (Amiga hunk format), then casts the data (at offset 8 from the BCPL pointer) to a `DiskFontHeader` structure. The font is:
-- **Family**: Amber
-- **Size**: 9 pixels tall
-- **Type**: Proportional width (variable character widths)
-- **Usage**: Story placards, in-game text overlays, and map labels
-
-A second font (Topaz, the Amiga system font) is opened via `OpenFont()` for the text viewport:
-```c
-tfont = OpenFont(&topaz_ta);
-SetFont(&rp_text, tfont);
-```
-
-Source: `fmain.c:778-779`
-
-### 20.9 Save File Format
-
-Save games are stored as sequential binary dumps with no headers, no magic numbers, and no version fields. The `saveload()` function (`fmain2.c:1553-1558`) either writes or reads raw bytes depending on the `svflag` direction flag:
-
-```c
-saveload(buffer, length)
-char *buffer; long length;
-{   if (svflag) Write(svfile, buffer, length);
-    else Read(svfile, buffer, length);
-}
-```
-
-The save file template is `"df1:A.faery"` (`fmain2.c:1392`). At save time:
-- `savename[2]` is set to `'0'` or `'1'` depending on which floppy drive is writable (`fmain2.c:1491-1495`)
-- In hard drive mode (`hdrive == TRUE`), the `"df1:"` prefix is skipped entirely (`name += 4`, `fmain2.c:1487`), writing to the current directory as just `A.faery`
-- `savename[4]` is set to `'A' + hit` for the selected slot A-H (`fmain2.c:1502`)
-
-Result: floppy saves go to `df0:A.faery` through `df1:H.faery`; hard drive saves go to `A.faery` through `H.faery`.
-
-**Field order in save file** (reconstructed from `fmain2.c:1507-1527` and `fmain.c:3621-3631`):
-
-| Order | Data | Size (bytes) | Source |
-|-------|------|-------------|--------|
-| 1 | Misc variables starting at `map_x` | 80 | `fmain2.c:1507` |
-| 2 | `region_num` | 2 | `fmain2.c:1510` |
-| 3 | `anix` (animation count) + padding | 6 | `fmain2.c:1513` |
-| 4 | `anim_list[]` | `anix * sizeof(struct shape)` | `fmain2.c:1514` |
-| 5 | Julian's inventory (`julstuff`) | 35 | `fmain.c:3623` |
-| 6 | Phillip's inventory (`philstuff`) | 35 | `fmain.c:3624` |
-| 7 | Kevin's inventory (`kevstuff`) | 35 | `fmain.c:3625` |
-| 8 | Missile list | `6 * sizeof(struct missile)` | `fmain.c:3630` |
-| 9 | Extent list | `2 * sizeof(struct extent)` | `fmain2.c:1519` |
-| 10 | Global object list (`ob_listg`) | `glbobs * sizeof(struct object)` | `fmain2.c:1522` |
-| 11 | Map object counts (`mapobs`) | 20 | `fmain2.c:1523` |
-| 12 | Destination object counts (`dstobs`) | 20 | `fmain2.c:1524` |
-| 13 | Per-region object tables (x10) | variable | `fmain2.c:1525-1526` |
-
-The 80-byte "misc variables" block at offset 0 starts at `map_x` and captures all contiguous game state variables declared after it in memory (hero position, stats, timers, flags, etc.). The exact fields depend on variable declaration order in the source.
-
-### 20.10 Additional File-Based Assets
-
-Several assets are loaded from named AmigaDOS files rather than the `image` sector dump:
-
-| File | Content | Loader | Size |
-|------|---------|--------|------|
-| `v6` | Waveforms (1,024 bytes) + volume envelopes (2,560 bytes) | `fmain.c:931-936` — direct `Read()` | 3,584 |
-| `songs` | Packed music score tracks | `fmain2.c:760-776` — `read_score()` | up to 5,900 |
-| `fonts/Amber/9` | Proportional bitmap font | `fmain.c:774` — `LoadSeg()` | varies |
-| `hiscreen` | Hi-res title/UI screen | `fmain.c:1227` — `unpackbrush()` IFF | varies |
-| Various IFF brushes | Intro story images | `fmain2.c:781-789` — `unpackbrush()` / `copypage()` | varies |
-
-The `songs` file uses a packed tracker format: each track begins with a 4-byte length word (in 16-bit sample units), followed by `length * 2` bytes of note data. Up to 28 tracks are read (4 channels x 7 songs). Source: `fmain2.c:760-776`.
-
-The `v6` file contains instrument data: the first 1,024 bytes are 8 waveforms of 128 bytes each (raw 8-bit signed PCM single-cycle waveforms), followed by 2,560 bytes of 10 volume envelopes of 256 bytes each. Source: `fmain.c:931-936`.
-
-### 20.11 Modern Conversion Specification Summary
-
-| Asset | Original Size | Original Format | Converter Output |
-|-------|--------------|-----------------|------------------|
-| Region tilesets | 81,920 bytes each (full set) | 5-plane Amiga planar bitmap, 4 banks of 64 tiles | 4 PNG tilesheets (256 tiles total, 16x16 each) |
-| Character sprites | varies (see cfiles table) | 5-plane planar + computed mask | PNG spritesheet with alpha channel |
-| Terrain properties | 1,024 bytes (2 x 512) | 4 bytes/tile: maptag, terrain, tiles, big_colors | terrain.json |
-| Sector maps | 32,768 bytes/region | 256 sectors of 128 bytes, raw tile indices | sectors.json or Tiled TMX |
-| Region maps | 4,096 bytes/region | 128-byte sector layout map | regionmap.json |
-| Music scores | up to 5,900 bytes | Packed custom tracker (4-byte length + note data) | songs.json |
-| Waveforms | 1,024 bytes | 8 x 128-byte 8-bit signed PCM single-cycle | 8 WAV files |
-| Volume envelopes | 2,560 bytes | 10 x 256-byte envelope curves | envelopes.json |
-| Sound effects | ~5,632 bytes | 6 length-prefixed 8-bit PCM samples | 6 WAV files |
-| IFF brushes | varies | Standard IFF/ILBM (RLE or raw) | PNG per image |
-| Palettes | 64 bytes each (32 x 2-byte entries) | 12-bit RGB (4 bits per channel, Amiga OCS) | palette.json |
-| Door table | 86 entries x 10 bytes | Struct array: 4 USHORTs + 2 chars | doors.json |
-| NPC dialogue | ~4,000 bytes (embedded in code) | Null-terminated C strings in source | dialogue.json |
-| Shadow masks | 12,288 bytes | Raw bitmap mask data | PNG masks or binary |
-| Amber font | varies | Amiga DiskFontHeader (hunk executable) | TTF or bitmap atlas PNG |
-| Save games | variable | Raw sequential binary dump, no headers | savegame.json (with named fields and version) |
-
-### 20.12 Sector Map Cross-Reference and Verification
-
-All `load_track_range()` calls in the codebase with their sector ranges:
-
-**Region loading** (`fmain.c:3557-3587`):
-- Sector maps: sectors 32-95 (outdoor) or 96-159 (indoor), 64 sectors each
-- Region maps: sectors 160-199, 8 sectors each (5 distinct ranges)
-- Terrain: sectors 149-159, 1 sector each (overlaps indoor sector map range)
-- Image banks: sectors 200-879, 40 sectors per bank (17 distinct starting addresses referenced)
-
-**One-time loads**:
-- Shadows: sectors 896-919, 24 sectors (`fmain.c:1222`)
-- Samples: sectors 920-930, 11 sectors (`fmain.c:1028`)
-- Copy protection: sector 880, 1 sector (`fmain2.c:1430`)
-
-**Sprite loads** (via `cfiles[]`, `fmain2.c:697`):
-- Setfig sets: sectors 931-955, in 5-sector blocks
-- Enemy sets: sectors 960-1119, in 40-sector blocks
-- Dragon: sectors 1160-1171, 12 sectors
-- Bird: sectors 1120-1159, 40 sectors
-- Objects: sectors 1312-1347, 36 sectors
-- Raft: sectors 1348-1350, 3 sectors
-- Turtle: sectors 1351-1370, 20 sectors
-- Player characters: sectors 1376-1501, in 42-sector blocks
-- Snake/salamander: sectors 1376-1415, overlapping Julian (shares same disk data)
-
-**Identified gaps (no load references)**:
-- Sectors 0-31 (16,384 bytes): Boot blocks and filesystem metadata from original floppy
-- Sectors 881-895 (7,680 bytes): Between copy protection and shadow masks
-- Sectors 956-959 (2,048 bytes): Between setfig sprites and enemy sprites
-- Sectors 1172-1311 (71,680 bytes): Large gap between dragon/bird and object sprites
-- Sectors 1371-1375 (2,560 bytes): Between turtle and player sprites
-- Sectors 1502-1759 (132,096 bytes): End of disk after Kevin's sprites
-
-**Overlap note**: The terrain tables (TERRA_BLOCK=149, offsets 0-10 giving sectors 149-159) overlap the indoor sector map range (96-159). This is safe because `load_track_range` reads into separate buffers (`terra_mem` vs `sector_mem`), and the terrain sectors are loaded independently from the sector map's 64-sector block read.
-
-**Verification**: All `cfiles[].numblocks` values have been checked against expected sizes computed from `width * height * 2 * count * 5 / 512`, and they match within rounding (disk sectors round up). No sector ranges loaded for different purposes actually collide in time, as the async I/O channels (0-8) are managed to prevent read conflicts.
+Called from `_decode_mouse` in `fsubs.asm:1582`.

@@ -1,1511 +1,920 @@
-# Game Storyline & Scenario Diagrams -- The Faery Tale Adventure
+# The Faery Tale Adventure — Storyline & Quest Documentation
 
-## Purpose
+Quest flows, NPC interactions, and narrative sequences documented from the original 1987 source code. All claims are backed by file-and-line citations.
 
-This document captures every game scenario, quest flow, NPC interaction, and state transition as Mermaid diagrams. Each diagram is implementation-ready -- it shows the exact conditions, speech indices, and function calls that drive each scenario.
-
-### How to Read
-
-- **Mermaid diagrams** render in GitHub, VS Code, and most Markdown viewers
-- **Source references** use `file:line` format pointing to the original source
-- **Speech indices** (e.g., `speak(27)`) reference entries in `narr.asm` -- see [RESEARCH.md Section 7](RESEARCH.md#7-npcs--dialogue) for the complete speech catalogue
-- **Conditions in brackets** show the exact variable checks from the source code
+> **Citation format**: `file.c:LINE` or `file.c:START-END`. Speech references: `speak(N)`.
+> **Cross-references**: `[RESEARCH.md §N](RESEARCH.md#section-anchor)` for mechanics detail.
 
 ---
 
-## 1. Main Quest Progression
+## 1. Story Overview
 
-The overall quest arc: recover the Talisman of True Sight from the Necromancer and return it to the village. The player controls up to three brothers in succession. Death is frequent; fairy revival and brother succession provide continuity. For system architecture overview, see [ARCHITECTURE.md](ARCHITECTURE.md). For detailed quest mechanics, see [RESEARCH.md Section 8](RESEARCH.md#8-quest-system).
+Three brothers — Julian, Phillip, and Kevin — live in the village of Tambry. The Talisman, a powerful artifact protecting their land, has been stolen by a Necromancer. The village mayor pleads: *"Rescue the Talisman!"* — `placard_text(0)`, `narr.asm:252-260`.
 
-**Source:** `fmain.c:1129-1245` (intro/game start), `fmain.c:1919` (desert gate check), `fmain.c:3244-3248` (win condition), `fmain.c:3304` (magic blocked in Necromancer arena), `fmain.c:3594-3597` (hidden city map patch), `fmain2.c:1583-1620` (rescue, win_colors), `narr.asm:251-347` (placard text)
+Julian, the eldest and bravest, sets out first. If he falls, Phillip takes up the quest. If Phillip also fails, young Kevin is the last hope. If all three perish, the tale ends: *"The Lesson of the Story: Stay at Home!"* — `placard_text(5)`, `narr.asm:299-302`.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Intro_Sequence
-    Intro_Sequence --> Copy_Protection
-    Copy_Protection --> Village_of_Tambry : correct answers
-    Copy_Protection --> Exit_Game : incorrect answer
+The quest spans a vast overworld divided into outdoor regions (snow, swamp, desert, forest, lava, mountains, farmland) and indoor areas (castles, keeps, cabins, dungeons, caves). Along the way, brothers rescue princesses, gather golden figurines, consult wizards, and ultimately confront the Necromancer to recover the Talisman.
 
-    Village_of_Tambry --> Explore_World : gather equipment and keys
-    note right of Village_of_Tambry : revive(TRUE) sets safe_x=19036 safe_y=15755\nbrother starts with dirk only (stuff[0]=1)\nplacard msg1: Mayor plea to rescue Talisman
+### The Three Brothers
 
-    Explore_World --> Find_Golden_Statues : locate all 5 statues
-    Explore_World --> Side_Princess_Rescue : enter princess extent (etype 83)
-    Explore_World --> Side_Witch_Lasso : speak(46) with witch
-    Explore_World --> Side_Turtle_Shell : turtle extent (etype 70, v3=5)
-    Explore_World --> Side_Dragon_Cave : dragon extent / doorlist cave entry
+| Brother | Brave | Luck | Kind | Wealth | Starting Vitality | Defining Trait |
+|---------|-------|------|------|--------|-------------------|----------------|
+| Julian  | 35    | 20   | 15   | 20     | 23                | Strongest fighter |
+| Phillip | 20    | 35   | 15   | 15     | 20                | Most fairy rescues (highest luck) |
+| Kevin   | 15    | 20   | 35   | 10     | 18                | Kindest; weakest combatant |
 
-    Side_Princess_Rescue --> Explore_World : rescue() awards wealth+=100 and keys+=3
-    Side_Witch_Lasso --> Explore_World
-    Side_Turtle_Shell --> Explore_World
-    Side_Dragon_Cave --> Explore_World
+Source: `blist[]` — `fmain.c:2807-2812`. Vitality = `15 + brave/4` — `fmain.c:2901`.
 
-    state Find_Golden_Statues {
-        [*] --> Collect_5_Statues
-        Collect_5_Statues --> Statue_Priest : writ from priest quest
-        Collect_5_Statues --> Statue_Sorceress : sorceress reward
-        Collect_5_Statues --> Statue_World_1 : world object pickup
-        Collect_5_Statues --> Statue_World_2 : world object pickup
-        Collect_5_Statues --> Statue_World_3 : world object pickup
-    }
+### The Three Princesses
 
-    Find_Golden_Statues --> Hidden_City_of_Azal : stuff[STATBASE] >= 5
-    note right of Hidden_City_of_Azal : Desert sector (region 4)\nDoor type DESERT (17) blocks entry if stuff[STATBASE] < 5\nMap tiles patched to wall (254) when < 5 statues (fmain.c 3594)
+| Order | Name  | Relationship | Placard Texts |
+|-------|-------|-------------|---------------|
+| 1st   | Katra | Princess of Marheim | `placard_text(8-10)` |
+| 2nd   | Karla | Katra's sister | `placard_text(11-13)` |
+| 3rd   | Kandy | Katra's and Karla's sister | `placard_text(14-16)` |
 
-    Hidden_City_of_Azal --> Spirit_Plane : stargate door (doorlist STAIR entries)
-    note right of Spirit_Plane : Stargate forwards: 0x2960,0x8760 to 0x2b00,0x92c0\nStargate backwards: reverse path
+Source: `narr.asm:302-336`. Counter: `princess` variable — `fmain.c:568`.
 
-    Spirit_Plane --> Defeat_Necromancer : melee combat only
-    note right of Defeat_Necromancer : extent v3=9, etype=60, vitality=50\nMagic blocked: if extn->v3==9 then speak(59)\nNo spells work in Necromancer arena
+### Narrative Walkthrough
 
-    Defeat_Necromancer --> Recover_Talisman : pickup Necromancer drop (stuff[22])
-    Recover_Talisman --> Victory : stuff[22] != 0 triggers win
+The quest begins in **Tambry** (sectors 64–69), a small village in the plains. Julian sets out with only a dirk, 20 gold pieces, and the mayor's plea. The world is large and nonlinear — there is no enforced quest order — but the item gates create a natural progression.
 
-    state Victory {
-        [*] --> Win_Placard : msg7 + name() + msg7a
-        Win_Placard --> Win_Picture : unpackbrush winpic
-        Win_Picture --> Color_Fade : sun_colors fade sequence
-        Color_Fade --> [*]
-    }
-    note right of Victory : quitflag=TRUE, viewstatus=2\nwin_colors() in fmain2.c 1605-1620\nWedding text: returned to Marheim where he wed the princess
+**Early exploration**: The hero explores the plains around Tambry and the nearby farms and city of **Marheim** (sectors 80–95). Talking to **wizards** (when `kind >= 10`) yields cryptic hints: *"Kind deeds could gain thee a friend from the sea"*, *"The Witch lives in the dim forest of Grimwood"*, *"Only the light of the Sun can destroy the Witch's Evil."* **Beggars**, when given gold, offer prophecies: *"Seek two women, one Good, one Evil"*, *"Where is the hidden city?"*. **Rangers** give directions to the dragon's cave. **Priests** heal the hero's wounds on every visit (`vitality = 15 + brave/4`) and offer counsel about the spirit plane and teleport stones. The **King** at Marheim can only lament: *"I cannot help you, young man"* — until the princess is rescued.
 
-    Explore_World --> Death_State : vitality reaches 0
-    Death_State --> Fairy_Revival : goodfairy countdown, luck > 0
-    Death_State --> Brother_Succession : luck < 1 and goodfairy < 200
-    Fairy_Revival --> Explore_World : revive(FALSE) same brother
-    Brother_Succession --> Explore_World : revive(TRUE) next brother
-    Brother_Succession --> Game_Over : brother > 3
+**The Turtle and Sea Shell**: In the **Witch Wood** (region 1), the hero discovers **Turtle Eggs** at an extent zone (22945–23225, 5597–5747). When the turtle carrier spawns, talking to it earns gratitude: *"Oh, thank you for saving my eggs!"* — and the **Sea Shell** (`stuff[6]`), which can be USEd anywhere to summon the turtle for ocean travel. This opens the coastlines and islands.
 
-    Game_Over --> [*]
-    Victory --> [*]
-    Exit_Game --> [*]
-```
+**Princess Rescue**: The princess is imprisoned in the **Unreachable Castle** — an isolated room (sector 129, region 8) accessible only through door 67, a STAIR entrance in the forest and wilderness region (region 7). The outdoor entrance is completely surrounded by mountain terrain, requiring the swan to fly over the mountains and land at the door. No underground tunnel connects to this location. When the hero enters the princess extent zone with `ob_list8[9].ob_stat != 0`, the rescue cinematic plays. The hero is teleported to Marheim (5511, 33780), the **King** speaks: *"Here is a writ designating you as my official agent"* — granting the **Writ** (`stuff[28]`), 100 gold, and 3 of each key type. The bird extent is also repositioned from the southern mountains to the Marheim farmlands (`move_extent(0, 22205, 21231)`), a hidden reward. Each brother can trigger one rescue; the `princess` counter advances through Katra → Karla → Kandy.
 
-### Key Conditions Summary
+**The Five Golden Statues**: Five golden figurines of Azal-Car-Ithil are needed to enter the **Burning Waste** desert and reach the hidden city of **Azal** (sectors 159–162). Three statues sit on the ground: at **Seahold** (`ob_listg[6]`), in the **Ogre Den** (`ob_listg[7]`), and in the **Octagonal Room** (`ob_listg[8]`). The **Sorceress** at the Crystal Palace gives one on first visit: *"Welcome. Here is one of the five golden figurines you will need."* The **Priest** gives one when shown the Writ: *"Ah! You have a writ from the king. Here is one of the golden statues."* Both NPCs "give" statues by making invisible ground objects visible (`ob_stat = 1`), which the player picks up normally.
 
-| Gate | Condition | Source |
-|------|-----------|--------|
-| Desert / Hidden City entry | `stuff[STATBASE] >= 5` (STATBASE=25) | `fmain.c:1919` |
-| Desert map patch (block city) | `new_region == 4 && stuff[STATBASE] < 5` | `fmain.c:3594-3597` |
-| Magic blocked in arena | `extn->v3 == 9` | `fmain.c:3304` |
-| Win trigger | `stuff[22] != 0` after pickup | `fmain.c:3244-3248` |
-| Brother succession | `luck < 1 && goodfairy < 200` | `fmain.c:1391` |
-| Game over | `brother > 3` | `fmain.c:2872` |
+**The Dark Knight and Sun Stone**: The **Knight of Dreams** (race 7, 40 HP) guards the **Hidden Valley** (extent idx 15, region 7). *"None may enter the sacred shrine of the People who came Before!"* Defeating him grants access: *"You have earned the right to enter and claim the prize."* Inside the Elf Glade sanctuary (door 48, HSTONE type), the **Sun Stone** (`stuff[7]`) awaits — the key to defeating the Witch.
+
+**The Witch and Golden Lasso**: In **Grimwood** (Witch's Castle, sectors 96–99), the Witch hisses: *"Look into my eyes and Die!!"* Without the Sun Stone, all attacks are blocked: *"Stupid fool, you can't hurt me with that!"* USEing the Sun Stone when the witch is present makes her vulnerable. Killing her (race `0x89`) drops the **Golden Lasso** (`stuff[5]`, `leave_item(i, 27)` — `fmain.c:1756`). The lasso is the key to the swan.
+
+**The Swan**: The bird carrier (`actor_file == 11`) can only be mounted when the hero has the Golden Lasso (`stuff[5]`) and is near the bird (`raftprox && wcarry == 3` — `fmain.c:1497-1502`). Without the lasso, the bird sits on the ground, unmountable. Once mounted (`riding = 11`), the swan uses momentum-based physics (`environ = -2`, velocity cap `e = 40` — `fmain.c:1582`) and bypasses terrain collision entirely (`goto newloc` skips `proxcheck()` — `fmain.c:1591-1594`), making the entire world accessible — mountains, water, lava, all flyable. Facing is derived from velocity, not joystick input (`set_course(0, -nvx, -nvy, 6)` — `fmain.c:1592`). Dismounting (fire button) is blocked in three cases: in the volcanic `fiery_death` zone (*"Ground is too hot for swan to land"* — `event(32)`, `fmain.c:1418`), at high velocity when `|vel_x| >= 15` or `|vel_y| >= 15` (*"Flying too fast to dismount"* — `event(33)`, `fmain.c:1427`), or silently when the landing terrain is impassable (`proxcheck` at two heights — `fmain.c:1421-1422`). On successful dismount, the hero is repositioned 14 pixels above the swan's position (`fmain.c:1420, 1424`).
+
+**The Spectre and Crystal Shard**: The **Spectre** (visible only at night, `lightlevel < 40`) haunts a crypt near Marheim. *"HE has usurped my place as lord of undead. Bring me bones of the ancient King."* Finding the **King's Bone** (`stuff[29]`, `ob_list9[8]`) in the underground and giving it to the Spectre yields the **Crystal Shard** (`stuff[30]`): *"Take this crystal shard."* The Shard allows walking through terrain type 12 — spirit barriers in the dungeon passages leading to the Necromancer.
+
+**The Rose and Desert**: With 5 Golden Statues, the hero can enter the desert through oasis doors (`stuff[25] >= 5` — `fmain.c:1919`). Without them, the desert tiles are overwritten to block passage (`fmain.c:3594`). Inside the hidden city of **Azal** (region 8, doors 7–11), the hero finds the **Rose** (`stuff[23]`, `ob_list8[51]`). The Rose grants fire immunity in the lava zone — when in the `fiery_death` area, `stuff[23]` resets environmental damage to 0 (`fmain.c:1844`). This is essential for reaching the **Citadel of Doom** (door 16), which sits inside the volcanic `fiery_death` zone (region 6).
+
+**The Spirit Plane and Necromancer**: Through the **Citadel of Doom** (door 16, region 6 volcanic), the hero enters the Doom castle interior (region 8, sectors 135–138). A stargate portal (door 15) leads from the castle to the **Spirit Plane** (sectors 43–59, 100, 143–149 in region 9) — a twisted maze where *"Space may twist, and time itself may run backwards!"* The Crystal Shard is needed to navigate its barriers. At the heart lies the **Necromancer's Arena** (sector 46, extent idx 4). The Necromancer (race 9, 50 HP) taunts: *"So this is the so-called Hero... Simply Pathetic."* He can only be damaged with the Bow or Magic Wand (`weapon >= 4`); lesser weapons are deflected: *"Stupid fool, you can't hurt me with that!"* Magic is also explicitly blocked in his arena (`extn->v3 == 9`): *"Your magic won't work here, fool!"*
+
+**Victory**: When the Necromancer falls, he transforms into a normal man (race 10, Woodcutter) and drops the **Talisman** (object 139, `leave_item(i, 139)` — `fmain.c:1754`). *"The Necromancer had been transformed into a normal man. All of his evil was gone."* Picking up the Talisman sets `stuff[22]`, which triggers `quitflag = TRUE`. The win sequence plays: *"Having defeated the villainous Necromancer and recovered the Talisman, [name] returned to Marheim where he wed the princess..."* A sunrise color animation plays over a victory image, and the tale ends.
 
 ---
 
-## 2. Brother Lifecycle
+## 2. Quest Progression
 
-Three brothers attempt the quest in order. Each has distinct stats and a unique sprite. For death/revival mechanics, see [RESEARCH.md Section 13](RESEARCH.md#13-death--revival). When a brother dies permanently (luck exhausted, no fairy saves left), his bones are placed in the world as a ghost object and the next brother begins from the village.
-
-**Source:** `fmain.c:2806-2912` (revive, bro struct, placard sequencing), `narr.asm:251-301` (placard text per brother), `fmain.c:1386-1407` (death/fairy revival logic)
-
-```mermaid
-sequenceDiagram
-    participant Game
-    participant Julian
-    participant Phillip
-    participant Kevin
-    participant World
-
-    Note over Game: revive(TRUE) called at game start<br/>brother=0 initially, incremented to 1
-
-    Game->>Julian: Initialize (brave=35, luck=20, kind=15, wealth=20)
-    Note over Julian: Sprite: PHIL type, julstuff inventory<br/>Starts at safe_x=19036, safe_y=15755 (Tambry)<br/>Weapon: dirk (stuff[0]=1)
-    Game->>Julian: placard_text(0) = msg1
-    Note over Julian: "Rescue the Talisman!" was the Mayor's plea.<br/>And so Julian set out on his quest to recover it.
-
-    loop Julian Gameplay
-        Julian->>World: Explore, fight, collect items
-        World-->>Julian: Takes damage (vitality drops)
-
-        alt Death with fairy save (luck > 0)
-            Note over Julian: goodfairy countdown 200->120: fairy sprite appears<br/>goodfairy 120->20: resurrection glow effect<br/>goodfairy == 1: revive(FALSE) - same position
-            Game->>Julian: revive(FALSE) - reset vitality, keep inventory
-        else Fall death (drowning/pit)
-            Note over Julian: anim_list[0].state == FALL<br/>goodfairy < 200: revive(FALSE) at safe position
-            Game->>Julian: revive(FALSE)
-        else Permanent death (luck < 1)
-            Note over Julian: luck < 1 && goodfairy < 200<br/>triggers revive(TRUE) = new brother
-        end
-    end
-
-    Game->>World: Save Julian bones: ob_listg[1].ob_stat=1 at death location
-    Game->>World: Create Julian ghost: ob_listg[3].ob_stat=3
-    Game->>Julian: placard_text(1) = msg2
-    Note over Julian: Unfortunately for Julian, his luck had run out.<br/>Many months passed and Julian did not return...
-
-    Game->>Phillip: placard_text(2) = msg3
-    Note over Phillip: So Phillip set out, determined to find his<br/>brother and complete the quest.
-    Game->>Phillip: Initialize (brave=20, luck=35, kind=15, wealth=15)
-    Note over Phillip: brother incremented to 2<br/>Fresh inventory, dirk only<br/>Starts at Tambry village
-
-    loop Phillip Gameplay
-        Phillip->>World: Explore, fight, collect items
-        World-->>Phillip: Takes damage
-
-        alt Fairy save or fall recovery
-            Game->>Phillip: revive(FALSE)
-        else Permanent death (luck < 1)
-            Note over Phillip: luck exhausted, triggers next brother
-        end
-    end
-
-    Game->>World: Save Phillip bones: ob_listg[2].ob_stat=1 at death location
-    Game->>World: Create Phillip ghost: ob_listg[4].ob_stat=3
-    Game->>Phillip: placard_text(3) = msg4
-    Note over Phillip: But sadly, Phillip's cleverness could not save<br/>him from the same fate as his older brother.
-
-    Game->>Kevin: placard_text(4) = msg5
-    Note over Kevin: So Kevin took up the quest, risking all, for<br/>the village had grown desperate. Young and<br/>inexperienced, his chances did not look good.
-    Game->>Kevin: Initialize (brave=15, luck=20, kind=35, wealth=10)
-    Note over Kevin: brother incremented to 3<br/>Fresh inventory, dirk only<br/>Starts at Tambry village
-
-    loop Kevin Gameplay
-        Kevin->>World: Explore, fight, collect items
-        World-->>Kevin: Takes damage
-
-        alt Fairy save or fall recovery
-            Game->>Kevin: revive(FALSE)
-        else Permanent death (luck < 1)
-            Note over Kevin: luck exhausted, no more brothers
-        end
-    end
-
-    Game->>Kevin: placard_text(5) = msg6
-    Note over Kevin: And so ends our sad tale.<br/>The Lesson of the Story: Stay at Home!
-    Note over Game: brother > 3: quitflag=TRUE, Delay(500)<br/>GAME OVER
-```
-
-### Brother Stats Reference
-
-| Brother | Index | brave | luck | kind | wealth | Inventory Array | Placard Intro | Placard Death |
-|---------|-------|-------|------|------|--------|-----------------|---------------|---------------|
-| Julian  | 0 (brother=1) | 35 | 20 | 15 | 20 | `julstuff` | msg1 (index 0) | msg2 (index 1) |
-| Phillip | 1 (brother=2) | 20 | 35 | 15 | 15 | `philstuff` | msg3 (index 2) | msg4 (index 3) |
-| Kevin   | 2 (brother=3) | 15 | 20 | 35 | 10 | `kevstuff` | msg5 (index 4) | msg6 (index 5) |
-
-### Princess Variation by Brother
-
-Each brother rescues a different princess (tracked by `princess` variable, incremented on each rescue):
-
-| Princess | Brother | Rescue Text | Source |
-|----------|---------|-------------|--------|
-| Katra    | Julian (princess=0) | msg8/msg8a/msg8b | `narr.asm:303-311` |
-| Karla    | Phillip (princess=1) | msg9/msg9a/msg9b (Katra's sister) | `narr.asm:313-320` |
-| Kandy    | Kevin (princess=2) | msg10/msg10a/msg10b (Katra's and Karla's sister) | `narr.asm:322-331` |
-
-After rescue, the brother escorts the princess home and receives the king's gold (msg11/msg11a), then resumes the quest. The `rescue()` function (`fmain2.c:1584-1603`) awards `wealth += 100`, adds 3 to each key slot (`stuff[16..21] += 3`), transfers princess to city, and clears the princess extent (`ob_list8[9].ob_stat = 0`).
-
----
-
-## 3. Intro Sequence
-
-The game opens with a legal notice, title screen animation, three story pages with columnar-reveal effects, copy protection riddles, and finally drops the player into the game world.
-
-**Source:** `fmain.c:1129-1245` (main function intro logic), `fmain2.c:781-836` (copypage, flipscan, skipint), `fmain2.c:1304-1336` (copy_protect_junk)
-
-```mermaid
-sequenceDiagram
-    participant Game
-    participant Display
-    participant Audio
-    participant Player
-
-    Note over Game: main() entry point (fmain.c:1129)
-
-    Game->>Display: open_all() - initialize Amiga display hardware
-    Game->>Display: SetRast() - clear both page bitmaps
-    Game->>Display: screen_size(156) - set initial viewport
-    Game->>Display: SetRGB4() - set colors (bg=dark blue, fg=white)
-
-    Game->>Display: ssp(titletext) - render legal/copyright text
-    Game->>Game: Delay(50) - 1 second pause on legal text
-
-    Game->>Display: SetFont(afont) - load Amber proportional font
-    Game->>Audio: read_score() - load packed music data from songs file
-    Game->>Audio: read_sample() - load instrument samples
-    Game->>Game: Delay(50) - 1 second pause
-
-    Game->>Display: Allocate page bitmaps (5 bitplanes each)
-    Game->>Audio: playscore(track[12..15]) - start intro music
-    Game->>Display: LoadRGB4(blackcolors) - fade text screen to black
-
-    Game->>Display: screen_size(0) - collapse viewport to zero height
-    Game->>Display: pagechange() x2 - prime double-buffer
-
-    alt Player presses space
-        Player->>Game: spacebar detected by skipint()
-        Note over Game: skipp flag set, goto end_intro
-    else No skip - full intro plays
-        Game->>Display: unpackbrush("page0") - load title screen IFF
-        Game->>Display: BltBitMap to both page buffers
-
-        loop Zoom-in animation (i=0 to 160, step 4)
-            Game->>Display: screen_size(i) - expand viewport vertically
-        end
-
-        alt Player presses space
-            Player->>Game: skipint() returns true
-        else Story pages play
-            Note over Display: Each copypage(): Delay(350)=7 sec,<br/>blit background, unpack 2 IFF brushes,<br/>flipscan() column-reveal animation
-
-            Game->>Display: copypage("p1a","p1b",21,29) - story page 1
-            Note over Display: 350-tick delay, then columnar reveal
-
-            Game->>Display: copypage("p2a","p2b",20,29) - story page 2
-            Note over Display: 350-tick delay, then columnar reveal
-
-            Game->>Display: copypage("p3a","p3b",20,33) - story page 3
-            Note over Display: 350-tick delay, then columnar reveal
-
-            Game->>Game: Delay(190) - 3.8 sec pause on final page
-        end
-
-        loop Zoom-out animation (i=156 to 0, step -4)
-            Game->>Display: screen_size(i) - collapse viewport
-        end
-    end
-
-    Note over Game: no_intro label (fmain.c:1211)
-
-    Game->>Display: seekn() - reset display state
-    Game->>Display: LoadRGB4(blackcolors) - clear colors
-    Game->>Display: screen_size(156) - restore viewport
-    Game->>Display: unpackbrush("hiscreen") - load HUD graphics
-
-    Game->>Display: stillscreen() + placard_text(19) = msg12
-    Note over Display: "So... You, game seeker, would guide the<br/>brothers to their destiny? Answer, then,<br/>these three questions..."
-
-    rect rgb(220, 220, 240)
-        Note over Game: Copy Protection (fmain2.c:1309-1336)
-        loop 3 riddle rounds
-            Game->>Game: rand8() selects from 8 answers pool
-            Game->>Display: question(j) - display riddle j
-            Note over Display: Answer pool: LIGHT, HEED, DEED, SIGHT,<br/>FLIGHT, CREED, BLIGHT, NIGHT
-            Player->>Game: Type answer (case-sensitive match)
-            alt Correct answer
-                Game->>Game: Mark answer as used (answers[j]=NULL)
-            else Incorrect answer
-                Game->>Game: return FALSE
-                Note over Game: copy_protect_junk()==0<br/>goto quit_all - EXIT GAME
-            end
-        end
-    end
-
-    Game->>Audio: stopscore() - stop intro music
-    Game->>Game: revive(TRUE) - initialize Julian (brother=1)
-    Note over Game: Julian intro placard (msg1),<br/>HUD setup, day music begins,<br/>main game loop starts (fmain.c:1270)
-```
-
-### Intro Timing Summary
-
-| Phase | Duration | Source |
-|-------|----------|--------|
-| Legal text display | 1 sec (Delay 50) | `fmain.c:1164` |
-| Font/music load pause | 1 sec (Delay 50) | `fmain.c:1173` |
-| Zoom-in animation | ~40 frames (0 to 160, step 4) | `fmain.c:1199` |
-| Story page delay (each) | 7 sec (Delay 350) per page | `fmain2.c:783` |
-| Final page hold | 3.8 sec (Delay 190) | `fmain.c:1206` |
-| Zoom-out animation | ~39 frames (156 to 0, step 4) | `fmain.c:1209` |
-| Copy protection | Player-paced (3 riddles) | `fmain2.c:1315` |
-| Julian intro placard | 2.4 sec (Delay 120) | `fmain.c:2870` |
-
----
-
-## 4. Death and Revival State Machine
-
-This diagram details the exact frame-by-frame logic that determines whether the hero is revived by a fairy, falls to a safe point, or transitions to the next brother. For the complete revive() function and good fairy mechanic, see [RESEARCH.md Section 13](RESEARCH.md#13-death--revival).
-
-**Source:** `fmain.c:1386-1407` (main loop death handling), `fmain.c:2814-2912` (revive function)
-
-```mermaid
-stateDiagram-v2
-    [*] --> Alive
-    Alive --> Dead_or_Falling : vitality reaches 0
-
-    state Dead_or_Falling {
-        [*] --> Check_Goodfairy
-        Check_Goodfairy --> Immediate_Revive : goodfairy == 1
-        Check_Goodfairy --> Countdown : goodfairy > 1
-
-        state Countdown {
-            [*] --> Decrement
-            Decrement --> Glow_Effect : goodfairy < 20
-            Decrement --> Luck_Check : goodfairy >= 20 and goodfairy < 200
-            Decrement --> Fairy_Approach : goodfairy >= 20 and goodfairy < 120
-        }
-
-        Luck_Check --> New_Brother : luck < 1
-        Luck_Check --> Fall_Recovery : state == FALL
-
-        Fairy_Approach --> Fairy_Sprite_Visible : sprite at hero_x + goodfairy*2 - 20
-        Fairy_Sprite_Visible --> Glow_Effect
-        Glow_Effect --> Immediate_Revive : countdown reaches 1
-
-        Immediate_Revive --> Revive_Same : revive(FALSE)
-        Fall_Recovery --> Revive_Same : revive(FALSE)
-        New_Brother --> Revive_Next : revive(TRUE)
-    }
-
-    Revive_Same --> Alive : same brother, same position or safe point
-    note right of Revive_Same : vitality = 15 + brave/4\nhunger = fatigue = 0\ndaynight = 8000 (reset to day)
-
-    Revive_Next --> Brother_Transition
-    state Brother_Transition {
-        [*] --> Save_Bones : ob_listg[brother] = death location, ob_stat=1
-        Save_Bones --> Create_Ghost : ob_listg[brother+2].ob_stat=3
-        Create_Ghost --> Reset_Princess : ob_list8[9].ob_stat=3
-        Reset_Princess --> Increment_Brother : brother++
-        Increment_Brother --> Show_Death_Placard : placard for fallen brother
-        Show_Death_Placard --> Show_Intro_Placard : placard for new brother
-        Show_Intro_Placard --> Init_New_Brother : load stats from blist[brother]
-    }
-
-    Brother_Transition --> Alive : brother <= 3
-    Brother_Transition --> Game_Over : brother > 3
-
-    note right of Game_Over : placard_text(5) = msg6\n"Stay at Home!"\nquitflag = TRUE, Delay(500)
-
-    Game_Over --> [*]
-```
-
-### Placard Sequencing in revive(TRUE)
-
-The `revive()` function uses the `brother` variable (incremented *before* placard display) to select text:
-
-| brother (after ++) | First Placard | Pause | Second Placard | Meaning |
-|-------------------|---------------|-------|----------------|---------|
-| 1 | `placard_text(0)` = msg1 | 120 ticks | (none -- first brother, also clears screen) | Julian's quest begins |
-| 2 | `placard_text(1)` = msg2 | 120 ticks | `placard_text(2)` = msg3 | Julian falls, Phillip begins |
-| 3 | `placard_text(3)` = msg4 | 120 ticks | `placard_text(4)` = msg5 | Phillip falls, Kevin begins |
-| 4 | `placard_text(5)` = msg6 | 120 ticks | (none -- game over) | Kevin falls, game ends |
-
-**Source:** `fmain.c:2861-2879`
-
----
-
-## 5. NPC Dialogue Trees
-
-> All speech indices reference `_speeches` in `narr.asm:351-518` -- see [RESEARCH.md Section 7](RESEARCH.md#7-npcs--dialogue) for the complete speech catalogue.
-> Placard text indices reference `_placard_text` in `narr.asm:233-347`.
-
-### 5.1 Wizard (SETFIG race 0, 7 instances with goal 0-6)
-
-The wizard appears in multiple locations, each with a distinct `goal` value that selects
-a different cryptic hint. The kindness check gates whether the wizard will speak at all.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Kindness
-    Check_Kindness --> Hostile_Wizard : kind < 10
-    Check_Kindness --> Select_Hint : kind >= 10
-
-    Hostile_Wizard --> Speak_35 : speak(35)
-    note right of Speak_35 : "Away with you, young ruffian!"
-
-    Select_Hint --> Hint_Goal_0 : goal == 0
-    Select_Hint --> Hint_Goal_1 : goal == 1
-    Select_Hint --> Hint_Goal_2 : goal == 2
-    Select_Hint --> Hint_Goal_3 : goal == 3
-    Select_Hint --> Hint_Goal_4 : goal == 4
-    Select_Hint --> Hint_Goal_5 : goal == 5
-    Select_Hint --> Hint_Goal_6 : goal == 6
-
-    Hint_Goal_0 --> Speak_27 : speak(27)
-    note right of Speak_27 : "Kind deeds could gain thee\na friend from the sea."
-
-    Hint_Goal_1 --> Speak_28 : speak(28)
-    note right of Speak_28 : "Seek the place that is\ndarker than night..."
-
-    Hint_Goal_2 --> Speak_29 : speak(29)
-    note right of Speak_29 : "A crystal Orb can help\nto find things concealed."
-
-    Hint_Goal_3 --> Speak_30 : speak(30)
-    note right of Speak_30 : "The Witch lives in\nGrimwood..."
-
-    Hint_Goal_4 --> Speak_31 : speak(31)
-    note right of Speak_31 : "Only the light of the Sun\ncan destroy the Witch."
-
-    Hint_Goal_5 --> Speak_32 : speak(32)
-    note right of Speak_32 : "The maiden lies imprisoned\nin an unreachable castle..."
-
-    Hint_Goal_6 --> Speak_33 : speak(33)
-    note right of Speak_33 : "Tame the golden beast\nand no mountain may deny you!"
-```
-
-**Source:** `fmain.c:3380-3381` -- `case 0: if (kind < 10) speak(35); else speak(27+an->goal);`
-
----
-
-### 5.2 Priest (SETFIG race 1)
-
-The priest has three interaction branches: hostile rejection for unkind heroes,
-granting the golden statue for heroes carrying the king's writ, and healing
-with hints for kind heroes without the writ.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Writ
-    Check_Writ --> Has_Writ : stuff[28] == 1
-    Check_Writ --> No_Writ : stuff[28] == 0
-
-    Has_Writ --> Check_Statue_Given
-    Check_Statue_Given --> Give_Statue : ob_listg[10] == 0
-    Check_Statue_Given --> Already_Given : ob_listg[10] != 0
-
-    Give_Statue --> Speak_39 : speak(39)
-    note right of Speak_39 : "Ah! You have a writ from the king.\nHere is one of the golden statues..."
-    Speak_39 --> Set_Statue_Flag : ob_listg[10].ob_stat = 1
-
-    Already_Given --> Speak_19 : speak(19)
-    note right of Speak_19 : "I already gave the golden\nstatue to the other young man."
-
-    No_Writ --> Check_Kindness_Priest
-    Check_Kindness_Priest --> Hostile_Priest : kind < 10
-    Check_Kindness_Priest --> Heal_And_Hint : kind >= 10
-
-    Hostile_Priest --> Speak_40 : speak(40)
-    note right of Speak_40 : "Repent, Sinner! Thou art\nan uncouth brute..."
-
-    Heal_And_Hint --> Select_Message : speak(36 + daynight%3)
-    note right of Select_Message : One of three rotating messages:\nspeak(36) spirit plane warning\nspeak(37) "seek the Stones"\nspeak(38) "I shall Heal all your wounds"
-    Select_Message --> Full_Heal : vitality = 15 + brave/4
-```
-
-**Source:** `fmain.c:3382-3393`
-
----
-
-### 5.3 King (SETFIG race 5)
-
-The king's dialogue changes based on whether the princess has been rescued.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Princess_Status
-    Check_Princess_Status --> Princess_Captive : ob_list8[9].ob_stat != 0
-    Check_Princess_Status --> Princess_Rescued : ob_list8[9].ob_stat == 0
-
-    Princess_Captive --> Speak_17 : speak(17)
-    note right of Speak_17 : "I cannot help you, young man.\nMy armies are decimated..."
-
-    Princess_Rescued --> Silent : no speech triggered
-```
-
-**Source:** `fmain.c:3398` -- `case 5: if (ob_list8[9].ob_stat) speak(17);`
-
----
-
-### 5.4 Sorceress (SETFIG race 7)
-
-The sorceress gives one golden figurine on first visit, then provides
-a luck boost on subsequent visits.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Visit_Status
-    Check_Visit_Status --> First_Visit : ob_listg[9].ob_stat == 0
-    Check_Visit_Status --> Return_Visit : ob_listg[9].ob_stat != 0
-
-    First_Visit --> Speak_45 : speak(45)
-    note right of Speak_45 : "Welcome. Here is one of the\nfive golden figurines you will need."
-    Speak_45 --> Mark_Visited : ob_listg[9].ob_stat = 1
-
-    Return_Visit --> Luck_Check : luck < rand64()?
-    Luck_Check --> Luck_Boost : yes
-    Luck_Check --> No_Effect : no
-    Luck_Boost --> Apply_Luck : luck += 5
-```
-
-**Source:** `fmain.c:3400-3404`
-
----
-
-### 5.5 Beggar (SETFIG race 13, via GIVE gold)
-
-The beggar begs for alms on TALK. When gold is given, he delivers one of
-three progressive prophecies selected by his `goal` value (0-2).
-
-```mermaid
-stateDiagram-v2
-    [*] --> Talk_To_Beggar
-    Talk_To_Beggar --> Speak_23 : speak(23) "Alms! Alms for the poor!"
-
-    [*] --> Give_Gold_To_Beggar
-    Give_Gold_To_Beggar --> Deduct_Gold : wealth -= 2
-    Deduct_Gold --> Kindness_Check : rand64() > kind?
-    Kindness_Check --> Increase_Kind : yes, kind++
-    Kindness_Check --> No_Change : no
-    Increase_Kind --> Select_Prophecy
-    No_Change --> Select_Prophecy
-
-    Select_Prophecy --> Prophecy_0 : goal == 0
-    Select_Prophecy --> Prophecy_1 : goal == 1
-    Select_Prophecy --> Prophecy_2 : goal == 2
-
-    Prophecy_0 --> Speak_24 : speak(24)
-    note right of Speak_24 : "You must seek two women,\none Good, one Evil."
-
-    Prophecy_1 --> Speak_25 : speak(25)
-    note right of Speak_25 : "Lovely Jewels, glint in\nthe night - give to us the\ngift of Sight!"
-
-    Prophecy_2 --> Speak_26 : speak(26)
-    note right of Speak_26 : "Where is the hidden city?\nHow can you find it when\nyou cannot even see it?"
-```
-
-**Source:** `fmain.c:3415` (TALK), `fmain.c:3493-3499` (GIVE)
-
----
-
-### 5.6 Spectre (SETFIG race 10, via GIVE bones)
-
-The spectre requests ancient bones to aid the hero. On TALK, he asks for them.
-On GIVE with bones in inventory, he trades the crystal shard.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Talk_To_Spectre
-    Talk_To_Spectre --> Speak_47 : speak(47)
-    note right of Speak_47 : "Bring me bones of the ancient\nKing and I'll help you\ndestroy him."
-
-    [*] --> Give_Bones
-    Give_Bones --> Check_Has_Bones : stuff[29] != 0?
-    Check_Has_Bones --> Wrong_Target : target race != 0x8a
-    Check_Has_Bones --> No_Bones : stuff[29] == 0
-
-    Wrong_Target --> Speak_21 : speak(21) "Sorry, I have no use for it."
-
-    Check_Has_Bones --> Trade_Bones : race == 0x8a and has bones
-    Trade_Bones --> Speak_48 : speak(48)
-    note right of Speak_48 : "Good! That spirit now rests\nquietly in my halls.\nTake this crystal shard."
-    Speak_48 --> Remove_Bones : stuff[29] = 0
-    Remove_Bones --> Drop_Shard : leave_item(140)
-```
-
-**Source:** `fmain.c:3410` (TALK), `fmain.c:3501-3503` (GIVE)
-
----
-
-### 5.7 Dark Knight (ENEMY race 7)
-
-The Dark Knight guards the sacred shrine. He speaks on approach and again
-when defeated.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Approach_Knight
-    Approach_Knight --> Speak_41 : speak(41)
-    note right of Speak_41 : "None may enter the sacred\nshrine of the People\nwho came Before!"
-
-    Speak_41 --> Combat
-    Combat --> Knight_Defeated : vitality < 1
-    Knight_Defeated --> Speak_42 : speak(42)
-    note right of Speak_42 : "Your prowess in battle is great.\nYou have earned the right\nto enter and claim the prize."
-```
-
-**Source:** `fmain.c:2101` (auto-speak on approach), `fmain.c:2775` (checkdead triggers speak(42))
-
----
-
-## 6. Princess Rescue Sequence
-
-Three princesses (Katra, Karla, Kandy) can be rescued in sequence. Each rescue
-triggers a placard cutscene, teleportation, and rewards.
-
-```mermaid
-sequenceDiagram
-    participant Hero
-    participant Game
-    participant Display
-
-    Hero->>Game: Enter princess extent zone<br/>(10820-10877, 35646-35670)
-    Game->>Game: Check ob_list8[9].ob_stat != 0
-    Game->>Game: xtype == 83 triggers rescue()
-
-    Game->>Display: map_message() opens placard overlay
-    Game->>Display: placard_text(8 + princess*3)<br/>Princess name varies by counter:<br/>0=Katra, 1=Karla, 2=Kandy
-    Game->>Display: name() inserts hero name
-    Game->>Display: placard_text(9 + princess*3)
-    Game->>Display: name() inserts hero name
-    Game->>Display: placard_text(10 + princess*3)
-    Game->>Display: placard() render, Delay(380)
-
-    Game->>Display: Clear placard area
-    Game->>Display: placard_text(17) aftermath message
-    Game->>Display: name() inserts hero name
-    Game->>Display: placard_text(18) "once more set out on his quest"
-    Game->>Display: Delay(380)
-    Game->>Display: message_off()
-
-    Game->>Game: princess++ (advance counter)
-    Game->>Game: xfer(5511, 33780, 0) teleport to Marheim
-    Game->>Game: move_extent(0, 22205, 21231)
-    Game->>Game: ob_list8[2].ob_id = 4
-    Game->>Game: stuff[28] = 1 (grant writ)
-    Game->>Hero: speak(18) "Here is a writ..."
-    Game->>Game: wealth += 100
-    Game->>Game: ob_list8[9].ob_stat = 0 (reset princess flag)
-    Game->>Game: stuff[16..21] += 3 (3 of each key type)
-```
-
-**Source:** `fmain2.c:1584-1603`, triggered by `fmain.c:2684-2685`
-
-**Placard text mapping (narr.asm:303-340):**
-| princess | placard_text indices | Princess name |
-|----------|---------------------|---------------|
-| 0        | 8, 9, 10            | Katra         |
-| 1        | 11, 12, 13          | Karla         |
-| 2        | 14, 15, 16          | Kandy         |
-
-Note: The placard table uses indices 8-16 for rescue messages and 17-18 for the
-aftermath message (msg11, msg11a).
-
----
-
-## 7. Witch Confrontation Sequence
-
-The witch (SETFIG race 9, race byte 0x89 when spawned as encounter) resides in
-Grimwood. She faces the hero every tick and projects a damaging vision cone.
-
-```mermaid
-sequenceDiagram
-    participant Hero
-    participant Witch
-    participant Game
-    participant Display
-
-    Hero->>Game: Enter Grimwood (extent type F2)
-    Game->>Witch: Spawn as SETFIG race 9
-    Game->>Display: speak(46) "Look into my eyes and Die!"
-
-    loop Every animation tick
-        Game->>Witch: set_course(i, hero_x, hero_y, 0)<br/>Witch always faces hero
-        Game->>Game: witchflag = TRUE
-        Game->>Display: witch_fx() renders vision cone polygon
-        Game->>Game: Compute cross products s1, s2<br/>from witch gaze vectors to hero position
-        alt Hero inside vision cone (s1 > 0 and s2 < 0) and dist < 100
-            Game->>Hero: dohit(-1, 0, witch.facing, rand2()+1)<br/>1-2 damage per tick
-        end
-    end
-
-    alt Hero uses Sun Stone (USE menu, hit==8, witchflag set)
-        Game->>Display: speak(60) "The Sunstone has made<br/>the witch vulnerable!"
-        Note over Game: stuff[7] set, removes immunity
-    end
-
-    alt Hero attacks with weapon < 4 (no sun stone active)
-        Game->>Display: speak(58) "You can't hurt me with that!"
-        Note over Game: dohit() returns immediately,<br/>no damage dealt
-    end
-
-    alt Hero attacks with weapon >= 4 or sun stone active
-        Game->>Witch: Reduce vitality by weapon damage
-    end
-
-    Witch->>Game: vitality reaches 0, state = DYING
-    Game->>Game: race == 0x89 check in death handler
-    Game->>Game: leave_item(i, 27) drop golden lasso
-    Note over Hero: Golden lasso (item 27) enables bird riding
-```
-
-**Key source references:**
-- Witch always faces hero: `fmain.c:1553-1554`
-- Vision cone rendering: `fmain2.c:917-965`
-- Cone damage: `fmain.c:2374-2375`
-- Sun stone USE: `fmain.c:3462`
-- Immunity check: `fmain2.c:231-234` (weapon < 4 and race 0x89 and stuff[7]==0)
-- Lasso drop on death: `fmain.c:1756`
-
----
-
-## 8. Necromancer Final Battle Sequence
-
-The Necromancer (type 60, race 9) awaits on the astral plane. Magic is restricted
-in his domain, and he is immune to weak weapons.
-
-```mermaid
-sequenceDiagram
-    participant Hero
-    participant Necromancer
-    participant Game
-    participant Display
-
-    Hero->>Game: Enter astral plane via stargate door
-
-    Note over Game: Loraii encounters (type 8, encounter_type 6)<br/>spawn when xtype == 8
-
-    Hero->>Game: Enter necromancer extent<br/>(9563-10144, 33883-34462)
-    Game->>Necromancer: Spawn as race 9, type 60, v3=9
-    Game->>Display: speak(43) "So this is the so-called Hero...<br/>Simply Pathetic."
-
-    alt Hero attempts MAGIC in extent (v3 == 9)
-        Game->>Display: speak(59) "Your magic won't work here, fool!"
-        Note over Game: Magic action blocked, returns immediately
-    end
-
-    alt Hero attacks with weapon < 4
-        Game->>Display: speak(58) "You can't hurt me with that!"
-        Note over Game: dohit() returns, no damage dealt
-    end
-
-    alt Hero attacks with weapon >= 4 (bow or wand)
-        Game->>Necromancer: Reduce vitality by weapon damage
-    end
-
-    Necromancer->>Game: vitality reaches 0, state = DYING
-    Game->>Game: tactic countdown to 0
-    Game->>Game: race == 0x09 check in death handler
-    Game->>Necromancer: race = 10 (woodcutter), vitality = 10
-    Game->>Necromancer: state = STILL, weapon = 0
-    Game->>Display: speak(44) "The Necromancer had been<br/>transformed into a normal man."
-    Game->>Game: leave_item(i, 139) drop Talisman
-
-    Hero->>Game: Pick up Talisman
-    Game->>Game: stuff[22] = 1
-    Game->>Game: quitflag = TRUE, viewstatus = 2
-    Game->>Display: Trigger win sequence
-```
-
-**Key source references:**
-- Necromancer extent: `fmain.c:343` -- `{ 9563,33883, 10144,34462, 60, 1, 1, 9 }`
-- Auto-speak on approach: `fmain.c:2100`
-- Magic restriction: `fmain.c:3304` -- `if (extn->v3 == 9) { speak(59); break; }`
-- Weapon immunity: `fmain2.c:231-232` -- weapon < 4 and race == 9
-- Death transformation: `fmain.c:1749-1754`
-- Win trigger on pickup: `fmain.c:3244-3247`
-
----
-
-## 9. Win and Lose Sequences
-
-### 9.1 Win Condition
-
-```mermaid
-sequenceDiagram
-    participant Hero
-    participant Game
-    participant Display
-
-    Hero->>Game: Pick up Talisman (stuff[22] set)
-    Game->>Game: quitflag = TRUE
-    Game->>Game: viewstatus = 2
-
-    Game->>Display: map_message() open overlay
-    Game->>Display: SetFont to afont
-    Game->>Display: win_colors() begins
-
-    Game->>Display: placard_text(6)<br/>"Having defeated the villainous Necromancer<br/>and recovered the Talisman,"
-    Game->>Display: name() insert hero name
-    Game->>Display: placard_text(7)<br/>"returned to Marheim where<br/>he wed the princess..."
-    Game->>Display: placard(), Delay(80)
-
-    Game->>Display: Unpack "winpic" brush to drawing bitmap
-    Game->>Display: Set all colors to black
-    Game->>Display: Resize screen to 156 lines
-
-    loop Fade-in cycle (i = 25 down to -30)
-        Game->>Display: Interpolate sun_colors palette
-        Game->>Display: LoadRGB4 with fader colors
-        Game->>Display: Delay(9) per step
-    end
-
-    Game->>Display: Delay(30) hold final image
-```
-
-**Source:** `fmain.c:3244-3247` (trigger), `fmain2.c:1605-1634` (win_colors)
-
----
-
-### 9.2 Lose Condition (All Brothers Dead)
-
-```mermaid
-sequenceDiagram
-    participant Game
-    participant Display
-
-    Note over Game: Current brother dies (vitality reaches 0)
-    Game->>Game: brother++ (advance to next brother)
-
-    alt brother == 1 (Julian starts)
-        Game->>Display: placard_text(0) "Rescue the Talisman!"
-    end
-    alt brother == 2 (Phillip starts)
-        Game->>Display: placard_text(1) "Julian did not return..."
-        Game->>Display: Delay(80)
-        Game->>Display: placard_text(2) "Phillip set out..."
-    end
-    alt brother == 3 (Kevin starts)
-        Game->>Display: placard_text(3) "Phillip's cleverness<br/>could not save him..."
-        Game->>Display: Delay(80)
-        Game->>Display: placard_text(4) "Kevin took up the quest..."
-    end
-    alt brother > 3 (Kevin also dead - GAME OVER)
-        Game->>Display: placard_text(5)<br/>"And so ends our sad tale.<br/>The Lesson of the Story:<br/>Stay at Home!"
-        Game->>Display: placard(), Delay(120)
-        Game->>Game: quitflag = TRUE
-        Game->>Game: Delay(500)
-        Note over Game: Game exits
-    end
-```
-
-**Source:** `fmain.c:2847-2872`
-
-**Placard text to narr.asm message mapping:**
-
-| placard_text index | narr.asm label | Content summary |
-|-------------------|----------------|-----------------|
-| 0                 | msg1           | Julian's quest begins |
-| 1                 | msg2           | Julian did not return |
-| 2                 | msg3           | Phillip sets out |
-| 3                 | msg4           | Phillip's fate |
-| 4                 | msg5           | Kevin takes up the quest |
-| 5                 | msg6           | "Stay at Home!" (game over) |
-| 6                 | msg7           | Victory: defeated Necromancer |
-| 7                 | msg7a          | Victory: wed the princess |
-
----
-
-## 10. Speech Index Verification
-
-Cross-referencing five speech indices between `fmain.c`/`fmain2.c` usage and
-`narr.asm:351-518` definitions:
-
-| Index | Code reference | narr.asm text | Match? |
-|-------|---------------|---------------|--------|
-| 17    | `fmain.c:3398` -- king speech when princess captive | `narr.asm:391-393`: "I cannot help you, young man... I have lost all hope." | Confirmed |
-| 35    | `fmain.c:3380` -- wizard hostile (kind < 10) | `narr.asm:442-444`: "Away with you, young ruffian!... find some small animal to torment" | Confirmed |
-| 43    | `fmain.c:2100` -- necromancer auto-speak on approach | `narr.asm:471-473`: "So this is the so-called Hero... Simply Pathetic." | Confirmed |
-| 48    | `fmain.c:3503` -- spectre receives bones | `narr.asm:489-491`: "Good! That spirit now rests quietly... Take this crystal shard." | Confirmed |
-| 58    | `fmain2.c:234` -- weapon immunity taunt | `narr.asm:513`: "Stupid fool, you can't hurt me with that!" | Confirmed |
-
-All five spot-checked speech references match their `narr.asm` definitions correctly.
-
----
-
-## 11. Combat Encounter Flow
-
-For detailed encounter generation mechanics, see [RESEARCH.md Section 5.6](RESEARCH.md#56-encounter-generation).
-
-This section provides Mermaid diagrams for the major game scenario subsystems: combat encounter generation, door/building transitions, carrier interactions, special map events, day/night cycles, and the shopping system.
-
-The encounter system checks every 32 ticks whether to spawn enemies. It calculates a danger level based on the current region and terrain type, then rolls against it using `rand64()`. On success, it selects an encounter type, loads the appropriate sprite file, and places enemies on the map.
-
-**Source:** `fmain.c:2058-2093`, `fmain.c:2105-2187`, `fmain2.c:253-275`
-
-```mermaid
-sequenceDiagram
-    participant MainLoop as Main Loop
-    participant EncGen as Encounter Generator
-    participant Loader as Sprite Loader
-    participant Placer as Enemy Placer
-    participant AI as Battle AI
-    participant Combat as Melee/Missile
-    participant After as Aftermath
-
-    MainLoop->>MainLoop: daynight increments each tick
-
-    Note over MainLoop: Every 32 ticks (daynight & 31 == 0)
-    MainLoop->>EncGen: Check spawn conditions
-    Note over EncGen: Requires: !actors_on_screen<br/>AND !actors_loading<br/>AND !active_carrier<br/>AND xtype < 50
-
-    EncGen->>EncGen: Calculate danger_level
-    Note over EncGen: Indoor (region > 7): 5 + xtype<br/>Outdoor (region <= 7): 2 + xtype
-
-    EncGen->>EncGen: Roll: rand64() <= danger_level?
-    alt Roll fails
-        EncGen-->>MainLoop: No encounter
-    else Roll succeeds
-        EncGen->>EncGen: encounter_type = rand4()
-        Note over EncGen: Overrides:<br/>xtype 7 and type 2 -> type 4 (snake)<br/>xtype 8 -> type 6, no mix (spider)<br/>xtype 49 -> type 2, no mix (wraith)
-        EncGen->>Loader: load_actors()
-        Loader->>Loader: encounter_number = v1 + rnd(v2)
-        Loader->>Loader: Read sprite file if actor_file changed
-        Note over Loader: actor_file = encounter_chart[type].file_id
-
-        Note over MainLoop: Every 16 ticks (daynight & 15 == 0)
-        MainLoop->>Placer: Place encounter_number enemies
-        Placer->>Placer: set_loc() picks encounter_x, encounter_y
-        Placer->>Placer: Verify clear terrain: px_to_im() == 0
-        loop Up to 10 placement attempts
-            Placer->>Placer: set_encounter(slot, spread=63)
-            Note over Placer: Random position within 63px spread<br/>Race from encounter_chart (mixflag may vary)<br/>Weapon from weapon_probs[arms*4 + wt]<br/>Goal: ATTACK or ARCHER based on arms/cleverness<br/>Vitality from encounter_chart[race].hitpoints
-        end
-    end
-
-    Note over MainLoop: Actor loop runs every tick (i=2..anix)
-    MainLoop->>AI: Evaluate each enemy
-    AI->>AI: Distance check: |xd| < 300 AND |yd| < 300?
-    AI->>AI: actors_on_screen = TRUE if in range
-    AI->>AI: battleflag = TRUE if visible
-    Note over AI: 1/16 re-evaluation chance (bitrand(15)==0)
-    AI->>AI: Select tactic: PURSUE, EVADE, SHOOT, BACKUP, FOLLOW, FLEE
-    Note over AI: Low HP (<2) or wrong extent -> FLEE<br/>Hero dead -> first enemy flees, rest follow<br/>Archer at range 40-70 -> SHOOT<br/>Archer too close (<40) -> BACKUP
-
-    AI->>Combat: do_tactic() / set_course() / FIGHTING state
-    Combat->>Combat: Melee: project strike point along facing
-    Combat->>Combat: Missile: arrows with velocity and direction
-    Combat->>Combat: dohit(i, j, facing, wt) -> subtract damage
-    Combat->>Combat: checkdead() -> DYING state, brave++
-
-    Note over MainLoop: When battleflag drops to FALSE (battle2 was TRUE)
-    MainLoop->>After: aftermath()
-    After->>After: Count DEAD enemies -> dead
-    After->>After: Count FLEE enemies -> flee
-    alt Hero alive and vitality < 5 and kills > 0
-        After-->>MainLoop: "Bravely done!"
-    else Normal victory
-        After-->>MainLoop: "N foes were defeated in battle."
-        After-->>MainLoop: "N foes fled in retreat."
-    end
-    After->>After: if turtle_eggs: get_turtle()
-```
-
----
-
-## 12. Door/Building Transition Flow
-
-The door system uses an 86-entry lookup table (`doorlist`). Outdoor-to-indoor transitions use a binary search on the hero's `xc1` coordinate. Indoor-to-outdoor transitions use a linear scan on the `xc2` coordinate. Each door entry specifies type (wood, stone, cave, etc.) and which sectors it connects.
-
-**Source:** `fmain.c:1894-1955`, `fmain.c:2625-2645`, `fmain.c:215-326`
+### 2.1 Complete Quest Chain
 
 ```mermaid
 flowchart TD
-    A[Hero walks onto door tile] --> B{Check region_num}
-    B -->|"region < 8 (Outdoor)"| C[Binary search doorlist by xc1]
-    B -->|"region >= 8 (Indoor)"| D[Linear scan doorlist by xc2]
+    START([Game Start<br>Julian in Tambry]) --> EXPLORE[Explore the World<br>Gather items, gold, weapons]
+    EXPLORE --> TURTLE_EGGS{Find Turtle Eggs<br>extent idx 5}
+    TURTLE_EGGS --> TURTLE_TALK[Talk to Turtle<br>Receive Sea Shell]
 
-    C --> E{Match found?}
-    E -->|No| Z[No transition]
-    E -->|Yes| F{Door orientation check}
+    EXPLORE --> RESCUE_P[Enter Princess Extent<br>xtype 83]
+    RESCUE_P --> PRINCESS_RESCUED[Princess Rescued<br>+100 gold, +Writ, +3 each key<br>Bird repositioned]
 
-    F -->|"Horizontal (type & 1)"| G{"hero_y & 0x10 == 0?"}
-    F -->|"Vertical (type & 1 == 0)"| H{"(hero_x & 15) <= 6?"}
-    G -->|Yes| I[Proceed to transition]
-    G -->|No| Z
-    H -->|Yes| I
-    H -->|No| Z
+    PRINCESS_RESCUED --> SHOW_WRIT[Show Writ to Priest<br>speak 39]
+    SHOW_WRIT --> PRIEST_STATUE[Priest reveals<br>Gold Statue]
 
-    I --> J{Special door type?}
-    J -->|DESERT| K{"stuff[STATBASE] >= 5?<br/>(5 gold statues needed)"}
-    K -->|No| Z
-    K -->|Yes| L[Calculate destination offsets]
-    J -->|CAVE| M["xtest = xc2 + 24<br/>ytest = yc2 + 16"]
-    J -->|"Horizontal normal"| N["xtest = xc2 + 16<br/>ytest = yc2"]
-    J -->|"Vertical normal"| O["xtest = xc2 - 1<br/>ytest = yc2 + 16"]
+    EXPLORE --> SORC_VISIT[Visit Sorceress<br>speak 45]
+    SORC_VISIT --> SORC_STATUE[Sorceress reveals<br>Gold Statue]
 
-    L --> P{Determine new region}
-    M --> P
-    N --> P
-    O --> P
+    EXPLORE --> FIND_STATUES[Find 3 Ground Statues<br>Seahold, Ogre Den, Octal Room]
 
-    P -->|"secs == 1"| Q["new_region = 8 (indoor)"]
-    P -->|"secs == 2"| R["new_region = 9 (dungeon)"]
+    PRIEST_STATUE --> FIVE_STATUES{5 Gold Statues?}
+    SORC_STATUE --> FIVE_STATUES
+    FIND_STATUES --> FIVE_STATUES
 
-    Q --> S["xfer(xtest, ytest, FALSE)"]
-    R --> S
+    FIVE_STATUES -->|Yes| DESERT[Enter Desert / Azal]
+    FIVE_STATUES -->|No| EXPLORE
 
-    S --> S1["Update hero position<br/>map_x += delta, map_y += delta"]
-    S1 --> S2["load_all() - load region data"]
-    S2 --> S3["gen_mini() - rebuild minimap"]
-    S3 --> S4["viewstatus = 99 (full redraw)"]
-    S4 --> T["find_place(2) - identify location"]
-    T --> U["fade_page() - visual transition"]
+    EXPLORE --> GET_BONE[Find King's Bone<br>ob_list9 idx 8]
+    GET_BONE --> GIVE_SPECTRE[Give Bone to Spectre<br>speak 48]
+    GIVE_SPECTRE --> GET_SHARD[Receive Crystal Shard<br>Passwall ability]
 
-    D --> V{Match xc2 to hero position?}
-    V -->|No| Z
-    V -->|Yes| W{Indoor orientation check}
+    EXPLORE --> DKNIGHT_VALLEY[Enter Hidden Valley<br>extent idx 15]
+    DKNIGHT_VALLEY --> FIGHT_DKNIGHT[Defeat Knight of Dreams<br>40 HP, Sword, fixed position]
+    FIGHT_DKNIGHT --> GET_SUNSTONE[Enter Elf Glade<br>Pick up Sun Stone]
+    GET_SUNSTONE --> FIGHT_WITCH[Use Sun Stone on Witch<br>speak 60]
+    FIGHT_WITCH --> GET_LASSO[Witch drops Golden Lasso<br>fmain.c:1756]
 
-    W -->|"Horizontal (type & 1)"| W1{"(hero_y & 0x10) != 0?"}
-    W -->|"Vertical (type & 1 == 0)"| W2{"(hero_x & 15) >= 2?"}
-    W1 -->|Yes| X[Calculate outdoor destination]
-    W1 -->|No| Z
-    W2 -->|Yes| X
-    W2 -->|No| Z
+    DESERT --> OASIS_DOOR[Enter Oasis Door<br>DESERT type, fmain.c:1919]
+    OASIS_DOOR --> AZAL[Hidden City of Azal<br>Region 8 buildings]
+    AZAL --> GET_ROSE[Find Rose<br>Fire Immunity, ob_list8 idx 51]
 
-    X --> X1{Door type for reverse offsets?}
-    X1 -->|CAVE| X2["xtest = xc1 - 4<br/>ytest = yc1 + 16"]
-    X1 -->|Horizontal| X3["xtest = xc1 + 16<br/>ytest = yc1 + 34"]
-    X1 -->|Vertical| X4["xtest = xc1 + 20<br/>ytest = yc1 + 16"]
-
-    X2 --> Y["xfer(xtest, ytest, TRUE)<br/>Recalculates outdoor region<br/>from map coordinates"]
-    X3 --> Y
-    X4 --> Y
-
-    Y --> Y1["find_place(FALSE)"]
+    GET_ROSE --> CITADEL[Cross Lava to<br>Citadel of Doom, door 16]
+    GET_SHARD --> CITADEL
+    CITADEL --> DOOM_CASTLE[Castle Interior<br>Region 8 island 22]
+    DOOM_CASTLE --> STARGATE[Stargate Portal<br>door 15]
+    STARGATE --> SPIRIT_WORLD[Spirit Plane<br>Region 9]
+    SPIRIT_WORLD --> NECRO_ARENA[Necromancer Arena<br>extent idx 4]
+    NECRO_ARENA --> FIGHT_NECRO[Defeat Necromancer<br>50 HP, weapon >= 4 required<br>Magic blocked in arena]
+    FIGHT_NECRO --> TALISMAN_DROP[Necromancer transforms<br>Drops Talisman obj 139]
+    TALISMAN_DROP --> PICK_TALISMAN[Pick Up Talisman<br>stuff 22 set]
+    PICK_TALISMAN --> WIN[Win Sequence<br>win_colors plays]
 ```
 
-### Door Type Summary
+### 2.2 Gold Statue Sources
 
-| Type ID | Name | Description |
-|---------|------|-------------|
-| 1 | HWOOD | Horizontal wooden door |
-| 2 | VWOOD | Vertical wooden door |
-| 3 | HSTONE | Horizontal stone door |
-| 4 | VSTONE | Vertical stone door |
-| 7 | CRYST | Crystal palace entrance |
-| 8 | SECRET | Secret door |
-| 9 | BLACK | Dark/fortress entrance |
-| 11 | LOG | Log cabin door |
-| 15 | STAIR | Stairway (used for stargate, tombs) |
-| 17 | DESERT | Desert oasis (requires 5 gold statues) |
-| 18 | CAVE | Cave entrance (also VLOG) |
+Five golden figurines are required to access the desert and the hidden city of Azal (`stuff[25] >= 5` — `fmain.c:1919`). Without them, DESERT-type doors block entry and the Azal map tiles are overwritten to be impassable (`fmain.c:3594-3596`).
+
+| # | Source | Location | How Obtained |
+|---|--------|----------|-------------|
+| 1 | Sorceress | ob_listg[9], (12025, 37639) | Talk to sorceress; `speak(45)`, sets `ob_listg[9].ob_stat = 1` — `fmain.c:3400-3403` |
+| 2 | Priest | ob_listg[10], (6700, 33766) | Show Writ to priest; `speak(39)`, sets `ob_listg[10].ob_stat = 1` — `fmain.c:3384-3385` |
+| 3 | Seahold | ob_listg[6], (11092, 38526) | Ground pickup — `fmain2.c:1008` |
+| 4 | Ogre Den | ob_listg[7], (25737, 10662) | Ground pickup — `fmain2.c:1009` |
+| 5 | Octal Room | ob_listg[8], (2910, 39023) | Ground pickup — `fmain2.c:1010` |
+
+> **Note**: Dialogue-revealed statues work through the standard Take mechanic — setting `ob_stat = 1` makes the object world-visible; the player picks it up via `itrans` like any ground object. See [PROBLEMS.md P21](PROBLEMS.md) (resolved).
+
+### 2.3 Key Quest Items
+
+| Item | stuff[] | How Obtained | Purpose |
+|------|---------|-------------|---------|
+| Writ | stuff[28] | Princess rescue → `fmain2.c:1598` | Show to Priest for Gold Statue |
+| Gold Statues ×5 | stuff[25] | Various (§2.2) | Gate to desert/Azal |
+| Sun Stone | stuff[7] | Ground pickup, ob_list8[18] | Makes Witch vulnerable — `fmain2.c:231-233`. Also required for combat: without Sun Stone, all attacks on Witch are blocked (`speak(58)`) |
+| Golden Lasso | stuff[5] | Dropped by witch (race 0x89) on death — `fmain.c:1756` | Enables riding the Swan — `fmain.c:1498` |
+| Sea Shell | stuff[6] | Talk to Turtle with `active_carrier==5` | Summon Turtle for water travel |
+| Rose | stuff[23] | Ground pickup, ob_list8[51] | Fire immunity — `fmain.c:1844` |
+| Bone | stuff[29] | Ground pickup, ob_list9[8] | Give to Spectre for Shard |
+| Crystal Shard | stuff[30] | Give Bone to Spectre — `fmain.c:3503` | Walk through terrain type 12 (crystal/spirit barriers) — `fmain.c:1609`. Required for navigating Spirit Plane |
+| Crystal Orb | stuff[12] | Pickups/containers | `secret_timer` — reveals secret passages |
+| Talisman | stuff[22] | Necromancer drops on death — `fmain.c:1754` | Picking it up wins the game |
+
+See [RESEARCH.md §10](RESEARCH.md#10-inventory--items) for full item mechanics.
+
+### 2.4 Transport Progression
+
+Four transport modes exist, each unlocking new areas of the world. All carriers share `anim_list[3]` (except the raft at `anim_list[1]`), meaning only one active carrier at a time.
+
+| Carrier | Actor | How Obtained | Capability | Restriction |
+|---------|-------|-------------|------------|-------------|
+| Raft | 1 | Automatic near water edges | Cross rivers/lakes | Water only; no steering |
+| Turtle | 5 | Save turtle eggs → talk to turtle → USE Sea Shell | Ocean travel | Water only; summoned via `move_extent(1,...)` |
+| Swan (bird) | 11 | Extent zone (idx 0); requires Golden Lasso (`stuff[5]`) to mount (`fmain.c:1498`) | Unrestricted flight over all terrain | Dismount blocked in lava (`event(32)`), at speed (`event(33)`), or on impassable terrain (`fmain.c:1421-1422`) |
+
+**Key interactions**:
+- All carriers suppress random encounters (`fmain.c:2081`)
+- All doors are blocked while mounted (`fmain.c:1901`)
+- Cannot talk to NPCs while riding swan/bird (`riding==11`, `fmain.c:2338`)
+- Freeze spell blocked when `riding > 1` (`fmain.c:3308`)
+- After combat, the turtle auto-resumes if turtle eggs are visible (`fmain2.c:274`)
+- Carrier and enemy shapes share memory — loading one unloads the other (`fmain.c:2730, 2791`)
+
+Source: `load_carrier()` — `fmain.c:2784-2802`. Extent zones — `fmain.c:2680-2720`.
+
+### 2.5 Magic Items
+
+Seven magic items (`stuff[9]`–`stuff[15]`) provide tactical advantages. All require weapon slot selection and are consumed on use via the MAGIC menu (`fmain.c:3301-3324`).
+
+| Item | stuff[] | Effect | Source |
+|------|---------|--------|--------|
+| Blue Stone | stuff[9] | Teleport to Great Stone Ring (sector 144) | `fmain.c:3312` |
+| Green Jewel | stuff[10] | Teleport to last-visited inn | `fmain.c:3315` |
+| Gold Ring | stuff[11] | Freeze all enemies on screen | `fmain.c:3308` — blocked when `riding > 1` |
+| Crystal Orb | stuff[12] | Start `secret_timer` — reveals hidden objects (`ob_stat == 5`) | `fmain.c:3310` |
+| Vial | stuff[13] | Full heal: vitality = `15 + brave/4` | `fmain.c:3319` |
+| Jade Skull | stuff[14] | Kill all enemies on screen | `fmain.c:3321` |
+| Red Gem | stuff[15] | *(Listed in `inv_list` but no effect code found)* | — |
+
+> **Note**: The Crystal Orb (`stuff[12]`) is uniquely valuable — it reveals hidden ground objects by setting `secret_timer`, which cycles `ob_stat` between 5 and 6 (visible/hidden) each frame. Objects with `ob_stat == 5` have their `race` temporarily set to 0, making them pickable.
 
 ---
 
-## 13. Carrier Interactions
+## 3. NPC Dialogue Trees
 
-The game has four carrier types spawned via extent zones (etype 70). Each is loaded into `anim_list[3]` by `load_carrier()`. The carrier file IDs are: **5** (turtle), **10** (dragon), **11** (bird/swan).
+All NPC speech is dispatched through `do_option()` — `fmain.c:3367-3422`. The Talk submenu offers three functionally identical options (Yell/Say/Ask) defined at `fmain.c:497`. The target NPC is identified by `race & 0x7f` for setfig types. See [RESEARCH.md §13](RESEARCH.md#13-npc-dialogue--quests).
 
-**Source:** `fmain.c:1496-1547`, `fmain.c:2784-2802`, `fmain.c:339-341`
+### 3.1 Wizard
 
-### 13.1 Raft (actor_file 1, anim_list slot 1)
+Wizards appear in multiple locations with different `goal` values (set from their object list position — `fmain2.c:1275`). Each goal produces a unique hint.
 
-The raft is a permanent fixture in slot 1. It follows water terrain and the hero can board it when nearby.
+```mermaid
+flowchart TD
+    TALK_WIZ[Talk to Wizard] --> KIND_CHECK{kind >= 10?}
+    KIND_CHECK -->|No| RUDE["speak(35): Away with you, ruffian!"]
+    KIND_CHECK -->|Yes| GOAL_SWITCH{Wizard goal value}
+    GOAL_SWITCH -->|0| S27["speak(27): Kind deeds gain a friend from the sea"]
+    GOAL_SWITCH -->|1| S28["speak(28): Seek the place darker than night"]
+    GOAL_SWITCH -->|2| S29["speak(29): Crystal Orb helps find concealed things"]
+    GOAL_SWITCH -->|3| S30["speak(30): Witch lives in dim forest of Grimwood"]
+    GOAL_SWITCH -->|4| S31["speak(31): Only light of the Sun destroys Witch's Evil"]
+    GOAL_SWITCH -->|5| S32["speak(32): Maiden imprisoned in unreachable castle"]
+    GOAL_SWITCH -->|6| S33["speak(33): Tame the golden beast"]
+    GOAL_SWITCH -->|7| S34["speak(34): Just what I needed!"]
+```
+
+Source: `fmain.c:3380-3381`. Kindness threshold: `kind < 10` → `speak(35)`.
+
+### 3.2 Priest
+
+The priest has a three-stage progression based on quest items and stats.
+
+```mermaid
+flowchart TD
+    TALK_PRIEST[Talk to Priest] --> HAS_WRIT{stuff 28 Writ?}
+    HAS_WRIT -->|Yes| ALREADY_GIVEN{ob_listg 10 .ob_stat?}
+    ALREADY_GIVEN -->|0 first time| S39["speak(39): Here is a golden statue<br>Sets ob_listg[10].ob_stat = 1"]
+    ALREADY_GIVEN -->|1 already given| S19["speak(19): Already gave the statue"]
+    HAS_WRIT -->|No| KIND_CHECK2{kind >= 10?}
+    KIND_CHECK2 -->|No| S40["speak(40): Repent, Sinner!"]
+    KIND_CHECK2 -->|Yes| ROTATE{daynight % 3}
+    ROTATE -->|0| S36["speak(36): Seek enemy on spirit plane<br>+ Vitality restored"]
+    ROTATE -->|1| S37["speak(37): Seek power of the Stones<br>+ Vitality restored"]
+    ROTATE -->|2| S38["speak(38): I shall Heal all your wounds<br>+ Vitality restored"]
+```
+
+Source: `fmain.c:3382-3394`. The vitality restoration (`15 + brave/4`) occurs on **every** visit when `kind >= 10` and no Writ — the rotating message (`daynight % 3`) selects only the speech text, not whether healing occurs. All three speeches (36, 37, 38) are followed by the heal.
+
+### 3.3 King
+
+```mermaid
+flowchart TD
+    TALK_KING[Talk to King] --> PRINCESS_FLAG{ob_list8 9 .ob_stat set?}
+    PRINCESS_FLAG -->|Yes| S17["speak(17): I cannot help you, young man"]
+    PRINCESS_FLAG -->|No| SILENT[No dialogue]
+```
+
+Source: `fmain.c:3398`. The King's main role is post-rescue: after `rescue()` fires, he gives the Writ via `speak(18)` — `fmain2.c:1599`.
+
+### 3.4 Sorceress
+
+```mermaid
+flowchart TD
+    TALK_SORC[Talk to Sorceress] --> FIRST_VISIT{ob_listg 9 .ob_stat == 0?}
+    FIRST_VISIT -->|Yes first visit| S45["speak(45): Welcome. Here is a golden figurine<br>Sets ob_listg[9].ob_stat = 1"]
+    FIRST_VISIT -->|No already visited| LUCK_BOOST["Silent luck boost:<br>if luck < rand64 then luck += 5"]
+```
+
+Source: `fmain.c:3400-3405`. On first visit, the sorceress gives a Gold Statue and speaks. On return visits, no speech plays but `luck` silently increases by 5 (if `luck < rand64()`) — a hidden mechanical reward for revisiting.
+
+### 3.5 Bartender
+
+```mermaid
+flowchart TD
+    TALK_BAR[Talk to Bartender] --> FATIGUE_CHECK{fatigue < 5?}
+    FATIGUE_CHECK -->|Yes rested| S13["speak(13): Good Morning"]
+    FATIGUE_CHECK -->|No| TIME_CHECK{dayperiod > 7?}
+    TIME_CHECK -->|Yes late| S12["speak(12): Buy something, or need lodging?"]
+    TIME_CHECK -->|No| S14["speak(14): Have a drink!"]
+```
+
+Source: `fmain.c:3405-3407`. Bartenders (race `0x88`) also serve as shopkeepers — see BUY menu in [RESEARCH.md §18](RESEARCH.md#18-menu-system).
+
+### 3.6 Witch
+
+```mermaid
+flowchart TD
+    TALK_WITCH[Talk to Witch] --> S46["speak(46): Look into my eyes and Die!!"]
+    PROXIMITY[Proximity auto-speak] --> S46
+    ATTACK[Attack Witch] --> HAS_SUN{stuff 7 Sun Stone?}
+    HAS_SUN -->|No| S58["speak(58): Can't hurt me with that!"]
+    HAS_SUN -->|Yes| DAMAGE[Normal damage applies]
+    USE_SUN[USE Sun Stone with witchflag] --> S60["speak(60): Sunstone made witch vulnerable!"]
+```
+
+Source: Talk — `fmain.c:3408`. Auto-speak — `fmain.c:2099`. Combat immunity — `fmain2.c:231-233`. Sun Stone USE — `fmain.c:3462`.
+
+### 3.7 Spectre
+
+```mermaid
+flowchart TD
+    TALK_SPECTRE[Talk to Spectre] --> S47["speak(47): HE has usurped my place...<br>Bring me bones of the ancient King"]
+    GIVE_BONE[Give Bone to Spectre] --> S48["speak(48): Take this crystal shard<br>stuff 29 cleared, object 140 dropped"]
+    GIVE_OTHER[Give Bone to non-Spectre] --> S21["speak(21): Sorry, no use for it"]
+```
+
+Source: Talk — `fmain.c:3409`. Give Bone — `fmain.c:3501-3503`. The Spectre only appears at night (`lightlevel < 40` → `ob_listg[5].ob_stat = 3` — `fmain.c:2027-2028`).
+
+### 3.8 Ghost (Dead Brother)
+
+```mermaid
+flowchart TD
+    TALK_GHOST[Talk to Ghost] --> S49["speak(49): I am the ghost of your dead brother.<br>Find my bones..."]
+```
+
+Source: `fmain.c:3410`. Ghosts appear after a brother dies — `ob_listg[brother+2].ob_stat = 3` — `fmain.c:2841`. Finding and picking up the dead brother's bones merges their inventory into the current brother's — `fmain.c:3173-3177`.
+
+### 3.9 Noble, Guard, Princess
+
+| NPC | Race | Speech | Condition | Source |
+|-----|------|--------|-----------|--------|
+| Noble | 0x86 | `speak(20)`: "If you could rescue the king's daughter..." | Always | `fmain.c:3396` |
+| Guard | 0x82/0x83 | `speak(15)`: "State your business!" | Always | `fmain.c:3394` |
+| Princess | 0x84 | `speak(16)`: "Please, sir, rescue me..." | `ob_list8[9].ob_stat` set | `fmain.c:3397` |
+
+Princess auto-speaks on proximity when captured — `fmain.c:2099`.
+
+### 3.10 Beggar
+
+```mermaid
+flowchart TD
+    TALK_BEGGAR[Talk to Beggar] --> S23["speak(23): Alms! Alms for the poor!"]
+    PROXIMITY[Proximity auto-speak] --> S23
+    GIVE_GOLD[Give Gold to Beggar] --> GOAL{Beggar goal value}
+    GOAL -->|0| S24["speak(24): Seek two women, one Good, one Evil"]
+    GOAL -->|1| S25["speak(25): Jewels, glint in the night - gift of Sight"]
+    GOAL -->|2| S26["speak(26): Where is the hidden city?"]
+```
+
+Source: Talk — `fmain.c:3414`. Auto-speak — `fmain.c:2097`. Give Gold — `fmain.c:3498`. Giving gold (costs 2 `wealth`) may also increase `kind` stat — `fmain.c:3496`.
+
+> **Bug**: The beggar at `ob_list3[3]` (region 3, near Great Bog) has `goal=3`, which overflows the 3 beggar speeches (24–26) and reads `speak(27)` — the first wizard hint text ("Kind deeds could gain thee a friend from the sea"). Only goals 0–2 produce intended beggar dialogue.
+
+### 3.11 Ranger
+
+```mermaid
+flowchart TD
+    TALK_RANGER[Talk to Ranger] --> REGION{region_num == 2?}
+    REGION -->|Yes swamp| S22["speak(22): Dragon's cave is directly north"]
+    REGION -->|No| GOAL{Ranger goal value}
+    GOAL -->|0| S53["speak(53): Dragon's cave is east"]
+    GOAL -->|1| S54["speak(54): Dragon's cave is west"]
+    GOAL -->|2| S55["speak(55): Dragon's cave is south"]
+```
+
+Source: `fmain.c:3411-3413`. Rangers only appear in ob_list0 (snow, 3 rangers) and ob_list2 (swamp, 1 ranger).
+
+### 3.12 Turtle
+
+```mermaid
+flowchart TD
+    TALK_TURTLE[Talk to Turtle<br>active_carrier == 5] --> HAS_SHELL{stuff 6 Sea Shell?}
+    HAS_SHELL -->|No| S56["speak(56): Thank you for saving my eggs!<br>Gives Sea Shell: stuff 6 = 1"]
+    HAS_SHELL -->|Yes| S57["speak(57): Hop on my back for a ride"]
+```
+
+Source: `fmain.c:3418-3421`. The Turtle carrier (extent idx 1) starts at coordinates (0,0,0,0) — initially unreachable. It must be repositioned via `move_extent()`.
+
+### 3.13 DreamKnight & Necromancer (Auto-Speak Only)
+
+| NPC | Race | Auto-Speak | On Death | Source |
+|-----|------|------------|----------|--------|
+| DreamKnight | 7 | `speak(41)`: "None may enter the sacred shrine..." | `speak(42)`: "Your prowess in battle is great. You have earned the right to enter..." | `fmain.c:2101`, `fmain.c:2775` |
+| Necromancer | 9 | `speak(43)`: "So this is the so-called Hero..." | Transforms to Woodcutter (race 10), drops Talisman | `fmain.c:2100`, `fmain.c:1751-1756` |
+
+### 3.14 Enemy Speech
+
+When the player talks to enemies, the speech index equals the enemy's `race` value — `fmain.c:3422`:
+
+| Race | Enemy | Speech |
+|------|-------|--------|
+| 0 | Ogre | `speak(0)`: "A guttural snarl was the only reply." |
+| 1 | Orc | `speak(1)`: "Human must die!" |
+| 2 | Wraith | `speak(2)`: "Doom!" |
+| 3 | Skeleton | `speak(3)`: "A clattering of bones" |
+| 4 | Snake | `speak(4)`: "A waste of time to talk to a snake" |
+| 5 | Salamander | `speak(5)`: "..." |
+| 6 | Spider | `speak(6)`: "There was no reply." |
+| 7 | DKnight | `speak(7)`: "Die, foolish mortal!" |
+
+**Note**: The `narr.asm` comments label speak(6) as "loraii" and speak(7) as "necromancer", reflecting an earlier race table before Spider (6) and DKnight (7) were inserted. Loraii (race 8) and Necromancer (race 9) have special auto-speak handlers (`speak(43)` for Necromancer on extent entry) that preempt the generic talk handler, so the misaligned speeches at indices 8–9 are never heard in normal gameplay.
+
+---
+
+## 4. Brother Succession Narrative
+
+When a brother dies, the fairy rescue system determines the outcome based on the `luck` stat. This is a deterministic system with no random element: if `luck >= 1` after the death penalty (`luck -= 5`), the fairy always rescues the brother. If `luck < 1`, the brother is permanently lost and the next brother takes over. Each brother's luck is a finite resource — Julian and Kevin can survive 3 deaths, Phillip can survive 6 (from starting stats alone). See [RESEARCH.md §15](RESEARCH.md#15-brother-succession).
+
+### 4.1 Succession State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Julian_Active : Game Start / revive(TRUE)<br>placard_text(0)
+
+    Julian_Active --> Julian_Dead : vitality < 1<br>luck < 1 after penalty
+    Julian_Active --> Julian_Active : vitality < 1<br>luck >= 1<br>Fairy rescues
+
+    Julian_Dead --> Phillip_Active : revive(TRUE)<br>placard_text(1), placard_text(2)<br>"Julian's luck ran out"
+
+    Phillip_Active --> Phillip_Dead : vitality < 1<br>luck < 1 after penalty
+    Phillip_Active --> Phillip_Active : vitality < 1<br>luck >= 1<br>Fairy rescues
+
+    Phillip_Dead --> Kevin_Active : revive(TRUE)<br>placard_text(3), placard_text(4)<br>"Phillip's cleverness could not save him"
+
+    Kevin_Active --> Kevin_Dead : vitality < 1<br>luck < 1 after penalty
+    Kevin_Active --> Kevin_Active : vitality < 1<br>luck >= 1<br>Fairy rescues
+
+    Kevin_Dead --> Game_Over : placard_text(5)<br>"Stay at Home!"<br>quitflag = TRUE
+```
+
+### 4.2 Placard Text Sequence
+
+The `brother` variable (`fmain.c:567`) controls which placard text displays during `revive(TRUE)` — `fmain.c:2857-2872`:
+
+| brother (after ++) | Placard | Text Summary |
+|--------------------|---------|-------------|
+| 1 (Julian starts) | `placard_text(0)` | *"Rescue the Talisman!" was the Mayor's plea... Julian set out on his quest.* |
+| 2 (Phillip starts) | `placard_text(1)` then `placard_text(2)` | *Julian's luck had run out... So Phillip set out, determined to find his brother.* |
+| 3 (Kevin starts) | `placard_text(3)` then `placard_text(4)` | *Phillip's cleverness could not save him... Kevin took up the quest, risking all.* |
+| >3 (Game Over) | `placard_text(5)` | *"And so ends our sad tale. The Lesson of the Story: Stay at Home!"* |
+
+Source: Placard text content in `narr.asm:252-302`.
+
+### 4.3 Journey Start Messages
+
+After the placard, each brother gets a contextual start message — `fmain.c:2885-2892`:
+
+| Brother | Event Messages |
+|---------|---------------|
+| Julian | `event(9)`: *"% started the journey in his home village of Tambry."* |
+| Phillip | `event(9)` + `event(10)`: *"...as had his brother before him."* |
+| Kevin | `event(9)` + `event(11)`: *"...as had his brothers before him."* |
+
+### 4.4 What Carries Over Between Brothers
+
+| Persists | Resets |
+|----------|--------|
+| Princess counter (`princess`) | Stats loaded fresh from `blist[]` |
+| Quest flags (`ob_listg`, `ob_list8` entries) | Inventory cleared (gets only a Dirk) |
+| Princess rescued flag reset to 3 (`ob_list8[9].ob_stat = 3`) | Position resets to Tambry (19036, 15755) |
+| Dead brother bones + ghost placed in world | Hunger, fatigue reset to 0 |
+
+Source: `revive()` — `fmain.c:2814-2911`. Inventory clear at `fmain.c:2849-2850`. Ghost placement at `fmain.c:2837-2841`.
+
+### 4.5 Recovering a Dead Brother's Items
+
+When a living brother picks up the bones (ob_id 28) of a dead brother — `fmain.c:3173-3177`:
+
+1. Both ghost setfigs are removed: `ob_listg[3].ob_stat = ob_listg[4].ob_stat = 0`
+2. The dead brother's entire inventory (31 item slots) is merged into the current brother's inventory
+3. Ghost dialogue before pickup: `speak(49)` — *"I am the ghost of your dead brother. Find my bones..."*
+
+---
+
+## 5. NPC Interactions
+
+### 5.1 Wizard Interaction Flow
 
 ```mermaid
 sequenceDiagram
     participant Hero
-    participant Raft as Raft (slot 1)
-    participant Prox as Proximity Check
-    participant Water as Water Terrain
+    participant Wizard
 
-    Hero->>Prox: Calculate distance to raft (slot 1)
-    Note over Prox: xstart = hero_x - raft_x - 4<br/>ystart = hero_y - raft_y - 4
-    Prox->>Prox: Within 16px? -> raftprox = 1
-    Prox->>Prox: Within 9px? -> raftprox = 2
+    Hero->>Wizard: Talk (Say/Ask/Yell)
 
-    alt raftprox == 2 AND wcarry == 1 (no active carrier)
-        Hero->>Raft: Auto-attach
-        Note over Raft: riding = 5<br/>Hero snaps to raft position<br/>dex = facing * 2 + walk cycle
-        Raft->>Water: Move along water tiles (px_to_im == 5)
-        Note over Water: Try current direction first<br/>Then try direction+1, direction-2, direction-1<br/>Seeking water tiles (terrain type 5)
-    else Not close enough
-        Raft->>Raft: Continue drifting on water
-        Note over Raft: riding = FALSE
+    alt kind < 10
+        Wizard->>Hero: speak(35) "Away with you, ruffian!"
+    else kind >= 10
+        Note over Wizard: speak(27 + goal)<br>Goal set by object list position
+        Wizard->>Hero: Hint based on goal (0-7)
     end
 ```
 
-### 13.2 Turtle (actor_file 5, extent index 1)
+**Wizard locations and hints**:
 
-The turtle spawns via extent zone and can be ridden after obtaining the sea shell by killing snakes near turtle eggs and talking to the turtle.
+| Region | Object List | Goal | Hint Topic |
+|--------|------------|------|------------|
+| Swamp (region 2) | ob_list2[0] | 0 | Sea friend (Turtle) |
+| Swamp (region 2) | ob_list2[1] | 1 | Place darker than night |
+| Tambry (region 3) | ob_list3[2] | 2 | Crystal Orb reveals secrets |
+| Farm/City (region 5) | ob_list5[3] | 3 | Witch in Grimwood |
+| Farm/City (region 5) | ob_list5[4] | 4 | Sun destroys Witch |
+| Indoors (region 8) | ob_list8[5] | 5 | Princess in unreachable castle |
+| Indoors (region 8) | ob_list8[6] | 6 | Tame the golden beast (Swan) |
+| Underground (region 9) | ob_list9[6] | 6 | Tame the golden beast (Swan) — same hint as region 8 wizard |
 
-```mermaid
-sequenceDiagram
-    participant Hero
-    participant Extent as Turtle Extent Zone
-    participant Eggs as Turtle Eggs (extent 5)
-    participant Snakes as Snake Encounter
-    participant Turtle
-    participant Shell as Sea Shell
-
-    Note over Extent: Extent index 1: etype 70, v3=5
-    Hero->>Extent: Enter turtle extent zone
-    Extent->>Turtle: load_carrier(5) if not already active
-    Note over Turtle: Position at extent origin + (250, 200)<br/>type = CARRIER, vitality = 50
-
-    Note over Hero: Separately, near turtle eggs extent:
-    Hero->>Eggs: Enter turtle eggs extent (index 5)
-    Note over Eggs: etype 61, v1=3, v2=2, v3=4 (snakes)
-    Eggs->>Snakes: Force spawn 3+rnd(2) snakes
-    Hero->>Snakes: Kill all snakes
-    Snakes->>Hero: aftermath() detects turtle_eggs flag
-    Hero->>Turtle: get_turtle() spawns turtle at water location
-
-    Hero->>Turtle: TALK to turtle (active_carrier == 5)
-    alt Has sea shell (stuff[6] != 0)
-        Turtle-->>Hero: speak(57) - already have shell
-    else No sea shell
-        Turtle->>Shell: stuff[6] = 1, speak(56)
-    end
-
-    Hero->>Turtle: Approach within 9px (raftprox == 2)
-    Note over Turtle: wcarry = 3 (carrier slot)<br/>AND stuff[5] (golden lasso) required
-    Turtle->>Hero: riding = 11, hero snaps to turtle position
-    Note over Hero: Turtle uses bird-style riding (actor_file 11 check)<br/>Hero environ set to -2 (above water)
-```
-
-### 13.3 Bird / Swan (actor_file 11, extent index 0)
-
-The bird is the primary flying carrier. After defeating the witch and obtaining the golden lasso, the hero can ride it across the map.
+### 5.2 Priest Interaction Flow
 
 ```mermaid
 sequenceDiagram
     participant Hero
-    participant Extent as Bird Extent Zone
-    participant Bird as Bird/Swan (slot 3)
-    participant Physics as Velocity Physics
+    participant Priest
 
-    Note over Extent: Extent index 0: (2118,27237)-(2618,27637)<br/>etype 70, v3=11
-    Hero->>Extent: Enter bird extent zone
-    Extent->>Bird: load_carrier(11)
-    Note over Bird: type = CARRIER, vitality = 50<br/>Position at extent origin + (250, 200)
+    Hero->>Priest: Talk
 
-    Hero->>Bird: Approach within 9px (raftprox == 2)
-    Note over Hero: Requires: wcarry == 3 (carrier active)<br/>AND stuff[5] (golden lasso)
-    Bird->>Hero: riding = 11
-    Note over Hero: Hero snaps to bird position<br/>anim_list[0].environ = -2 (airborne)
-
-    loop Each tick while riding == 11
-        Hero->>Physics: Joystick input -> dif_x, dif_y
-        alt fiery_death zone active
-            Physics-->>Hero: event(32) - cannot fly here
-        else Low velocity (|dif_x| < 15 AND |dif_y| < 15)
-            Physics->>Physics: Check dismount: proxcheck at hero_y - 14
-            alt Clear ground below
-                Physics->>Hero: riding = 0, hero_y adjusted
-                Note over Hero: Dismount successful
-            else Blocked
-                Physics-->>Hero: Cannot dismount here
-            end
-        else Normal flight
-            Physics-->>Hero: event(33) - flying message
+    alt Has Writ (stuff[28])
+        alt First visit (ob_listg[10].ob_stat == 0)
+            Priest->>Hero: speak(39) "Here is a golden statue"
+            Note over Priest: ob_listg[10].ob_stat = 1
+        else Already given
+            Priest->>Hero: speak(19) "Already gave the statue"
+        end
+    else No Writ
+        alt kind < 10
+            Priest->>Hero: speak(40) "Repent, Sinner!"
+        else kind >= 10
+            Note over Priest: Rotating advice + heal
+            Priest->>Hero: speak(36/37/38) based on daynight%3
+            Note over Hero: vitality restored (all 3 speeches heal)
         end
     end
 ```
 
-### 13.4 Dragon (actor_file 10, extent index 2)
-
-The dragon is a hostile carrier that attacks with fireballs. It cannot be ridden -- it must be fought and killed.
+### 5.3 Spectre / Bone / Shard Exchange
 
 ```mermaid
 sequenceDiagram
     participant Hero
-    participant Extent as Dragon Extent Zone
-    participant Dragon as Dragon (slot 3)
-    participant Combat as Combat System
+    participant Spectre
 
-    Note over Extent: Extent index 2: (6749,34951)-(7249,35351)<br/>etype 70, v3=10
-    Hero->>Extent: Enter dragon extent zone
-    Extent->>Dragon: load_carrier(10)
-    Note over Dragon: type = DRAGON (not CARRIER)<br/>vitality = 50<br/>Position at extent origin + (250, 200)
+    Note over Spectre: Only visible at night<br>lightlevel < 40
 
-    loop Battle
-        Dragon->>Combat: Fireballs (missile attacks)
-        Note over Combat: Dragon immune to pushback<br/>(dohit skips move_figure for DRAGON type)
-        Hero->>Combat: Melee and missile attacks against dragon
-        Combat->>Dragon: Subtract damage from vitality
-    end
+    Hero->>Spectre: Talk
+    Spectre->>Hero: speak(47) "Bring me bones of the ancient King"
 
-    Combat->>Dragon: checkdead() when vitality reaches 0
-    Note over Dragon: Dragon enters DYING state<br/>brave++ for hero
+    Note over Hero: Find King's Bone<br>ob_list9[8] at (3723, 39340)
+
+    Hero->>Spectre: Give Bone
+    Spectre->>Hero: speak(48) "Take this crystal shard"
+    Note over Hero: stuff[29] = 0 (bone consumed)<br>Object 140 (shard) dropped
+    Note over Hero: stuff[30] = Crystal Shard<br>Passwall through terrain type 12
 ```
+
+### 5.4 Witch Combat Encounter
+
+```mermaid
+flowchart TD
+    APPROACH[Approach Witch] --> AUTO["Auto-speak(46):<br>Look into my eyes and Die!!"]
+    ATTACK[Attack Witch] --> WEAPON{Weapon type?}
+    WEAPON -->|"Melee (< bow)"| SUN{stuff 7 Sun Stone?}
+    SUN -->|No| IMMUNE["speak(58): Can't hurt me!<br>No damage"]
+    SUN -->|Yes| DAMAGE[Normal damage applies]
+    WEAPON -->|"Ranged (bow/wand)"| DAMAGE
+
+    USE_SUNSTONE[USE Sun Stone<br>when witchflag set] --> VULNERABLE["speak(60):<br>Sunstone made witch vulnerable!"]
+
+    WITCH_DIES[Witch dies] --> LASSO_DROP["Drops Golden Lasso<br>leave_item(i, 27)"]
+```
+
+Source: Combat immunity — `fmain2.c:231-233`. Lasso drop — `fmain.c:1756`. Sun Stone USE — `fmain.c:3462`.
+
+### 5.5 Necromancer Final Battle
+
+```mermaid
+flowchart TD
+    ENTER_ARENA[Enter Necromancer Extent<br>9563-10144, 33883-34462] --> SPAWN["Necromancer spawns<br>Race 9, 50 HP, Wand"]
+    SPAWN --> AUTO["Auto-speak(43):<br>So this is the so-called Hero..."]
+
+    MAGIC_ATTEMPT[Use Magic] --> BLOCKED["speak(59):<br>Your magic won't work here!"]
+
+    ATTACK[Attack Necromancer] --> WEAPON{Weapon type?}
+    WEAPON -->|"Melee (< bow)"| IMMUNE["speak(58): Can't hurt me!"]
+    WEAPON -->|"Bow or Wand"| DAMAGE[Damage dealt]
+
+    DAMAGE --> DEAD{vitality == 0?}
+    DEAD -->|No| ATTACK
+    DEAD -->|Yes| DYING["State: DYING<br>tactic counts down from 7"]
+    DYING --> TRANSFORM["race = 10 Woodcutter<br>vitality = 10<br>weapon = 0"]
+    TRANSFORM --> DROP_TALISMAN["leave_item(i, 139)<br>Talisman appears on ground"]
+```
+
+Source: Extent — `fmain.c:343`. Stats — `fmain.c:62`. Magic block — `fmain.c:3305`. Death handler — `fmain.c:1751-1756`.
+
+### 5.6 Dark Knight (Knight of Dreams)
+
+The DKnight is a unique fixed encounter guarding the elf glade, where the Sun Stone is located. Unlike other enemies, it does not use the tactic system — it stands still facing south at a hardcoded position, physically blocking passage. See [RESEARCH.md §9.8](RESEARCH.md#98-dark-knight-dknight).
+
+```mermaid
+flowchart TD
+    ENTER[Enter Hidden Valley<br>extent_list 15: etype 60, v3=7<br>fmain.c:360] --> SPAWN[DKnight spawns at fixed position<br>21635, 25762<br>fmain.c:2741]
+    SPAWN --> SPEAK41["speak(41): Ho there, young traveler!<br>None may enter the sacred shrine...<br>fmain.c:2101"]
+    SPEAK41 --> IDLE[DKnight stands STILL, facing south<br>Blocks passage to elf glade door<br>fmain.c:2168-2169]
+
+    IDLE --> APPROACH{Player within 16px?}
+    APPROACH -->|No| IDLE
+    APPROACH -->|Yes| FIGHT[DKnight enters FIGHTING state<br>Attacks with Sword<br>fmain.c:2162-2167]
+
+    FIGHT --> DEAD{DKnight vitality == 0?}
+    DEAD -->|No| FIGHT
+    DEAD -->|Yes| SPEAK42["speak(42): Your prowess in battle is great.<br>You have earned the right to enter...<br>fmain.c:2775"]
+    SPEAK42 --> BRAVE[brave++ bravery stat increment<br>fmain.c:2778]
+    BRAVE --> CLEAR[Path to doorlist 48 clear<br>Elf Glade: HSTONE door<br>fmain.c:288]
+    CLEAR --> SUNSTONE[Pick up Sun Stone inside<br>ob_list8 idx 18, stuff 7<br>fmain2.c:1092]
+```
+
+**DKnight combat stats**:
+
+| Stat | Value | Source |
+|------|-------|--------|
+| Hitpoints | 40 | `fmain.c:61` |
+| Weapon | Sword (3) | `fmain2.c:867` |
+| Goal | ATTACK2 (clever) | ATTACK1 + cleverness 1 |
+| Melee threshold | 16 (overridden from normal 12) | `fmain.c:2163` |
+| Aggressive | TRUE | `fmain.c:61` |
+| Treasure | None (group 0) | `fmain.c:61` |
+
+**Key behaviors**:
+- **No pursuit**: Outside melee range, the DKnight stands STILL facing south (direction 5) — it never chases the player (`fmain.c:2168-2169`). All other enemies use the tactic system when out of range.
+- **Extended engagement**: Normal ATTACK2 enemies engage at threshold 12 (14 − mode). The DKnight overrides this to 16, a 33% larger radius (`fmain.c:2163`).
+- **No flee**: The DKnight's race (7) matches extent v3 (7), so the flee condition at `fmain.c:2138-2140` is suppressed — it fights to the death.
+- **Respawns**: The DKnight spawns every time the player enters the hidden valley extent (`fmain.c:2687-2691`). No death flag is persisted.
+- **DOOR_SEEK/DOOR_LET unused**: `ftale.h:53-54` defines goal modes DOOR_SEEK (11) and DOOR_LET (12), but no code references them. The DKnight's door-blocking behavior is entirely hardcoded.
 
 ---
 
-## 14. Special Event Diagrams
+## 6. Location Map
 
-### 14.1 Stone Ring Teleport
+### 6.1 Outdoor Regions
 
-The Blue Stone (item 9) activates teleportation at stone ring locations. There are 11 stone rings mapped in `stone_list[]`. The hero's facing direction selects the destination ring.
+The world is divided into 8 outdoor regions (0–7) plus 2 indoor regions (8–9). The outdoor world is a **2×4 grid** computed from map coordinates: `x_col = ((map_x+151)>>14) & 1`, `y_row = ((map_y+64)>>13) & 7`, `region = x_col + y_row*2` — `fmain.c:2633-2637`.
 
-**Source:** `fmain.c:3327-3347`, `fmain.c:374-376`
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Sector: USE Blue Stone
-    Check_Sector --> Not_At_Ring: hero_sector != 144
-    Check_Sector --> Check_Center: hero_sector == 144
-
-    Check_Center --> Not_Centered: Position not at center tile
-    Check_Center --> Find_Ring: (hero_x & 255)/85 == 1<br/>AND (hero_y & 255)/64 == 1
-
-    Not_At_Ring --> [*]: Return without decrementing use count
-    Not_Centered --> [*]: Return without decrementing use count
-
-    Find_Ring --> Scan_List: Scan stone_list[0..10]
-    Scan_List --> No_Match: Hero coords not in any ring
-    Scan_List --> Match_Found: stone_list[i*2] == hero_x>>8<br/>AND stone_list[i*2+1] == hero_y>>8
-
-    No_Match --> [*]: No teleport
-
-    Match_Found --> Calculate_Dest: dest = i + facing + 1
-    Calculate_Dest --> Wrap_Index: if dest > 10 then dest -= 11
-    Wrap_Index --> Build_Coords: x = stone_list[dest*2] shl 8 + (hero_x AND 255)
-    Build_Coords --> Colorplay: colorplay() visual effect
-    Colorplay --> Teleport: xfer(x, y, TRUE)
-    Teleport --> Check_Riding: Carrier riding?
-    Check_Riding --> Move_Carrier: Yes carrier snaps to hero
-    Check_Riding --> Done: No
-    Move_Carrier --> Done
-    Done --> [*]: Decrement Blue Stone use count
+```
+          WEST (x=0)              EAST (x=1)
+       ┌─────────────────────┬─────────────────────┐
+ NORTH │  0 — Snow Land      │  1 — Witch Wood /   │
+ (y=0) │      (F1)           │      Maze Forest (F2)│
+       ├─────────────────────┼─────────────────────┤
+       │  2 — Swamp Land     │  3 — Plains /       │
+ (y=1) │      Great Bog (F3) │      Tambry (F4)    │
+       ├─────────────────────┼─────────────────────┤
+       │  4 — Desert /       │  5 — Bay / Marheim /│
+ (y=2) │      Azal (F5)      │      Farms (F6)     │
+       ├─────────────────────┼─────────────────────┤
+ SOUTH │  6 — Lava /         │  7 — Forest /       │
+ (y=3) │      Volcanic (F7)  │      Mountains (F8) │
+       └─────────────────────┴─────────────────────┘
+         Indoor regions (entered via doors):
+           8 — Building interiors (F9)
+           9 — Dungeons and caves (F10)
 ```
 
-### 14.2 Astral Plane Entry
+| Region | File | Description |
+|--------|------|-------------|
+| 0 | F1 | Snow land |
+| 1 | F2 | Witch wood / maze forest north |
+| 2 | F3 | Swamp land |
+| 3 | F4 | Plains / Tambry / manor |
+| 4 | F5 | Desert |
+| 5 | F6 | Bay / City of Marheim / farms |
+| 6 | F7 | Lava / volcanic |
+| 7 | F8 | Forest / wilderness / mountains |
+| 8 | F9 | Building interiors |
+| 9 | F10 | Dungeons and caves |
 
-The stargate door transitions the hero to region 9 (the astral plane), where Loraii enemies constantly replenish.
+Source: `file_index[]` — `fmain.c:615-625`. Region formula — `fmain.c:2633-2637`.
 
-**Source:** `fmain.c:254-255` (doorlist entries), `fmain.c:353` (extent)
+### 6.2 Named Outdoor Locations
 
-```mermaid
-stateDiagram-v2
-    [*] --> Stargate_Door: Hero on stargate tile<br/>(0x2960, 0x8760)
-    Stargate_Door --> Binary_Search: Door type = STAIR, secs=1
-    Binary_Search --> Calc_Dest: xc2 = 0x2B00, yc2 = 0x92C0
-    Calc_Dest --> Set_Region: new_region = 8 (secs == 1)
-    Set_Region --> Xfer_Call: xfer(xtest, ytest, FALSE)
-    Xfer_Call --> Load_Region: load_all() + gen_mini()
-    Load_Region --> Find_Place: find_place(2)
-    Find_Place --> Astral_Extent: Enter extent (0x2400,0x8200)-(0x3100,0x8A00)
-    Astral_Extent --> Spawn_Loraii: etype=52, encounter_type=8 (Loraii)
-    Spawn_Loraii --> Continuous_Combat: Loraii replenish (v1=3, v2=1)
-    Continuous_Combat --> Return_Gate: Hero finds return stargate
-    Return_Gate --> Reverse_Door: (0x2B00,0x92C0) -> (0x2960,0x8780)
-    Reverse_Door --> Outdoor: xfer to outdoor, secs=2 -> new_region=9
-    Outdoor --> [*]
-```
+From `_place_tbl` / `_place_msg` — `narr.asm:86-193`. Sector ranges determine which name displays when the hero enters.
 
-### 14.3 Graveyard (extent 7)
+| Sector Range | Location Name | Notable Features |
+|-------------|--------------|-----------------|
+| 51 | Small Keep | — |
+| 64–69 | Village of Tambry | Starting location for all brothers |
+| 70–73 | Vermillion Manor | — |
+| 80–95 | City of Marheim | King's castle, shops, guards |
+| 96–99 | Witch's Castle | Witch encounter; Sun Stone needed |
+| 138–139 | Graveyard | High danger (79.7% spawn rate) |
+| 144 | Great Stone Ring | Blue Stone teleport destination |
+| 147 | Watchtower | — |
+| 148 | Old Castle | — |
+| 159–162 | Hidden City of Azal | Requires 5 Gold Statues |
+| 163 | Outlying Fort | Desert region |
+| 164–167 | Crystal Palace | Blue Key doors |
+| 168 | Log Cabin | — |
+| 170 | Dark Stone Tower | — |
+| 171–174 | Citadel of Doom | Gateway to Spirit Plane (door 16, inside fiery_death zone) |
+| 176 | Pixle Grove | Troll cave entrance (door 64) |
+| 178 | Isolated Cabin | Swamp area |
+| 179 | Tombs of Hemsath | Stair to underground |
+| 180 | Forbidden Keep | — |
+| 208–221 | Great Bog | Swamp region |
+| 243 | Oasis | Desert; requires 5 statues |
+| 255 | Cave in Hillside | Dragon cave |
+| 185–254 | Burning Waste | Desert region (broad range) |
+| 78, 187–239 | Mountains of Frost | Region-dependent display logic |
 
-**Source:** `fmain.c:347` -- extent `(19596,17123)-(19974,17401)`, etype 48, v1=8, v2=8, v3=2 (wraith)
+> **Dead text**: `_place_msg[5]` = "Plain of Grief" (`narr.asm:171`) — defined but never referenced by any `_place_tbl` entry.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Enter_Graveyard: Hero enters graveyard extent zone
-    Enter_Graveyard --> Set_Xtype: xtype = 48
-    Set_Xtype --> Danger_Calc: danger_level = 2 + 48 = 50
-    Danger_Calc --> High_Spawn_Rate: rand64() <= 50 (78% chance)
-    High_Spawn_Rate --> Spawn_Wraiths: encounter_type forced to 2 (wraith)<br/>encounter_number = 8 + rnd(8)
-    Spawn_Wraiths --> Battle_Wraiths: Wraiths: 16 HP, arms=6,<br/>cleverness=1, treasure=4
-    Battle_Wraiths --> Aftermath_Check: aftermath() on battle end
-    Aftermath_Check --> More_Wraiths: Spawn continues while in zone
-    More_Wraiths --> Battle_Wraiths
-    Aftermath_Check --> Exit_Zone: Hero leaves extent
-    Exit_Zone --> [*]
-```
+### 6.3 Named Indoor Locations
 
-### 14.4 Spider Pit (extents 3, 17, 18)
+Complete indoor location table from `_inside_tbl` / `_inside_msg` — `narr.asm:117-154, 199-226`. Earlier entries take priority when sectors overlap.
 
-**Source:** `fmain.c:342,362,364` -- multiple spider extent zones, etype 53/8, v3=6 (spider)
+| Sector Range | Message | Notes |
+|-------------|---------|-------|
+| 2 | Small chamber | Dungeon |
+| 7 | Large chamber | Dungeon |
+| 4 | Long passageway | Dungeon |
+| 5–6 | Twisting tunnel | Dungeon |
+| 9–10 | Forked intersection | Dungeon |
+| 30 | Keep interior | Forbidden Keep |
+| 19–33, 101, 130–134 | Stone corridor | Dungeon passages; King's Bone at sec 132 |
+| 36 | Octagonal room | Gold Statue pickup |
+| 37–42 | Large room | Dungeon |
+| 46 | Final arena | Necromancer encounter (special message) |
+| 43–59, 100, 143–149 | Spirit Plane | Twisted maze with type-12 barriers |
+| 62 | Small building | Village |
+| 65–66 | Tavern | Village |
+| 60–78 | Building | Generic building (overridden by above) |
+| 82, 86–87, 92, 94–95 | Building | City buildings; sec 92 = priest |
+| 97–99 | Building | Witch's Castle indoor area |
+| 120, 116–119, 139–141 | Building | Desert buildings (fort + Azal) |
+| 79–96 | Castle of King Mar | Overridden by above for 82+ |
+| 104 | Inn | Wayside inn |
+| 114 | Crypt | Tomb interior (Spectre quest) |
+| 105–115 | Castle | Generic castle; includes Seahold (115) |
+| 135–138 | Castle | Doom tower (Citadel interior) |
+| 125 | Cabin | Cabin interior |
+| 127 | Sanctuary of the temple | Elf Glade (Sun Stone) |
+| 142 | Unlocked and entered | Lighthouse |
+| 121–129 | Unlocked and entered | Generic door; sec 129 = princess rescue room |
+| 150–161 | Stone maze | Underground labyrinth |
 
-```mermaid
-stateDiagram-v2
-    [*] --> Enter_Spider_Zone: Hero enters spider extent
-    Enter_Spider_Zone --> Check_Etype: etype = 53 or 8?
+### 6.4 Door Connections
 
-    Check_Etype --> Forced_Spawn: etype 53 (spider pit)
-    Forced_Spawn --> Set_Encounter: encounter_type = 6 (spider)<br/>mixflag = 0, wt = 0
-    Set_Encounter --> Load_Immediate: load_actors() + prep(ENEMY)<br/>actors_loading = FALSE (instant)
-    Load_Immediate --> Place_4_Spiders: encounter_number = v1 (4)
-    Place_4_Spiders --> Battle_Spiders: Spiders: 10 HP, arms=6,<br/>cleverness=1
+The doorlist (`fmain.c:240-325`, `DOORCOUNT = 86`) maps outdoor coordinates to indoor coordinates. See [RESEARCH.md §12](RESEARCH.md#12-door-system) for the full door system.
 
-    Check_Etype --> Normal_Spawn: etype 8 (spider region)
-    Normal_Spawn --> Danger_Check: danger_level = 2 + 8 = 10
-    Danger_Check --> Roll_Encounter: Standard encounter roll
-    Roll_Encounter --> Spider_Battle: Spiders spawn normally
+**Key quest-relevant connections**:
 
-    Battle_Spiders --> [*]
-    Spider_Battle --> [*]
-```
+| Door | Outdoor (secs) | Type | Notable |
+|------|---------------|------|---------|
+| Dragon Cave (idx 4) | CAVE → region 9 | Dungeon | Dragon carrier inside |
+| Crystal Palace (idx 21-22) | CRYST → region 8 | Blue Key required | Two entries |
+| Main Castle (idx 50) | MARBLE → region 8 | King Mar's castle | White Key |
+| Witch's Castle (idx 79) | BLACK → region 8 | Witch encounter area |
+| Unreachable Castle (idx 67) | STAIR → region 8 | Princess rescue location |
+| Tombs (idx 20) | STAIR → region 9 | Underground dungeon |
+| Spider Exit (idx 70) | CAVE → region 9 | Spider pit area |
+| Citadel of Doom (idx 16) | STAIR → region 8 | Doom castle interior (sec 135–138) |
+| Stargate (idx 14-15) | STAIR bidirectional | Portal: Doom castle ↔ Spirit Plane |
+| Village (idx 31-39) | VWOOD/HWOOD → region 8 | 9 village doors |
+| City (idx 50-61) | Various → region 8 | 12 city doors |
+| Cabins (10 pairs) | VLOG/LOG → region 8 | Each cabin has yard + door |
+| Desert Oasis (idx 7-11) | DESERT → region 8 | Hidden city of Azal buildings |
 
-### 14.5 Hidden Valley (extent 15)
+**Desert gate**: All 5 oasis doors (type DESERT) require `stuff[25] >= 5` (Gold Statues) — `fmain.c:1919`.
 
-**Source:** `fmain.c:360` -- `(21405,25583)-(21827,26028)`, etype 60, v1=1, v2=1, v3=7 (dark knight)
+**Riding restriction**: All doors are blocked while mounted (`if (riding) goto nodoor3` — `fmain.c:1901`).
 
-```mermaid
-stateDiagram-v2
-    [*] --> Enter_Valley: Hero enters hidden valley extent
-    Enter_Valley --> Special_Figure: etype = 60 (special figure)
-    Special_Figure --> Check_Presence: anim_list[3].race != 7 or anix < 4?
-    Check_Presence --> Force_DKnight: Yes spawn dark knight
-    Force_DKnight --> Set_Position: Fixed position (21635, 25762)
-    Set_Position --> DKnight_Stats: Dark Knight: 40 HP, arms=7,<br/>cleverness=1, race=7
-    DKnight_Stats --> Special_Behavior: thresh = 16 (extended melee range)<br/>State = STILL, facing = 5<br/>Does not pursue, stands ground
-    Special_Behavior --> Battle: Hero engages dark knight
-    Battle --> Victory: speak(42) on death
-    Check_Presence --> Already_Present: No already spawned
-    Already_Present --> [*]
-    Victory --> [*]
-```
+### 6.5 Peace Zones
 
-### 14.6 Fiery Death Zone
+Certain areas prevent random encounters and/or weapon use. See [RESEARCH.md §9](RESEARCH.md#9-encounter--spawning).
 
-**Source:** `fmain.c:1384-1385`, `fmain.c:1843-1848`
-
-```mermaid
-stateDiagram-v2
-    [*] --> Check_Bounds: Every tick check map coordinates
-    Check_Bounds --> Not_Fiery: map_x <= 8802 OR map_x >= 13562<br/>OR map_y <= 24744 OR map_y >= 29544
-    Check_Bounds --> Fiery_Active: map_x 8802 to 13562<br/>AND map_y 24744 to 29544
-
-    Not_Fiery --> [*]
-    Fiery_Active --> Check_Each_Actor: For each actor i=0..anix
-
-    Check_Each_Actor --> Hero_Check: i == 0 (hero)
-    Check_Each_Actor --> NPC_Check: i > 0 (enemy/NPC)
-
-    Hero_Check --> Has_Fruit: stuff[23] (fruit) > 0?
-    Has_Fruit --> Immune: Yes environ forced to 0
-    Has_Fruit --> Apply_Damage: No check environ level
-
-    NPC_Check --> Apply_Damage
-
-    Apply_Damage --> Instant_Death: environ > 15
-    Apply_Damage --> Gradual_Damage: environ > 2
-    Apply_Damage --> Safe_For_Now: environ <= 2
-
-    Instant_Death --> Set_Zero_HP: vitality = 0
-    Set_Zero_HP --> Check_Dead: checkdead(i, 27)
-    Gradual_Damage --> Lose_1_HP: vitality-- each tick
-    Lose_1_HP --> Check_Dead
-    Safe_For_Now --> [*]
-
-    Immune --> [*]
-    Check_Dead --> [*]
-```
+| Extent Idx | etype | Location | Effect |
+|-----------|-------|----------|--------|
+| 8 | 80 | Around city | No encounters |
+| 10 | 81 | King's castle grounds | No encounters + no weapon draw (`event(15)`) |
+| 11 | 82 | Sorceress area | No encounters + no weapon draw (`event(16)`) |
+| 12-14 | 80 | Buildings / cabins / specials | No encounters |
+| 19 | 80 | Village of Tambry | No encounters |
 
 ---
 
-## 15. Day/Night Cycle and Shopping
+## 7. Event Sequences
 
-### 15.1 Day/Night Cycle
+### 7.1 Fairy Rescue on Death
 
-The `daynight` counter runs from 0 to 23999 (one full day). The `lightlevel` is computed from `daynight` to create a parabolic brightness curve. Period changes trigger atmospheric event messages.
-
-**Source:** `fmain.c:2011-2039`, `fmain.c:1867-1889`
-
-```mermaid
-sequenceDiagram
-    participant Timer as daynight Counter
-    participant Light as Light System
-    participant Period as Period Events
-    participant Sleep as Sleep System
-    participant Regen as Health Regen
-
-    Note over Timer: daynight increments each tick<br/>Wraps at 24000 -> 0<br/>Skipped during freeze_timer
-
-    Timer->>Light: lightlevel = daynight / 40
-    Light->>Light: if lightlevel >= 300: lightlevel = 600 - lightlevel
-    Note over Light: Creates parabolic curve:<br/>Dawn/dusk = low light<br/>Midday = peak light (300)<br/>Night = near 0
-    Light->>Light: if lightlevel < 40: torches visible (ob_stat=3)
-    Light->>Light: day_fade() adjusts palette colors
-
-    Timer->>Period: period = daynight / 2000
-    Note over Period: 0-11 periods in a full day
-    alt period changed from previous
-        Period-->>Period: period 0: event(28) - midnight message
-        Period-->>Period: period 4: event(29) - dawn message
-        Period-->>Period: period 6: event(30) - midday message
-        Period-->>Period: period 9: event(31) - dusk message
-    end
-
-    Note over Regen: Every 1024 ticks (daynight & 0x3FF == 0)
-    Timer->>Regen: Check health regen
-    Regen->>Regen: if vitality < max (15 + brave/4) AND hero alive
-    Regen-->>Regen: vitality++
-
-    Note over Sleep: Indoor bed detection (region == 8)
-    Sleep->>Sleep: Check tile at hero position
-    Note over Sleep: Bed tiles: 161, 52, 162, 53
-    Sleep->>Sleep: Hero standing still on bed?
-    Sleep->>Sleep: sleepwait++ each tick on bed
-    alt sleepwait reaches 30
-        alt fatigue < 50
-            Sleep-->>Sleep: event(25) - "not tired enough"
-        else fatigue >= 50
-            Sleep->>Sleep: event(26) - hero falls asleep
-            Sleep->>Sleep: state = SLEEP
-            Note over Sleep: While SLEEP state:<br/>daynight += 63 per tick (fast forward)<br/>fatigue-- each tick
-        end
-    end
-
-    Note over Sleep: Wake conditions (any triggers wake)
-    Sleep->>Sleep: fatigue reaches 0
-    Sleep->>Sleep: fatigue < 30 AND daynight in 9000-10000 (morning)
-    Sleep->>Sleep: battleflag AND rand64() == 0 (combat interruption)
-    Sleep-->>Sleep: state = STILL, hero_y aligned to grid
-```
-
-### 15.2 Shopping System
-
-The BUY menu is available when near a bartender (race 0x88). Items and prices are defined in the `jtrans[]` table as pairs of (item_index, cost).
-
-**Source:** `fmain.c:3424-3443`, `fmain2.c:850`
+The fairy rescue system is **deterministic**: if the hero has luck ≥ 1 after the death penalty, the fairy always appears. There is no random element — and since luck cannot change during the DEAD state, the outcome is fixed the moment the hero dies. The system uses the `goodfairy` counter (unsigned char, starts at 0) which counts down when the hero is in DEAD or FALL state. See [RESEARCH.md §7.9](RESEARCH.md#79-good-fairy--brother-succession).
 
 ```mermaid
 sequenceDiagram
     participant Hero
-    participant Menu as BUY Menu
-    participant Bartender as Bartender (race 0x88)
-    participant Inventory as Inventory System
+    participant System as Game System
+    participant Fairy
 
-    Hero->>Bartender: Enter tavern, approach bartender
-    Note over Bartender: nearest_person must be set<br/>anim_list[nearest].race == 0x88
+    Hero->>System: vitality < 1
+    System->>System: checkdead(0, dtype)<br>luck -= 5, event(dtype)
+    System->>System: state = DYING, tactic = 7<br>Death animation plays (7 frames)
+    System->>System: tactic reaches 0<br>state = DEAD, goodfairy = 0
 
-    Hero->>Menu: Select BUY action
-    Note over Menu: Menu items (hit values 5-11):<br/>5: Food - 3 gold (item 0)<br/>6: Arrows x10 - 10 gold (item 8)<br/>7: Vial - 15 gold (item 11)<br/>8: Mace - 30 gold (item 1)<br/>9: Sword - 45 gold (item 2)<br/>10: Bow - 75 gold (item 3)<br/>11: Totem - 20 gold (item 13)
+    Note over System: goodfairy wraps 0→255<br>Counts down each frame
 
-    Menu->>Menu: hit = (menu_selection - 5) * 2
-    Menu->>Menu: item = jtrans[hit], cost = jtrans[hit+1]
+    Note over System: goodfairy 255→200 (~56 frames)<br>Death sequence continues<br>(corpse + death song always play fully)
 
-    alt wealth > cost
-        Menu->>Inventory: wealth -= cost
-        alt item == 0 (Food)
-            Inventory->>Inventory: event(22), eat(50)
-            Note over Inventory: Reduces hunger by 50
-        else item == 8 (Arrows)
-            Inventory->>Inventory: stuff[8] += 10, event(23)
-            Note over Inventory: Adds 10 arrows to quiver
-        else Other items
-            Inventory->>Inventory: stuff[item]++
-            Inventory-->>Hero: "Hero bought a [item name]."
-        end
-    else wealth <= cost
-        Menu-->>Hero: "Not enough money!"
+    Note over System: Luck is frozen during DEAD state<br>Outcome decided once at goodfairy < 200
+
+    alt luck < 1 (deterministic — no fairy)
+        System->>System: revive(TRUE)<br>Brother dies permanently
+        System->>Hero: Next brother activated
+    else luck >= 1 (deterministic — fairy guaranteed)
+        Note over System: goodfairy 199→120: no visible effect
+        Note over Fairy: goodfairy 119→20: Fairy visible<br>Flies toward hero
+        Note over System: goodfairy 19→2: Resurrection glow
+        Fairy->>Hero: goodfairy == 1
+        System->>System: revive(FALSE)<br>Same brother continues
+        System->>Hero: Respawn at safe_x, safe_y<br>Vitality = 15 + brave/4
     end
 ```
 
-### Buy Menu Price Table
+Source: `fmain.c:1388-1403` (fairy logic), `fmain.c:2769-2782` (`checkdead()`), `fmain.c:2814-2911` (`revive()`).
 
-Derived from `jtrans[] = { 0,3, 8,10, 11,15, 1,30, 2,45, 3,75, 13,20 }`:
+**FALL state** (pit traps): Always rescued via `revive(FALSE)` regardless of luck — `fmain.c:1392`.
 
-| Menu Slot | Item Index | Item Name | Cost (gold) | Effect |
-|-----------|-----------|-----------|-------------|--------|
-| 5 | 0 | Food | 3 | eat(50) -- reduces hunger by 50 |
-| 6 | 8 | Arrows | 10 | stuff[8] += 10 (adds 10 arrows) |
-| 7 | 11 | Glass Vial | 15 | stuff[11]++ (magic item) |
-| 8 | 1 | Mace | 30 | stuff[1]++ (weapon upgrade) |
-| 9 | 2 | Sword | 45 | stuff[2]++ (weapon upgrade) |
-| 10 | 3 | Bow | 75 | stuff[3]++ (ranged weapon) |
-| 11 | 13 | Bird Totem | 20 | stuff[13]++ (magic item) |
+### 7.2 Princess Rescue Sequence
+
+```mermaid
+sequenceDiagram
+    participant Hero
+    participant System as Game System
+    participant King
+
+    Note over Hero: Enter princess extent<br>(10820-10877, 35646-35670)
+
+    System->>System: Check: xtype == 83<br>AND ob_list8[9].ob_stat != 0
+    System->>System: map_message() — fade to black
+    System->>System: Display rescue placard<br>placard_text(8 + princess*3)
+    Note over System: Princess name interpolated<br>Katra / Karla / Kandy
+    System->>System: Delay(380) — 7.6 seconds
+    System->>System: Display post-rescue text<br>placard_text(17), placard_text(18)
+    System->>System: Delay(380) — 7.6 seconds
+
+    System->>System: princess++
+    System->>Hero: Teleport to (5511, 33780)
+    System->>System: Bird extent repositioned<br>move_extent(0, 22205, 21231)
+    System->>System: Noble → Princess in castle<br>ob_list8[2].ob_id = 4
+
+    King->>Hero: speak(18) "Here is a writ..."
+    System->>Hero: +100 gold<br>+Writ (stuff[28])<br>+3 of each key type
+    System->>System: ob_list8[9].ob_stat = 0<br>Rescue flag cleared
+```
+
+Source: `rescue()` — `fmain2.c:1584-1603`. Trigger — `fmain.c:2684-2685`.
+
+**Key detail**: `ob_list8[9].ob_stat` is reset to 3 during each `revive(TRUE)` (`fmain.c:2843`), so each new brother can trigger one rescue. The `princess` counter persists globally — each rescue shows a different princess.
+
+### 7.3 Win Condition Sequence
+
+```mermaid
+sequenceDiagram
+    participant Hero
+    participant Necro as Necromancer
+    participant System as Game System
+
+    Hero->>Necro: Attacks with Bow or Wand
+    Note over Necro: vitality reaches 0
+    Necro->>Necro: State: DYING<br>tactic 7→0
+    Necro->>Necro: race = 10 (Woodcutter)<br>vitality = 10
+    Necro->>System: leave_item(i, 139)<br>Talisman on ground
+
+    Hero->>System: Take → picks up Talisman
+    System->>System: stuff[22] != 0
+    System->>System: quitflag = TRUE<br>viewstatus = 2
+
+    System->>System: map_message() — fade
+    System->>System: placard_text(6) + name() + placard_text(7)
+    Note over System: "Having defeated the Necromancer...<br>returned to Marheim, wed the princess"
+    System->>System: placard() + Delay(80)
+
+    System->>System: Load "winpic" image
+    System->>System: Sunrise color animation<br>55 frames ≈ 11 seconds
+    System->>System: Fade to black
+
+    System->>System: Game loop exits
+```
+
+Source: Necromancer death — `fmain.c:1751-1756`. Win check — `fmain.c:3244-3247`. `win_colors()` — `fmain2.c:1605-1636`.
+
+### 7.4 Copy Protection Flow
+
+Both mechanisms trigger during startup, disabled in preserved source via `#define NO_PROTECT` — `fmain2.c:14`. Documented for completeness. See [RESEARCH.md §18](RESEARCH.md#18-menu-system) for startup flow.
+
+```mermaid
+flowchart TD
+    INTRO[Intro Sequence Ends] --> DISK_CHECK["seekn() → cpytest()<br>fmain.c:1212"]
+    DISK_CHECK --> DISK_TYPE{Floppy or HD?}
+    DISK_TYPE -->|Floppy| CHECK_TICK{"dl_VolumeDate.ds_Tick == 230?"}
+    CHECK_TICK -->|No| CRASH["cold() → jmp -4<br>System crash"]
+    CHECK_TICK -->|Yes| RIDDLE
+    DISK_TYPE -->|HD| CHECK_BLOCK{"buffer[123] == 230?"}
+    CHECK_BLOCK -->|No| SHUTDOWN["close_all()<br>Graceful exit"]
+    CHECK_BLOCK -->|Yes| RIDDLE
+
+    RIDDLE["placard_text(19):<br>'Answer three questions...'"] --> Q1[Random question from 8 riddles]
+    Q1 --> Q2[Second question]
+    Q2 --> Q3[Third question]
+    Q3 --> PASS{All correct?}
+    PASS -->|Yes| GAME_START[Game begins]
+    PASS -->|No| QUIT["Graceful shutdown"]
+```
+
+**Riddle answers** (from `fmain2.c:1306-1308`): LIGHT, HEED, DEED, SIGHT, FLIGHT, CREED, BLIGHT, NIGHT.
+
+Source: `copy_protect_junk()` — `fmain2.c:1309-1334`. `cpytest()` — `fmain2.c:1409-1434`.
+
+### 7.5 Game Over Sequence
+
+```mermaid
+flowchart TD
+    KEVIN_DIES[Kevin dies<br>luck < 1] --> REVIVE["revive(TRUE) called"]
+    REVIVE --> PLACARD["placard_text(5):<br>'And so ends our sad tale.<br>Stay at Home!'"]
+    PLACARD --> BROTHER_CHECK{"brother > 3?"}
+    BROTHER_CHECK -->|Yes| QUIT["quitflag = TRUE<br>Delay(500) — 10 seconds"]
+    QUIT --> EXIT[Game loop exits<br>stopscore → close_all]
+```
+
+Source: `fmain.c:2870-2872`.
 
 ---
 
-## 16. Encounter Type Reference
+## Cross-Reference Index
 
-From `encounter_chart[]` (`fmain.c:52-63`):
-
-| Type | Name | HP | Aggressive | Arms | Cleverness | Treasure | Sprite File |
-|------|------|----|-----------|------|------------|----------|-------------|
-| 0 | Ogre | 18 | Yes | 2 | 0 | 2 | 6 |
-| 1 | Orcs | 12 | Yes | 4 | 1 | 1 | 6 |
-| 2 | Wraith | 16 | Yes | 6 | 1 | 4 | 7 |
-| 3 | Skeleton | 8 | Yes | 3 | 0 | 3 | 7 |
-| 4 | Snake | 16 | Yes | 6 | 1 | 0 | 8 |
-| 5 | Salamander | 9 | Yes | 3 | 0 | 0 | 7 |
-| 6 | Spider | 10 | Yes | 6 | 1 | 0 | 8 |
-| 7 | Dark Knight | 40 | Yes | 7 | 1 | 0 | 8 |
-| 8 | Loraii | 12 | Yes | 6 | 1 | 0 | 9 |
-| 9 | Necromancer | 50 | Yes | 5 | 0 | 0 | 9 |
-| 10 | Woodcutter | 4 | No | 0 | 0 | 0 | 9 |
-
-## 17. Extent Zone Reference
-
-From `extent_list[]` (`fmain.c:338-369`):
-
-| Index | Name | Coordinates | etype | v1 | v2 | v3 | Behavior |
-|-------|------|-------------|-------|----|----|----|----|
-| 0 | Bird | (2118,27237)-(2618,27637) | 70 | 0 | 1 | 11 | Carrier spawn |
-| 1 | Turtle | (0,0)-(0,0) | 70 | 0 | 1 | 5 | Carrier spawn (dynamically placed) |
-| 2 | Dragon | (6749,34951)-(7249,35351) | 70 | 0 | 1 | 10 | Hostile carrier spawn |
-| 3 | Spider Pit | (4063,34819)-(4909,35125) | 53 | 4 | 1 | 6 | Forced spider encounter |
-| 4 | Necromancer | (9563,33883)-(10144,34462) | 60 | 1 | 1 | 9 | Special figure |
-| 5 | Turtle Eggs | (22945,5597)-(23225,5747) | 61 | 3 | 2 | 4 | Forced snake encounter |
-| 6 | Princess | (10820,35646)-(10877,35670) | 83 | 1 | 1 | 0 | Rescue trigger |
-| 7 | Graveyard | (19596,17123)-(19974,17401) | 48 | 8 | 8 | 2 | Dense wraith spawns |
-| 8 | City Area | (19400,17034)-(20240,17484) | 80 | 4 | 20 | 0 | Peace zone |
-| 9 | Astral Plane | (0x2400,0x8200)-(0x3100,0x8A00) | 52 | 3 | 1 | 8 | Loraii arena |
-| 15 | Hidden Valley | (21405,25583)-(21827,26028) | 60 | 1 | 1 | 7 | Dark knight encounter |
-| 16 | Swamp Region | (6156,12755)-(12316,15905) | 7 | 1 | 8 | 0 | Swamp encounters |
-| 17-18 | Spider Regions | Various | 8 | 1 | 8 | 0 | Spider encounters |
-| 22 | Whole World | (0,0)-(0x7FFF,0x9FFF) | 3 | 1 | 8 | 0 | Default fallback |
+| Topic | RESEARCH.md Section | STORYLINE.md Section |
+|-------|-------------------|---------------------|
+| Brother stats & succession | [§15 Brother Succession](RESEARCH.md#15-brother-succession) | [§4 Brother Succession](#4-brother-succession-narrative) |
+| Carrier / transport system | [§14 Carrier System](RESEARCH.md#14-carrier-system) | [§2.4 Transport Progression](#24-transport-progression) |
+| Combat system | [§7 Combat](RESEARCH.md#7-combat-system) | [§3.6 Witch](#36-witch), [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
+| Dark Knight encounter | [§9.8 Dark Knight](RESEARCH.md#98-dark-knight-dknight) | [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
+| Dialogue dispatch | [§13 NPC Dialogue](RESEARCH.md#13-npc-dialogue--quests) | [§3 NPC Dialogue Trees](#3-npc-dialogue-trees) |
+| Door system | [§12 Doors](RESEARCH.md#12-door-system) | [§6.4 Door Connections](#64-door-connections) |
+| Encounter zones | [§9 Encounters](RESEARCH.md#9-encounter--spawning) | [§6.5 Peace Zones](#65-peace-zones) |
+| Inventory & items | [§10 Inventory](RESEARCH.md#10-inventory--items) | [§2.3 Key Quest Items](#23-key-quest-items) |
+| Magic items | [§10 Inventory](RESEARCH.md#10-inventory--items) | [§2.5 Magic Items](#25-magic-items) |
+| Princess rescue | [§16 Win Condition](RESEARCH.md#16-win-condition--princess-rescue) | [§7.2 Princess Rescue](#72-princess-rescue-sequence) |
+| Win condition | [§16 Win Condition](RESEARCH.md#16-win-condition--princess-rescue) | [§7.3 Win Sequence](#73-win-condition-sequence) |
+| World objects | [§11 World Objects](RESEARCH.md#11-world-objects) | [§2.2 Gold Statues](#22-gold-statue-sources) |

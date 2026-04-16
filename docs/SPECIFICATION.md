@@ -423,6 +423,10 @@ Hero walk speed depends on weapon and terrain:
 - Turtle (ridden): 3 pixels/frame
 - Bird: velocity-based acceleration with cap of 40 (vertical) and 32 (horizontal), position = position + velocity/4
 
+### 9.4 Crystal Shard Terrain Bypass
+
+When the hero (`i == 0`) attempts to move and `proxcheck()` returns terrain type 12 (blocked), the movement is permitted if `stuff[30]` (crystal shard) is nonzero. This is checked in the movement resolution code (`fmain.c:1609`) after the door check (terrain 15) and before deviation. Terrain type 12 tiles are invisible barriers in the astral plane tile data that gate access to the Necromancer's arena.
+
 ---
 
 ## 10. Combat System
@@ -577,7 +581,7 @@ The `extent_list[23]` array defines rectangular trigger zones. Each entry has:
 | 7 | Sorceress | Gives figurine on first visit; luck boost on repeat |
 | 8 | Bartender | Context-dependent (fatigue/time) |
 | 9 | Witch | "Look into my eyes and Die!" |
-| 10 | Spectre | Requests bones, gives crystal shard |
+| 10 | Spectre | Requests bones, gives crystal shard (terrain-12 barrier bypass) |
 | 11 | Ghost | Reports dead brother's bone location |
 | 12 | Ranger | Directional hints based on region and goal |
 | 13 | Beggar | Prophecies (3 per-instance variants) |
@@ -598,7 +602,7 @@ The `extent_list[23]` array defines rectangular trigger zones. Each entry has:
 
 Items that can be given to NPCs:
 - **Gold**: Costs 2 gold. Random kindness increase. Beggars give prophecies.
-- **Bone**: If given to spectre, receive crystal shard. Otherwise "no use for it."
+- **Bone**: If given to spectre, receive crystal shard (`stuff[30]`). The shard enables passage through terrain type 12 barriers on the astral plane, gating access to the Necromancer. Otherwise "no use for it."
 
 ### 13.5 Carrier Dialogue (Turtle)
 
@@ -617,9 +621,9 @@ Items that can be given to NPCs:
 |-------------|----------|-------|
 | 0–8 | Weapons/tools | Dirk, Mace, Sword, Bow, Wand, Lasso, Shell, Sunstone, Book |
 | 9–15 | Magic items | Blue Stone, Green Jewel, Glass Vial, Crystal Orb, Bird Totem, Gold Ring, Jade Skull |
-| 16–21 | Keys | Gold, Silver, Jade, Crystal, Ebony, Bronze |
+| 16–21 | Keys | Gold, Green, Blue, Red, Grey, White |
 | 22 | Quest | Talisman (triggers win condition) |
-| 23 | Consumable | Fiery Fruit (lava immunity) |
+| 23 | Non-consumable | Rose (lava immunity) |
 | 24 | Consumable | Apples (auto-eaten in safe zones) |
 | 25–30 | Statues/quest | Gold Statues (5 needed), Writ, Bone, etc. |
 | 31–34 | Currency | Gold and arrows |
@@ -647,8 +651,9 @@ Weapon slot 0 (`stuff[0]`–`stuff[4]`) determines melee damage bonus. Bow (`stu
 3. Trade writ for golden statue at priest
 4. Collect 5 golden statues (from priest, sorceress, spectre, beggars, quest rewards)
 5. Enter hidden city in desert (gated by statue count ≥ 5)
-6. Defeat the Necromancer
-7. Pick up the Talisman (triggers win condition)
+6. Obtain crystal shard from spectre by trading bones (gates astral plane passage)
+7. Defeat the Necromancer (shard required to cross terrain-12 barrier to reach arena)
+8. Pick up the Talisman (triggers win condition)
 
 ### 15.2 Quest State Flags
 
@@ -661,6 +666,7 @@ Weapon slot 0 (`stuff[0]`–`stuff[4]`) determines melee damage bonus. Bow (`stu
 | `stuff[22]` | Talisman (nonzero = win) |
 | `stuff[25]` | Gold statues count (5 needed) |
 | `stuff[28]` | Writ |
+| `stuff[30]` | Crystal shard (enables terrain type 12 passability on astral plane) |
 | `princess` | Rescue counter (affects placard text selection) |
 
 ### 15.3 Hidden City Reveal
@@ -820,7 +826,7 @@ Auto-eat: if hunger > 30 and hero has apples, consume one apple (−30 hunger).
 ### 18.6 Fiery Death Zone
 
 Rectangle: `8802 < map_x < 13562`, `24744 < map_y < 29544`.
-- Hero with fiery fruit (`stuff[23]`): immune (environ reset to 0 each tick)
+- Hero with rose (`stuff[23]`): immune (environ reset to 0 each tick)
 - Environ > 15: instant death
 - Environ > 2: −1 vitality per tick
 

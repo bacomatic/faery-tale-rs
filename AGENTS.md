@@ -28,12 +28,13 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Validate changed behavior with targeted commands/tests when feasible.
 - Always call `font.set_color_mod(r, g, b)` before every `render_string()` call. The canonical white/default is `set_color_mod(255, 255, 255)`. SDL2 color mod is stateful; failing to reset it causes text to render in the previous scene's tint color.
 - When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
+- **Fail Fast** If you cannot find an answer, say you don't know rather than guessing. This gives the user the opportunity to clarify or provide more information, and prevents implementation errors. Often this indicates a gap in the reference documentation that should be filled.
 
 ## Canonical sources by topic
 
 - Build/run commands and developer setup: `README.md`
-- **Authoritative reference docs (source of truth; do not modify unless the user explicitly requests it):** `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`
-- Implementation contract (synthesized from the reference docs): `docs/SPECIFICATION.md`
+- **Authoritative reference docs (source of truth; READ-ONLY — agents must never modify these files under any circumstances; only the user may edit them):** `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`
+- Implementation contract (synthesized from the reference docs): `docs/SPECIFICATION.md`, `docs/DEBUG_SPECIFICATION.md`
 - Requirements and user stories: `docs/REQUIREMENTS.md`
 - Rust coding guidelines for agents: `docs/GUIDELINES.md`
 - Current Rust implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
