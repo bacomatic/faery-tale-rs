@@ -28,7 +28,49 @@ pub struct Placard {
     lines: Vec<PlacardLine>
 }
 
+/// Parse an ssp-encoded byte stream into placard lines.
+/// The format uses bytes `128 + x_half` followed by `y`, then ASCII text
+/// until the next escape or a 0 terminator.
+fn parse_ssp_lines(data: &[u8]) -> Vec<PlacardLine> {
+    let mut lines = Vec::new();
+    let mut idx = 0usize;
+    while idx < data.len() {
+        let byte = data[idx];
+        if byte == 0 {
+            break;
+        }
+        if byte >= 128 {
+            let x_half = (byte - 128) as usize;
+            if idx + 1 >= data.len() {
+                break;
+            }
+            let y = data[idx + 1] as usize;
+            idx += 2;
+            let mut text_bytes = Vec::new();
+            while idx < data.len() {
+                let b = data[idx];
+                if b == 0 || b >= 128 {
+                    break;
+                }
+                text_bytes.push(b);
+                idx += 1;
+            }
+            let text = String::from_utf8_lossy(&text_bytes).to_string();
+            lines.push(PlacardLine { x: x_half * 2, y, text });
+            continue;
+        }
+        idx += 1;
+    }
+    lines
+}
+
 impl Placard {
+    pub fn from_ssp_bytes(data: &[u8]) -> Placard {
+        Placard {
+            lines: parse_ssp_lines(data),
+        }
+    }
+
     pub fn print(&self) {
         for line in &self.lines {
             // only use x here
@@ -313,5 +355,31 @@ pub fn draw_placard_border<'a, T: RenderTarget>(canvas: &mut Canvas<T>, palette:
             xorg = dx;
             yorg = dy;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_ssp_xy_escape() {
+        let data = [128u8 + 5, 10, b'H', b'i', 0];
+        let lines = parse_ssp_lines(&data);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].x, 10);
+        assert_eq!(lines[0].y, 10);
+        assert_eq!(lines[0].text, "Hi");
+    }
+
+    #[test]
+    fn test_parse_ssp_multiple_segments() {
+        let data = [128u8 + 3, 5, b'A', b'B', 128u8 + 4, 8, b'C', 0];
+        let lines = parse_ssp_lines(&data);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].text, "AB");
+        assert_eq!(lines[1].x, 8);
+        assert_eq!(lines[1].y, 8);
+        assert_eq!(lines[1].text, "C");
     }
 }
