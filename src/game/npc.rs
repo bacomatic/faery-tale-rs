@@ -342,7 +342,6 @@ mod tests {
 
     #[test]
     fn test_npc_tick_blocked_becomes_frust() {
-        use crate::game::actor::Tactic;
         let mut npc = Npc {
             npc_type: NPC_TYPE_ORC,
             race: RACE_ENEMY,
