@@ -77,6 +77,7 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
         active_carrier: state.active_carrier as i32,
         actor_file: state.actor_file as i32,
         set_file: state.set_file as i32,
+        wcarry: state.wcarry as u32,
 
         princess: state.princess as u32,
         dayperiod: state.dayperiod as u32,
@@ -200,6 +201,7 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.active_carrier = sf.active_carrier as i16;
     state.actor_file = sf.actor_file as i16;
     state.set_file = sf.set_file as i16;
+    state.wcarry = sf.wcarry as u8;
 
     state.princess = sf.princess as u8;
     state.dayperiod = sf.dayperiod as u8;

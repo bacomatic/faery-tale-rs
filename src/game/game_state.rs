@@ -134,6 +134,9 @@ pub struct GameState {
     /// Proximity to raft actor: 0=none, 1=near (within 16px), 2=aboard (within 9px).
     /// Mirrors raftprox from fmain.c (player-107).
     pub raftprox: i16,
+    /// Actor slot index (1..3) of the active carrier; 0 = no carrier.
+    /// Used to gate raft/turtle boarding checks (SPEC §21.2, §21.3).
+    pub wcarry: u8,
     pub actor_file: i16,
     pub set_file: i16,
 
@@ -242,6 +245,7 @@ impl GameState {
             active_carrier: 0,
             on_raft: false,
             raftprox: 0,
+            wcarry: 0,
             actor_file: 0,
             set_file: 0,
 
@@ -574,6 +578,7 @@ impl GameState {
     pub fn leave_raft(&mut self) {
         self.on_raft = false;
         self.active_carrier = 0;
+        self.wcarry = 0;
     }
 
     /// Summon turtle using a shell item. Returns true if successful.
@@ -583,6 +588,7 @@ impl GameState {
             self.stuff_mut()[ITEM_SHELL] -= 1;
             self.active_carrier = CARRIER_TURTLE;
             self.on_raft = true;
+            self.wcarry = 3;  // SPEC §21.3: turtle is in actor slot 3
             true
         } else {
             false
@@ -624,6 +630,25 @@ impl GameState {
     /// Stop swan flight (land).
     pub fn stop_swan_flight(&mut self) {
         self.flying = 0;
+    }
+
+    /// Check if raft can be boarded at the given terrain (SPEC §21.2).
+    /// Returns true if wcarry == 1 AND terrain is water/shore (codes 3..=5).
+    pub fn can_board_raft(&self, terrain: u8) -> bool {
+        self.wcarry == 1 && (3..=5).contains(&terrain)
+    }
+
+    /// Check if turtle can be boarded (SPEC §21.3).
+    /// Returns true if wcarry == 3 (turtle is active).
+    pub fn can_board_turtle(&self) -> bool {
+        self.wcarry == 3
+    }
+
+    /// Check if turtle summon is blocked in the central region (SPEC §21.3).
+    /// Returns true if position is inside X ∈ [11194, 21373] AND Y ∈ [10205, 16208].
+    pub fn is_turtle_summon_blocked(&self) -> bool {
+        (11194..=21373).contains(&self.hero_x)
+            && (10205..=16208).contains(&self.hero_y)
     }
 
     /// Eat food from inventory. Returns true if food was available.
@@ -1035,5 +1060,71 @@ mod tests {
         state.init_first_brother(10, 10, 10, 100, 1000, 2000, 3);
         assert_eq!(state.stuff()[0], 1, "dirk should be in inventory");
         assert_eq!(state.actors[0].weapon, 1, "dirk should be equipped");
+    }
+
+    #[test]
+    fn test_can_board_raft_gating() {
+        let mut s = GameState::new();
+        // Not allowed when wcarry != 1.
+        s.wcarry = 0;
+        assert!(!s.can_board_raft(3), "cannot board raft when wcarry == 0");
+        assert!(!s.can_board_raft(4), "cannot board raft when wcarry == 0");
+        assert!(!s.can_board_raft(5), "cannot board raft when wcarry == 0");
+
+        // Not allowed when terrain is not water/shore.
+        s.wcarry = 1;
+        assert!(!s.can_board_raft(0), "cannot board raft on terrain 0");
+        assert!(!s.can_board_raft(1), "cannot board raft on terrain 1");
+        assert!(!s.can_board_raft(2), "cannot board raft on terrain 2");
+        assert!(!s.can_board_raft(6), "cannot board raft on terrain 6");
+
+        // Allowed only when wcarry == 1 AND terrain in 3..=5.
+        assert!(s.can_board_raft(3), "can board raft on terrain 3 (water)");
+        assert!(s.can_board_raft(4), "can board raft on terrain 4 (shore)");
+        assert!(s.can_board_raft(5), "can board raft on terrain 5 (water)");
+    }
+
+    #[test]
+    fn test_can_board_turtle_gating() {
+        let mut s = GameState::new();
+        s.wcarry = 0;
+        assert!(!s.can_board_turtle(), "cannot board turtle when wcarry == 0");
+        s.wcarry = 1;
+        assert!(!s.can_board_turtle(), "cannot board turtle when wcarry == 1 (raft slot)");
+        s.wcarry = 3;
+        assert!(s.can_board_turtle(), "can board turtle when wcarry == 3");
+    }
+
+    #[test]
+    fn test_turtle_summon_region_blocking() {
+        let mut s = GameState::new();
+        // Outside the forbidden region.
+        s.hero_x = 11193;
+        s.hero_y = 10205;
+        assert!(!s.is_turtle_summon_blocked(), "X below lower bound");
+
+        s.hero_x = 21374;
+        s.hero_y = 10205;
+        assert!(!s.is_turtle_summon_blocked(), "X above upper bound");
+
+        s.hero_x = 15000;
+        s.hero_y = 10204;
+        assert!(!s.is_turtle_summon_blocked(), "Y below lower bound");
+
+        s.hero_y = 16209;
+        assert!(!s.is_turtle_summon_blocked(), "Y above upper bound");
+
+        // Inside the forbidden region.
+        s.hero_x = 11194;
+        s.hero_y = 10205;
+        assert!(s.is_turtle_summon_blocked(), "at lower corner");
+
+        s.hero_x = 21373;
+        s.hero_y = 16208;
+        assert!(s.is_turtle_summon_blocked(), "at upper corner");
+
+        s.hero_x = 16000;
+        s.hero_y = 13000;
+        assert!(s.is_turtle_summon_blocked(), "in the middle");
     }
 }

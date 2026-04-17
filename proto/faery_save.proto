@@ -85,6 +85,7 @@ message SaveFile {
     int32 active_carrier = 110;
     int32 actor_file     = 111;
     int32 set_file       = 112;
+    uint32 wcarry        = 113;
 
     // Quest state
     uint32 princess  = 120;
