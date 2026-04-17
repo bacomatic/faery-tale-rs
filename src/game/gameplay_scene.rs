@@ -2855,15 +2855,12 @@ impl GameplayScene {
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
-            // FRUIT (ob_id 148): eat if hungry, else add to inventory
+            // FRUIT (ob_id 148): auto-eat if hungry, else store per SPEC §14.5
             148 => {
-                if self.state.hunger >= 15 {
-                    // Hungry — eat immediately
-                    self.state.eat_amount(30);
+                let ate = self.state.pickup_fruit();
+                if ate {
                     self.dlog(format!("ate fruit, hunger now {}", self.state.hunger));
                 } else {
-                    // Not hungry — add to inventory (stuff[24])
-                    self.state.pickup_item(24);
                     let msg = crate::game::events::event_msg(&self.narr, 36, bname);
                     if !msg.is_empty() { self.messages.push(msg); }
                 }
