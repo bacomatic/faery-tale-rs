@@ -27,6 +27,17 @@ pub fn heal_cap(brave: i16) -> i16 {
     15 + brave / 4
 }
 
+/// Simple pseudo-random 0-7 for magic effects (ports rand8() pattern).
+/// Uses system time nanos similar to combat.rs melee_rand().
+fn rand8() -> i16 {
+    use std::time::SystemTime;
+    let nanos = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    (nanos & 7) as i16
+}
+
 /// Stone ring sector coordinates from fmain.c stone_list[].
 /// 11 pairs of (x_sector, y_sector) for teleport destinations.
 const STONE_RINGS: [(u8, u8); 11] = [
@@ -95,9 +106,8 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
             "A warm light surrounds you."
         }
         ITEM_VIAL => {
-            // fmain.c: vitality += rand8() + 4, capped at 15 + brave/4.
-            // Use fixed heal of 8 (midpoint of rand8() range 0..=7, + 4 = ~8).
-            let heal: i16 = 8;
+            // SPEC §19.2: vitality += rand8() + 4 (yields 4-11), capped at 15 + brave/4.
+            let heal = rand8() + 4;
             let cap = heal_cap(state.brave);
             state.vitality = (state.vitality + heal).min(cap);
             "That feels a lot better!"
@@ -107,7 +117,8 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
             "You feel unseen."
         }
         ITEM_TOTEM => {
-            if state.region_num >= 8 {
+            // SPEC §19.2, §25.9: blocked when region_num > 7 unless cheat1 is set.
+            if state.region_num > 7 && !state.cheat1 {
                 return Err("The bird totem does not work indoors.");
             }
             state.viewstatus = 1;
@@ -118,7 +129,8 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
             "Time slows around you."
         }
         ITEM_SKULL => {
-            // fmain.c: zero vitality of all on-screen ENEMY actors with race < 7.
+            // SPEC §19.2: Kill spell kills all visible enemies, brave-- per kill.
+            // Counterbalances normal combat brave++ per kill.
             let mut killed = 0usize;
             let anix = state.anix;
             for i in 1..anix {
@@ -128,6 +140,8 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
                     killed += 1;
                 }
             }
+            // Decrement brave once per enemy killed (cowardice penalty).
+            state.brave = state.brave.saturating_sub(killed as i16);
             if killed > 0 { "Death takes them all!" } else { "No enemies to claim." }
         }
         _ => return Err("Not a magic item"),
@@ -204,5 +218,120 @@ mod tests {
         assert_eq!(state.light_timer, 4);
         assert_eq!(state.secret_timer, 2);
         assert_eq!(state.freeze_timer, 0);
+    }
+    
+    #[test]
+    fn test_vial_heal_randomness() {
+        // SPEC §19.2: heal = rand8() + 4 (yields 4-11), capped at 15 + brave/4.
+        let mut state = GameState::new();
+        state.vitality = 5;
+        state.brave = 40; // cap = 15 + 40/4 = 25
+        state.stuff_mut()[ITEM_VIAL] = 10;
+        
+        // Test multiple uses to verify randomness and capping.
+        for _ in 0..10 {
+            let before = state.vitality;
+            let _ = use_magic(&mut state, ITEM_VIAL);
+            let gained = state.vitality - before;
+            // Heal should be in range [4, 11] but capped by (25 - before).
+            let expected_max = (11).min(25 - before);
+            assert!(gained >= 4.min(25 - before) && gained <= expected_max,
+                    "Heal gained {gained} outside expected range");
+            assert!(state.vitality <= 25, "Vitality {0} exceeded cap 25", state.vitality);
+        }
+    }
+    
+    #[test]
+    fn test_vial_heal_cap_enforcement() {
+        // SPEC §19.2: heal is capped at 15 + brave/4.
+        let mut state = GameState::new();
+        state.brave = 20; // cap = 15 + 20/4 = 20
+        state.vitality = 18;
+        state.stuff_mut()[ITEM_VIAL] = 1;
+        let _ = use_magic(&mut state, ITEM_VIAL);
+        // Even if rand8() + 4 = 11, vitality should not exceed 20.
+        assert!(state.vitality <= 20, "Vitality exceeded cap");
+    }
+    
+    #[test]
+    fn test_jade_skull_brave_decrement() {
+        // SPEC §19.2: brave-- per kill (counterbalances normal combat brave++).
+        let mut state = GameState::new();
+        state.brave = 50;
+        state.stuff_mut()[ITEM_SKULL] = 1;
+        
+        // Set up 3 killable enemies (race < 7, vitality > 0, kind = Enemy).
+        state.anix = 4;
+        state.actors[1].vitality = 10;
+        state.actors[1].kind = ActorKind::Enemy;
+        state.actors[1].race = 3;
+        state.actors[2].vitality = 15;
+        state.actors[2].kind = ActorKind::Enemy;
+        state.actors[2].race = 5;
+        state.actors[3].vitality = 20;
+        state.actors[3].kind = ActorKind::Enemy;
+        state.actors[3].race = 6;
+        
+        let _ = use_magic(&mut state, ITEM_SKULL);
+        
+        // All 3 enemies should be dead.
+        assert_eq!(state.actors[1].vitality, 0);
+        assert_eq!(state.actors[2].vitality, 0);
+        assert_eq!(state.actors[3].vitality, 0);
+        
+        // Brave should have decreased by 3 (one per kill).
+        assert_eq!(state.brave, 47, "Brave should decrement by 3 (one per kill)");
+    }
+    
+    #[test]
+    fn test_jade_skull_no_brave_change_if_no_kills() {
+        // SPEC §19.2: brave-- per kill; if no kills, no brave change.
+        let mut state = GameState::new();
+        state.brave = 50;
+        state.stuff_mut()[ITEM_SKULL] = 1;
+        state.anix = 1; // No enemies.
+        
+        let _ = use_magic(&mut state, ITEM_SKULL);
+        assert_eq!(state.brave, 50, "Brave should not change if no enemies killed");
+    }
+    
+    #[test]
+    fn test_totem_blocked_underground() {
+        // SPEC §19.2, §25.9: blocked when region_num > 7 unless cheat1 is set.
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_TOTEM] = 1;
+        state.region_num = 8; // Underground.
+        state.cheat1 = false;
+        
+        let result = use_magic(&mut state, ITEM_TOTEM);
+        assert!(result.is_err(), "Totem should be blocked underground");
+        assert_eq!(state.stuff()[ITEM_TOTEM], 1, "Charge should not be consumed");
+    }
+    
+    #[test]
+    fn test_totem_allowed_overworld() {
+        // SPEC §19.2: allowed when region_num <= 7.
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_TOTEM] = 1;
+        state.region_num = 7;
+        
+        let result = use_magic(&mut state, ITEM_TOTEM);
+        assert!(result.is_ok(), "Totem should work in overworld");
+        assert_eq!(state.viewstatus, 1);
+        assert_eq!(state.stuff()[ITEM_TOTEM], 0, "Charge should be consumed");
+    }
+    
+    #[test]
+    fn test_totem_cheat1_bypass() {
+        // SPEC §25.9: cheat1 bypasses region restriction.
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_TOTEM] = 1;
+        state.region_num = 9; // Deep underground.
+        state.cheat1 = true;
+        
+        let result = use_magic(&mut state, ITEM_TOTEM);
+        assert!(result.is_ok(), "Totem should work underground when cheat1 is set");
+        assert_eq!(state.viewstatus, 1);
+        assert_eq!(state.stuff()[ITEM_TOTEM], 0, "Charge should be consumed");
     }
 }
