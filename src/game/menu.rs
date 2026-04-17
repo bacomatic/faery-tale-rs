@@ -6,7 +6,7 @@ pub const LABEL3: &str = "Yell Say  Ask  ";
 pub const LABEL4: &str = "PauseMusicSoundQuit Load ";
 pub const LABEL5: &str = "Food ArrowVial Mace SwordBow  Totem";
 pub const LABEL6: &str = "StoneJewelVial Orb  TotemRing Skull";
-pub const LABEL7: &str = "Dirk Mace SwordBow  Wand LassoShellKey  Sun  Book ";
+pub const LABEL7: &str = "Dirk Mace SwordBow  Wand LassoShellKey  Sun       ";
 pub const LABEL8: &str = "Save Exit ";
 pub const LABEL9: &str = "Gold GreenBlue Red  Grey White";
 pub const LABELA: &str = "Gold Book Writ Bone ";
@@ -305,6 +305,13 @@ impl MenuState {
 
     /// Handle a keyboard shortcut (fmain.c:1499-1520).
     pub fn handle_key(&mut self, key: u8) -> MenuAction {
+        if self.cmode == MenuMode::Keys && (b'1'..=b'6').contains(&key) {
+            if self.is_paused() {
+                return MenuAction::None;
+            }
+            let hit = key - b'1' + 5;
+            return self.dispatch_do_option(hit);
+        }
         for &(letter, menu, slot) in LETTER_LIST {
             if letter != key {
                 continue;
@@ -508,5 +515,58 @@ mod tests {
         assert_eq!(visible_labels[6], "G");
         assert_eq!(visible_labels[7], "H");
     }
-}
 
+    #[test]
+    fn test_keys_mode_number_dispatches_key_action() {
+        let mut ms = MenuState::new();
+        ms.gomenu(MenuMode::Keys);
+        let action = ms.handle_key(b'1');
+        assert!(matches!(action, MenuAction::TryKey(0)));
+        assert_eq!(ms.cmode, MenuMode::Keys);
+    }
+
+    #[test]
+    fn test_use_menu_labels_and_no_book_entry() {
+        assert_eq!(LABEL7.len() % 5, 0, "LABEL7 must be 5-char chunks");
+        let chunks: Vec<&str> = (0..LABEL7.len())
+            .step_by(5)
+            .map(|i| &LABEL7[i..i + 5])
+            .collect();
+        assert_eq!(chunks[0], "Dirk ");
+        assert_eq!(chunks[1], "Mace ");
+        assert_eq!(chunks[2], "Sword");
+        assert_eq!(chunks[3], "Bow  ");
+        assert_eq!(chunks[4], "Wand ");
+        assert_eq!(chunks[5], "Lasso");
+        assert_eq!(chunks[6], "Shell");
+        assert_eq!(chunks[7], "Key  ");
+        assert_eq!(chunks[8], "Sun  ");
+        assert!(chunks[9].trim().is_empty(), "10th USE slot should be blank");
+        assert!(!LABEL7.contains("Book"));
+    }
+
+    #[test]
+    fn test_menu_colors_for_use_file_keys_savex() {
+        let mut ms = MenuState::new();
+
+        ms.gomenu(MenuMode::Use);
+        ms.print_options();
+        let dirk_slot = ms.real_options.iter().position(|&x| x == 0).unwrap();
+        assert_eq!(ms.propt(dirk_slot, false).bg_color, 14);
+
+        ms.gomenu(MenuMode::File);
+        ms.print_options();
+        let file_slot = ms.real_options.iter().position(|&x| x == 0).unwrap();
+        assert_eq!(ms.propt(file_slot, false).bg_color, 13);
+
+        ms.gomenu(MenuMode::Keys);
+        ms.print_options();
+        let gold_slot = ms.real_options.iter().position(|&x| x == 5).unwrap();
+        assert_eq!(ms.propt(gold_slot, false).bg_color, KEYCOLORS[0]);
+
+        ms.gomenu(MenuMode::SaveX);
+        ms.print_options();
+        let save_slot = ms.real_options.iter().position(|&x| x == 5).unwrap();
+        assert_eq!(ms.propt(save_slot, false).bg_color, 5);
+    }
+}

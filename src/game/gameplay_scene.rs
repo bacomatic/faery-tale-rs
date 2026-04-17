@@ -125,12 +125,14 @@ fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
     }
 }
 
-/// Return the name of the active brother (Julian=1, Phillip=2, Kevin=3).
-fn brother_name(state: &crate::game::game_state::GameState) -> &'static str {
-    match state.brother {
-        1 => "Julian",
-        2 => "Phillip",
-        _ => "Kevin",
+fn default_brother_names() -> Vec<String> {
+    vec!["Julian".to_string(), "Phillip".to_string(), "Kevin".to_string()]
+}
+
+fn compass_dir_for_facing(facing: u8) -> usize {
+    match facing {
+        0..=7 => ((facing as usize) + 1) % 8,
+        _ => 9,
     }
 }
 
@@ -332,6 +334,8 @@ pub struct GameplayScene {
     object_sprites: Option<crate::game::sprites::SpriteSheet>,
     /// Narrative strings from faery.toml [narr], used by event_msg / speak helpers.
     narr: crate::game::game_library::NarrConfig,
+    /// Brother display names (datanames[brother-1]).
+    brother_names: Vec<String>,
     /// Door table from faery.toml [[doors]], used for region transition checks.
     doors: Vec<crate::game::doors::DoorEntry>,
     /// Indices into `doors` of doors that have been opened (bump phase complete).
@@ -441,6 +445,7 @@ impl GameplayScene {
             sprite_sheets: (0..crate::game::sprites::CFILE_COUNT).map(|_| None).collect(),
             object_sprites: None,
             narr: crate::game::game_library::NarrConfig::default(),
+            brother_names: default_brother_names(),
             doors: Vec::new(),
             opened_doors: std::collections::HashSet::new(),
             bumped_door: None,
@@ -468,6 +473,17 @@ impl GameplayScene {
                 bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
             );
         }
+        let mut names: Vec<String> = game_lib.brothers.iter().map(|b| b.name.clone()).collect();
+        if names.is_empty() {
+            names = default_brother_names();
+        } else if names.len() < 3 {
+            let defaults = default_brother_names();
+            for idx in names.len()..3 {
+                names.push(defaults[idx].clone());
+            }
+        }
+        self.brother_names = names;
+        self.update_brother_substitution();
 
         if let Some(compass) = game_lib.get_compass() {
             self.compass_regions = compass.comptable.regions.iter()
@@ -497,16 +513,16 @@ impl GameplayScene {
 
         // Push startup event message (original: revive() calls event(9) +
         // print_cont(".") for Julian, event(10/11) for later brothers).
-        let bname = brother_name(&self.state);
-        let mut msg9 = crate::game::events::event_msg(&self.narr, 9, bname);
+        let bname = self.brother_name().to_string();
+        let mut msg9 = crate::game::events::event_msg(&self.narr, 9, &bname);
         match self.state.brother {
             1 => { msg9.push('.'); self.messages.push_wrapped(msg9); }
             2 => { self.messages.push_wrapped(msg9);
                     self.messages.push_wrapped(
-                        crate::game::events::event_msg(&self.narr, 10, bname)); }
+                        crate::game::events::event_msg(&self.narr, 10, &bname)); }
             _ => { self.messages.push_wrapped(msg9);
                     self.messages.push_wrapped(
-                        crate::game::events::event_msg(&self.narr, 11, bname)); }
+                        crate::game::events::event_msg(&self.narr, 11, &bname)); }
         }
 
         let stuff = self.state.stuff().clone();
@@ -546,7 +562,20 @@ impl GameplayScene {
 
     /// Current hero's display name ("Julian", "Phillip", "Kevin"). Used by
     /// external scenes (e.g. the victory placard) that need `%`-substitution.
-    pub fn hero_name(&self) -> &'static str { brother_name(&self.state) }
+    pub fn hero_name(&self) -> &str { self.brother_name() }
+
+    fn brother_name(&self) -> &str {
+        let idx = self.state.brother.saturating_sub(1) as usize;
+        self.brother_names
+            .get(idx)
+            .map(|s| s.as_str())
+            .unwrap_or("Kevin")
+    }
+
+    fn update_brother_substitution(&mut self) {
+        let name = self.brother_name().to_string();
+        self.messages.set_substitution(name);
+    }
 
     /// Current zone index and label for the debug console.
     pub fn current_zone_info(&self) -> (Option<usize>, Option<String>) {
@@ -586,8 +615,8 @@ impl GameplayScene {
 
         if in_necro_arena {
             // SPEC §19.1: speak(59) - "Your magic won't work here, fool!"
-            let bname = brother_name(&self.state);
-            let msg = crate::game::events::speak(&self.narr, 59, bname);
+            let bname = self.brother_name().to_string();
+            let msg = crate::game::events::speak(&self.narr, 59, &bname);
             self.messages.push(msg);
         } else {
             match use_magic(&mut self.state, item_idx) {
@@ -1214,7 +1243,7 @@ impl GameplayScene {
         }
         self.last_person = Some(person);
 
-        let bname = brother_name(&self.state);
+        let bname = self.brother_name().to_string();
         match &fig.kind {
             FigKind::Npc(idx) => {
                 if let Some(ref table) = self.npc_table {
@@ -1229,7 +1258,7 @@ impl GameplayScene {
                             _ => None,
                         };
                         if let Some(id) = speech_id {
-                            self.messages.push(crate::game::events::speak(&self.narr, id, bname));
+                            self.messages.push(crate::game::events::speak(&self.narr, id, &bname));
                         }
                     }
                 }
@@ -1248,7 +1277,7 @@ impl GameplayScene {
                     _ => None,
                 };
                 if let Some(id) = speech_id {
-                    self.messages.push(crate::game::events::speak(&self.narr, id, bname));
+                    self.messages.push(crate::game::events::speak(&self.narr, id, &bname));
                 }
             }
         }
@@ -1672,6 +1701,7 @@ impl GameplayScene {
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
 
+            let bname = self.brother_name().to_string();
             if let Some(ref mut table) = self.npc_table {
                 let npc_idx = target_idx.saturating_sub(2);
                 if npc_idx < table.npcs.len() {
@@ -1686,7 +1716,6 @@ impl GameplayScene {
                         ImmunityResult::Vulnerable => damage,
                         ImmunityResult::ImmuneSilent => 0,
                         ImmunityResult::ImmuneWithMessage => {
-                            let bname = brother_name(&self.state);
                             immunity_msg = Some(crate::game::events::speak(&self.narr, 58, &bname));
                             0
                         }
@@ -1887,17 +1916,7 @@ impl GameplayScene {
         let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
         let textcolors = &self.textcolors;
         let compass_regions = &self.compass_regions;
-        let input_comptable_dir: usize = match self.current_direction() {
-            Direction::NW   => 0,
-            Direction::N    => 1,
-            Direction::NE   => 2,
-            Direction::E    => 3,
-            Direction::SE   => 4,
-            Direction::S    => 5,
-            Direction::SW   => 6,
-            Direction::W    => 7,
-            Direction::None => 9,
-        };
+        let input_comptable_dir = compass_dir_for_facing(self.state.facing);
         let hiscreen_opt = resources.find_image("hiscreen");
         let amber_font = resources.amber_font;
         let topaz_font = resources.topaz_font;
@@ -2491,8 +2510,8 @@ impl GameplayScene {
                         }
                     }
                 } else if self.state.eat_food() {
-                    let bname = brother_name(&self.state);
-                    self.messages.push(crate::game::events::event_msg(&self.narr, 37, bname));
+                    let bname = self.brother_name().to_string();
+                    self.messages.push(crate::game::events::event_msg(&self.narr, 37, &bname));
                     self.dlog(format!("eat_food: consumed food, hunger={}", self.state.hunger));
                 } else {
                     self.messages.push("No food.");
@@ -2564,8 +2583,8 @@ impl GameplayScene {
                     self.state.fatigue = 0;
                     self.state.hunger = (self.state.hunger + 50)
                         .min(crate::game::game_state::MAX_HUNGER);
-                    let bname = brother_name(&self.state);
-                    self.messages.push(crate::game::events::event_msg(&self.narr, 26, bname));
+                    let bname = self.brother_name().to_string();
+                    self.messages.push(crate::game::events::event_msg(&self.narr, 26, &bname));
                     self.dlog("Player slept: fatigue reset");
                 }
             }
@@ -2716,8 +2735,8 @@ impl GameplayScene {
                 if let Some((idx, ob_id)) = self.state.find_nearest_item(
                     self.state.region_num, self.state.hero_x, self.state.hero_y, TAKE_RANGE,
                 ) {
-                    let bname = brother_name(&self.state);
-                    let taken = self.handle_take_item(idx, ob_id, bname);
+                    let bname = self.brother_name().to_string();
+                    let taken = self.handle_take_item(idx, ob_id, &bname);
                     if taken {
                         let wealth = self.state.wealth;
                         self.menu.set_options(self.state.stuff(), wealth);
@@ -2765,13 +2784,13 @@ impl GameplayScene {
             GameAction::Yell => {
                 // Yell: nearest_fig(1, 100). If NPC within 35 → speak(8) "No need to shout!"
                 // Otherwise yell the next brother's name (fmain.c:4167-4175).
-                let bname = brother_name(&self.state);
+                let bname = self.brother_name().to_string();
                 if let Some(fig) = self.nearest_fig(1, 100) {
                     if fig.dist < 35 {
-                        self.messages.push(crate::game::events::speak(&self.narr, 8, bname));
+                        self.messages.push(crate::game::events::speak(&self.narr, 8, &bname));
                     } else {
                         // NPC in yell range but not close — show dialogue
-                        self.handle_setfig_talk(&fig, bname);
+                        self.handle_setfig_talk(&fig, &bname);
                     }
                 } else {
                     let next_brother = match self.state.brother {
@@ -2784,7 +2803,7 @@ impl GameplayScene {
             }
             GameAction::Speak | GameAction::Ask => {
                 // Talk: nearest_fig(1, 50). Check shopkeeper first, then setfig dialogue.
-                let bname = brother_name(&self.state);
+                let bname = self.brother_name().to_string();
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
                 let near_shop = self.npc_table.as_ref().map_or(false, |t| {
@@ -2811,7 +2830,7 @@ impl GameplayScene {
                     menu.push_str(&format!("  (Your gold: {})", self.state.gold));
                     self.messages.push(menu);
                 } else if let Some(fig) = self.nearest_fig(1, 50) {
-                    self.handle_setfig_talk(&fig, bname);
+                        self.handle_setfig_talk(&fig, &bname);
                 } else {
                     self.messages.push("There is no one here to talk to.");
                 }
@@ -2896,6 +2915,8 @@ impl GameplayScene {
             }
             _ => {}
         }
+        let wealth = self.state.wealth;
+        self.menu.set_options(self.state.stuff(), wealth);
     }
 
     fn toggle_menu_mode(&mut self) {
@@ -3219,6 +3240,7 @@ impl GameplayScene {
                     BrotherId::Kevin => 3,
                 };
                 self.state.brother = b;
+                self.update_brother_substitution();
                 self.dlog(format!("RestartAsBrother: switched to brother {}", b));
             }
             QueryTerrain => {
@@ -4129,9 +4151,9 @@ impl Scene for GameplayScene {
         let tick_events = self.state.tick(delta_ticks);
         self.state.cycle = self.state.cycle.wrapping_add(delta_ticks);
         if !tick_events.is_empty() {
-            let bname = brother_name(&self.state);
+            let bname = self.brother_name().to_string();
             for ev in tick_events {
-                let msg = crate::game::events::event_msg(&self.narr, ev as usize, bname);
+                let msg = crate::game::events::event_msg(&self.narr, ev as usize, &bname);
                 if !msg.is_empty() {
                     self.messages.push(msg);
                 }
@@ -4383,7 +4405,7 @@ impl Scene for GameplayScene {
             self.last_mood = u8::MAX; // force death music re-evaluation
             
             // T1-DEATH-MESSAGE: emit death event message (SPEC §20.1)
-            let bname = brother_name(&self.state);
+            let bname = self.brother_name().to_string();
             let death_msg = crate::game::events::event_msg(&self.narr, self.death_type, &bname);
             if !death_msg.is_empty() {
                 self.messages.push_wrapped(death_msg);
@@ -4409,10 +4431,10 @@ impl Scene for GameplayScene {
                     self.state.hunger = 0;
                     self.state.fatigue = 0;
                     self.state.battleflag = false;
-                    let bname = brother_name(&self.state);
-                    self.messages.push(format!("A faery saved {}!", bname));
+                    let bname = self.brother_name().to_string();
+                    self.messages.push(format!("A faery saved {}!", &bname));
                     self.last_mood = u8::MAX; // restart normal music
-                    self.dlog(format!("faery revived {}, luck now {}", bname, self.state.luck));
+                    self.dlog(format!("faery revived {}, luck now {}", &bname, self.state.luck));
                 } else if let Some(next) = self.state.next_brother() {
                     // SPEC §15.2: On brother death, set bones/ghost world objects visible.
                     // ob_listg[1-2].ob_stat = 1 (bones), ob_listg[3-4].ob_stat = 3 (ghosts).
@@ -4445,11 +4467,12 @@ impl Scene for GameplayScene {
                     } else {
                         self.state.activate_brother(next);
                     }
-                    let bname = brother_name(&self.state);
+                    self.update_brother_substitution();
+                    let bname = self.brother_name().to_string();
                     // Original: event(9) + event(10) for Phillip,
                     //           event(9) + event(11) for Kevin.
                     self.messages.push_wrapped(
-                        crate::game::events::event_msg(&self.narr, 9, bname));
+                        crate::game::events::event_msg(&self.narr, 9, &bname));
                     let cont_id = match self.state.brother {
                         2 => Some(10),
                         3 => Some(11),
@@ -4457,10 +4480,10 @@ impl Scene for GameplayScene {
                     };
                     if let Some(id) = cont_id {
                         self.messages.push_wrapped(
-                            crate::game::events::event_msg(&self.narr, id, bname));
+                            crate::game::events::event_msg(&self.narr, id, &bname));
                     }
                     self.last_mood = u8::MAX;
-                    self.dlog(format!("brother died, {} continues", bname));
+                    self.dlog(format!("brother died, {} continues", &bname));
                 } else {
                     // All brothers dead — game over
                     self.quit_requested = true;
@@ -5416,6 +5439,24 @@ mod tests {
 }
 
 #[cfg(test)]
+mod ui_menu_tests {
+    use super::*;
+    use crate::game::menu::MenuMode;
+
+    #[test]
+    fn test_do_option_always_refreshes_menu_options() {
+        let mut scene = GameplayScene::new();
+        // Simulate having a dirk, but menu says hidden.
+        scene.state.stuff_mut()[0] = 1;
+        scene.menu.menus[MenuMode::Use as usize].enabled[0] = 8;
+
+        scene.do_option(GameAction::LookAround);
+
+        assert_eq!(scene.menu.menus[MenuMode::Use as usize].enabled[0], 10);
+    }
+}
+
+#[cfg(test)]
 mod combat_tests {
     use super::push_offset;
 
@@ -5775,6 +5816,23 @@ mod t1_arena_spectre_tests {
         // Other objects should be unchanged
         assert_eq!(scene.state.world_objects[1].visible, true);
         assert_eq!(scene.state.world_objects[2].visible, true);
+    }
+}
+
+#[cfg(test)]
+mod t2_compass_tests {
+    use super::compass_dir_for_facing;
+
+    #[test]
+    fn test_compass_dir_for_facing() {
+        assert_eq!(compass_dir_for_facing(0), 1); // N
+        assert_eq!(compass_dir_for_facing(1), 2); // NE
+        assert_eq!(compass_dir_for_facing(2), 3); // E
+        assert_eq!(compass_dir_for_facing(3), 4); // SE
+        assert_eq!(compass_dir_for_facing(4), 5); // S
+        assert_eq!(compass_dir_for_facing(5), 6); // SW
+        assert_eq!(compass_dir_for_facing(6), 7); // W
+        assert_eq!(compass_dir_for_facing(7), 0); // NW
     }
 }
 
