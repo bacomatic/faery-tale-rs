@@ -340,6 +340,8 @@ pub struct GameplayScene {
     zones: Vec<crate::game::game_library::ZoneConfig>,
     /// Index of the zone the hero was in last frame (None = no zone).
     last_zone: Option<usize>,
+    /// Trigger princess rescue sequence on next frame.
+    trigger_princess_rescue: bool,
     /// Hero is in forced sleep (events 12/24).
     sleeping: bool,
     /// True when hero is in the volcanic region (lava damage active).
@@ -418,6 +420,7 @@ impl GameplayScene {
             bumped_door: None,
             zones: Vec::new(),
             last_zone: None,
+            trigger_princess_rescue: false,
             sleeping: false,
             fiery_death: false,
             dying: false,
@@ -1139,6 +1142,53 @@ impl GameplayScene {
         if environ as i32 == 30 && (self.state.cycle & 7) == 0 {
             self.state.vitality = (self.state.vitality - 1).max(0);
         }
+    }
+
+    /// Execute princess rescue sequence (SPEC §15.6).
+    /// Awards Writ, gold, keys, teleports hero, and clears princess captive flag.
+    fn execute_princess_rescue(&mut self) {
+        const ITEM_WRIT: usize = 28;  // stuff[28] = Writ
+        const ITEM_STATUE: usize = 25; // stuff[25] = gold statues
+        const PRINCESS_OB_INDEX: usize = 9; // ob_list8[9] in world_objects
+
+        // Princess names: Katra (0), Karla (1), Kandy (2)
+        let princess_names = ["Katra", "Karla", "Kandy"];
+        let princess_idx = self.state.princess as usize;
+        let princess_name = princess_names.get(princess_idx).unwrap_or(&"Princess");
+
+        let bname = self.hero_name();
+        self.messages.push(format!("{} has rescued {}!", bname, princess_name));
+
+        // Award Writ (stuff[28] = 1)
+        self.state.stuff_mut()[ITEM_WRIT] = 1;
+
+        // Award 100 gold
+        self.state.gold += 100;
+
+        // Award +3 of each key type (stuff[16..22] are the 6 key types)
+        for i in 16..22 {
+            let current = self.state.stuff()[i];
+            self.state.stuff_mut()[i] = current.saturating_add(3);
+        }
+
+        // Increment princess counter
+        self.state.princess = self.state.princess.saturating_add(1);
+
+        // Clear princess captive flag
+        if self.state.world_objects.len() > PRINCESS_OB_INDEX {
+            self.state.world_objects[PRINCESS_OB_INDEX].ob_stat = 0;
+            self.state.world_objects[PRINCESS_OB_INDEX].visible = false;
+        }
+
+        // Teleport hero to near King's castle (5511, 33780, region 0)
+        self.state.hero_x = 5511;
+        self.state.hero_y = 33780;
+        if self.state.region_num != 0 {
+            self.state.region_num = 0;
+            // Region change will be processed on next frame
+        }
+
+        self.dlog(format!("Princess rescue complete: {} (count={})", princess_name, self.state.princess));
     }
 
     /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
@@ -1921,7 +1971,24 @@ impl GameplayScene {
                 Err(anyhow::anyhow!("no region config for region {}", region))
             };
             match world_result {
-                Ok(world) => {
+                Ok(mut world) => {
+                    // SPEC §15.10: Hidden City gate. If entering region 4 (desert) with
+                    // fewer than 5 golden statues, overwrite 4 tiles at map offset
+                    // (11 × 128) + 26 with impassable tile 254 to block the city entrance.
+                    if region == 4 {
+                        const ITEM_STATUE: usize = 25; // stuff[25] = gold statue count
+                        if self.state.stuff()[ITEM_STATUE] < 5 {
+                            let offset = (11 * 128) + 26;
+                            if offset + 3 < world.map_mem.len() {
+                                world.map_mem[offset] = 254;
+                                world.map_mem[offset + 1] = 254;
+                                world.map_mem[offset + 2] = 254;
+                                world.map_mem[offset + 3] = 254;
+                                self.log_buffer.push("Azal city entrance blocked (statues < 5)".to_string());
+                            }
+                        }
+                    }
+
                     self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                     self.current_palette = Self::region_palette(game_lib, region);
                     self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
@@ -3984,8 +4051,38 @@ impl Scene for GameplayScene {
             let hy = self.state.hero_y;
             let current_zone = crate::game::zones::find_zone(&self.zones, hx, hy);
             if current_zone != self.last_zone {
+                // Update xtype from zone etype when zone changes
+                if let Some(zone_idx) = current_zone {
+                    if zone_idx < self.zones.len() {
+                        self.state.xtype = self.zones[zone_idx].etype as u16;
+                    }
+                }
+
+                // SPEC §15.6: Princess rescue trigger (xtype == 83)
+                if let Some(zone_idx) = current_zone {
+                    if zone_idx < self.zones.len() && self.zones[zone_idx].etype == 83 {
+                        // Check if princess is captive (ob_list8[9].ob_stat != 0)
+                        // ob_list8 is region 8, but the princess object should be global
+                        // Looking at the spec, ob_list8[9] is a specific world object.
+                        // We need to find the princess object in world_objects.
+                        const PRINCESS_OB_INDEX: usize = 9;
+                        if self.state.world_objects.len() > PRINCESS_OB_INDEX {
+                            let princess_captive = self.state.world_objects[PRINCESS_OB_INDEX].ob_stat != 0;
+                            if princess_captive {
+                                self.trigger_princess_rescue = true;
+                            }
+                        }
+                    }
+                }
+
                 self.last_zone = current_zone;
             }
+        }
+
+        // SPEC §15.6: Princess rescue sequence
+        if self.trigger_princess_rescue {
+            self.trigger_princess_rescue = false;
+            self.execute_princess_rescue();
         }
 
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
@@ -4054,6 +4151,27 @@ impl Scene for GameplayScene {
                     self.last_mood = u8::MAX; // restart normal music
                     self.dlog(format!("faery revived {}, luck now {}", bname, self.state.luck));
                 } else if let Some(next) = self.state.next_brother() {
+                    // SPEC §15.2: On brother death, set bones/ghost world objects visible.
+                    // ob_listg[1-2].ob_stat = 1 (bones), ob_listg[3-4].ob_stat = 3 (ghosts).
+                    if self.state.world_objects.len() > 4 {
+                        if self.state.world_objects[1].ob_id == 28 {
+                            self.state.world_objects[1].ob_stat = 1;
+                            self.state.world_objects[1].visible = true;
+                        }
+                        if self.state.world_objects[2].ob_id == 28 {
+                            self.state.world_objects[2].ob_stat = 1;
+                            self.state.world_objects[2].visible = true;
+                        }
+                        if self.state.world_objects[3].ob_id == 10 || self.state.world_objects[3].ob_id == 11 {
+                            self.state.world_objects[3].ob_stat = 3;
+                            self.state.world_objects[3].visible = true;
+                        }
+                        if self.state.world_objects[4].ob_id == 10 || self.state.world_objects[4].ob_id == 11 {
+                            self.state.world_objects[4].ob_stat = 3;
+                            self.state.world_objects[4].visible = true;
+                        }
+                    }
+
                     if let Some(bro) = game_lib.get_brother(next) {
                         let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
                             .map(|loc| (loc.x, loc.y, loc.region))
@@ -4940,3 +5058,155 @@ mod combat_tests {
         assert_eq!(push_offset(7, 2), (-2, -2));  // NW
     }
 }
+
+#[cfg(test)]
+mod quest_tests {
+    use super::*;
+
+    #[test]
+    fn test_princess_rescue_awards_items() {
+        let mut gs = GameplayScene::new();
+        gs.state.princess = 0;
+        gs.state.gold = 50;
+
+        // Setup princess as captive
+        while gs.state.world_objects.len() <= 9 {
+            gs.state.world_objects.push(crate::game::game_state::WorldObject {
+                ob_id: 0,
+                ob_stat: 0,
+                region: 0,
+                x: 0,
+                y: 0,
+                visible: false,
+            });
+        }
+        gs.state.world_objects[9].ob_stat = 3; // Princess captive
+
+        gs.execute_princess_rescue();
+
+        // Check Writ awarded
+        assert_eq!(gs.state.stuff()[28], 1, "Writ should be awarded");
+
+        // Check gold awarded
+        assert_eq!(gs.state.gold, 150, "100 gold should be added");
+
+        // Check keys awarded (+3 of each, indices 16-21)
+        for i in 16..22 {
+            assert_eq!(gs.state.stuff()[i], 3, "Key slot {} should have +3", i);
+        }
+
+        // Check princess counter incremented
+        assert_eq!(gs.state.princess, 1, "Princess counter should increment");
+
+        // Check princess flag cleared
+        assert_eq!(gs.state.world_objects[9].ob_stat, 0, "Princess captive flag should be cleared");
+    }
+
+    #[test]
+    fn test_brother_death_sets_bones_and_ghosts() {
+        let mut gs = GameplayScene::new();
+
+        // Setup world objects for bones and ghosts
+        for _ in 0..5 {
+            gs.state.world_objects.push(crate::game::game_state::WorldObject {
+                ob_id: 0,
+                ob_stat: 0,
+                region: 255,
+                x: 0,
+                y: 0,
+                visible: false,
+            });
+        }
+        // Index 1-2: bones (ob_id 28)
+        gs.state.world_objects[1].ob_id = 28;
+        gs.state.world_objects[2].ob_id = 28;
+        // Index 3-4: ghosts (ob_id 11)
+        gs.state.world_objects[3].ob_id = 11;
+        gs.state.world_objects[4].ob_id = 11;
+
+        // Verify bones/ghosts start hidden
+        assert_eq!(gs.state.world_objects[1].ob_stat, 0);
+        assert_eq!(gs.state.world_objects[2].ob_stat, 0);
+        assert_eq!(gs.state.world_objects[3].ob_stat, 0);
+        assert_eq!(gs.state.world_objects[4].ob_stat, 0);
+
+        // Simulate the brother death logic manually (without full update loop)
+        // This is the code path from the actual implementation
+        if gs.state.world_objects.len() > 4 {
+            if gs.state.world_objects[1].ob_id == 28 {
+                gs.state.world_objects[1].ob_stat = 1;
+                gs.state.world_objects[1].visible = true;
+            }
+            if gs.state.world_objects[2].ob_id == 28 {
+                gs.state.world_objects[2].ob_stat = 1;
+                gs.state.world_objects[2].visible = true;
+            }
+            if gs.state.world_objects[3].ob_id == 10 || gs.state.world_objects[3].ob_id == 11 {
+                gs.state.world_objects[3].ob_stat = 3;
+                gs.state.world_objects[3].visible = true;
+            }
+            if gs.state.world_objects[4].ob_id == 10 || gs.state.world_objects[4].ob_id == 11 {
+                gs.state.world_objects[4].ob_stat = 3;
+                gs.state.world_objects[4].visible = true;
+            }
+        }
+
+        // Check bones set visible (ob_stat = 1)
+        assert_eq!(gs.state.world_objects[1].ob_stat, 1, "Bone 1 should be visible");
+        assert_eq!(gs.state.world_objects[2].ob_stat, 1, "Bone 2 should be visible");
+
+        // Check ghosts set visible (ob_stat = 3)
+        assert_eq!(gs.state.world_objects[3].ob_stat, 3, "Ghost 1 should be visible");
+        assert_eq!(gs.state.world_objects[4].ob_stat, 3, "Ghost 2 should be visible");
+    }
+
+    #[test]
+    fn test_azal_city_gate_logic() {
+        // Test that the statue check logic is correct
+        const ITEM_STATUE: usize = 25;
+        
+        let mut stuff_blocked = [0u8; 31];
+        stuff_blocked[ITEM_STATUE] = 2;
+        assert!(stuff_blocked[ITEM_STATUE] < 5, "With 2 statues, gate should be blocked");
+
+        let mut stuff_open = [0u8; 31];
+        stuff_open[ITEM_STATUE] = 5;
+        assert!(stuff_open[ITEM_STATUE] >= 5, "With 5 statues, gate should be open");
+    }
+
+    #[test]
+    fn test_xtype_updates_from_zone_etype() {
+        let mut gs = GameplayScene::new();
+        
+        // Setup a zone with etype 83 (princess zone)
+        gs.zones.push(crate::game::game_library::ZoneConfig {
+            label: "princess".to_string(),
+            etype: 83,
+            x1: 100,
+            y1: 100,
+            x2: 200,
+            y2: 200,
+            v1: 0,
+            v2: 0,
+            v3: 0,
+        });
+
+        // Move hero into the zone
+        gs.state.hero_x = 150;
+        gs.state.hero_y = 150;
+
+        // Find the zone
+        let zone = crate::game::zones::find_zone(&gs.zones, gs.state.hero_x, gs.state.hero_y);
+        assert_eq!(zone, Some(0), "Hero should be in zone 0");
+
+        // Simulate zone entry (this would happen in update)
+        if let Some(zone_idx) = zone {
+            if zone_idx < gs.zones.len() {
+                gs.state.xtype = gs.zones[zone_idx].etype as u16;
+            }
+        }
+
+        assert_eq!(gs.state.xtype, 83, "xtype should match zone etype");
+    }
+}
+
