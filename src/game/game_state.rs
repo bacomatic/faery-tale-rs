@@ -836,8 +836,8 @@ impl GameState {
     /// Attempt luck-gated respawn. Returns true if respawned.
     /// Requires luck >= 10; costs 10 luck per use.
     pub fn try_respawn(&mut self) -> bool {
-        if self.luck >= 10 {
-            self.luck -= 10;
+        if self.luck >= 1 {
+            self.luck = (self.luck - 5).max(0);
             self.hero_x = self.safe_x;
             self.hero_y = self.safe_y;
             self.region_num = self.safe_r;
@@ -899,7 +899,7 @@ mod tests {
     #[test]
     fn test_try_respawn_no_luck() {
         let mut s = GameState::new();
-        s.luck = 5;
+        s.luck = 0;
         assert!(!s.try_respawn());
     }
 
