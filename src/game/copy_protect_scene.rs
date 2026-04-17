@@ -339,7 +339,7 @@ impl Scene for CopyProtectScene {
                     });
 
                     let correct = if let Some(q) = game_lib.get_copy_protect_questions().get(qidx) {
-                        self.input.eq_ignore_ascii_case(&q.answer)
+                        self.input == q.answer
                     } else {
                         false
                     };
@@ -429,5 +429,32 @@ impl Scene for CopyProtectScene {
 
             CopyProtectPhase::Done { .. } => SceneResult::Done,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_answer_comparison_case_sensitive() {
+        // SPEC §23.2: Copy protection riddle answer comparison is case-sensitive (uppercase required).
+        // Exact match required — lowercase should fail.
+        let answer = "HEED";
+        
+        // Uppercase match → correct
+        assert_eq!("HEED", answer);
+        
+        // Lowercase → incorrect
+        assert_ne!("heed", answer);
+        assert_ne!("Heed", answer);
+        assert_ne!("hEED", answer);
+        
+        // Other valid answers
+        assert_eq!("LIGHT", "LIGHT");
+        assert_ne!("light", "LIGHT");
+        
+        assert_eq!("NIGHT", "NIGHT");
+        assert_ne!("Night", "NIGHT");
     }
 }
