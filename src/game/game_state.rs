@@ -45,6 +45,11 @@ pub struct WorldObject {
     pub visible: bool,
 }
 
+/// Convert daynight counter to dayperiod value per SPEC §17.3.
+/// Returns discrete values {0, 4, 6, 9} for midnight/morning/midday/evening.
+pub fn dayperiod_from_daynight(daynight: u16) -> u8 {
+    (daynight / 2000) as u8
+}
 pub struct GameState {
     // Hero position
     pub hero_x: u16,
@@ -150,6 +155,9 @@ pub struct GameState {
     pub secret_sticky: bool,
     pub freeze_sticky: bool,
 
+    // Cheat flag (persisted in save file per SPEC §25.9)
+    pub cheat1: bool,
+
     // Tick counter (cumulative ticks since start)
     pub tick_counter: u32,
 
@@ -238,7 +246,7 @@ impl GameState {
             set_file: 0,
 
             princess: 0,
-            dayperiod: 1,    // morning period; was 0 (midnight)
+            dayperiod: 4,    // morning period (0=midnight, 4=morning, 6=midday, 9=evening)
 
             current_mood: 0,
 
@@ -249,6 +257,7 @@ impl GameState {
             light_sticky: false,
             secret_sticky: false,
             freeze_sticky: false,
+            cheat1: false,
 
             tick_counter: 0,
             brother_alive: [true, true, true],
@@ -300,12 +309,12 @@ impl GameState {
         self.lightlevel = if raw >= 300 { 600 - raw } else { raw };
 
         // Detect period boundary crossing (boundaries at 0, 6000, 12000, 18000).
-        const BOUNDARIES: [u16; 4] = [0, 6000, 12000, 18000];
+        const BOUNDARIES: [u16; 4] = [0, 8000, 12000, 18000];
         let crossed = BOUNDARIES
             .iter()
             .any(|&b| (prev < b && self.daynight >= b) || (prev > self.daynight && b == 0));
         if crossed {
-            self.dayperiod = ((self.daynight / 6000) as u8).min(3);
+            self.dayperiod = dayperiod_from_daynight(self.daynight);
         }
         crossed
     }
@@ -322,9 +331,9 @@ impl GameState {
     pub fn get_day_phase(&self) -> DayPhase {
         match self.dayperiod {
             0 => DayPhase::Midnight,
-            1 => DayPhase::Morning,
-            2 => DayPhase::Midday,
-            3 => DayPhase::Evening,
+            4 => DayPhase::Morning,
+            6 => DayPhase::Midday,
+            9 => DayPhase::Evening,
             _ => DayPhase::Midnight,
         }
     }
@@ -364,9 +373,9 @@ impl GameState {
             if period_crossed {
                 let ev = match self.dayperiod {
                     0 => 28u8, // midnight
-                    1 => 29,   // morning
-                    2 => 30,   // midday
-                    3 => 31,   // evening
+                    4 => 29,   // morning
+                    6 => 30,   // midday
+                    9 => 31,   // evening
                     _ => u8::MAX,
                 };
                 if ev != u8::MAX {

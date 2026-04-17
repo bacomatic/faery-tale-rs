@@ -2785,7 +2785,7 @@ impl GameplayScene {
         if s.hero_x >= 0x2400 && s.hero_x <= 0x3100 && s.hero_y >= 0x8200 && s.hero_y <= 0x8a00 { return 4; }
         if s.battleflag { return 1; }
         if s.region_num > 7 { return 5; }
-        if s.dayperiod == 1 || s.dayperiod == 2 { return 0; }  // day music during morning/midday
+        if s.dayperiod == 4 || s.dayperiod == 6 { return 0; }  // day music during morning(4)/midday(6)
         2
     }
 
@@ -2841,7 +2841,7 @@ impl GameplayScene {
                 self.state.daynight = phase;
                 let raw = self.state.daynight / 40;
                 self.state.lightlevel = if raw >= 300 { 600 - raw } else { raw };
-                self.state.dayperiod = ((self.state.daynight / 6000) as u8).min(3);
+                self.state.dayperiod = crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
             }
             SetGameTime { hour, minute } => {
                 // Each hour = 1000 daynight ticks; each minute ≈ 1000/60
@@ -2850,7 +2850,7 @@ impl GameplayScene {
                 self.state.daynight = ticks % 24000;
                 let raw = self.state.daynight / 40;
                 self.state.lightlevel = if raw >= 300 { 600 - raw } else { raw };
-                self.state.dayperiod = ((self.state.daynight / 6000) as u8).min(3);
+                self.state.dayperiod = crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
             }
             HoldTimeOfDay { hold } => {
                 self.state.freeze_sticky = hold;
