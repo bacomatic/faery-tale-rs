@@ -1347,27 +1347,29 @@ impl GameplayScene {
                     }
                 }
             }
-            FigKind::SetFig { setfig_type, .. } => {
+            FigKind::SetFig { world_idx, setfig_type } => {
                 let k = *setfig_type as usize;
+                let sf_goal = self.state.world_objects
+                    .get(*world_idx)
+                    .map_or(0u8, |o| o.goal) as usize;
                 // Per-setfig dialogue (fmain.c:4188-4261).
                 match k {
                     0 => {
-                        // Wizard: kind < 10 → speak(35), else speak(27 + goal).
-                        // goal is not tracked yet; use speak(27) as default.
+                        // Wizard (SPEC §13.1): kind < 10 → speak(35), else speak(27 + goal).
                         if self.state.kind < 10 {
                             self.messages.push(crate::game::events::speak(&self.narr, 35, bname));
                         } else {
-                            self.messages.push(crate::game::events::speak(&self.narr, 27, bname));
+                            self.messages.push(crate::game::events::speak(&self.narr, 27 + sf_goal, bname));
                         }
                     }
                     1 => {
-                        // Priest: heals hero. kind < 10 → speak(40), else speak(36 + daynight%3) + heal.
+                        // Priest (SPEC §13.1): kind < 10 → speak(40), else speak(36 + daynight%3) + heal.
                         if self.state.kind < 10 {
                             self.messages.push(crate::game::events::speak(&self.narr, 40, bname));
                         } else {
                             let day_mod = (self.state.daynight % 3) as usize;
                             self.messages.push(crate::game::events::speak(&self.narr, 36 + day_mod, bname));
-                            // Heal: vitality = 15 + brave/4 (fmain.c:4222).
+                            // Heal to 15 + brave/4 (fmain.c:4222).
                             self.state.vitality = 15 + self.state.brave / 4;
                         }
                     }
@@ -1418,15 +1420,15 @@ impl GameplayScene {
                         self.messages.push(crate::game::events::speak(&self.narr, 49, bname));
                     }
                     12 => {
-                        // Ranger: region 2 → speak(22), else speak(53 + goal).
+                        // Ranger (SPEC §13.1): region 2 → speak(22), else speak(53 + goal).
                         if self.state.region_num == 2 {
                             self.messages.push(crate::game::events::speak(&self.narr, 22, bname));
                         } else {
-                            self.messages.push(crate::game::events::speak(&self.narr, 53, bname));
+                            self.messages.push(crate::game::events::speak(&self.narr, 53 + sf_goal, bname));
                         }
                     }
                     13 => {
-                        // Beggar: speak(23).
+                        // Beggar TALK (SPEC §13.1): always speak(23) "Alms! Alms for the poor!"
                         self.messages.push(crate::game::events::speak(&self.narr, 23, bname));
                     }
                     _ => {
@@ -2657,26 +2659,31 @@ impl GameplayScene {
                 }
             }
             GameAction::Give => {
-                // Give 2 gold to a nearby beggar (race 0x8d), raising kindness.
-                // Mirrors fmain.c GIVE case: hit==5 && wealth>2, kind++.
-                use crate::game::npc::RACE_BEGGAR;
+                // Give 2 gold to a nearby beggar setfig (ob_id=13, ob_stat=3), raising kindness.
+                // T2-NPC-BEGGAR-GOAL: beggar speaks speak(24 + goal) on receipt (SPEC §13.5).
+                // Overflow bug at goal==3 → speak(27) is preserved naturally (24+3=27).
+                let bname = brother_name(&self.state);
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
-                let near_beggar = self.npc_table.as_ref().map_or(false, |t| {
-                    t.npcs.iter().any(|n| {
-                        n.active && n.race == RACE_BEGGAR
-                            && (n.x - hero_x).abs() < 32
-                            && (n.y - hero_y).abs() < 32
-                    })
-                });
+                let beggar_world_idx = self.state.world_objects.iter().enumerate().find(|(_, o)| {
+                    o.ob_stat == 3 && o.ob_id == 13 && o.visible
+                        && o.region == self.state.region_num
+                        && ((o.x as i16 - hero_x).abs() < 50)
+                        && ((o.y as i16 - hero_y).abs() < 50)
+                }).map(|(i, _)| i);
+                let near_beggar = beggar_world_idx.is_some();
                 if near_beggar && self.state.wealth > 2 {
                     self.state.wealth -= 2;
                     // kind++ chance (mirrors: if rand64() > kind { kind++; })
                     if self.state.kind < 100 {
                         self.state.kind += 1;
                     }
-                    self.messages.push("You give gold to the beggar. They thank you.");
-                    self.dlog(format!("give to beggar: wealth={}, kind={}", self.state.wealth, self.state.kind));
+                    let goal = beggar_world_idx
+                        .and_then(|i| self.state.world_objects.get(i))
+                        .map_or(0usize, |o| o.goal as usize);
+                    // speak(24 + goal): goal==3 overflows to speak(27) per original bug.
+                    self.messages.push(crate::game::events::speak(&self.narr, 24 + goal, bname));
+                    self.dlog(format!("give to beggar goal={}: wealth={}, kind={}", goal, self.state.wealth, self.state.kind));
                 } else if near_beggar {
                     self.messages.push("You have no gold to spare.");
                 } else {
@@ -2705,6 +2712,7 @@ impl GameplayScene {
             }
             GameAction::Speak | GameAction::Ask => {
                 // Talk: nearest_fig(1, 50). Check shopkeeper first, then setfig dialogue.
+                // Fallback: turtle carrier shell dialogue (SPEC §13.7).
                 let bname = brother_name(&self.state);
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
@@ -2733,6 +2741,17 @@ impl GameplayScene {
                     self.messages.push(menu);
                 } else if let Some(fig) = self.nearest_fig(1, 50) {
                     self.handle_setfig_talk(&fig, bname);
+                } else if self.state.active_carrier == crate::game::game_state::CARRIER_TURTLE {
+                    // T2-NPC-TURTLE-DIALOG: turtle carrier shell dialogue (SPEC §13.7).
+                    // No shell → speak(56) "Thank you for saving my eggs!" and award shell.
+                    // Has shell → speak(57) "Hop on my back for a ride".
+                    let speech = if self.state.stuff()[crate::game::game_state::ITEM_SHELL] == 0 {
+                        self.state.stuff_mut()[crate::game::game_state::ITEM_SHELL] = 1;
+                        56
+                    } else {
+                        57
+                    };
+                    self.messages.push(crate::game::events::speak(&self.narr, speech, bname));
                 } else {
                     self.messages.push("There is no one here to talk to.");
                 }
@@ -3311,6 +3330,7 @@ impl GameplayScene {
                             region,
                             x, y,
                             visible: true,
+                            goal: 0,
                         });
                         dropped += 1;
                     }
@@ -3335,6 +3355,7 @@ impl GameplayScene {
                             region,
                             x, y,
                             visible: true,
+                            goal: 0,
                         });
                         dropped += 1;
                     }
@@ -4815,6 +4836,7 @@ mod tests {
             x: gs.state.hero_x,
             y: gs.state.hero_y,
             visible: true,
+            goal: 0,
         });
         gs.do_option(GameAction::Take);
 
@@ -4835,6 +4857,7 @@ mod tests {
             x: gs.state.hero_x,
             y: gs.state.hero_y,
             visible: true,
+            goal: 0,
         });
         gs.do_option(GameAction::Take);
 
@@ -5023,6 +5046,7 @@ mod tests {
                 region: state.region_num,
                 x, y,
                 visible: true,
+                goal: 0,
             });
         }
         assert_eq!(state.world_objects.len(), 5);
@@ -5491,6 +5515,7 @@ mod t1_arena_spectre_tests {
             x: 12439,
             y: 36202,
             visible: false,
+            goal: 0,
         });
         
         // Set lightlevel to deep night (< 40)
@@ -5516,6 +5541,7 @@ mod t1_arena_spectre_tests {
             x: 12439,
             y: 36202,
             visible: true,
+            goal: 0,
         });
         
         // Set lightlevel to day (>= 40)
@@ -5540,6 +5566,7 @@ mod t1_arena_spectre_tests {
             x: 12439,
             y: 36202,
             visible: false,
+            goal: 0,
         });
         
         // Test just below threshold (should be visible)
@@ -5566,6 +5593,7 @@ mod t1_arena_spectre_tests {
             x: 12439,
             y: 36202,
             visible: false,
+            goal: 0,
         });
         scene.state.world_objects.push(WorldObject {
             ob_id: 11,  // Ghost (different setfig)
@@ -5574,6 +5602,7 @@ mod t1_arena_spectre_tests {
             x: 5000,
             y: 5000,
             visible: true,
+            goal: 0,
         });
         scene.state.world_objects.push(WorldObject {
             ob_id: 15,  // Chest (ground item)
@@ -5582,6 +5611,7 @@ mod t1_arena_spectre_tests {
             x: 6000,
             y: 6000,
             visible: true,
+            goal: 0,
         });
         
         scene.state.lightlevel = 30;  // Night
@@ -5614,6 +5644,7 @@ mod quest_tests {
                 x: 0,
                 y: 0,
                 visible: false,
+                goal: 0,
             });
         }
         gs.state.world_objects[9].ob_stat = 3; // Princess captive
@@ -5651,6 +5682,7 @@ mod quest_tests {
                 x: 0,
                 y: 0,
                 visible: false,
+                goal: 0,
             });
         }
         // Index 1-2: bones (ob_id 28)
@@ -5993,5 +6025,314 @@ mod quest_tests {
         gs.state.region_num = 3; // outdoor
         gs.state.lightlevel = 121; // just above threshold
         assert_eq!(gs.setmood(), 0); // Day music (> 120)
+    }
+}
+
+#[cfg(test)]
+mod t2_npc_talk_tests {
+    //! TDD tests for T2-NPC-* tasks (SPEC §25.5 TALK).
+    use super::*;
+    use crate::game::game_library::NarrConfig;
+    use crate::game::game_state::{WorldObject, CARRIER_TURTLE, ITEM_SHELL};
+
+    /// Build a minimal GameplayScene pre-loaded with a speech table of size `n`.
+    fn scene_with_speeches(n: usize) -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        scene.narr = NarrConfig {
+            event_msg: vec![],
+            speeches: (0..n).map(|i| format!("speech_{}", i)).collect(),
+            place_msg: vec![],
+            inside_msg: vec![],
+        };
+        scene
+    }
+
+    /// Push a setfig WorldObject at the hero's position and return the world_idx.
+    fn push_setfig(scene: &mut GameplayScene, ob_id: u8, goal: u8) -> usize {
+        let idx = scene.state.world_objects.len();
+        scene.state.world_objects.push(WorldObject {
+            ob_id,
+            ob_stat: 3,
+            region: scene.state.region_num,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal,
+        });
+        idx
+    }
+
+    // ── T2-NPC-PRIEST-HEAL ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_priest_heal_kind_ge10_heals_and_speaks() {
+        // SPEC §13.1 Priest: kind >= 10 → speak(36+daynight%3) AND heal to 15+brave/4.
+        let mut scene = scene_with_speeches(60);
+        scene.state.kind = 15;
+        scene.state.brave = 40;
+        scene.state.vitality = 5; // wounded
+        scene.state.daynight = 0; // daynight%3 == 0 → speak(36)
+        push_setfig(&mut scene, 1, 0); // setfig type 1 = Priest
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 1 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+
+        // HP should be 15 + 40/4 = 25
+        assert_eq!(scene.state.vitality, 25, "priest should heal to 15 + brave/4");
+        // Should have spoken speak(36) ("seek enemy on spirit plane")
+        assert_eq!(scene.messages.len(), 1);
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_36"),
+            "priest should speak(36) at daynight%3==0, got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_priest_heal_kind_lt10_no_heal_speak40() {
+        // SPEC §13.1 Priest: kind < 10 → speak(40) "Repent, Sinner!" — no heal.
+        let mut scene = scene_with_speeches(60);
+        scene.state.kind = 5;
+        scene.state.vitality = 3;
+        push_setfig(&mut scene, 1, 0);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 1 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+
+        assert_eq!(scene.state.vitality, 3, "no heal when kind < 10");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_40"),
+            "should speak(40), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T2-NPC-WIZARD-GOAL ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_wizard_kind_lt10_speaks_35() {
+        // SPEC §13.1 Wizard: kind < 10 → speak(35).
+        let mut scene = scene_with_speeches(60);
+        scene.state.kind = 5;
+        push_setfig(&mut scene, 0, 2); // goal=2, but should be ignored
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 0 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_35"),
+            "wizard kind<10 should speak(35), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_wizard_kind_ge10_speaks_27_plus_goal() {
+        // SPEC §13.1 Wizard: kind >= 10 → speak(27 + goal).
+        let mut scene = scene_with_speeches(60);
+        scene.state.kind = 15;
+        push_setfig(&mut scene, 0, 2); // goal = 2 → speak(29)
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 0 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_29"),
+            "wizard kind>=10 goal=2 should speak(29), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T2-NPC-INNKEEPER ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_innkeeper_fatigue_lt5_speaks_13() {
+        // SPEC §13.1 Bartender: fatigue < 5 → speak(13) "Good Morning".
+        let mut scene = scene_with_speeches(60);
+        scene.state.fatigue = 2;
+        push_setfig(&mut scene, 8, 0);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_13"),
+            "innkeeper fatigue<5 should speak(13), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_innkeeper_dayperiod_gt7_fatigue_ge5_speaks_12() {
+        // SPEC §13.1 Bartender: fatigue >= 5 && dayperiod > 7 → speak(12).
+        let mut scene = scene_with_speeches(60);
+        scene.state.fatigue = 10;
+        scene.state.dayperiod = 9; // evening
+        push_setfig(&mut scene, 8, 0);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_12"),
+            "innkeeper dayperiod>7 fatigue>=5 should speak(12), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_innkeeper_else_speaks_14() {
+        // SPEC §13.1 Bartender: else → speak(14) "Have a drink!".
+        let mut scene = scene_with_speeches(60);
+        scene.state.fatigue = 10;
+        scene.state.dayperiod = 4; // morning, not > 7
+        push_setfig(&mut scene, 8, 0);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_14"),
+            "innkeeper else should speak(14), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T2-NPC-RANGER-GOAL ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_ranger_region2_speaks_22() {
+        // SPEC §13.1 Ranger: region_num == 2 → speak(22).
+        let mut scene = scene_with_speeches(60);
+        scene.state.region_num = 2;
+        push_setfig(&mut scene, 12, 1); // goal=1 but shouldn't matter
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_22"),
+            "ranger region=2 should speak(22), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_ranger_goal0_speaks_53() {
+        // SPEC §13.1 Ranger: region != 2, goal=0 → speak(53).
+        let mut scene = scene_with_speeches(60);
+        scene.state.region_num = 0; // snow
+        push_setfig(&mut scene, 12, 0);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_53"),
+            "ranger goal=0 should speak(53), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_ranger_goal1_speaks_54() {
+        // SPEC §13.1 Ranger: goal=1 → speak(54).
+        let mut scene = scene_with_speeches(60);
+        scene.state.region_num = 0;
+        push_setfig(&mut scene, 12, 1);
+
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_54"),
+            "ranger goal=1 should speak(54), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T2-NPC-BEGGAR-GOAL ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_beggar_give_goal0_speaks_24() {
+        // SPEC §13.5 Give gold to beggar, goal=0 → speak(24).
+        let mut scene = scene_with_speeches(60);
+        scene.state.wealth = 10;
+        scene.state.kind = 5;
+        // Place beggar setfig (ob_id=13) at hero position, goal=0
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 13,
+            ob_stat: 3,
+            region: scene.state.region_num,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal: 0,
+        });
+
+        scene.do_option(GameAction::Give);
+
+        assert_eq!(scene.state.wealth, 8, "wealth should decrease by 2");
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_24"),
+            "beggar goal=0 should speak(24), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_beggar_give_goal2_speaks_26() {
+        // SPEC §13.5 Beggar, goal=2 → speak(26).
+        let mut scene = scene_with_speeches(60);
+        scene.state.wealth = 10;
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 13, ob_stat: 3,
+            region: scene.state.region_num,
+            x: scene.state.hero_x, y: scene.state.hero_y,
+            visible: true, goal: 2,
+        });
+
+        scene.do_option(GameAction::Give);
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_26"),
+            "beggar goal=2 should speak(26), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_beggar_give_goal3_overflows_to_speak27() {
+        // SPEC §13.5 Overflow bug: ob_list3[3] has goal=3 → speak(24+3)=speak(27).
+        // speak(27) is the first wizard hint — this IS the original bug, preserved.
+        let mut scene = scene_with_speeches(60);
+        scene.state.wealth = 10;
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 13, ob_stat: 3,
+            region: scene.state.region_num,
+            x: scene.state.hero_x, y: scene.state.hero_y,
+            visible: true, goal: 3,
+        });
+
+        scene.do_option(GameAction::Give);
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_27"),
+            "beggar goal=3 overflow should speak(27), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T2-NPC-TURTLE-DIALOG ────────────────────────────────────────────────
+
+    #[test]
+    fn test_turtle_dialog_no_shell_awards_shell_speaks_56() {
+        // SPEC §13.7: active_carrier==turtle, stuff[6]==0 → speak(56) + award shell.
+        let mut scene = scene_with_speeches(60);
+        scene.state.active_carrier = CARRIER_TURTLE;
+        scene.state.stuff_mut()[ITEM_SHELL] = 0; // no shell
+
+        scene.do_option(GameAction::Speak);
+
+        assert_eq!(scene.state.stuff()[ITEM_SHELL], 1, "shell should be awarded");
+        assert_eq!(scene.messages.len(), 1);
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_56"),
+            "no shell → speak(56), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    #[test]
+    fn test_turtle_dialog_has_shell_speaks_57() {
+        // SPEC §13.7: active_carrier==turtle, stuff[6]!=0 → speak(57).
+        let mut scene = scene_with_speeches(60);
+        scene.state.active_carrier = CARRIER_TURTLE;
+        scene.state.stuff_mut()[ITEM_SHELL] = 1; // has shell
+
+        scene.do_option(GameAction::Speak);
+
+        // Shell count should remain unchanged
+        assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
+        assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
+            "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
     }
 }

@@ -43,6 +43,9 @@ pub struct WorldObject {
     pub x: u16,
     pub y: u16,
     pub visible: bool,
+    /// goal: index of this object within its ob_listX (set at region load; 0 for dynamic items).
+    /// Used by setfig NPCs (wizard, ranger, beggar) to select variant dialogue (SPEC §13.1).
+    pub goal: u8,
 }
 
 /// Convert daynight counter to dayperiod value per SPEC §17.3.
@@ -811,6 +814,7 @@ impl GameState {
                 ob_stat: 1,
                 region, x, y,
                 visible: true,
+                goal: 0,
             });
             true
         } else {
@@ -903,11 +907,27 @@ impl GameState {
     pub fn populate_region_objects(&mut self, region: u8, game_lib: &crate::game::game_library::GameLibrary) {
         self.world_objects.clear();
 
+        // Track per-list indices separately (mirrors original ob_listX vs ob_listg).
+        let mut region_goal: u8 = 0;
+        let mut global_goal: u8 = 0;
+
         for obj_cfg in &game_lib.objects {
             // Include objects for this region + global objects (region 255)
             if obj_cfg.region != region && obj_cfg.region != 255 {
                 continue;
             }
+            // goal = index in the respective ob_listX, counting all entries (SPEC §13.1).
+            let is_global = obj_cfg.region == 255;
+            let goal = if is_global {
+                let g = global_goal;
+                global_goal = global_goal.wrapping_add(1);
+                g
+            } else {
+                let g = region_goal;
+                region_goal = region_goal.wrapping_add(1);
+                g
+            };
+
             // Ground items (1), setfig NPCs (3), and hidden items (5)
             if obj_cfg.ob_stat == 1 || obj_cfg.ob_stat == 3 || obj_cfg.ob_stat == 5 {
                 self.world_objects.push(WorldObject {
@@ -917,6 +937,7 @@ impl GameState {
                     x: obj_cfg.x,
                     y: obj_cfg.y,
                     visible: obj_cfg.ob_stat != 5, // ob_stat 1 and 3 are visible
+                    goal,
                 });
             }
         }
@@ -1098,7 +1119,7 @@ mod tests {
         s.hero_y = 100;
         // Gold Key: ob_id 25 → stuff index 16
         s.world_objects.push(WorldObject {
-            ob_id: 25, ob_stat: 1, region: 3, x: 100, y: 100, visible: true,
+            ob_id: 25, ob_stat: 1, region: 3, x: 100, y: 100, visible: true, goal: 0,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -1114,7 +1135,7 @@ mod tests {
         s.hero_y = 100;
         s.gold = 10;
         s.world_objects.push(WorldObject {
-            ob_id: 13, ob_stat: 1, region: 3, x: 100, y: 100, visible: true,
+            ob_id: 13, ob_stat: 1, region: 3, x: 100, y: 100, visible: true, goal: 0,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -1128,7 +1149,7 @@ mod tests {
         s.hero_x = 100;
         s.hero_y = 100;
         s.world_objects.push(WorldObject {
-            ob_id: 31, ob_stat: 1, region: 8, x: 100, y: 100, visible: true,
+            ob_id: 31, ob_stat: 1, region: 8, x: 100, y: 100, visible: true, goal: 0,
         });
         let result = s.pickup_world_object(8, 100, 100, 24);
         assert!(result.is_none());
