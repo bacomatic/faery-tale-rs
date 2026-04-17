@@ -28,6 +28,7 @@ use crate::game::intro_scene::IntroScene;
 use crate::game::copy_protect_scene::CopyProtectScene;
 use crate::game::placard_scene::PlacardScene;
 use crate::game::gameplay_scene::GameplayScene;
+use crate::game::victory_scene::VictoryScene;
 use crate::game::audio::{AudioSystem, Instruments};
 use crate::game::songs::{SongLibrary, Track};
 
@@ -199,7 +200,7 @@ pub fn main() -> Result<(), String> {
 
     // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
     // The scene_phase tracks what to start next when a scene completes.
-    enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay }
+    enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay, VictoryPlacard, VictoryImage }
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
             let mut gs = GameplayScene::new();
@@ -391,12 +392,43 @@ pub fn main() -> Result<(), String> {
                             clear_flag = true;
                         }
                         ScenePhase::Gameplay => {
-                            // Game over or restart — re-create GameplayScene
-                            let mut gs = GameplayScene::new();
-                            gs.init_from_library(&game_lib);
-                            gs.set_echo_transcript(cli.echo_transcript);
-                            active_scene = Some(Box::new(gs));
+                            // Gameplay exited via SceneResult::Done.
+                            // If the Talisman win condition fired, transition
+                            // into the victory sequence (placard → winpic);
+                            // otherwise treat as restart.
+                            let won = scene.as_any().downcast_ref::<GameplayScene>()
+                                .map(|gs| gs.is_victory()).unwrap_or(false);
+                            if won {
+                                let hero = scene.as_any().downcast_ref::<GameplayScene>()
+                                    .map(|gs| gs.hero_name()).unwrap_or("Julian");
+                                if let Some(ref a) = audio_system {
+                                    a.stop_score();
+                                }
+                                active_scene = Some(Box::new(
+                                    PlacardScene::new("player_win", "pagecolors")
+                                        .with_hold_ticks(80)
+                                        .with_substitution(hero),
+                                ));
+                                scene_phase = ScenePhase::VictoryPlacard;
+                            } else {
+                                // Game over or restart — re-create GameplayScene
+                                let mut gs = GameplayScene::new();
+                                gs.init_from_library(&game_lib);
+                                gs.set_echo_transcript(cli.echo_transcript);
+                                active_scene = Some(Box::new(gs));
+                            }
                             dirty = true;
+                        }
+                        ScenePhase::VictoryPlacard => {
+                            // Victory placard done → show the winpic image.
+                            active_scene = Some(Box::new(VictoryScene::new()));
+                            scene_phase = ScenePhase::VictoryImage;
+                            dirty = true;
+                            clear_flag = true;
+                        }
+                        ScenePhase::VictoryImage => {
+                            // Victory image fade-out complete → exit the app.
+                            break 'running;
                         }
                     }
                 }

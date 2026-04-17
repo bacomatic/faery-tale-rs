@@ -309,6 +309,11 @@ pub struct GameplayScene {
     log_buffer: Vec<String>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
+    /// Set to true when the Talisman win condition fires (`stuff[22]` set
+    /// after an item pickup). Drives the Gameplay→VictoryScene transition
+    /// in `main.rs`. Mirrors `quitflag = TRUE; viewstatus = 2` from
+    /// `fmain.c:3244-3247`.
+    victory_triggered: bool,
     /// Game is paused (Space key toggles).
     paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
@@ -400,6 +405,7 @@ impl GameplayScene {
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             quit_requested: false,
+            victory_triggered: false,
             paused: false,
             compass_regions: Vec::new(),
             menu: crate::game::menu::MenuState::new(),
@@ -501,6 +507,15 @@ impl GameplayScene {
 
     /// Whether a palette crossfade (region transition) is in progress.
     pub fn is_palette_xfade_active(&self) -> bool { self.palette_transition.is_some() }
+
+    /// True once the Talisman win condition has fired. `main.rs` observes this
+    /// on `SceneResult::Done` to branch into the victory sequence rather than
+    /// restarting gameplay.
+    pub fn is_victory(&self) -> bool { self.victory_triggered }
+
+    /// Current hero's display name ("Julian", "Phillip", "Kevin"). Used by
+    /// external scenes (e.g. the victory placard) that need `%`-substitution.
+    pub fn hero_name(&self) -> &'static str { brother_name(&self.state) }
 
     /// Current zone index and label for the debug console.
     pub fn current_zone_info(&self) -> (Option<usize>, Option<String>) {
@@ -2413,6 +2428,15 @@ impl GameplayScene {
                     if taken {
                         let wealth = self.state.wealth;
                         self.menu.set_options(self.state.stuff(), wealth);
+                        // Win condition — fmain.c:3244-3247:
+                        //   if (stuff[22]) { quitflag = TRUE; viewstatus = 2;
+                        //                    map_message(); SetFont(rp,afont); win_colors(); }
+                        // Talisman pickup sets stuff[22]; game exits via VictoryScene.
+                        if self.state.stuff()[22] != 0 && !self.victory_triggered {
+                            self.state.quitflag = true;
+                            self.state.viewstatus = 2;
+                            self.victory_triggered = true;
+                        }
                     }
                 } else {
                     self.messages.push("Nothing here to take.");
@@ -4437,6 +4461,9 @@ impl Scene for GameplayScene {
         self.render_by_viewstatus(canvas, resources);
         if self.quit_requested {
             SceneResult::Quit
+        } else if self.victory_triggered {
+            // Talisman picked up → transition to victory sequence via main.rs.
+            SceneResult::Done
         } else {
             SceneResult::Continue
         }
@@ -4454,6 +4481,50 @@ impl Scene for GameplayScene {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_talisman_pickup_triggers_victory() {
+        // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
+        // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
+        let mut gs = GameplayScene::new();
+        assert!(!gs.is_victory(), "fresh scene should not be in victory state");
+        assert!(!gs.state.quitflag);
+
+        // Place the Necromancer's Talisman (world object 139) on the ground at
+        // the hero's position, then invoke Take via do_option.
+        gs.state.world_objects.push(crate::game::game_state::WorldObject {
+            ob_id: 139,
+            ob_stat: 1,
+            region: gs.state.region_num,
+            x: gs.state.hero_x,
+            y: gs.state.hero_y,
+            visible: true,
+        });
+        gs.do_option(GameAction::Take);
+
+        assert!(gs.is_victory(), "picking up Talisman must trigger victory");
+        assert!(gs.state.quitflag, "quitflag must be set per spec §15.8");
+        assert_eq!(gs.state.viewstatus, 2, "viewstatus must be 2 per spec §15.8");
+        assert_eq!(gs.state.stuff()[22], 1, "stuff[22] must record the Talisman");
+    }
+
+    #[test]
+    fn test_non_talisman_pickup_does_not_trigger_victory() {
+        let mut gs = GameplayScene::new();
+        // Rose (world obj 141 → stuff[23]) or any non-Talisman item.
+        gs.state.world_objects.push(crate::game::game_state::WorldObject {
+            ob_id: 141,
+            ob_stat: 1,
+            region: gs.state.region_num,
+            x: gs.state.hero_x,
+            y: gs.state.hero_y,
+            visible: true,
+        });
+        gs.do_option(GameAction::Take);
+
+        assert!(!gs.is_victory(), "non-Talisman pickups must not trigger victory");
+        assert!(!gs.state.quitflag);
+    }
 
     #[test]
     fn test_facing_to_frame_base() {

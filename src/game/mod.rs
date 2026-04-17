@@ -32,6 +32,7 @@ pub mod persist;
 pub mod palette_fader;
 pub mod placard;
 pub mod placard_scene;
+pub mod victory_scene;
 pub mod render_resources;
 pub mod render_task;
 pub mod scene;

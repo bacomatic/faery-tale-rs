@@ -57,6 +57,8 @@ pub struct PlacardScene {
     hold_ticks: u32,
     /// Allow Space to skip.
     skip_requested: bool,
+    /// Optional substitution for `%` in placard text (brother name).
+    substitution: Option<String>,
 }
 
 impl PlacardScene {
@@ -68,12 +70,21 @@ impl PlacardScene {
             palette_name: palette_name.to_string(),
             hold_ticks: DEFAULT_HOLD_TICKS,
             skip_requested: false,
+            substitution: None,
         }
     }
 
     /// Create a placard scene with a custom hold duration.
     pub fn with_hold_ticks(mut self, ticks: u32) -> PlacardScene {
         self.hold_ticks = ticks;
+        self
+    }
+
+    /// Substitute `%` in all placard lines with the given string. Used for
+    /// placards that interpolate the hero's name (e.g. `player_win`,
+    /// `rescue_katra`).
+    pub fn with_substitution(mut self, sub: impl Into<String>) -> PlacardScene {
+        self.substitution = Some(sub.into());
         self
     }
 }
@@ -114,6 +125,7 @@ impl Scene for PlacardScene {
 
                 // Draw text to play_tex (border will be animated separately)
                 let placard_name = self.placard_name.clone();
+                let substitution = self.substitution.clone();
                 // Set the font color to palette index 24 (red in pagecolors).
                 if let Some(pal) = palette {
                     if let Some(c) = pal.get_color(24) {
@@ -128,7 +140,14 @@ impl Scene for PlacardScene {
 
                     // Draw the placard text shifted right to align with centered border
                     if let Some(plac) = game_lib.find_placard(&placard_name) {
-                        plac.draw_offset(resources.amber_font, play_canvas, BORDER_X_OFFSET, 0);
+                        match &substitution {
+                            Some(sub) => plac.draw_offset_substituted(
+                                resources.amber_font, play_canvas, BORDER_X_OFFSET, 0, sub,
+                            ),
+                            None => plac.draw_offset(
+                                resources.amber_font, play_canvas, BORDER_X_OFFSET, 0,
+                            ),
+                        }
                     }
                 });
 

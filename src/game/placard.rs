@@ -62,6 +62,30 @@ impl Placard {
         }
     }
 
+    /// Like `draw_offset`, but substitutes `%` in every line with the given
+    /// name. This mirrors the original `name()` call emitted inline between
+    /// `placard_text()` calls — e.g. for the victory and princess-rescue
+    /// placards ("Having defeated the villanous Necromancer and recovered the
+    /// Talisman, [name] returned to Marheim…").
+    pub fn draw_offset_substituted<'a, T: RenderTarget>(
+        &self,
+        font: &FontTexture<'a>,
+        canvas: &mut Canvas<T>,
+        x_offset: i32,
+        y_offset: i32,
+        substitution: &str,
+    ) {
+        for line in &self.lines {
+            let text = line.text.replace('%', substitution);
+            font.render_string(
+                &text,
+                canvas,
+                line.x as i32 + x_offset,
+                line.y as i32 + y_offset,
+            );
+        }
+    }
+
     /// Draw the placard text at 2× glyph height (title screen).
     /// Simulates Amiga CRT line-doubling: each glyph is rendered at normal
     /// width but 2× height, with Y positions also doubled so line spacing
