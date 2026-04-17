@@ -7,6 +7,14 @@ use crate::game::game_state::GameState;
 /// Maximum concurrent projectiles (missile_list[6] from fmain.c).
 pub const MAX_MISSILES: usize = 6;
 
+/// Missile type identifier (SPEC §10.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MissileType {
+    #[default]
+    Arrow,    // weapon 4: hit radius 6px, attacker code -1
+    Fireball, // weapon 5: hit radius 9px, attacker code -2
+}
+
 /// A projectile (arrow, wand bolt, etc.).
 #[derive(Debug, Clone, Default)]
 pub struct Missile {
@@ -15,13 +23,13 @@ pub struct Missile {
     pub y: i32,
     pub dx: i32, // velocity x (-2, 0, or 2)
     pub dy: i32, // velocity y (-2, 0, or 2)
-    pub damage: i16,
+    pub missile_type: MissileType,
     pub is_friendly: bool, // true = fired by hero
 }
 
 impl Missile {
     /// Advance one frame; returns true if this missile hit its target.
-    /// target_x, target_y = position to test for hit (16px tolerance).
+    /// Hit radius per SPEC §10.4: arrows 6px, fireballs 9px.
     pub fn tick(&mut self, target_x: i32, target_y: i32) -> bool {
         if !self.active { return false; }
         self.x += self.dx;
@@ -31,20 +39,38 @@ impl Missile {
             self.active = false;
             return false;
         }
-        let hit = (self.x - target_x).abs() < 16 && (self.y - target_y).abs() < 16;
+        let radius = match self.missile_type {
+            MissileType::Arrow => 6,
+            MissileType::Fireball => 9,
+        };
+        let hit = (self.x - target_x).abs() < radius && (self.y - target_y).abs() < radius;
         if hit { self.active = false; }
         hit
+    }
+
+    /// Compute damage for this missile per SPEC §10.4: rand8() + 4 for both types.
+    pub fn damage(&self) -> i16 {
+        (melee_rand(8) as i16) + 4
+    }
+
+    /// Get attacker code for dohit() per SPEC §10.4: -1 for arrows, -2 for fireballs.
+    pub fn attacker_code(&self) -> i8 {
+        match self.missile_type {
+            MissileType::Arrow => -1,
+            MissileType::Fireball => -2,
+        }
     }
 }
 
 /// Fire a missile from origin toward target direction.
 /// dir: 0=N, 2=E, 4=S, 6=W (and diagonals).
+/// weapon: 4=bow (arrow), 5=wand (fireball).
 /// Returns the index of the missile slot used, or None if full.
 pub fn fire_missile(
     missiles: &mut [Missile; MAX_MISSILES],
     x: i32, y: i32,
     dir: u8,
-    damage: i16,
+    weapon: u8,
     is_friendly: bool,
 ) -> Option<usize> {
     let slot = missiles.iter().position(|m| !m.active)?;
@@ -59,7 +85,8 @@ pub fn fire_missile(
         7 => (-2, -2), // NW
         _ => (0, -2),
     };
-    missiles[slot] = Missile { active: true, x, y, dx, dy, damage, is_friendly };
+    let missile_type = if weapon == 5 { MissileType::Fireball } else { MissileType::Arrow };
+    missiles[slot] = Missile { active: true, x, y, dx, dy, missile_type, is_friendly };
     Some(slot)
 }
 
@@ -249,6 +276,22 @@ pub fn rand256() -> i16 {
     melee_rand(256) as i16
 }
 
+/// Compute hero movement speed based on terrain environ and riding status (SPEC §9.5).
+/// Returns signed speed value for newx/newy multiplication.
+pub fn hero_speed_for_env(environ: i8, riding_raft: bool) -> i8 {
+    if riding_raft {
+        // SPEC: raft riding = 3
+        return 3;
+    }
+    match environ {
+        -3 => -2,  // reversal tile (backward movement)
+        -1 => 4,   // slippery (fast)
+        2 => 1,    // wading (slow)
+        e if e > 6 => 1, // deep water (slow)
+        _ => 2,    // default walking speed
+    }
+}
+
 /// Result of enemy immunity check per SPEC §10.2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImmunityResult {
@@ -332,9 +375,112 @@ mod tests {
         assert_eq!(state.gold, 5);
     }
 
+    // T1-COMBAT-MISSILES tests
+
+    #[test]
+    fn test_arrow_hit_radius_6px() {
+        let mut arrow = Missile {
+            active: true, x: 100, y: 100, dx: 2, dy: 0,
+            missile_type: MissileType::Arrow, is_friendly: true,
+        };
+        // Within 6px → hit
+        assert!(arrow.tick(105, 100));
+        assert!(!arrow.active); // missile deactivated after hit
+    }
+
+    #[test]
+    fn test_arrow_miss_beyond_6px() {
+        let mut arrow = Missile {
+            active: true, x: 100, y: 100, dx: 2, dy: 0,
+            missile_type: MissileType::Arrow, is_friendly: true,
+        };
+        // After tick, arrow at 102. Target at 109 → distance 7px → miss
+        assert!(!arrow.tick(109, 100));
+        assert_eq!(arrow.x, 102); // missile advanced
+        assert!(arrow.active);
+    }
+
+    #[test]
+    fn test_fireball_hit_radius_9px() {
+        let mut fireball = Missile {
+            active: true, x: 100, y: 100, dx: 0, dy: 2,
+            missile_type: MissileType::Fireball, is_friendly: true,
+        };
+        // After tick, fireball at y=102. Target at 110 → distance 8px → hit
+        assert!(fireball.tick(100, 110));
+        assert!(!fireball.active);
+    }
+
+    #[test]
+    fn test_fireball_miss_beyond_9px() {
+        let mut fireball = Missile {
+            active: true, x: 100, y: 100, dx: 0, dy: 2,
+            missile_type: MissileType::Fireball, is_friendly: true,
+        };
+        // After tick, fireball at y=102. Target at 112 → distance 10px → miss
+        assert!(!fireball.tick(100, 112));
+        assert_eq!(fireball.y, 102);
+        assert!(fireball.active);
+    }
+
+    #[test]
+    fn test_missile_damage_range() {
+        // SPEC §10.4: rand8() + 4 = 4–11 for both types
+        for _ in 0..100 {
+            let arrow = Missile {
+                active: true, x: 0, y: 0, dx: 0, dy: 0,
+                missile_type: MissileType::Arrow, is_friendly: true,
+            };
+            let dmg = arrow.damage();
+            assert!((4..=11).contains(&dmg), "arrow damage {} out of range 4-11", dmg);
+
+            let fireball = Missile {
+                active: true, x: 0, y: 0, dx: 0, dy: 0,
+                missile_type: MissileType::Fireball, is_friendly: true,
+            };
+            let dmg = fireball.damage();
+            assert!((4..=11).contains(&dmg), "fireball damage {} out of range 4-11", dmg);
+        }
+    }
+
+    #[test]
+    fn test_attacker_codes() {
+        let arrow = Missile {
+            active: true, x: 0, y: 0, dx: 0, dy: 0,
+            missile_type: MissileType::Arrow, is_friendly: true,
+        };
+        assert_eq!(arrow.attacker_code(), -1);
+
+        let fireball = Missile {
+            active: true, x: 0, y: 0, dx: 0, dy: 0,
+            missile_type: MissileType::Fireball, is_friendly: true,
+        };
+        assert_eq!(fireball.attacker_code(), -2);
+    }
+
+    #[test]
+    fn test_fire_arrow_weapon_4() {
+        let mut missiles = std::array::from_fn(|_| Missile::default());
+        let slot = fire_missile(&mut missiles, 100, 200, 2, 4, true);
+        assert!(slot.is_some());
+        let m = &missiles[slot.unwrap()];
+        assert_eq!(m.missile_type, MissileType::Arrow);
+        assert_eq!(m.attacker_code(), -1);
+    }
+
+    #[test]
+    fn test_fire_fireball_weapon_5() {
+        let mut missiles = std::array::from_fn(|_| Missile::default());
+        let slot = fire_missile(&mut missiles, 100, 200, 0, 5, false);
+        assert!(slot.is_some());
+        let m = &missiles[slot.unwrap()];
+        assert_eq!(m.missile_type, MissileType::Fireball);
+        assert_eq!(m.attacker_code(), -2);
+    }
+
     #[test]
     fn test_missile_ticks() {
-        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, damage: 5, is_friendly: true };
+        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, missile_type: MissileType::Arrow, is_friendly: true };
         let hit = m.tick(50, 100); // too far
         assert!(!hit);
         assert_eq!(m.x, 2);
@@ -343,7 +489,7 @@ mod tests {
     #[test]
     fn test_fire_missile_slots() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 0, 0, 2, 5, true);
+        let slot = fire_missile(&mut missiles, 0, 0, 2, 4, true);
         assert!(slot.is_some());
         assert!(missiles[slot.unwrap()].active);
     }
@@ -414,6 +560,46 @@ mod tests {
     fn test_combat_reach_hero_min() {
         let r = combat_reach(true, 0, 0);
         assert_eq!(r, 5);
+    }
+
+    // T1-MOVE-SPEED-TERRAIN tests
+
+    #[test]
+    fn test_terrain_speed_default() {
+        assert_eq!(hero_speed_for_env(0, false), 2);
+        assert_eq!(hero_speed_for_env(1, false), 2);
+        assert_eq!(hero_speed_for_env(-2, false), 2); // ice environ
+    }
+
+    #[test]
+    fn test_terrain_speed_slippery() {
+        assert_eq!(hero_speed_for_env(-1, false), 4);
+    }
+
+    #[test]
+    fn test_terrain_speed_reversal() {
+        assert_eq!(hero_speed_for_env(-3, false), -2);
+    }
+
+    #[test]
+    fn test_terrain_speed_wading() {
+        assert_eq!(hero_speed_for_env(2, false), 1);
+    }
+
+    #[test]
+    fn test_terrain_speed_deep_water() {
+        assert_eq!(hero_speed_for_env(7, false), 1);
+        assert_eq!(hero_speed_for_env(10, false), 1);
+        assert_eq!(hero_speed_for_env(30, false), 1);
+    }
+
+    #[test]
+    fn test_terrain_speed_raft_overrides() {
+        assert_eq!(hero_speed_for_env(0, true), 3);
+        assert_eq!(hero_speed_for_env(-1, true), 3);
+        assert_eq!(hero_speed_for_env(-3, true), 3);
+        assert_eq!(hero_speed_for_env(2, true), 3);
+        assert_eq!(hero_speed_for_env(10, true), 3);
     }
 
     #[test]
