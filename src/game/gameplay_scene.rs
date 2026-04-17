@@ -723,6 +723,11 @@ impl GameplayScene {
             // Speed calculation per SPEC §9.5: terrain-modulated via environ.
             let speed: i32 = if self.state.flying != 0 {
                 4
+            } else if self.state.on_raft
+                && self.state.active_carrier == crate::game::game_state::CARRIER_TURTLE
+            {
+                // SPEC §21.3: turtle riding forces speed to 3.
+                3
             } else {
                 use crate::game::combat::hero_speed_for_env;
                 let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
@@ -1004,6 +1009,16 @@ impl GameplayScene {
                         && (n.y as i32 - hy).abs() < 16
                 })
             });
+
+            // Get current terrain for raft gating (SPEC §21.2).
+            let terrain = self.map_world.as_ref().map_or(0, |world| {
+                collision::px_to_terrain_type(
+                    world,
+                    self.state.hero_x as i32,
+                    self.state.hero_y as i32,
+                )
+            });
+
             let raft_aboard = self.npc_table.as_ref().map_or(false, |t| {
                 t.npcs.iter().any(|n| {
                     n.active
@@ -1011,11 +1026,13 @@ impl GameplayScene {
                         && (n.x as i32 - hx).abs() < 9
                         && (n.y as i32 - hy).abs() < 9
                 })
-            });
+            }) && self.state.can_board_raft(terrain);
+
             if raft_aboard {
                 self.state.raftprox = 2;
                 self.state.active_carrier = crate::game::game_state::CARRIER_RAFT;
                 self.state.on_raft = true;
+                self.state.wcarry = 1;  // SPEC §21.2: raft is in actor slot 1
             } else if raft_close {
                 self.state.raftprox = 1;
             } else {
@@ -1024,13 +1041,7 @@ impl GameplayScene {
                 if self.state.on_raft
                     && self.state.active_carrier == crate::game::game_state::CARRIER_RAFT
                 {
-                    let on_land = self.map_world.as_ref().map_or(false, |world| {
-                        collision::px_to_terrain_type(
-                            world,
-                            self.state.hero_x as i32,
-                            self.state.hero_y as i32,
-                        ) < 2
-                    });
+                    let on_land = terrain < 2;
                     if on_land {
                         self.state.leave_raft();
                     }
@@ -2497,7 +2508,9 @@ impl GameplayScene {
                 }
             }
             GameAction::SummonTurtle => {
-                if self.state.summon_turtle() {
+                if self.state.is_turtle_summon_blocked() {
+                    self.messages.push("The turtle won't come here.");
+                } else if self.state.summon_turtle() {
                     self.messages.push("You summon the turtle!");
                 } else {
                     self.messages.push("You have no shells to summon a turtle.");
