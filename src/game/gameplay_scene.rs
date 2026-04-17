@@ -721,21 +721,75 @@ impl GameplayScene {
 
         if dir != Direction::None {
             // Speed calculation per SPEC §9.5: terrain-modulated via environ.
+            // For swan flight (flying != 0), use inertial physics instead of direct movement.
             let speed: i32 = if self.state.flying != 0 {
-                4
+                0 // speed not used for swan flight (uses velocity instead)
             } else {
                 use crate::game::combat::hero_speed_for_env;
                 let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
                 hero_speed_for_env(environ, self.state.on_raft) as i32
             };
 
-            let dx = base_dx * speed / 2;
-            let dy = base_dy * speed / 2;
+            let (dx, dy, facing): (i32, i32, u8) = if self.state.flying != 0 {
+                // Swan flight: apply velocity impulse from directional input.
+                // xdir/ydir from collision module match the base_dx/base_dy values.
+                let (xdir, ydir): (i16, i16) = match dir {
+                    Direction::N    => ( 0, -3),
+                    Direction::NE   => ( 2, -2),
+                    Direction::E    => ( 3,  0),
+                    Direction::SE   => ( 2,  2),
+                    Direction::S    => ( 0,  3),
+                    Direction::SW   => (-2,  2),
+                    Direction::W    => (-3,  0),
+                    Direction::NW   => (-2, -2),
+                    Direction::None => ( 0,  0),
+                };
+                self.state.apply_swan_velocity_impulse(xdir, ydir);
+                
+                // Position is determined by velocity, not input direction.
+                let (new_x, new_y) = self.state.compute_swan_position();
+                let dx = (new_x as i32 - self.state.hero_x as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
+                let dy = (new_y as i32 - self.state.hero_y as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
+                
+                // Facing is derived from velocity per SPEC §21.4: set_course(0, -nvx, -nvy, 6).
+                // This means facing toward the direction of motion (reversed velocity vector).
+                let face_dir = if self.state.swan_vx == 0 && self.state.swan_vy == 0 {
+                    self.state.facing // keep current facing when stationary
+                } else {
+                    // Compute facing from reversed velocity (-vx, -vy).
+                    let nvx = -self.state.swan_vx;
+                    let nvy = -self.state.swan_vy;
+                    // Find closest cardinal/diagonal direction.
+                    let angle = (nvy as f32).atan2(nvx as f32);
+                    let octant = ((angle / std::f32::consts::PI * 4.0 + 4.5) as i32).rem_euclid(8);
+                    // Map octant to facing (0=N, 1=NE, 2=E, etc.)
+                    // East=0°, North=90°, West=180°, South=270° in standard coords
+                    // But our facing: 0=N, 2=E, 4=S, 6=W
+                    // octant 0 = East (2), 2 = North (0), 4 = West (6), 6 = South (4)
+                    match octant {
+                        0 => 2, // E
+                        1 => 1, // NE
+                        2 => 0, // N
+                        3 => 7, // NW
+                        4 => 6, // W
+                        5 => 5, // SW
+                        6 => 4, // S
+                        7 => 3, // SE
+                        _ => self.state.facing,
+                    }
+                };
+                (dx, dy, face_dir)
+            } else {
+                // Normal walking/riding.
+                let dx = base_dx * speed / 2;
+                let dy = base_dy * speed / 2;
 
-            let facing: u8 = match dir {
-                Direction::N  => 0, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
-                Direction::S  => 4, Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
-                Direction::None => 0,
+                let facing: u8 = match dir {
+                    Direction::N  => 0, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
+                    Direction::S  => 4, Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                    Direction::None => 0,
+                };
+                (dx, dy, facing)
             };
 
             // Outdoor world wraps at MAXCOORD = 0x8000 = 32768 (USHORT arithmetic).
