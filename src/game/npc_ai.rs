@@ -285,7 +285,7 @@ pub fn select_tactic(
 
     // === Recalculation gate (probabilistic, varies by goal) ===
     let gate_mask = match npc.goal {
-        Goal::Attack1 | Goal::Archer1 => 3, // ~25%
+        Goal::Attack1 | Goal::Archer2 => 3, // ~25%
         _ => 15,                             // ~6.25%
     };
     if (r & gate_mask) != 0 {
@@ -611,5 +611,122 @@ mod tests {
         npc.goal = Goal::Stand;
         select_tactic(&mut npc, 200, 100, false, None, 0, 42);
         assert_eq!(npc.state, NpcState::Still);
+    }
+
+    #[test]
+    fn test_select_tactic_reconsider_probabilities() {
+        // Test that all four goal types have correct reconsider probabilities per SPEC §11.7:
+        // - ATTACK1 and ARCHER2 should reconsider at 25% (gate_mask = 3)
+        // - ATTACK2 and ARCHER1 should reconsider at 6.25% (gate_mask = 15)
+        
+        const ITERATIONS: u32 = 2000;
+        let mut reconsider_attack1 = 0u32;
+        let mut reconsider_attack2 = 0u32;
+        let mut reconsider_archer1 = 0u32;
+        let mut reconsider_archer2 = 0u32;
+        
+        for tick in 0..ITERATIONS {
+            // For archers, place hero close enough to trigger Backup tactic when reconsidering
+            // (xd < 40 && yd < 30). Start with Pursue tactic.
+            // If it stays Pursue, the gate blocked reconsideration.
+            // If it changes to Backup, reconsideration happened.
+            
+            // Test ARCHER1 (should be ~6.25%)
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Archer1;
+            npc.weapon = 4; // bow
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 120, 110, false, None, 0, tick); // xd=20, yd=10 → Backup
+            if npc.tactic == Tactic::Backup {
+                reconsider_archer1 += 1;
+            }
+            
+            // Test ARCHER2 (should be ~25%)
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Archer2;
+            npc.weapon = 4;
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 120, 110, false, None, 0, tick); // xd=20, yd=10 → Backup
+            if npc.tactic == Tactic::Backup {
+                reconsider_archer2 += 1;
+            }
+            
+            // For melee, we need a condition that changes tactic.
+            // Use low vitality (< 6) to potentially trigger Evade.
+            // The evade check also has a 50% chance (r >> 8) & 1 == 0.
+            // So we expect: reconsider_rate * 0.5 = observed_evade_rate
+            // ATTACK1 at 25% * 0.5 = 12.5%
+            // ATTACK2 at 6.25% * 0.5 = 3.125%
+            
+            // Test ATTACK1 (should be ~25%, so ~12.5% will trigger Evade)
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.weapon = 1;
+            npc.vitality = 3; // < 6
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            if npc.tactic == Tactic::Evade {
+                reconsider_attack1 += 1;
+            }
+            
+            // Test ATTACK2 (should be ~6.25%, so ~3.125% will trigger Evade)
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack2;
+            npc.weapon = 1;
+            npc.vitality = 3;
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            if npc.tactic == Tactic::Evade {
+                reconsider_attack2 += 1;
+            }
+        }
+        
+        // Allow ±5% margin for probabilistic tests
+        
+        // ARCHER1: 6.25% of 2000 = 125 ± 50
+        assert!(
+            reconsider_archer1 > 75 && reconsider_archer1 < 175,
+            "ARCHER1 should reconsider at ~6.25%: got {}/2000 = {}%",
+            reconsider_archer1,
+            reconsider_archer1 * 100 / ITERATIONS
+        );
+        
+        // ARCHER2: 25% of 2000 = 500 ± 100
+        assert!(
+            reconsider_archer2 > 400 && reconsider_archer2 < 600,
+            "ARCHER2 should reconsider at ~25%: got {}/2000 = {}%",
+            reconsider_archer2,
+            reconsider_archer2 * 100 / ITERATIONS
+        );
+        
+        // ATTACK1: 25% * 50% = 12.5% of 2000 = 250 ± 75
+        assert!(
+            reconsider_attack1 > 175 && reconsider_attack1 < 325,
+            "ATTACK1 should reconsider at ~25% (evade at ~12.5%): got {}/2000 = {}%",
+            reconsider_attack1,
+            reconsider_attack1 * 100 / ITERATIONS
+        );
+        
+        // ATTACK2: 6.25% * 50% = 3.125% of 2000 = 62.5 ± 40
+        assert!(
+            reconsider_attack2 > 20 && reconsider_attack2 < 100,
+            "ATTACK2 should reconsider at ~6.25% (evade at ~3.125%): got {}/2000 = {}%",
+            reconsider_attack2,
+            reconsider_attack2 * 100 / ITERATIONS
+        );
+        
+        // Verify the 4x relationship between high and low reconsider rates
+        assert!(
+            reconsider_archer2 > reconsider_archer1 * 3,
+            "ARCHER2 ({}) should reconsider ~4x more than ARCHER1 ({})",
+            reconsider_archer2,
+            reconsider_archer1
+        );
+        assert!(
+            reconsider_attack1 > reconsider_attack2 * 3,
+            "ATTACK1 ({}) should reconsider ~4x more than ATTACK2 ({})",
+            reconsider_attack1,
+            reconsider_attack2
+        );
     }
 }
