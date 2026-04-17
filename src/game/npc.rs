@@ -39,6 +39,8 @@ pub const RACE_SHOPKEEPER: u8 = 0x88;
 pub const RACE_BEGGAR: u8 = 0x8d;
 pub const RACE_NECROMANCER: u8 = 9;
 pub const RACE_WITCH: u8 = 0x89;
+pub const RACE_SPECTRE: u8 = 0x8a;
+pub const RACE_GHOST: u8 = 0x8b;
 
 /// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
 #[derive(Debug, Clone, PartialEq, Default)]

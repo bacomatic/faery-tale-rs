@@ -1,7 +1,7 @@
 //! Combat system: melee combat resolution between hero and NPCs.
 //! Ports the battle loop from original fmain.c.
 
-use crate::game::npc::{Npc, RACE_UNDEAD, RACE_WRAITH};
+use crate::game::npc::{Npc, RACE_UNDEAD, RACE_WRAITH, RACE_NECROMANCER, RACE_WITCH, RACE_SPECTRE, RACE_GHOST};
 use crate::game::game_state::GameState;
 
 /// Maximum concurrent projectiles (missile_list[6] from fmain.c).
@@ -249,6 +249,31 @@ pub fn rand256() -> i16 {
     melee_rand(256) as i16
 }
 
+/// Result of enemy immunity check per SPEC §10.2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImmunityResult {
+    /// Target takes full damage.
+    Vulnerable,
+    /// Target is immune; no message.
+    ImmuneSilent,
+    /// Target is immune; emit speak(58).
+    ImmuneWithMessage,
+}
+
+/// Check if an NPC is immune to physical melee damage.
+/// Per SPEC §10.2:
+/// - Spectre (0x8a) and Ghost (0x8b) are fully immune (silent).
+/// - Witch (0x89) is immune to weapon<4 unless player has Sun Stone (stuff[7]).
+/// - Necromancer (9) is immune to weapon<4; emit speak(58) on block.
+pub fn check_immunity(npc_race: u8, weapon: u8, has_sun_stone: bool) -> ImmunityResult {
+    match npc_race {
+        RACE_SPECTRE | RACE_GHOST => ImmunityResult::ImmuneSilent,
+        RACE_NECROMANCER if weapon < 4 => ImmunityResult::ImmuneWithMessage,
+        RACE_WITCH if weapon < 4 && !has_sun_stone => ImmunityResult::ImmuneWithMessage,
+        _ => ImmunityResult::Vulnerable,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,6 +429,124 @@ mod tests {
         for _ in 0..1000 {
             let r = rand256();
             assert!((0..=255).contains(&r), "rand256 returned {}", r);
+        }
+    }
+
+    #[test]
+    fn test_immunity_spectre_always_immune() {
+        use crate::game::npc::RACE_SPECTRE;
+        for weapon in 0..=5 {
+            assert_eq!(
+                check_immunity(RACE_SPECTRE, weapon, false),
+                ImmunityResult::ImmuneSilent,
+                "Spectre should be immune to weapon {}", weapon
+            );
+            assert_eq!(
+                check_immunity(RACE_SPECTRE, weapon, true),
+                ImmunityResult::ImmuneSilent,
+                "Spectre should be immune to weapon {} even with Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_ghost_always_immune() {
+        use crate::game::npc::RACE_GHOST;
+        for weapon in 0..=5 {
+            assert_eq!(
+                check_immunity(RACE_GHOST, weapon, false),
+                ImmunityResult::ImmuneSilent,
+                "Ghost should be immune to weapon {}", weapon
+            );
+            assert_eq!(
+                check_immunity(RACE_GHOST, weapon, true),
+                ImmunityResult::ImmuneSilent,
+                "Ghost should be immune to weapon {} even with Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_necromancer_immune_below_4() {
+        use crate::game::npc::RACE_NECROMANCER;
+        for weapon in 0..4 {
+            assert_eq!(
+                check_immunity(RACE_NECROMANCER, weapon, false),
+                ImmunityResult::ImmuneWithMessage,
+                "Necromancer should be immune to weapon {}", weapon
+            );
+            assert_eq!(
+                check_immunity(RACE_NECROMANCER, weapon, true),
+                ImmunityResult::ImmuneWithMessage,
+                "Necromancer should be immune to weapon {} even with Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_necromancer_vulnerable_at_4() {
+        use crate::game::npc::RACE_NECROMANCER;
+        for weapon in 4..=5 {
+            assert_eq!(
+                check_immunity(RACE_NECROMANCER, weapon, false),
+                ImmunityResult::Vulnerable,
+                "Necromancer should be vulnerable to weapon {}", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_witch_immune_below_4_without_stone() {
+        use crate::game::npc::RACE_WITCH;
+        for weapon in 0..4 {
+            assert_eq!(
+                check_immunity(RACE_WITCH, weapon, false),
+                ImmunityResult::ImmuneWithMessage,
+                "Witch should be immune to weapon {} without Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_witch_vulnerable_below_4_with_stone() {
+        use crate::game::npc::RACE_WITCH;
+        for weapon in 0..4 {
+            assert_eq!(
+                check_immunity(RACE_WITCH, weapon, true),
+                ImmunityResult::Vulnerable,
+                "Witch should be vulnerable to weapon {} with Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_witch_vulnerable_at_4() {
+        use crate::game::npc::RACE_WITCH;
+        for weapon in 4..=5 {
+            assert_eq!(
+                check_immunity(RACE_WITCH, weapon, false),
+                ImmunityResult::Vulnerable,
+                "Witch should be vulnerable to weapon {} without Sun Stone", weapon
+            );
+            assert_eq!(
+                check_immunity(RACE_WITCH, weapon, true),
+                ImmunityResult::Vulnerable,
+                "Witch should be vulnerable to weapon {} with Sun Stone", weapon
+            );
+        }
+    }
+
+    #[test]
+    fn test_immunity_normal_enemies_vulnerable() {
+        use crate::game::npc::{RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH};
+        for race in [RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH] {
+            for weapon in 0..=5 {
+                assert_eq!(
+                    check_immunity(race, weapon, false),
+                    ImmunityResult::Vulnerable,
+                    "Race {} should be vulnerable to weapon {}", race, weapon
+                );
+            }
         }
     }
 }

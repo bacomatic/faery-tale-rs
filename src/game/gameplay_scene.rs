@@ -1378,8 +1378,6 @@ impl GameplayScene {
     /// Apply one melee hit from attacker to target.
     /// Ports fmain2.c dohit(i, j, fc, wt).
     fn apply_hit(&mut self, attacker_idx: usize, target_idx: usize, facing: u8, damage: i16) {
-        use crate::game::npc::{RACE_NECROMANCER, RACE_WITCH};
-
         if target_idx == 0 {
             // NPC hitting hero
             self.state.vitality = (self.state.vitality - damage).max(0);
@@ -1409,19 +1407,26 @@ impl GameplayScene {
             // Work inside the npc_table borrow, collect results to act on after.
             let mut logs: Vec<String> = Vec::new();
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
+            let mut immunity_msg: Option<String> = None;
 
             if let Some(ref mut table) = self.npc_table {
                 let npc_idx = target_idx.saturating_sub(2);
                 if npc_idx < table.npcs.len() {
                     let npc = &mut table.npcs[npc_idx];
 
-                    // Immunity guard: Necromancer/Witch immune unless weapon >= 4
-                    let actual_damage = if (npc.race == RACE_NECROMANCER || npc.race == RACE_WITCH)
-                        && attacker_weapon < 4
-                    {
-                        0
-                    } else {
-                        damage
+                    // Immunity guard per SPEC §10.2
+                    use crate::game::combat::{check_immunity, ImmunityResult};
+                    let has_sun_stone = self.state.stuff()[7] != 0;
+                    let immunity = check_immunity(npc.race, attacker_weapon, has_sun_stone);
+
+                    let actual_damage = match immunity {
+                        ImmunityResult::Vulnerable => damage,
+                        ImmunityResult::ImmuneSilent => 0,
+                        ImmunityResult::ImmuneWithMessage => {
+                            let bname = brother_name(&self.state);
+                            immunity_msg = Some(crate::game::events::speak(&self.narr, 58, &bname));
+                            0
+                        }
                     };
 
                     npc.vitality -= actual_damage;
@@ -1454,6 +1459,9 @@ impl GameplayScene {
             }
 
             // Deferred work outside the npc_table borrow
+            if let Some(msg) = immunity_msg {
+                self.messages.push_wrapped(msg);
+            }
             for msg in logs {
                 self.dlog(msg);
             }
