@@ -125,6 +125,11 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
             "The bird totem shows the way."
         }
         ITEM_RING => {
+            // SPEC §19.2, §21.7: Gold Ring / freeze spell blocked when riding > 1.
+            // riding: 0=on foot, 1=raft (allowed), 5=turtle (blocked), 11=swan (blocked).
+            if state.riding > 1 {
+                return Err("You cannot use the ring while riding.");
+            }
             state.freeze_timer = state.freeze_timer.saturating_add(FREEZE_TIMER_INCREMENT);
             "Time slows around you."
         }
@@ -333,5 +338,58 @@ mod tests {
         assert!(result.is_ok(), "Totem should work underground when cheat1 is set");
         assert_eq!(state.viewstatus, 1);
         assert_eq!(state.stuff()[ITEM_TOTEM], 0, "Charge should be consumed");
+    }
+
+    // T1-CARRY-FREEZE-BLOCK / T1-MAGIC-RING-RIDING (SPEC §19.2, §21.7)
+    #[test]
+    fn test_ring_blocked_on_turtle() {
+        // SPEC §19.2, §21.7: Gold Ring blocked when riding > 1 (turtle or swan).
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_RING] = 1;
+        state.riding = 5; // Turtle
+        
+        let result = use_magic(&mut state, ITEM_RING);
+        assert!(result.is_err(), "Ring should be blocked on turtle (riding=5)");
+        assert_eq!(state.freeze_timer, 0, "Freeze timer should not change");
+        assert_eq!(state.stuff()[ITEM_RING], 1, "Charge should NOT be consumed");
+    }
+    
+    #[test]
+    fn test_ring_blocked_on_swan() {
+        // SPEC §19.2, §21.7: Gold Ring blocked when riding > 1 (swan).
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_RING] = 1;
+        state.riding = 11; // Swan
+        
+        let result = use_magic(&mut state, ITEM_RING);
+        assert!(result.is_err(), "Ring should be blocked on swan (riding=11)");
+        assert_eq!(state.freeze_timer, 0, "Freeze timer should not change");
+        assert_eq!(state.stuff()[ITEM_RING], 1, "Charge should NOT be consumed");
+    }
+    
+    #[test]
+    fn test_ring_allowed_on_foot() {
+        // SPEC §19.2: Gold Ring allowed on foot (riding=0).
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_RING] = 1;
+        state.riding = 0; // On foot
+        
+        let result = use_magic(&mut state, ITEM_RING);
+        assert!(result.is_ok(), "Ring should work on foot");
+        assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
+        assert_eq!(state.stuff()[ITEM_RING], 0, "Charge should be consumed");
+    }
+    
+    #[test]
+    fn test_ring_allowed_on_raft() {
+        // SPEC §19.2: Gold Ring allowed on raft (riding=1).
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_RING] = 1;
+        state.riding = 1; // Raft
+        
+        let result = use_magic(&mut state, ITEM_RING);
+        assert!(result.is_ok(), "Ring should work on raft (riding=1)");
+        assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
+        assert_eq!(state.stuff()[ITEM_RING], 0, "Charge should be consumed");
     }
 }
