@@ -4,24 +4,15 @@
 use crate::game::game_state::GameState;
 
 /// Item cost table (jtrans[] from original). Index = item slot, value = gold cost.
-/// 0 = not for sale.
-/// Slots 11 and 13 correspond to ITEM_VIAL and ITEM_TOTEM (magic items available to buy).
+/// Per SPEC §25.5 BUY: Food=3, Arrow=10, Vial=15, Mace=30, Sword=45, Bow=75, Totem=20.
 pub const ITEM_COSTS: &[i32] = &[
-    5,   // 0: food
-    10,  // 1: arrows
-    15,  // 2: rope
-    20,  // 3: key
-    25,  // 4: potion
-    30,  // 5: armor (leather)
-    50,  // 6: armor (chain)
-    100, // 7: armor (plate)
-    30,  // 8: weapon (dagger / mace)
-    50,  // 9: weapon (sword / bow)
-    80,  // 10: weapon (long sword)
-    25,  // 11: vial (ITEM_VIAL — healing potion)
-    0,   // 12: not for sale
-    50,  // 13: totem (ITEM_TOTEM)
-    0,   // 14+: not for sale
+    3,   // 0: food
+    10,  // 1: arrows (batch of 10)
+    15,  // 2: vial (healing potion)
+    30,  // 3: mace
+    45,  // 4: sword
+    75,  // 5: bow
+    20,  // 6: totem
 ];
 
 /// Purchase an item from a shopkeeper.
@@ -56,9 +47,9 @@ mod tests {
     fn test_buy_item_success() {
         let mut state = GameState::new();
         state.gold = 100;
-        let result = buy_item(&mut state, 0); // food costs 5
+        let result = buy_item(&mut state, 0); // food costs 3
         assert!(result.is_ok());
-        assert_eq!(state.gold, 95);
+        assert_eq!(state.gold, 97);
         assert_eq!(state.stuff()[0], 1);
     }
 
@@ -66,7 +57,7 @@ mod tests {
     fn test_buy_item_no_gold() {
         let mut state = GameState::new();
         state.gold = 0;
-        let result = buy_item(&mut state, 4); // potion costs 25
+        let result = buy_item(&mut state, 3); // mace costs 30
         assert!(result.is_err());
     }
 
@@ -74,7 +65,7 @@ mod tests {
     fn test_buy_not_for_sale() {
         let mut state = GameState::new();
         state.gold = 999;
-        let result = buy_item(&mut state, 12); // not for sale
+        let result = buy_item(&mut state, 12); // out of range
         assert!(result.is_err());
     }
 }

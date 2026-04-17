@@ -11,7 +11,7 @@ pub enum DayPhase {
 }
 
 /// Lasso item index in stuff array (from original fmain.h).
-pub const ITEM_LASSO: usize = 16;
+pub const ITEM_LASSO: usize = 5;
 /// Swan carrier type ID (from original cfile/carrier tables).
 pub const CARRIER_SWAN: i16 = 1;
 /// Raft carrier type ID.
@@ -413,6 +413,11 @@ impl GameState {
     /// Per-128-daynight-tick hunger and fatigue increment, matching fmain.c:2623-2652.
     /// Pushes triggered event IDs into `events`.
     fn hunger_fatigue_step(&mut self, events: &mut Vec<u8>) {
+        // Safe-zone auto-eat per SPEC §18.2 (must check before incrementing hunger)
+        if self.try_safe_autoeat() {
+            events.push(37); // event(37) per SPEC §18.2
+        }
+
         self.hunger += 1;
         self.fatigue += 1;
 
@@ -720,6 +725,49 @@ impl GameState {
     /// Mirrors fmain.c eat(amount): hunger -= amount, clamped to 0.
     pub fn eat_amount(&mut self, amount: i16) {
         self.hunger = (self.hunger - amount).max(0);
+    }
+
+    /// Pick up a fruit. Per SPEC §14.5: if hunger >= 15, eat immediately via eat(30);
+    /// otherwise store in inventory (stuff[24]++).
+    /// Returns true if fruit was auto-eaten, false if stored.
+    pub fn pickup_fruit(&mut self) -> bool {
+        const FRUIT_ITEM: usize = 24;
+        const HUNGER_THRESHOLD: i16 = 15;
+        const EAT_AMOUNT: i16 = 30;
+
+        if self.hunger >= HUNGER_THRESHOLD {
+            // Auto-eat immediately
+            self.eat_amount(EAT_AMOUNT);
+            true
+        } else {
+            // Store in inventory
+            if self.stuff()[FRUIT_ITEM] < 255 {
+                self.stuff_mut()[FRUIT_ITEM] += 1;
+            }
+            false
+        }
+    }
+
+    /// Safe-zone auto-eat per SPEC §18.2.
+    /// In a safe zone, when (daynight & 127) == 0, if hunger > 30 and stuff[24] > 0,
+    /// auto-eat fruit (direct hunger subtraction, not via eat()).
+    /// Returns true if fruit was consumed.
+    pub fn try_safe_autoeat(&mut self) -> bool {
+        const FRUIT_ITEM: usize = 24;
+        const HUNGER_THRESHOLD: i16 = 30;
+        const REDUCE_AMOUNT: i16 = 30;
+
+        if self.safe_flag
+            && (self.daynight & 127) == 0
+            && self.hunger > HUNGER_THRESHOLD
+            && self.stuff()[FRUIT_ITEM] > 0
+        {
+            self.stuff_mut()[FRUIT_ITEM] -= 1;
+            self.hunger = (self.hunger - REDUCE_AMOUNT).max(0);
+            true
+        } else {
+            false
+        }
     }
 
     /// Apply hunger effects: if hunger >= MAX_HUNGER, drain vitality by 1.
@@ -1189,7 +1237,7 @@ mod tests {
         state.swan_vx = 20;
         state.swan_vy = 30;
         state.active_carrier = CARRIER_SWAN;
-        state.stuff_mut()[16] = 1; // has lasso
+        state.stuff_mut()[ITEM_LASSO] = 1; // has lasso at index 5
         assert!(state.start_swan_flight());
         assert_eq!(state.flying, 1);
         assert_eq!(state.swan_vx, 0);
