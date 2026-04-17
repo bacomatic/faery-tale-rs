@@ -269,6 +269,7 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
             x: wo.x as u16,
             y: wo.y as u16,
             visible: wo.visible,
+            goal: 0, // recomputed when region is reloaded from game library
         });
     }
 
@@ -466,6 +467,7 @@ mod tests {
             x: 1000,
             y: 2000,
             visible: true,
+            goal: 0,
         });
         state.world_objects.push(WorldObject {
             ob_id: 114,
@@ -474,6 +476,7 @@ mod tests {
             x: 3000,
             y: 4000,
             visible: false,
+            goal: 0,
         });
 
         save_to_path(&state, &path).unwrap();
