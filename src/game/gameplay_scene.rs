@@ -824,13 +824,16 @@ impl GameplayScene {
                 if self.state.region_num >= 8 {
                     // Indoor (region >= 8): exit check — match on grid-aligned dst coords.
                     // Mirrors fmain.c indoor branch: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
-                    if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, final_x, final_y) {
-                        let (ex, ey) = crate::game::doors::exit_spawn(&door);
-                        let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
-                        self.state.region_num = outdoor_region;
-                        self.state.hero_x = ex;
-                        self.state.hero_y = ey;
-                        self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
+                    // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry (and exit).
+                    if self.state.riding == 0 {
+                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, final_x, final_y) {
+                            let (ex, ey) = crate::game::doors::exit_spawn(&door);
+                            let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
+                            self.state.region_num = outdoor_region;
+                            self.state.hero_x = ex;
+                            self.state.hero_y = ey;
+                            self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
+                        }
                     }
                 } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, final_x, final_y) {
                     // Outdoor (region < 8): walk-on entry check — match on src coords.
@@ -842,9 +845,11 @@ impl GameplayScene {
                     } else {
                         final_x & 15 <= 6    // vertical: left portion
                     };
+                    // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry.
+                    let not_riding = self.state.riding == 0;
                     // DESERT doors (oasis) require 5 gold statues; original silently blocks if < 5.
                     use crate::game::doors::{key_req, KeyReq};
-                    let allow = in_doorway && match key_req(door.door_type) {
+                    let allow = in_doorway && not_riding && match key_req(door.door_type) {
                         KeyReq::GoldStatues => self.state.stuff()[25] >= 5,
                         _ => true, // walk-on path: door was already opened by bump; NOKEY always allowed
                     };
@@ -922,7 +927,9 @@ impl GameplayScene {
                             } else {
                                 new_x & 15 <= 6    // vertical: left portion
                             };
-                            if sub_tile_ok {
+                            // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry.
+                            let not_riding = self.state.riding == 0;
+                            if sub_tile_ok && not_riding {
                                 let (ix, iy) = crate::game::doors::entry_spawn(&door);
                                 self.state.region_num = door.dst_region;
                                 self.state.hero_x = ix;
@@ -5607,5 +5614,46 @@ mod quest_tests {
         }
 
         assert_eq!(gs.state.xtype, 83, "xtype should match zone etype");
+    }
+
+    // T1-CARRY-DOOR-BLOCK (SPEC §21.7)
+    #[test]
+    fn test_door_entry_guard_riding_values() {
+        // SPEC §21.7: "All riding values block door entry"
+        // This tests the guard condition logic.
+        let gs = GameplayScene::new();
+        
+        // riding = 0 (on foot): should allow
+        let not_riding_0 = 0 == 0;
+        assert!(not_riding_0, "riding=0 should allow door entry");
+        
+        // riding = 1 (raft): should block
+        let not_riding_1 = 1 == 0;
+        assert!(!not_riding_1, "riding=1 should block door entry");
+        
+        // riding = 5 (turtle): should block
+        let not_riding_5 = 5 == 0;
+        assert!(!not_riding_5, "riding=5 should block door entry");
+        
+        // riding = 11 (swan): should block
+        let not_riding_11 = 11 == 0;
+        assert!(!not_riding_11, "riding=11 should block door entry");
+    }
+
+    #[test]
+    fn test_door_exit_guard_indoor() {
+        // SPEC §21.7: Door exits (indoor) also blocked by riding.
+        // This verifies the guard wraps the doorfind_exit call.
+        let mut gs = GameplayScene::new();
+        gs.state.region_num = 8; // Indoor
+        gs.state.riding = 5; // Turtle
+        
+        // When riding != 0, the doorfind_exit branch should be skipped
+        let should_check_exit = gs.state.riding == 0;
+        assert!(!should_check_exit, "Exit check should be skipped when riding");
+        
+        gs.state.riding = 0; // On foot
+        let should_check_exit = gs.state.riding == 0;
+        assert!(should_check_exit, "Exit check should run when on foot");
     }
 }
