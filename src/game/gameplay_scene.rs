@@ -2817,6 +2817,8 @@ impl GameplayScene {
             }
             _ => {}
         }
+        let wealth = self.state.wealth;
+        self.menu.set_options(self.state.stuff(), wealth);
     }
 
     fn toggle_menu_mode(&mut self) {
@@ -5229,6 +5231,24 @@ mod tests {
         };
         assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
         assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 0);
+    }
+}
+
+#[cfg(test)]
+mod ui_menu_tests {
+    use super::*;
+    use crate::game::menu::MenuMode;
+
+    #[test]
+    fn test_do_option_always_refreshes_menu_options() {
+        let mut scene = GameplayScene::new();
+        // Simulate having a dirk, but menu says hidden.
+        scene.state.stuff_mut()[0] = 1;
+        scene.menu.menus[MenuMode::Use as usize].enabled[0] = 8;
+
+        scene.do_option(GameAction::LookAround);
+
+        assert_eq!(scene.menu.menus[MenuMode::Use as usize].enabled[0], 10);
     }
 }
 
