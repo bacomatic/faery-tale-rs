@@ -273,7 +273,8 @@ pub struct GameplayScene {
     map_y: u16,
     last_mood: u8,
     mood_tick: u32,
-    music_stop_pending: bool,
+    pending_music_toggle: Option<bool>,
+    pending_sound_toggle: Option<bool>,
     map_renderer: Option<MapRenderer>,
     map_world: Option<crate::game::world_data::WorldData>,
     adf: Option<crate::game::adf::AdfDisk>,
@@ -381,8 +382,9 @@ impl GameplayScene {
             map_x: 0,
             map_y: 0,
             last_mood: u8::MAX,
+            pending_music_toggle: None,
+            pending_sound_toggle: None,
             mood_tick: 0,
-            music_stop_pending: false,
             map_renderer: None,
             map_world: None,
             adf: None,
@@ -2374,11 +2376,12 @@ impl GameplayScene {
                 let on = self.menu.is_music_on();
                 self.messages.push(if on { "Music on." } else { "Music off." });
                 self.last_mood = u8::MAX; // force re-evaluation next tick
-                self.music_stop_pending = !on;
+                self.pending_music_toggle = Some(on);
             }
             MenuAction::ToggleSound => {
                 let on = self.menu.is_sound_on();
                 self.messages.push(if on { "Sound on." } else { "Sound off." });
+                self.pending_sound_toggle = Some(on);
             }
             MenuAction::RefreshMusic  => {}
             MenuAction::SummonTurtle  => self.do_option(GameAction::SummonTurtle),
@@ -2990,14 +2993,38 @@ impl GameplayScene {
     }
 
     /// Select music group 0-6 based on current game state (mirrors original setmood()).
+    ///
+    /// Priority evaluation per SPEC §22.6:
+    /// 1. Death (vitality == 0) → group 6 (tracks 24-27)
+    /// 2. Zone (astral plane coordinates) → group 4 (tracks 16-19)
+    /// 3. Battle (battleflag) → group 1 (tracks 4-7)
+    /// 4. Dungeon (region_num > 7) → group 5 (tracks 20-23)
+    /// 5. Day (lightlevel > 120) → group 0 (tracks 0-3)
+    /// 6. Night (lightlevel ≤ 120) → group 2 (tracks 8-11)
     fn setmood(&self) -> u8 {
         let s = &self.state;
-        if s.vitality <= 0 { return 6; }
-        if s.hero_x >= 0x2400 && s.hero_x <= 0x3100 && s.hero_y >= 0x8200 && s.hero_y <= 0x8a00 { return 4; }
-        if s.battleflag { return 1; }
-        if s.region_num > 7 { return 5; }
-        if s.dayperiod == 4 || s.dayperiod == 6 { return 0; }  // day music during morning(4)/midday(6)
-        2
+        // Priority 1: Death
+        if s.vitality <= 0 {
+            return 6;
+        }
+        // Priority 2: Zone (astral plane bounds)
+        if s.hero_x >= 0x2400 && s.hero_x <= 0x3100 && s.hero_y >= 0x8200 && s.hero_y <= 0x8a00 {
+            return 4;
+        }
+        // Priority 3: Battle
+        if s.battleflag {
+            return 1;
+        }
+        // Priority 4: Dungeon (underground)
+        if s.region_num > 7 {
+            return 5;
+        }
+        // Priority 5 & 6: Day/Night based on lightlevel
+        if s.lightlevel > 120 {
+            0  // Day
+        } else {
+            2  // Night
+        }
     }
 
     pub fn apply_command(&mut self, cmd: DebugCommand) {
@@ -4001,6 +4028,22 @@ impl Scene for GameplayScene {
     ) -> SceneResult {
         self.tick_accum += delta_ticks;
 
+        // Apply pending audio toggles (SPEC §25.5 GAME).
+        if let Some(on) = self.pending_music_toggle.take() {
+            if let Some(audio) = resources.audio {
+                audio.set_music_enabled(on);
+                if on {
+                    let mood = self.setmood();
+                    audio.set_score(mood);
+                }
+            }
+        }
+        if let Some(on) = self.pending_sound_toggle.take() {
+            if let Some(audio) = resources.audio {
+                audio.set_sfx_enabled(on);
+            }
+        }
+
         // When paused, skip game logic but keep rendering.
         if self.menu.is_paused() {
             self.render_by_viewstatus(canvas, resources);
@@ -4145,13 +4188,6 @@ impl Scene for GameplayScene {
 
         // Fatigue is updated per movement step in apply_player_input (player-111).
 
-        // Handle pending music stop from ToggleMusic OFF
-        if self.music_stop_pending {
-            self.music_stop_pending = false;
-            if let Some(audio) = resources.audio {
-                audio.stop_score();
-            }
-        }
 
         // setmood: check music group every 4 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
@@ -4162,9 +4198,8 @@ impl Scene for GameplayScene {
                 self.last_mood = mood;
                 self.dlog(format!("setmood: switching to group {}", mood));
                 if let Some(audio) = resources.audio {
-                    if self.menu.is_music_on() {
-                        audio.set_score(mood);
-                    }
+                    // set_score now handles the music_enabled check internally
+                    audio.set_score(mood);
                 }
             }
         }
@@ -5874,5 +5909,92 @@ mod quest_tests {
         // After tick, fireball at y=105. Target at 113 → distance 8px → should hit (radius 9)
         assert!(fireball.tick(100, 113));
         assert!(!fireball.active); // Deactivated on hit
+    }
+
+    // T2-AUDIO-MOOD: Mood priority tests (SPEC §22.6)
+    
+    #[test]
+    fn test_setmood_death_highest_priority() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 0;
+        gs.state.battleflag = true;
+        gs.state.region_num = 10; // dungeon
+        gs.state.lightlevel = 200; // day
+        // Death should override all other conditions
+        assert_eq!(gs.setmood(), 6);
+    }
+
+    #[test]
+    fn test_setmood_zone_over_battle() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.hero_x = 0x2800; // inside astral plane bounds
+        gs.state.hero_y = 0x8500;
+        gs.state.battleflag = true;
+        gs.state.lightlevel = 200;
+        // Zone should override battle
+        assert_eq!(gs.setmood(), 4);
+    }
+
+    #[test]
+    fn test_setmood_battle_over_dungeon() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = true;
+        gs.state.region_num = 10; // dungeon
+        gs.state.lightlevel = 200;
+        // Battle should override dungeon
+        assert_eq!(gs.setmood(), 1);
+    }
+
+    #[test]
+    fn test_setmood_dungeon_over_day() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = false;
+        gs.state.region_num = 10; // dungeon
+        gs.state.lightlevel = 200; // day
+        // Dungeon should override day/night
+        assert_eq!(gs.setmood(), 5);
+    }
+
+    #[test]
+    fn test_setmood_day_when_lightlevel_high() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = false;
+        gs.state.region_num = 3; // outdoor
+        gs.state.lightlevel = 121; // > 120
+        assert_eq!(gs.setmood(), 0); // Day music
+    }
+
+    #[test]
+    fn test_setmood_night_when_lightlevel_low() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = false;
+        gs.state.region_num = 3; // outdoor
+        gs.state.lightlevel = 120; // ≤ 120
+        assert_eq!(gs.setmood(), 2); // Night music
+    }
+
+    #[test]
+    fn test_setmood_night_at_threshold() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = false;
+        gs.state.region_num = 3; // outdoor
+        gs.state.lightlevel = 120; // exactly at threshold
+        assert_eq!(gs.setmood(), 2); // Night music (≤ 120)
+    }
+
+    #[test]
+    fn test_setmood_day_above_threshold() {
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = 10;
+        gs.state.battleflag = false;
+        gs.state.region_num = 3; // outdoor
+        gs.state.lightlevel = 121; // just above threshold
+        assert_eq!(gs.setmood(), 0); // Day music (> 120)
     }
 }
