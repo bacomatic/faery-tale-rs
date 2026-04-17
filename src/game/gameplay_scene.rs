@@ -38,6 +38,11 @@ const FIGHT_TRANS_LIST: [[u8; 4]; 9] = [
     [0, 6, 8, 2], // 8: arm middle, weapon raise fwd
 ];
 
+/// Proximity radius (pixels) for auto-speech checks (SPEC §13.4).
+const PROXIMITY_SPEECH_RANGE: i32 = 35;
+/// Princess world object index (ob_list8[9]) used for captive flag checks.
+const PRINCESS_OB_INDEX: usize = 9;
+
 /// Advance the fight animation state using trans_list random transitions.
 /// `state`: current fight state (0-8). `tick`: game cycle for randomness.
 fn advance_fight_state(state: u8, tick: u32) -> u8 {
@@ -341,6 +346,8 @@ pub struct GameplayScene {
     zones: Vec<crate::game::game_library::ZoneConfig>,
     /// Index of the zone the hero was in last frame (None = no zone).
     last_zone: Option<usize>,
+    /// Last nearest person for proximity auto-speech (SPEC §13.4).
+    last_person: Option<PersonId>,
     /// Trigger princess rescue sequence on next frame.
     trigger_princess_rescue: bool,
     /// Hero is in forced sleep (events 12/24).
@@ -363,6 +370,21 @@ enum FigKind {
     Npc(usize),
     /// A setfig from world_objects, with its index and setfig type (ob_id).
     SetFig { world_idx: usize, setfig_type: u8 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PersonId {
+    Npc(usize),
+    SetFig(usize),
+}
+
+impl From<&FigKind> for PersonId {
+    fn from(kind: &FigKind) -> Self {
+        match kind {
+            FigKind::Npc(idx) => PersonId::Npc(*idx),
+            FigKind::SetFig { world_idx, .. } => PersonId::SetFig(*world_idx),
+        }
+    }
 }
 
 /// Result of nearest_fig search.
@@ -424,6 +446,7 @@ impl GameplayScene {
             bumped_door: None,
             zones: Vec::new(),
             last_zone: None,
+            last_person: None,
             trigger_princess_rescue: false,
             sleeping: false,
             fiery_death: false,
@@ -1175,6 +1198,62 @@ impl GameplayScene {
         best
     }
 
+    /// Proximity auto-speech for nearby NPCs (SPEC §13.4).
+    fn update_proximity_speech(&mut self) {
+        let fig = match self.nearest_fig(1, PROXIMITY_SPEECH_RANGE) {
+            Some(fig) => fig,
+            None => {
+                self.last_person = None;
+                return;
+            }
+        };
+
+        let person = PersonId::from(&fig.kind);
+        if self.last_person == Some(person) {
+            return;
+        }
+        self.last_person = Some(person);
+
+        let bname = brother_name(&self.state);
+        match &fig.kind {
+            FigKind::Npc(idx) => {
+                if let Some(ref table) = self.npc_table {
+                    if let Some(npc) = table.npcs.get(*idx) {
+                        use crate::game::npc::{RACE_BEGGAR, RACE_NECROMANCER, RACE_WITCH};
+                        const RACE_DREAM_KNIGHT: u8 = 7;
+                        let speech_id = match npc.race {
+                            RACE_BEGGAR => Some(23),
+                            RACE_WITCH => Some(46),
+                            RACE_NECROMANCER => Some(43),
+                            RACE_DREAM_KNIGHT => Some(41),
+                            _ => None,
+                        };
+                        if let Some(id) = speech_id {
+                            self.messages.push(crate::game::events::speak(&self.narr, id, bname));
+                        }
+                    }
+                }
+            }
+            FigKind::SetFig { setfig_type, .. } => {
+                let speech_id = match *setfig_type {
+                    13 => Some(23), // Beggar
+                    9 => Some(46),  // Witch
+                    4 => {
+                        let princess_captive = self.state.world_objects
+                            .get(PRINCESS_OB_INDEX)
+                            .map(|obj| obj.ob_stat != 0)
+                            .unwrap_or(false);
+                        if princess_captive { Some(16) } else { None }
+                    }
+                    _ => None,
+                };
+                if let Some(id) = speech_id {
+                    self.messages.push(crate::game::events::speak(&self.narr, id, bname));
+                }
+            }
+        }
+    }
+
     /// Update actor environ based on terrain type at current position.
     /// Port of fmain.c:2019-2074 sinker logic.
     fn update_environ(&mut self) {
@@ -1283,7 +1362,6 @@ impl GameplayScene {
     fn execute_princess_rescue(&mut self) {
         const ITEM_WRIT: usize = 28;  // stuff[28] = Writ
         const ITEM_STATUE: usize = 25; // stuff[25] = gold statues
-        const PRINCESS_OB_INDEX: usize = 9; // ob_list8[9] in world_objects
 
         // Princess names: Katra (0), Karla (1), Kandy (2)
         let princess_names = ["Katra", "Karla", "Kandy"];
@@ -2112,6 +2190,7 @@ impl GameplayScene {
         // Reset door interaction state: all opened doors and the locked-message dedup.
         self.opened_doors.clear();
         self.bumped_door = None;
+        self.last_person = None;
         self.state.populate_region_objects(region, game_lib);
         self.log_buffer.push(format!("on_region_changed: loaded {} world objects", self.state.world_objects.len()));
         if let Some(ref adf) = self.adf {
@@ -4237,7 +4316,6 @@ impl Scene for GameplayScene {
                         // ob_list8 is region 8, but the princess object should be global
                         // Looking at the spec, ob_list8[9] is a specific world object.
                         // We need to find the princess object in world_objects.
-                        const PRINCESS_OB_INDEX: usize = 9;
                         if self.state.world_objects.len() > PRINCESS_OB_INDEX {
                             let princess_captive = self.state.world_objects[PRINCESS_OB_INDEX].ob_stat != 0;
                             if princess_captive {
@@ -4455,6 +4533,7 @@ impl Scene for GameplayScene {
                 self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
             }
             self.update_actors(1);
+            self.update_proximity_speech();
             self.run_combat_tick();
 
             let (new_map_x, new_map_y) = Self::map_adjust(
@@ -4797,6 +4876,110 @@ impl Scene for GameplayScene {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::game_library::NarrConfig;
+    use crate::game::game_state::WorldObject;
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+
+    fn scene_with_speeches() -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        scene.narr = NarrConfig {
+            event_msg: vec![],
+            speeches: vec![String::new(); 60],
+            place_msg: vec![],
+            inside_msg: vec![],
+        };
+        scene.narr.speeches[16] = "Princess auto-speech.".to_string();
+        scene.narr.speeches[23] = "Beggar auto-speech.".to_string();
+        scene.narr.speeches[41] = "DreamKnight auto-speech.".to_string();
+        scene.narr.speeches[43] = "Necromancer auto-speech.".to_string();
+        scene.narr.speeches[46] = "Witch auto-speech.".to_string();
+        scene
+    }
+
+    fn add_setfig(scene: &mut GameplayScene, setfig_type: u8, x: u16, y: u16) {
+        scene.state.world_objects.push(WorldObject {
+            ob_id: setfig_type,
+            ob_stat: 3,
+            region: scene.state.region_num,
+            x,
+            y,
+            visible: true,
+        });
+    }
+
+    #[test]
+    fn test_proximity_auto_speech_triggers_on_approach() {
+        let mut scene = scene_with_speeches();
+        add_setfig(&mut scene, 13, 100, 100); // Beggar
+        scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
+        scene.state.hero_y = 100;
+
+        scene.update_proximity_speech();
+        assert!(scene.messages.is_empty(), "no speech when out of range");
+
+        scene.state.hero_x = 100 + (PROXIMITY_SPEECH_RANGE as u16 / 2);
+        scene.update_proximity_speech();
+        assert_eq!(scene.messages.len(), 1);
+        assert!(scene.messages.latest().unwrap().contains("Beggar"));
+    }
+
+    #[test]
+    fn test_proximity_auto_speech_no_repeat_for_same_person() {
+        let mut scene = scene_with_speeches();
+        add_setfig(&mut scene, 13, 100, 100); // Beggar
+        scene.state.hero_x = 100;
+        scene.state.hero_y = 100;
+
+        scene.update_proximity_speech();
+        scene.update_proximity_speech();
+        assert_eq!(scene.messages.len(), 1, "speech should not repeat for same person");
+    }
+
+    #[test]
+    fn test_proximity_auto_speech_resets_after_leaving_range() {
+        let mut scene = scene_with_speeches();
+        add_setfig(&mut scene, 13, 100, 100); // Beggar
+        scene.state.hero_x = 100;
+        scene.state.hero_y = 100;
+
+        scene.update_proximity_speech();
+        assert_eq!(scene.messages.len(), 1);
+
+        scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
+        scene.update_proximity_speech();
+        assert_eq!(scene.messages.len(), 1, "leaving range should not emit speech");
+
+        scene.state.hero_x = 100;
+        scene.update_proximity_speech();
+        assert_eq!(scene.messages.len(), 2, "re-approach should emit speech again");
+    }
+
+    #[test]
+    fn test_proximity_auto_speech_switches_to_new_person() {
+        let mut scene = scene_with_speeches();
+        add_setfig(&mut scene, 13, 100, 100); // Beggar
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_NECROMANCER,
+            race: RACE_NECROMANCER,
+            x: 220,
+            y: 100,
+            vitality: 10,
+            active: true,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+
+        scene.state.hero_x = 100;
+        scene.state.hero_y = 100;
+        scene.update_proximity_speech();
+        assert!(scene.messages.latest().unwrap().contains("Beggar"));
+
+        scene.state.hero_x = 220;
+        scene.state.hero_y = 100;
+        scene.update_proximity_speech();
+        assert!(scene.messages.latest().unwrap().contains("Necromancer"));
+    }
 
     #[test]
     fn test_talisman_pickup_triggers_victory() {
