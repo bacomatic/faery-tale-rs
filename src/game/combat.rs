@@ -65,6 +65,7 @@ impl Missile {
 /// Fire a missile from origin toward target direction.
 /// dir: 0=N, 2=E, 4=S, 6=W (and diagonals).
 /// weapon: 4=bow (arrow), 5=wand (fireball).
+/// speed: projectile velocity (default 2 for arrows/wands, 5 for dragon fireballs).
 /// Returns the index of the missile slot used, or None if full.
 pub fn fire_missile(
     missiles: &mut [Missile; MAX_MISSILES],
@@ -72,18 +73,19 @@ pub fn fire_missile(
     dir: u8,
     weapon: u8,
     is_friendly: bool,
+    speed: i32,
 ) -> Option<usize> {
     let slot = missiles.iter().position(|m| !m.active)?;
     let (dx, dy) = match dir & 7 {
-        0 => (0, -2),  // N
-        1 => (2, -2),  // NE
-        2 => (2, 0),   // E
-        3 => (2, 2),   // SE
-        4 => (0, 2),   // S
-        5 => (-2, 2),  // SW
-        6 => (-2, 0),  // W
-        7 => (-2, -2), // NW
-        _ => (0, -2),
+        0 => (0, -speed),      // N
+        1 => (speed, -speed),  // NE
+        2 => (speed, 0),       // E
+        3 => (speed, speed),   // SE
+        4 => (0, speed),       // S
+        5 => (-speed, speed),  // SW
+        6 => (-speed, 0),      // W
+        7 => (-speed, -speed), // NW
+        _ => (0, -speed),
     };
     let missile_type = if weapon == 5 { MissileType::Fireball } else { MissileType::Arrow };
     missiles[slot] = Missile { active: true, x, y, dx, dy, missile_type, is_friendly };
@@ -461,7 +463,7 @@ mod tests {
     #[test]
     fn test_fire_arrow_weapon_4() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 100, 200, 2, 4, true);
+        let slot = fire_missile(&mut missiles, 100, 200, 2, 4, true, 2);
         assert!(slot.is_some());
         let m = &missiles[slot.unwrap()];
         assert_eq!(m.missile_type, MissileType::Arrow);
@@ -471,7 +473,7 @@ mod tests {
     #[test]
     fn test_fire_fireball_weapon_5() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 100, 200, 0, 5, false);
+        let slot = fire_missile(&mut missiles, 100, 200, 0, 5, false, 2);
         assert!(slot.is_some());
         let m = &missiles[slot.unwrap()];
         assert_eq!(m.missile_type, MissileType::Fireball);
@@ -489,7 +491,7 @@ mod tests {
     #[test]
     fn test_fire_missile_slots() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 0, 0, 2, 4, true);
+        let slot = fire_missile(&mut missiles, 0, 0, 2, 4, true, 2);
         assert!(slot.is_some());
         assert!(missiles[slot.unwrap()].active);
     }
