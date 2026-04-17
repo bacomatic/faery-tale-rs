@@ -41,6 +41,8 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
         brother: state.brother as u32,
         riding: state.riding as i32,
         flying: state.flying as i32,
+        swan_vx: state.swan_vx as i32,
+        swan_vy: state.swan_vy as i32,
 
         light_timer: state.light_timer as i32,
         secret_timer: state.secret_timer as i32,
@@ -153,6 +155,8 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.brother = sf.brother as u8;
     state.riding = sf.riding as i16;
     state.flying = sf.flying as i16;
+    state.swan_vx = sf.swan_vx as i16;
+    state.swan_vy = sf.swan_vy as i16;
 
     state.light_timer = sf.light_timer as i16;
     state.secret_timer = sf.secret_timer as i16;

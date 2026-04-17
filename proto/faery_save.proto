@@ -40,6 +40,8 @@ message SaveFile {
     uint32 brother = 27;  // 1=Julian, 2=Phillip, 3=Kevin
     int32 riding   = 28;
     int32 flying   = 29;
+    int32 swan_vx  = 141;  // Swan horizontal velocity (signed)
+    int32 swan_vy  = 142;  // Swan vertical velocity (signed)
 
     // Timers
     int32  light_timer  = 30;

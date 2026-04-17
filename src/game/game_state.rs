@@ -72,6 +72,10 @@ pub struct GameState {
     pub riding: i16,
     pub flying: i16,
 
+    // Swan velocity (signed i16, clamped to ±32 horizontal, ±40 vertical)
+    pub swan_vx: i16,
+    pub swan_vy: i16,
+
     // Timers
     pub light_timer: i16,
     pub secret_timer: i16,
@@ -201,6 +205,8 @@ impl GameState {
             brother: 1,
             riding: 0,
             flying: 0,
+            swan_vx: 0,
+            swan_vy: 0,
 
             light_timer: 0,
             secret_timer: 0,
@@ -621,15 +627,63 @@ impl GameState {
     pub fn start_swan_flight(&mut self) -> bool {
         if self.has_lasso() && self.active_carrier == CARRIER_SWAN {
             self.flying = 1;
+            self.swan_vx = 0;
+            self.swan_vy = 0;
             true
         } else {
             false
         }
     }
 
-    /// Stop swan flight (land).
+    /// Stop swan flight (land). Resets velocity.
     pub fn stop_swan_flight(&mut self) {
         self.flying = 0;
+        self.swan_vx = 0;
+        self.swan_vy = 0;
+    }
+
+    /// Apply directional input to swan velocity (SPEC §21.4).
+    /// xdir/ydir are the directional impulse values from collision::XDIR/YDIR.
+    /// Velocity is clamped to ±32 horizontal, ±40 vertical.
+    pub fn apply_swan_velocity_impulse(&mut self, xdir: i16, ydir: i16) {
+        if self.flying == 0 { return; }
+        
+        self.swan_vx += xdir;
+        self.swan_vy += ydir;
+        
+        // Clamp horizontal velocity to ±32
+        self.swan_vx = self.swan_vx.clamp(-32, 32);
+        // Clamp vertical velocity to ±40
+        self.swan_vy = self.swan_vy.clamp(-40, 40);
+    }
+
+    /// Compute new hero position from swan velocity (SPEC §21.4).
+    /// Position updates by vel/4 per frame.
+    /// Returns (new_x, new_y, wraps_x, wraps_y) where wraps indicate coordinate wrapping.
+    pub fn compute_swan_position(&self) -> (u16, u16) {
+        if self.flying == 0 {
+            return (self.hero_x, self.hero_y);
+        }
+        
+        let dx = self.swan_vx / 4;
+        let dy = self.swan_vy / 4;
+        
+        // Outdoor world wraps at 0x8000
+        let new_x = ((self.hero_x as i32 + dx as i32).rem_euclid(0x8000)) as u16;
+        let new_y = if self.region_num < 8 {
+            ((self.hero_y as i32 + dy as i32).rem_euclid(0x8000)) as u16
+        } else {
+            (self.hero_y as i32 + dy as i32) as u16
+        };
+        
+        (new_x, new_y)
+    }
+
+    /// Check if swan can dismount at current velocity (SPEC §21.4).
+    /// Dismount allowed when |vel_x| < 15 && |vel_y| < 15.
+    pub fn can_dismount_swan(&self) -> bool {
+        if self.flying == 0 { return false; }
+        self.swan_vx.abs() < 15 && self.swan_vy.abs() < 15
     }
 
     /// Check if raft can be boarded at the given terrain (SPEC §21.2).
@@ -1063,6 +1117,7 @@ mod tests {
     }
 
     #[test]
+    #[test]
     fn test_can_board_raft_gating() {
         let mut s = GameState::new();
         // Not allowed when wcarry != 1.
@@ -1126,5 +1181,165 @@ mod tests {
         s.hero_x = 16000;
         s.hero_y = 13000;
         assert!(s.is_turtle_summon_blocked(), "in the middle");
+    }
+
+    #[test]
+    fn test_swan_start_clears_velocity() {
+        let mut state = GameState::new();
+        state.swan_vx = 20;
+        state.swan_vy = 30;
+        state.active_carrier = CARRIER_SWAN;
+        state.stuff_mut()[16] = 1; // has lasso
+        assert!(state.start_swan_flight());
+        assert_eq!(state.flying, 1);
+        assert_eq!(state.swan_vx, 0);
+        assert_eq!(state.swan_vy, 0);
+    }
+
+    #[test]
+    fn test_swan_stop_clears_velocity() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        state.swan_vx = 20;
+        state.swan_vy = 30;
+        state.stop_swan_flight();
+        assert_eq!(state.flying, 0);
+        assert_eq!(state.swan_vx, 0);
+        assert_eq!(state.swan_vy, 0);
+    }
+
+    #[test]
+    fn test_swan_velocity_accumulates() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        // North: xdir=0, ydir=-3
+        state.apply_swan_velocity_impulse(0, -3);
+        assert_eq!(state.swan_vx, 0);
+        assert_eq!(state.swan_vy, -3);
+        // Another north impulse
+        state.apply_swan_velocity_impulse(0, -3);
+        assert_eq!(state.swan_vy, -6);
+    }
+
+    #[test]
+    fn test_swan_velocity_horizontal_cap() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        // East: xdir=3, ydir=0
+        for _ in 0..20 {
+            state.apply_swan_velocity_impulse(3, 0);
+        }
+        assert_eq!(state.swan_vx, 32, "horizontal velocity capped at 32");
+        assert_eq!(state.swan_vy, 0);
+    }
+
+    #[test]
+    fn test_swan_velocity_vertical_cap() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        // South: xdir=0, ydir=3
+        for _ in 0..20 {
+            state.apply_swan_velocity_impulse(0, 3);
+        }
+        assert_eq!(state.swan_vx, 0);
+        assert_eq!(state.swan_vy, 40, "vertical velocity capped at 40");
+    }
+
+    #[test]
+    fn test_swan_velocity_negative_cap() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        // West: xdir=-3, ydir=0
+        for _ in 0..20 {
+            state.apply_swan_velocity_impulse(-3, 0);
+        }
+        assert_eq!(state.swan_vx, -32, "horizontal velocity capped at -32");
+        // North: xdir=0, ydir=-3
+        state.swan_vx = 0;
+        for _ in 0..20 {
+            state.apply_swan_velocity_impulse(0, -3);
+        }
+        assert_eq!(state.swan_vy, -40, "vertical velocity capped at -40");
+    }
+
+    #[test]
+    fn test_swan_position_update_formula() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        state.hero_x = 1000;
+        state.hero_y = 2000;
+        state.swan_vx = 20;
+        state.swan_vy = 32;
+        let (new_x, new_y) = state.compute_swan_position();
+        // pos += vel/4: dx = 20/4 = 5, dy = 32/4 = 8
+        assert_eq!(new_x, 1005);
+        assert_eq!(new_y, 2008);
+    }
+
+    #[test]
+    fn test_swan_position_wraps_outdoor() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        state.region_num = 3; // outdoor
+        state.hero_x = 0x7FFE;
+        state.hero_y = 0x7FFE;
+        state.swan_vx = 32; // max east: 32/4 = 8
+        state.swan_vy = 40; // max south: 40/4 = 10
+        let (new_x, new_y) = state.compute_swan_position();
+        // X: 0x7FFE + 8 = 0x8006, wraps to 0x0006
+        // Y: 0x7FFE + 10 = 0x8008, wraps to 0x0008
+        assert_eq!(new_x, 0x0006);
+        assert_eq!(new_y, 0x0008);
+    }
+
+    #[test]
+    fn test_swan_position_no_wrap_indoor() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        state.region_num = 8; // indoor
+        state.hero_x = 0x7FFE;
+        state.hero_y = 0x8500; // indoor Y range
+        state.swan_vx = 32;
+        state.swan_vy = 40;
+        let (new_x, new_y) = state.compute_swan_position();
+        // X still wraps (outdoor wrapping), Y does not
+        assert_eq!(new_x, 0x0006);
+        assert_eq!(new_y, 0x850A); // no wrap
+    }
+
+    #[test]
+    fn test_swan_dismount_requires_low_velocity() {
+        let mut state = GameState::new();
+        state.flying = 1;
+        state.swan_vx = 14;
+        state.swan_vy = 14;
+        assert!(state.can_dismount_swan(), "vel < 15 should allow dismount");
+        
+        state.swan_vx = 15;
+        assert!(!state.can_dismount_swan(), "vel >= 15 should block dismount");
+        
+        state.swan_vx = 14;
+        state.swan_vy = 15;
+        assert!(!state.can_dismount_swan(), "vy >= 15 should block dismount");
+    }
+
+    #[test]
+    fn test_swan_dismount_not_flying() {
+        let mut state = GameState::new();
+        state.flying = 0;
+        state.swan_vx = 0;
+        state.swan_vy = 0;
+        assert!(!state.can_dismount_swan(), "cannot dismount when not flying");
+    }
+
+    #[test]
+    fn test_swan_velocity_impulse_no_op_when_not_flying() {
+        let mut state = GameState::new();
+        state.flying = 0;
+        state.swan_vx = 0;
+        state.swan_vy = 0;
+        state.apply_swan_velocity_impulse(3, 3);
+        assert_eq!(state.swan_vx, 0, "velocity should not change when not flying");
+        assert_eq!(state.swan_vy, 0);
     }
 }
