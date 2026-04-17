@@ -532,6 +532,45 @@ impl GameplayScene {
         self.messages.set_echo(echo);
     }
 
+    /// SPEC §17.4: Toggle spectre visibility based on lightlevel.
+    /// Spectre (ob_listg[5] in original) is visible when lightlevel < 40 (deep night),
+    /// hidden otherwise. The spectre is a global setfig (region=255, ob_id=10, ob_stat=3).
+    fn update_spectre_visibility(&mut self) {
+        let is_night = self.state.lightlevel < 40;
+        for obj in &mut self.state.world_objects {
+            if obj.region == 255 && obj.ob_id == 10 && obj.ob_stat == 3 {
+                obj.visible = is_night;
+            }
+        }
+    }
+
+    /// Attempt to cast a magic spell, checking for Necromancer arena block first.
+    /// SPEC §19.1: Magic is blocked when extn->v3 == 9 (Necromancer arena).
+    fn try_cast_spell(&mut self, item_idx: usize) {
+        // Check if hero is in Necromancer arena (v3 == 9)
+        let in_necro_arena = crate::game::zones::find_zone(
+            &self.zones,
+            self.state.hero_x,
+            self.state.hero_y
+        )
+        .and_then(|idx| self.zones.get(idx))
+        .map_or(false, |z| z.v3 == 9);
+
+        if in_necro_arena {
+            // SPEC §19.1: speak(59) - "Your magic won't work here, fool!"
+            let bname = brother_name(&self.state);
+            let msg = crate::game::events::speak(&self.narr, 59, bname);
+            self.messages.push(msg);
+        } else {
+            match use_magic(&mut self.state, item_idx) {
+                Ok(msg) => self.messages.push(msg),
+                Err(e)  => self.messages.push(e),
+            }
+            let wealth = self.state.wealth;
+            self.menu.set_options(self.state.stuff(), wealth);
+        }
+    }
+
     /// Decode 8-way direction from current input flags.
     fn current_direction(&self) -> Direction {
         match (self.input.up, self.input.down, self.input.left, self.input.right) {
@@ -2343,60 +2382,25 @@ impl GameplayScene {
             }
             // MAGIC menu items 5..=11 (stuff[9..=15], MAGICBASE=9 in fmain.c).
             GameAction::CastSpell1 => {
-                match use_magic(&mut self.state, ITEM_STONE_RING) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_STONE_RING);
             }
             GameAction::CastSpell2 => {
-                match use_magic(&mut self.state, ITEM_LANTERN) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_LANTERN);
             }
             GameAction::CastSpell3 => {
-                match use_magic(&mut self.state, ITEM_VIAL) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_VIAL);
             }
             GameAction::CastSpell4 => {
-                match use_magic(&mut self.state, ITEM_ORB) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_ORB);
             }
             GameAction::CastSpell5 => {
-                match use_magic(&mut self.state, ITEM_TOTEM) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_TOTEM);
             }
             GameAction::CastSpell6 => {
-                match use_magic(&mut self.state, ITEM_RING) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_RING);
             }
             GameAction::CastSpell7 => {
-                match use_magic(&mut self.state, ITEM_SKULL) {
-                    Ok(msg) => self.messages.push(msg),
-                    Err(e)  => self.messages.push(e),
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
+                self.try_cast_spell(ITEM_SKULL);
             }
             GameAction::Shoot => {
                 use crate::game::game_state::ITEM_ARROWS;
@@ -3964,6 +3968,10 @@ impl Scene for GameplayScene {
             }
         }
 
+        // SPEC §17.4: Spectre night visibility toggle (ob_listg[5])
+        // When lightlevel < 40 (deep night): visible, otherwise hidden.
+        self.update_spectre_visibility();
+
         // Fatigue is updated per movement step in apply_player_input (player-111).
 
         // Handle pending music stop from ToggleMusic OFF
@@ -5092,5 +5100,243 @@ mod death_tests {
         assert_eq!(state.hero_y, 2000);
         assert_eq!(state.region_num, 5);
         assert_eq!(state.vitality, 10);
+    }
+}
+
+#[cfg(test)]
+mod t1_arena_spectre_tests {
+    use super::*;
+    use crate::game::game_library::{ZoneConfig, NarrConfig};
+    use crate::game::game_state::WorldObject;
+    use crate::game::magic::{ITEM_LANTERN, ITEM_VIAL};
+
+    /// Helper to create a minimal GameplayScene for testing.
+    fn test_scene() -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        scene.narr = NarrConfig {
+            event_msg: vec![],
+            speeches: vec![
+                String::new(); 60  // Fill to index 59
+            ],
+            place_msg: vec![],
+            inside_msg: vec![],
+        };
+        // Set speech 59 to the expected message
+        scene.narr.speeches[59] = "\"Your magic won't work here, fool!\"".to_string();
+        scene
+    }
+
+    #[test]
+    fn test_magic_blocked_in_necromancer_arena() {
+        // SPEC §19.1: Magic blocked when extn->v3 == 9 (Necromancer arena).
+        let mut scene = test_scene();
+        
+        // Create zone with v3 == 9 (Necromancer arena)
+        scene.zones = vec![
+            ZoneConfig {
+                label: "necro_arena".to_string(),
+                etype: 60,
+                x1: 1000, y1: 1000,
+                x2: 2000, y2: 2000,
+                v1: 0, v2: 0, v3: 9,
+            }
+        ];
+        
+        // Place hero in the arena
+        scene.state.hero_x = 1500;
+        scene.state.hero_y = 1500;
+        
+        // Give hero a magic item
+        scene.state.stuff_mut()[ITEM_LANTERN] = 1;
+        
+        // Try to cast spell
+        scene.try_cast_spell(ITEM_LANTERN);
+        
+        // Should receive speak(59) message
+        let msgs: Vec<&str> = scene.messages.iter().collect();
+        assert_eq!(msgs.len(), 1);
+        assert!(msgs[0].contains("Your magic won't work here"));
+        
+        // Item should NOT be consumed
+        assert_eq!(scene.state.stuff()[ITEM_LANTERN], 1);
+    }
+
+    #[test]
+    fn test_magic_allowed_outside_necromancer_arena() {
+        // Magic should work normally outside the arena.
+        let mut scene = test_scene();
+        
+        // Create zone WITHOUT v3 == 9
+        scene.zones = vec![
+            ZoneConfig {
+                label: "normal_zone".to_string(),
+                etype: 10,
+                x1: 1000, y1: 1000,
+                x2: 2000, y2: 2000,
+                v1: 0, v2: 0, v3: 0,
+            }
+        ];
+        
+        // Place hero in normal zone
+        scene.state.hero_x = 1500;
+        scene.state.hero_y = 1500;
+        
+        // Give hero a magic item
+        scene.state.stuff_mut()[ITEM_LANTERN] = 1;
+        
+        // Try to cast spell
+        scene.try_cast_spell(ITEM_LANTERN);
+        
+        // Should receive success message (not the block message)
+        let msgs: Vec<&str> = scene.messages.iter().collect();
+        assert_eq!(msgs.len(), 1);
+        assert!(!msgs[0].contains("won't work here"));
+        
+        // Item should be consumed
+        assert_eq!(scene.state.stuff()[ITEM_LANTERN], 0);
+    }
+
+    #[test]
+    fn test_magic_allowed_when_no_zone() {
+        // Magic should work when hero is not in any specific zone.
+        let mut scene = test_scene();
+        
+        // No zones defined
+        scene.zones = vec![];
+        
+        // Place hero anywhere
+        scene.state.hero_x = 5000;
+        scene.state.hero_y = 5000;
+        
+        // Give hero a magic item
+        scene.state.stuff_mut()[ITEM_VIAL] = 1;
+        scene.state.vitality = 10;
+        
+        // Try to cast spell
+        scene.try_cast_spell(ITEM_VIAL);
+        
+        // Should receive success message
+        let msgs: Vec<&str> = scene.messages.iter().collect();
+        assert_eq!(msgs.len(), 1);
+        assert!(!msgs[0].contains("won't work here"));
+        
+        // Item should be consumed
+        assert_eq!(scene.state.stuff()[ITEM_VIAL], 0);
+    }
+
+    #[test]
+    fn test_spectre_visible_at_night() {
+        // SPEC §17.4: Spectre visible when lightlevel < 40.
+        let mut scene = test_scene();
+        
+        // Add spectre to world_objects (region=255, ob_id=10, ob_stat=3)
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 10,
+            ob_stat: 3,
+            region: 255,
+            x: 12439,
+            y: 36202,
+            visible: false,
+        });
+        
+        // Set lightlevel to deep night (< 40)
+        scene.state.lightlevel = 30;
+        
+        // Update spectre visibility
+        scene.update_spectre_visibility();
+        
+        // Spectre should be visible
+        assert_eq!(scene.state.world_objects[0].visible, true);
+    }
+
+    #[test]
+    fn test_spectre_hidden_by_day() {
+        // SPEC §17.4: Spectre hidden when lightlevel >= 40.
+        let mut scene = test_scene();
+        
+        // Add spectre to world_objects
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 10,
+            ob_stat: 3,
+            region: 255,
+            x: 12439,
+            y: 36202,
+            visible: true,
+        });
+        
+        // Set lightlevel to day (>= 40)
+        scene.state.lightlevel = 100;
+        
+        // Update spectre visibility
+        scene.update_spectre_visibility();
+        
+        // Spectre should be hidden
+        assert_eq!(scene.state.world_objects[0].visible, false);
+    }
+
+    #[test]
+    fn test_spectre_visibility_threshold() {
+        // Test the exact threshold (lightlevel < 40).
+        let mut scene = test_scene();
+        
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 10,
+            ob_stat: 3,
+            region: 255,
+            x: 12439,
+            y: 36202,
+            visible: false,
+        });
+        
+        // Test just below threshold (should be visible)
+        scene.state.lightlevel = 39;
+        scene.update_spectre_visibility();
+        assert_eq!(scene.state.world_objects[0].visible, true);
+        
+        // Test at threshold (should be hidden)
+        scene.state.lightlevel = 40;
+        scene.update_spectre_visibility();
+        assert_eq!(scene.state.world_objects[0].visible, false);
+    }
+
+    #[test]
+    fn test_spectre_visibility_does_not_affect_other_objects() {
+        // Ensure the visibility toggle only affects spectres.
+        let mut scene = test_scene();
+        
+        // Add spectre and other objects
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 10,  // Spectre
+            ob_stat: 3,
+            region: 255,
+            x: 12439,
+            y: 36202,
+            visible: false,
+        });
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 11,  // Ghost (different setfig)
+            ob_stat: 3,
+            region: 255,
+            x: 5000,
+            y: 5000,
+            visible: true,
+        });
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 15,  // Chest (ground item)
+            ob_stat: 1,
+            region: 3,
+            x: 6000,
+            y: 6000,
+            visible: true,
+        });
+        
+        scene.state.lightlevel = 30;  // Night
+        scene.update_spectre_visibility();
+        
+        // Spectre should be visible
+        assert_eq!(scene.state.world_objects[0].visible, true);
+        // Other objects should be unchanged
+        assert_eq!(scene.state.world_objects[1].visible, true);
+        assert_eq!(scene.state.world_objects[2].visible, true);
     }
 }
