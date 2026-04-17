@@ -483,4 +483,30 @@ mod tests {
         // cmode == Game, k=6 >= 5, not Keys/SaveX → bg_color = menus[Game].color = 2
         assert_eq!(btn.bg_color, 2);
     }
+
+    #[test]
+    fn test_file_menu_slot_labels() {
+        // T2-SAVE-SLOT-UI: verify FILE menu presents slots A-H (SPEC §24.1)
+        let mut ms = MenuState::new();
+        ms.gomenu(MenuMode::File);
+        let renders = ms.print_options();
+
+        // FILE menu should show 8 slots (A-H) from LABELB
+        let visible_labels: Vec<String> = renders
+            .iter()
+            .filter(|r| r.menu_index >= 0)
+            .map(|r| r.text.trim().to_string())
+            .collect();
+
+        assert_eq!(visible_labels.len(), 8, "FILE menu should show 8 slots");
+        assert_eq!(visible_labels[0], "A");
+        assert_eq!(visible_labels[1], "B");
+        assert_eq!(visible_labels[2], "C");
+        assert_eq!(visible_labels[3], "D");
+        assert_eq!(visible_labels[4], "E");
+        assert_eq!(visible_labels[5], "F");
+        assert_eq!(visible_labels[6], "G");
+        assert_eq!(visible_labels[7], "H");
+    }
 }
+

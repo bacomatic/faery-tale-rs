@@ -7,7 +7,7 @@ use anyhow::Context;
 use prost::Message;
 
 use crate::game::actor::{Actor, ActorKind, ActorState};
-use crate::game::game_state::GameState;
+use crate::game::game_state::{GameState, WorldObject};
 
 /// Generated protobuf types for the save format.
 pub mod proto {
@@ -22,6 +22,15 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
     let make_stuff = |arr: &[u8; 35]| proto::BrotherStuff {
         slots: arr.iter().map(|&v| v as u32).collect(),
     };
+
+    let world_objects = state.world_objects.iter().map(|wo| proto::SavedWorldObject {
+        ob_id: wo.ob_id as u32,
+        ob_stat: wo.ob_stat as u32,
+        region: wo.region as u32,
+        x: wo.x as u32,
+        y: wo.y as u32,
+        visible: wo.visible,
+    }).collect();
 
     proto::SaveFile {
         save_version: SAVE_VERSION,
@@ -87,6 +96,7 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
         current_mood: state.current_mood as u32,
 
         actors: vec![],
+        world_objects,
     }
 }
 
@@ -249,6 +259,25 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
         }
     }
 
+    // Restore per-region object tables (SPEC §24.2)
+    state.world_objects.clear();
+    for wo in &sf.world_objects {
+        state.world_objects.push(WorldObject {
+            ob_id: wo.ob_id as u8,
+            ob_stat: wo.ob_stat as u8,
+            region: wo.region as u8,
+            x: wo.x as u16,
+            y: wo.y as u16,
+            visible: wo.visible,
+        });
+    }
+
+    // Post-load cleanup (SPEC §24.5)
+    state.encounter_number = 0;
+    state.actors_loading = false;
+    state.encounter_type = 0;
+    state.viewstatus = 99;  // Force full redraw
+
     Ok(state)
 }
 
@@ -399,5 +428,70 @@ mod tests {
         assert_eq!(loaded.brother, state.brother);
         assert_eq!(loaded.daynight, state.daynight);
         assert_eq!(loaded.region_num, state.region_num);
+    }
+
+    #[test]
+    fn test_postload_cleanup() {
+        // T2-SAVE-POSTLOAD: verify SPEC §24.5 post-load cleanup
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("save_postload.sav");
+
+        let mut state = GameState::new();
+        state.encounter_number = 42;
+        state.actors_loading = true;
+        state.encounter_type = 99;
+        state.viewstatus = 3;
+
+        save_to_path(&state, &path).unwrap();
+        let loaded = load_from_path(&path).unwrap();
+
+        // Post-load cleanup should reset these fields
+        assert_eq!(loaded.encounter_number, 0, "encounter_number should be cleared");
+        assert_eq!(loaded.actors_loading, false, "actors_loading should be cleared");
+        assert_eq!(loaded.encounter_type, 0, "encounter_type should be cleared");
+        assert_eq!(loaded.viewstatus, 99, "viewstatus should be set to 99");
+    }
+
+    #[test]
+    fn test_world_objects_persistence() {
+        // T2-SAVE-REGIONAL: verify per-region object tables are persisted
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("save_objects.sav");
+
+        let mut state = GameState::new();
+        state.world_objects.push(WorldObject {
+            ob_id: 25,
+            ob_stat: 1,
+            region: 2,
+            x: 1000,
+            y: 2000,
+            visible: true,
+        });
+        state.world_objects.push(WorldObject {
+            ob_id: 114,
+            ob_stat: 5,
+            region: 3,
+            x: 3000,
+            y: 4000,
+            visible: false,
+        });
+
+        save_to_path(&state, &path).unwrap();
+        let loaded = load_from_path(&path).unwrap();
+
+        assert_eq!(loaded.world_objects.len(), 2);
+        assert_eq!(loaded.world_objects[0].ob_id, 25);
+        assert_eq!(loaded.world_objects[0].ob_stat, 1);
+        assert_eq!(loaded.world_objects[0].region, 2);
+        assert_eq!(loaded.world_objects[0].x, 1000);
+        assert_eq!(loaded.world_objects[0].y, 2000);
+        assert_eq!(loaded.world_objects[0].visible, true);
+
+        assert_eq!(loaded.world_objects[1].ob_id, 114);
+        assert_eq!(loaded.world_objects[1].ob_stat, 5);
+        assert_eq!(loaded.world_objects[1].region, 3);
+        assert_eq!(loaded.world_objects[1].x, 3000);
+        assert_eq!(loaded.world_objects[1].y, 4000);
+        assert_eq!(loaded.world_objects[1].visible, false);
     }
 }

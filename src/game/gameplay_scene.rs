@@ -2353,6 +2353,9 @@ impl GameplayScene {
                         let existing = crate::game::persist::load_transcript(slot);
                         self.messages.set_transcript(existing);
                         self.messages.push("Game loaded.");
+                        // Post-load: rebuild menu states from inventory (SPEC §24.5)
+                        let wealth = self.state.wealth;
+                        self.menu.set_options(self.state.stuff(), wealth);
                     }
                     Err(e) => {
                         self.messages.push(format!("Load failed: {}", e));

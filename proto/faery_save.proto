@@ -18,6 +18,16 @@ message SavedActor {
     uint32 facing = 8;
 }
 
+// World object (items on ground, NPCs)
+message SavedWorldObject {
+    uint32 ob_id   = 1;
+    uint32 ob_stat = 2;
+    uint32 region  = 3;
+    uint32 x       = 4;
+    uint32 y       = 5;
+    bool   visible = 6;
+}
+
 // Top-level save file message
 message SaveFile {
     // File metadata
@@ -98,4 +108,7 @@ message SaveFile {
 
     // Active actors snapshot (optional — can be omitted for initial impl)
     repeated SavedActor actors = 140;
+
+    // Per-region object tables (SPEC §24.2)
+    repeated SavedWorldObject world_objects = 150;
 }
