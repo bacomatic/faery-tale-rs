@@ -563,9 +563,10 @@ impl GameplayScene {
 
             let hero_weapon = self.state.actors.first().map_or(1, |a| a.weapon);
             let has_bow = hero_weapon == 4;
+            let has_wand = hero_weapon == 5;
             let has_arrows = self.state.stuff()[ITEM_ARROWS] > 0;
 
-            if has_bow && has_arrows {
+            if (has_bow && has_arrows) || has_wand {
                 // SHOOT1: aiming. Stay in Shooting state while button held.
                 if let Some(player) = self.state.actors.first_mut() {
                     player.facing = facing;
@@ -592,24 +593,39 @@ impl GameplayScene {
             return;
         }
 
-        // Bow release-to-fire: arrow fires on the frame input.fight goes false
+        // Bow/Wand release-to-fire: missile fires on the frame input.fight goes false
         // while hero is in Shooting state (SHOOT1 → SHOOT3 transition).
         if let Some(player) = self.state.actors.first() {
             if matches!(player.state, ActorState::Shooting(_)) {
                 use crate::game::game_state::ITEM_ARROWS;
                 use crate::game::combat::fire_missile;
+                let weapon = player.weapon;
 
-                if self.state.stuff()[ITEM_ARROWS] > 0 {
+                let can_fire = if weapon == 4 {
+                    // Bow requires arrows
+                    self.state.stuff()[ITEM_ARROWS] > 0
+                } else if weapon == 5 {
+                    // Wand has unlimited shots
+                    true
+                } else {
+                    false
+                };
+
+                if can_fire {
                     fire_missile(
                         &mut self.missiles,
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
                         self.state.facing,
-                        5,
+                        weapon,
                         true,
                     );
-                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
-                    self.messages.push("You shoot an arrow!");
+                    if weapon == 4 {
+                        self.state.stuff_mut()[ITEM_ARROWS] -= 1;
+                        self.messages.push("You shoot an arrow!");
+                    } else if weapon == 5 {
+                        self.messages.push("You cast a fireball!");
+                    }
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -659,22 +675,14 @@ impl GameplayScene {
         };
 
         if dir != Direction::None {
-            // Speed: flying=4px, on_raft=2px (water passable), water terrain (type 2-5)=1px, default=2px.
+            // Speed calculation per SPEC §9.5: terrain-modulated via environ.
             let speed: i32 = if self.state.flying != 0 {
                 4
-            } else if self.state.on_raft {
-                2
-            } else if let Some(ref world) = self.map_world {
-                let terrain = collision::px_to_terrain_type(
-                    world,
-                    self.state.hero_x as i32,
-                    self.state.hero_y as i32,
-                );
-                if (2..=5).contains(&terrain) { 1 } else { 2 }
             } else {
-                2
+                use crate::game::combat::hero_speed_for_env;
+                let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
+                hero_speed_for_env(environ, self.state.on_raft) as i32
             };
-
 
             let dx = base_dx * speed / 2;
             let dy = base_dy * speed / 2;
@@ -1577,7 +1585,7 @@ impl GameplayScene {
                 if (hero_x - ax).abs().max((hero_y - ay).abs()) > 150 { continue; }
                 let dir = facing_toward(ax, ay, hero_x, hero_y);
                 use crate::game::combat::fire_missile;
-                fire_missile(&mut self.missiles, ax, ay, dir, 3, false);
+                fire_missile(&mut self.missiles, ax, ay, dir, 4, false); // NPCs fire arrows (weapon 4)
                 self.archer_cooldown = 15;
                 break;
             }
@@ -2379,7 +2387,10 @@ impl GameplayScene {
             }
             GameAction::Shoot => {
                 use crate::game::game_state::ITEM_ARROWS;
-                if self.state.stuff()[ITEM_ARROWS] == 0 {
+                let weapon = self.state.actors.first().map_or(4, |a| a.weapon);
+                let is_bow = weapon == 4;
+                
+                if is_bow && self.state.stuff()[ITEM_ARROWS] == 0 {
                     self.messages.push("No Arrows!");
                 } else {
                     use crate::game::combat::fire_missile;
@@ -2388,11 +2399,15 @@ impl GameplayScene {
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
                         self.state.facing,
-                        5, // base arrow damage
+                        weapon,
                         true,
                     );
-                    self.state.stuff_mut()[ITEM_ARROWS] -= 1;
-                    self.messages.push("You shoot an arrow!");
+                    if is_bow {
+                        self.state.stuff_mut()[ITEM_ARROWS] -= 1;
+                        self.messages.push("You shoot an arrow!");
+                    } else {
+                        self.messages.push("You cast a fireball!");
+                    }
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -4119,17 +4134,22 @@ impl Scene for GameplayScene {
                         missile.active = false;
                         continue;
                     }
+                    // Use correct hit radius per SPEC §10.4
+                    let radius = match missile.missile_type {
+                        crate::game::combat::MissileType::Arrow => 6,
+                        crate::game::combat::MissileType::Fireball => 9,
+                    };
                     if missile.is_friendly {
                         for &(npc_idx, nx, ny) in &npc_positions {
-                            if (missile.x - nx).abs() < 16 && (missile.y - ny).abs() < 16 {
+                            if (missile.x - nx).abs() < radius && (missile.y - ny).abs() < radius {
                                 missile.active = false;
-                                npc_hits.push((npc_idx, missile.damage));
+                                npc_hits.push((npc_idx, missile.damage()));
                                 break;
                             }
                         }
-                    } else if (missile.x - hero_x).abs() < 16 && (missile.y - hero_y).abs() < 16 {
+                    } else if (missile.x - hero_x).abs() < radius && (missile.y - hero_y).abs() < radius {
                         missile.active = false;
-                        hero_missile_damage += missile.damage;
+                        hero_missile_damage += missile.damage();
                     }
                 }
                 if let Some(ref mut table) = self.npc_table {
