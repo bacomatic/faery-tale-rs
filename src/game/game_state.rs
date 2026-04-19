@@ -116,10 +116,10 @@ pub struct GameState {
     pub region_num: u8,
     pub new_region: u8,
 
-    // Per-brother inventory
-    pub julstuff: [u8; 35],
-    pub philstuff: [u8; 35],
-    pub kevstuff: [u8; 35],
+    // Per-brother inventory (ARROWBASE = 35; array length 36 so index 35 is valid)
+    pub julstuff: [u8; 36],
+    pub philstuff: [u8; 36],
+    pub kevstuff: [u8; 36],
     /// 0 = Julian, 1 = Phillip, 2 = Kevin
     pub active_brother: usize,
 
@@ -238,9 +238,9 @@ impl GameState {
             region_num: 3,
             new_region: 0,
 
-            julstuff: [0u8; 35],
-            philstuff: [0u8; 35],
-            kevstuff: [0u8; 35],
+            julstuff: [0u8; 36],
+            philstuff: [0u8; 36],
+            kevstuff: [0u8; 36],
             active_brother: 0,
 
             actors,
@@ -279,7 +279,7 @@ impl GameState {
     }
 
     /// Returns a reference to the active brother's inventory array.
-    pub fn stuff(&self) -> &[u8; 35] {
+    pub fn stuff(&self) -> &[u8; 36] {
         match self.active_brother {
             0 => &self.julstuff,
             1 => &self.philstuff,
@@ -288,7 +288,7 @@ impl GameState {
     }
 
     /// Returns a mutable reference to the active brother's inventory array.
-    pub fn stuff_mut(&mut self) -> &mut [u8; 35] {
+    pub fn stuff_mut(&mut self) -> &mut [u8; 36] {
         match self.active_brother {
             0 => &mut self.julstuff,
             1 => &mut self.philstuff,
@@ -511,7 +511,7 @@ impl GameState {
         self.vitality = 15 + brave / 4;
 
         // Clear inventory and give a dirk (stuff[0] = 1)
-        *self.stuff_mut() = [0u8; 35];
+        *self.stuff_mut() = [0u8; 36];
         self.stuff_mut()[0] = 1;
 
         // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
@@ -784,7 +784,7 @@ impl GameState {
     /// Pick up an item (port of itrans[] logic from fmain.c).
     /// item_id: item type (0-34). Returns true if picked up.
     pub fn pickup_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 35 { return false; }
+        if item_id >= 36 { return false; }
         let stuff = self.stuff_mut();
         if stuff[item_id] < 255 {
             stuff[item_id] += 1;
@@ -796,7 +796,7 @@ impl GameState {
 
     /// Drop an item.
     pub fn drop_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 35 { return false; }
+        if item_id >= 36 { return false; }
         let stuff = self.stuff_mut();
         if stuff[item_id] > 0 {
             stuff[item_id] -= 1;
@@ -1410,5 +1410,28 @@ mod tests {
         state.apply_swan_velocity_impulse(3, 3);
         assert_eq!(state.swan_vx, 0, "velocity should not change when not flying");
         assert_eq!(state.swan_vy, 0);
+    }
+
+    #[test]
+    fn test_inventory_array_len_is_36() {
+        // T3-INV-STUFF-36: SPEC §14.1 — ARROWBASE = 35, array must be length 36.
+        let state = GameState::new();
+        assert_eq!(state.julstuff.len(), 36, "julstuff must have 36 slots (indices 0-35)");
+        assert_eq!(state.philstuff.len(), 36);
+        assert_eq!(state.kevstuff.len(), 36);
+        assert_eq!(state.stuff().len(), 36, "stuff() slice must be length 36");
+    }
+
+    #[test]
+    fn test_arrowbase_pickup_no_panic() {
+        // T3-INV-STUFF-36: pickup_item(35) must not panic and must use slot 35 as accumulator.
+        let mut state = GameState::new();
+        assert_eq!(state.stuff()[35], 0, "ARROWBASE slot starts at 0");
+        let ok = state.pickup_item(35);
+        assert!(ok, "pickup_item(35) should succeed");
+        assert_eq!(state.stuff()[35], 1, "ARROWBASE accumulator should be incremented");
+
+        // Index 36+ still rejected.
+        assert!(!state.pickup_item(36), "pickup_item(36) must return false");
     }
 }
