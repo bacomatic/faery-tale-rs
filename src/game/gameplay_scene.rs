@@ -141,7 +141,7 @@ fn compass_dir_for_facing(facing: u8) -> usize {
 /// `direction` is +1 (next) or -1 (prev).
 /// `stuff` is the player's inventory array.
 /// Returns `Some(new_weapon_value)` if a different weapon is found, `None` otherwise.
-fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 35]) -> Option<u8> {
+fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 36]) -> Option<u8> {
     let weapon_count: i8 = 5; // weapons 1..=5, stuff indices 0..=4
     let cur_0 = (current as i8 - 1).max(0); // convert to 0-based index
     for offset in 1..weapon_count {
@@ -3015,7 +3015,7 @@ impl GameplayScene {
                         // One random item from inv_list[rand8()+8]
                         let item_idx = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         let item_idx = if item_idx == 8 { 35usize } else { item_idx }; // 8→ARROWBASE(35)
-                        if item_idx < 35 {
+                        if item_idx < 36 {
                             self.state.pickup_item(item_idx);
                         }
                         let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
@@ -5292,7 +5292,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_next() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Dirk (weapon 1)
         stuff[2] = 1; // Sword (weapon 3)
         stuff[4] = 1; // Wand (weapon 5)
@@ -5306,7 +5306,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_prev() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Dirk (weapon 1)
         stuff[2] = 1; // Sword (weapon 3)
         stuff[4] = 1; // Wand (weapon 5)
@@ -5318,7 +5318,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_single_owned() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Only Dirk (weapon 1)
         assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
         assert_eq!(cycle_weapon_slot(1, -1, &stuff), None);
@@ -5326,7 +5326,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_none_owned() {
-        let stuff = [0u8; 35];
+        let stuff = [0u8; 36];
         assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
     }
 
