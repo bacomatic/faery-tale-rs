@@ -73,10 +73,10 @@ pub const WEAPON_PROBS: [u8; 32] = [
     1, 1, 1, 1,  // arms=1: dirk
     1, 1, 2, 1,  // arms=2: mostly dirk, some mace
     2, 1, 2, 2,  // arms=3: mostly mace
-    2, 2, 3, 2,  // arms=4: mace with sword chance
-    3, 3, 2, 3,  // arms=5: mostly sword
-    3, 3, 4, 3,  // arms=6: sword with bow chance
-    4, 3, 4, 4,  // arms=7: bow-heavy
+    4, 4, 3, 2,  // arms=4: bows and swords
+    5, 5, 5, 5,  // arms=5: all magic wands
+    8, 8, 8, 8,  // arms=6: touch attack
+    3, 3, 3, 3,  // arms=7: all swords
 ];
 
 fn rand4_from_tick(tick: u32) -> u32 {
@@ -466,5 +466,26 @@ mod tests {
     fn test_spawn_encounter_cleverness_wraith() {
         let npc = spawn_encounter(2, 100, 100, 42); // Wraith: clever=1
         assert_eq!(npc.cleverness, 1);
+    }
+
+    // SPEC §10.6: weapon_probs groups 4-7 exact values.
+    #[test]
+    fn test_weapon_probs_group4() {
+        assert_eq!(&WEAPON_PROBS[16..20], &[4, 4, 3, 2]);
+    }
+
+    #[test]
+    fn test_weapon_probs_group5() {
+        assert_eq!(&WEAPON_PROBS[20..24], &[5, 5, 5, 5]);
+    }
+
+    #[test]
+    fn test_weapon_probs_group6() {
+        assert_eq!(&WEAPON_PROBS[24..28], &[8, 8, 8, 8]);
+    }
+
+    #[test]
+    fn test_weapon_probs_group7() {
+        assert_eq!(&WEAPON_PROBS[28..32], &[3, 3, 3, 3]);
     }
 }
