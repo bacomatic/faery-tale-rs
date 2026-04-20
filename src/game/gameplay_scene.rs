@@ -3540,6 +3540,13 @@ impl GameplayScene {
     /// For outdoors (region < 8): applies fade_page() with per-channel percentages
     /// derived from lightlevel (0=midnight, 300=noon) and jewel light_on flag.
     /// For indoors (region >= 8): returns base palette at full brightness.
+    ///
+    /// In both cases, color 31 (sky) is set to a fixed per-region value after any
+    /// fading (SPEC §17.6):
+    ///   - region 4  (desert):             0x0980  orange-brown
+    ///   - region 9, secret_active:        0x00f0  bright green
+    ///   - region 9  (normal):             0x0445  dark grey-blue
+    ///   - all others:                     0x0bdf  light blue
     fn compute_current_palette(
         base: &crate::game::colors::Palette,
         region_num: u8,
@@ -3555,10 +3562,12 @@ impl GameplayScene {
             for (i, entry) in base.colors.iter().enumerate().take(PALETTE_SIZE) {
                 pal[i] = amiga_color_to_rgba(entry.color);
             }
-            // Region 9 secret_timer swaps color 31.
-            if region_num == 9 && secret_active {
-                pal[31] = amiga_color_to_rgba(0x00f0);
-            }
+            // SPEC §17.6: color 31 (sky) override for all indoor cases.
+            pal[31] = amiga_color_to_rgba(match (region_num, secret_active) {
+                (9, true)  => 0x00f0, // secret area active: bright green
+                (9, false) => 0x0445, // dungeon normal: dark grey-blue
+                _          => 0x0bdf, // other indoor regions: light blue
+            });
             return pal;
         }
 
@@ -3577,6 +3586,12 @@ impl GameplayScene {
         for (i, entry) in faded.colors.iter().enumerate().take(PALETTE_SIZE) {
             out[i] = amiga_color_to_rgba(entry.color);
         }
+        // SPEC §17.6: color 31 (sky) is a fixed per-region value, not subject to
+        // day/night fading.  Apply the override after fade_page.
+        out[31] = amiga_color_to_rgba(match region_num {
+            4 => 0x0980, // desert sky: orange-brown
+            _ => 0x0bdf, // all other outdoor regions: light blue
+        });
         out
     }
 
@@ -6611,5 +6626,81 @@ mod t3_loot_container_gold_tests {
             "tier-2 container index 8 must add 100 gold (SPEC §14.10)");
         assert_eq!(scene.state.stuff()[8], initial_arrows,
             "tier-2 container index 8 must not change arrow count");
+    }
+}
+
+#[cfg(test)]
+mod t3_palette_sky_tests {
+    //! TDD tests for T3-PALETTE-SKY (SPEC §17.6): palette entry 31 sky color override.
+    //!
+    //! Verifies that `compute_current_palette` returns the correct sky color for
+    //! each of the four cases regardless of day/night fading:
+    //!   - region 4  (desert):          0x0980
+    //!   - region 9 + secret_active:    0x00f0
+    //!   - region 9  (normal):          0x0445
+    //!   - all others:                  0x0bdf
+    use super::GameplayScene;
+    use crate::game::colors::{Palette as ColorsPalette, RGB4};
+    use crate::game::palette::amiga_color_to_rgba;
+
+    /// Build a 32-entry `colors::Palette` with every entry set to black except
+    /// color 31, which is set to `color31`.  The other entries are zero so that
+    /// any accidental leakage from the fade path is obvious.
+    fn make_base(color31: u16) -> ColorsPalette {
+        let mut colors = vec![RGB4 { color: 0x0000 }; 32];
+        colors[31] = RGB4 { color: color31 };
+        ColorsPalette { colors }
+    }
+
+    #[test]
+    fn test_sky_region4_desert() {
+        // SPEC §17.6: region 4 (desert) → palette[31] = 0x0980 (orange-brown).
+        // Use dawn lightlevel (150) so that fade_page would produce a darker value
+        // if the override were not applied, proving the override takes effect.
+        let base = make_base(0x0980);
+        let pal = GameplayScene::compute_current_palette(&base, 4, 150, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0980),
+            "region 4 sky should be fixed 0x0980 (orange-brown desert sky)"
+        );
+    }
+
+    #[test]
+    fn test_sky_region9_normal() {
+        // SPEC §17.6: region 9, secret_timer inactive → palette[31] = 0x0445 (dark grey-blue).
+        let base = make_base(0x0445);
+        let pal = GameplayScene::compute_current_palette(&base, 9, 0, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0445),
+            "region 9 normal sky should be 0x0445 (dark grey-blue dungeon sky)"
+        );
+    }
+
+    #[test]
+    fn test_sky_region9_secret() {
+        // SPEC §17.6: region 9, secret_timer active → palette[31] = 0x00f0 (bright green).
+        let base = make_base(0x0445); // base has the normal dungeon value
+        let pal = GameplayScene::compute_current_palette(&base, 9, 0, false, true);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x00f0),
+            "region 9 secret sky should be 0x00f0 (bright green secret revealed)"
+        );
+    }
+
+    #[test]
+    fn test_sky_other_region_outdoor() {
+        // SPEC §17.6: all other regions → palette[31] = 0x0bdf (light blue sky).
+        // Region 0 is outdoor; use dawn (lightlevel=150) so fade_page would alter
+        // the value if the override were absent.
+        let base = make_base(0x0bdf);
+        let pal = GameplayScene::compute_current_palette(&base, 0, 150, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0bdf),
+            "other region sky should be fixed 0x0bdf (light blue sky)"
+        );
     }
 }
