@@ -3111,7 +3111,7 @@ Princess counter persists across succession. However, `ob_list8[9].ob_stat` IS r
 | Combat | Carriers skip melee/missile hit detection |
 | Freeze spell | Blocked when `riding > 1` (turtle or swan) |
 | Stone circle teleport | Carrier teleports with hero |
-| Rendering | Carriers skip terrain masking; swan on ground renders as RAFT sprite |
+| Rendering | Carriers skip terrain masking |
 
 ---
 
