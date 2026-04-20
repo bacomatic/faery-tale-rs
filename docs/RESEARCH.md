@@ -942,20 +942,24 @@ Velocity halves approximately every 3 ticks. Position continues updating by `vel
 
 ### 5.8 Movement Speed by Terrain
 
-Speed value `e` passed to `newx`/`newy` during WALKING (`fmain.c:1599-1604`):
+Speed value `e` passed to `newx`/`newy` during WALKING (`fmain.c:1599-1602`). The if/else chain applies to **all actors** — hero and NPC share the same code path:
 
-| Condition | Speed | Effect |
-|-----------|-------|--------|
-| Hero riding raft (`riding==5`) | 3 | Fast overland |
-| `environ == −3` (terrain 8) | −2 | Direction reversal zone (near Necromancer); reverses player input |
-| `environ == −2` (terrain 7) | N/A | Ice physics (velocity-based, no direct speed) |
-| `environ == −1` (terrain 6) | 4 | Fast terrain |
-| `environ == 2` or `> 6` | 1 | Wading / deep water |
-| Default | 2 | Normal walking |
-
-For non-hero actors: `e = 1` in water/deep terrain, `e = 2` otherwise (with the same environ exceptions above).
+| Condition | Speed | Hero | NPC | Effect |
+|-----------|-------|------|-----|--------|
+| `i==0 && riding==5` | 3 | Yes | — | Turtle riding (hero-only, `fmain.c:1599`) |
+| `environ == −3` (terrain 8) | −2 | Yes | Unreachable | Direction reversal; `proxcheck` blocks NPCs from terrain 8 (`fmain2.c:282`) |
+| `environ == −2` (terrain 7) | velocity | Yes | Yes | Ice physics — no `i==0` guard (`fmain.c:1581-1598`) |
+| `environ == −1` (terrain 6) | 4 | Yes | Yes | Fast terrain, 2× normal speed (`fmain.c:1601`) |
+| `environ == 2` or `> 6` | 1 | Yes | Yes | Wading / deep water, half speed (`fmain.c:1602`) |
+| Default | 2 | Yes | Yes | Normal walking (`fmain.c:1602`) |
 
 Negative speed (−2 for terrain 8) causes backward movement along the current facing direction — the `newx`/`newy` `muls.w` handles the sign inversion.
+
+**NPC terrain access**: `proxcheck` zeroes terrain types 8 and 9 only for the hero (`fmain2.c:282`). NPCs are blocked by Probe 2 (`fsubs.asm:1608-1609`, threshold ≥ 8), so they can never reach terrain 8 (direction reversal) or 9 (pits) under normal gameplay. This makes `environ == −3` effectively hero-only despite the speed code having no actor check.
+
+**Race-based terrain immunity**: Wraiths (`race == 2`) skip terrain collision entirely (`fmain2.c:279-280`), but their terrain is forced to 0 at `fmain.c:1639`, giving them normal speed (e=2) on all surfaces. Snakes (`race == 4`) also have terrain forced to 0 (`fmain.c:1639`). See [§6.3](#63-collision-detection) for collision details.
+
+**Wading speed gap**: The check `k == 2 || k > 6` creates a speed anomaly during water depth ramping. For terrain 4 (deep water), where environ ramps 0→10, actors cycle through: normal speed (environ 0–1) → slow (environ 2) → normal (environ 3–6) → slow (environ 7–10). This brief normal-speed window at environ 3–6 affects hero and NPCs identically.
 
 ### 5.9 Hunger Stumble (`fmain.c:1442-1445`)
 
@@ -1042,20 +1046,29 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source c
 | 6 | Slippery | −1 | Speed becomes 4 (`fmain.c:1601`, `1771`) |
 | 7 | Velocity ice | −2 | Momentum-based physics with directional impulse (`fmain.c:1580-1595`) |
 | 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); reverses player input near Necromancer area |
-| 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1776-1783`) |
+| 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1766-1774`) |
 | 10+ | Blocked | — | `_prox` blocks at second probe point (`fsubs.asm:1608-1609`); first probe blocks at ≥10 (`fsubs.asm:1598-1599`) |
 | 12 | Crystal wall | — | Blocked unless `stuff[30]` (crystal shard) is held (`fmain.c:1611`). Exists only in terra set 8 (under+furnish, Region 8 building interiors) — tile index 93, found in 12 sectors: small chambers, twisting tunnels, forked intersections, and doom tower. **Not present** in the spirit world or dungeons (terra set 10 maps tile 93 to type 1/impassable). |
 | 15 | Door | — | Triggers `doorfind()` attempt when player bumps it (`fmain.c:1609`) |
 
 #### Environ Effects
 
-The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. Key thresholds:
+The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. The sinker section applies to **all actors** — both hero and NPCs get environ updates identically (except where noted). Key thresholds:
 
 - `environ > 15`: instant death — `vitality = 0` (`fmain.c:1845`)
 - `environ > 2`: gradual drowning — `vitality--` per tick (`fmain.c:1846`)
-- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`)
+- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`) — hero only
 
 Water damage is gated by the `fiery_death` flag (`fmain.c:1843`); see [P17](PROBLEMS.md).
+
+**NPC drowning immunity by race**: The drowning damage check at `fmain.c:1849-1851` uses the local variable `k`, which is repurposed from environ to `an->race` at `fmain.c:1802`. The condition `k != 2 && k != 3` therefore checks **race**, not environ — race 2 (wraith) and race 3 (skeleton) are immune to drowning damage. Additionally, wraiths (`race == 2`) and snakes (`race == 4`) have their terrain forced to 0 at `fmain.c:1639`, preventing them from entering water environ at all.
+
+**Hero-only environ rules**:
+- `i==0 && raftprox` → environ forced to 0 (turtle proximity prevents drowning, `fmain.c:1761`)
+- `j == 9 && i==0 && xtype == 52` → FALL state + environ −2 (pit traps, `fmain.c:1766-1774`)
+- `riding == 11` → environ forced to −2 before the loop (swan mount, `fmain.c:1464`)
+
+For NPCs, terrain 9 (pit/fall) produces no environ change — no sinker branch matches, so `k` retains its previous value (`fmain.c:1766`).
 
 ### 6.3 Collision Detection
 
@@ -1091,17 +1104,29 @@ When any actor's movement is blocked, the game auto-deviates (this is NOT player
 
 ### 6.4 Movement Speed by Terrain
 
-Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](#58-movement-speed-by-terrain):
+Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](#58-movement-speed-by-terrain). The speed assignment at `fmain.c:1599-1602` is a single if/else chain evaluated for every actor:
 
-| Condition | Speed | Source |
-|-----------|-------|--------|
-| Riding raft (`riding==5`) | 3 | `fmain.c:1599` |
-| `environ == −3` (lava) | −2 | `fmain.c:1600` |
-| `environ == −1` (slippery) | 4 | `fmain.c:1601` |
-| `environ == 2` or `> 6` | 1 | `fmain.c:1603` |
-| Default | 2 | `fmain.c:1604` |
+| Condition | Speed | Source | Applies To |
+|-----------|-------|--------|------------|
+| `i==0 && riding==5` | 3 | `fmain.c:1599` | Hero only (turtle mount) |
+| `environ == −3` (lava) | −2 | `fmain.c:1600` | All actors (but NPCs blocked from terrain 8 by `proxcheck`) |
+| `environ == −1` (slippery) | 4 | `fmain.c:1601` | All actors |
+| `environ == 2` or `> 6` | 1 | `fmain.c:1602` | All actors |
+| Default | 2 | `fmain.c:1602` | All actors |
 
-Crystal shard (`stuff[30]`) overrides terrain type 12 blocking: `if (stuff[30] && j==12) goto newloc` (`fmain.c:1611`).
+Per-speed pixel displacement per frame (from direction vectors at `fsubs.asm:1277-1278`):
+
+| Speed (e) | Cardinal px/frame | Diagonal px/frame |
+|-----------|-------------------|--------------------|
+| −2 | 3 (reversed) | 2 (reversed) |
+| 1 | 1 | 1 |
+| 2 | 3 | 2 |
+| 3 | 4 | 3 |
+| 4 | 6 | 4 |
+
+Crystal shard (`stuff[30]`) overrides terrain type 12 blocking: `if (stuff[30] && j==12) goto newloc` (`fmain.c:1611`). Hero-only — NPCs are always blocked by terrain ≥ 10.
+
+**NPC freeze**: When `freeze_timer` is active, all non-hero actors (`i > 0`) skip movement processing entirely via `goto statc` (`fmain.c:1473`). Talin's inline comment `/* what about wizard? */` suggests this blanket freeze may have been broader than intended.
 
 ### 6.5 Memory Layout
 

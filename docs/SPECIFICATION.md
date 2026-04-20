@@ -808,20 +808,44 @@ Walk trigger: `qualifier & 0x4000` (left mouse) OR `keydir != 0`.
 
 ### 9.5 Movement Speed by Terrain
 
-Speed value `e` passed to `newx`/`newy`:
+Speed value `e` passed to `newx`/`newy` during WALKING. The if/else chain applies to **all actors** — hero and NPC share the same code path:
 
-| Condition | Speed | Effect |
-|-----------|-------|--------|
-| Riding raft (`riding == 5`) | 3 | Fast overland |
-| `environ == −3` (terrain 8, direction reversal) | −2 | Backward movement (near Necromancer) |
-| `environ == −2` (terrain 7, ice) | N/A | Velocity-based physics |
-| `environ == −1` (terrain 6, slippery) | 4 | Fast terrain |
-| `environ == 2` or `> 6` (wading/deep water) | 1 | Slow |
-| Default | 2 | Normal walking |
+| Condition | Speed | Scope | Effect |
+|-----------|-------|-------|--------|
+| `i == 0 && riding == 5` | 3 | Hero only | Turtle mount (fast overland) |
+| `environ == −3` (terrain 8) | −2 | All actors | Direction reversal. NPCs are blocked from terrain 8 by `proxcheck` (`fmain2.c:282`), so in practice this is hero-only. |
+| `environ == −2` (terrain 7, ice) | velocity | All actors | Velocity-based physics — no `i == 0` guard |
+| `environ == −1` (terrain 6) | 4 | All actors | Fast/slippery, 2× normal |
+| `environ == 2` or `> 6` | 1 | All actors | Wading / deep water, half speed |
+| Default | 2 | All actors | Normal walking |
 
-Non-hero actors: speed 1 in water, 2 otherwise (same environ exceptions).
+Per-speed pixel displacement per frame:
+
+| Speed `e` | Cardinal | Diagonal |
+|-----------|----------|----------|
+| −2 (reversed) | 3 | 2 |
+| 1 | 1 | 1 |
+| 2 | 3 | 2 |
+| 3 | 4 | 3 |
+| 4 | 6 | 4 |
 
 Negative speed (−2) causes backward movement — the signed multiply in `newx`/`newy` handles inversion.
+
+**Hero-only movement rules:**
+- Turtle mount (`riding == 5`) forces speed 3 regardless of terrain.
+- Crystal shard (`stuff[30]`) passes through terrain type 12 barriers (`fmain.c:1611`).
+- Terrain types 8 and 9 are passable for the hero but cause effects (reversal / pit fall).
+
+**NPC-only movement rules:**
+- `freeze_timer > 0` → all non-hero actors skip movement entirely (`fmain.c:1473`, `goto statc`).
+- Terrain ≥ 10 always blocks (no crystal-shard exception).
+- Terrain 8 and 9 are blocked by `proxcheck`'s second probe (threshold ≥ 8).
+
+**Race-based terrain immunity (NPCs):**
+- Wraiths (`race == 2`) skip terrain collision entirely (`fmain2.c:279-280`) and have terrain forced to 0 at `fmain.c:1639` (normal speed everywhere).
+- Snakes (`race == 4`) have terrain forced to 0 (same mechanism), normal speed everywhere.
+
+**Wading speed gap:** The `environ == 2 || environ > 6` condition creates a brief normal-speed window at environ 3–6 during water-depth ramping. Affects hero and NPCs identically.
 
 ### 9.6 Position Update — `newx` / `newy`
 
@@ -2790,10 +2814,12 @@ Used at: natural healing cap, revive, heal vial cap, priest healing.
 |--------|--------|-----------|
 | Combat hits | `vitality -= wt` (weapon table value) | Per hit |
 | Hunger/fatigue | −2 | When `(hunger & 7) == 0` and (hunger > 100 OR fatigue > 160) and vitality > 5 |
-| Drowning (`environ == 30`) | −1 | Every 8 ticks |
+| Drowning (`environ == 30`) | −1 | Every 8 ticks. Wraiths (race 2) and skeletons (race 3) are immune. |
 | Lava (`environ > 2`) | −1 per tick | `environ > 15` = instant death |
 
-Rose (`stuff[23]`) prevents lava damage by forcing `environ = 0` each tick.
+Rose (`stuff[23]`) prevents lava damage by forcing `environ = 0` each tick (hero only).
+
+Wraiths (race 2) and snakes (race 4) have terrain forced to 0 at `fmain.c:1639`, so NPCs of those races never enter drowning or lava environ in the first place.
 
 ### 18.7 Stat Changes
 
