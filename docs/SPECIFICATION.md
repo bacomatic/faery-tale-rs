@@ -3840,7 +3840,11 @@ Both are used for map messages, door transitions, story placards, and screen cha
 
 ### 27.6 Viewport Zoom (`screen_size`)
 
-Animates viewport dimensions from a point to full screen using 5:8 aspect ratio: `y = x × 5 / 8`. Normal gameplay uses `screen_size(156)`, yielding a 312×194 viewport slightly inset from the 320×200 frame. The intro sequence reaches `screen_size(160)` for full-screen display.
+Manipulates the Amiga **DIW** (DIWSTRT/DIWSTOP display-window registers) — the hardware CRT visible region — using a 5:8 aspect ratio: `y = x × 5 / 8`. Normal gameplay uses `screen_size(156)`, opening a 312×194 DIW slightly inset from the 320×200 frame. The intro zoom animation reaches `screen_size(160)` for full-screen display.
+
+**This is not the playfield bitmap size.** The `vp_page` lo-res playfield bitmap is always 288×140 (§1.1) and is positioned within the DIW via `DxOffset=16, DyOffset=0`. `screen_size()` only changes the hardware visible region; the game renderer always draws into the same 288×140 bitmap area. The port MUST size its playfield framebuffer and scroll/clip math for 288×140, not 312×194.
+
+Port implementation: treat `screen_size()` calls as a no-op for normal gameplay (the CRT DIW has no equivalent in a windowed modern renderer). For the intro zoom and the victory sunrise, animate a masking rectangle (or equivalent letterbox) over the presented frame to reproduce the expanding/contracting CRT aperture effect; do not resize the playfield bitmap itself.
 
 ### 27.7 Static Display Reset (`stillscreen`)
 
