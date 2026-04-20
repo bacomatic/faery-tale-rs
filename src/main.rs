@@ -566,6 +566,44 @@ pub fn main() -> Result<(), String> {
                         .take(20)
                         .map(|(slot, a)| crate::game::debug_console::ActorSnapshot::from_actor(slot as u8, a))
                         .collect(),
+                    // Hero top-row extras (DBG-LAYOUT-01)
+                    max_vitality: 15 + (gs.state.brave / 4),
+                    luck: gs.state.luck,
+                    kind: gs.state.kind,
+                    hero_weapon: gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
+                    hero_weapon_name: crate::game::debug_console::weapon_short_name(
+                        gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
+                    ).to_string(),
+                    hero_state_u8: gs.state.actors.first()
+                        .map(|a| {
+                            use crate::game::actor::ActorState as AS;
+                            match a.state {
+                                AS::Still => 0, AS::Walking => 1, AS::Fighting(_) => 2,
+                                AS::Dying => 3, AS::Dead => 4, AS::Shooting(_) => 5,
+                                AS::Sinking => 6, AS::Falling => 7, AS::Sleeping => 8,
+                            }
+                        })
+                        .unwrap_or(0),
+                    hero_state_name: gs.state.actors.first()
+                        .map(|a| {
+                            use crate::game::actor::ActorState as AS;
+                            let discriminant: u8 = match a.state {
+                                AS::Still => 0, AS::Walking => 1, AS::Fighting(_) => 2,
+                                AS::Dying => 3, AS::Dead => 4, AS::Shooting(_) => 5,
+                                AS::Sinking => 6, AS::Falling => 7, AS::Sleeping => 8,
+                            };
+                            crate::game::debug_console::actor_state_name(discriminant).to_string()
+                        })
+                        .unwrap_or_else(|| "—".to_string()),
+                    hero_facing: gs.state.actors.first().map(|a| a.facing).unwrap_or(0),
+                    hero_environ: gs.state.actors.first().map(|a| a.environ).unwrap_or(0),
+                    active_carrier: gs.state.active_carrier,
+                    active_carrier_name: crate::game::debug_console::carrier_name(
+                        gs.state.active_carrier,
+                    ).to_string(),
+                    jewel_timer: gs.state.light_timer.max(0) as u16,
+                    totem_timer: 0,
+                    freeze_timer: gs.state.freeze_timer.max(0) as u16,
                 };
                 dc.update_status(status);
             } else {

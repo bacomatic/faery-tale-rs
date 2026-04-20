@@ -104,6 +104,34 @@ pub struct DebugSnapshot {
 
     // Actor slots (for `/actors` command and `/watch` feature). Up to 20 active slots.
     pub actors: Vec<ActorSnapshot>,
+
+    // ── Hero top-row extras (DBG-LAYOUT-01) ────────────────────────────
+    /// `15 + brave/4` — current cap for hero HP.
+    pub max_vitality: i16,
+    pub luck: i16,
+    pub kind: i16,
+    /// Weapon slot currently equipped on the hero (`actors[0].weapon`).
+    pub hero_weapon: u8,
+    /// Human-readable name of the hero's weapon (Dirk/Mace/Sword/Bow/Wand/…).
+    pub hero_weapon_name: String,
+    /// Hero ActorState encoded (see actor_state_u8).
+    pub hero_state_u8: u8,
+    /// Human-readable hero state (WALKING, FIGHT, …).
+    pub hero_state_name: String,
+    /// Hero facing direction 0..=7 (0=N, clockwise).
+    pub hero_facing: u8,
+    /// Hero environ value (−3..=2); see SPEC §9.5.
+    pub hero_environ: i8,
+    /// Carrier index currently ridden (0 none / 1 raft / 2 turtle / 3 swan / 4 dragon).
+    pub active_carrier: i16,
+    /// Active carrier human-readable label.
+    pub active_carrier_name: String,
+    /// Light-timer tick count (Green Jewel spell).
+    pub jewel_timer: u16,
+    /// Totem (Bird Totem / map) active indicator tick count.
+    pub totem_timer: u16,
+    /// Freeze (Gold Ring) timer tick count.
+    pub freeze_timer: u16,
 }
 
 /// Per-actor snapshot for the Actor Watch panel and `/actors` dump.
@@ -211,6 +239,75 @@ pub fn day_phase_label(phase: DayPhase) -> String {
         DayPhase::Morning => "Morning".to_string(),
         DayPhase::Midday => "Midday".to_string(),
         DayPhase::Evening => "Evening".to_string(),
+    }
+}
+
+/// Hero weapon slot → short display name (DBG-LAYOUT-01).
+pub fn weapon_short_name(weapon: u8) -> &'static str {
+    match weapon {
+        0 => "—",
+        1 => "Dirk",
+        2 => "Mace",
+        3 => "Sword",
+        4 => "Bow",
+        5 => "Wand",
+        _ => "?",
+    }
+}
+
+/// ActorState discriminant → compact display name (DBG-LAYOUT-01).
+pub fn actor_state_name(state: u8) -> &'static str {
+    match state {
+        0 => "STILL",
+        1 => "WALK",
+        2 => "FIGHT",
+        3 => "DYING",
+        4 => "DEAD",
+        5 => "SHOOT",
+        6 => "SINK",
+        7 => "FALL",
+        8 => "SLEEP",
+        _ => "?",
+    }
+}
+
+/// Facing direction 0..=7 → 8-point compass label.
+pub fn facing_name(facing: u8) -> &'static str {
+    match facing & 7 {
+        0 => "N",
+        1 => "NE",
+        2 => "E",
+        3 => "SE",
+        4 => "S",
+        5 => "SW",
+        6 => "W",
+        7 => "NW",
+        _ => "?",
+    }
+}
+
+/// Human-readable environ label (SPEC §9.5).
+pub fn environ_label(env: i8) -> &'static str {
+    match env {
+        -3 => "reverse",
+        -2 => "swamp",
+        -1 => "slippery",
+        0 => "normal",
+        1 => "wading",
+        2 => "fire",
+        _ => "?",
+    }
+}
+
+/// Carrier slot → human-readable label.
+pub fn carrier_name(carrier: i16) -> &'static str {
+    match carrier {
+        0 => "none",
+        1 => "raft",
+        2 => "turtle",
+        3 => "swan",
+        4 => "dragon",
+        _ => "?",
     }
 }
 
@@ -490,18 +587,17 @@ impl DebugConsole {
                 ])
                 .split(area);
 
-            // Split status header: Status (left) | Geography (center) | VFX (right)
+            // Top row: three equal panels per DEBUG_SPEC §Top Row Panel Contents.
             let status_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(40),
-                    Constraint::Percentage(35),
-                    Constraint::Percentage(25),
+                    Constraint::Percentage(34),
+                    Constraint::Percentage(33),
+                    Constraint::Percentage(33),
                 ])
                 .split(chunks[0]);
 
-            // ── Status header ──────────────────────────────────────────────
-            let phase_str = format!("{:?}", status.day_phase);
+            // ── Hero Stats (left) ──────────────────────────────────────────
             let brother_name = match status.brother {
                 1 => "Julian",
                 2 => "Phillip",
@@ -509,110 +605,133 @@ impl DebugConsole {
                 _ => "?",
             };
             let god_str = build_god_str(status.god_mode_flags);
-            let scene_str = status.scene_name.as_deref().unwrap_or("—");
-            let song_str = match status.current_song_group {
-                Some(g) => format!("playing #{}", g + 1),
-                None => "stopped".to_owned(),
-            };
-            let hold_str = if status.time_held { "HELD" } else { "free" };
-
-            let status_text = vec![
+            let hero_stats_text = vec![
                 Line::from(vec![
-                    styled_label("FPS: "),
-                    Span::raw(format!("{:5.1}  ", status.fps)),
-                    styled_label("Day: "),
-                    Span::raw(format!("{} {:02}:{:02}  ", status.game_day, status.game_hour, status.game_minute)),
-                    styled_label("Phase: "),
-                    Span::raw(format!("{}  ", phase_str)),
-                    styled_label("Ticks: "),
-                    Span::raw(format!("{}  ", status.game_ticks)),
-                    if status.paused {
-                        Span::styled("[PAUSED]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    Span::styled(brother_name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::raw("  "),
+                    styled_label("HP: "),
+                    Span::raw(format!("{}/{}", status.vitality, status.max_vitality)),
+                ]),
+                Line::from(vec![
+                    styled_label("B:"),
+                    Span::raw(format!("{} ", status.brave)),
+                    styled_label("L:"),
+                    Span::raw(format!("{} ", status.luck)),
+                    styled_label("K:"),
+                    Span::raw(format!("{}  ", status.kind)),
+                    styled_label("W:"),
+                    Span::raw(format!("{}", status.wealth)),
+                ]),
+                Line::from(vec![
+                    styled_label("Hgr:"),
+                    Span::raw(format!("{} ", status.hunger)),
+                    styled_label("Fat:"),
+                    Span::raw(format!("{}  ", status.fatigue)),
+                    styled_label("Wpn:"),
+                    Span::raw(status.hero_weapon_name.clone()),
+                ]),
+                Line::from(vec![
+                    styled_label("State: "),
+                    Span::raw(format!("{}  ", status.hero_state_name)),
+                    styled_label("F:"),
+                    Span::raw(facing_name(status.hero_facing)),
+                    if !god_str.is_empty() {
+                        Span::styled(format!("  God:{}", god_str), Style::default().fg(Color::Yellow))
+                    } else {
+                        Span::raw("")
+                    },
+                ]),
+            ];
+            let hero_widget = Paragraph::new(hero_stats_text)
+                .block(Block::default().borders(Borders::ALL).title(" Hero Stats "));
+            f.render_widget(hero_widget, status_chunks[0]);
+
+            // ── Geography (center) ─────────────────────────────────────────
+            let zone_str = match (status.current_zone_idx, &status.current_zone_label) {
+                (Some(idx), Some(label)) => format!("{} ({})", idx, label),
+                (Some(idx), None) => format!("{}", idx),
+                _ => "—".to_string(),
+            };
+            let env_str = format!("{} ({})", status.hero_environ, environ_label(status.hero_environ));
+            let geo_text = vec![
+                Line::from(vec![
+                    styled_label("Pos: "),
+                    Span::raw(format!("{}, {}", status.hero_x, status.hero_y)),
+                ]),
+                Line::from(vec![
+                    styled_label("Rgn: "),
+                    Span::raw(format!("{}   ", status.region_num)),
+                    styled_label("Ext: "),
+                    Span::raw(zone_str),
+                ]),
+                Line::from(vec![
+                    styled_label("Env: "),
+                    Span::raw(env_str),
+                ]),
+                Line::from(vec![
+                    styled_label("Carrier: "),
+                    Span::raw(status.active_carrier_name.clone()),
+                ]),
+            ];
+            let geo_widget = Paragraph::new(geo_text)
+                .block(Block::default().borders(Borders::ALL).title(" Geography "));
+            f.render_widget(geo_widget, status_chunks[1]);
+
+            // ── Visual Effects (right) ─────────────────────────────────────
+            let vfx_text = vec![
+                Line::from(vec![
+                    styled_label("Time: "),
+                    Span::raw(format!("{}  ", status.daynight)),
+                    Span::styled(
+                        status.time_period.clone(),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    styled_label("Light: "),
+                    Span::raw(format!("{}", status.lightlevel)),
+                    if status.vfx_light_sticky {
+                        Span::styled(" *sticky", Style::default().fg(Color::Yellow))
                     } else {
                         Span::raw("")
                     },
                 ]),
                 Line::from(vec![
-                    styled_label("Brother: "),
-                    Span::raw(format!("{}  ", brother_name)),
-                    styled_label("Scene: "),
-                    Span::raw(format!("{}  ", scene_str)),
+                    styled_label("Jewel:"),
+                    Span::raw(format!("{} ", status.jewel_timer)),
+                    styled_label("Totem:"),
+                    Span::raw(format!("{} ", status.totem_timer)),
+                    styled_label("Frz:"),
+                    Span::raw(format!("{}", status.freeze_timer)),
                 ]),
                 Line::from(vec![
-                    styled_label("VIT: "),
-                    Span::raw(format!("{}  ", status.vitality)),
-                    styled_label("HGR: "),
-                    Span::raw(format!("{}  ", status.hunger)),
-                    styled_label("FTG: "),
-                    Span::raw(format!("{}  ", status.fatigue)),
-                    styled_label("God: "),
-                    Span::raw(format!("{}  ", if god_str.is_empty() { "off" } else { &god_str })),
-                    styled_label("Time: "),
-                    Span::raw(format!("{}  ", hold_str)),
-                ]),
-                Line::from(vec![
-                    styled_label("Music: "),
-                    Span::raw(format!("{}  ({} groups available)", song_str, status.song_group_count)),
+                    if status.is_paused {
+                        Span::styled(
+                            "[PAUSED]",
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        Span::raw("")
+                    },
+                    if status.vfx_witch_active {
+                        Span::styled(" Witch", Style::default().fg(Color::Magenta))
+                    } else {
+                        Span::raw("")
+                    },
+                    if status.vfx_teleport_active {
+                        Span::styled(" TP", Style::default().fg(Color::Green))
+                    } else {
+                        Span::raw("")
+                    },
+                    if status.vfx_secret_active {
+                        Span::styled(" Secret", Style::default().fg(Color::Green))
+                    } else {
+                        Span::raw("")
+                    },
                 ]),
             ];
-
-            let status_widget = Paragraph::new(status_text)
-                .block(Block::default().borders(Borders::ALL).title(" Status "));
-            f.render_widget(status_widget, status_chunks[0]);
-
-            // ── Geography ─────────────────────────────────────────────
-            let zone_str = match (status.current_zone_idx, &status.current_zone_label) {
-                (Some(idx), Some(label)) => format!("[{}] {}", idx, label),
-                _ => "—".to_string(),
-            };
-            let geo_text = vec![
-                Line::from(vec![
-                    styled_label("Hero: "),
-                    Span::raw(format!("({:5},{:5})", status.hero_x, status.hero_y)),
-                ]),
-                Line::from(vec![
-                    styled_label("Region: "),
-                    Span::raw(format!("{}", status.region_num)),
-                ]),
-                Line::from(vec![
-                    styled_label("Zone: "),
-                    Span::raw(zone_str),
-                ]),
-            ];
-
-            let geo_widget = Paragraph::new(geo_text)
-                .block(Block::default().borders(Borders::ALL).title(" Geography "));
-            f.render_widget(geo_widget, status_chunks[1]);
-
-            // ── VFX status ────────────────────────────────────────────
-            let on_off = |v: bool| if v { "ON" } else { "off" };
-            let vfx_text = vec![
-                Line::from(vec![
-                    styled_label("LL: "),
-                    Span::raw(format!("{}  ", status.lightlevel)),
-                    styled_label("DN: "),
-                    Span::raw(format!("{}  ", status.daynight)),
-                ]),
-                Line::from(vec![
-                    styled_label("Jewel: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_jewel_active))),
-                    styled_label("Sticky: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_light_sticky))),
-                    styled_label("Secret: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_secret_active))),
-                ]),
-                Line::from(vec![
-                    styled_label("Witch: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_witch_active))),
-                    styled_label("Teleport: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_teleport_active))),
-                    styled_label("Xfade: "),
-                    Span::raw(format!("{}  ", on_off(status.vfx_palette_xfade))),
-                ]),
-            ];
-
             let vfx_widget = Paragraph::new(vfx_text)
-                .block(Block::default().borders(Borders::ALL).title(" VFX "));
+                .block(Block::default().borders(Borders::ALL).title(" Visual Effects "));
             f.render_widget(vfx_widget, status_chunks[2]);
 
             // ── Log ───────────────────────────────────────────────────────
