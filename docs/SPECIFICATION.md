@@ -858,12 +858,22 @@ Velocity halves approximately every 3 ticks. Position continues updating by `vel
 
 ### 9.8 Collision Deviation
 
-When player movement is terrain-blocked:
+When **any** actor's movement is terrain-blocked, the game auto-deviates before declaring a block (`fmain.c:1612-1626`):
 1. Try `dir + 1` (clockwise) — if clear, commit
 2. Try `dir − 2` (counterclockwise from original) — if clear, commit
-3. All three blocked: `frustflag++`
-   - At `frustflag > 20`: scratching-head animation
-   - At `frustflag > 40`: special animation index 40
+3. All three blocked → fall through to the shared `blocked:` label (`fmain.c:1654`)
+
+At `blocked:`, behavior diverges by actor index:
+
+- **Player** (`i == 0`): `frustflag++` with escalating visual feedback. This gives the player a clear cue that he has walked into impassable terrain — the character shakes his head, then turns south.
+  - **`frustflag` 0–20**: normal standing sprite (no visible effect)
+  - **`frustflag` 21–40**: head-shaking animation — oscillation sprites 84/85 (figures 64/65), alternating every 2 game cycles via `dex = 84 + ((cycle >> 1) & 1)` (`fmain.c:1658`)
+  - **`frustflag` 41+**: fixed `dex = 40` (statelist[40] = figure 35, south-facing pose). The player sprite **snaps to face south** regardless of input facing (`fmain.c:1657`)
+- **NPC** (`i != 0`): `an->tactic = FRUST` for AI resolution next tick — see §11.10.
+
+`frustflag` is a **global `char`** (`fmain.c:589`), not a per-actor field. Only the player path increments it, but **any** actor's successful action inside the shared animation loop resets it to 0: successful walk (`fmain.c:1650`), sink (`fmain.c:1577`), shooting (`fmain.c:1707`), melee hit (`fmain.c:1715`), dying (`fmain.c:1725`). This shared-reset semantics is intentional, not a bug: it suppresses the head-shake / south-snap animation during combat, since active NPCs reset the global on every tick they act. The escalating feedback is reserved for solo exploration moments when the player walks into impassable terrain.
+
+**Port simplification (observable-equivalent).** Rather than threading resets through every actor's success path to emulate the shared-global side effect, the port MAY gate the player increment on "no active enemy NPCs in the current encounter/region." If any enemy NPC is active, hold `frustflag` at 0; otherwise increment on full block and reset on the player's own successful walk. Result is observably identical to the original (no animation during combat; animation only during solo exploration when walking into a wall), with far less coupling. The user-facing behavior is what MUST match — the implementation structure is free.
 
 ### 9.9 World Wrapping
 
@@ -1326,6 +1336,28 @@ Stupid enemies: Ogre, Skeleton, Salamander, Necromancer, Woodcutter.
 ### 11.9 CONFUSED Mode
 
 Assigned when hostile actor loses weapon (`weapon < 1`). First tick: `do_tactic(i, RANDOM)`. Subsequent ticks: CONFUSED (10) fails all goal-mode checks — no AI processing occurs. Actor walks in last random direction until blocked.
+
+### 11.10 NPC Frustration Cycle
+
+When an NPC's movement is blocked in all three probe directions (`dir`, `dir+1`, `dir−2`), the blocked-handler at `fmain.c:1654-1661` sets `an->tactic = FRUST`. On the next AI tick, the frustration handler (`fmain.c:2141-2143`) picks a random escape tactic keyed on weapon type:
+
+```c
+if (tactic == FRUST || tactic == SHOOTFRUST) {
+    if (an->weapon & 4) do_tactic(i, rand4() + 2);  // ranged
+    else                 do_tactic(i, rand2() + 3);  // melee
+}
+```
+
+| Weapon class | Expression | Range | Possible tactics |
+|---|---|---|---|
+| Ranged (`weapon & 4` set) | `rand4() + 2` | 2–5 | FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP |
+| Melee (`weapon & 4` clear) | `rand2() + 3` | 3–4 | BUMBLE_SEEK, RANDOM |
+
+**Cross-goal-mode behavior** (original, preserve): the frustration handler fires before the goal-mode dispatch, so FRUST can override FLEE, FOLLOWER, and CONFUSED goals — e.g., a fleeing actor blocked at a wall may BUMBLE_SEEK toward the hero instead of continuing to BACKUP. Documented as a quirk of the original; port SHOULD reproduce.
+
+**SHOOTFRUST is dead code** (original): tactic value 9 is defined and checked in the handler above, but is **never assigned** anywhere in the original codebase. The missile collision path never touches `an->tactic`. The SHOOTFRUST branch is therefore unreachable at runtime; the port MAY omit any assignment logic for it, but SHOULD retain the tactic constant and the `|| tactic == SHOOTFRUST` branch in the frustration handler for fidelity and to avoid regression if a future edit adds assignment.
+
+**`set_encounter()` initialization gap** (original, minor cosmetic bug): `set_encounter()` does not initialize `an->tactic` when reusing an `anim_list[]` slot. If the stale value is 0 (FRUST), the frustration handler fires on the actor's first AI tick, giving it a one-off random direction. The port MAY initialize `tactic` to PURSUE (or any non-FRUST sentinel) on spawn to suppress this cosmetic bug.
 
 ---
 

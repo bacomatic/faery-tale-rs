@@ -841,10 +841,20 @@ Returns: 0 = clear, terrain code = terrain-blocked, 16 = actor-blocked.
 
 #### Player Collision Deviation (`fmain.c:1612-1626`)
 
-When the player walks into a wall:
-1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1613-1617`)
-2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1620-1624`)
-3. All three blocked: `frustflag++` (`fmain.c:1654-1660`). At `frustflag > 20`: scratching-head animation. At `frustflag > 40`: special animation index 40.
+When any actor walks into a wall, the game auto-deviates before declaring a block (`fmain.c:1612-1626`):
+1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1614-1618`)
+2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1621-1625`)
+3. All three blocked → `goto blocked` (`fmain.c:1626`)
+
+This deviation logic runs for **all actors** (player and NPCs alike). At the `blocked:` label (`fmain.c:1654`), the paths diverge:
+
+- **NPCs** (`i != 0`): `an->tactic = FRUST` — see [§8.4 Frustration Cycle](#84-frustration-cycle)
+- **Player** (`i == 0`): `frustflag++` with escalating visual feedback. This provides visual feedback when the player walks into impassable terrain — the character turns south and shakes his head repeatedly:
+   - **0–20 frames**: Normal standing sprite (`fmain.c:1663`)
+   - **21–40 frames**: Head-shaking animation — oscillation sprites 84/85, alternating every 2 game cycles — `dex = 84+((cycle>>1)&1)` (`fmain.c:1658`). These are figures 64/65 (`fmain.c:200-201`).
+   - **41+ frames**: Hardcoded `dex = 40` (`fmain.c:1657`) — statelist[40] is figure 35 (south-facing pose). The character snaps to face south regardless of actual facing direction.
+
+`frustflag` is a global `char` (`fmain.c:589`), only **incremented** for the player (`i == 0`), but **reset to 0** by any actor's successful action inside the shared animation loop (`fmain.c:1468`). Reset points: successful walk (`fmain.c:1650`), sink state (`fmain.c:1577`), shooting (`fmain.c:1707`), melee combat (`fmain.c:1715`), dying (`fmain.c:1725`). Since the flag exists solely to provide visual feedback that the hero is blocked, the NPC resets are harmless — during encounters, active NPCs reset it each tick, but the player is unlikely to be stuck against a wall in combat anyway. The escalating head-shaking animation is designed for solo exploration moments when the player walks into impassable terrain.
 
 ### 5.5 World Wrapping
 
@@ -1071,13 +1081,13 @@ Wraps `_prox` with three additional layers:
 2. **Player override** (`fmain2.c:281-283`): For the hero (`i==0`), terrain types 8 and 9 are treated as passable — the player walks *into* lava and pits (they cause effects but don't block).
 3. **Actor collision** (`fmain2.c:285-292`): Checks all active actors for bounding-box overlap (22×18 pixels: `|dx| < 11`, `|dy| < 9`). Skips self, slot 1 (raft/companion), CARRIER type (type 5), and DEAD actors. Returns 16 on actor collision.
 
-#### Player Collision Deviation (`fmain.c:1612-1626`)
+#### Collision Deviation (`fmain.c:1612-1626`)
 
-When the player's movement is terrain-blocked, the game auto-deviates:
+When any actor's movement is blocked, the game auto-deviates (this is NOT player-only):
 
 1. Try `dir + 1` (clockwise) — if clear, commit
 2. Try `dir − 2` (counterclockwise from original) — if clear, commit
-3. All three blocked: `frustflag++` — at 20+, scratching-head animation (`fmain.c:1654-1660`)
+3. All three blocked: player gets `frustflag++` with escalating animations; NPCs get `an->tactic = FRUST`. See [§5.4](#player-collision-deviation-fmainc1612-1626) for threshold details and the `frustflag` scope bug.
 
 ### 6.4 Movement Speed by Terrain
 
@@ -1549,7 +1559,7 @@ The AI loop processes actors 2 through `anix-1` (skipping player and raft). Proc
 4. **Distance & battle detection** (`fmain.c:2123-2131`): Within 300×300 pixels sets `actors_on_screen = TRUE` and `battleflag = TRUE`.
 5. **Random reconsider** (`fmain.c:2132`): `r = !bitrand(15)` → 1/16 (6.25%) base probability of reconsidering tactics.
 6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health → FLEE; unarmed → CONFUSED.
-7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random tactic: ranged picks from {FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP}; melee picks from {BUMBLE_SEEK, RANDOM}.
+7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random escape tactic; see [§8.4](#84-frustration-cycle) for details. Note: SHOOTFRUST is dead code (defined but never assigned — see [§8.4](#84-frustration-cycle)).
 8. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
 9. **FLEE** (`fmain.c:2172`): `do_tactic(i, BACKUP)`.
 10. **FOLLOWER** (`fmain.c:2173`): `do_tactic(i, FOLLOW)`.
@@ -1587,13 +1597,68 @@ Melee engagement threshold: `thresh = 14 − mode` (`fmain.c:2162`). DKnight (ra
 
 ### 8.4 Frustration Cycle
 
-When an actor is blocked during movement, `tactic` is set to FRUST (`fmain.c:1660-1661`). Next tick, the AI loop catches FRUST and selects a random escape tactic:
+When an NPC actor is blocked during movement, `tactic` is set to FRUST (`fmain.c:1661`). On the next AI tick, the frustration handler (`fmain.c:2141-2143`) catches this and selects a random escape tactic:
 
 ```
 walk → blocked → FRUST → random tactic → walk → ...
 ```
 
-This loop prevents enemies from getting permanently stuck on obstacles.
+This prevents enemies from getting permanently stuck on obstacles.
+
+#### Blocked Check (`fmain.c:1654-1661`)
+
+The blocked handler is in the WALKING/STILL state section of the animation loop (`fmain.c:1468`). When all three movement directions (original, clockwise +1, counterclockwise −2) are blocked by `proxcheck()` — a deviation sequence shared by all actors (see [§5.4](#player-collision-deviation-fmainc1612-1626)):
+
+- **Player** (`i == 0`): Increments `frustflag` and plays escalating animations — see [§5.4](#player-collision-deviation-fmainc1612-1626) for details.
+- **NPC** (`i != 0`): Sets `an->tactic = FRUST` for AI resolution next tick
+
+#### Escape Tactic Selection (`fmain.c:2141-2143`)
+
+```c
+if (tactic == FRUST || tactic == SHOOTFRUST)
+{   if (an->weapon & 4) do_tactic(i,rand4()+2);   /* ranged */
+    else do_tactic(i,rand2()+3);                    /* melee */
+}
+```
+
+| Weapon Type | Expression | Range | Possible Tactics |
+|-------------|-----------|-------|------------------|
+| Ranged (`weapon & 4` set) | `rand4()+2` | 2–5 | FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP |
+| Melee (`weapon & 4` clear) | `rand2()+3` | 3–4 | BUMBLE_SEEK, RANDOM |
+
+Ranged actors get more escape options (4 tactics) than melee actors (2 tactics), giving archers more variety in obstacle navigation.
+
+#### Cross-Goal-Mode Effect
+
+The frustration handler fires **before** the goal-mode dispatch chain (`fmain.c:2144+`), meaning it applies to **all** goal modes — not just hostile ones:
+
+- A **FLEE** actor that gets blocked receives BUMBLE_SEEK or RANDOM instead of BACKUP, potentially moving it *toward* the player
+- A **CONFUSED** actor that gets blocked may BUMBLE_SEEK toward the player despite being "confused"
+- A **FOLLOWER** that gets blocked may move in a direction that doesn't lead to the leader
+
+This is likely a bug — the frustration handler doesn't check `mode` before reassigning the tactic.
+
+#### SHOOTFRUST: Dead Code
+
+SHOOTFRUST (value 9, `ftale.h:51`) is tested at `fmain.c:2141` but **never assigned anywhere in the codebase**. The comment "arrows not getting through" (`fmain.c:131`) suggests it was planned for a mechanic where archers whose missiles consistently miss would switch tactics, but the detection code was never written. The missile collision code (`fmain.c:2260-2300`) and `dohit()` (`fmain2.c:230-247`) never modify the archer's `tactic` field. See also [PROBLEMS.md §P11](PROBLEMS.md#p11-unused-tactics-hide-7-door_seek-11-door_let-12--resolved).
+
+#### Tactic Field Overloading
+
+The `tactic` field in `struct shape` (`ftale.h:63`) is repurposed depending on actor state:
+
+| Actor State | Purpose of `tactic` | Values | Source |
+|-------------|---------------------|--------|--------|
+| AI-controlled (WALKING/FIGHTING) | Tactical sub-goal | 0–10 (tactic constants) | `fmain.c:2121` |
+| TALKING (SETFIG) | Speech animation countdown | 15→0 | `fmain.c:3377`, `fmain.c:1557` |
+| DYING | Death animation countdown | 7→0 | `fmain.c:2773`, `fmain.c:1747` |
+| FALL | Fall frame counter | 0→30 | `fmain.c:1770`, `fmain.c:1733-1736` |
+| FALL (rendering) | Type selector: <16 → ENEMY sprite, ≥16 → OBJECTS sprite | any | `fmain.c:2457` |
+
+These overloaded uses don't conflict in practice: DYING/TALKING/FALL actors are handled in the animation state machine before the AI loop processes them, so their timer values never reach the frustration handler.
+
+#### `set_encounter()` Missing Initialization
+
+`set_encounter()` (`fmain.c:2736-2770`) does not initialize `an->tactic` when spawning a new enemy. The field retains the stale value from the previous occupant of that `anim_list[]` slot. If the stale value is 0 (FRUST), the frustration handler fires on the first AI tick, giving the actor a random direction — a minor cosmetic bug.
 
 ### 8.5 Cleverness Effects
 
