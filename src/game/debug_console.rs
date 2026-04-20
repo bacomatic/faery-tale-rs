@@ -319,6 +319,92 @@ pub fn carrier_name(carrier: i16) -> &'static str {
     }
 }
 
+/// Short label for `ActorKind` codes (matches `actor_kind_u8`).
+pub fn actor_kind_name(kind: u8) -> &'static str {
+    match kind {
+        0 => "PLAYER",
+        1 => "ENEMY",
+        2 => "OBJECT",
+        3 => "RAFT",
+        4 => "SETFIG",
+        5 => "CARRIER",
+        6 => "DRAGON",
+        _ => "?",
+    }
+}
+
+/// Short label for `Goal` codes (matches `goal_u8`).
+pub fn goal_name(g: u8) -> &'static str {
+    match g {
+        0 => "USER",
+        1 => "ATK1",
+        2 => "ATK2",
+        3 => "ARC1",
+        4 => "ARC2",
+        5 => "FLEE",
+        6 => "FOLL",
+        7 => "LEAD",
+        8 => "STAND",
+        9 => "GUARD",
+        10 => "CONF",
+        255 => "—",
+        _ => "?",
+    }
+}
+
+/// Short label for `Tactic` codes (matches `tactic_u8`).
+pub fn tactic_name(t: u8) -> &'static str {
+    match t {
+        0 => "PURSUE",
+        1 => "SHOOT",
+        2 => "RANDOM",
+        3 => "BUMBLE",
+        4 => "BACKUP",
+        5 => "FOLLOW",
+        6 => "EVADE",
+        7 => "EGG",
+        8 => "FRUST",
+        255 => "—",
+        _ => "?",
+    }
+}
+
+/// Short race/NPC-type label. Tries NPC type byte first, then known race constants; otherwise
+/// falls back to a hex representation so the panel remains informative.
+pub fn race_label(race: u8) -> String {
+    use crate::game::npc::{
+        NPC_TYPE_DKNIGHT, NPC_TYPE_DRAGON, NPC_TYPE_GHOST, NPC_TYPE_HORSE, NPC_TYPE_HUMAN,
+        NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER, NPC_TYPE_ORC, NPC_TYPE_RAFT, NPC_TYPE_SKELETON,
+        NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_SWAN, NPC_TYPE_WRAITH, RACE_BEGGAR, RACE_GHOST,
+        RACE_NECROMANCER, RACE_SHOPKEEPER, RACE_SPECTRE, RACE_WITCH, RACE_WOODCUTTER,
+    };
+    match race {
+        0 => "Normal".into(),
+        x if x == NPC_TYPE_HUMAN => "Human".into(),
+        x if x == NPC_TYPE_SWAN => "Swan".into(),
+        x if x == NPC_TYPE_HORSE => "Horse".into(),
+        x if x == NPC_TYPE_DRAGON => "Dragon".into(),
+        x if x == NPC_TYPE_GHOST => "Ghost".into(),
+        x if x == NPC_TYPE_ORC => "Orc".into(),
+        x if x == NPC_TYPE_WRAITH => "Wraith".into(),
+        x if x == NPC_TYPE_SKELETON => "Skel".into(),
+        x if x == NPC_TYPE_RAFT => "Raft".into(),
+        x if x == NPC_TYPE_SNAKE => "Snake".into(),
+        x if x == NPC_TYPE_SPIDER => "Spider".into(),
+        x if x == NPC_TYPE_DKNIGHT => "DKnight".into(),
+        x if x == NPC_TYPE_LORAII => "Loraii".into(),
+        x if x == NPC_TYPE_NECROMANCER => "Necro".into(),
+        x if x == RACE_WOODCUTTER => "Woodctr".into(),
+        x if x == RACE_SHOPKEEPER => "Shop".into(),
+        x if x == RACE_BEGGAR => "Beggar".into(),
+        x if x == RACE_WITCH => "Witch".into(),
+        x if x == RACE_SPECTRE => "Spectre".into(),
+        x if x == RACE_GHOST => "Ghost".into(),
+        x if x == RACE_NECROMANCER => "Necro".into(),
+        _ => format!("r:0x{:02X}", race),
+    }
+}
+
 // ── DebugConsole ─────────────────────────────────────────────────────────────
 
 const MAX_LOG_LINES: usize = 1000;
@@ -348,6 +434,9 @@ pub struct DebugConsole {
     pause_request: Option<bool>,
     /// Step request: number of ticks to advance while paused. Consumed by the clock.
     step_request: u32,
+
+    /// Actor Watch panel display mode (DBG-LAYOUT-07). false = collapsed (default).
+    watch_expanded: bool,
 
     // Latest status snapshot
     status: DebugSnapshot,
@@ -385,6 +474,7 @@ impl DebugConsole {
             quit_requested: false,
             pause_request: None,
             step_request: 0,
+            watch_expanded: false,
             status: DebugSnapshot::default(),
         })
     }
@@ -483,6 +573,11 @@ impl DebugConsole {
                             self.pause_request = Some(true);
                             self.log("Game paused (Ctrl+P). /resume to continue, /step [n] to advance frames.");
                         }
+                    }
+
+                    // Toggle actor watch expanded/collapsed (Ctrl+W — DEBUG_SPEC §Keyboard Shortcuts)
+                    KeyCode::Char('w') if ke.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.watch_expanded = !self.watch_expanded;
                     }
 
                     // Submit command
@@ -585,12 +680,13 @@ impl DebugConsole {
         let _ = self.terminal.draw(|f| {
             let area = f.area();
 
-            // Layout: status header (6) | actor-watch summary (1) | log (fills) | prompt (3)
+            // Layout: status header (6) | actor-watch (1 collapsed / 6 expanded) | log (fills) | prompt (3)
+            let watch_height: u16 = if self.watch_expanded { 6 } else { 1 };
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(6),
-                    Constraint::Length(1),
+                    Constraint::Length(watch_height),
                     Constraint::Min(3),
                     Constraint::Length(3),
                 ])
@@ -743,18 +839,62 @@ impl DebugConsole {
                 .block(Block::default().borders(Borders::ALL).title(" Visual Effects "));
             f.render_widget(vfx_widget, status_chunks[2]);
 
-            // ── Actor Watch (collapsed summary, DBG-LAYOUT-06) ─────────────
+            // ── Actor Watch (DBG-LAYOUT-06 collapsed / DBG-LAYOUT-07 expanded) ─
             let raft_str = match status.raft_xy {
                 Some((x, y)) => format!("Raft:({},{})", x, y),
                 None => "Raft:—".to_string(),
             };
+            let indicator = if self.watch_expanded { "[▼]" } else { "[▶]" };
             let watch_title = format!(
-                " Actors [▶]  {}  Msls:{} Items:{} ",
-                raft_str, status.missile_count, status.item_count,
+                " Actors {}  {}  Msls:{} Items:{} ",
+                indicator, raft_str, status.missile_count, status.item_count,
             );
-            let watch_widget = Paragraph::new("")
-                .block(Block::default().borders(Borders::TOP).title(watch_title));
-            f.render_widget(watch_widget, chunks[1]);
+            if self.watch_expanded {
+                // One row per slot 2..=6 (always rendered; empty slots show `#N —`).
+                let mut rows: Vec<Line> = Vec::with_capacity(5);
+                for slot in 2u8..=6 {
+                    let entry = status.actors.iter().find(|a| a.slot == slot);
+                    let line = match entry {
+                        Some(a) if a.visible && a.actor_type != 0 => {
+                            let kind = actor_kind_name(a.actor_type);
+                            let race = race_label(a.race);
+                            let state = actor_state_name(a.state);
+                            if a.actor_type == 4 {
+                                // SETFIG: no goal/tactic
+                                format!(
+                                    "#{} {} {} {} HP:{} ({},{})",
+                                    slot, kind, race, state, a.vitality, a.abs_x, a.abs_y,
+                                )
+                            } else {
+                                format!(
+                                    "#{} {} {} {} HP:{} goal:{} tac:{} ({},{})",
+                                    slot,
+                                    kind,
+                                    race,
+                                    state,
+                                    a.vitality,
+                                    goal_name(a.goal),
+                                    tactic_name(a.tactic),
+                                    a.abs_x,
+                                    a.abs_y,
+                                )
+                            }
+                        }
+                        _ => format!("#{} —", slot),
+                    };
+                    rows.push(Line::raw(line));
+                }
+                let watch_widget = Paragraph::new(rows).block(
+                    Block::default()
+                        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+                        .title(watch_title),
+                );
+                f.render_widget(watch_widget, chunks[1]);
+            } else {
+                let watch_widget = Paragraph::new("")
+                    .block(Block::default().borders(Borders::TOP).title(watch_title));
+                f.render_widget(watch_widget, chunks[1]);
+            }
 
             // ── Log ───────────────────────────────────────────────────────
             let log_height = chunks[2].height.saturating_sub(2) as usize; // subtract borders
@@ -838,6 +978,13 @@ impl DebugConsole {
                 self.step_request = self.step_request.saturating_add(n);
                 self.pause_request = Some(true);
                 self.log(format!("Stepping {} tick(s).", n));
+            }
+            "/watch" => {
+                self.watch_expanded = !self.watch_expanded;
+                self.log(format!(
+                    "Actor watch {}.",
+                    if self.watch_expanded { "expanded" } else { "collapsed" }
+                ));
             }
             _ => {
                 self.log(format!("Unknown command: {}  (type /help for list)", cmd));
