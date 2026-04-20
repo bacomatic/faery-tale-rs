@@ -1845,6 +1845,7 @@ impl GameplayScene {
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
             let mut necro_talisman_pos: Option<(i16, i16)> = None;
+            let mut witch_lasso_pos: Option<(i16, i16)> = None;
 
             let bname = self.brother_name().to_string();
             if let Some(ref mut table) = self.npc_table {
@@ -1887,7 +1888,7 @@ impl GameplayScene {
 
                     // checkdead
                     if npc.vitality == 0 {
-                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, RACE_WITCH, NpcState};
                         if npc.race == RACE_NECROMANCER {
                             // SPEC §15.7: transform in-place → Woodcutter; don't despawn.
                             necro_talisman_pos = Some((npc.x, npc.y));
@@ -1897,6 +1898,10 @@ impl GameplayScene {
                             npc.weapon = 0;
                             logs.push("necromancer slain: transformed to woodcutter, talisman drops".to_string());
                         } else {
+                            // SPEC §14.20: Witch drops Golden Lasso on death.
+                            if npc.race == RACE_WITCH {
+                                witch_lasso_pos = Some((npc.x, npc.y));
+                            }
                             npc.active = false;
                         }
                         self.state.brave = (self.state.brave + 1).min(100);
@@ -1941,6 +1946,104 @@ impl GameplayScene {
                     goal: 0,
                 });
                 self.dlog("talisman (ob_id 139) placed at necromancer death coords".to_string());
+            }
+            // SPEC §14.20: drop Golden Lasso (ob_id 27) at witch's death coords (+10 Y).
+            if let Some((wx, wy)) = witch_lasso_pos {
+                use crate::game::game_state::WorldObject;
+                let drop_y = (wy as i32 + 10).clamp(0, 32767) as u16;
+                self.state.world_objects.push(WorldObject {
+                    ob_id: 27,
+                    ob_stat: 1, // ground item
+                    region: self.state.region_num,
+                    x: wx as u16,
+                    y: drop_y,
+                    visible: true,
+                    goal: 0,
+                });
+                self.dlog("witch slain: golden lasso (ob_id 27) placed at death coords".to_string());
+            }
+        }
+    }
+
+    /// T3-CARRY-TURTLE-AUTO: Autonomous turtle movement when unmounted (SPEC §21.3).
+    ///
+    /// When the hero is NOT riding the turtle (`riding != 5`) but the turtle carrier is
+    /// active (`wcarry == 3`, `active_carrier == CARRIER_TURTLE`), the turtle drifts on
+    /// its own along water tiles.  Movement is attempted every 4 ticks.
+    ///
+    /// Direction probe order (SPEC §21.3: "tries current direction, then ±1, then −2"):
+    ///   offsets [0, +1, −1, −2] are applied to the turtle's current facing (mod 8).
+    /// The first candidate whose probe points both return terrain code 5 (water) is
+    /// committed.  If no water direction is found the turtle stays still and its facing
+    /// is randomised for the next attempt.
+    ///
+    /// # Ambiguities noted
+    /// - **Cadence**: the spec does not state a sub-tick cadence; every-4-ticks is used
+    ///   so the turtle drifts at roughly ¼ of ridden speed.
+    /// - **RNG rate**: no explicit probability given; the turtle always tries to move
+    ///   each cadence tick (deterministic direction search, then pseudo-random re-face).
+    fn update_turtle_autonomous(&mut self) {
+        use crate::game::game_state::CARRIER_TURTLE;
+        use crate::game::collision::{newx, newy, px_to_terrain_type};
+
+        // Only run when turtle carrier is active and not being ridden.
+        if self.state.wcarry != 3
+            || self.state.riding == 5
+            || self.state.active_carrier != CARRIER_TURTLE
+        {
+            return;
+        }
+
+        // Cadence: attempt a move every 4 game ticks (~7.5 times/s at 30 Hz).
+        if self.state.tick_counter % 4 != 0 {
+            return;
+        }
+
+        let slot = self.state.wcarry as usize;
+        if slot >= self.state.actors.len() {
+            return;
+        }
+
+        let turtle_x = self.state.actors[slot].abs_x;
+        let turtle_y = self.state.actors[slot].abs_y;
+        let facing   = self.state.actors[slot].facing;
+        let indoor   = self.state.region_num >= 8;
+
+        // Probe direction offsets (SPEC §21.3): current, +1, -1, -2.
+        const DIR_OFFSETS: [i8; 4] = [0, 1, -1, -2];
+
+        // Determine movement in a borrow-safe block: compute result then apply.
+        let result: Option<(u16, u16, u8)> = if let Some(ref world) = self.map_world {
+            let mut found = None;
+            for &off in &DIR_OFFSETS {
+                let probe_dir = facing.wrapping_add(off as u8) & 7;
+                let nx = newx(turtle_x, probe_dir, 2);
+                let ny = newy(turtle_y, probe_dir, 2, indoor);
+                // Require BOTH probe points to be exactly terrain 5 (water-only rule).
+                let right = px_to_terrain_type(world, nx as i32 + 4, ny as i32 + 2);
+                let left  = px_to_terrain_type(world, nx as i32 - 4, ny as i32 + 2);
+                if right == 5 && left == 5 {
+                    found = Some((nx, ny, probe_dir));
+                    break;
+                }
+            }
+            found
+        } else {
+            None
+        };
+
+        match result {
+            Some((nx, ny, dir)) => {
+                self.state.actors[slot].abs_x  = nx;
+                self.state.actors[slot].abs_y  = ny;
+                self.state.actors[slot].facing = dir;
+                self.state.actors[slot].moving = true;
+            }
+            None => {
+                self.state.actors[slot].moving = false;
+                // Pseudo-random re-face so the turtle tries a new heading next cadence.
+                self.state.actors[slot].facing =
+                    ((self.state.tick_counter >> 3) & 7) as u8;
             }
         }
     }
@@ -4698,6 +4801,7 @@ impl Scene for GameplayScene {
                 self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
             }
             self.update_actors(1);
+            self.update_turtle_autonomous();
             self.update_proximity_speech();
             self.run_combat_tick();
 
@@ -7362,6 +7466,182 @@ mod t4_palette_fade_freq_tests {
         assert!(
             !GameplayScene::should_update_palette(2, 0),
             "off-cadence tick with normal viewstatus must NOT update"
+        );
+    }
+}
+
+// ── T3-CARRY-TURTLE-AUTO tests ───────────────────────────────────────────────
+#[cfg(test)]
+mod tests_turtle_auto {
+    use super::*;
+    use crate::game::game_state::CARRIER_TURTLE;
+    use crate::game::world_data::WorldData;
+
+    /// Build a WorldData where every position returns terrain type 5 (water).
+    ///
+    /// px_to_terrain_type returns `(terra_mem[tile*4+1] >> 4) & 0xF` when
+    /// `terra_mem[tile*4+2] & d4 != 0`.  With all sector_mem zeroed, tile_idx=0
+    /// everywhere.  Setting terra_mem[1]=0x50 (upper nibble=5) and
+    /// terra_mem[2]=0xFF (all d4 bits) makes every probe return 5.
+    fn all_water_world() -> WorldData {
+        let mut world = WorldData::empty();
+        world.terra_mem[1] = 0x50; // terrain type nibble = 5 (water)
+        world.terra_mem[2] = 0xFF; // all d4 bitmask bits set → always blocked → returns type
+        world
+    }
+
+    /// Set up a GameplayScene with turtle carrier active and NOT ridden.
+    fn turtle_unmounted_scene() -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        scene.state.active_carrier = CARRIER_TURTLE;
+        scene.state.wcarry = 3;
+        scene.state.riding = 0; // not riding
+        scene.state.on_raft = true;
+        // Place turtle actor at a known position (not origin so moves are detectable).
+        scene.state.actors[3].abs_x = 1000;
+        scene.state.actors[3].abs_y = 1000;
+        scene.state.actors[3].facing = 2; // East
+        scene.map_world = Some(all_water_world());
+        scene
+    }
+
+    /// (a) Unmounted turtle moves eventually: over N cadence ticks the position changes.
+    ///
+    /// SPEC §21.3: "Autonomous movement (unridden): probes candidate positions with
+    /// px_to_im(), only commits moves where terrain code is exactly 5 (water)."
+    #[test]
+    fn test_turtle_auto_moves_when_unmounted() {
+        let mut scene = turtle_unmounted_scene();
+        let initial_x = scene.state.actors[3].abs_x;
+        let initial_y = scene.state.actors[3].abs_y;
+
+        // Advance tick_counter to the first cadence boundary (multiple of 4).
+        scene.state.tick_counter = 0;
+
+        // Run enough ticks to guarantee at least one cadence step fires.
+        // Cadence is every 4 ticks; 8 ticks = 2 attempts.
+        for _ in 0..8 {
+            scene.state.tick_counter += 1;
+            scene.update_turtle_autonomous();
+        }
+
+        let new_x = scene.state.actors[3].abs_x;
+        let new_y = scene.state.actors[3].abs_y;
+        assert!(
+            new_x != initial_x || new_y != initial_y,
+            "unmounted turtle must move on water: initial ({initial_x},{initial_y}), \
+             final ({new_x},{new_y})"
+        );
+    }
+
+    /// (b) Turtle stays on water — probe commits only terrain-5 tiles.
+    ///
+    /// We install a world where only exactly the tiles matching terrain==5 are water.
+    /// Since all_water_world() returns 5 everywhere, every move is valid.
+    /// Verify the committed position still has terrain==5 under the turtle.
+    #[test]
+    fn test_turtle_stays_on_water_after_move() {
+        let mut scene = turtle_unmounted_scene();
+        scene.state.tick_counter = 3; // will fire on tick 4 (0%4==0 is at counter 0, 4, 8...)
+
+        // Fire exactly one cadence step.
+        scene.state.tick_counter = 4;
+        scene.update_turtle_autonomous();
+
+        let tx = scene.state.actors[3].abs_x;
+        let ty = scene.state.actors[3].abs_y;
+
+        if let Some(ref world) = scene.map_world {
+            let right = crate::game::collision::px_to_terrain_type(
+                world, tx as i32 + 4, ty as i32 + 2);
+            let left  = crate::game::collision::px_to_terrain_type(
+                world, tx as i32 - 4, ty as i32 + 2);
+            assert_eq!(right, 5, "turtle right probe must be on water (terrain 5)");
+            assert_eq!(left,  5, "turtle left probe must be on water (terrain 5)");
+        }
+    }
+
+    /// (c) Mounted turtle does NOT auto-move.
+    ///
+    /// SPEC §21.3: autonomous movement is only for the unridden turtle.
+    /// When riding==5 the turtle must remain stationary regardless of cadence.
+    #[test]
+    fn test_turtle_no_auto_move_when_mounted() {
+        let mut scene = turtle_unmounted_scene();
+        scene.state.riding = 5; // hero is riding the turtle
+
+        let initial_x = scene.state.actors[3].abs_x;
+        let initial_y = scene.state.actors[3].abs_y;
+
+        // Drive many cadence ticks.
+        for t in 0..32u32 {
+            scene.state.tick_counter = t;
+            scene.update_turtle_autonomous();
+        }
+
+        assert_eq!(
+            scene.state.actors[3].abs_x, initial_x,
+            "mounted turtle must not change abs_x"
+        );
+        assert_eq!(
+            scene.state.actors[3].abs_y, initial_y,
+            "mounted turtle must not change abs_y"
+        );
+    }
+
+    /// (d) Cadence gate: update_turtle_autonomous is a no-op on ticks not divisible by 4.
+    #[test]
+    fn test_turtle_cadence_gate() {
+        let mut scene = turtle_unmounted_scene();
+
+        let initial_x = scene.state.actors[3].abs_x;
+        let initial_y = scene.state.actors[3].abs_y;
+
+        // Only test ticks 1, 2, 3 — cadence fires at multiples of 4 (0, 4, 8 ...).
+        for t in [1u32, 2, 3] {
+            scene.state.tick_counter = t;
+            scene.update_turtle_autonomous();
+        }
+
+        assert_eq!(
+            scene.state.actors[3].abs_x, initial_x,
+            "turtle must not move on non-cadence ticks"
+        );
+        assert_eq!(
+            scene.state.actors[3].abs_y, initial_y,
+            "turtle must not move on non-cadence ticks"
+        );
+    }
+
+    /// (e) When no water direction is found (all non-water world), turtle stays put
+    ///     but re-faces (pseudo-random new heading for next attempt).
+    #[test]
+    fn test_turtle_refacing_when_no_water() {
+        let mut scene = turtle_unmounted_scene();
+        // Replace world with all-non-water (terrain 0 = passable/land).
+        scene.map_world = Some(WorldData::empty()); // terra_mem all zeros → terrain 0
+
+        let initial_x = scene.state.actors[3].abs_x;
+        let initial_y = scene.state.actors[3].abs_y;
+        let initial_facing = scene.state.actors[3].facing;
+
+        scene.state.tick_counter = 4; // cadence tick
+        scene.update_turtle_autonomous();
+
+        assert_eq!(
+            scene.state.actors[3].abs_x, initial_x,
+            "turtle must not move on non-water"
+        );
+        assert_eq!(
+            scene.state.actors[3].abs_y, initial_y,
+            "turtle must not move on non-water"
+        );
+        // Facing should change to the pseudo-random value derived from tick_counter.
+        let expected_facing = ((scene.state.tick_counter >> 3) & 7) as u8;
+        assert_eq!(
+            scene.state.actors[3].facing, expected_facing,
+            "turtle should re-face when no water direction available; \
+             initial facing was {initial_facing}"
         );
     }
 }
