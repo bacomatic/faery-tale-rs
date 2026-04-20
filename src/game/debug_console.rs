@@ -30,6 +30,7 @@ use ratatui::{
     Terminal,
 };
 
+use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
 use crate::game::debug_command::{
     BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId,
 };
@@ -40,7 +41,7 @@ use crate::game::game_state::DayPhase;
 /// Lightweight game-state snapshot for the status header.
 /// Built by main.rs each frame when the console is active.
 #[derive(Debug, Clone, Default)]
-pub struct DebugStatus {
+pub struct DebugSnapshot {
     pub fps: f64,
     pub game_day: u32,
     pub game_hour: u32,
@@ -50,6 +51,7 @@ pub struct DebugStatus {
     pub lightlevel: u16,
     pub game_ticks: u64,
     pub paused: bool,
+    pub is_paused: bool,
     pub scene_name: Option<String>,
     pub hero_x: u16,
     pub hero_y: u16,
@@ -76,6 +78,132 @@ pub struct DebugStatus {
     pub vfx_witch_active: bool,
     pub vfx_teleport_active: bool,
     pub vfx_palette_xfade: bool,
+
+    // Time-of-day period derived from day_phase.
+    pub time_period: String,
+
+    // Quest state (for `/quest` command — DEBUG_SPEC §DebugSnapshot Data Model).
+    pub princess_captive: bool,
+    pub princess_rescues: u16,
+    pub statues_collected: u8,
+    pub has_writ: bool,
+    pub has_talisman: bool,
+
+    // Encounter state (for `/enc` commands).
+    pub encounter_number: u8,
+    pub encounter_type: u8,
+    pub active_enemy_count: u8,
+
+    // Actor slots (for `/actors` command and `/watch` feature). Up to 20 active slots.
+    pub actors: Vec<ActorSnapshot>,
+}
+
+/// Per-actor snapshot for the Actor Watch panel and `/actors` dump.
+/// See DEBUG_SPECIFICATION.md §DebugSnapshot Data Model for field semantics.
+#[derive(Debug, Clone, Default)]
+pub struct ActorSnapshot {
+    pub slot: u8,
+    pub actor_type: u8,
+    pub state: u8,
+    pub facing: u8,
+    pub abs_x: u16,
+    pub abs_y: u16,
+    pub vitality: i8,
+    pub weapon: u8,
+    pub race: u8,
+    pub goal: u8,
+    pub tactic: u8,
+    pub environ: i8,
+    pub visible: bool,
+}
+
+impl ActorSnapshot {
+    pub fn from_actor(slot: u8, a: &Actor) -> Self {
+        Self {
+            slot,
+            actor_type: actor_kind_u8(&a.kind),
+            state: actor_state_u8(&a.state),
+            facing: a.facing,
+            abs_x: a.abs_x,
+            abs_y: a.abs_y,
+            vitality: a.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            weapon: a.weapon,
+            race: a.race,
+            goal: goal_u8(&a.goal),
+            tactic: tactic_u8(&a.tactic),
+            environ: a.environ,
+            visible: true,
+        }
+    }
+}
+
+fn actor_kind_u8(k: &ActorKind) -> u8 {
+    match k {
+        ActorKind::Player => 0,
+        ActorKind::Enemy => 1,
+        ActorKind::Object => 2,
+        ActorKind::Raft => 3,
+        ActorKind::SetFig => 4,
+        ActorKind::Carrier => 5,
+        ActorKind::Dragon => 6,
+    }
+}
+
+fn actor_state_u8(s: &ActorState) -> u8 {
+    match s {
+        ActorState::Still => 0,
+        ActorState::Walking => 1,
+        ActorState::Fighting(_) => 2,
+        ActorState::Dying => 3,
+        ActorState::Dead => 4,
+        ActorState::Shooting(_) => 5,
+        ActorState::Sinking => 6,
+        ActorState::Falling => 7,
+        ActorState::Sleeping => 8,
+    }
+}
+
+fn goal_u8(g: &Goal) -> u8 {
+    match g {
+        Goal::User => 0,
+        Goal::Attack1 => 1,
+        Goal::Attack2 => 2,
+        Goal::Archer1 => 3,
+        Goal::Archer2 => 4,
+        Goal::Flee => 5,
+        Goal::Follower => 6,
+        Goal::Leader => 7,
+        Goal::Stand => 8,
+        Goal::Guard => 9,
+        Goal::Confused => 10,
+        Goal::None => 255,
+    }
+}
+
+fn tactic_u8(t: &Tactic) -> u8 {
+    match t {
+        Tactic::Pursue => 0,
+        Tactic::Shoot => 1,
+        Tactic::Random => 2,
+        Tactic::BumbleSeek => 3,
+        Tactic::Backup => 4,
+        Tactic::Follow => 5,
+        Tactic::Evade => 6,
+        Tactic::EggSeek => 7,
+        Tactic::Frust => 8,
+        Tactic::None => 255,
+    }
+}
+
+/// Human-readable label for a `DayPhase` variant — used to populate
+/// `DebugSnapshot::time_period` (spec §DebugSnapshot Data Model).
+pub fn day_phase_label(phase: DayPhase) -> String {
+    match phase {
+        DayPhase::Midnight => "Night".to_string(),
+        DayPhase::Morning => "Morning".to_string(),
+        DayPhase::Midday => "Midday".to_string(),
+        DayPhase::Evening => "Evening".to_string(),
+    }
 }
 
 // ── DebugConsole ─────────────────────────────────────────────────────────────
@@ -105,7 +233,7 @@ pub struct DebugConsole {
     quit_requested: bool,
 
     // Latest status snapshot
-    status: DebugStatus,
+    status: DebugSnapshot,
 }
 
 impl DebugConsole {
@@ -138,12 +266,12 @@ impl DebugConsole {
             stop_requested: false,
             cave_mode_requested: None,
             quit_requested: false,
-            status: DebugStatus::default(),
+            status: DebugSnapshot::default(),
         })
     }
 
     /// Update the status snapshot shown in the header.
-    pub fn update_status(&mut self, status: DebugStatus) {
+    pub fn update_status(&mut self, status: DebugSnapshot) {
         self.status = status;
     }
 

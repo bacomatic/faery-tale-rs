@@ -16,7 +16,7 @@ use sdl2::surface::Surface;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::game::debug_console::{DebugConsole, DebugStatus};
+use crate::game::debug_console::{DebugConsole, DebugSnapshot};
 use crate::game::game_clock::GameClock;
 use crate::game::game_state::DayPhase;
 use crate::game::settings::{self, GameSettings};
@@ -499,7 +499,7 @@ pub fn main() -> Result<(), String> {
                     .unwrap_or(0);
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
                 let (gday, ghour, gminute) = gs.state.daynight_to_wall_clock();
-                let status = DebugStatus {
+                let status = DebugSnapshot {
                     fps: game_fps,
                     game_day: gday,
                     game_hour: ghour,
@@ -537,6 +537,21 @@ pub fn main() -> Result<(), String> {
                     vfx_witch_active: gs.is_witch_active(),
                     vfx_teleport_active: gs.is_teleport_active(),
                     vfx_palette_xfade: gs.is_palette_xfade_active(),
+                    time_period: crate::game::debug_console::day_phase_label(gs.state.get_day_phase()),
+                    is_paused: clock.paused,
+                    princess_captive: gs.state.world_objects.get(9).map_or(false, |o| o.ob_stat != 0),
+                    princess_rescues: gs.state.princess as u16,
+                    statues_collected: gs.state.stuff().get(25).copied().unwrap_or(0) as u8,
+                    has_writ: gs.state.stuff().get(28).copied().unwrap_or(0) != 0,
+                    has_talisman: gs.state.stuff().get(22).copied().unwrap_or(0) != 0,
+                    encounter_number: gs.state.encounter_number,
+                    encounter_type: gs.state.encounter_type as u8,
+                    active_enemy_count: gs.state.anix as u8,
+                    actors: gs.state.actors.iter().enumerate()
+                        .filter(|(_, a)| a.is_active())
+                        .take(20)
+                        .map(|(slot, a)| crate::game::debug_console::ActorSnapshot::from_actor(slot as u8, a))
+                        .collect(),
                 };
                 dc.update_status(status);
             } else {
@@ -546,7 +561,7 @@ pub fn main() -> Result<(), String> {
                     .map(|l| l.tracks.len() / SongLibrary::VOICES)
                     .unwrap_or(0);
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
-                let status = DebugStatus {
+                let status = DebugSnapshot {
                     fps: game_fps,
                     game_day: 0,
                     game_hour: 0,
@@ -559,7 +574,7 @@ pub fn main() -> Result<(), String> {
                     scene_name: Some("Intro".to_owned()),
                     song_group_count,
                     current_song_group,
-                    ..DebugStatus::default()
+                    ..DebugSnapshot::default()
                 };
                 dc.update_status(status);
                 // Drain any leftover commands (no-op during intro)
@@ -593,7 +608,7 @@ pub fn main() -> Result<(), String> {
                 .map(|l| l.tracks.len() / SongLibrary::VOICES)
                 .unwrap_or(0);
             let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
-            let status = DebugStatus {
+            let status = DebugSnapshot {
                 fps: game_fps,
                 game_day: 0,
                 game_hour: 0,
@@ -606,7 +621,7 @@ pub fn main() -> Result<(), String> {
                 scene_name: None,
                 song_group_count,
                 current_song_group,
-                ..DebugStatus::default()
+                ..DebugSnapshot::default()
             };
             dc.update_status(status);
             dc.render();
