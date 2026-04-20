@@ -3067,10 +3067,29 @@ Princess counter persists across succession. However, `ob_list8[9].ob_stat` IS r
 - Actor slot 3, type CARRIER, `actor_file = 5`
 - Summoned via USE menu (turtle item `stuff[6]`)
 - Boarding: within 16px proximity, `wcarry==3`, sets `riding = 5`
-- Speed: forced to 3 pixels/frame when ridden
-- Autonomous movement (unridden): probes candidate positions with `px_to_im()`, only commits moves where terrain code is exactly 5 (water); tries current direction, then ±1, then −2
 - Cannot be summoned in central region bounds (11194–21373 X, 10205–16208 Y)
-- Mounted-turtle exploit: melee recoil from `dohit()` pushes rider via `move_figure(i,fc,2)`, which only checks `proxcheck()` and bypasses the turtle's `px_to_im(...)==5` water-only rule, enabling transit over invalid terrain (original behavior)
+
+**Autonomous movement (unridden)** — `fmain.c:1520-1542`:
+
+- Runs **every tick**. Speed is always **3** pixels (`fmain.c:1521-1522`).
+- Uses `px_to_im()` directly (not `proxcheck()`): only commits a position update when the probed terrain is **exactly type 5** (very deep water). Types 2–4 (shallower water) and all land types are impassable to the autonomous turtle.
+- Each tick, probes 4 directions in priority order from current facing `d`:
+  1. `d`
+  2. `(d + 1) & 7`
+  3. `(d − 1) & 7`
+  4. `(d − 2) & 7`
+  The first direction whose probe lands on terrain 5 is committed; if none succeed the turtle does not move.
+- The handler **does not persist** the chosen direction back to `an->facing` — it exits via `goto raise` (`fmain.c:1545`), bypassing the `an->facing = d` write at `newloc:` (`fmain.c:1633`). Facing is instead updated by the general CARRIER AI path (§22 `do_tactic`), which every 16 ticks calls `set_course(i, hero_x, hero_y, 5)` to aim the turtle's facing toward the hero (mode 5 — toward-target, no WALKING state change). Net effect: the turtle re-aims at the hero every 16 ticks and probes for water each tick in that general direction, producing a slow hero-seeking drift along coastlines and water bodies.
+- **Bug — extent drift** (do not preserve): on a frame where no direction lands on terrain 5, `xtest`/`ytest` retain the last failed probe's coordinates; `move_extent(1, xtest, ytest)` at `fmain.c:1545` still executes, drifting the 500×400 extent box away from the turtle's actual `abs_x`/`abs_y`. Over time the extent can desync enough to make the turtle unreachable. See RESEARCH.md §9.6, [PROBLEMS.md §P22]. The port SHOULD fix this (skip `move_extent` on failed probes).
+
+**Mounted movement (`riding == 5`)** — `fmain.c:1599`:
+
+- Hero's WALKING step is forced to speed 3 (`fmain.c:1599`); checked before terrain effects, so riding also neutralizes lava push-back (terrain 8, `e = −2`).
+- Movement uses the hero's standard `proxcheck()` — **the rider can walk onto any non-blocked terrain**, including land.
+- The turtle's actual position (`abs_x`/`abs_y`) only updates when the hero stands on terrain 5 (`fmain.c:1541`); when the hero walks onto land, the turtle sprite stays at the water's edge.
+- The `raftprox` flag forces `environ = 0` while riding (`fmain.c:1768`), preventing drowning. When the hero moves >16px away, `raftprox` drops to 0 and the rider dismounts automatically.
+
+**Mounted-turtle exploit** (original behavior — preserve): melee recoil from `dohit()` pushes the rider via `move_figure(i, fc, 2)` (`fmain2.c:242-245, 322-329`), which only applies `proxcheck()` and bypasses the autonomous turtle's `px_to_im(...)==5` water-only rule, enabling transit over terrain the turtle itself cannot cross.
 
 ### 21.4 Swan (Bird)
 
@@ -3087,7 +3106,6 @@ Princess counter persists across succession. However, `ob_list8[9].ob_stat` IS r
 - Dismount conditions: hero action button + velocity < 15 + clear ground below + not fiery terrain
   - Blocked in lava zone: event 32 ("Ground is too hot")
   - Blocked at high velocity: event 33 ("Flying too fast")
-- On ground: renders as RAFT sprite
 
 ### 21.5 Dragon
 

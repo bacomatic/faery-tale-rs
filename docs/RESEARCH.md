@@ -1777,6 +1777,16 @@ an->weapon = weapon_probs[w];
 
 Carrier extent position: set to a 500×400 box centered on a point via `move_extent()` at `fmain2.c:1560-1566`.
 
+##### Turtle Autonomous Movement (`fmain.c:1520-1542`)
+
+When not ridden, the turtle is restricted to **terrain type 5 only** (very deep water). It uses `px_to_im()` directly — not `proxcheck()` — and only commits position updates when the result is exactly 5 (`fmain.c:1523,1527,1531,1541`). Shallower water (types 2–4) and all land types are impassable to the autonomous turtle.
+
+Each tick, 4 directions are probed in priority order from the current facing `d`: `d`, `(d+1)&7`, `(d-1)&7`, `(d-2)&7`. The first direction landing on terrain 5 is selected (`fmain.c:1521-1534`). If all fail, the turtle does not move. Speed is always 3 (`fmain.c:1521-1522`).
+
+`load_carrier()` does not initialize `an->facing` (`fmain.c:2784-2801`), and the carrier handler exits via `goto raise` (`fmain.c:1545`), bypassing the `an->facing = d` write at `newloc:` (`fmain.c:1633`). The turtle's facing is therefore never persisted — it retries the same directional probe sequence every tick.
+
+**Bug — extent drift**: When no valid direction exists, `xtest`/`ytest` retain the last failed probe's coordinates. `move_extent(1, xtest, ytest)` still executes (`fmain.c:1545`), repositioning the extent to a non-water location while `abs_x`/`abs_y` stay fixed. See [PROBLEMS.md §P22](PROBLEMS.md).
+
 #### Spider Pit (etype 53, index 3)
 
 Forced encounter: spawns `v1=4` spiders (`v3=6`) immediately on entry. `mixflag=0, wt=0` — no mixing, all spiders get the same touch attack weapon.
