@@ -203,6 +203,11 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: u8) {
 /// Per SPEC §19.3: when `freeze` is true (i.e. `freeze_timer > 0`), hostile NPCs
 /// (`race < 7`) skip all AI — they do not change tactic, facing, or movement state.
 /// Non-hostile NPCs (`race >= 7`, e.g. shopkeepers, villagers) are always processed.
+///
+/// Per SPEC §11.5 step 3: SETFIG actors (`race >= 0x80`) are excluded from the
+/// standard AI loop entirely — no random wandering, no chase, no tactic selection.
+/// The only scripted behavior retained is `Goal::Stand`, which keeps the actor
+/// facing the hero while remaining Still (used by shopkeepers and other fixed NPCs).
 pub fn tick_npc(
     npc: &mut Npc,
     hero_x: i32,
@@ -214,6 +219,16 @@ pub fn tick_npc(
     xtype: u16,
     freeze: bool,
 ) {
+    // SETFIG actors (race >= 0x80): skipped entirely from standard AI (§11.5 step 3).
+    // Stand goal is the only scripted behavior: face hero, stay Still.
+    if npc.race >= 0x80 {
+        if npc.goal == Goal::Stand {
+            set_course(npc, hero_x, hero_y, SC_AIM);
+            npc.state = NpcState::Still;
+        }
+        return;
+    }
+
     if freeze && npc.race < 7 {
         return;
     }
@@ -991,5 +1006,94 @@ mod tests {
             }
         }
         assert!(got_pursue, "re-armed actor must eventually select Pursue tactic");
+    }
+
+    // ── T4-NPC-SETFIG: SETFIG AI exclusion tests (§11.5 step 3) ────────────
+
+    /// (a) SETFIG actor (race=0x89 Witch) does NOT move when ticked with generic AI.
+    /// tick_npc must return early for race >= 0x80 without changing state or tactic.
+    #[test]
+    fn test_setfig_witch_does_not_move() {
+        use crate::game::npc::RACE_WITCH;
+        let mut npc = Npc {
+            npc_type: 9,
+            race: RACE_WITCH, // 0x89 — SETFIG
+            x: 100,
+            y: 100,
+            vitality: 10,
+            weapon: 2,
+            active: true,
+            goal: Goal::Attack1, // hostile goal — must be suppressed
+            tactic: Tactic::Pursue,
+            state: NpcState::Still,
+            facing: 0,
+            ..Default::default()
+        };
+        for tick in 0..200u32 {
+            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            assert_eq!(
+                npc.state,
+                NpcState::Still,
+                "SETFIG Witch must not change state at tick {tick}"
+            );
+            // Tactic and goal must remain unchanged — no hostile AI.
+            assert_eq!(
+                npc.tactic,
+                Tactic::Pursue,
+                "SETFIG Witch tactic must not change at tick {tick}"
+            );
+            assert_eq!(
+                npc.goal,
+                Goal::Attack1,
+                "SETFIG Witch goal must not change at tick {tick}"
+            );
+        }
+    }
+
+    /// (b) Regular hostile (race < 7) still moves normally after SETFIG gate.
+    #[test]
+    fn test_regular_hostile_still_moves() {
+        let mut acted = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100); // race = RACE_ENEMY (3 < 7)
+            npc.goal = Goal::Attack1;
+            npc.weapon = 1;
+            npc.state = NpcState::Still;
+            npc.facing = 0;
+            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            if npc.state != NpcState::Still || npc.facing != 0 {
+                acted = true;
+                break;
+            }
+        }
+        assert!(acted, "Regular hostile NPC must still receive AI updates");
+    }
+
+    /// (c) SETFIG shopkeeper with Stand goal faces the hero and stays Still.
+    /// Scripted Stand behavior is preserved even though generic AI is skipped.
+    #[test]
+    fn test_setfig_shopkeeper_stand_faces_hero() {
+        use crate::game::npc::RACE_SHOPKEEPER;
+        let mut npc = Npc {
+            npc_type: 1,
+            race: RACE_SHOPKEEPER, // 0x88 — SETFIG
+            x: 100,
+            y: 100,
+            vitality: 10,
+            active: true,
+            goal: Goal::Stand,
+            ..Default::default()
+        };
+        // Hero is due East at (200, 100).
+        tick_npc(&mut npc, 200, 100, false, None, &[], 0, 0, false);
+        assert_eq!(
+            npc.state,
+            NpcState::Still,
+            "SETFIG shopkeeper with Stand goal must stay Still"
+        );
+        assert_eq!(
+            npc.facing, 2,
+            "SETFIG shopkeeper must face hero East (facing=2)"
+        );
     }
 }
