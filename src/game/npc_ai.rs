@@ -192,6 +192,29 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: u8) {
     }
 }
 
+/// Advance one NPC's AI by one tick, with a freeze gate.
+///
+/// Per SPEC §19.3: when `freeze` is true (i.e. `freeze_timer > 0`), hostile NPCs
+/// (`race < 7`) skip all AI — they do not change tactic, facing, or movement state.
+/// Non-hostile NPCs (`race >= 7`, e.g. shopkeepers, villagers) are always processed.
+pub fn tick_npc(
+    npc: &mut Npc,
+    hero_x: i32,
+    hero_y: i32,
+    hero_dead: bool,
+    leader_idx: Option<usize>,
+    npcs: &[(i32, i32)],
+    tick: u32,
+    xtype: u16,
+    freeze: bool,
+) {
+    if freeze && npc.race < 7 {
+        return;
+    }
+    select_tactic(npc, hero_x, hero_y, hero_dead, leader_idx, xtype, tick);
+    do_tactic(npc, hero_x, hero_y, leader_idx, npcs, tick);
+}
+
 /// Goal value for close-range melee threshold computation.
 fn goal_value(goal: &Goal) -> i32 {
     match goal {
@@ -728,5 +751,100 @@ mod tests {
             reconsider_attack1,
             reconsider_attack2
         );
+    }
+
+    // T3-COMBAT-FREEZE-CAST: freeze spell tests (SPEC §19.2, §19.3).
+
+    #[test]
+    fn test_freeze_hostile_npc_does_not_act() {
+        // SPEC §19.3: freeze_timer > 0 → hostile enemies (race < 7) skip all AI.
+        // (b) frozen actors do not move on tick.
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.tactic = Tactic::Pursue;
+        npc.weapon = 1;
+        npc.state = NpcState::Still;
+        let initial_facing = npc.facing;
+
+        for tick in 0..100u32 {
+            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, true);
+            assert_eq!(
+                npc.state, NpcState::Still,
+                "Frozen hostile NPC changed state at tick {tick}"
+            );
+            assert_eq!(
+                npc.facing, initial_facing,
+                "Frozen hostile NPC changed facing at tick {tick}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_freeze_nonhostile_npc_still_acts() {
+        // SPEC §19.3: NPCs with race >= 7 (e.g. shopkeepers) are not frozen enemies.
+        // (d) non-hostile NPCs are unaffected by freeze.
+        use crate::game::npc::RACE_SHOPKEEPER;
+        let mut npc = Npc {
+            npc_type: 1,
+            race: RACE_SHOPKEEPER, // 0x88 ≥ 7 — not a combat enemy
+            x: 100,
+            y: 100,
+            vitality: 10,
+            active: true,
+            goal: Goal::Stand,
+            ..Default::default()
+        };
+        // Stand goal always aims at hero and stays Still — this is normal AI behavior.
+        // tick_npc with freeze=true should still process non-hostile NPCs.
+        tick_npc(&mut npc, 200, 100, false, None, &[], 0, 0, true);
+        // Stand goal: set_course(SC_AIM) + state = Still — should not panic.
+        assert_eq!(npc.state, NpcState::Still);
+        assert_eq!(npc.facing, 2, "Shopkeeper should face hero (East)");
+    }
+
+    #[test]
+    fn test_unfrozen_hostile_npc_can_act() {
+        // When not frozen, hostile NPCs receive AI updates normally.
+        let mut acted = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.tactic = Tactic::Pursue;
+            npc.weapon = 1;
+            npc.facing = 0;
+            npc.state = NpcState::Still;
+            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            if npc.state != NpcState::Still || npc.facing != 0 {
+                acted = true;
+                break;
+            }
+        }
+        assert!(acted, "Unfrozen hostile NPC should eventually change state or facing");
+    }
+
+    #[test]
+    fn test_freeze_expires_after_duration() {
+        // SPEC §19.2, §19.3: freeze_timer decrements by 1 each tick; expires at 0.
+        // (c) freeze expires after spec'd duration (FREEZE_TIMER_INCREMENT = 100 ticks).
+        use crate::game::game_state::GameState;
+        use crate::game::magic::FREEZE_TIMER_INCREMENT;
+        let mut state = GameState::new();
+        state.freeze_timer = FREEZE_TIMER_INCREMENT;
+        // Tick exactly FREEZE_TIMER_INCREMENT times.
+        state.tick(FREEZE_TIMER_INCREMENT as u32);
+        assert_eq!(state.freeze_timer, 0, "Freeze should expire after {} ticks", FREEZE_TIMER_INCREMENT);
+    }
+
+    #[test]
+    fn test_freeze_cast_sets_nonzero_timer() {
+        // SPEC §19.2: Gold Ring cast increments freeze_timer by FREEZE_TIMER_INCREMENT.
+        // (a) cast applies freeze effect to game state.
+        use crate::game::game_state::GameState;
+        use crate::game::magic::{use_magic, ITEM_RING, FREEZE_TIMER_INCREMENT};
+        let mut state = GameState::new();
+        state.stuff_mut()[ITEM_RING] = 1;
+        let _ = use_magic(&mut state, ITEM_RING);
+        assert!(state.freeze_timer > 0, "freeze_timer must be > 0 after cast");
+        assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
     }
 }

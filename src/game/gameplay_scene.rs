@@ -1785,7 +1785,7 @@ impl GameplayScene {
     /// Advance all active NPCs by one frame using the AI pipeline.
     /// Actor 0 is always the player; actors 1..anix are synced from NPC state.
     fn update_actors(&mut self, _delta: u32) {
-        use crate::game::npc_ai::{select_tactic, do_tactic};
+        use crate::game::npc_ai::tick_npc;
         use crate::game::npc::NpcState;
 
         let hero_x = self.state.hero_x as i32;
@@ -1794,6 +1794,8 @@ impl GameplayScene {
         let xtype = self.state.xtype;
         let indoor = self.state.region_num >= 8;
         let tick = self.state.tick_counter;
+        // SPEC §19.3: freeze_timer > 0 → hostile enemies (race < 7) skip all AI.
+        let freeze = self.state.freeze_timer > 0;
 
         if let Some(ref mut table) = self.npc_table {
             // Snapshot NPC positions for Follow/Evade targeting.
@@ -1810,14 +1812,15 @@ impl GameplayScene {
             // 1. AI decision pass.
             for npc in &mut table.npcs {
                 if !npc.active { continue; }
-                select_tactic(npc, hero_x, hero_y, hero_dead, leader_idx, xtype, tick);
-                do_tactic(npc, hero_x, hero_y, leader_idx, &positions, tick);
+                tick_npc(npc, hero_x, hero_y, hero_dead, leader_idx, &positions, tick, xtype, freeze);
             }
 
             // 2. Movement execution pass (sequential — later NPCs see earlier updates).
             for i in 0..table.npcs.len() {
                 if !table.npcs[i].active { continue; }
                 if table.npcs[i].state != NpcState::Walking { continue; }
+                // SPEC §19.3: hostile enemies (race < 7) do not move when frozen.
+                if freeze && table.npcs[i].race < 7 { continue; }
                 // Build collision list: hero + all other active, alive NPCs.
                 let mut others: Vec<(i32, i32)> = Vec::with_capacity(crate::game::npc::MAX_NPCS + 1);
                 others.push((hero_x, hero_y));
@@ -4396,7 +4399,8 @@ impl Scene for GameplayScene {
         }
 
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
-        if self.in_encounter_zone {
+        // SPEC §19.3: suppressed while freeze_timer > 0.
+        if self.in_encounter_zone && self.state.freeze_timer == 0 {
             let trigger = self.npc_table.as_ref().and_then(|table| {
                 crate::game::encounter::try_trigger_encounter(
                     self.state.tick_counter,
