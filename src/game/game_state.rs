@@ -749,6 +749,30 @@ impl GameState {
             && (10205..=16208).contains(&self.hero_y)
     }
 
+    /// Move the active carrier actor to the hero's current position (SPEC §21.7).
+    ///
+    /// Called after any teleport that moves the hero while mounted so the carrier
+    /// is co-located with the hero at the destination.  Mount state (on_raft,
+    /// flying, wcarry) is preserved unchanged.
+    ///
+    /// Carrier actor slots (from SPEC §21):
+    ///   - Raft:  actors[wcarry] where wcarry == 1
+    ///   - Turtle: actors[wcarry] where wcarry == 3
+    ///   - Swan:  actors[3] (flying != 0; wcarry may be 0 for swan)
+    pub fn sync_carrier_to_hero(&mut self) {
+        let slot = if self.flying != 0 {
+            3 // Swan always occupies actor slot 3 (SPEC §21.4)
+        } else if self.on_raft && self.wcarry > 0 {
+            self.wcarry as usize
+        } else {
+            0
+        };
+        if slot > 0 && slot < self.actors.len() {
+            self.actors[slot].abs_x = self.hero_x;
+            self.actors[slot].abs_y = self.hero_y;
+        }
+    }
+
     /// Eat food from inventory. Returns true if food was available.
     pub fn eat_food(&mut self) -> bool {
         if self.stuff()[ITEM_FOOD] > 0 {
