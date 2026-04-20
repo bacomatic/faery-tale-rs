@@ -25,6 +25,12 @@ pub fn do_tactic(
     npcs: &[(i32, i32)],
     tick: u32,
 ) {
+    // CONFUSED: no AI processing on any tick (§11.9). First-tick random walk was already
+    // executed directly inside select_tactic when the goal was assigned.
+    if npc.goal == Goal::Confused {
+        return;
+    }
+
     let r = ai_rand(tick, npc.x as u32 ^ npc.y as u32);
 
     // Probabilistic gate: ~12.5% for most goals, ~25% for Attack2/Archer2.
@@ -284,6 +290,9 @@ pub fn select_tactic(
             npc.state = NpcState::Still;
             return;
         }
+        // CONFUSED: goal already set on first tick (with random walk executed). Subsequent
+        // ticks bypass all tactic processing — actor continues last trajectory (§11.9).
+        Goal::Confused => return,
         _ => {} // Attack/Archer goals continue to tactic tree.
     }
 
@@ -324,9 +333,13 @@ pub fn select_tactic(
         return;
     }
 
-    // No weapon → confused.
+    // No weapon → CONFUSED goal (§11.9). Assign goal, execute first-tick random walk
+    // directly (do_tactic is gated for Confused goal on all subsequent ticks).
     if npc.weapon == 0 {
+        npc.goal = Goal::Confused;
         npc.tactic = Tactic::Random;
+        npc.facing = ((r >> 4) & 7) as u8;
+        npc.state = NpcState::Walking;
         return;
     }
 
@@ -612,6 +625,8 @@ mod tests {
             npc.weapon = 0;
             select_tactic(&mut npc, 200, 100, false, None, 0, tick);
             if npc.tactic == Tactic::Random {
+                // Updated: goal must also be Confused (§11.9).
+                assert_eq!(npc.goal, Goal::Confused, "weapon=0 NPC must have Goal::Confused");
                 confused = true;
                 break;
             }
@@ -846,5 +861,135 @@ mod tests {
         let _ = use_magic(&mut state, ITEM_RING);
         assert!(state.freeze_timer > 0, "freeze_timer must be > 0 after cast");
         assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
+    }
+
+    // ── T3-COMBAT-CONFUSED: CONFUSED goal tests (§11.9) ────────────────────
+
+    /// (a) A hostile actor with weapon=0 is assigned Goal::Confused by select_tactic.
+    #[test]
+    fn test_confused_goal_assigned_when_unarmed() {
+        // select_tactic must reliably set Goal::Confused on an unarmed hostile; the recalc
+        // gate fires probabilistically so we run several ticks and check at least one hits.
+        let mut got_confused = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.weapon = 0; // unarmed
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            if npc.goal == Goal::Confused {
+                got_confused = true;
+                break;
+            }
+        }
+        assert!(got_confused, "unarmed hostile must receive Goal::Confused");
+    }
+
+    /// (b) On the first CONFUSED tick, actor walks one step in a random direction.
+    /// select_tactic must set state=Walking and a valid facing (0–7).
+    #[test]
+    fn test_confused_first_tick_random_walk() {
+        // Force the gate to fire by iterating ticks; check Walking + valid facing.
+        let mut found = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.weapon = 0;
+            npc.state = NpcState::Still;
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            if npc.goal == Goal::Confused {
+                assert_eq!(npc.state, NpcState::Walking, "first CONFUSED tick must set Walking");
+                assert!(npc.facing <= 7, "facing must be 0–7, got {}", npc.facing);
+                // do_tactic must be a no-op for Confused — confirm it doesn't touch state.
+                let facing_before = npc.facing;
+                do_tactic(&mut npc, 200, 100, None, &[], tick);
+                assert_eq!(
+                    npc.state, NpcState::Walking,
+                    "do_tactic must not change state for Confused actor"
+                );
+                assert_eq!(
+                    npc.facing, facing_before,
+                    "do_tactic must not change facing for Confused actor"
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "CONFUSED assignment not observed within 200 ticks");
+    }
+
+    /// (c) On subsequent ticks with Goal::Confused, neither select_tactic nor do_tactic
+    /// modifies the actor (no new direction, no attack, no tactic change).
+    #[test]
+    fn test_confused_subsequent_tick_no_processing() {
+        // Bootstrap: get actor into Confused state on tick T.
+        let seed_tick = (0u32..200)
+            .find(|&t| {
+                let mut npc = make_npc(100, 100);
+                npc.goal = Goal::Attack1;
+                npc.weapon = 0;
+                select_tactic(&mut npc, 200, 100, false, None, 0, t);
+                npc.goal == Goal::Confused
+            })
+            .expect("could not bootstrap Confused state");
+
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.weapon = 0;
+        select_tactic(&mut npc, 200, 100, false, None, 0, seed_tick);
+        assert_eq!(npc.goal, Goal::Confused);
+
+        // Snapshot state after first tick.
+        let facing_after_first = npc.facing;
+        let state_after_first = npc.state.clone();
+        let tactic_after_first = npc.tactic.clone();
+
+        // Simulate 10 subsequent ticks: neither facing nor tactic should change.
+        for tick in (seed_tick + 1)..(seed_tick + 11) {
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            do_tactic(&mut npc, 200, 100, None, &[], tick);
+
+            assert_eq!(npc.goal, Goal::Confused, "Confused goal must persist on tick {tick}");
+            assert_eq!(
+                npc.facing, facing_after_first,
+                "facing must not change on subsequent Confused ticks (tick {tick})"
+            );
+            assert_eq!(
+                npc.state, state_after_first,
+                "state must not change on subsequent Confused ticks (tick {tick})"
+            );
+            assert_eq!(
+                npc.tactic, tactic_after_first,
+                "tactic must not change on subsequent Confused ticks (tick {tick})"
+            );
+        }
+    }
+
+    /// (d) Restoring a weapon: if the caller resets the goal back to a hostile mode and
+    /// calls select_tactic with weapon > 0, re-evaluation assigns a pursuit tactic (not Random).
+    /// This tests that CONFUSED machinery only fires when weapon == 0.
+    #[test]
+    fn test_confused_lifted_when_weapon_restored() {
+        // An actor was Confused; its weapon is restored and goal is reset to Attack1
+        // (simulating external re-spawn or loot pickup).
+        let mut got_pursue = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1; // goal reset by caller
+            npc.weapon = 1;           // weapon restored
+            npc.tactic = Tactic::Random; // leftover from confused period
+            // Hero is far → no melee engage.
+            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            // Should NOT assign Confused; when gate fires, should choose Pursue.
+            assert_ne!(
+                npc.goal,
+                Goal::Confused,
+                "armed actor must not receive Goal::Confused"
+            );
+            if npc.tactic == Tactic::Pursue {
+                got_pursue = true;
+                break;
+            }
+        }
+        assert!(got_pursue, "re-armed actor must eventually select Pursue tactic");
     }
 }

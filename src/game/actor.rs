@@ -41,6 +41,8 @@ pub enum Goal {
     Leader,
     Stand,
     Guard,
+    /// Hostile actor lost its weapon (weapon < 1). First tick: random walk; subsequent: no AI.
+    Confused,
     #[default]
     None,
 }

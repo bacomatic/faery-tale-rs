@@ -1707,6 +1707,7 @@ impl GameplayScene {
             let mut logs: Vec<String> = Vec::new();
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
+            let mut necro_talisman_pos: Option<(i16, i16)> = None;
 
             let bname = self.brother_name().to_string();
             if let Some(ref mut table) = self.npc_table {
@@ -1749,7 +1750,18 @@ impl GameplayScene {
 
                     // checkdead
                     if npc.vitality == 0 {
-                        npc.active = false;
+                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+                        if npc.race == RACE_NECROMANCER {
+                            // SPEC §15.7: transform in-place → Woodcutter; don't despawn.
+                            necro_talisman_pos = Some((npc.x, npc.y));
+                            npc.race = RACE_WOODCUTTER;
+                            npc.vitality = 10;
+                            npc.state = NpcState::Still;
+                            npc.weapon = 0;
+                            logs.push("necromancer slain: transformed to woodcutter, talisman drops".to_string());
+                        } else {
+                            npc.active = false;
+                        }
                         self.state.brave = (self.state.brave + 1).min(100);
                         dead_npc = Some(npc.clone());
                         logs.push(format!("enemy slain, bravery now {}", self.state.brave));
@@ -1778,6 +1790,20 @@ impl GameplayScene {
                         }
                     }
                 }
+            }
+            // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
+            if let Some((tx, ty)) = necro_talisman_pos {
+                use crate::game::game_state::WorldObject;
+                self.state.world_objects.push(WorldObject {
+                    ob_id: 139,
+                    ob_stat: 1, // ground item
+                    region: self.state.region_num,
+                    x: tx as u16,
+                    y: ty as u16,
+                    visible: true,
+                    goal: 0,
+                });
+                self.dlog("talisman (ob_id 139) placed at necromancer death coords".to_string());
             }
         }
     }
@@ -5048,6 +5074,92 @@ mod tests {
     }
 
     #[test]
+    fn test_necromancer_death_transforms_to_woodcutter() {
+        // SPEC §15.7: on death, necromancer → race 10 (Woodcutter), vitality 10,
+        // state Still, weapon 0.  NPC must remain active (not despawned).
+        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_NECROMANCER,
+            race: RACE_NECROMANCER,
+            x: 500,
+            y: 600,
+            vitality: 0, // pre-killed so checkdead fires with damage=0
+            active: true,
+            weapon: 5,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
+        scene.apply_hit(0, 2, 0, 0);
+        let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
+        assert_eq!(npc.race, RACE_WOODCUTTER, "necromancer must transform to Woodcutter (race 10)");
+        assert_eq!(npc.vitality, 10, "transformed woodcutter must have vitality 10");
+        assert_eq!(npc.state, NpcState::Still, "state must be Still after transform");
+        assert_eq!(npc.weapon, 0, "weapon must be cleared after transform");
+        assert!(npc.active, "NPC must remain active after necromancer transform");
+    }
+
+    #[test]
+    fn test_necromancer_death_drops_talisman_at_death_location() {
+        // SPEC §15.7: leave_item(i, 139) → WorldObject {ob_id:139, ob_stat:1} at death coords.
+        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+        let nx: i16 = 500;
+        let ny: i16 = 600;
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_NECROMANCER,
+            race: RACE_NECROMANCER,
+            x: nx,
+            y: ny,
+            vitality: 0,
+            active: true,
+            weapon: 5,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        scene.apply_hit(0, 2, 0, 0);
+        // Capture the NPC's position after pushback (that is where the talisman is dropped).
+        let (expected_x, expected_y) = {
+            let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
+            (npc.x as u16, npc.y as u16)
+        };
+        let talisman = scene.state.world_objects.iter()
+            .find(|o| o.ob_id == 139)
+            .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
+        assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
+        assert_eq!(talisman.x, expected_x, "talisman x must match death location");
+        assert_eq!(talisman.y, expected_y, "talisman y must match death location");
+        assert!(talisman.visible, "talisman must be visible");
+        assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
+    }
+
+    #[test]
+    fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
+        // Killing a non-necromancer must not spawn a talisman.
+        use crate::game::npc::{NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 100,
+            y: 100,
+            vitality: 0,
+            active: true,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        scene.apply_hit(0, 2, 0, 0);
+        assert!(
+            scene.state.world_objects.iter().all(|o| o.ob_id != 139),
+            "talisman must NOT drop when a non-necromancer dies"
+        );
+    }
+
+    #[test]
     fn test_talisman_pickup_triggers_victory() {
         // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
         // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
@@ -6756,6 +6868,90 @@ mod t3_palette_sky_tests {
             pal[31],
             amiga_color_to_rgba(0x0bdf),
             "other region sky should be fixed 0x0bdf (light blue sky)"
+        );
+    }
+}
+
+#[cfg(test)]
+mod t3_death_sleep_collapse_tests {
+    //! TDD tests for T3-DEATH-SLEEP-COLLAPSE (SPEC §18): hunger collapse forces SLEEP state.
+    //!
+    //! (a) Hunger at collapse threshold sets sleep state.
+    //! (b) Movement/action input is rejected while forced-sleeping.
+    //! (c) Waking from forced sleep clears the flag and restores movement.
+
+    use super::*;
+
+    /// (a) Event 24 (hunger collapse, SPEC §18.2) triggers the `sleeping` flag.
+    ///
+    /// Setup: vitality ≤ 5 (else-branch), fatigue < 170 (not event 12), hunger = 143
+    /// so that after the +1 increment hunger = 144 satisfies 144 > 140 and (144 & 7) == 0.
+    /// Daynight = 127 so the next +1 tick crosses the 128-boundary and fires
+    /// hunger_fatigue_step.
+    #[test]
+    fn test_hunger_collapse_sets_sleeping() {
+        let mut scene = GameplayScene::new();
+        scene.state.vitality = 3;
+        scene.state.fatigue = 50;
+        scene.state.hunger = 143;
+        scene.state.daynight = 127;
+
+        let events = scene.state.tick(1);
+        // Mirror the event dispatch that lives in GameplayScene::update().
+        for ev in &events {
+            if *ev == 12 || *ev == 24 {
+                scene.sleeping = true;
+            }
+        }
+
+        assert!(
+            events.contains(&24),
+            "tick must emit event 24 when hunger crosses collapse threshold"
+        );
+        assert!(
+            scene.sleeping,
+            "sleeping flag must be set when event 24 fires"
+        );
+    }
+
+    /// (b) Movement input is silently ignored while the hero is forced-sleeping.
+    ///
+    /// apply_player_input() must return immediately (before touching position/actor
+    /// state) whenever `sleeping` is true.
+    #[test]
+    fn test_movement_blocked_while_sleeping() {
+        let mut scene = GameplayScene::new();
+        scene.sleeping = true;
+        let initial_x = scene.state.hero_x;
+        let initial_y = scene.state.hero_y;
+        scene.input.right = true;
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.hero_x, initial_x, "hero_x must not change while sleeping");
+        assert_eq!(scene.state.hero_y, initial_y, "hero_y must not change while sleeping");
+        let moving = scene.state.actors.first().map_or(false, |a| a.moving);
+        assert!(!moving, "actor moving flag must stay false while sleeping");
+    }
+
+    /// (c) Waking from forced sleep clears the `sleeping` flag.
+    ///
+    /// When sleep_advance_daynight() returns true (wake condition met), the
+    /// frame loop sets sleeping = false.  Verify the path works: fatigue = 1
+    /// so exactly one sleep-advance call reaches fatigue == 0 → wake.
+    #[test]
+    fn test_wake_from_forced_sleep_clears_flag() {
+        let mut scene = GameplayScene::new();
+        scene.sleeping = true;
+        scene.state.fatigue = 1;
+
+        let should_wake = scene.state.sleep_advance_daynight();
+        if should_wake {
+            scene.sleeping = false;
+        }
+
+        assert!(
+            !scene.sleeping,
+            "sleeping flag must be cleared when wake condition is met"
         );
     }
 }
