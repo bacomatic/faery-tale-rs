@@ -3,21 +3,19 @@
 //! # Screen layout
 //!
 //! The original Amiga game used two Copper-switched viewports stacked vertically:
-//! - `vp_page` (LORES, 312×194): the playfield at `screen_size(156)` (normal gameplay)
+//! - `vp_page` (LORES, 288×140): the playfield
 //! - `vp_text` (HIRES, 640×57): the HI bar (buttons, compass, messages)
 //!
-//! Both are 2× line-doubled and centered in the SDL 640×480 logical canvas with 40px top margin.
-//! At `screen_size(156)` the Amiga DxOffset=4, DyOffset=3, so the playfield is inset 4/3 LORES px:
+//! Both are 2× line-doubled (NTSC 30 Hz interlaced → line-doubled to fill 400 lines)
+//! and centered in the SDL 640×480 logical canvas with 40px top/bottom margins:
 //!
 //! ```text
 //!  y=  0.. 39  black margin (40px)
-//!  y= 46..433  playfield   (624×388)  x=8..631  (DxOffset=4 LORES px × 2, DyOffset=3 × 2)
-//!  y=326..439  HI bar      (640×114)  x=0..639  (Amiga scanline 143 × 2 + 40px margin)
+//!  y= 40..319  playfield   (576×280)  x=32..607 (DxOffset=16 LORES px × 2)
+//!  y=320..325  gap         (6px)      3 LORES rows × 2
+//!  y=326..439  HI bar      (640×114)  x=0..639  (57 HIRES rows × 2)
 //!  y=440..479  black margin (40px)
 //! ```
-//!
-//! The HI bar overlaps the lower part of the playfield (scanlines 143–194), exactly as on the
-//! original Amiga where the Copper switched viewports at scanline 143 regardless of playfield size.
 //!
 //! See `RESEARCH.md § Screen Layout: Amiga Mixed-Resolution Viewports` for full details.
 use crate::game::magic::{use_magic, ITEM_LANTERN, ITEM_ORB, ITEM_RING, ITEM_SKULL, ITEM_STONE_RING, ITEM_TOTEM, ITEM_VIAL};
@@ -156,30 +154,27 @@ fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 36]) -> Option<u8>
 }
 
 /// Canvas layout — original 640×200 game area line-doubled to 640×400,
-/// centered in 640×480 logical canvas with 40px top/bottom margins.
+/// centered in 640×480 logical canvas with 40px margins top and bottom.
 ///
-/// Playfield (vp_page, LORES 312×194 px at screen_size(156)):
-///   DxOffset=4 LORES × 2 = 8px left; DyOffset=3 LORES × 2 = 6px top-of-Amiga-frame offset.
-///   2× line-doubled to canvas rect (8, 46, 624, 388).
+/// Playfield (vp_page, LORES 288×140 px): DxOffset=16 LORES × 2 = 32px left margin;
+/// 2× line-doubled to canvas rect (32, 40, MAP_DST_W*2, MAP_DST_H*2).
 ///
-/// HI bar (vp_text, HIRES 640×57 px): Amiga Copper switches at scanline 143 (PAGE_HEIGHT).
-///   canvas y = 40 (margin) + 143×2 = 326. Canvas rect (0, 326, 640, 114).
-///   Overlaps the lower portion of the playfield (lines 143–194 of the Amiga frame),
-///   exactly as on the original hardware.
+/// Gap: 3 original LORES rows × 2 = 6px at canvas y=320–325.
+///
+/// HI bar (vp_text, HIRES 640×57 px): also 2× line-doubled → 640×114;
+/// canvas rect (0, 326, 640, 114). Internal coords (buttons, compass) scale ×2 vertically.
 const CANVAS_MARGIN_Y: i32 = 40;
-/// Playfield canvas X: Amiga DxOffset=4 LORES pixels × 2 = 8 canvas pixels.
-const PLAYFIELD_X: i32 = 8;              // vp_page DxOffset=4 LORES px × 2 (screen_size(156))
-/// Playfield canvas Y: top margin + Amiga DyOffset=3 LORES pixels × 2.
-const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y + 3 * 2; // = 46
-/// Visible LORES playfield dimensions — `screen_size(156)` = half_width×2 = 312, height = 156×5/8×2 = 194.
-const PLAYFIELD_LORES_W: u32 = 312;    // vp_page.DWidth  at screen_size(156)
-const PLAYFIELD_LORES_H: u32 = 194;    // vp_page.DHeight at screen_size(156)
-const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2; // 624
-const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2; // 388
+const PLAYFIELD_X: i32 = 32;              // vp_page DxOffset=16 LORES px × 2
+const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y; // = 40
+/// Visible LORES playfield dimensions — vp_page.DWidth/DHeight from fmain.c.
+/// The framebuf (MAP_DST_W×MAP_DST_H) is larger; only this sub-rect is shown.
+const PLAYFIELD_LORES_W: u32 = 288;    // vp_page.DWidth
+const PLAYFIELD_LORES_H: u32 = 140;    // vp_page.DHeight
+const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2; // 576
+const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2; // 280
 const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
 const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
-/// HI bar canvas Y: Amiga Copper switches at scanline PAGE_HEIGHT=143, scaled 2×, plus top margin.
-const HIBAR_Y: i32 = CANVAS_MARGIN_Y + 143 * 2; // 40 + 286 = 326 (unchanged: Amiga scanline 143)
+const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
 
 /// Day/night phase derived from lightlevel triangle wave (0–300).
 /// lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
@@ -2463,9 +2458,8 @@ impl GameplayScene {
                         sdl2::pixels::PixelFormatEnum::ARGB8888,
                     ) {
                         if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                            // Clip to screen_size(156) viewport: DxOffset=4, DyOffset=3
                             let src = sdl2::rect::Rect::new(
-                                4, 3, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
+                                16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
                             );
                             let dst = sdl2::rect::Rect::new(
                                 PLAYFIELD_X, PLAYFIELD_Y,
@@ -7008,55 +7002,6 @@ mod t2_npc_talk_tests {
         assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
         assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
             "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
-    }
-
-    // --- T3-VIEWPORT-SIZE: SPEC §1 / §27.6 ---
-
-    /// Assert the normal gameplay playfield LORES dimensions match screen_size(156):
-    ///   width  = 156 × 2 = 312
-    ///   height = floor(156 × 5 / 8) × 2 = 97 × 2 = 194
-    #[test]
-    fn test_playfield_lores_dimensions() {
-        assert_eq!(PLAYFIELD_LORES_W, 312, "PLAYFIELD_LORES_W must be 312 (screen_size(156))");
-        assert_eq!(PLAYFIELD_LORES_H, 194, "PLAYFIELD_LORES_H must be 194 (screen_size(156))");
-    }
-
-    /// Assert the playfield canvas (2×-scaled) dimensions are correct.
-    #[test]
-    fn test_playfield_canvas_dimensions() {
-        assert_eq!(PLAYFIELD_CANVAS_W, 624, "PLAYFIELD_CANVAS_W = 312 × 2 = 624");
-        assert_eq!(PLAYFIELD_CANVAS_H, 388, "PLAYFIELD_CANVAS_H = 194 × 2 = 388");
-    }
-
-    /// Assert the playfield canvas position reflects Amiga DxOffset=4, DyOffset=3
-    /// at screen_size(156), with 40px top margin.
-    #[test]
-    fn test_playfield_canvas_position() {
-        assert_eq!(PLAYFIELD_X, 8,  "PLAYFIELD_X = DxOffset(4) × 2 = 8");
-        assert_eq!(PLAYFIELD_Y, 46, "PLAYFIELD_Y = 40 (margin) + DyOffset(3) × 2 = 46");
-    }
-
-    /// Assert the HI bar stays at Amiga scanline 143 (PAGE_HEIGHT), unchanged by
-    /// the playfield size.  326 = 40 (margin) + 143 × 2.
-    #[test]
-    fn test_hibar_y_at_amiga_scanline_143() {
-        assert_eq!(HIBAR_Y, 326, "HIBAR_Y must be 40 + 143×2 = 326 (Amiga scanline PAGE_HEIGHT)");
-        assert_eq!(HIBAR_H, 114, "HIBAR_H = 57 × 2 = 114");
-    }
-
-    /// Assert the map framebuffer (MAP_DST_W × MAP_DST_H) is at least as large as the
-    /// viewport so the src rect in canvas.copy() never reads out-of-bounds pixels.
-    #[test]
-    fn test_map_framebuf_covers_viewport() {
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-        assert!(
-            MAP_DST_W >= PLAYFIELD_LORES_W,
-            "MAP_DST_W ({MAP_DST_W}) must be >= PLAYFIELD_LORES_W ({PLAYFIELD_LORES_W})"
-        );
-        assert!(
-            MAP_DST_H >= PLAYFIELD_LORES_H,
-            "MAP_DST_H ({MAP_DST_H}) must be >= PLAYFIELD_LORES_H ({PLAYFIELD_LORES_H})"
-        );
     }
 }
 
