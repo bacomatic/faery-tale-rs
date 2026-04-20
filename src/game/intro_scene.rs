@@ -100,11 +100,13 @@ const PAGE_DISPLAY_TICKS: u32 = 240;
 const PAGE0_DISPLAY_TICKS: u32 = 240;
 
 /// How long to hold the last page after display before zooming out.
-const LAST_PAGE_HOLD_TICKS: u32 = 240;
+/// SPEC §23.1 step 8: "Final pause (3.8 seconds)" at 30 fps = 114 ticks.
+const LAST_PAGE_HOLD_TICKS: u32 = 114;
 
 /// How long to hold the title text before proceeding.
-/// 3s = 90 ticks at 30Hz.
-const TITLE_HOLD_TICKS: u32 = 90;
+/// SPEC §23.1 step 2: "1-second pause" at 30 fps = 30 ticks.
+/// Original: `Delay(50)` at Amiga 50 Hz VBL = 1 second (RESEARCH §17.1 step 4).
+const TITLE_HOLD_TICKS: u32 = 30;
 
 /// Duration of the title fade-out in ticks.
 /// 1.5s = 45 ticks at 30Hz.
@@ -113,6 +115,13 @@ const TITLE_FADE_TICKS: u32 = 45;
 /// Total duration of zoom in/out in ticks.
 /// 3s = 90 ticks at 30Hz.
 const ZOOM_DURATION_TICKS: u32 = 90;
+
+/// Tick down a duration counter by `delta`.
+/// Returns `true` when the counter reaches zero (phase complete).
+fn tick_countdown(remaining: &mut u32, delta: u32) -> bool {
+    *remaining = remaining.saturating_sub(delta);
+    *remaining == 0
+}
 
 /// Minimum ticks per page-flip step for ~5s total flip.
 /// 22 steps × 7 ticks/step ≈ 154 ticks ≈ 5.1s.
@@ -284,13 +293,7 @@ impl Scene for IntroScene {
                     );
                 }
 
-                if delta >= *ticks_remaining {
-                    *ticks_remaining = 0;
-                } else {
-                    *ticks_remaining -= delta;
-                }
-
-                if *ticks_remaining == 0 {
+                if tick_countdown(ticks_remaining, delta) {
                     self.advance(game_lib);
                 }
 
@@ -422,13 +425,7 @@ impl Scene for IntroScene {
                 let screen_dest = Rect::new(0, 40, 640, 400);
                 canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
 
-                if delta >= *ticks_remaining {
-                    *ticks_remaining = 0;
-                } else {
-                    *ticks_remaining -= delta;
-                }
-
-                if *ticks_remaining == 0 {
+                if tick_countdown(ticks_remaining, delta) {
                     self.advance(game_lib);
                 }
 
@@ -528,5 +525,71 @@ impl Scene for IntroScene {
 
             IntroPhase::Done => SceneResult::Done,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SPEC §23.1 step 2: "1-second pause" after title text display.
+    /// At 30 fps, 1 second = 30 ticks.
+    /// Original Amiga code: `Delay(50)` at 50 Hz VBL = 1 second (RESEARCH §17.1 step 4).
+    #[test]
+    fn title_hold_is_one_second_at_30fps() {
+        assert_eq!(
+            TITLE_HOLD_TICKS, 30,
+            "SPEC §23.1 step 2: title text hold must be 1 second = 30 ticks at 30 fps"
+        );
+    }
+
+    /// SPEC §23.1 step 8: "Final pause (3.8 seconds)" after last story page.
+    /// At 30 fps, 3.8 seconds = 114 ticks.
+    /// Corresponds to `Delay(190)` at Amiga 50 Hz VBL.
+    #[test]
+    fn last_page_hold_is_3_point_8_seconds_at_30fps() {
+        assert_eq!(
+            LAST_PAGE_HOLD_TICKS, 114,
+            "SPEC §23.1 step 8: final pause must be 3.8 seconds = 114 ticks at 30 fps"
+        );
+    }
+
+    /// Tick the TitleText countdown one-by-one; must fire at exactly TITLE_HOLD_TICKS.
+    #[test]
+    fn title_text_countdown_transitions_at_spec_tick() {
+        let mut remaining = TITLE_HOLD_TICKS;
+        let mut elapsed = 0u32;
+        loop {
+            elapsed += 1;
+            if tick_countdown(&mut remaining, 1) {
+                break;
+            }
+        }
+        assert_eq!(elapsed, 30,
+            "SPEC §23.1 step 2: TitleText phase must expire at exactly 30 ticks (1 second)");
+    }
+
+    /// Tick the last-page countdown one-by-one; must fire at exactly LAST_PAGE_HOLD_TICKS.
+    #[test]
+    fn last_page_countdown_transitions_at_spec_tick() {
+        let mut remaining = LAST_PAGE_HOLD_TICKS;
+        let mut elapsed = 0u32;
+        loop {
+            elapsed += 1;
+            if tick_countdown(&mut remaining, 1) {
+                break;
+            }
+        }
+        assert_eq!(elapsed, 114,
+            "SPEC §23.1 step 8: last ShowPage phase must expire at exactly 114 ticks (3.8 seconds)");
+    }
+
+    /// tick_countdown must not underflow with large delta.
+    #[test]
+    fn tick_countdown_saturates_to_zero() {
+        let mut remaining = 10u32;
+        let done = tick_countdown(&mut remaining, 999);
+        assert!(done);
+        assert_eq!(remaining, 0);
     }
 }
