@@ -439,6 +439,70 @@ mod tests {
         assert!(b16 >= 2, "Vegetation index 16 should get blue boost at partial darkness, got {}", b16);
     }
 
+    // Helper: fade a palette of `n` all-black (0x000) entries with the given
+    // percentages and return the blue nibble of the entry at `idx`.
+    fn veg_blue(n: usize, idx: usize, r: i16, g: i16, b: i16) -> u16 {
+        let colors = vec![RGB4 { color: 0x000 }; n];
+        let palette = Palette { colors };
+        let result = fade_page(r, g, b, true, false, &palette);
+        result.colors[idx].color & 0x00F
+    }
+
+    /// SPEC §17: vegetation boost — green channel boundary g=49 (still +2)
+    /// and g=50 (first value of +1 range).
+    #[test]
+    fn test_veg_boost_green_boundary_49_vs_50() {
+        // Both use palette index 16 with a pure-black source so base b1==0.
+        assert_eq!(
+            veg_blue(25, 16, 50, 49, 50),
+            2,
+            "g=49 must give +2 blue (spec: 21–49 → +2)"
+        );
+        assert_eq!(
+            veg_blue(25, 16, 50, 50, 50),
+            1,
+            "g=50 must give +1 blue (spec: 50–74 → +1)"
+        );
+    }
+
+    /// SPEC §17: vegetation boost — green channel boundary g=74 (still +1)
+    /// and g=75 (first value with no boost).
+    #[test]
+    fn test_veg_boost_green_boundary_74_vs_75() {
+        assert_eq!(
+            veg_blue(25, 16, 50, 74, 50),
+            1,
+            "g=74 must give +1 blue (spec: 50–74 → +1)"
+        );
+        assert_eq!(
+            veg_blue(25, 16, 50, 75, 50),
+            0,
+            "g=75 must give no boost (above second range)"
+        );
+    }
+
+    /// SPEC §17: vegetation boost applies only to palette indices 16–24 (inclusive).
+    #[test]
+    fn test_veg_boost_index_boundary() {
+        // Use g=40 so we're firmly in the +2 range; 26 entries to cover 15–25.
+        let g = 40;
+        assert_eq!(veg_blue(26, 15, 50, g, 50), 0, "index 15 must NOT be boosted");
+        assert_eq!(veg_blue(26, 16, 50, g, 50), 2, "index 16 must be boosted +2");
+        assert_eq!(veg_blue(26, 24, 50, g, 50), 2, "index 24 must be boosted +2");
+        assert_eq!(veg_blue(26, 25, 50, g, 50), 0, "index 25 must NOT be boosted");
+    }
+
+    /// SPEC §17: vegetation boost is only active when limit=true (night mode).
+    #[test]
+    fn test_veg_boost_requires_limit_true() {
+        let colors = vec![RGB4 { color: 0x000 }; 25];
+        let palette = Palette { colors };
+        // g=40 would trigger +2 if limit=true, but limit=false disables it.
+        let result = fade_page(50, 40, 50, false, false, &palette);
+        let b = result.colors[16].color & 0x00F;
+        assert_eq!(b, 0, "No vegetation boost when limit=false (not night mode)");
+    }
+
     #[test]
     fn test_fade_page_light_timer_boosts_red() {
         // Color where red < green: 0x090 (r=0, g=9, b=0)
