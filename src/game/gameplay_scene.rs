@@ -1885,7 +1885,7 @@ impl GameplayScene {
                     NpcState::Dying => crate::game::actor::ActorState::Dying,
                     NpcState::Dead => crate::game::actor::ActorState::Dead,
                     NpcState::Sinking => crate::game::actor::ActorState::Sinking,
-                    NpcState::Still => crate::game::actor::ActorState::Still,
+                    NpcState::Still | NpcState::FrustA | NpcState::FrustB => crate::game::actor::ActorState::Still,
                 };
                 actor_idx += 1;
             }
@@ -3858,6 +3858,18 @@ impl GameplayScene {
                     // Default still: static frame (fmain.c:~1900 — diroffs[d] + 1)
                     frame_base + 1
                 }
+            }
+            NpcState::FrustA => {
+                // Scratching-head animation (SPEC §9.8, threshold 1: frust > 20).
+                // AMBIGUITY: spec names animation "scratching-head" but gives no sprite index.
+                // FRUST_ANIM_A_FRAME (32) used as placeholder; cycles 4 frames at 4-tick rate.
+                use crate::game::npc::FRUST_ANIM_A_FRAME;
+                FRUST_ANIM_A_FRAME + ((cycle as usize / 4) & 3)
+            }
+            NpcState::FrustB => {
+                // Special animation index 40 (SPEC §9.8, threshold 2: frust > 40).
+                use crate::game::npc::FRUST_ANIM_B_FRAME;
+                FRUST_ANIM_B_FRAME
             }
             // Dying/Dead/Sinking/Fighting/Shooting: static base frame
             _ => frame_base,
