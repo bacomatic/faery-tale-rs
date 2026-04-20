@@ -132,6 +132,14 @@ pub struct DebugSnapshot {
     pub totem_timer: u16,
     /// Freeze (Gold Ring) timer tick count.
     pub freeze_timer: u16,
+
+    // ── Actor Watch (DBG-LAYOUT-06) ────────────────────────────────────
+    /// Raft (slot 1) world coords when active+visible, otherwise `None`.
+    pub raft_xy: Option<(u16, u16)>,
+    /// Count of active projectiles (missile list), spec §Actor Watch.
+    pub missile_count: u8,
+    /// Count of visible ground-item actors (slots 7..=19).
+    pub item_count: u8,
 }
 
 /// Per-actor snapshot for the Actor Watch panel and `/actors` dump.
@@ -577,11 +585,12 @@ impl DebugConsole {
         let _ = self.terminal.draw(|f| {
             let area = f.area();
 
-            // Layout: status header (fixed 6 lines) | log (fills) | prompt (3 lines)
+            // Layout: status header (6) | actor-watch summary (1) | log (fills) | prompt (3)
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(6),
+                    Constraint::Length(1),
                     Constraint::Min(3),
                     Constraint::Length(3),
                 ])
@@ -734,8 +743,21 @@ impl DebugConsole {
                 .block(Block::default().borders(Borders::ALL).title(" Visual Effects "));
             f.render_widget(vfx_widget, status_chunks[2]);
 
+            // ── Actor Watch (collapsed summary, DBG-LAYOUT-06) ─────────────
+            let raft_str = match status.raft_xy {
+                Some((x, y)) => format!("Raft:({},{})", x, y),
+                None => "Raft:—".to_string(),
+            };
+            let watch_title = format!(
+                " Actors [▶]  {}  Msls:{} Items:{} ",
+                raft_str, status.missile_count, status.item_count,
+            );
+            let watch_widget = Paragraph::new("")
+                .block(Block::default().borders(Borders::TOP).title(watch_title));
+            f.render_widget(watch_widget, chunks[1]);
+
             // ── Log ───────────────────────────────────────────────────────
-            let log_height = chunks[1].height.saturating_sub(2) as usize; // subtract borders
+            let log_height = chunks[2].height.saturating_sub(2) as usize; // subtract borders
             let total = log_lines.len();
             // Compute scroll offset (from top) for ratatui's .scroll((top, 0))
             let top_offset = if total <= log_height {
@@ -749,13 +771,13 @@ impl DebugConsole {
             let log_widget = Paragraph::new(log_text)
                 .block(Block::default().borders(Borders::ALL).title(" Log  [PgUp/PgDn/Home/End to scroll] "))
                 .scroll((top_offset as u16, 0));
-            f.render_widget(log_widget, chunks[1]);
+            f.render_widget(log_widget, chunks[2]);
 
             // ── Prompt ────────────────────────────────────────────────────
             let prompt_widget = Paragraph::new(input.as_str())
                 .block(Block::default().borders(Borders::ALL).title(" Command "))
                 .wrap(Wrap { trim: false });
-            f.render_widget(prompt_widget, chunks[2]);
+            f.render_widget(prompt_widget, chunks[3]);
         });
     }
 

@@ -604,6 +604,25 @@ pub fn main() -> Result<(), String> {
                     jewel_timer: gs.state.light_timer.max(0) as u16,
                     totem_timer: 0,
                     freeze_timer: gs.state.freeze_timer.max(0) as u16,
+                    raft_xy: {
+                        use crate::game::actor::ActorKind;
+                        gs.state.actors.get(1).and_then(|a| {
+                            if a.is_active() && matches!(a.kind, ActorKind::Raft) {
+                                Some((a.abs_x, a.abs_y))
+                            } else {
+                                None
+                            }
+                        })
+                    },
+                    missile_count: gs.missiles.iter().filter(|m| m.active).count().min(255) as u8,
+                    item_count: {
+                        use crate::game::actor::ActorKind;
+                        gs.state.actors.iter().enumerate()
+                            .filter(|(i, a)| *i >= 7 && *i <= 19 && a.is_active()
+                                && matches!(a.kind, ActorKind::Object))
+                            .count()
+                            .min(255) as u8
+                    },
                 };
                 dc.update_status(status);
             } else {
