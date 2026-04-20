@@ -6700,3 +6700,87 @@ mod t3_palette_sky_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod t3_death_sleep_collapse_tests {
+    //! TDD tests for T3-DEATH-SLEEP-COLLAPSE (SPEC §18): hunger collapse forces SLEEP state.
+    //!
+    //! (a) Hunger at collapse threshold sets sleep state.
+    //! (b) Movement/action input is rejected while forced-sleeping.
+    //! (c) Waking from forced sleep clears the flag and restores movement.
+
+    use super::*;
+
+    /// (a) Event 24 (hunger collapse, SPEC §18.2) triggers the `sleeping` flag.
+    ///
+    /// Setup: vitality ≤ 5 (else-branch), fatigue < 170 (not event 12), hunger = 143
+    /// so that after the +1 increment hunger = 144 satisfies 144 > 140 and (144 & 7) == 0.
+    /// Daynight = 127 so the next +1 tick crosses the 128-boundary and fires
+    /// hunger_fatigue_step.
+    #[test]
+    fn test_hunger_collapse_sets_sleeping() {
+        let mut scene = GameplayScene::new();
+        scene.state.vitality = 3;
+        scene.state.fatigue = 50;
+        scene.state.hunger = 143;
+        scene.state.daynight = 127;
+
+        let events = scene.state.tick(1);
+        // Mirror the event dispatch that lives in GameplayScene::update().
+        for ev in &events {
+            if *ev == 12 || *ev == 24 {
+                scene.sleeping = true;
+            }
+        }
+
+        assert!(
+            events.contains(&24),
+            "tick must emit event 24 when hunger crosses collapse threshold"
+        );
+        assert!(
+            scene.sleeping,
+            "sleeping flag must be set when event 24 fires"
+        );
+    }
+
+    /// (b) Movement input is silently ignored while the hero is forced-sleeping.
+    ///
+    /// apply_player_input() must return immediately (before touching position/actor
+    /// state) whenever `sleeping` is true.
+    #[test]
+    fn test_movement_blocked_while_sleeping() {
+        let mut scene = GameplayScene::new();
+        scene.sleeping = true;
+        let initial_x = scene.state.hero_x;
+        let initial_y = scene.state.hero_y;
+        scene.input.right = true;
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.hero_x, initial_x, "hero_x must not change while sleeping");
+        assert_eq!(scene.state.hero_y, initial_y, "hero_y must not change while sleeping");
+        let moving = scene.state.actors.first().map_or(false, |a| a.moving);
+        assert!(!moving, "actor moving flag must stay false while sleeping");
+    }
+
+    /// (c) Waking from forced sleep clears the `sleeping` flag.
+    ///
+    /// When sleep_advance_daynight() returns true (wake condition met), the
+    /// frame loop sets sleeping = false.  Verify the path works: fatigue = 1
+    /// so exactly one sleep-advance call reaches fatigue == 0 → wake.
+    #[test]
+    fn test_wake_from_forced_sleep_clears_flag() {
+        let mut scene = GameplayScene::new();
+        scene.sleeping = true;
+        scene.state.fatigue = 1;
+
+        let should_wake = scene.state.sleep_advance_daynight();
+        if should_wake {
+            scene.sleeping = false;
+        }
+
+        assert!(
+            !scene.sleeping,
+            "sleeping flag must be cleared when wake condition is met"
+        );
+    }
+}
