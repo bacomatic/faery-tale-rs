@@ -71,10 +71,10 @@ DebugSnapshot {
     freeze_timer: u16,              // Gold Ring time-stop remaining
     is_paused: bool,                // game loop paused by debug command
 
-    // Actor slots (for `actors` command and `watch` feature)
+    // Actor slots (for `/actors` command and `/watch` feature)
     actors: Vec<ActorSnapshot>,     // up to 20 active slots
 
-    // Quest state (for `quest` command)
+    // Quest state (for `/quest` command)
     princess_captive: bool,
     princess_rescues: u16,
     statues_collected: u8,
@@ -201,47 +201,47 @@ Empty slots always display as `#N —` to maintain stable row positions. This pr
 
 ## Command System
 
-All commands are typed at the `> ` prompt and executed on Enter. Commands are case-insensitive, whitespace-trimmed.
+All commands are typed at the `> ` prompt and executed on Enter. Commands are case-insensitive, whitespace-trimmed, and **must be prefixed with `/`** (e.g. `/stats`, `/tp 200 150`). Any input that does not begin with `/` is ignored with an "Unknown command" message so the prompt cannot be mistaken for a chat line.
 
 ### Inspection Commands
 
 | Command | Output |
 |---------|--------|
-| `stats` | Full hero stat dump to log (all fields from Hero panel + computed values) |
-| `actors` | Table of all active actor slots: slot, type, race, state, goal, tactic, HP, position |
-| `quest` | Quest progress: princess state, statue count, writ, talisman, key inventory |
-| `inventory` | Full stuff[35] array grouped by category (weapons, magic, keys, consumables) |
-| `timers` | All active timers: daynight, light_timer, secret_timer, freeze_timer, hunger, fatigue |
-| `doors` | Door state: locked door list, keys held, recently activated door |
-| `extent` | Current extent zone: matched index, etype, parameters (v1/v2/v3) |
-| `help` | List all commands with brief descriptions |
-| `help <cmd>` | Detailed help for one command with usage examples |
+| `/stats` | Full hero stat dump to log (all fields from Hero panel + computed values) |
+| `/actors` | Table of all active actor slots: slot, type, race, state, goal, tactic, HP, position |
+| `/quest` | Quest progress: princess state, statue count, writ, talisman, key inventory |
+| `/inventory` | Full stuff[35] array grouped by category (weapons, magic, keys, consumables) |
+| `/timers` | All active timers: daynight, light_timer, secret_timer, freeze_timer, hunger, fatigue |
+| `/doors` | Door state: locked door list, keys held, recently activated door |
+| `/extent` | Current extent zone: matched index, etype, parameters (v1/v2/v3) |
+| `/terrain` | Dump terrain lookup chain under the hero's feet (collision debug) |
+| `/adf <block> [count]` | Hex-dump one or more ADF data blocks to the log |
+| `/help` | List all commands with brief descriptions |
+| `/help <cmd>` | Detailed help for one command with usage examples (prefix optional in the argument) |
 
 ### Mutation Commands
 
 | Command | Effect | Validation |
 |---------|--------|------------|
-| `set vitality <n>` | Set hero HP | Clamped to 0–max_vitality |
-| `set brave <n>` | Set brave stat | Clamped to 0–255 |
-| `set luck <n>` | Set luck stat | Clamped to 0–255 |
-| `set kind <n>` | Set kind stat | Clamped to 0–255 |
-| `set wealth <n>` | Set gold | u16 range |
-| `set hunger <n>` | Set hunger counter | 0–255 |
-| `set fatigue <n>` | Set fatigue counter | 0–255 |
-| `set daynight <n>` | Set time-of-day tick | 0–23999 |
-| `set weapon <n>` | Equip weapon | 0–5 (none/dirk/mace/sword/bow/wand) |
-| `give <item>` | Add item to inventory | By name: `give sword`, `give green_jewel`, `give gold_key` |
-| `take <item>` | Remove item from inventory | Same item names as `give` |
-| `teleport <x> <y>` | Move hero to world coordinates | 0–32767 range for each |
-| `region <n>` | Change to region | 0–9 |
-| `heal` | Set vitality to max, hunger and fatigue to 0 | Shortcut |
-| `kill <slot>` | Set actor vitality to 0 | Slot 1–19 (not hero) |
-| `brother <n>` | Switch active brother | 0=Julian, 1=Phillip, 2=Kevin |
-| `cheat` | Toggle `cheat1` debug-key mode on/off | Reports new state; see SPEC §25.9 |
-| `cheat on` / `cheat off` | Explicitly set `cheat1` state | — |
-| `heropack` | Batch equip (see below) | — |
+| `/stat <name> <n>` | Set or adjust a hero stat. Names: `vit`, `brv`, `lck`, `knd`, `wlt`, `hgr`, `ftg`. Values accept `+N` / `-N` for relative adjustments. | Each stat clamped to its documented range (vitality to 0–max, others to 0–255 or u16 for wealth) |
+| `/inv <slot> <n>` | Set or adjust inventory slot 0–34. `+N`/`-N` for relative. | Slot range 0–34; value clamped to slot's max |
+| `/give <item>` | Add item to inventory by name | See Item Name Reference |
+| `/take <item>` | Remove item from inventory by name | Same names as `/give` |
+| `/tp <x> <y>` | Teleport hero to world coordinates | 0–32767 each |
+| `/tp safe` | Teleport hero to nearest safe (non-water, non-fire) tile | — |
+| `/tp ring <N>` | Teleport hero to the ring of stones in region N | N = 0–9 |
+| `/region <n>` | Change to region | 0–9 |
+| `/max` | Max all stats (vitality, brave, luck, kind, wealth; zero hunger/fatigue) | Shortcut |
+| `/heal` | Set vitality to max_vitality; zero hunger and fatigue | Shortcut |
+| `/die` | Set hero vitality to 0 (triggers death) | — |
+| `/kill` | Kill every active enemy NPC on screen (single pass) | — |
+| `/kill <slot>` | Set one actor's vitality to 0 | Slot 1–19 (not hero) |
+| `/brother <name>` | Switch active brother | `julian` / `phillip` / `kevin` (or 0 / 1 / 2) |
+| `/cheat` | Toggle `cheat1` debug-key mode on/off | Reports new state; see SPEC §25.9 |
+| `/cheat on` / `/cheat off` | Explicitly set `cheat1` state | — |
+| `/pack` | Batch equip (see below) | — |
 
-#### heropack Command
+#### /pack Command
 
 Grants a full test loadout in one command:
 
@@ -272,13 +272,56 @@ Grants a full test loadout in one command:
 | stuff[23] | Rose | 1 |
 | stuff[24] | Apple | 255 |
 
-Also calls `heal` (max vitality, zero hunger/fatigue). Each item granted is logged individually.
+Also calls `/heal` (max vitality, zero hunger/fatigue). Each item granted is logged individually.
+
+### Magic, Carrier, and Time Commands
+
+These are modern debug affordances not present in the original game; they expose internal state directly so the TUI can exercise subsystems without scripted setup.
+
+| Command | Effect |
+|---------|--------|
+| `/god` | Toggle all god-mode flags on/off |
+| `/god <flag>` | Toggle a specific flag: `noclip`, `invincible`, `ohk` (one-hit kill), `reach` (infinite weapon reach), `all`, `off` |
+| `/noclip` | Shortcut for `/god noclip` |
+| `/magic <effect>` | Sticky-enable a magic effect that otherwise times out: `light` (Green Jewel), `secret` (Bird Totem), `freeze` (Gold Ring). Toggles off when applied a second time. |
+| `/swan` | Summon the swan carrier at the hero's position |
+| `/time <HH:MM>` | Jump the daynight clock to a specific time |
+| `/time <period>` | Jump to a named time period: `dawn`, `noon`, `dusk`, `midnight` |
+| `/time hold` | Freeze the daynight clock (time-of-day stops advancing; gameplay continues) |
+| `/time free` | Resume the daynight clock |
+| `/save <on\|off>` | Enable or disable autosave |
+| `/fx <effect>` | Trigger a one-shot visual effect: `witch`, `teleport`, `fadeout`, `fadein` |
+
+Note: `/time hold` only freezes the day-night tick counter. It does **not** pause the game loop or actor updates — for that, see the Flow Control commands below.
+
+### Encounter & Item Spawning Commands
+
+Helpers for testing combat, AI, and item behavior without walking to a spawn zone.
+
+| Command | Effect |
+|---------|--------|
+| `/encounter` | Force a regional encounter of four enemies of the region's default type |
+| `/encounter <type>` | Spawn one enemy of the named type: `orc`, `ghost`, `skeleton`, `wraith`, `dragon`, `snake`, `swan`, `horse` |
+| `/encounter clear` | Deactivate all active NPCs (enemies, setfigs, carriers) |
+| `/items` | Scatter all 30 safe items around the hero (excludes talisman) |
+| `/items <count>` | Scatter N random items (no talisman) |
+| `/items <name\|id>` | Drop one item by name or inventory index (0–30). `/items talisman` is the only way to drop the talisman (which ends the game on pickup). |
+| `/items <count> <name>` | Drop N of a named item |
+
+### Music Commands
+
+| Command | Effect |
+|---------|--------|
+| `/songs` | List available song groups |
+| `/songs play <N>` | Play song index N |
+| `/songs stop` | Stop music |
+| `/songs cave <on\|off>` | Toggle cave music overlay |
 
 ### Actor Watch Commands
 
 | Command | Effect |
 |---------|--------|
-| `watch` | Toggle the actor watch panel between collapsed and expanded (same as Ctrl+W) |
+| `/watch` | Toggle the actor watch panel between collapsed and expanded (same as Ctrl+W) |
 
 The actor watch panel is always visible. In collapsed mode it shows a one-line summary of raft position, missile count, and item count. In expanded mode it additionally shows detail rows for slots 2–6 (setfig and enemies/carriers). Updates at the same 5 Hz rate as the status panels.
 
@@ -286,21 +329,21 @@ The actor watch panel is always visible. In collapsed mode it shows a one-line s
 
 | Command | Effect |
 |---------|--------|
-| `filter` | Open interactive filter: shows all categories with [ON]/[OFF], Tab cycles, Space toggles, Enter confirms |
-| `filter +cat -cat` | Inline toggle: enable/disable specific categories (e.g. `filter +combat -ai`) |
-| `filter reset` | Reset to defaults (noisy categories off) |
-| `filter all` | Enable all categories |
-| `filter none` | Disable all categories |
+| `/filter` | Open interactive filter: shows all categories with [ON]/[OFF], Tab cycles, Space toggles, Enter confirms |
+| `/filter +cat -cat` | Inline toggle: enable/disable specific categories (e.g. `/filter +combat -ai`) |
+| `/filter reset` | Reset to defaults (noisy categories off) |
+| `/filter all` | Enable all categories |
+| `/filter none` | Disable all categories |
 
 ### Flow Control Commands
 
 | Command | Effect | Shortcut |
 |---------|--------|----------|
-| `pause` | Freeze game loop | Ctrl+P |
-| `resume` | Unfreeze game loop | Ctrl+P |
-| `step` | Advance exactly 1 frame (while paused) | — |
-| `step <n>` | Advance n frames (while paused) | — |
-| `clear` | Clear the log buffer | — |
+| `/pause` | Freeze game loop (all actor and physics updates; daynight clock continues unless also held with `/time hold`) | Ctrl+P |
+| `/resume` | Unfreeze game loop | Ctrl+P |
+| `/step` | Advance exactly 1 frame (while paused) | — |
+| `/step <n>` | Advance n frames (while paused) | — |
+| `/clear` (aliases: `/cls`) | Clear the log buffer | — |
 
 ## Log Categories
 
@@ -353,7 +396,7 @@ All other input goes to the command prompt.
 1. If bridge is active: build `DebugSnapshot` from current game state.
 2. Send snapshot via `try_send`; if TUI is behind, drop the frame (bounded channel of 2).
 3. Drain all pending `DebugCommand`s and apply them (set stats, teleport, pause, etc.).
-4. If pause is active: enter a tight poll loop — keep draining commands and sending snapshots but skip game logic until `resume` or `step`.
+4. If pause is active: enter a tight poll loop — keep draining commands and sending snapshots but skip game logic until `/resume` or `/step`.
 
 ### TUI Thread Event Loop
 
@@ -392,7 +435,7 @@ No other new dependencies required. Channel communication uses `std::sync::mpsc`
 
 ## Item Name Reference
 
-Valid item names for `give` and `take` commands, mapped to inventory indices:
+Valid item names for the `/give`, `/take`, and `/items` commands, mapped to inventory indices:
 
 | Name | stuff[] Index | Notes |
 |------|---------------|-------|
