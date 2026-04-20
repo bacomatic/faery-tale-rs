@@ -96,6 +96,8 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> Result<&'static str,
                 // Preserve sub-sector offset, change sector
                 state.hero_x = ((dx as u16) << 8) | (state.hero_x & 255);
                 state.hero_y = ((dy as u16) << 8) | (state.hero_y & 255);
+                // SPEC §21.7: carrier teleports with the hero
+                state.sync_carrier_to_hero();
                 "The stone ring transports you!"
             } else {
                 return Err("The stone ring glows but nothing happens here.");
@@ -391,5 +393,106 @@ mod tests {
         assert!(result.is_ok(), "Ring should work on raft (riding=1)");
         assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
         assert_eq!(state.stuff()[ITEM_RING], 0, "Charge should be consumed");
+    }
+
+    // ── T3-CARRY-STONE-TELE: stone circle carrier teleport (SPEC §21.7) ──────
+
+    /// Build a state positioned at STONE_RINGS[0] = (54,43), sector=144, centred.
+    /// hero_x = (54<<8)|85, hero_y = (43<<8)|64.  facing=0 → dest ring 1 = (71,77).
+    fn stone_ring_state() -> GameState {
+        let mut state = GameState::new();
+        state.hero_x = (54u16 << 8) | 85;  // sector 54, centred (85/85=1)
+        state.hero_y = (43u16 << 8) | 64;  // sector 43, centred (64/64=1)
+        state.hero_sector = STONE_RING_SECTOR;
+        state.facing = 0;
+        state.stuff_mut()[ITEM_STONE_RING] = 1;
+        state
+    }
+
+    #[test]
+    fn test_stone_ring_teleports_hero() {
+        // Baseline: confirm hero position changes on stone ring use.
+        let mut state = stone_ring_state();
+        let result = use_magic(&mut state, ITEM_STONE_RING);
+        assert!(result.is_ok(), "Stone ring should succeed");
+        // Dest ring 1 = (71, 77); sub-sector preserved (85 / 64).
+        assert_eq!(state.hero_x >> 8, 71, "hero_x sector after teleport");
+        assert_eq!(state.hero_y >> 8, 77, "hero_y sector after teleport");
+    }
+
+    #[test]
+    fn test_stone_ring_teleports_turtle_carrier() {
+        // T3-CARRY-STONE-TELE (a): hero on turtle → turtle position == hero new pos.
+        let mut state = stone_ring_state();
+        state.on_raft = true;
+        state.wcarry = 3; // turtle in actor slot 3
+        // Place turtle at origin to verify it moves.
+        state.actors[3].abs_x = 0;
+        state.actors[3].abs_y = 0;
+
+        let result = use_magic(&mut state, ITEM_STONE_RING);
+        assert!(result.is_ok());
+        assert_eq!(state.actors[3].abs_x, state.hero_x,
+            "turtle abs_x must equal hero_x after stone ring teleport");
+        assert_eq!(state.actors[3].abs_y, state.hero_y,
+            "turtle abs_y must equal hero_y after stone ring teleport");
+        // Mount state preserved.
+        assert!(state.on_raft, "on_raft must remain true after teleport");
+        assert_eq!(state.wcarry, 3, "wcarry must remain 3 after teleport");
+    }
+
+    #[test]
+    fn test_stone_ring_teleports_raft_carrier() {
+        // T3-CARRY-STONE-TELE: hero on raft (wcarry=1) → raft position == hero new pos.
+        let mut state = stone_ring_state();
+        state.on_raft = true;
+        state.wcarry = 1; // raft in actor slot 1
+        state.actors[1].abs_x = 0;
+        state.actors[1].abs_y = 0;
+
+        let result = use_magic(&mut state, ITEM_STONE_RING);
+        assert!(result.is_ok());
+        assert_eq!(state.actors[1].abs_x, state.hero_x,
+            "raft abs_x must equal hero_x after teleport");
+        assert_eq!(state.actors[1].abs_y, state.hero_y,
+            "raft abs_y must equal hero_y after teleport");
+        assert!(state.on_raft, "on_raft preserved");
+        assert_eq!(state.wcarry, 1, "wcarry preserved");
+    }
+
+    #[test]
+    fn test_stone_ring_teleports_swan_carrier() {
+        // T3-CARRY-STONE-TELE: hero flying on swan → swan position == hero new pos.
+        let mut state = stone_ring_state();
+        state.flying = 1; // swan flight active
+        state.actors[3].abs_x = 0;
+        state.actors[3].abs_y = 0;
+
+        let result = use_magic(&mut state, ITEM_STONE_RING);
+        assert!(result.is_ok());
+        assert_eq!(state.actors[3].abs_x, state.hero_x,
+            "swan abs_x must equal hero_x after teleport");
+        assert_eq!(state.actors[3].abs_y, state.hero_y,
+            "swan abs_y must equal hero_y after teleport");
+        // Mount state preserved.
+        assert_eq!(state.flying, 1, "flying flag preserved after teleport");
+    }
+
+    #[test]
+    fn test_stone_ring_unmounted_no_carrier_move() {
+        // T3-CARRY-STONE-TELE (b): unmounted hero → carrier actors unaffected.
+        let mut state = stone_ring_state();
+        // No mount: on_raft=false, flying=0, wcarry=0.
+        state.actors[1].abs_x = 9999;
+        state.actors[1].abs_y = 8888;
+        state.actors[3].abs_x = 7777;
+        state.actors[3].abs_y = 6666;
+
+        let result = use_magic(&mut state, ITEM_STONE_RING);
+        assert!(result.is_ok());
+        assert_eq!(state.actors[1].abs_x, 9999, "actors[1] x unaffected when unmounted");
+        assert_eq!(state.actors[1].abs_y, 8888, "actors[1] y unaffected when unmounted");
+        assert_eq!(state.actors[3].abs_x, 7777, "actors[3] x unaffected when unmounted");
+        assert_eq!(state.actors[3].abs_y, 6666, "actors[3] y unaffected when unmounted");
     }
 }
