@@ -3759,10 +3759,97 @@ impl GameplayScene {
                 self.dlog(format!("cheat1 = {}", if enabled { "on" } else { "off" }));
             }
             TeleportNamedLocation { name } => {
+                let needle = name.to_ascii_lowercase();
+                let matches: Vec<(usize, String, u16, u16, u16, u16)> = self
+                    .zones
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, z)| z.label.to_ascii_lowercase().contains(&needle))
+                    .map(|(i, z)| (i, z.label.clone(), z.x1, z.y1, z.x2, z.y2))
+                    .collect();
+                match matches.len() {
+                    0 => self.dlog(format!("TeleportNamedLocation: no zone matches '{}'", name)),
+                    1 => {
+                        let (idx, label, x1, y1, x2, y2) = matches.into_iter().next().unwrap();
+                        let cx = (x1 as u32 + x2 as u32) / 2;
+                        let cy = (y1 as u32 + y2 as u32) / 2;
+                        self.state.hero_x = cx.min(0x7FFF) as u16;
+                        self.state.hero_y = cy.min(0x7FFF) as u16;
+                        self.snap_camera_to_hero();
+                        self.dlog(format!(
+                            "Teleported to '{}' (zone {}, center {},{})",
+                            label, idx, self.state.hero_x, self.state.hero_y
+                        ));
+                    }
+                    n => {
+                        self.dlog(format!(
+                            "TeleportNamedLocation: '{}' is ambiguous ({} matches):",
+                            name, n
+                        ));
+                        for (i, label, _, _, _, _) in matches.into_iter().take(8) {
+                            self.dlog(format!("  [{}] {}", i, label));
+                        }
+                    }
+                }
+            }
+            QueryDoors => {
+                let keys: Vec<u8> = (16..=21)
+                    .map(|i| self.state.stuff().get(i).copied().unwrap_or(0))
+                    .collect();
+                let total = self.doors.len();
+                let opened = self.opened_doors.len();
+                let region = self.state.region_num;
+                let rows: Vec<(usize, u8, u16, u16, u8, u16, u16, crate::game::doors::KeyReq)> =
+                    self.doors.iter().enumerate()
+                        .filter(|(_, d)| d.src_region == region)
+                        .map(|(i, d)| (i, d.door_type, d.src_x, d.src_y,
+                                        d.dst_region, d.dst_x, d.dst_y,
+                                        crate::game::doors::key_req(d.door_type)))
+                        .collect();
+                self.dlog(format!("── Doors ── total: {}", total));
                 self.dlog(format!(
-                    "TeleportNamedLocation: '{}' (named-extent lookup not yet wired)",
-                    name
+                    "  Keys held (slots 16-21): gold={} silver={} ruby={} skull={} iron={} crystal={}",
+                    keys[0], keys[1], keys[2], keys[3], keys[4], keys[5]
                 ));
+                self.dlog(format!("  Opened door tiles: {}", opened));
+                if rows.is_empty() {
+                    self.dlog(format!("  (no doors in current region {})", region));
+                } else {
+                    let shown = rows.len().min(20);
+                    for (i, dt, sx, sy, dr, dx, dy, kr) in rows.iter().take(20) {
+                        self.dlog(format!(
+                            "  [{}] type={} at ({},{}) -> r{}:({},{}) req={:?}",
+                            i, dt, sx, sy, dr, dx, dy, kr
+                        ));
+                    }
+                    if rows.len() > shown {
+                        self.dlog("  ... (truncated)".to_string());
+                    }
+                }
+            }
+            QueryExtent => {
+                let x = self.state.hero_x;
+                let y = self.state.hero_y;
+                match crate::game::zones::find_zone(&self.zones, x, y) {
+                    None => self.dlog(format!(
+                        "── Extent ── hero at ({},{}): no matching zone", x, y
+                    )),
+                    Some(idx) => {
+                        let (label, etype, x1, y1, x2, y2, v1, v2, v3) = {
+                            let z = &self.zones[idx];
+                            (z.label.clone(), z.etype, z.x1, z.y1, z.x2, z.y2,
+                             z.v1, z.v2, z.v3)
+                        };
+                        self.dlog(format!("── Extent ── hero at ({},{})", x, y));
+                        self.dlog(format!(
+                            "  [{}] '{}' etype={} ({:?})  bounds=({},{})-({},{})",
+                            idx, label, etype,
+                            crate::game::zones::ZoneType::from_etype(etype),
+                            x1, y1, x2, y2
+                        ));
+                        self.dlog(format!("  v1={}  v2={}  v3={}", v1, v2, v3));
+                    }
+                }
             }
         }
     }

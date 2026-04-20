@@ -65,4 +65,8 @@ pub enum DebugCommand {
     SetCheat1 { enabled: bool },
     /// Teleport hero to the named extent's walkable center.
     TeleportNamedLocation { name: String },
+    /// Dump door state to the debug log.
+    QueryDoors,
+    /// Dump the extent zone under the hero's feet to the debug log.
+    QueryExtent,
 }
