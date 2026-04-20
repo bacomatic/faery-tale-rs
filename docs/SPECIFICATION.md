@@ -3614,7 +3614,11 @@ Two 48×24 pixel bitmaps as raw bitplane data:
 - `_hinor`: base compass (all directions normal)
 - `_hivar`: highlighted direction segments
 
-Rendered on `bm_text` at (567, 15). Only bitplane 2 differs. Direction regions: `comptable[10]` — 8 cardinal/ordinal rectangles + 2 null entries.
+Rendered on `bm_text` at (567, 15). Only bitplane 2 differs. Direction regions: `comptable[10]` — 8 cardinal/ordinal rectangles at indices 0–7 plus **2 null entries at indices 8 and 9** used to render "no highlight".
+
+**Highlight source (behavioral requirement).** The highlighted wedge is driven by the **resolved input direction this tick** (keyboard / joystick / mouse-click), not by the player's persistent `facing` value. The resolved direction uses the same `com2[9]` table as movement (§9.1) and takes one of the values 0–7 (NW, N, NE, E, SE, S, SW, W) or **9 (no input this tick)**. When the value is 9, the comptable lookup hits a null region and only `_hinor` is drawn — i.e. **no wedge is highlighted while the player is idle**. `drawcompass()` is invoked only when the resolved direction changes (`oldir` → new), so the base bitmap is not redundantly re-blitted every frame.
+
+Player `facing` is updated from the resolved direction only when the direction is 0–7; when the direction is 9, `facing` retains its last value so the sprite still faces the last-walked direction, but the compass highlight clears.
 
 ### 25.8 Stats & HUD
 
