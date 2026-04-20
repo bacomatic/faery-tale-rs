@@ -92,6 +92,33 @@ pub struct DebugLogEntry {
     pub text: String,
 }
 
+/// Constructs a [`DebugLogEntry`] with the given category and formatted message.
+///
+/// The `timestamp_ticks` field is left at `0`; callers that care about timing
+/// should overwrite it at push time (the debug console is responsible for the
+/// authoritative tick stamp).
+///
+/// # Examples
+///
+/// ```ignore
+/// use crate::debug_log;
+/// let dmg = 7;
+/// let entry = debug_log!(Combat, "hero dealt {} dmg", dmg);
+/// assert_eq!(entry.text, "hero dealt 7 dmg");
+/// let entry = debug_log!(General, "paused");
+/// assert_eq!(entry.text, "paused");
+/// ```
+#[macro_export]
+macro_rules! debug_log {
+    ($cat:ident, $fmt:expr $(, $args:expr)* $(,)?) => {
+        $crate::game::debug_log::DebugLogEntry {
+            category: $crate::game::debug_log::LogCategory::$cat,
+            timestamp_ticks: 0,
+            text: format!($fmt $(, $args)*),
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +203,36 @@ mod tests {
         assert_eq!(LogCategory::ALL[10], LogCategory::Rendering);
         assert_eq!(LogCategory::ALL[11], LogCategory::Animation);
         assert_eq!(LogCategory::ALL[12], LogCategory::Time);
+    }
+
+    #[test]
+    fn test_debug_log_macro_no_format_args() {
+        let entry = crate::debug_log!(General, "paused");
+        assert_eq!(entry.category, LogCategory::General);
+        assert_eq!(entry.text, "paused");
+        assert_eq!(entry.timestamp_ticks, 0);
+    }
+
+    #[test]
+    fn test_debug_log_macro_with_format_args() {
+        let dmg = 7;
+        let entry = crate::debug_log!(Combat, "hero dealt {} dmg", dmg);
+        assert_eq!(entry.category, LogCategory::Combat);
+        assert_eq!(entry.text, "hero dealt 7 dmg");
+    }
+
+    #[test]
+    fn test_debug_log_macro_multiple_format_args() {
+        let entry = crate::debug_log!(Quest, "{} of {} complete", 3, 10);
+        assert_eq!(entry.category, LogCategory::Quest);
+        assert_eq!(entry.text, "3 of 10 complete");
+    }
+
+    #[test]
+    fn test_debug_log_macro_trailing_comma() {
+        let name = "goblin";
+        let entry = crate::debug_log!(Encounter, "spawned {}", name,);
+        assert_eq!(entry.category, LogCategory::Encounter);
+        assert_eq!(entry.text, "spawned goblin");
     }
 }
