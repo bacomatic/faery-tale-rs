@@ -4201,12 +4201,8 @@ impl Scene for GameplayScene {
 
         // Sleep loop: advance time quickly, reduce fatigue, wake when rested
         if self.sleeping {
-            self.state.daynight = ((self.state.daynight as u32 + 63) % 24000) as u16;
-            self.state.fatigue = self.state.fatigue.saturating_sub(1);
-            let raw = self.state.daynight / 40;
-            self.state.lightlevel = if raw >= 300 { 600u16.saturating_sub(raw) } else { raw };
-            let can_wake_time = self.state.daynight >= 9000 && self.state.daynight < 10000;
-            if self.state.fatigue == 0 || (self.state.fatigue < 30 && can_wake_time) {
+            let should_wake = self.state.sleep_advance_daynight();
+            if should_wake {
                 self.sleeping = false;
             }
             self.render_by_viewstatus(canvas, resources);
