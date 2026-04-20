@@ -38,6 +38,8 @@ pub const RACE_SHOPKEEPER: u8 = 0x88;
 /// Beggar race code (from fmain.c do_option GIVE case: race 0x8d).
 pub const RACE_BEGGAR: u8 = 0x8d;
 pub const RACE_NECROMANCER: u8 = 9;
+/// Race 10: Woodcutter — Necromancer transforms to this on death (SPEC §15.7).
+pub const RACE_WOODCUTTER: u8 = 10;
 pub const RACE_WITCH: u8 = 0x89;
 pub const RACE_SPECTRE: u8 = 0x8a;
 pub const RACE_GHOST: u8 = 0x8b;
