@@ -3234,7 +3234,7 @@ Player can skip at multiple checkpoints.
 
 #### Riddle System (`copy_protect_junk`)
 
-Presents 3 random fill-in-the-blank questions from 8 question/answer pairs. Comparison is case-sensitive (uppercase required), prefix-only — the loop walks the correct answer until NUL terminator but does not verify length. After each correct answer, entry nulled to prevent repeats within session. Failure triggers `goto quit_all`.
+Presents 3 random fill-in-the-blank questions from 8 question/answer pairs. **Input is restricted to uppercase A–Z keystrokes** — the Amiga input loop converted every typed character to uppercase ASCII before appending to the answer buffer, so lowercase input was not representable. Comparison is therefore a byte-for-byte `==` of the uppercase input against the uppercase stored answer; there is no separate case-folding step. Comparison is **prefix-only**: the loop walks the stored answer until its NUL terminator and does not verify the typed length, so any uppercase prefix of the correct answer is accepted. After each correct answer, the entry is nulled to prevent repeats within the session. Failure triggers `goto quit_all`.
 
 First question effectively deterministic: RNG seed starts at 19837325, no `rand()` consumption before reaching `copy_protect_junk()`, first `rand8()` resolves to index 1 → "Make haste, but take...?"
 
