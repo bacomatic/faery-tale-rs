@@ -211,9 +211,8 @@ All commands are typed at the `> ` prompt and executed on Enter. Commands are ca
 | `/actors` | Table of all active actor slots: slot, type, race, state, goal, tactic, HP, position |
 | `/quest` | Quest progress: princess state, statue count, writ, talisman, key inventory |
 | `/inventory` | Full stuff[35] array grouped by category (weapons, magic, keys, consumables) |
-| `/timers` | All active timers: daynight, light_timer, secret_timer, freeze_timer, hunger, fatigue |
-| `/doors` | Door state: locked door list, keys held, recently activated door |
 | `/extent` | Current extent zone: matched index, etype, parameters (v1/v2/v3) |
+| `/doors` | Door state: locked door list, keys held, recently activated door |
 | `/terrain` | Dump terrain lookup chain under the hero's feet (collision debug) |
 | `/adf <block> [count]` | Hex-dump one or more ADF data blocks to the log |
 | `/help` | List all commands with brief descriptions |
