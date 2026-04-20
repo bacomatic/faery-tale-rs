@@ -237,6 +237,8 @@ All commands are typed at the `> ` prompt and executed on Enter. Commands are ca
 | `heal` | Set vitality to max, hunger and fatigue to 0 | Shortcut |
 | `kill <slot>` | Set actor vitality to 0 | Slot 1–19 (not hero) |
 | `brother <n>` | Switch active brother | 0=Julian, 1=Phillip, 2=Kevin |
+| `cheat` | Toggle `cheat1` debug-key mode on/off | Reports new state; see SPEC §25.9 |
+| `cheat on` / `cheat off` | Explicitly set `cheat1` state | — |
 | `heropack` | Batch equip (see below) | — |
 
 #### heropack Command

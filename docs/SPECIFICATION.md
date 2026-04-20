@@ -3687,7 +3687,7 @@ Menu display: `print_options()` on `rp_text2`. Two columns, 6 rows, each label 5
 
 ### 25.9 `cheat1` Debug Mode
 
-Persisted in save file (byte offset 18 of 80-byte block). Only enabled via hex-editing. Gates debug keys:
+In the original game, `cheat1` is persisted in the save file (byte offset 18 of the 80-byte block) and enabled only via hex-editing. When set, it gates the following debug keys:
 
 | Key | Effect |
 |-----|--------|
@@ -3695,11 +3695,14 @@ Persisted in save file (byte offset 18 of 80-byte block). Only enabled via hex-e
 | . | Add 3 to random `stuff[]` entry (range 0–30) |
 | R | Call `rescue()` |
 | = | Call `prq(2)` |
-| Key 19 | Call `prq(3)` |
-| Key 18 | Advance `daynight` by 1000 |
-| Keys 1–4 | Teleport hero ±150 Y / ±280 X |
+| F9 | Advance `daynight` by 1000 |
+| F10 | Call `prq(3)` |
+| ↑ / ↓ | Teleport hero ±150 in Y |
+| ← / → | Teleport hero ±280 in X |
 
 Also gates map spell region restriction: when `cheat1 == 0`, map returns early if `region_num > 7`.
+
+**Port implementation:** The Rust port exposes `cheat1` via a debug-console toggle rather than requiring save-file hex-editing — see DEBUG_SPECIFICATION §"Mutation Commands" (`cheat` command). The gameplay effect of each key above is unchanged; only the enablement path differs.
 
 ---
 

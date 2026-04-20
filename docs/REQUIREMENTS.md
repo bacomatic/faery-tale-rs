@@ -778,7 +778,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-UI-013 | Two fonts: Topaz 8 (ROM, for status/menu labels), Amber 9 (custom disk font from `fonts/Amber/9`, for scrolling messages and placard text). |
 | R-UI-014 | Text rendering: `print(str)` scrolls up 10px then renders at (TXMIN,42). `print_cont(str)` appends without scroll. Bounds: TXMIN=16, TYMIN=5, TXMAX=400, TYMAX=44. Colors: pen 10 fg, pen 11 bg, JAM2 mode. |
 | R-UI-015 | `extract()` template engine: word-wrap at 37 chars, `%` substitutes `datanames[brother-1]` (Julian/Phillip/Kevin), CR(13) forces line break, uses `mesbuf[200]` buffer. |
-| R-UI-016 | `cheat1` debug flag: persisted in save files (offset 18 of 80-byte block), only enabled via hex-editing. Gates debug keys (B=summon swan, '.'=random item, R=rescue, '='=prq(2), teleport keys) and map spell region restriction. |
+| R-UI-016 | `cheat1` debug flag: in the original, persisted in save files (offset 18 of 80-byte block), only enabled via hex-editing. Gates debug keys: B=summon swan (+Golden Lasso if already on Swan), '.'=random item, R=rescue, '='=prq(2), F9=advance daynight 1000, F10=prq(3), ↑/↓=teleport ±150 Y, ←/→=teleport ±280 X, and the map spell region restriction. The port enables it via a debug-console toggle (see DEBUG_SPECIFICATION) rather than save-file editing. |
 
 ### User Stories
 
