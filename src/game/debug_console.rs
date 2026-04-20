@@ -34,6 +34,7 @@ use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
 use crate::game::debug_command::{
     BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId,
 };
+use crate::game::debug_log::{DebugLogEntry, LogCategory};
 use crate::game::game_state::DayPhase;
 
 // ── Status snapshot ──────────────────────────────────────────────────────────
@@ -413,7 +414,7 @@ pub struct DebugConsole {
     terminal: Terminal<CrosstermBackend<Stdout>>,
 
     // Log output
-    log_lines: Vec<String>,
+    log_entries: Vec<DebugLogEntry>,
     /// If the user hasn't manually scrolled, we auto-scroll to the bottom.
     auto_scroll: bool,
     /// Scroll offset from the bottom (0 = show tail).
@@ -461,7 +462,7 @@ impl DebugConsole {
         let terminal = Terminal::new(backend)?;
         Ok(Self {
             terminal,
-            log_lines: Vec::new(),
+            log_entries: Vec::new(),
             auto_scroll: true,
             scroll_from_bottom: 0,
             input_buffer: String::new(),
@@ -484,21 +485,42 @@ impl DebugConsole {
         self.status = status;
     }
 
-    /// Push a message to the scrolling log.
-    pub fn log(&mut self, msg: impl Into<String>) {
-        let msg = msg.into();
-        // Handle embedded newlines so each line is separate
-        for line in msg.lines() {
-            self.log_lines.push(line.to_owned());
+    /// Push a categorized entry to the scrolling log. Primary API for gameplay-emitted logs.
+    ///
+    /// Splits embedded newlines into multiple entries (preserving category/timestamp),
+    /// enforces `MAX_LOG_LINES`, and preserves auto-scroll behavior.
+    pub fn log_entry(&mut self, entry: DebugLogEntry) {
+        for line in entry.text.split('\n') {
+            self.log_entries.push(DebugLogEntry {
+                category: entry.category,
+                timestamp_ticks: entry.timestamp_ticks,
+                text: line.to_owned(),
+            });
         }
-        if self.log_lines.len() > MAX_LOG_LINES {
-            let overflow = self.log_lines.len() - MAX_LOG_LINES;
-            self.log_lines.drain(..overflow);
+        if self.log_entries.len() > MAX_LOG_LINES {
+            let overflow = self.log_entries.len() - MAX_LOG_LINES;
+            self.log_entries.drain(..overflow);
         }
-        // If auto-scroll is on, keep offset at 0 (bottom)
         if self.auto_scroll {
             self.scroll_from_bottom = 0;
         }
+    }
+
+    /// Alias for [`log_entry`]; the intent is that the main loop drains
+    /// gameplay-emitted entries into the console via this method.
+    pub fn ingest(&mut self, entry: DebugLogEntry) {
+        self.log_entry(entry);
+    }
+
+    /// Push a plain-text message to the scrolling log. Compatibility wrapper
+    /// for call sites that produce user-facing command feedback; messages are
+    /// tagged as [`LogCategory::General`] with `timestamp_ticks = 0`.
+    pub fn log(&mut self, msg: impl Into<String>) {
+        self.log_entry(DebugLogEntry {
+            category: LogCategory::General,
+            timestamp_ticks: 0,
+            text: msg.into(),
+        });
     }
 
     /// Drain pending debug commands for the main loop to apply.
@@ -648,7 +670,7 @@ impl DebugConsole {
                     }
                     KeyCode::Home => {
                         self.auto_scroll = false;
-                        self.scroll_from_bottom = self.log_lines.len().saturating_sub(1);
+                        self.scroll_from_bottom = self.log_entries.len().saturating_sub(1);
                     }
                     KeyCode::End => {
                         self.scroll_from_bottom = 0;
@@ -672,7 +694,7 @@ impl DebugConsole {
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     pub fn render(&mut self) {
-        let log_lines = &self.log_lines;
+        let log_entries = &self.log_entries;
         let scroll_from_bottom = self.scroll_from_bottom;
         let input = format!("> {}", self.input_buffer);
         let status = &self.status;
@@ -898,7 +920,7 @@ impl DebugConsole {
 
             // ── Log ───────────────────────────────────────────────────────
             let log_height = chunks[2].height.saturating_sub(2) as usize; // subtract borders
-            let total = log_lines.len();
+            let total = log_entries.len();
             // Compute scroll offset (from top) for ratatui's .scroll((top, 0))
             let top_offset = if total <= log_height {
                 0
@@ -907,7 +929,10 @@ impl DebugConsole {
                 bottom_top.saturating_sub(scroll_from_bottom)
             };
 
-            let log_text: Vec<Line> = log_lines.iter().map(|l| Line::raw(l.as_str())).collect();
+            let log_text: Vec<Line> = log_entries
+                .iter()
+                .map(|e| Line::raw(format_log_entry(e)))
+                .collect();
             let log_widget = Paragraph::new(log_text)
                 .block(Block::default().borders(Borders::ALL).title(" Log  [PgUp/PgDn/Home/End to scroll] "))
                 .scroll((top_offset as u16, 0));
@@ -1529,7 +1554,7 @@ impl DebugConsole {
     }
 
     fn cmd_clear(&mut self) {
-        self.log_lines.clear();
+        self.log_entries.clear();
         self.scroll_from_bottom = 0;
     }
 }
@@ -1556,4 +1581,84 @@ fn build_god_str(flags: u8) -> String {
     if f.contains(GodModeFlags::ONE_HIT_KILL) { parts.push("ONE_HIT_KILL"); }
     if f.contains(GodModeFlags::INSANE_REACH) { parts.push("INSANE_REACH"); }
     parts.join("+")
+}
+
+/// Format a single log entry for rendering: `"[CATEGORY] text"`, with an
+/// optional `"[{tick}] "` prefix when `timestamp_ticks` is non-zero.
+fn format_log_entry(entry: &DebugLogEntry) -> String {
+    if entry.timestamp_ticks != 0 {
+        format!("[{}] [{}] {}", entry.timestamp_ticks, entry.category.label(), entry.text)
+    } else {
+        format!("[{}] {}", entry.category.label(), entry.text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helpers --------------------------------------------------------------
+    //
+    // `DebugConsole::new` installs a crossterm alternate screen and raw mode,
+    // which is unsuitable for unit tests.  These tests construct a minimal
+    // console-like harness that exercises the log storage/format helpers
+    // directly.
+
+    fn make_entry(cat: LogCategory, ticks: u64, text: &str) -> DebugLogEntry {
+        DebugLogEntry { category: cat, timestamp_ticks: ticks, text: text.to_owned() }
+    }
+
+    /// Mimics `DebugConsole::log_entry` for testing without allocating a
+    /// terminal.  Kept in sync with the real implementation above.
+    fn push(entries: &mut Vec<DebugLogEntry>, entry: DebugLogEntry) {
+        for line in entry.text.split('\n') {
+            entries.push(DebugLogEntry {
+                category: entry.category,
+                timestamp_ticks: entry.timestamp_ticks,
+                text: line.to_owned(),
+            });
+        }
+        if entries.len() > MAX_LOG_LINES {
+            let overflow = entries.len() - MAX_LOG_LINES;
+            entries.drain(..overflow);
+        }
+    }
+
+    #[test]
+    fn log_entry_appends_and_respects_max_lines() {
+        let mut entries: Vec<DebugLogEntry> = Vec::new();
+        for i in 0..(MAX_LOG_LINES + 25) {
+            push(&mut entries, make_entry(LogCategory::General, 0, &format!("msg {}", i)));
+        }
+        assert_eq!(entries.len(), MAX_LOG_LINES);
+        // Oldest 25 entries should have been drained from the front.
+        assert_eq!(entries[0].text, "msg 25");
+        assert_eq!(entries.last().unwrap().text, format!("msg {}", MAX_LOG_LINES + 24));
+    }
+
+    #[test]
+    fn log_entry_splits_on_newlines_preserving_category() {
+        let mut entries: Vec<DebugLogEntry> = Vec::new();
+        push(&mut entries, make_entry(LogCategory::Combat, 42, "line a\nline b\nline c"));
+        assert_eq!(entries.len(), 3);
+        for e in &entries {
+            assert_eq!(e.category, LogCategory::Combat);
+            assert_eq!(e.timestamp_ticks, 42);
+        }
+        assert_eq!(entries[0].text, "line a");
+        assert_eq!(entries[1].text, "line b");
+        assert_eq!(entries[2].text, "line c");
+    }
+
+    #[test]
+    fn format_log_entry_general_no_tick() {
+        let e = make_entry(LogCategory::General, 0, "hello");
+        assert_eq!(format_log_entry(&e), "[GENERAL] hello");
+    }
+
+    #[test]
+    fn format_log_entry_with_nonzero_tick_prefixes_tick() {
+        let e = make_entry(LogCategory::Combat, 1234, "hero swings");
+        assert_eq!(format_log_entry(&e), "[1234] [COMBAT] hero swings");
+    }
 }
