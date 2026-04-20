@@ -234,7 +234,7 @@ All commands are typed at the `> ` prompt and executed on Enter. Commands are ca
 | `/max` | Max all stats (vitality, brave, luck, kind, wealth; zero hunger/fatigue) | Shortcut |
 | `/heal` | Set vitality to max_vitality; zero hunger and fatigue | Shortcut |
 | `/die` | Set hero vitality to 0 (triggers death) | — |
-| `/kill` | Kill every active enemy NPC on screen (single pass) | — |
+| `/kill` | Kill every active hostile NPC on screen in one pass. Only enemy combatants (Enemy and Dragon actors) are affected; setfigs, carriers, swans, horses, and other non-combatant NPCs are left alone. | — |
 | `/kill <slot>` | Set one actor's vitality to 0 | Slot 1–19 (not hero) |
 | `/brother <name>` | Switch active brother | `julian` / `phillip` / `kevin` (or 0 / 1 / 2) |
 | `/cheat` | Toggle `cheat1` debug-key mode on/off | Reports new state; see SPEC §25.9 |
