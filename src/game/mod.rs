@@ -13,6 +13,7 @@ pub mod copy_protect_scene;
 pub mod cursor;
 pub mod debug_command;
 pub mod debug_console;
+pub mod debug_items;
 pub mod font;
 pub mod font_texture;
 pub mod game_clock;
