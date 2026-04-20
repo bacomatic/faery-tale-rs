@@ -503,6 +503,10 @@ pub fn main() -> Result<(), String> {
                 for msg in gs.drain_logs() {
                     dc.log(msg);
                 }
+                // DBG-LOG-04: drain categorized entries emitted by gameplay code.
+                for entry in gs.pending_log.drain(..) {
+                    dc.log_entry(entry);
+                }
                 // Build status snapshot
                 let song_group_count = song_library
                     .as_ref()

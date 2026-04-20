@@ -329,6 +329,10 @@ pub struct GameplayScene {
     archer_cooldown: u32,
     /// Debug log lines buffered for the debug window. Drained each frame by main loop.
     log_buffer: Vec<String>,
+    /// Categorized debug log entries buffered for the debug window. Drained each
+    /// frame by the main loop and forwarded into `DebugConsole::log_entry`.
+    /// Parallel to `log_buffer` during the DBG-LOG-04 migration.
+    pub pending_log: Vec<crate::game::debug_log::DebugLogEntry>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
     /// Set to true when the Talisman win condition fires (`stuff[22]` set
@@ -458,6 +462,7 @@ impl GameplayScene {
             missiles: std::array::from_fn(|_| crate::game::combat::Missile::default()),
             archer_cooldown: 0,
             log_buffer: Vec::new(),
+            pending_log: Vec::new(),
             quit_requested: false,
             victory_triggered: false,
             paused: false,
@@ -3794,8 +3799,12 @@ impl GameplayScene {
                         self.state.hero_x = cx.min(0x7FFF) as u16;
                         self.state.hero_y = cy.min(0x7FFF) as u16;
                         self.snap_camera_to_hero();
-                        self.dlog(format!(
-                            "Teleported to '{}' (zone {}, center {},{})",
+                        // DBG-LOG-04: proof-of-pattern — emit via the new
+                        // categorized channel instead of the legacy string
+                        // log_buffer path.
+                        self.pending_log.push(crate::debug_log!(
+                            General,
+                            "teleport: '{}' (zone {}, center {},{})",
                             label, idx, self.state.hero_x, self.state.hero_y
                         ));
                     }
