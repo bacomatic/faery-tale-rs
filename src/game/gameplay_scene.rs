@@ -309,9 +309,8 @@ pub struct GameplayScene {
     /// Used as input to fade_page() for day/night/jewel palette computation.
     /// None until init_from_library() runs.
     base_colors_palette: Option<crate::game::colors::Palette>,
-    /// Dirty-check key for current_palette: (lightlevel, light_on, secret_active).
-    /// When any of these change, current_palette is recomputed.
-    last_palette_key: (u16, bool, bool),
+    /// Forces a palette recompute on the next cadence tick (set on region load/transition).
+    palette_dirty: bool,
 
     witch_effect: WitchEffect,
     teleport_effect: TeleportEffect,
@@ -443,7 +442,7 @@ impl GameplayScene {
             day_night_phase: DayNightPhase::Day,
             current_palette: [0xFF808080_u32; crate::game::palette::PALETTE_SIZE],
             base_colors_palette: None,
-            last_palette_key: (u16::MAX, false, false),
+            palette_dirty: true,
 
             witch_effect: WitchEffect::new(),
             teleport_effect: TeleportEffect::new(),
@@ -2527,7 +2526,7 @@ impl GameplayScene {
 
                     self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                     self.current_palette = Self::region_palette(game_lib, region);
-                    self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
+                    self.palette_dirty = true; // force recompute next cadence tick
                     self.map_renderer = Some(MapRenderer::new(&world, self.shadow_mem.clone()));
                     self.map_world = Some(world);
                     self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
@@ -3871,6 +3870,15 @@ impl GameplayScene {
         out
     }
 
+    /// SPEC §17.5: Returns `true` when `day_fade()` should update the palette.
+    ///
+    /// Fires every 4 ticks (`daynight & 3 == 0`) or during a screen rebuild
+    /// (`viewstatus > 97`), matching the original Amiga cadence exactly.
+    #[inline]
+    pub(crate) fn should_update_palette(daynight: u16, viewstatus: u8) -> bool {
+        (daynight & 3) == 0 || viewstatus > 97
+    }
+
     fn stat_field_mut(state: &mut GameState, stat: StatId) -> &mut i16 {
         match stat {
             StatId::Vitality => &mut state.vitality,
@@ -4543,7 +4551,7 @@ impl Scene for GameplayScene {
                         Ok(world) => {
                             self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
                             self.current_palette = Self::region_palette(game_lib, region);
-                            self.last_palette_key = (u16::MAX, false, false); // force recompute next tick
+                            self.palette_dirty = true; // force recompute next cadence tick
                             // Load global shadow_mem bitmask table (sprite-depth masking).
                             let shadow_mem = if let Some(ref disk) = game_lib.disk {
                                 if disk.shadow_count > 0 {
@@ -4594,23 +4602,21 @@ impl Scene for GameplayScene {
             self.day_night_phase = new_phase;
         }
 
-        // Recompute current_palette when lighting state changes.
-        {
-            let lightlevel = self.state.lightlevel;
-            let light_on = self.state.light_timer > 0;
-            let secret_active = self.state.region_num == 9 && self.state.secret_timer > 0;
-            let palette_key = (lightlevel, light_on, secret_active);
-            if palette_key != self.last_palette_key {
-                self.last_palette_key = palette_key;
-                if let Some(ref base) = self.base_colors_palette {
-                    self.current_palette = Self::compute_current_palette(
-                        base,
-                        self.state.region_num,
-                        lightlevel,
-                        light_on,
-                        secret_active,
-                    );
-                }
+        // SPEC §17.5: day_fade() — update palette every 4 ticks (daynight & 3 == 0) or
+        // during screen rebuild (viewstatus > 97), or when palette_dirty is set (region change).
+        if Self::should_update_palette(self.state.daynight, self.state.viewstatus) || self.palette_dirty {
+            self.palette_dirty = false;
+            if let Some(ref base) = self.base_colors_palette {
+                let lightlevel = self.state.lightlevel;
+                let light_on = self.state.light_timer > 0;
+                let secret_active = self.state.region_num == 9 && self.state.secret_timer > 0;
+                self.current_palette = Self::compute_current_palette(
+                    base,
+                    self.state.region_num,
+                    lightlevel,
+                    light_on,
+                    secret_active,
+                );
             }
         }
 
@@ -7368,6 +7374,98 @@ mod t3_death_sleep_collapse_tests {
         assert!(
             !scene.sleeping,
             "sleeping flag must be cleared when wake condition is met"
+        );
+    }
+}
+
+#[cfg(test)]
+mod t4_palette_fade_freq_tests {
+    //! TDD tests for T4-PALETTE-FADE-FREQ (SPEC §17.5): palette update cadence.
+    //!
+    //! The spec says `day_fade()` is called every tick but only updates the palette
+    //! when `(daynight & 3) == 0` (every 4 ticks) or `viewstatus > 97` (screen rebuild).
+
+    use super::GameplayScene;
+
+    // --- should_update_palette cadence ---
+
+    #[test]
+    fn t4_palette_updates_at_daynight_mod4_zero() {
+        // SPEC §17.5: (daynight & 3) == 0 → update.
+        for base in [0u16, 4, 8, 100, 23996, 23000] {
+            assert!(
+                GameplayScene::should_update_palette(base, 0),
+                "should update at daynight={base} (& 3 == 0)"
+            );
+        }
+    }
+
+    #[test]
+    fn t4_palette_skips_non_cadence_ticks() {
+        // SPEC §17.5: (daynight & 3) != 0 and viewstatus <= 97 → no update.
+        for offset in [1u16, 2, 3] {
+            let daynight = 100 + offset; // 101, 102, 103 → & 3 != 0
+            assert!(
+                !GameplayScene::should_update_palette(daynight, 0),
+                "should NOT update at daynight={daynight} (& 3 != 0)"
+            );
+        }
+    }
+
+    #[test]
+    fn t4_palette_updates_during_screen_rebuild_viewstatus_98() {
+        // SPEC §17.5: viewstatus > 97 → force update regardless of daynight.
+        // viewstatus 98 = Rebuild, 99 = Rebuild (init).
+        assert!(
+            GameplayScene::should_update_palette(1, 98),
+            "viewstatus=98 should force palette update"
+        );
+        assert!(
+            GameplayScene::should_update_palette(1, 99),
+            "viewstatus=99 should force palette update"
+        );
+        // viewstatus 255: any value > 97 must trigger.
+        assert!(
+            GameplayScene::should_update_palette(3, 255),
+            "viewstatus=255 should force palette update"
+        );
+    }
+
+    #[test]
+    fn t4_palette_does_not_update_at_viewstatus_97() {
+        // SPEC §17.5: viewstatus == 97 is NOT > 97, so cadence alone governs.
+        // daynight=1 → & 3 = 1, so no update expected.
+        assert!(
+            !GameplayScene::should_update_palette(1, 97),
+            "viewstatus=97 alone should not force update"
+        );
+    }
+
+    #[test]
+    fn t4_palette_cadence_sequence_over_12_ticks() {
+        // Walk daynight through ticks 0..=11; assert updates only on 0, 4, 8.
+        let updates: Vec<u16> = (0u16..12)
+            .filter(|&dn| GameplayScene::should_update_palette(dn, 0))
+            .collect();
+        assert_eq!(updates, vec![0, 4, 8], "palette must update only at daynight 0, 4, 8 in ticks 0..12");
+    }
+
+    #[test]
+    fn t4_palette_cadence_or_viewstatus_is_disjunction() {
+        // Both conditions are OR: daynight on-cadence with high viewstatus → still update.
+        assert!(
+            GameplayScene::should_update_palette(0, 98),
+            "on-cadence tick with rebuild viewstatus must still update"
+        );
+        // Off-cadence tick with rebuild viewstatus → update via viewstatus.
+        assert!(
+            GameplayScene::should_update_palette(2, 99),
+            "off-cadence tick with rebuild viewstatus must update via viewstatus path"
+        );
+        // Off-cadence tick with normal viewstatus → no update.
+        assert!(
+            !GameplayScene::should_update_palette(2, 0),
+            "off-cadence tick with normal viewstatus must NOT update"
         );
     }
 }
