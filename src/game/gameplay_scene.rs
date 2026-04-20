@@ -1846,6 +1846,7 @@ impl GameplayScene {
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
             let mut necro_talisman_pos: Option<(i16, i16)> = None;
+            let mut witch_lasso_pos: Option<(i16, i16)> = None;
 
             let bname = self.brother_name().to_string();
             if let Some(ref mut table) = self.npc_table {
@@ -1888,7 +1889,7 @@ impl GameplayScene {
 
                     // checkdead
                     if npc.vitality == 0 {
-                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, RACE_WITCH, NpcState};
                         if npc.race == RACE_NECROMANCER {
                             // SPEC §15.7: transform in-place → Woodcutter; don't despawn.
                             necro_talisman_pos = Some((npc.x, npc.y));
@@ -1898,6 +1899,10 @@ impl GameplayScene {
                             npc.weapon = 0;
                             logs.push("necromancer slain: transformed to woodcutter, talisman drops".to_string());
                         } else {
+                            // SPEC §14.20: Witch drops Golden Lasso on death.
+                            if npc.race == RACE_WITCH {
+                                witch_lasso_pos = Some((npc.x, npc.y));
+                            }
                             npc.active = false;
                         }
                         self.state.brave = (self.state.brave + 1).min(100);
@@ -1942,6 +1947,21 @@ impl GameplayScene {
                     goal: 0,
                 });
                 self.dlog("talisman (ob_id 139) placed at necromancer death coords".to_string());
+            }
+            // SPEC §14.20: drop Golden Lasso (ob_id 27) at witch's death coords (+10 Y).
+            if let Some((wx, wy)) = witch_lasso_pos {
+                use crate::game::game_state::WorldObject;
+                let drop_y = (wy as i32 + 10).clamp(0, 32767) as u16;
+                self.state.world_objects.push(WorldObject {
+                    ob_id: 27,
+                    ob_stat: 1, // ground item
+                    region: self.state.region_num,
+                    x: wx as u16,
+                    y: drop_y,
+                    visible: true,
+                    goal: 0,
+                });
+                self.dlog("witch slain: golden lasso (ob_id 27) placed at death coords".to_string());
             }
         }
     }
