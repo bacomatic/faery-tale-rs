@@ -1,13 +1,15 @@
 //! MapRenderer: combines TileAtlas and genmini() to blit the map viewport.
 
 use crate::game::tile_atlas::{TileAtlas, TILE_W, TILE_H};
-use crate::game::map_view::{genmini_scrolled, SCROLL_TILES, SCROLL_TILES_W, SCROLL_TILES_H, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
+use crate::game::map_view::{genmini_scrolled, SCROLL_TILES, SCROLL_TILES_W, SCROLL_TILES_H};
 use crate::game::world_data::WorldData;
 
 pub const MAP_DST_X: i32 = 0;
 pub const MAP_DST_Y: i32 = 0;
-pub const MAP_DST_W: u32 = (TILE_W * VIEWPORT_TILES_W) as u32; // 304
-pub const MAP_DST_H: u32 = (TILE_H * VIEWPORT_TILES_H) as u32; // 192
+/// Framebuffer dimensions based on scroll tile grid (20×7) to support the 312×194 viewport
+/// with sub-tile pixel offsets up to 15 px (X) and 31 px (Y) without leaving unfilled edges.
+pub const MAP_DST_W: u32 = (TILE_W * SCROLL_TILES_W) as u32; // 320
+pub const MAP_DST_H: u32 = (TILE_H * SCROLL_TILES_H) as u32; // 224
 
 pub struct MapRenderer {
     pub atlas: TileAtlas,
@@ -85,5 +87,14 @@ mod tests {
         let mut renderer = MapRenderer::new(&world, Vec::new());
         renderer.compose(1600, 6400, &world);
         assert_eq!(renderer.framebuf.len(), (MAP_DST_W * MAP_DST_H) as usize);
+    }
+
+    /// T3-VIEWPORT-SIZE: MAP_DST dimensions must be based on the full scroll tile grid
+    /// (SCROLL_TILES_W×TILE_W = 320, SCROLL_TILES_H×TILE_H = 224) so the 312×194 viewport
+    /// never reads beyond the framebuffer bounds.
+    #[test]
+    fn test_map_dst_dimensions() {
+        assert_eq!(MAP_DST_W, 320, "MAP_DST_W = SCROLL_TILES_W(20) × TILE_W(16) = 320");
+        assert_eq!(MAP_DST_H, 224, "MAP_DST_H = SCROLL_TILES_H(7) × TILE_H(32) = 224");
     }
 }

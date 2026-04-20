@@ -3,19 +3,21 @@
 //! # Screen layout
 //!
 //! The original Amiga game used two Copper-switched viewports stacked vertically:
-//! - `vp_page` (LORES, 288×140): the playfield
+//! - `vp_page` (LORES, 312×194): the playfield at `screen_size(156)` (normal gameplay)
 //! - `vp_text` (HIRES, 640×57): the HI bar (buttons, compass, messages)
 //!
-//! Both are 2× line-doubled (NTSC 30 Hz interlaced → line-doubled to fill 400 lines)
-//! and centered in the SDL 640×480 logical canvas with 40px top/bottom margins:
+//! Both are 2× line-doubled and centered in the SDL 640×480 logical canvas with 40px top margin.
+//! At `screen_size(156)` the Amiga DxOffset=4, DyOffset=3, so the playfield is inset 4/3 LORES px:
 //!
 //! ```text
 //!  y=  0.. 39  black margin (40px)
-//!  y= 40..319  playfield   (576×280)  x=32..607 (DxOffset=16 LORES px × 2)
-//!  y=320..325  gap         (6px)      3 LORES rows × 2
-//!  y=326..439  HI bar      (640×114)  x=0..639  (57 HIRES rows × 2)
+//!  y= 46..433  playfield   (624×388)  x=8..631  (DxOffset=4 LORES px × 2, DyOffset=3 × 2)
+//!  y=326..439  HI bar      (640×114)  x=0..639  (Amiga scanline 143 × 2 + 40px margin)
 //!  y=440..479  black margin (40px)
 //! ```
+//!
+//! The HI bar overlaps the lower part of the playfield (scanlines 143–194), exactly as on the
+//! original Amiga where the Copper switched viewports at scanline 143 regardless of playfield size.
 //!
 //! See `RESEARCH.md § Screen Layout: Amiga Mixed-Resolution Viewports` for full details.
 use crate::game::magic::{use_magic, ITEM_LANTERN, ITEM_ORB, ITEM_RING, ITEM_SKULL, ITEM_STONE_RING, ITEM_TOTEM, ITEM_VIAL};
@@ -154,27 +156,30 @@ fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 36]) -> Option<u8>
 }
 
 /// Canvas layout — original 640×200 game area line-doubled to 640×400,
-/// centered in 640×480 logical canvas with 40px margins top and bottom.
+/// centered in 640×480 logical canvas with 40px top/bottom margins.
 ///
-/// Playfield (vp_page, LORES 288×140 px): DxOffset=16 LORES × 2 = 32px left margin;
-/// 2× line-doubled to canvas rect (32, 40, MAP_DST_W*2, MAP_DST_H*2).
+/// Playfield (vp_page, LORES 312×194 px at screen_size(156)):
+///   DxOffset=4 LORES × 2 = 8px left; DyOffset=3 LORES × 2 = 6px top-of-Amiga-frame offset.
+///   2× line-doubled to canvas rect (8, 46, 624, 388).
 ///
-/// Gap: 3 original LORES rows × 2 = 6px at canvas y=320–325.
-///
-/// HI bar (vp_text, HIRES 640×57 px): also 2× line-doubled → 640×114;
-/// canvas rect (0, 326, 640, 114). Internal coords (buttons, compass) scale ×2 vertically.
+/// HI bar (vp_text, HIRES 640×57 px): Amiga Copper switches at scanline 143 (PAGE_HEIGHT).
+///   canvas y = 40 (margin) + 143×2 = 326. Canvas rect (0, 326, 640, 114).
+///   Overlaps the lower portion of the playfield (lines 143–194 of the Amiga frame),
+///   exactly as on the original hardware.
 const CANVAS_MARGIN_Y: i32 = 40;
-const PLAYFIELD_X: i32 = 32;              // vp_page DxOffset=16 LORES px × 2
-const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y; // = 40
-/// Visible LORES playfield dimensions — vp_page.DWidth/DHeight from fmain.c.
-/// The framebuf (MAP_DST_W×MAP_DST_H) is larger; only this sub-rect is shown.
-const PLAYFIELD_LORES_W: u32 = 288;    // vp_page.DWidth
-const PLAYFIELD_LORES_H: u32 = 140;    // vp_page.DHeight
-const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2; // 576
-const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2; // 280
+/// Playfield canvas X: Amiga DxOffset=4 LORES pixels × 2 = 8 canvas pixels.
+const PLAYFIELD_X: i32 = 8;              // vp_page DxOffset=4 LORES px × 2 (screen_size(156))
+/// Playfield canvas Y: top margin + Amiga DyOffset=3 LORES pixels × 2.
+const PLAYFIELD_Y: i32 = CANVAS_MARGIN_Y + 3 * 2; // = 46
+/// Visible LORES playfield dimensions — `screen_size(156)` = half_width×2 = 312, height = 156×5/8×2 = 194.
+const PLAYFIELD_LORES_W: u32 = 312;    // vp_page.DWidth  at screen_size(156)
+const PLAYFIELD_LORES_H: u32 = 194;    // vp_page.DHeight at screen_size(156)
+const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2; // 624
+const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2; // 388
 const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
 const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
-const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
+/// HI bar canvas Y: Amiga Copper switches at scanline PAGE_HEIGHT=143, scaled 2×, plus top margin.
+const HIBAR_Y: i32 = CANVAS_MARGIN_Y + 143 * 2; // 40 + 286 = 326 (unchanged: Amiga scanline 143)
 
 /// Day/night phase derived from lightlevel triangle wave (0–300).
 /// lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
@@ -1702,6 +1707,7 @@ impl GameplayScene {
             let mut logs: Vec<String> = Vec::new();
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
+            let mut necro_talisman_pos: Option<(i16, i16)> = None;
 
             let bname = self.brother_name().to_string();
             if let Some(ref mut table) = self.npc_table {
@@ -1744,7 +1750,18 @@ impl GameplayScene {
 
                     // checkdead
                     if npc.vitality == 0 {
-                        npc.active = false;
+                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+                        if npc.race == RACE_NECROMANCER {
+                            // SPEC §15.7: transform in-place → Woodcutter; don't despawn.
+                            necro_talisman_pos = Some((npc.x, npc.y));
+                            npc.race = RACE_WOODCUTTER;
+                            npc.vitality = 10;
+                            npc.state = NpcState::Still;
+                            npc.weapon = 0;
+                            logs.push("necromancer slain: transformed to woodcutter, talisman drops".to_string());
+                        } else {
+                            npc.active = false;
+                        }
                         self.state.brave = (self.state.brave + 1).min(100);
                         dead_npc = Some(npc.clone());
                         logs.push(format!("enemy slain, bravery now {}", self.state.brave));
@@ -1773,6 +1790,20 @@ impl GameplayScene {
                         }
                     }
                 }
+            }
+            // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
+            if let Some((tx, ty)) = necro_talisman_pos {
+                use crate::game::game_state::WorldObject;
+                self.state.world_objects.push(WorldObject {
+                    ob_id: 139,
+                    ob_stat: 1, // ground item
+                    region: self.state.region_num,
+                    x: tx as u16,
+                    y: ty as u16,
+                    visible: true,
+                    goal: 0,
+                });
+                self.dlog("talisman (ob_id 139) placed at necromancer death coords".to_string());
             }
         }
     }
@@ -2183,8 +2214,9 @@ impl GameplayScene {
                         sdl2::pixels::PixelFormatEnum::ARGB8888,
                     ) {
                         if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                            // Clip to screen_size(156) viewport: DxOffset=4, DyOffset=3
                             let src = sdl2::rect::Rect::new(
-                                16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
+                                4, 3, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
                             );
                             let dst = sdl2::rect::Rect::new(
                                 PLAYFIELD_X, PLAYFIELD_Y,
@@ -5038,6 +5070,92 @@ mod tests {
     }
 
     #[test]
+    fn test_necromancer_death_transforms_to_woodcutter() {
+        // SPEC §15.7: on death, necromancer → race 10 (Woodcutter), vitality 10,
+        // state Still, weapon 0.  NPC must remain active (not despawned).
+        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_NECROMANCER,
+            race: RACE_NECROMANCER,
+            x: 500,
+            y: 600,
+            vitality: 0, // pre-killed so checkdead fires with damage=0
+            active: true,
+            weapon: 5,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
+        scene.apply_hit(0, 2, 0, 0);
+        let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
+        assert_eq!(npc.race, RACE_WOODCUTTER, "necromancer must transform to Woodcutter (race 10)");
+        assert_eq!(npc.vitality, 10, "transformed woodcutter must have vitality 10");
+        assert_eq!(npc.state, NpcState::Still, "state must be Still after transform");
+        assert_eq!(npc.weapon, 0, "weapon must be cleared after transform");
+        assert!(npc.active, "NPC must remain active after necromancer transform");
+    }
+
+    #[test]
+    fn test_necromancer_death_drops_talisman_at_death_location() {
+        // SPEC §15.7: leave_item(i, 139) → WorldObject {ob_id:139, ob_stat:1} at death coords.
+        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+        let nx: i16 = 500;
+        let ny: i16 = 600;
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_NECROMANCER,
+            race: RACE_NECROMANCER,
+            x: nx,
+            y: ny,
+            vitality: 0,
+            active: true,
+            weapon: 5,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        scene.apply_hit(0, 2, 0, 0);
+        // Capture the NPC's position after pushback (that is where the talisman is dropped).
+        let (expected_x, expected_y) = {
+            let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
+            (npc.x as u16, npc.y as u16)
+        };
+        let talisman = scene.state.world_objects.iter()
+            .find(|o| o.ob_id == 139)
+            .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
+        assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
+        assert_eq!(talisman.x, expected_x, "talisman x must match death location");
+        assert_eq!(talisman.y, expected_y, "talisman y must match death location");
+        assert!(talisman.visible, "talisman must be visible");
+        assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
+    }
+
+    #[test]
+    fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
+        // Killing a non-necromancer must not spawn a talisman.
+        use crate::game::npc::{NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+        let mut scene = GameplayScene::new();
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            x: 100,
+            y: 100,
+            vitality: 0,
+            active: true,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        scene.apply_hit(0, 2, 0, 0);
+        assert!(
+            scene.state.world_objects.iter().all(|o| o.ob_id != 139),
+            "talisman must NOT drop when a non-necromancer dies"
+        );
+    }
+
+    #[test]
     fn test_talisman_pickup_triggers_victory() {
         // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
         // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
@@ -6587,6 +6705,55 @@ mod t2_npc_talk_tests {
         assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
         assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
             "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // --- T3-VIEWPORT-SIZE: SPEC §1 / §27.6 ---
+
+    /// Assert the normal gameplay playfield LORES dimensions match screen_size(156):
+    ///   width  = 156 × 2 = 312
+    ///   height = floor(156 × 5 / 8) × 2 = 97 × 2 = 194
+    #[test]
+    fn test_playfield_lores_dimensions() {
+        assert_eq!(PLAYFIELD_LORES_W, 312, "PLAYFIELD_LORES_W must be 312 (screen_size(156))");
+        assert_eq!(PLAYFIELD_LORES_H, 194, "PLAYFIELD_LORES_H must be 194 (screen_size(156))");
+    }
+
+    /// Assert the playfield canvas (2×-scaled) dimensions are correct.
+    #[test]
+    fn test_playfield_canvas_dimensions() {
+        assert_eq!(PLAYFIELD_CANVAS_W, 624, "PLAYFIELD_CANVAS_W = 312 × 2 = 624");
+        assert_eq!(PLAYFIELD_CANVAS_H, 388, "PLAYFIELD_CANVAS_H = 194 × 2 = 388");
+    }
+
+    /// Assert the playfield canvas position reflects Amiga DxOffset=4, DyOffset=3
+    /// at screen_size(156), with 40px top margin.
+    #[test]
+    fn test_playfield_canvas_position() {
+        assert_eq!(PLAYFIELD_X, 8,  "PLAYFIELD_X = DxOffset(4) × 2 = 8");
+        assert_eq!(PLAYFIELD_Y, 46, "PLAYFIELD_Y = 40 (margin) + DyOffset(3) × 2 = 46");
+    }
+
+    /// Assert the HI bar stays at Amiga scanline 143 (PAGE_HEIGHT), unchanged by
+    /// the playfield size.  326 = 40 (margin) + 143 × 2.
+    #[test]
+    fn test_hibar_y_at_amiga_scanline_143() {
+        assert_eq!(HIBAR_Y, 326, "HIBAR_Y must be 40 + 143×2 = 326 (Amiga scanline PAGE_HEIGHT)");
+        assert_eq!(HIBAR_H, 114, "HIBAR_H = 57 × 2 = 114");
+    }
+
+    /// Assert the map framebuffer (MAP_DST_W × MAP_DST_H) is at least as large as the
+    /// viewport so the src rect in canvas.copy() never reads out-of-bounds pixels.
+    #[test]
+    fn test_map_framebuf_covers_viewport() {
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+        assert!(
+            MAP_DST_W >= PLAYFIELD_LORES_W,
+            "MAP_DST_W ({MAP_DST_W}) must be >= PLAYFIELD_LORES_W ({PLAYFIELD_LORES_W})"
+        );
+        assert!(
+            MAP_DST_H >= PLAYFIELD_LORES_H,
+            "MAP_DST_H ({MAP_DST_H}) must be >= PLAYFIELD_LORES_H ({PLAYFIELD_LORES_H})"
+        );
     }
 }
 
