@@ -59,4 +59,10 @@ pub enum DebugCommand {
     /// Scatter items in a ring around the player.
     /// item_id: None = random from safe pool (no talisman); Some(id) = specific item.
     ScatterItems { count: usize, item_id: Option<usize> },
+    /// Kill a single actor slot (1..=19). Slot 0 is hero; use /die instead.
+    KillActorSlot { slot: u8 },
+    /// Set the `cheat1` debug-keys mode flag.
+    SetCheat1 { enabled: bool },
+    /// Teleport hero to the named extent's walkable center.
+    TeleportNamedLocation { name: String },
 }

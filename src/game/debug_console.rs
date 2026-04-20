@@ -94,6 +94,15 @@ pub struct DebugSnapshot {
     pub encounter_type: u8,
     pub active_enemy_count: u8,
 
+    // Full inventory array for `/inventory` command.
+    pub stuff: Vec<u8>,
+    // cheat1 flag (DEBUG_SPEC §Mutation /cheat).
+    pub cheat1: bool,
+    // Wealth (gold) — used by /give/take and /inventory dumps.
+    pub wealth: u16,
+    // Brave — used to compute heal cap `15 + brave/4` for /heal.
+    pub brave: u16,
+
     // Actor slots (for `/actors` command and `/watch` feature). Up to 20 active slots.
     pub actors: Vec<ActorSnapshot>,
 }
@@ -645,15 +654,22 @@ impl DebugConsole {
 
         match cmd.as_str() {
             "/help" | "/h" | "/?" => self.cmd_help(args),
-            "/kill" => self.push_cmd(DebugCommand::InstaKill),
+            "/kill" => self.cmd_kill(args),
             "/die" => {
                 self.push_cmd(DebugCommand::AdjustStat { stat: StatId::Vitality, delta: -9999 });
                 self.log("Player vitality set to zero.");
             }
             "/pack" => self.push_cmd(DebugCommand::HeroPack),
             "/max" => self.cmd_max_stats(),
+            "/heal" => self.cmd_heal(),
             "/stat" => self.cmd_stat(args),
+            "/stats" => self.cmd_stats(),
+            "/quest" => self.cmd_quest(),
+            "/inventory" | "/inventorylist" => self.cmd_inventory(),
             "/inv" => self.cmd_inv(args),
+            "/give" => self.cmd_give(args),
+            "/take" => self.cmd_take(args),
+            "/cheat" => self.cmd_cheat(args),
             "/tp" | "/teleport" => self.cmd_tp(args),
             "/god" => self.cmd_god(args),
             "/noclip" => self.cmd_god(&["noclip"]),
@@ -699,13 +715,20 @@ impl DebugConsole {
     fn cmd_help(&mut self, args: &[&str]) {
         if let Some(&topic) = args.first() {
             let msg = match topic.to_ascii_lowercase().as_str() {
-                "/kill" | "kill"     => "/kill — kill all enemies currently on screen.",
+                "/kill" | "kill"     => "/kill — kill all hostile enemies on screen.\n  /kill <slot>  kill one actor slot (1-19).",
                 "/die"  | "die"      => "/die — set player vitality to zero (die).",
                 "/pack" | "pack"     => "/pack — fill weapons, magic items, keys, and arrows.",
                 "/max"  | "max"      => "/max — set all stats to maximum / hunger+fatigue to 0.",
+                "/heal" | "heal"     => "/heal — vitality to 15 + brave/4, hunger=0, fatigue=0.",
                 "/stat" | "stat"     => "/stat <name> [+|-]<value>  e.g. /stat vit 100 or /stat hunger -50\n  Names: vit, brv, lck, knd, wlt, hgr, ftg",
+                "/stats"            => "/stats — full hero stat dump to log.",
+                "/quest"            => "/quest — quest progress (princess, statues, writ, talisman).",
+                "/inventory"        => "/inventory — full stuff[] dump grouped by category.",
                 "/inv"  | "inv"      => "/inv <slot 0-34> [+|-]<value>  e.g. /inv 0 1 or /inv 8 +99",
-                "/tp"   | "teleport" => "/tp safe | ring <N> | <x> <y>  e.g. /tp 200 150",
+                "/give" | "give"     => "/give <item>  add 1 x item by name or stuff index (see /items).",
+                "/take" | "take"     => "/take <item>  remove 1 x item by name or stuff index.",
+                "/cheat"| "cheat"    => "/cheat          toggle cheat1 debug-key mode\n  /cheat on|off  set explicitly.",
+                "/tp"   | "teleport" => "/tp safe | ring <N> | <x> <y> | <location>\n  e.g. /tp 200 150   /tp tavern   /tp ring 0",
                 "/god"  | "god"      => "/god [noclip|invincible|ohk|reach|all|off]  — toggle god mode flag.",
                 "/noclip"           => "/noclip — shortcut for /god noclip.",
                 "/magic"| "magic"    => "/magic <light|secret|freeze> — toggle sticky magic effect.",
@@ -730,13 +753,20 @@ impl DebugConsole {
 
         let lines = [
             "— Commands ———————————————————————————",
-            "  /kill          kill all enemies on screen",
+            "  /kill          kill enemies on screen  (/kill <slot> = one actor)",
             "  /die           kill the player",
             "  /pack          fill weapons, magic, keys",
             "  /max           max all stats",
+            "  /heal          heal vitality + clear hunger/fatigue",
             "  /stat <n> <v>  set/adjust a stat (vit/brv/lck/knd/wlt/hgr/ftg)",
+            "  /stats         dump all hero stats",
+            "  /quest         dump quest progress",
+            "  /inventory     dump full stuff[] array",
             "  /inv <s> <v>   set/adjust inventory slot 0-34",
-            "  /tp <x> <y>    teleport to coords (also: /tp safe, /tp ring <N>)",
+            "  /give <item>   add 1 x item (name or index)",
+            "  /take <item>   remove 1 x item (name or index)",
+            "  /cheat [on|off] toggle / set cheat1 mode",
+            "  /tp <x> <y>    teleport (also: /tp safe | ring <N> | <location>)",
             "  /god [flag]    god mode: noclip/invincible/ohk/reach/all/off",
             "  /noclip        toggle noclip shortcut",
             "  /magic <m>     sticky magic: light/secret/freeze",
@@ -767,6 +797,143 @@ impl DebugConsole {
             self.push_cmd(DebugCommand::SetStat { stat: *s, value: *v });
         }
         self.log("Max stats applied.");
+    }
+
+    /// `/heal` — vitality = `15 + brave/4`, hunger = 0, fatigue = 0.
+    fn cmd_heal(&mut self) {
+        let cap = 15i16.saturating_add((self.status.brave as i16) / 4);
+        self.push_cmd(DebugCommand::SetStat { stat: StatId::Vitality, value: cap });
+        self.push_cmd(DebugCommand::SetStat { stat: StatId::Hunger, value: 0 });
+        self.push_cmd(DebugCommand::SetStat { stat: StatId::Fatigue, value: 0 });
+        self.log(format!("Healed: vitality={} (cap 15 + brave/4), hunger=0, fatigue=0.", cap));
+    }
+
+    /// `/stats` — full hero stat dump.
+    fn cmd_stats(&mut self) {
+        let s = &self.status;
+        let heal_cap = 15i16.saturating_add((s.brave as i16) / 4);
+        let lines = [
+            format!("── Hero Stats ──"),
+            format!("  Vitality: {} / {}   Brave: {}   Luck: —   Kind: —",
+                s.vitality, heal_cap, s.brave),
+            format!("  Wealth: {}g   Hunger: {}   Fatigue: {}",
+                s.wealth, s.hunger, s.fatigue),
+            format!("  Position: ({}, {})   Region: {}   Brother: {}",
+                s.hero_x, s.hero_y, s.region_num, s.brother),
+            format!("  God mode: {:#06b}   Cheat1: {}   Paused: {}",
+                s.god_mode_flags, s.cheat1, s.is_paused),
+        ];
+        for l in &lines { self.log(l.clone()); }
+    }
+
+    /// `/quest` — quest progress.
+    fn cmd_quest(&mut self) {
+        let s = &self.status;
+        // Count keys in slots 16-21 (Gold/Silver/Ruby/Skull/Iron/Crystal keys per item ref).
+        let key_count: u16 = s.stuff.iter().skip(16).take(6).map(|&v| v as u16).sum();
+        let lines = [
+            format!("── Quest Progress ──"),
+            format!("  Princess captive: {}   Rescues: {}",
+                s.princess_captive, s.princess_rescues),
+            format!("  Gold statues: {} / 5   Writ of Safe Conduct: {}",
+                s.statues_collected, if s.has_writ { "yes" } else { "no" }),
+            format!("  TALISMAN: {}   Keys held (16-21): {}",
+                if s.has_talisman { "YES (win condition!)" } else { "no" }, key_count),
+        ];
+        for l in &lines { self.log(l.clone()); }
+    }
+
+    /// `/inventory` — full stuff[] array grouped by category.
+    fn cmd_inventory(&mut self) {
+        let s = &self.status.stuff;
+        if s.is_empty() {
+            self.log("Inventory not available (not in gameplay).");
+            return;
+        }
+        let get = |i: usize| -> u8 { s.get(i).copied().unwrap_or(0) };
+        let lines = [
+            format!("── Inventory (stuff[{}]) ──", s.len()),
+            format!("  Weapons : dirk={} mace={} sword={} bow={} wand={} lasso={} shell={} [7]={}",
+                get(0), get(1), get(2), get(3), get(4), get(5), get(6), get(7)),
+            format!("  Arrows  : {}", get(8)),
+            format!("  Magic   : vial={} jewel={} totem={} flute={} ring={} skull={} staff={}",
+                get(9), get(10), get(11), get(12), get(13), get(14), get(15)),
+            format!("  Keys    : gold={} silver={} ruby={} skull={} iron={} crystal={}",
+                get(16), get(17), get(18), get(19), get(20), get(21)),
+            format!("  Quest   : talisman={} writ={} statues={}",
+                get(22), get(28), get(25)),
+            format!("  Consume : food={} fruit={}", get(23), get(24)),
+            format!("  Gold    : {}", self.status.wealth),
+        ];
+        for l in &lines { self.log(l.clone()); }
+    }
+
+    /// `/kill` — no args: kill all enemies on screen. With arg: kill single slot.
+    fn cmd_kill(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            self.push_cmd(DebugCommand::InstaKill);
+        } else {
+            match args[0].parse::<u8>() {
+                Ok(slot) if slot >= 1 && slot <= 19 => {
+                    self.push_cmd(DebugCommand::KillActorSlot { slot });
+                }
+                Ok(_) => self.log("/kill: slot must be 1-19"),
+                Err(_) => self.log(format!("/kill: bad slot '{}'", args[0])),
+            }
+        }
+    }
+
+    /// `/give <item>` — resolve name via debug_items map, then SetInventory +1.
+    fn cmd_give(&mut self, args: &[&str]) {
+        let Some(raw) = args.first() else {
+            self.log("Usage: /give <item>  (name or stuff index)");
+            return;
+        };
+        match crate::game::debug_items::lookup_by_name(raw)
+            .or_else(|| raw.parse::<u8>().ok().and_then(crate::game::debug_items::lookup_by_id))
+        {
+            Some(entry) => {
+                self.push_cmd(DebugCommand::AdjustInventory {
+                    index: entry.stuff_index as u8, delta: 1,
+                });
+                self.log(format!("Gave 1 x {} (stuff[{}]).", entry.name, entry.stuff_index));
+            }
+            None => self.log(format!("/give: unknown item '{}'", raw)),
+        }
+    }
+
+    /// `/take <item>` — resolve name via debug_items map, then AdjustInventory -1.
+    fn cmd_take(&mut self, args: &[&str]) {
+        let Some(raw) = args.first() else {
+            self.log("Usage: /take <item>  (name or stuff index)");
+            return;
+        };
+        match crate::game::debug_items::lookup_by_name(raw)
+            .or_else(|| raw.parse::<u8>().ok().and_then(crate::game::debug_items::lookup_by_id))
+        {
+            Some(entry) => {
+                self.push_cmd(DebugCommand::AdjustInventory {
+                    index: entry.stuff_index as u8, delta: -1,
+                });
+                self.log(format!("Took 1 x {} (stuff[{}]).", entry.name, entry.stuff_index));
+            }
+            None => self.log(format!("/take: unknown item '{}'", raw)),
+        }
+    }
+
+    /// `/cheat` — toggle. `/cheat on` / `/cheat off` — explicit set.
+    fn cmd_cheat(&mut self, args: &[&str]) {
+        let enabled = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
+            None | Some("") => !self.status.cheat1,
+            Some("on")      => true,
+            Some("off")     => false,
+            Some(other) => {
+                self.log(format!("/cheat: unknown arg '{}' (use on/off or no arg to toggle)", other));
+                return;
+            }
+        };
+        self.push_cmd(DebugCommand::SetCheat1 { enabled });
+        self.log(format!("cheat1 -> {}", if enabled { "ON" } else { "OFF" }));
     }
 
     fn cmd_stat(&mut self, args: &[&str]) {
@@ -828,6 +995,7 @@ impl DebugConsole {
 
     fn cmd_tp(&mut self, args: &[&str]) {
         match args {
+            [] => self.log("Usage: /tp safe | ring <N> | <x> <y> | <location>"),
             ["safe"] | ["Safe"] => self.push_cmd(DebugCommand::TeleportSafe),
             ["ring", n] => {
                 match n.parse::<u8>() {
@@ -835,7 +1003,8 @@ impl DebugConsole {
                     Err(_) => self.log(format!("Bad ring index: {}", n)),
                 }
             }
-            [xs, ys] => {
+            [xs, ys] if xs.chars().next().map_or(false, |c| c.is_ascii_digit())
+                     && ys.chars().next().map_or(false, |c| c.is_ascii_digit()) => {
                 let x = xs.parse::<u16>();
                 let y = ys.parse::<u16>();
                 match (x, y) {
@@ -843,7 +1012,12 @@ impl DebugConsole {
                     _ => self.log("Usage: /tp <x> <y>  (unsigned integers)"),
                 }
             }
-            _ => self.log("Usage: /tp safe | /tp ring <N> | /tp <x> <y>"),
+            _ => {
+                // Treat remaining forms as a named location (may be multi-word).
+                let name = args.join(" ");
+                self.push_cmd(DebugCommand::TeleportNamedLocation { name: name.clone() });
+                self.log(format!("Teleport request: '{}'", name));
+            }
         }
     }
 

@@ -3738,6 +3738,32 @@ impl GameplayScene {
                     self.dlog(format!("scattered {} items", dropped));
                 }
             }
+            KillActorSlot { slot } => {
+                let idx = slot as usize;
+                if idx == 0 {
+                    self.dlog("KillActorSlot: slot 0 is the hero; use /die instead".to_string());
+                } else if let Some(actor) = self.state.actors.get_mut(idx) {
+                    if matches!(actor.state, ActorState::Dead | ActorState::Dying) {
+                        self.dlog(format!("KillActorSlot: slot {} already dead/dying", slot));
+                    } else {
+                        actor.vitality = 0;
+                        actor.state = ActorState::Dying;
+                        self.dlog(format!("KillActorSlot: slot {} killed", slot));
+                    }
+                } else {
+                    self.dlog(format!("KillActorSlot: slot {} out of range", slot));
+                }
+            }
+            SetCheat1 { enabled } => {
+                self.state.cheat1 = enabled;
+                self.dlog(format!("cheat1 = {}", if enabled { "on" } else { "off" }));
+            }
+            TeleportNamedLocation { name } => {
+                self.dlog(format!(
+                    "TeleportNamedLocation: '{}' (named-extent lookup not yet wired)",
+                    name
+                ));
+            }
         }
     }
 

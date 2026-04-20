@@ -558,6 +558,10 @@ pub fn main() -> Result<(), String> {
                     encounter_number: gs.state.encounter_number,
                     encounter_type: gs.state.encounter_type as u8,
                     active_enemy_count: gs.state.anix as u8,
+                    stuff: gs.state.stuff().to_vec(),
+                    cheat1: gs.state.cheat1,
+                    wealth: gs.state.wealth as u16,
+                    brave: gs.state.brave as u16,
                     actors: gs.state.actors.iter().enumerate()
                         .filter(|(_, a)| a.is_active())
                         .take(20)
