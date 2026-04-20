@@ -230,7 +230,7 @@ All commands are typed at the `> ` prompt and executed on Enter. Commands are ca
 | `/tp <x> <y>` | Teleport hero to world coordinates | 0–32767 each |
 | `/tp safe` | Teleport hero to nearest safe (non-water, non-fire) tile | — |
 | `/tp ring <N>` | Teleport hero to the ring of stones in region N | N = 0–9 |
-| `/region <n>` | Change to region | 0–9 |
+| `/tp <location>` | Teleport hero to a named location (town, cave, castle, shrine, etc.). The destination is a walkable tile at or near the center of that location's extent; if the exact center is blocked the command searches outward for the nearest walkable tile still inside the extent. | Location name must match a known extent label; ambiguous or unknown names are logged and ignored |
 | `/max` | Max all stats (vitality, brave, luck, kind, wealth; zero hunger/fatigue) | Shortcut |
 | `/heal` | Set vitality to max_vitality; zero hunger and fatigue | Shortcut |
 | `/die` | Set hero vitality to 0 (triggers death) | — |
