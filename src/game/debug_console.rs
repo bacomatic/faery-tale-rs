@@ -26,7 +26,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Terminal,
 };
 
@@ -443,6 +443,11 @@ pub struct DebugConsole {
     /// Seeded from `LogCategory::default_enabled()` per DEBUG_SPEC §Log Categories.
     active_categories: std::collections::HashSet<LogCategory>,
 
+    /// DBG-LOG-08: When `Some(cursor)`, the `/filter` interactive modal is
+    /// open with the highlight on `LogCategory::ALL[cursor]`. All other key
+    /// input is swallowed until the user presses Enter/Esc to close.
+    filter_interactive: Option<usize>,
+
     // Latest status snapshot
     status: DebugSnapshot,
 }
@@ -485,6 +490,7 @@ impl DebugConsole {
                 .copied()
                 .filter(|c| c.default_enabled())
                 .collect(),
+            filter_interactive: None,
             status: DebugSnapshot::default(),
         })
     }
@@ -583,6 +589,17 @@ impl DebugConsole {
             return false;
         }
         let Ok(ev) = event::read() else { return false };
+
+        // DBG-LOG-08: when the interactive /filter modal is open, route all
+        // key events to it and swallow everything else.
+        if self.filter_interactive.is_some() {
+            if let Event::Key(ke) = &ev {
+                if ke.kind == KeyEventKind::Press {
+                    self.handle_filter_interactive_key(ke.code, ke.modifiers);
+                }
+            }
+            return true;
+        }
 
         match ev {
             Event::Key(ke) if ke.kind == KeyEventKind::Press => {
@@ -698,6 +715,48 @@ impl DebugConsole {
             _ => {}
         }
         true
+    }
+
+    /// DBG-LOG-08: handle a key press while the interactive `/filter` modal is open.
+    ///
+    /// - Up / Shift+Tab    — move cursor up (wraps)
+    /// - Down / Tab        — move cursor down (wraps)
+    /// - Space             — toggle the category under the cursor
+    /// - Enter / Esc       — close the modal (changes are already applied)
+    fn handle_filter_interactive_key(&mut self, code: KeyCode, mods: KeyModifiers) {
+        let Some(cursor) = self.filter_interactive else { return };
+        let n = LogCategory::ALL.len();
+        match code {
+            KeyCode::Esc | KeyCode::Enter => {
+                self.filter_interactive = None;
+                self.log("Filter: closed interactive mode.");
+            }
+            KeyCode::Down => {
+                self.filter_interactive = Some((cursor + 1) % n);
+            }
+            KeyCode::Up => {
+                self.filter_interactive = Some((cursor + n - 1) % n);
+            }
+            KeyCode::Tab => {
+                if mods.contains(KeyModifiers::SHIFT) {
+                    self.filter_interactive = Some((cursor + n - 1) % n);
+                } else {
+                    self.filter_interactive = Some((cursor + 1) % n);
+                }
+            }
+            KeyCode::BackTab => {
+                self.filter_interactive = Some((cursor + n - 1) % n);
+            }
+            KeyCode::Char(' ') => {
+                let cat = LogCategory::ALL[cursor];
+                if self.active_categories.contains(&cat) {
+                    self.active_categories.remove(&cat);
+                } else {
+                    self.active_categories.insert(cat);
+                }
+            }
+            _ => {}
+        }
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
@@ -954,6 +1013,27 @@ impl DebugConsole {
                 .block(Block::default().borders(Borders::ALL).title(" Command "))
                 .wrap(Wrap { trim: false });
             f.render_widget(prompt_widget, chunks[3]);
+
+            // ── DBG-LOG-08: interactive /filter modal overlay ──────────────
+            if let Some(cursor) = self.filter_interactive {
+                let lines = filter_modal_lines(cursor, &self.active_categories);
+                let text: Vec<Line> = lines.into_iter().map(Line::raw).collect();
+                let n = text.len() as u16;
+                // Popup size: width 40, height n + 2 borders + 1 footer.
+                let w: u16 = 40;
+                let h: u16 = n + 3;
+                let x = area.x + area.width.saturating_sub(w) / 2;
+                let y = area.y + area.height.saturating_sub(h) / 2;
+                let popup = ratatui::layout::Rect { x, y, width: w.min(area.width), height: h.min(area.height) };
+                f.render_widget(Clear, popup);
+                let modal = Paragraph::new(text)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(" /filter — Space toggle  Tab/↑↓ move  Enter/Esc close "),
+                    );
+                f.render_widget(modal, popup);
+            }
         });
     }
 
@@ -1068,7 +1148,7 @@ impl DebugConsole {
                 "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop  /songs cave <on|off>",
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
-                "/filter"|"filter"  => "/filter — show active log categories.\n  /filter all     enable every category.\n  /filter none    disable every category.\n  /filter reset   defaults (noisy categories off).\n  /filter +CAT -CAT  toggle by name (combat, movement, ai, ...).",
+                "/filter"|"filter"  => "/filter — open interactive category toggle (Up/Down or Tab to move, Space to toggle, Enter/Esc to close).\n  /filter all     enable every category.\n  /filter none    disable every category.\n  /filter reset   defaults (noisy categories off).\n  /filter +CAT -CAT  toggle by name (combat, movement, ai, ...).",
                 "/watch"| "watch"   => "/watch — toggle the actor watch panel between collapsed and expanded (same as Ctrl+W).",
                 "/pause"| "pause"   => "/pause — freeze the game loop (actors + physics). Daynight still ticks unless /time hold. Shortcut: Ctrl+P.",
                 "/resume"|"resume"  => "/resume — unfreeze the game loop (alias: /unpause). Shortcut: Ctrl+P.",
@@ -1591,17 +1671,9 @@ impl DebugConsole {
     ///    Category tokens match label case-insensitively, e.g. `combat`, `MOVEMENT`.
     fn cmd_filter(&mut self, args: &[&str]) {
         if args.is_empty() {
-            let mut names: Vec<&'static str> = self
-                .active_categories
-                .iter()
-                .map(|c| c.label())
-                .collect();
-            names.sort();
-            if names.is_empty() {
-                self.log("Active categories: (none)");
-            } else {
-                self.log(format!("Active categories: {}", names.join(", ")));
-            }
+            // DBG-LOG-08: no args → open interactive filter modal.
+            self.filter_interactive = Some(0);
+            self.log("Filter: interactive mode — Up/Down or Tab to move, Space to toggle, Enter/Esc to close.");
             return;
         }
         // Single-keyword forms.
@@ -1702,6 +1774,23 @@ fn format_log_entry(entry: &DebugLogEntry) -> String {
     } else {
         format!("[{}] {}", entry.category.label(), entry.text)
     }
+}
+
+/// DBG-LOG-08: render one line per category for the interactive /filter modal.
+///
+/// Each line is `"<cursor> [ON|OFF] LABEL"` where `<cursor>` is `>` on the
+/// selected row and a single space otherwise. The last line is a footer hint.
+fn filter_modal_lines(
+    cursor: usize,
+    active: &std::collections::HashSet<LogCategory>,
+) -> Vec<String> {
+    let mut out = Vec::with_capacity(LogCategory::ALL.len() + 1);
+    for (i, cat) in LogCategory::ALL.iter().enumerate() {
+        let marker = if i == cursor { ">" } else { " " };
+        let state = if active.contains(cat) { "[ON] " } else { "[OFF]" };
+        out.push(format!("{} {} {}", marker, state, cat.label()));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1830,5 +1919,37 @@ mod tests {
         assert_eq!(parse_category("ai"), Some(LogCategory::Ai));
         assert_eq!(parse_category("nonsense"), None);
         assert_eq!(parse_category(""), None);
+    }
+
+    // ── DBG-LOG-08: interactive filter modal ──────────────────────────────
+
+    #[test]
+    fn filter_modal_lines_marks_cursor_and_state() {
+        let mut active = std::collections::HashSet::new();
+        active.insert(LogCategory::Combat);
+        active.insert(LogCategory::Quest);
+        let lines = filter_modal_lines(0, &active);
+        assert_eq!(lines.len(), LogCategory::ALL.len());
+        // Row 0 (Combat): cursor marker + ON
+        assert!(lines[0].starts_with("> [ON] "));
+        assert!(lines[0].ends_with("COMBAT"));
+        // Row 1 (Encounter): not selected, OFF
+        assert!(lines[1].starts_with("  [OFF] "));
+        assert!(lines[1].ends_with("ENCOUNTER"));
+        // Row 2 (Quest): not selected, ON
+        assert!(lines[2].starts_with("  [ON] "));
+        assert!(lines[2].ends_with("QUEST"));
+    }
+
+    #[test]
+    fn filter_modal_lines_cursor_moves() {
+        let active = std::collections::HashSet::new();
+        let lines = filter_modal_lines(5, &active);
+        assert!(lines[5].starts_with("> "));
+        for (i, line) in lines.iter().enumerate() {
+            if i != 5 {
+                assert!(line.starts_with("  "), "row {i} should not have cursor: {line:?}");
+            }
+        }
     }
 }
