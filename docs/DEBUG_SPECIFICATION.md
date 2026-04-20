@@ -288,7 +288,6 @@ These are modern debug affordances not present in the original game; they expose
 | `/time <period>` | Jump to a named time period: `dawn`, `noon`, `dusk`, `midnight` |
 | `/time hold` | Freeze the daynight clock (time-of-day stops advancing; gameplay continues) |
 | `/time resume` | Resume the daynight clock |
-| `/save <on\|off>` | Enable or disable autosave |
 | `/fx <effect>` | Trigger a one-shot visual effect: `witch`, `teleport`, `fadeout`, `fadein` |
 
 Note: `/time hold` only freezes the day-night tick counter. It does **not** pause the game loop or actor updates — for that, see the Flow Control commands below.

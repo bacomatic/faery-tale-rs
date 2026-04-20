@@ -503,7 +503,6 @@ impl DebugConsole {
             "/swan" => self.push_cmd(DebugCommand::SummonSwan),
             "/time" => self.cmd_time(args),
             "/brother" => self.cmd_brother(args),
-            "/save" => self.cmd_autosave(args),
             "/fx" => self.cmd_fx(args),
             "/actors" => self.push_cmd(DebugCommand::QueryActors),
             "/terrain" => self.push_cmd(DebugCommand::QueryTerrain),
@@ -540,7 +539,6 @@ impl DebugConsole {
                 "/swan" | "swan"     => "/swan — summon the swan.",
                 "/time" | "time"     => "/time <HH:MM> | dawn | noon | dusk | midnight | hold | resume\n  /time hold — freeze time.  /time resume — unfreeze.",
                 "/brother"          => "/brother <julian|phillip|kevin>",
-                "/save" | "save"    => "/save <on|off> — enable/disable autosave.",
                 "/fx"   | "fx"      => "/fx <witch|teleport|fadeout|fadein>",
                 "/actors"           => "/actors — print actor list to log.",
                 "/terrain"          => "/terrain — dump terra lookup chain at hero's feet (collision debug).",
@@ -572,7 +570,6 @@ impl DebugConsole {
             "  /swan          summon the swan",
             "  /time <t>      set time: HH:MM or dawn/noon/dusk/midnight/hold/resume",
             "  /brother <b>   switch to julian/phillip/kevin",
-            "  /save <on|off> toggle autosave",
             "  /fx <e>        trigger: witch/teleport/fadeout/fadein",
             "  /actors        list actors",
             "  /terrain       dump terrain at current position",
@@ -759,16 +756,6 @@ impl DebugConsole {
             _ => { self.log("Usage: /brother <julian|phillip|kevin>"); return; }
         };
         self.push_cmd(DebugCommand::RestartAsBrother { brother });
-    }
-
-    fn cmd_autosave(&mut self, args: &[&str]) {
-        let enable = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("on")  | Some("1") | Some("true")  => true,
-            Some("off") | Some("0") | Some("false") => false,
-            _ => { self.log("Usage: /save <on|off>"); return; }
-        };
-        self.push_cmd(DebugCommand::ToggleAutosave { enable });
-        self.log(format!("Autosave: {}", if enable { "on" } else { "off" }));
     }
 
     fn cmd_fx(&mut self, args: &[&str]) {
