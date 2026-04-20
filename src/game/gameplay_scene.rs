@@ -136,6 +136,22 @@ fn compass_dir_for_facing(facing: u8) -> usize {
     }
 }
 
+/// Pick the compass highlight segment (comptable index 0..=7) or 9 for
+/// "no highlight" per SPECIFICATION §25.7.
+///
+/// The original highlights the compass from the *resolved input direction this
+/// tick*, not from the persistent `facing` value. Facing is retained when the
+/// player stops so the sprite keeps its orientation, but the compass wedge
+/// must clear. We treat the hero as idle when their ActorState is `Still` and
+/// no movement was produced this tick (`moving == false`).
+fn compass_dir_for_player(state: &ActorState, moving: bool, facing: u8) -> usize {
+    if matches!(state, ActorState::Still) && !moving {
+        9
+    } else {
+        compass_dir_for_facing(facing)
+    }
+}
+
 /// Find the next owned weapon slot in the given direction.
 /// `current` is the 1-based weapon value (1=Dirk..5=Wand, matching actor.weapon).
 /// `direction` is +1 (next) or -1 (prev).
@@ -2191,7 +2207,14 @@ impl GameplayScene {
         let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
         let textcolors = &self.textcolors;
         let compass_regions = &self.compass_regions;
-        let input_comptable_dir = compass_dir_for_facing(self.state.facing);
+        let input_comptable_dir = {
+            let player = self.state.actors.first();
+            let (state, moving) = match player {
+                Some(a) => (a.state.clone(), a.moving),
+                None => (ActorState::Still, false),
+            };
+            compass_dir_for_player(&state, moving, self.state.facing)
+        };
         let hiscreen_opt = resources.find_image("hiscreen");
         let amber_font = resources.amber_font;
         let topaz_font = resources.topaz_font;
@@ -5489,6 +5512,53 @@ mod tests {
         assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 44); // SW → westfight
         assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // W  → westfight
         assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 56); // NW → northfight
+    }
+
+    #[test]
+    fn test_compass_dir_for_player_idle_clears_highlight() {
+        // Spec §25.7: idle hero (Still + not moving) → direction 9 (no highlight).
+        for facing in 0u8..=7 {
+            assert_eq!(
+                compass_dir_for_player(&ActorState::Still, false, facing),
+                9,
+                "idle hero should return 9 regardless of persistent facing ({facing})"
+            );
+        }
+    }
+
+    #[test]
+    fn test_compass_dir_for_player_walking_uses_facing() {
+        // Walking → highlight wedge corresponding to facing (comptable index = (facing+1)%8).
+        let cases = [
+            (0u8, 1usize), (1, 2), (2, 3), (3, 4),
+            (4, 5), (5, 6), (6, 7), (7, 0),
+        ];
+        for (facing, expected) in cases {
+            assert_eq!(
+                compass_dir_for_player(&ActorState::Walking, true, facing),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_compass_dir_for_player_attempting_move_still_highlights() {
+        // Walking but blocked (moving == false): still "attempting to move" this tick,
+        // so the wedge must remain lit.
+        assert_eq!(
+            compass_dir_for_player(&ActorState::Walking, false, 2),
+            3
+        );
+    }
+
+    #[test]
+    fn test_compass_dir_for_player_still_with_moving_flag_highlights() {
+        // Defensive: if something sets moving=true while state==Still, we treat it as
+        // non-idle and keep the highlight (the AND guard prevents false idle detection).
+        assert_eq!(
+            compass_dir_for_player(&ActorState::Still, true, 0),
+            1
+        );
     }
 
     #[test]
