@@ -228,9 +228,20 @@ pub fn main() -> Result<(), String> {
     let mut game_frame_count: u64 = 0;
     let mut game_fps_time = std::time::Instant::now();
     let mut game_fps: f64 = 0.0;
+    // Debug step budget: when the console queues /step, this many frames get
+    // the real delta while clock.paused remains true. See DEBUG_SPEC §Flow.
+    let mut debug_step_budget: u32 = 0;
 
     'running: loop {
-        let delta_ticks = clock.update();
+        let raw_delta = clock.update();
+        // When the debug console has paused gameplay, freeze scene time by
+        // zeroing the delta. Step frames temporarily consume from the budget.
+        let delta_ticks = if clock.paused && debug_step_budget == 0 {
+            0
+        } else {
+            if debug_step_budget > 0 { debug_step_budget -= 1; }
+            raw_delta
+        };
 
         // Update game FPS counter
         game_frame_count += 1;
@@ -597,6 +608,24 @@ pub fn main() -> Result<(), String> {
             if let Some(cave) = dc.take_cave_mode_request() {
                 if let Some(ref a) = audio_system {
                     a.set_cave_mode(cave);
+                }
+            }
+
+            // Pause/resume requests from the debug console.
+            if let Some(want_pause) = dc.take_pause_request() {
+                if want_pause {
+                    clock.pause();
+                } else {
+                    clock.resume();
+                }
+            }
+            // Step requests: advance N ticks while staying paused.
+            let step_budget = dc.take_step_request();
+            if step_budget > 0 {
+                debug_step_budget = debug_step_budget.saturating_add(step_budget);
+                // Stepping implies paused; ensure the clock is in that state.
+                if !clock.paused {
+                    clock.pause();
                 }
             }
 

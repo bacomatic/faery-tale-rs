@@ -231,6 +231,10 @@ pub struct DebugConsole {
     stop_requested: bool,
     cave_mode_requested: Option<bool>,
     quit_requested: bool,
+    /// Pause/resume request: Some(true) = pause, Some(false) = resume, None = none.
+    pause_request: Option<bool>,
+    /// Step request: number of ticks to advance while paused. Consumed by the clock.
+    step_request: u32,
 
     // Latest status snapshot
     status: DebugSnapshot,
@@ -266,6 +270,8 @@ impl DebugConsole {
             stop_requested: false,
             cave_mode_requested: None,
             quit_requested: false,
+            pause_request: None,
+            step_request: 0,
             status: DebugSnapshot::default(),
         })
     }
@@ -295,6 +301,19 @@ impl DebugConsole {
     /// Drain pending debug commands for the main loop to apply.
     pub fn drain_commands(&mut self) -> Vec<DebugCommand> {
         self.pending_commands.drain(..).collect()
+    }
+
+    /// Returns and clears any queued pause/resume request.
+    /// `Some(true)` = pause, `Some(false)` = resume, `None` = no change.
+    pub fn take_pause_request(&mut self) -> Option<bool> {
+        self.pause_request.take()
+    }
+
+    /// Returns and clears the queued step budget (ticks to advance while paused).
+    pub fn take_step_request(&mut self) -> u32 {
+        let n = self.step_request;
+        self.step_request = 0;
+        n
     }
 
     /// Returns and clears any song group play request.
@@ -340,6 +359,17 @@ impl DebugConsole {
                     }
                     KeyCode::Char('q') if ke.modifiers.contains(KeyModifiers::CONTROL) => {
                         self.quit_requested = true;
+                    }
+
+                    // Toggle pause/resume (Ctrl+P — DEBUG_SPEC §Keyboard Shortcuts)
+                    KeyCode::Char('p') if ke.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if self.status.is_paused {
+                            self.pause_request = Some(false);
+                            self.log("Game resumed (Ctrl+P).");
+                        } else {
+                            self.pause_request = Some(true);
+                            self.log("Game paused (Ctrl+P). /resume to continue, /step [n] to advance frames.");
+                        }
                     }
 
                     // Submit command
@@ -639,6 +669,21 @@ impl DebugConsole {
             "/songs" => self.cmd_songs(args),
             "/adf" => self.cmd_adf(args),
             "/clear" | "/cls" => self.cmd_clear(),
+            "/pause" => {
+                self.pause_request = Some(true);
+                self.log("Game paused. /resume to continue, /step [n] to advance frames.");
+            }
+            "/resume" | "/unpause" => {
+                self.pause_request = Some(false);
+                self.log("Game resumed.");
+            }
+            "/step" => {
+                let n: u32 = args.first().and_then(|s| s.parse().ok()).unwrap_or(1);
+                let n = n.max(1);
+                self.step_request = self.step_request.saturating_add(n);
+                self.pause_request = Some(true);
+                self.log(format!("Stepping {} tick(s).", n));
+            }
             _ => {
                 self.log(format!("Unknown command: {}  (type /help for list)", cmd));
             }
