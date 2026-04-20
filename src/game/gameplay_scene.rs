@@ -4065,14 +4065,6 @@ impl GameplayScene {
         }
     }
 
-    /// Return the effective cfile index for rendering the swan NPC (SPEC §21.4 / §21.7).
-    ///
-    /// When `flying != 0` the swan is airborne → use cfile 11 (bird sprite).
-    /// When `flying == 0` the swan is grounded → use cfile 4 (raft sprite).
-    pub fn swan_sprite_cfile(flying: i16) -> usize {
-        if flying != 0 { 11 } else { 4 }
-    }
-
     /// Map (npc_type, race) → SETFIG_TABLE index for named NPC rendering.
     /// Returns None if the NPC is not a SetFig.
     /// SETFIG_TABLE indices: 0=wizard, 8=bartender, 13=beggar (see sprites.rs).
@@ -4238,13 +4230,7 @@ impl GameplayScene {
         // --- Enemy NPCs from npc_table ---
         if let Some(ref table) = npc_table {
             for (npc_idx, npc) in table.npcs.iter().enumerate().filter(|(_, n)| n.active) {
-                let Some(base_cfile) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
-                // SPEC §21.4 / §21.7: swan on ground renders as raft sprite.
-                let cfile_idx = if npc.npc_type == crate::game::npc::NPC_TYPE_SWAN {
-                    Self::swan_sprite_cfile(state.flying)
-                } else {
-                    base_cfile
-                };
+                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
                 let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
 
                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
@@ -5036,13 +5022,7 @@ impl Scene for GameplayScene {
                         RenderKind::Enemy(idx) => {
                             if let Some(ref table) = self.npc_table {
                                 let npc = &table.npcs[idx];
-                                let Some(base_cfile) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
-                                // SPEC §21.4 / §21.7: swan on ground renders as raft sprite.
-                                let cfile_idx = if npc.npc_type == crate::game::npc::NPC_TYPE_SWAN {
-                                    Self::swan_sprite_cfile(self.state.flying)
-                                } else {
-                                    base_cfile
-                                };
+                                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
                                 let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) else { continue };
 
                                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
@@ -5444,150 +5424,6 @@ mod tests {
         assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
         // Beggar → SetFig pass (not enemy)
         assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
-    }
-
-    // --- T3-CARRY-SWAN-GROUND: swan sprite selection tests (SPEC §21.4 / §21.7) ---
-
-    #[test]
-    fn test_swan_sprite_cfile_flying_uses_bird_sheet() {
-        // flying=1 → airborne → cfile 11 (bird sprite)
-        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11,
-            "swan flying=1 must use cfile 11 (bird sprite)");
-    }
-
-    #[test]
-    fn test_swan_sprite_cfile_grounded_uses_raft_sheet() {
-        // flying=0 → grounded → cfile 4 (raft sprite)
-        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4,
-            "swan flying=0 must use cfile 4 (raft sprite)");
-    }
-
-    #[test]
-    fn test_swan_sprite_cfile_landing_transition() {
-        // Before landing: flying=1 → bird sprite
-        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11);
-        // After landing: flying=0 → raft sprite
-        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4,
-            "sprite must switch to raft immediately when flying resets to 0");
-    }
-
-    #[test]
-    fn test_swan_sprite_cfile_takeoff_transition() {
-        // Before takeoff: flying=0 → raft sprite
-        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4);
-        // After takeoff: flying=1 → bird sprite
-        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11,
-            "sprite must restore to bird immediately when flying becomes 1");
-    }
-
-    #[test]
-    fn test_swan_render_grounded_selects_raft_cfile() {
-        // Verify blit_actors_to_framebuf picks cfile 4 for a grounded swan.
-        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, RACE_NORMAL};
-        use crate::game::game_state::GameState;
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-
-        // Build mock sprite sheets: cfile 4 (raft, 2 frames) and cfile 11 (bird, 8 frames).
-        let raft_sheet = SpriteSheet {
-            cfile_idx: 4,
-            pixels: vec![0u8; SPRITE_W * SPRITE_H * 2],
-            num_frames: 2,
-            frame_h: SPRITE_H,
-        };
-        let bird_sheet = SpriteSheet {
-            cfile_idx: 11,
-            pixels: vec![1u8; SPRITE_W * SPRITE_H * 8], // different fill so we can tell them apart
-            num_frames: 8,
-            frame_h: SPRITE_H,
-        };
-
-        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
-        sheets[4]  = Some(raft_sheet);
-        sheets[11] = Some(bird_sheet);
-
-        let mut state = GameState::new();
-        state.flying = 0; // grounded
-
-        let swan_npc = Npc {
-            active: true,
-            npc_type: NPC_TYPE_SWAN,
-            race: RACE_NORMAL,
-            x: 100, y: 100,
-            ..Default::default()
-        };
-        let mut npcs: [Npc; crate::game::npc::MAX_NPCS] = Default::default();
-        npcs[0] = swan_npc;
-        let table = NpcTable { npcs };
-        let npc_table = Some(table);
-
-        let fb_w = MAP_DST_W as usize;
-        let fb_h = MAP_DST_H as usize;
-        let mut framebuf = vec![31u8; fb_w * fb_h]; // 31 = transparent sentinel
-
-        GameplayScene::blit_actors_to_framebuf(
-            &sheets, &None, &state, &npc_table, 100, 100, &mut framebuf, false,
-        );
-
-        // The raft sheet is filled with 0; the bird sheet is filled with 1.
-        // At least one pixel from the swan render must be 0 (raft), not 1 (bird).
-        let has_raft_pixel = framebuf.iter().any(|&p| p == 0);
-        let has_bird_pixel = framebuf.iter().any(|&p| p == 1);
-        assert!(has_raft_pixel, "grounded swan must blit raft-sheet pixels (0)");
-        assert!(!has_bird_pixel, "grounded swan must NOT blit bird-sheet pixels (1)");
-    }
-
-    #[test]
-    fn test_swan_render_flying_selects_bird_cfile() {
-        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, RACE_NORMAL};
-        use crate::game::game_state::GameState;
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-
-        let raft_sheet = SpriteSheet {
-            cfile_idx: 4,
-            pixels: vec![0u8; SPRITE_W * SPRITE_H * 2],
-            num_frames: 2,
-            frame_h: SPRITE_H,
-        };
-        let bird_sheet = SpriteSheet {
-            cfile_idx: 11,
-            pixels: vec![1u8; SPRITE_W * SPRITE_H * 8],
-            num_frames: 8,
-            frame_h: SPRITE_H,
-        };
-
-        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
-        sheets[4]  = Some(raft_sheet);
-        sheets[11] = Some(bird_sheet);
-
-        let mut state = GameState::new();
-        state.flying = 1; // airborne
-
-        let swan_npc = Npc {
-            active: true,
-            npc_type: NPC_TYPE_SWAN,
-            race: RACE_NORMAL,
-            x: 100, y: 100,
-            ..Default::default()
-        };
-        let mut npcs: [Npc; crate::game::npc::MAX_NPCS] = Default::default();
-        npcs[0] = swan_npc;
-        let table = NpcTable { npcs };
-        let npc_table = Some(table);
-
-        let fb_w = MAP_DST_W as usize;
-        let fb_h = MAP_DST_H as usize;
-        let mut framebuf = vec![31u8; fb_w * fb_h];
-
-        GameplayScene::blit_actors_to_framebuf(
-            &sheets, &None, &state, &npc_table, 100, 100, &mut framebuf, false,
-        );
-
-        let has_bird_pixel = framebuf.iter().any(|&p| p == 1);
-        let has_raft_pixel = framebuf.iter().any(|&p| p == 0);
-        assert!(has_bird_pixel, "flying swan must blit bird-sheet pixels (1)");
-        assert!(!has_raft_pixel, "flying swan must NOT blit raft-sheet pixels (0)");
     }
 
     #[test]
