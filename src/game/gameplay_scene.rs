@@ -366,9 +366,18 @@ pub struct GameplayScene {
     fiery_death: bool,
     /// Death countdown active (goodfairy timer running).
     dying: bool,
-    /// Goodfairy countdown: starts at 255, decrements every other tick (~30Hz).
-    /// When reaches 0, luck check determines faery revive or next brother.
+    /// Goodfairy countdown: u8 semantic, held as i16 for arithmetic convenience.
+    /// Initialised to 255 when hero dies.  Counts down each frame (30 Hz) toward 1.
+    /// Timeline (SPEC §20.2):
+    ///   255–200 (~56 frames): death sequence / song
+    ///   199–120 (~80 frames): luck gate fires once (luck < 1 → brother succession)
+    ///   119–20  (~100 frames): fairy sprite flying; battleflag cleared
+    ///   19–2    (~18 frames): resurrection glow
+    ///   1       (frame 256): revive(FALSE) — fairy rescues hero
     goodfairy: i16,
+    /// True once the luck gate (goodfairy crossing below 200) has fired this death cycle.
+    /// Prevents the gate from re-firing on subsequent frames.
+    luck_gate_fired: bool,
     /// Death type for event message (5=combat, 6=drowning, 27=lava, 0=starvation).
     death_type: usize,
 }
@@ -462,6 +471,7 @@ impl GameplayScene {
             fiery_death: false,
             dying: false,
             goodfairy: 0,
+            luck_gate_fired: false,
             death_type: 0,
         }
     }
@@ -1346,6 +1356,134 @@ impl GameplayScene {
 
         if let Some(player) = self.state.actors.first_mut() {
             player.environ = k;
+        }
+    }
+
+    /// Advance the good-fairy rescue countdown one step (SPEC §20.2, T3-COMBAT-GOODFAIRY).
+    ///
+    /// **Timeline** (countdown starts at 255, decrements ~30 Hz):
+    /// - 255–200: death sequence / song (no action)
+    /// - 199–120: luck gate fires **once**; luck < 1 → brother succession immediately
+    /// - 119–20: fairy sprite flying; `battleflag` cleared
+    /// - 19–2:   resurrection glow (no action)
+    /// - ≤ 1:    `revive(FALSE)` — fairy rescues hero; countdown ends
+    ///
+    /// Also initialises the countdown when `vitality ≤ 0` and `dying` is not yet set.
+    /// Extracted from `update()` to allow unit-testing without SDL dependencies.
+    fn tick_goodfairy_countdown(&mut self, game_lib: &GameLibrary, delta_ticks: u32) {
+        // Start countdown on hero death.
+        if !self.dying && self.state.vitality <= 0
+            && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE)
+        {
+            self.dying = true;
+            self.goodfairy = 255;
+            self.luck_gate_fired = false;
+            self.last_mood = u8::MAX; // force death music re-evaluation
+
+            // T1-DEATH-MESSAGE: emit death event message (SPEC §20.1)
+            let bname = self.brother_name().to_string();
+            let death_msg = crate::game::events::event_msg(&self.narr, self.death_type, &bname);
+            if !death_msg.is_empty() {
+                self.messages.push_wrapped(death_msg);
+            }
+
+            self.dlog("death: goodfairy countdown started (255)");
+        }
+
+        if self.dying {
+            // Decrement each frame (~30 Hz; 255 frames total ≈ 8.5 s).
+            self.goodfairy -= delta_ticks as i16;
+
+            // Luck gate: fires once when countdown crosses below 200 (SPEC §20.2 range 199–120).
+            // Fully deterministic: luck cannot change during DEAD state.
+            if self.goodfairy <= 199 && !self.luck_gate_fired {
+                self.luck_gate_fired = true;
+                if self.state.luck < 1 {
+                    // Luck depleted — the Good Fairy cannot rescue; next brother takes over.
+                    self.dying = false;
+                    self.luck_gate_fired = false;
+                    // SPEC §15.2: On brother death, set bones/ghost world objects visible.
+                    // ob_listg[1-2].ob_stat = 1 (bones), ob_listg[3-4].ob_stat = 3 (ghosts).
+                    if self.state.world_objects.len() > 4 {
+                        if self.state.world_objects[1].ob_id == 28 {
+                            self.state.world_objects[1].ob_stat = 1;
+                            self.state.world_objects[1].visible = true;
+                        }
+                        if self.state.world_objects[2].ob_id == 28 {
+                            self.state.world_objects[2].ob_stat = 1;
+                            self.state.world_objects[2].visible = true;
+                        }
+                        if self.state.world_objects[3].ob_id == 10 || self.state.world_objects[3].ob_id == 11 {
+                            self.state.world_objects[3].ob_stat = 3;
+                            self.state.world_objects[3].visible = true;
+                        }
+                        if self.state.world_objects[4].ob_id == 10 || self.state.world_objects[4].ob_id == 11 {
+                            self.state.world_objects[4].ob_stat = 3;
+                            self.state.world_objects[4].visible = true;
+                        }
+                    }
+                    if let Some(next) = self.state.next_brother() {
+                        if let Some(bro) = game_lib.get_brother(next) {
+                            let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
+                                .map(|loc| (loc.x, loc.y, loc.region))
+                                .unwrap_or((19036, 15755, 3));
+                            self.state.activate_brother_from_config(
+                                next, bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
+                            );
+                        } else {
+                            self.state.activate_brother(next);
+                        }
+                        self.update_brother_substitution();
+                        let bname = self.brother_name().to_string();
+                        // Original: event(9) + event(10) for Phillip,
+                        //           event(9) + event(11) for Kevin.
+                        self.messages.push_wrapped(
+                            crate::game::events::event_msg(&self.narr, 9, &bname));
+                        let cont_id = match self.state.brother {
+                            2 => Some(10),
+                            3 => Some(11),
+                            _ => None,
+                        };
+                        if let Some(id) = cont_id {
+                            self.messages.push_wrapped(
+                                crate::game::events::event_msg(&self.narr, id, &bname));
+                        }
+                        self.last_mood = u8::MAX;
+                        self.dlog(format!("brother died, {} continues", &bname));
+                    } else {
+                        // All brothers dead — game over
+                        self.quit_requested = true;
+                        self.dlog("All brothers dead — GAME OVER");
+                    }
+                }
+                // luck >= 1: countdown continues toward fairy rescue at goodfairy == 1
+            }
+
+            // Fairy sprite phase: clear battleflag when fairy is flying (SPEC §20.2 range 119–20).
+            if self.goodfairy <= 119 {
+                self.state.battleflag = false;
+            }
+
+            // T3-COMBAT-GOODFAIRY: Fairy rescue fires at goodfairy ≤ 1 (not 0).
+            // SPEC §20.2: "1 | frame 256 | revive(FALSE) — fairy rescues hero, same character."
+            if self.goodfairy <= 1 && self.dying {
+                self.dying = false;
+                self.luck_gate_fired = false;
+                // T1-DEATH-FAERY-COST: luck cost is 5 (SPEC §20.2)
+                self.state.luck = (self.state.luck - 5).max(0);
+                // revive(FALSE): return to safe position with full HP; stats unchanged.
+                self.state.hero_x = self.state.safe_x;
+                self.state.hero_y = self.state.safe_y;
+                self.state.region_num = self.state.safe_r;
+                self.state.vitality = crate::game::magic::heal_cap(self.state.brave);
+                self.state.hunger = 0;
+                self.state.fatigue = 0;
+                self.state.battleflag = false;
+                let bname = self.brother_name().to_string();
+                self.messages.push(format!("A faery saved {}!", &bname));
+                self.last_mood = u8::MAX; // restart normal music
+                self.dlog(format!("faery revived {}, luck now {}", &bname, self.state.luck));
+            }
         }
     }
 
@@ -3893,6 +4031,14 @@ impl GameplayScene {
         }
     }
 
+    /// Return the effective cfile index for rendering the swan NPC (SPEC §21.4 / §21.7).
+    ///
+    /// When `flying != 0` the swan is airborne → use cfile 11 (bird sprite).
+    /// When `flying == 0` the swan is grounded → use cfile 4 (raft sprite).
+    pub fn swan_sprite_cfile(flying: i16) -> usize {
+        if flying != 0 { 11 } else { 4 }
+    }
+
     /// Map (npc_type, race) → SETFIG_TABLE index for named NPC rendering.
     /// Returns None if the NPC is not a SetFig.
     /// SETFIG_TABLE indices: 0=wizard, 8=bartender, 13=beggar (see sprites.rs).
@@ -4058,7 +4204,13 @@ impl GameplayScene {
         // --- Enemy NPCs from npc_table ---
         if let Some(ref table) = npc_table {
             for (npc_idx, npc) in table.npcs.iter().enumerate().filter(|(_, n)| n.active) {
-                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                let Some(base_cfile) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                // SPEC §21.4 / §21.7: swan on ground renders as raft sprite.
+                let cfile_idx = if npc.npc_type == crate::game::npc::NPC_TYPE_SWAN {
+                    Self::swan_sprite_cfile(state.flying)
+                } else {
+                    base_cfile
+                };
                 let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
 
                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
@@ -4556,104 +4708,8 @@ impl Scene for GameplayScene {
             }
         }
 
-        // Death / revive cycle (gameloop-106)
-        // Trigger: vitality drops to 0 → start goodfairy countdown.
-        // During countdown: no input, decrement goodfairy every other tick (~30Hz).
-        // At 0: luck check → faery revival or next brother / game over.
-        if !self.dying && self.state.vitality <= 0
-            && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE)
-        {
-            self.dying = true;
-            self.goodfairy = 255;
-            self.last_mood = u8::MAX; // force death music re-evaluation
-            
-            // T1-DEATH-MESSAGE: emit death event message (SPEC §20.1)
-            let bname = self.brother_name().to_string();
-            let death_msg = crate::game::events::event_msg(&self.narr, self.death_type, &bname);
-            if !death_msg.is_empty() {
-                self.messages.push_wrapped(death_msg);
-            }
-            
-            self.dlog("death: goodfairy countdown started (255)");
-        }
-
-        if self.dying {
-            // Decrement every other tick (~30Hz countdown, ~8.5s total)
-            self.goodfairy -= delta_ticks as i16;
-            if self.goodfairy <= 0 {
-                self.dying = false;
-                // T1-DEATH-LUCK-GATE: luck threshold is 1, not 10 (SPEC §20.2)
-                if self.state.luck >= 1 {
-                    // T1-DEATH-FAERY-COST: luck cost is 5, not 10 (SPEC §20.2)
-                    self.state.luck = (self.state.luck - 5).max(0);
-                    // T1-DEATH-FAERY-RESET: restore state per SPEC §20.2
-                    self.state.hero_x = self.state.safe_x;
-                    self.state.hero_y = self.state.safe_y;
-                    self.state.region_num = self.state.safe_r;
-                    self.state.vitality = crate::game::magic::heal_cap(self.state.brave);
-                    self.state.hunger = 0;
-                    self.state.fatigue = 0;
-                    self.state.battleflag = false;
-                    let bname = self.brother_name().to_string();
-                    self.messages.push(format!("A faery saved {}!", &bname));
-                    self.last_mood = u8::MAX; // restart normal music
-                    self.dlog(format!("faery revived {}, luck now {}", &bname, self.state.luck));
-                } else if let Some(next) = self.state.next_brother() {
-                    // SPEC §15.2: On brother death, set bones/ghost world objects visible.
-                    // ob_listg[1-2].ob_stat = 1 (bones), ob_listg[3-4].ob_stat = 3 (ghosts).
-                    if self.state.world_objects.len() > 4 {
-                        if self.state.world_objects[1].ob_id == 28 {
-                            self.state.world_objects[1].ob_stat = 1;
-                            self.state.world_objects[1].visible = true;
-                        }
-                        if self.state.world_objects[2].ob_id == 28 {
-                            self.state.world_objects[2].ob_stat = 1;
-                            self.state.world_objects[2].visible = true;
-                        }
-                        if self.state.world_objects[3].ob_id == 10 || self.state.world_objects[3].ob_id == 11 {
-                            self.state.world_objects[3].ob_stat = 3;
-                            self.state.world_objects[3].visible = true;
-                        }
-                        if self.state.world_objects[4].ob_id == 10 || self.state.world_objects[4].ob_id == 11 {
-                            self.state.world_objects[4].ob_stat = 3;
-                            self.state.world_objects[4].visible = true;
-                        }
-                    }
-
-                    if let Some(bro) = game_lib.get_brother(next) {
-                        let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
-                            .map(|loc| (loc.x, loc.y, loc.region))
-                            .unwrap_or((19036, 15755, 3));
-                        self.state.activate_brother_from_config(
-                            next, bro.brave, bro.luck, bro.kind, bro.wealth, sx, sy, sr,
-                        );
-                    } else {
-                        self.state.activate_brother(next);
-                    }
-                    self.update_brother_substitution();
-                    let bname = self.brother_name().to_string();
-                    // Original: event(9) + event(10) for Phillip,
-                    //           event(9) + event(11) for Kevin.
-                    self.messages.push_wrapped(
-                        crate::game::events::event_msg(&self.narr, 9, &bname));
-                    let cont_id = match self.state.brother {
-                        2 => Some(10),
-                        3 => Some(11),
-                        _ => None,
-                    };
-                    if let Some(id) = cont_id {
-                        self.messages.push_wrapped(
-                            crate::game::events::event_msg(&self.narr, id, &bname));
-                    }
-                    self.last_mood = u8::MAX;
-                    self.dlog(format!("brother died, {} continues", &bname));
-                } else {
-                    // All brothers dead — game over
-                    self.quit_requested = true;
-                    self.dlog("All brothers dead — GAME OVER");
-                }
-            }
-        }
+        // Death / revive cycle (SPEC §20.2, gameloop-106)
+        self.tick_goodfairy_countdown(game_lib, delta_ticks);
 
         // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
         for _ in 0..delta_ticks {
@@ -4948,7 +5004,13 @@ impl Scene for GameplayScene {
                         RenderKind::Enemy(idx) => {
                             if let Some(ref table) = self.npc_table {
                                 let npc = &table.npcs[idx];
-                                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                let Some(base_cfile) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                // SPEC §21.4 / §21.7: swan on ground renders as raft sprite.
+                                let cfile_idx = if npc.npc_type == crate::game::npc::NPC_TYPE_SWAN {
+                                    Self::swan_sprite_cfile(self.state.flying)
+                                } else {
+                                    base_cfile
+                                };
                                 let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) else { continue };
 
                                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
@@ -5350,6 +5412,150 @@ mod tests {
         assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
         // Beggar → SetFig pass (not enemy)
         assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
+    }
+
+    // --- T3-CARRY-SWAN-GROUND: swan sprite selection tests (SPEC §21.4 / §21.7) ---
+
+    #[test]
+    fn test_swan_sprite_cfile_flying_uses_bird_sheet() {
+        // flying=1 → airborne → cfile 11 (bird sprite)
+        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11,
+            "swan flying=1 must use cfile 11 (bird sprite)");
+    }
+
+    #[test]
+    fn test_swan_sprite_cfile_grounded_uses_raft_sheet() {
+        // flying=0 → grounded → cfile 4 (raft sprite)
+        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4,
+            "swan flying=0 must use cfile 4 (raft sprite)");
+    }
+
+    #[test]
+    fn test_swan_sprite_cfile_landing_transition() {
+        // Before landing: flying=1 → bird sprite
+        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11);
+        // After landing: flying=0 → raft sprite
+        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4,
+            "sprite must switch to raft immediately when flying resets to 0");
+    }
+
+    #[test]
+    fn test_swan_sprite_cfile_takeoff_transition() {
+        // Before takeoff: flying=0 → raft sprite
+        assert_eq!(GameplayScene::swan_sprite_cfile(0), 4);
+        // After takeoff: flying=1 → bird sprite
+        assert_eq!(GameplayScene::swan_sprite_cfile(1), 11,
+            "sprite must restore to bird immediately when flying becomes 1");
+    }
+
+    #[test]
+    fn test_swan_render_grounded_selects_raft_cfile() {
+        // Verify blit_actors_to_framebuf picks cfile 4 for a grounded swan.
+        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, RACE_NORMAL};
+        use crate::game::game_state::GameState;
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+
+        // Build mock sprite sheets: cfile 4 (raft, 2 frames) and cfile 11 (bird, 8 frames).
+        let raft_sheet = SpriteSheet {
+            cfile_idx: 4,
+            pixels: vec![0u8; SPRITE_W * SPRITE_H * 2],
+            num_frames: 2,
+            frame_h: SPRITE_H,
+        };
+        let bird_sheet = SpriteSheet {
+            cfile_idx: 11,
+            pixels: vec![1u8; SPRITE_W * SPRITE_H * 8], // different fill so we can tell them apart
+            num_frames: 8,
+            frame_h: SPRITE_H,
+        };
+
+        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+        sheets[4]  = Some(raft_sheet);
+        sheets[11] = Some(bird_sheet);
+
+        let mut state = GameState::new();
+        state.flying = 0; // grounded
+
+        let swan_npc = Npc {
+            active: true,
+            npc_type: NPC_TYPE_SWAN,
+            race: RACE_NORMAL,
+            x: 100, y: 100,
+            ..Default::default()
+        };
+        let mut npcs: [Npc; crate::game::npc::MAX_NPCS] = Default::default();
+        npcs[0] = swan_npc;
+        let table = NpcTable { npcs };
+        let npc_table = Some(table);
+
+        let fb_w = MAP_DST_W as usize;
+        let fb_h = MAP_DST_H as usize;
+        let mut framebuf = vec![31u8; fb_w * fb_h]; // 31 = transparent sentinel
+
+        GameplayScene::blit_actors_to_framebuf(
+            &sheets, &None, &state, &npc_table, 100, 100, &mut framebuf, false,
+        );
+
+        // The raft sheet is filled with 0; the bird sheet is filled with 1.
+        // At least one pixel from the swan render must be 0 (raft), not 1 (bird).
+        let has_raft_pixel = framebuf.iter().any(|&p| p == 0);
+        let has_bird_pixel = framebuf.iter().any(|&p| p == 1);
+        assert!(has_raft_pixel, "grounded swan must blit raft-sheet pixels (0)");
+        assert!(!has_bird_pixel, "grounded swan must NOT blit bird-sheet pixels (1)");
+    }
+
+    #[test]
+    fn test_swan_render_flying_selects_bird_cfile() {
+        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, RACE_NORMAL};
+        use crate::game::game_state::GameState;
+        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+
+        let raft_sheet = SpriteSheet {
+            cfile_idx: 4,
+            pixels: vec![0u8; SPRITE_W * SPRITE_H * 2],
+            num_frames: 2,
+            frame_h: SPRITE_H,
+        };
+        let bird_sheet = SpriteSheet {
+            cfile_idx: 11,
+            pixels: vec![1u8; SPRITE_W * SPRITE_H * 8],
+            num_frames: 8,
+            frame_h: SPRITE_H,
+        };
+
+        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+        sheets[4]  = Some(raft_sheet);
+        sheets[11] = Some(bird_sheet);
+
+        let mut state = GameState::new();
+        state.flying = 1; // airborne
+
+        let swan_npc = Npc {
+            active: true,
+            npc_type: NPC_TYPE_SWAN,
+            race: RACE_NORMAL,
+            x: 100, y: 100,
+            ..Default::default()
+        };
+        let mut npcs: [Npc; crate::game::npc::MAX_NPCS] = Default::default();
+        npcs[0] = swan_npc;
+        let table = NpcTable { npcs };
+        let npc_table = Some(table);
+
+        let fb_w = MAP_DST_W as usize;
+        let fb_h = MAP_DST_H as usize;
+        let mut framebuf = vec![31u8; fb_w * fb_h];
+
+        GameplayScene::blit_actors_to_framebuf(
+            &sheets, &None, &state, &npc_table, 100, 100, &mut framebuf, false,
+        );
+
+        let has_bird_pixel = framebuf.iter().any(|&p| p == 1);
+        let has_raft_pixel = framebuf.iter().any(|&p| p == 0);
+        assert!(has_bird_pixel, "flying swan must blit bird-sheet pixels (1)");
+        assert!(!has_raft_pixel, "flying swan must NOT blit raft-sheet pixels (0)");
     }
 
     #[test]
@@ -5832,6 +6038,100 @@ mod death_tests {
         assert_eq!(state.hero_y, 2000);
         assert_eq!(state.region_num, 5);
         assert_eq!(state.vitality, 10);
+    }
+
+    // ── T3-COMBAT-GOODFAIRY tests ─────────────────────────────────────────────
+
+    fn make_lib() -> crate::game::game_library::GameLibrary {
+        let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
+        toml::from_str(&cfg).expect("faery.toml must parse")
+    }
+
+    #[test]
+    fn t3_goodfairy_death_init_sets_255() {
+        // (a) When vitality drops to 0, countdown must initialise at 255 (SPEC §20.2).
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.state.vitality = 0;
+        scene.state.luck = 20; // above gate threshold
+        scene.tick_goodfairy_countdown(&lib, 0);
+        assert!(scene.dying, "dying must be true after vitality drops to 0");
+        assert_eq!(scene.goodfairy, 255, "countdown must start at 255");
+    }
+
+    #[test]
+    fn t3_goodfairy_countdown_decrements_each_tick() {
+        // (b) Each call with delta=1 decrements goodfairy by 1 (SPEC §20.2).
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.dying = true;
+        scene.goodfairy = 255;
+        scene.state.luck = 20; // above gate threshold — won't trigger succession
+        scene.tick_goodfairy_countdown(&lib, 1);
+        assert_eq!(scene.goodfairy, 254, "countdown must decrement by delta each tick");
+        scene.tick_goodfairy_countdown(&lib, 1);
+        assert_eq!(scene.goodfairy, 253);
+    }
+
+    #[test]
+    fn t3_goodfairy_revive_at_1() {
+        // (c) Countdown reaching 1 triggers revive(FALSE): safe location, full HP,
+        //     hunger/fatigue reset, battleflag cleared (SPEC §20.2).
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.dying = true;
+        scene.luck_gate_fired = true; // gate already passed (luck was >= 1)
+        scene.goodfairy = 2;          // one tick away from 1
+        scene.state.luck = 20;
+        scene.state.brave = 35;       // heal_cap = 15 + 35/4 = 23
+        scene.state.hunger = 80;
+        scene.state.fatigue = 90;
+        scene.state.battleflag = true;
+        scene.state.vitality = 0;
+        scene.state.safe_x = 5000;
+        scene.state.safe_y = 6000;
+        scene.state.safe_r = 3;
+
+        // Should NOT fire yet at goodfairy=2→1 after one delta=1 tick
+        scene.tick_goodfairy_countdown(&lib, 1);
+        assert_eq!(scene.goodfairy, 1, "goodfairy should be at 1 before rescue fires");
+        // goodfairy is now 1, so rescue fires this tick
+        assert!(!scene.dying, "dying must clear once goodfairy reaches 1");
+        assert_eq!(scene.state.hero_x, 5000, "hero must teleport to safe_x");
+        assert_eq!(scene.state.hero_y, 6000, "hero must teleport to safe_y");
+        assert_eq!(scene.state.vitality, 23, "vitality must be restored to heal_cap (15+brave/4)");
+        assert_eq!(scene.state.hunger, 0, "hunger must be cleared on revive");
+        assert_eq!(scene.state.fatigue, 0, "fatigue must be cleared on revive");
+        assert!(!scene.state.battleflag, "battleflag must be cleared on revive");
+        assert_eq!(scene.state.luck, 15, "luck must decrease by 5 on fairy rescue");
+    }
+
+    #[test]
+    fn t3_goodfairy_no_rescue_when_luck_zero() {
+        // (d) Luck < 1 → luck gate fires brother succession, not fairy rescue.
+        //     Countdown must end at the luck gate (~199), not run to 1.
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.dying = true;
+        scene.goodfairy = 200; // one tick away from triggering the luck gate
+        scene.state.luck = 0;  // fairy NOT available
+        scene.state.brother = 1;
+        scene.state.active_brother = 0;
+        scene.state.brother_alive = [true, true, true];
+
+        // Advance one tick so goodfairy drops to 199 → luck gate fires.
+        scene.tick_goodfairy_countdown(&lib, 1);
+
+        // With luck=0, brother succession must have triggered (dying cleared).
+        assert!(!scene.dying,
+            "dying must clear at luck gate when luck < 1 (brother succession)");
+        // Brother must have changed (Julian → Phillip), not fairy rescued.
+        assert_eq!(scene.state.brother, 2,
+            "brother must advance to Phillip (2) on succession, not stay as Julian (1)");
+        // No fairy rescue message should have been emitted.
+        let transcript = scene.messages.transcript().join(" ");
+        assert!(!transcript.contains("faery saved"),
+            "fairy rescue message must NOT appear when luck < 1");
     }
 }
 
