@@ -1022,6 +1022,7 @@ impl DebugConsole {
                     if self.watch_expanded { "expanded" } else { "collapsed" }
                 ));
             }
+            "/filter" => self.cmd_filter(args),
             _ => {
                 self.log(format!("Unknown command: {}  (type /help for list)", cmd));
             }
@@ -1067,6 +1068,7 @@ impl DebugConsole {
                 "/songs"| "songs"   => "/songs — list song groups.  /songs play <N>  /songs stop  /songs cave <on|off>",
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
+                "/filter"|"filter"  => "/filter — show active log categories.\n  /filter all     enable every category.\n  /filter none    disable every category.\n  /filter reset   defaults (noisy categories off).\n  /filter +CAT -CAT  toggle by name (combat, movement, ai, ...).",
                 _ => "No help for that topic.",
             };
             for line in msg.lines() {
@@ -1107,6 +1109,7 @@ impl DebugConsole {
             "  /songs [cmd]   music: play <N> / stop / cave <on|off>",
             "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
+            "  /filter [...]  show/adjust log categories",
             "  /help [cmd]    show help",
             "——————————————————————————————————————",
             "PgUp/PgDn/Home/End — scroll log   Up/Down — command history",
@@ -1568,6 +1571,79 @@ impl DebugConsole {
         self.log_entries.clear();
         self.scroll_from_bottom = 0;
     }
+
+    /// DBG-LOG-06/07/08: `/filter` command dispatcher.
+    ///
+    /// Subcommands:
+    /// * `/filter` (no args) — print current active categories.
+    /// * `/filter all` — enable all categories.
+    /// * `/filter none` — disable all categories.
+    /// * `/filter reset` — restore defaults (first 8 ON, last 5 OFF).
+    /// * `/filter +cat -cat ...` — inline toggles. Prefix `+` enables, `-` disables.
+    ///    Category tokens match label case-insensitively, e.g. `combat`, `MOVEMENT`.
+    fn cmd_filter(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            let mut names: Vec<&'static str> = self
+                .active_categories
+                .iter()
+                .map(|c| c.label())
+                .collect();
+            names.sort();
+            if names.is_empty() {
+                self.log("Active categories: (none)");
+            } else {
+                self.log(format!("Active categories: {}", names.join(", ")));
+            }
+            return;
+        }
+        // Single-keyword forms.
+        if args.len() == 1 {
+            match args[0].to_ascii_lowercase().as_str() {
+                "all" => {
+                    self.active_categories = LogCategory::ALL.iter().copied().collect();
+                    self.log("Filter: all categories enabled.");
+                    return;
+                }
+                "none" => {
+                    self.active_categories.clear();
+                    self.log("Filter: all categories disabled.");
+                    return;
+                }
+                "reset" => {
+                    self.active_categories = LogCategory::ALL
+                        .iter()
+                        .copied()
+                        .filter(|c| c.default_enabled())
+                        .collect();
+                    self.log("Filter: defaults restored (noisy categories off).");
+                    return;
+                }
+                _ => {} // fall through to inline-toggle handling
+            }
+        }
+        // Inline +cat / -cat tokens.
+        for tok in args {
+            let (sign, rest) = match tok.as_bytes().first() {
+                Some(b'+') => (true, &tok[1..]),
+                Some(b'-') => (false, &tok[1..]),
+                _ => {
+                    self.log(format!("Filter: token {:?} missing +/- prefix", tok));
+                    continue;
+                }
+            };
+            let Some(cat) = parse_category(rest) else {
+                self.log(format!("Filter: unknown category {:?}", rest));
+                continue;
+            };
+            if sign {
+                self.active_categories.insert(cat);
+                self.log(format!("Filter: +{}", cat.label()));
+            } else {
+                self.active_categories.remove(&cat);
+                self.log(format!("Filter: -{}", cat.label()));
+            }
+        }
+    }
 }
 
 impl Drop for DebugConsole {
@@ -1596,6 +1672,12 @@ fn build_god_str(flags: u8) -> String {
 
 /// Format a single log entry for rendering: `"[CATEGORY] text"`, with an
 /// optional `"[{tick}] "` prefix when `timestamp_ticks` is non-zero.
+/// Parse a category name token (case-insensitive) into a [`LogCategory`].
+fn parse_category(name: &str) -> Option<LogCategory> {
+    let up = name.to_ascii_uppercase();
+    LogCategory::ALL.iter().copied().find(|c| c.label() == up.as_str())
+}
+
 /// Filter log entries by the given active-category set (DBG-LOG-05).
 ///
 /// Returns references to entries whose `category` is present in `active`.
@@ -1730,5 +1812,15 @@ mod tests {
         let kept = filter_log_entries(&entries, &active);
         assert_eq!(kept.len(), 2);
         assert!(kept.iter().all(|e| e.text == "shown"));
+    }
+
+    #[test]
+    fn parse_category_case_insensitive() {
+        assert_eq!(parse_category("combat"), Some(LogCategory::Combat));
+        assert_eq!(parse_category("COMBAT"), Some(LogCategory::Combat));
+        assert_eq!(parse_category("Movement"), Some(LogCategory::Movement));
+        assert_eq!(parse_category("ai"), Some(LogCategory::Ai));
+        assert_eq!(parse_category("nonsense"), None);
+        assert_eq!(parse_category(""), None);
     }
 }
