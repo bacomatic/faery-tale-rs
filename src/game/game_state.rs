@@ -482,12 +482,14 @@ impl GameState {
                     events.push(2); // "was starving!"
                 }
             } else if self.fatigue > 170 {
+                // Forced sleep from exhaustion — do NOT zero fatigue; it will decrement
+                // naturally via sleep_advance_daynight() so the hero sleeps until rested.
                 events.push(12); // "just couldn't stay awake any longer!" → forced sleep
-                self.fatigue = 0;
             } else if self.hunger > 140 {
+                // Hunger collapse — reset hunger to 130 per SPEC §18.2; leave fatigue
+                // intact so sleep_advance_daynight() drives the actual sleep duration.
                 events.push(24); // "passed out from hunger!" → forced sleep
                 self.hunger = 130;
-                self.fatigue = 0;
             }
         }
     }
@@ -1094,6 +1096,39 @@ mod tests {
         s.hunger_fatigue_step(&mut events);
         assert_eq!(s.hunger, 6, "hunger should increment by 1");
         assert_eq!(s.fatigue, 11, "fatigue should increment by 1");
+    }
+
+    // T3-DEATH-SLEEP-COLLAPSE: SPEC §18.2/§18.3 — forced sleep must not zero fatigue
+
+    #[test]
+    fn test_event24_hunger_collapse_preserves_fatigue() {
+        // SPEC §18.2: hunger > 140 with (hunger & 7) == 0 and vitality ≤ 5 fires event(24).
+        // Fatigue must NOT be zeroed — it drives the actual sleep duration via
+        // sleep_advance_daynight(), so zeroing it would cause immediate wake.
+        let mut s = GameState::new();
+        s.vitality = 3;   // ≤ 5: else branch in the 8-tick check
+        s.fatigue = 80;   // < 170: event 12 won't take priority
+        s.hunger = 143;   // +1 → 144: 144 > 140, (144 & 7) == 0
+        let mut events = Vec::new();
+        s.hunger_fatigue_step(&mut events);
+        assert!(events.contains(&24), "should emit event 24 at hunger collapse");
+        assert_eq!(s.hunger, 130, "hunger must be reset to 130 on collapse");
+        assert_eq!(s.fatigue, 81, "fatigue must only increment (+1), not be zeroed");
+    }
+
+    #[test]
+    fn test_event12_fatigue_collapse_preserves_fatigue() {
+        // SPEC §18.3: fatigue > 170 with vitality ≤ 5 fires event(12) (exhaustion collapse).
+        // Fatigue must NOT be zeroed — the hero should sleep until it naturally
+        // decrements to 0 via sleep_advance_daynight().
+        let mut s = GameState::new();
+        s.vitality = 3;   // ≤ 5: else branch
+        s.fatigue = 175;  // +1 → 176 > 170: event 12 takes priority over event 24
+        s.hunger = 7;     // +1 → 8: (8 & 7) == 0, not > 140 so event 24 won't fire
+        let mut events = Vec::new();
+        s.hunger_fatigue_step(&mut events);
+        assert!(events.contains(&12), "should emit event 12 at fatigue > 170");
+        assert_eq!(s.fatigue, 176, "fatigue must only increment (+1), not be zeroed");
     }
 
     #[test]
