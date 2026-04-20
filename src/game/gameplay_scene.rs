@@ -4412,6 +4412,82 @@ impl GameplayScene {
         self.input.right = false;
         false
     }
+
+    /// SPEC §25.9: handle a cheat1-gated debug key. Returns true if the key was consumed.
+    ///
+    /// | Key     | Effect                                                                    |
+    /// |---------|---------------------------------------------------------------------------|
+    /// | B       | Grant Golden Lasso (`stuff[5]=1`); swan summon not yet wired              |
+    /// | .       | Add 3 to random `stuff[]` entry (range 0..=30)                            |
+    /// | R       | (stub) logs — fairy rescue is invoked automatically on death              |
+    /// | =       | (stub) logs — `prq(2)` brother-bio page overlay not yet wired             |
+    /// | F9      | Advance `daynight` by 1000                                                |
+    /// | F10     | (stub) logs — `prq(3)` brother-bio page overlay not yet wired             |
+    /// | ↑ / ↓   | Teleport hero ±150 in Y                                                   |
+    /// | ← / →   | Teleport hero ±280 in X                                                   |
+    fn handle_cheat1_key(&mut self, kc: Keycode) -> bool {
+        use sdl2::keyboard::Keycode as K;
+        match kc {
+            K::B => {
+                self.state.stuff_mut()[5] = 1;
+                self.dlog("cheat1(B): granted Golden Lasso (stuff[5]=1); swan summon TODO");
+                true
+            }
+            K::Period => {
+                use std::time::SystemTime;
+                let nanos = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .subsec_nanos();
+                let idx = (nanos % 31) as usize;
+                let new_val = self.state.stuff()[idx].saturating_add(3);
+                self.state.stuff_mut()[idx] = new_val;
+                self.dlog(format!(
+                    "cheat1(.): stuff[{}] += 3 -> {}",
+                    idx, new_val
+                ));
+                true
+            }
+            K::R => {
+                self.dlog("cheat1(R): rescue() not wired; fairy rescue fires on death");
+                true
+            }
+            K::Equals => {
+                self.dlog("cheat1(=): prq(2) overlay not yet implemented");
+                true
+            }
+            K::F9 => {
+                self.state.daynight = self.state.daynight.wrapping_add(1000);
+                self.dlog(format!("cheat1(F9): daynight += 1000 -> {}", self.state.daynight));
+                true
+            }
+            K::F10 => {
+                self.dlog("cheat1(F10): prq(3) overlay not yet implemented");
+                true
+            }
+            K::Up => {
+                self.state.hero_y = self.state.hero_y.saturating_sub(150);
+                self.dlog(format!("cheat1(↑): hero_y -= 150 -> {}", self.state.hero_y));
+                true
+            }
+            K::Down => {
+                self.state.hero_y = self.state.hero_y.saturating_add(150);
+                self.dlog(format!("cheat1(↓): hero_y += 150 -> {}", self.state.hero_y));
+                true
+            }
+            K::Left => {
+                self.state.hero_x = self.state.hero_x.saturating_sub(280);
+                self.dlog(format!("cheat1(←): hero_x -= 280 -> {}", self.state.hero_x));
+                true
+            }
+            K::Right => {
+                self.state.hero_x = self.state.hero_x.saturating_add(280);
+                self.dlog(format!("cheat1(→): hero_x += 280 -> {}", self.state.hero_x));
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Scene for GameplayScene {
@@ -4447,6 +4523,11 @@ impl Scene for GameplayScene {
                     if self.state.viewstatus == 4 || self.state.viewstatus == 1 {
                         self.state.viewstatus = 0;
                     }
+                    return true;
+                }
+                // SPEC §25.9: cheat1 debug keys. Intercepts arrows (teleport override),
+                // F9/F10, and a handful of letter/punct keys when cheat1 is enabled.
+                if self.state.cheat1 && self.handle_cheat1_key(*kc) {
                     return true;
                 }
                 match *kc {
@@ -7641,5 +7722,62 @@ mod tests_turtle_auto {
             "turtle should re-face when no water direction available; \
              initial facing was {initial_facing}"
         );
+    }
+
+    #[test]
+    fn t4_cheat1_b_grants_lasso() {
+        let mut scene = GameplayScene::new();
+        scene.state.cheat1 = true;
+        scene.state.stuff_mut()[5] = 0;
+        let consumed = scene.handle_cheat1_key(Keycode::B);
+        assert!(consumed);
+        assert_eq!(scene.state.stuff()[5], 1, "B grants Golden Lasso (stuff[5]=1)");
+    }
+
+    #[test]
+    fn t4_cheat1_f9_advances_daynight() {
+        let mut scene = GameplayScene::new();
+        scene.state.cheat1 = true;
+        let before = scene.state.daynight;
+        let consumed = scene.handle_cheat1_key(Keycode::F9);
+        assert!(consumed);
+        assert_eq!(scene.state.daynight, before.wrapping_add(1000));
+    }
+
+    #[test]
+    fn t4_cheat1_arrow_teleport() {
+        let mut scene = GameplayScene::new();
+        scene.state.cheat1 = true;
+        scene.state.hero_x = 10_000;
+        scene.state.hero_y = 10_000;
+        assert!(scene.handle_cheat1_key(Keycode::Up));
+        assert_eq!(scene.state.hero_y, 9_850, "↑ teleports -150 in Y");
+        assert!(scene.handle_cheat1_key(Keycode::Down));
+        assert_eq!(scene.state.hero_y, 10_000, "↓ teleports +150 in Y");
+        assert!(scene.handle_cheat1_key(Keycode::Left));
+        assert_eq!(scene.state.hero_x, 9_720, "← teleports -280 in X");
+        assert!(scene.handle_cheat1_key(Keycode::Right));
+        assert_eq!(scene.state.hero_x, 10_000, "→ teleports +280 in X");
+    }
+
+    #[test]
+    fn t4_cheat1_period_adds_to_stuff() {
+        let mut scene = GameplayScene::new();
+        scene.state.cheat1 = true;
+        let before: [u8; 36] = *scene.state.stuff();
+        let consumed = scene.handle_cheat1_key(Keycode::Period);
+        assert!(consumed);
+        let after = scene.state.stuff();
+        let diffs: Vec<usize> = (0..=30).filter(|&i| after[i] != before[i]).collect();
+        assert_eq!(diffs.len(), 1, "exactly one entry in 0..=30 should change");
+        let i = diffs[0];
+        assert_eq!(after[i], before[i].saturating_add(3));
+    }
+
+    #[test]
+    fn t4_cheat1_ignores_unmapped_key() {
+        let mut scene = GameplayScene::new();
+        scene.state.cheat1 = true;
+        assert!(!scene.handle_cheat1_key(Keycode::Z), "Z is not a cheat key");
     }
 }
