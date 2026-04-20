@@ -205,7 +205,7 @@ Defined at `ftale.h:9-25` (canonical) and duplicated at `fmain.c:90-103`.
 | 16 | `SINK` | Sinking (quicksand/water) |
 | 17 | `OSCIL` | Oscillation animation 1 (comment: "and 18") — vestigial, never assigned |
 | 18 | *(implicit)* | Oscillation animation 2 (paired with OSCIL) — vestigial, never assigned |
-| 19 | `TALKING` | Speaking/dialogue |
+| 19 | `TALKING` | SETFIG-only: 15-tick image flicker while speech text displays |
 | 20 | `FROZEN` | Frozen in place (freeze spell) |
 | 21 | `FLYING` | Vestigial — defined but never assigned; Swan uses WALKING + `riding` |
 | 22 | `FALL` | Falling; velocity-based with 25% friction per tick (`fmain.c:1737-1738`) |
@@ -351,7 +351,7 @@ struct { BYTE cfile_entry, image_base, can_talk; }
 | 12 | Ranger | 17 | 0 | 1 | `fmain.c:36` |
 | 13 | Beggar | 17 | 4 | 1 | `fmain.c:37` |
 
-`cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables generic dialogue initiation.
+`cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables the TALKING visual effect (see [§13.2](#132-talk-system)) — it does not gate speech dispatch.
 
 ### 2.7 encounter_chart — Monster Combat Stats
 
@@ -1674,7 +1674,7 @@ The `tactic` field in `struct shape` (`ftale.h:63`) is repurposed depending on a
 | Actor State | Purpose of `tactic` | Values | Source |
 |-------------|---------------------|--------|--------|
 | AI-controlled (WALKING/FIGHTING) | Tactical sub-goal | 0–10 (tactic constants) | `fmain.c:2121` |
-| TALKING (SETFIG) | Speech animation countdown | 15→0 | `fmain.c:3377`, `fmain.c:1557` |
+| TALKING (SETFIG) | Speech image-toggle countdown | 15→0 | `fmain.c:3377`, `fmain.c:1557` |
 | DYING | Death animation countdown | 7→0 | `fmain.c:2773`, `fmain.c:1747` |
 | FALL | Fall frame counter | 0→30 | `fmain.c:1770`, `fmain.c:1733-1736` |
 | FALL (rendering) | Type selector: <16 → ENEMY sprite, ≥16 → OBJECTS sprite | any | `fmain.c:2457` |
@@ -2603,7 +2603,7 @@ Defined at `fmain.c:22-36`, the `setfig_table[]` maps 14 NPC types:
 | 12 | Ranger | 17 | 0 | Yes | 0x8c |
 | 13 | Beggar | 17 | 4 | Yes | 0x8d |
 
-`can_talk` controls only the talking animation (15-tick timer) — `fmain.c:3376-3379`. All 14 types have speech dispatch code regardless.
+`can_talk` controls only the TALKING state visual effect (15-tick timer) — `fmain.c:3376-3379`. While `tactic` counts down from 15 to 0, each render tick randomly selects between two adjacent sprite images (`dex += rand2()` — `fmain.c:1556`) producing a flickering jitter, not a true animation sequence. When the timer expires the NPC returns to STILL (`fmain.c:1557`). All 14 types have speech dispatch code regardless.
 
 Race code: `id + 0x80` (OR'd with 0x80 in `set_objects` — `fmain2.c:1280`). Vitality: `2 + id*2` (`fmain2.c:1274`). The `goal` field stores the object list index — `fmain2.c:1275` — which selects variant dialogue for wizards, rangers, and beggars.
 
@@ -2620,6 +2620,10 @@ Entry point: `do_option()` at `fmain.c:3367-3422`.
 | Ask (hit=7) | `nearest_fig(1,50)` — 50 units | Functionally identical to Say |
 
 All three share the same dispatch logic after the range check. There is no separate Ask handler.
+
+#### TALKING Visual Effect
+
+Before speech dispatch, if the target is a SETFIG with `can_talk=1`, the NPC enters the TALKING state for 15 ticks (`fmain.c:3376-3377`). Only 5 of 14 NPC types have `can_talk=1`: **Wizard**, **Priest**, **King**, **Ranger**, and **Beggar**. During each render tick, the sprite image randomly toggles between two adjacent frames (`dex += rand2()` — `fmain.c:1556`), producing a visual flicker. When the timer expires, the NPC returns to STILL (`fmain.c:1557`). This is purely cosmetic — all 14 types receive speech text regardless of `can_talk`.
 
 #### Dispatch Logic (`fmain.c:3375-3422`)
 

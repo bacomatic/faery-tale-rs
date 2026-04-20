@@ -597,7 +597,7 @@ The fundamental actor record, 22 bytes total, used for player, NPCs, and enemies
 | 16 | SINK | Sinking (quicksand/water) |
 | 17 | OSCIL | Oscillation anim 1 — vestigial, never assigned |
 | 18 | *(implicit)* | Oscillation anim 2 — vestigial, never assigned |
-| 19 | TALKING | Speaking/dialogue |
+| 19 | TALKING | SETFIG-only: 15-tick image-flicker while speech text displays |
 | 20 | FROZEN | Frozen in place (freeze spell) |
 | 21 | FLYING | Vestigial — defined but never assigned; swan uses WALKING + `riding` |
 | 22 | FALL | Falling; velocity decays 25% per tick |
@@ -739,7 +739,7 @@ Sequence type constants:
 | 12 | Ranger | 17 | 0 | 1 |
 | 13 | Beggar | 17 | 4 | 1 |
 
-`cfile_entry` selects the image file. `image_base` is the sub-image offset. `can_talk=1` enables generic dialogue initiation.
+`cfile_entry` selects the image file. `image_base` is the sub-image offset. `can_talk=1` enables the TALKING visual effect during speech — it does **not** gate speech dispatch. All types produce speech text regardless.
 
 ---
 
@@ -1607,7 +1607,7 @@ Extents with etype 80–83 set `xtype ≥ 50`, failing the `xtype < 50` guard. T
 - Race code: `id + 0x80` (OR'd in `set_objects` — `fmain2.c:1280`).
 - Vitality: `2 + id*2` (`fmain2.c:1274`).
 - `goal` field: stores the object list index (`fmain2.c:1275`), selecting variant dialogue for wizards, rangers, and beggars.
-- `can_talk`: controls the talking mouth animation (15-tick timer — `fmain.c:3376-3379`). All 14 types have speech dispatch code regardless of this flag.
+- `can_talk`: enables the TALKING state visual flicker (15-tick timer — `fmain.c:3376-3379`). While `tactic` counts down from 15 to 0, each render tick picks between two adjacent sprite frames via `dex += rand2()` (`fmain.c:1556`), producing a random flicker — **not** a scripted mouth/animation sequence. When the timer expires the NPC returns to STILL (`fmain.c:1557`). Only 5 of 14 types set `can_talk=1`: Wizard, Priest, King, Ranger, Beggar. All 14 types have speech dispatch code regardless of this flag.
 
 ### 13.2 Talk System
 
