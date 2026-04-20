@@ -143,7 +143,7 @@ fn compass_dir_for_facing(facing: u8) -> usize {
 /// `direction` is +1 (next) or -1 (prev).
 /// `stuff` is the player's inventory array.
 /// Returns `Some(new_weapon_value)` if a different weapon is found, `None` otherwise.
-fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 35]) -> Option<u8> {
+fn cycle_weapon_slot(current: u8, direction: i8, stuff: &[u8; 36]) -> Option<u8> {
     let weapon_count: i8 = 5; // weapons 1..=5, stuff indices 0..=4
     let cur_0 = (current as i8 - 1).max(0); // convert to 0-based index
     for offset in 1..weapon_count {
@@ -3021,7 +3021,7 @@ impl GameplayScene {
                         // One random item from inv_list[rand8()+8]
                         let item_idx = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         let item_idx = if item_idx == 8 { 35usize } else { item_idx }; // 8→ARROWBASE(35)
-                        if item_idx < 35 {
+                        if item_idx < 36 {
                             self.state.pickup_item(item_idx);
                         }
                         let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
@@ -3029,7 +3029,7 @@ impl GameplayScene {
                     }
                     2 => {
                         // Two different random items
-                        // Special: first item i==8 → GOLDBASE+3 (100 Gold Pieces, wealth+=100)
+                        // Special: first item i==8 → 100 gold (SPEC §14.10).
                         let raw1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         let (item1, gold_special) = if raw1 == 8 {
                             (34usize, true) // GOLDBASE+3 = inv_list[34] = "100 Gold Pieces"
@@ -3037,7 +3037,7 @@ impl GameplayScene {
                             (raw1, false)
                         };
                         if gold_special {
-                            self.state.wealth = self.state.wealth.saturating_add(100);
+                            self.state.gold += 100;
                         }
                         let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
                         if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
@@ -3546,6 +3546,13 @@ impl GameplayScene {
     /// For outdoors (region < 8): applies fade_page() with per-channel percentages
     /// derived from lightlevel (0=midnight, 300=noon) and jewel light_on flag.
     /// For indoors (region >= 8): returns base palette at full brightness.
+    ///
+    /// In both cases, color 31 (sky) is set to a fixed per-region value after any
+    /// fading (SPEC §17.6):
+    ///   - region 4  (desert):             0x0980  orange-brown
+    ///   - region 9, secret_active:        0x00f0  bright green
+    ///   - region 9  (normal):             0x0445  dark grey-blue
+    ///   - all others:                     0x0bdf  light blue
     fn compute_current_palette(
         base: &crate::game::colors::Palette,
         region_num: u8,
@@ -3561,10 +3568,12 @@ impl GameplayScene {
             for (i, entry) in base.colors.iter().enumerate().take(PALETTE_SIZE) {
                 pal[i] = amiga_color_to_rgba(entry.color);
             }
-            // Region 9 secret_timer swaps color 31.
-            if region_num == 9 && secret_active {
-                pal[31] = amiga_color_to_rgba(0x00f0);
-            }
+            // SPEC §17.6: color 31 (sky) override for all indoor cases.
+            pal[31] = amiga_color_to_rgba(match (region_num, secret_active) {
+                (9, true)  => 0x00f0, // secret area active: bright green
+                (9, false) => 0x0445, // dungeon normal: dark grey-blue
+                _          => 0x0bdf, // other indoor regions: light blue
+            });
             return pal;
         }
 
@@ -3583,6 +3592,12 @@ impl GameplayScene {
         for (i, entry) in faded.colors.iter().enumerate().take(PALETTE_SIZE) {
             out[i] = amiga_color_to_rgba(entry.color);
         }
+        // SPEC §17.6: color 31 (sky) is a fixed per-region value, not subject to
+        // day/night fading.  Apply the override after fade_page.
+        out[31] = amiga_color_to_rgba(match region_num {
+            4 => 0x0980, // desert sky: orange-brown
+            _ => 0x0bdf, // all other outdoor regions: light blue
+        });
         out
     }
 
@@ -4192,12 +4207,8 @@ impl Scene for GameplayScene {
 
         // Sleep loop: advance time quickly, reduce fatigue, wake when rested
         if self.sleeping {
-            self.state.daynight = ((self.state.daynight as u32 + 63) % 24000) as u16;
-            self.state.fatigue = self.state.fatigue.saturating_sub(1);
-            let raw = self.state.daynight / 40;
-            self.state.lightlevel = if raw >= 300 { 600u16.saturating_sub(raw) } else { raw };
-            let can_wake_time = self.state.daynight >= 9000 && self.state.daynight < 10000;
-            if self.state.fatigue == 0 || (self.state.fatigue < 30 && can_wake_time) {
+            let should_wake = self.state.sleep_advance_daynight();
+            if should_wake {
                 self.sleeping = false;
             }
             self.render_by_viewstatus(canvas, resources);
@@ -5283,7 +5294,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_next() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Dirk (weapon 1)
         stuff[2] = 1; // Sword (weapon 3)
         stuff[4] = 1; // Wand (weapon 5)
@@ -5297,7 +5308,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_prev() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Dirk (weapon 1)
         stuff[2] = 1; // Sword (weapon 3)
         stuff[4] = 1; // Wand (weapon 5)
@@ -5309,7 +5320,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_single_owned() {
-        let mut stuff = [0u8; 35];
+        let mut stuff = [0u8; 36];
         stuff[0] = 1; // Only Dirk (weapon 1)
         assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
         assert_eq!(cycle_weapon_slot(1, -1, &stuff), None);
@@ -5317,7 +5328,7 @@ mod tests {
 
     #[test]
     fn test_cycle_weapon_none_owned() {
-        let stuff = [0u8; 35];
+        let stuff = [0u8; 36];
         assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
     }
 
@@ -6630,6 +6641,117 @@ mod t2_npc_talk_tests {
         assert!(
             MAP_DST_H >= PLAYFIELD_LORES_H,
             "MAP_DST_H ({MAP_DST_H}) must be >= PLAYFIELD_LORES_H ({PLAYFIELD_LORES_H})"
+        );
+    }
+}
+
+#[cfg(test)]
+mod t3_loot_container_gold_tests {
+    use super::*;
+    use crate::game::game_state::WorldObject;
+
+    /// SPEC §14.10: tier-2 roll (rand4()==2) with first-item index 8 → gold += 100, no arrows.
+    ///
+    /// tick_counter=2 gives: roll = 2 & 3 = 2 (tier-2), raw1 = (2>>2)&7 + 8 = 8.
+    #[test]
+    fn test_container_tier2_index8_awards_100_gold() {
+        let mut scene = GameplayScene::new();
+        // Force tick so that roll==2 (tier-2) and raw1==8 (index 8).
+        scene.state.tick_counter = 2;
+        let initial_gold = scene.state.gold;
+        let initial_arrows = scene.state.stuff()[8];
+
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 15, // CHEST
+            ob_stat: 1,
+            region: scene.state.region_num,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal: 0,
+        });
+        let world_idx = scene.state.world_objects.len() - 1;
+        scene.handle_take_item(world_idx, 15, "Julian");
+
+        assert_eq!(scene.state.gold, initial_gold + 100,
+            "tier-2 container index 8 must add 100 gold (SPEC §14.10)");
+        assert_eq!(scene.state.stuff()[8], initial_arrows,
+            "tier-2 container index 8 must not change arrow count");
+    }
+}
+
+#[cfg(test)]
+mod t3_palette_sky_tests {
+    //! TDD tests for T3-PALETTE-SKY (SPEC §17.6): palette entry 31 sky color override.
+    //!
+    //! Verifies that `compute_current_palette` returns the correct sky color for
+    //! each of the four cases regardless of day/night fading:
+    //!   - region 4  (desert):          0x0980
+    //!   - region 9 + secret_active:    0x00f0
+    //!   - region 9  (normal):          0x0445
+    //!   - all others:                  0x0bdf
+    use super::GameplayScene;
+    use crate::game::colors::{Palette as ColorsPalette, RGB4};
+    use crate::game::palette::amiga_color_to_rgba;
+
+    /// Build a 32-entry `colors::Palette` with every entry set to black except
+    /// color 31, which is set to `color31`.  The other entries are zero so that
+    /// any accidental leakage from the fade path is obvious.
+    fn make_base(color31: u16) -> ColorsPalette {
+        let mut colors = vec![RGB4 { color: 0x0000 }; 32];
+        colors[31] = RGB4 { color: color31 };
+        ColorsPalette { colors }
+    }
+
+    #[test]
+    fn test_sky_region4_desert() {
+        // SPEC §17.6: region 4 (desert) → palette[31] = 0x0980 (orange-brown).
+        // Use dawn lightlevel (150) so that fade_page would produce a darker value
+        // if the override were not applied, proving the override takes effect.
+        let base = make_base(0x0980);
+        let pal = GameplayScene::compute_current_palette(&base, 4, 150, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0980),
+            "region 4 sky should be fixed 0x0980 (orange-brown desert sky)"
+        );
+    }
+
+    #[test]
+    fn test_sky_region9_normal() {
+        // SPEC §17.6: region 9, secret_timer inactive → palette[31] = 0x0445 (dark grey-blue).
+        let base = make_base(0x0445);
+        let pal = GameplayScene::compute_current_palette(&base, 9, 0, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0445),
+            "region 9 normal sky should be 0x0445 (dark grey-blue dungeon sky)"
+        );
+    }
+
+    #[test]
+    fn test_sky_region9_secret() {
+        // SPEC §17.6: region 9, secret_timer active → palette[31] = 0x00f0 (bright green).
+        let base = make_base(0x0445); // base has the normal dungeon value
+        let pal = GameplayScene::compute_current_palette(&base, 9, 0, false, true);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x00f0),
+            "region 9 secret sky should be 0x00f0 (bright green secret revealed)"
+        );
+    }
+
+    #[test]
+    fn test_sky_other_region_outdoor() {
+        // SPEC §17.6: all other regions → palette[31] = 0x0bdf (light blue sky).
+        // Region 0 is outdoor; use dawn (lightlevel=150) so fade_page would alter
+        // the value if the override were absent.
+        let base = make_base(0x0bdf);
+        let pal = GameplayScene::compute_current_palette(&base, 0, 150, false, false);
+        assert_eq!(
+            pal[31],
+            amiga_color_to_rgba(0x0bdf),
+            "other region sky should be fixed 0x0bdf (light blue sky)"
         );
     }
 }

@@ -19,7 +19,7 @@ pub const SAVE_VERSION: u32 = 1;
 pub const SAVE_DIR: &str = ".config/faery/saves";
 
 fn state_to_proto(state: &GameState) -> proto::SaveFile {
-    let make_stuff = |arr: &[u8; 35]| proto::BrotherStuff {
+    let make_stuff = |arr: &[u8; 36]| proto::BrotherStuff {
         slots: arr.iter().map(|&v| v as u32).collect(),
     };
 
@@ -192,17 +192,17 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.new_region = sf.new_region as u8;
 
     if let Some(j) = sf.julstuff {
-        for (i, s) in j.slots.iter().take(35).enumerate() {
+        for (i, s) in j.slots.iter().take(36).enumerate() {
             state.julstuff[i] = *s as u8;
         }
     }
     if let Some(p) = sf.philstuff {
-        for (i, s) in p.slots.iter().take(35).enumerate() {
+        for (i, s) in p.slots.iter().take(36).enumerate() {
             state.philstuff[i] = *s as u8;
         }
     }
     if let Some(k) = sf.kevstuff {
-        for (i, s) in k.slots.iter().take(35).enumerate() {
+        for (i, s) in k.slots.iter().take(36).enumerate() {
             state.kevstuff[i] = *s as u8;
         }
     }

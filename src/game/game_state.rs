@@ -116,10 +116,10 @@ pub struct GameState {
     pub region_num: u8,
     pub new_region: u8,
 
-    // Per-brother inventory
-    pub julstuff: [u8; 35],
-    pub philstuff: [u8; 35],
-    pub kevstuff: [u8; 35],
+    // Per-brother inventory (ARROWBASE = 35; array length 36 so index 35 is valid)
+    pub julstuff: [u8; 36],
+    pub philstuff: [u8; 36],
+    pub kevstuff: [u8; 36],
     /// 0 = Julian, 1 = Phillip, 2 = Kevin
     pub active_brother: usize,
 
@@ -238,9 +238,9 @@ impl GameState {
             region_num: 3,
             new_region: 0,
 
-            julstuff: [0u8; 35],
-            philstuff: [0u8; 35],
-            kevstuff: [0u8; 35],
+            julstuff: [0u8; 36],
+            philstuff: [0u8; 36],
+            kevstuff: [0u8; 36],
             active_brother: 0,
 
             actors,
@@ -279,7 +279,7 @@ impl GameState {
     }
 
     /// Returns a reference to the active brother's inventory array.
-    pub fn stuff(&self) -> &[u8; 35] {
+    pub fn stuff(&self) -> &[u8; 36] {
         match self.active_brother {
             0 => &self.julstuff,
             1 => &self.philstuff,
@@ -288,7 +288,7 @@ impl GameState {
     }
 
     /// Returns a mutable reference to the active brother's inventory array.
-    pub fn stuff_mut(&mut self) -> &mut [u8; 35] {
+    pub fn stuff_mut(&mut self) -> &mut [u8; 36] {
         match self.active_brother {
             0 => &mut self.julstuff,
             1 => &mut self.philstuff,
@@ -357,8 +357,6 @@ impl GameState {
     /// triggered this update — hunger/fatigue warnings, time-of-day announcements, etc.
     /// The caller (gameplay_scene) is responsible for displaying the corresponding messages.
     pub fn tick(&mut self, delta: u32) -> Vec<u8> {
-        const HEAL_PERIOD: u32 = 1024; // ~34 s at 30 Hz, matching original fmain.c
-
         let mut events: Vec<u8> = Vec::new();
 
         // Decrement magic timers (clamped, unless sticky).
@@ -373,6 +371,7 @@ impl GameState {
         }
 
         // Advance day/night cycle once per tick, checking hunger/fatigue on each step.
+        let cap = crate::game::magic::heal_cap(self.brave);
         for _ in 0..delta {
             let period_crossed = self.daynight_tick();
 
@@ -380,6 +379,15 @@ impl GameState {
             // `(daynight & 127) == 0` triggers once per 128-tick window.
             if (self.daynight & 127) == 0 && self.vitality > 0 {
                 self.hunger_fatigue_step(&mut events);
+            }
+
+            // Natural healing (SPEC §18.6): +1 HP every 1024 daynight ticks.
+            // Tying the check to daynight means sleep's 64× time acceleration
+            // automatically produces ≈63× faster healing (63 extra steps per frame).
+            if !self.battleflag && self.vitality > 0 && self.vitality < cap
+                && (self.daynight & 0x3FF) == 0
+            {
+                self.vitality = (self.vitality + 1).min(cap);
             }
 
             // Time-of-day announcements when dayperiod boundary is crossed (events 28-31).
@@ -399,18 +407,44 @@ impl GameState {
 
         self.tick_counter = self.tick_counter.wrapping_add(delta);
 
-        // Healing: +1 vitality every HEAL_PERIOD ticks when out of battle and injured.
+        events
+    }
+
+    /// Advance the day/night clock by 63 sub-steps for one sleep frame
+    /// (SPEC §18.4: "daynight += 63" each frame while sleeping; the remaining
+    /// +1 is contributed by the normal `tick()` call that precedes this).
+    ///
+    /// For each sub-step the natural-healing check fires when
+    /// `(daynight & 0x3FF) == 0` (SPEC §18.6), so healing accumulates at
+    /// ≈63× the awake rate over the same real-time interval.
+    ///
+    /// Also decrements fatigue (clamped at 0) and refreshes lightlevel.
+    ///
+    /// Returns `true` when the wake condition is met:
+    ///   `fatigue == 0` OR (`fatigue < 30` AND `daynight ∈ [9000, 10000)`).
+    pub fn sleep_advance_daynight(&mut self) -> bool {
         let cap = crate::game::magic::heal_cap(self.brave);
-        if !self.battleflag && self.vitality > 0 && self.vitality < cap {
-            let prev_heal = self.tick_counter.wrapping_sub(delta) / HEAL_PERIOD;
-            let next_heal = self.tick_counter / HEAL_PERIOD;
-            if next_heal > prev_heal {
-                let increments = (next_heal - prev_heal) as i16;
-                self.vitality = (self.vitality + increments).min(cap);
+        for _ in 0..63 {
+            self.daynight = self.daynight.wrapping_add(1);
+            if self.daynight >= 24000 {
+                self.daynight = 0;
+                self.game_days += 1;
+            }
+            if !self.battleflag && self.vitality > 0 && self.vitality < cap
+                && (self.daynight & 0x3FF) == 0
+            {
+                self.vitality = (self.vitality + 1).min(cap);
             }
         }
 
-        events
+        // Refresh the brightness triangle wave after the daynight jump.
+        let raw = self.daynight / 40;
+        self.lightlevel = if raw >= 300 { 600u16.saturating_sub(raw) } else { raw };
+
+        self.fatigue = self.fatigue.saturating_sub(1);
+
+        let can_wake_time = self.daynight >= 9000 && self.daynight < 10000;
+        self.fatigue == 0 || (self.fatigue < 30 && can_wake_time)
     }
 
     /// Per-128-daynight-tick hunger and fatigue increment, matching fmain.c:2623-2652.
@@ -511,7 +545,7 @@ impl GameState {
         self.vitality = 15 + brave / 4;
 
         // Clear inventory and give a dirk (stuff[0] = 1)
-        *self.stuff_mut() = [0u8; 35];
+        *self.stuff_mut() = [0u8; 36];
         self.stuff_mut()[0] = 1;
 
         // Equip dirk (fmain.c:3501: stuff[0] = an->weapon = 1).
@@ -784,7 +818,7 @@ impl GameState {
     /// Pick up an item (port of itrans[] logic from fmain.c).
     /// item_id: item type (0-34). Returns true if picked up.
     pub fn pickup_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 35 { return false; }
+        if item_id >= 36 { return false; }
         let stuff = self.stuff_mut();
         if stuff[item_id] < 255 {
             stuff[item_id] += 1;
@@ -796,7 +830,7 @@ impl GameState {
 
     /// Drop an item.
     pub fn drop_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 35 { return false; }
+        if item_id >= 36 { return false; }
         let stuff = self.stuff_mut();
         if stuff[item_id] > 0 {
             stuff[item_id] -= 1;
@@ -1410,5 +1444,157 @@ mod tests {
         state.apply_swan_velocity_impulse(3, 3);
         assert_eq!(state.swan_vx, 0, "velocity should not change when not flying");
         assert_eq!(state.swan_vy, 0);
+    }
+
+    #[test]
+    fn test_inventory_array_len_is_36() {
+        // T3-INV-STUFF-36: SPEC §14.1 — ARROWBASE = 35, array must be length 36.
+        let state = GameState::new();
+        assert_eq!(state.julstuff.len(), 36, "julstuff must have 36 slots (indices 0-35)");
+        assert_eq!(state.philstuff.len(), 36);
+        assert_eq!(state.kevstuff.len(), 36);
+        assert_eq!(state.stuff().len(), 36, "stuff() slice must be length 36");
+    }
+
+    #[test]
+    fn test_arrowbase_pickup_no_panic() {
+        // T3-INV-STUFF-36: pickup_item(35) must not panic and must use slot 35 as accumulator.
+        let mut state = GameState::new();
+        assert_eq!(state.stuff()[35], 0, "ARROWBASE slot starts at 0");
+        let ok = state.pickup_item(35);
+        assert!(ok, "pickup_item(35) should succeed");
+        assert_eq!(state.stuff()[35], 1, "ARROWBASE accumulator should be incremented");
+
+        // Index 36+ still rejected.
+        assert!(!state.pickup_item(36), "pickup_item(36) must return false");
+    }
+
+    // -------------------------------------------------------------------------
+    // T3-SURV-SLEEP-HEAL: SPEC §18.4 / §18.6 — sleep healing rate tests
+    // -------------------------------------------------------------------------
+
+    /// Helper: advance GameState awake by N daynight ticks. Returns heal count.
+    fn advance_awake(state: &mut GameState, daynight_ticks: u32) -> i16 {
+        let before = state.vitality;
+        // tick() advances daynight by delta, healing on each (daynight & 0x3FF) == 0.
+        state.tick(daynight_ticks);
+        state.vitality - before
+    }
+
+    #[test]
+    fn test_awake_healing_baseline() {
+        // SPEC §18.6: +1 HP every 1024 daynight ticks while awake and injured.
+        let mut state = GameState::new();
+        state.brave = 0;           // cap = 15
+        state.vitality = 1;        // injured
+        state.battleflag = false;
+        // Align daynight to a known position so the boundary is predictable.
+        state.daynight = 0;
+
+        // Advance exactly 1024 daynight ticks (one awake heal period).
+        let healed = advance_awake(&mut state, 1024);
+        assert_eq!(healed, 1, "awake: should gain exactly 1 HP per 1024 daynight ticks");
+    }
+
+    #[test]
+    fn test_sleep_healing_scales_with_daynight() {
+        // SPEC §18.6: "During sleep, daynight advances by 63 per frame,
+        // so healing occurs ≈63× faster."
+        //
+        // We compare total heal over 1024 real frames:
+        //   awake:   1024 daynight ticks → 1 heal
+        //   asleep:  1024 × 64 = 65536 daynight ticks → ≈65 heals
+        //
+        // Use high brave so cap (78) is well above the expected heal count.
+        let brave = 252i16; // cap = 15 + 252/4 = 78
+
+        // --- Awake baseline ---
+        let mut awake = GameState::new();
+        awake.brave = brave;
+        awake.vitality = 1;
+        awake.battleflag = false;
+        awake.daynight = 0;
+        // 1024 real-time ticks awake → +1 heal at the 1024-tick boundary
+        awake.tick(1024);
+        let awake_heal = awake.vitality - 1;
+        assert_eq!(awake_heal, 1, "awake: 1 HP per 1024 daynight ticks");
+
+        // --- Sleeping ---
+        let mut asleep = GameState::new();
+        asleep.brave = brave;
+        asleep.vitality = 1;
+        asleep.battleflag = false;
+        asleep.daynight = 0;
+        asleep.fatigue = 255; // prevent waking from fatigue during test
+
+        // 1024 real-time frames: each frame = tick(1) [+1 daynight] +
+        //   sleep_advance_daynight() [+63 daynight] = 64 daynight ticks/frame.
+        // Over 1024 frames: 65536 daynight ticks → ~65 heals (wrapping at 24000
+        // yields 24 heals/cycle; 2 full cycles + 17 heals = 65).
+        for _ in 0..1024 {
+            asleep.tick(1);
+            asleep.sleep_advance_daynight(); // ignore wake return for test
+        }
+        let sleep_heal = asleep.vitality - 1;
+
+        // Must be substantially more than awake; ≈63× per spec (allow ±15).
+        assert!(
+            sleep_heal >= 50 && sleep_heal <= 80,
+            "sleeping: expected ≈63–65 heals in 1024 frames, got {}",
+            sleep_heal
+        );
+        assert!(
+            sleep_heal > awake_heal * 50,
+            "sleeping heal ({}) must far exceed awake heal ({})",
+            sleep_heal, awake_heal
+        );
+    }
+
+    #[test]
+    fn test_sleep_heal_clamps_at_max_hp() {
+        // SPEC §18.6: vitality must not exceed 15 + brave/4.
+        let mut state = GameState::new();
+        state.brave = 40;           // cap = 25
+        state.vitality = 24;       // one below cap
+        state.battleflag = false;
+        state.daynight = 0;
+        state.fatigue = 200;
+
+        // Run many sleep frames — should cap at 25, never exceed it.
+        for _ in 0..10_000 {
+            state.tick(1);
+            state.sleep_advance_daynight();
+        }
+        assert_eq!(state.vitality, 25, "vitality must not exceed heal cap (15 + brave/4)");
+    }
+
+    #[test]
+    fn test_awake_heal_no_overshoot() {
+        // Healing while awake also must not exceed cap.
+        let mut state = GameState::new();
+        state.brave = 20;           // cap = 20
+        state.vitality = 19;
+        state.battleflag = false;
+        state.daynight = 0;
+        // 5000 ticks — enough for multiple heal events.
+        state.tick(5000);
+        assert_eq!(state.vitality, 20, "awake: vitality must not exceed heal cap");
+    }
+
+    #[test]
+    fn test_sleep_no_heal_at_max_hp() {
+        // If already at cap, sleeping should not change vitality.
+        let mut state = GameState::new();
+        state.brave = 0;            // cap = 15
+        state.vitality = 15;        // already at cap
+        state.battleflag = false;
+        state.daynight = 0;
+        state.fatigue = 100;
+
+        for _ in 0..1000 {
+            state.tick(1);
+            state.sleep_advance_daynight();
+        }
+        assert_eq!(state.vitality, 15, "no heal when already at max HP");
     }
 }
