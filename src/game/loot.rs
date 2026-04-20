@@ -1,7 +1,7 @@
 //! Enemy loot tables: treasure_probs[] and item drop resolution.
 //! Ports treasure_probs[] and encounter_chart.treasure from fmain.c.
 
-use crate::game::npc::Npc;
+use crate::game::npc::{Npc, RACE_WITCH};
 use crate::game::game_state::GameState;
 
 /// First gold item index in inv_list[] (from fmain.c: #define GOLDBASE 31).
@@ -98,6 +98,16 @@ pub fn award_drops(state: &mut GameState, drops: &[(usize, u8)]) {
     }
 }
 
+/// Returns the ob_id of the WorldObject to drop for special SETFIG death events.
+/// SPEC §14.20: Witch (0x89) drops Golden Lasso (ob_id 27) via leave_item.
+/// Returns None for NPCs with no special drop.
+pub fn setfig_death_ob_id(race: u8) -> Option<u8> {
+    match race {
+        RACE_WITCH => Some(27),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +176,58 @@ mod tests {
         let drops = vec![(0usize, 3u8)];
         award_drops(&mut state, &drops);
         assert_eq!(state.stuff()[0], 3);
+    }
+
+    // T4-LOOT-WITCH-LASSO tests
+
+    fn make_witch() -> Npc {
+        use crate::game::npc::RACE_WITCH;
+        Npc { race: RACE_WITCH, ..Default::default() }
+    }
+
+    #[test]
+    fn t4_witch_alive_no_treasure_drop() {
+        // Witch is a setfig (race >= 0x80); roll_treasure must always return None.
+        // The lasso is a special death drop handled separately by setfig_death_ob_id.
+        let npc = make_witch();
+        for tick in 0..256 {
+            assert_eq!(
+                roll_treasure(&npc, tick),
+                None,
+                "Witch should never drop treasure via roll_treasure (tick {})", tick
+            );
+        }
+    }
+
+    #[test]
+    fn t4_witch_defeated_drops_lasso_ob_id() {
+        // SPEC §14.20: Witch death (race 0x89) → ob_id 27 (Golden Lasso).
+        use crate::game::npc::RACE_WITCH;
+        assert_eq!(
+            setfig_death_ob_id(RACE_WITCH),
+            Some(27),
+            "Witch must drop ob_id 27 (Golden Lasso) on death"
+        );
+    }
+
+    #[test]
+    fn t4_lasso_ob_id_27_maps_to_stuff_slot_5() {
+        // SPEC §14.3: ob_id 27 → stuff[5] (ITEM_LASSO).
+        use crate::game::world_objects::ob_id_to_stuff_index;
+        use crate::game::game_state::ITEM_LASSO;
+        assert_eq!(
+            ob_id_to_stuff_index(27),
+            Some(ITEM_LASSO),
+            "ob_id 27 must map to stuff slot 5 (ITEM_LASSO)"
+        );
+    }
+
+    #[test]
+    fn t4_non_witch_setfig_no_special_drop() {
+        // Only RACE_WITCH has a special drop; other races return None.
+        assert_eq!(setfig_death_ob_id(0x80), None, "Wizard should not have a special drop");
+        assert_eq!(setfig_death_ob_id(0x88), None, "Innkeeper should not have a special drop");
+        assert_eq!(setfig_death_ob_id(0x00), None, "Regular NPC should not have a special drop");
+        assert_eq!(setfig_death_ob_id(0x09), None, "Necromancer uses transform path, not setfig_death_ob_id");
     }
 }
