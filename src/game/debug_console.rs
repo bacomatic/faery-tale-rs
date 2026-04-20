@@ -1069,6 +1069,10 @@ impl DebugConsole {
                 "/adf"  | "adf"     => "/adf <block> [count] — hex dump ADF block(s) to log.",
                 "/clear"| "cls"     => "/clear — clear the log.",
                 "/filter"|"filter"  => "/filter — show active log categories.\n  /filter all     enable every category.\n  /filter none    disable every category.\n  /filter reset   defaults (noisy categories off).\n  /filter +CAT -CAT  toggle by name (combat, movement, ai, ...).",
+                "/watch"| "watch"   => "/watch — toggle the actor watch panel between collapsed and expanded (same as Ctrl+W).",
+                "/pause"| "pause"   => "/pause — freeze the game loop (actors + physics). Daynight still ticks unless /time hold. Shortcut: Ctrl+P.",
+                "/resume"|"resume"  => "/resume — unfreeze the game loop (alias: /unpause). Shortcut: Ctrl+P.",
+                "/step" | "step"    => "/step [n] — while paused, advance exactly 1 (or n) frame(s).",
                 _ => "No help for that topic.",
             };
             for line in msg.lines() {
@@ -1110,6 +1114,10 @@ impl DebugConsole {
             "  /adf <b> [n]   hex dump n ADF block(s) starting at b",
             "  /clear         clear this log",
             "  /filter [...]  show/adjust log categories",
+            "  /watch         toggle actor watch panel (also: Ctrl+W)",
+            "  /pause         freeze game loop (also: Ctrl+P)",
+            "  /resume        unfreeze game loop (also: Ctrl+P)",
+            "  /step [n]      advance 1 (or n) frame(s) while paused",
             "  /help [cmd]    show help",
             "——————————————————————————————————————",
             "PgUp/PgDn/Home/End — scroll log   Up/Down — command history",
