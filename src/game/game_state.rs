@@ -1042,10 +1042,11 @@ impl GameState {
     }
 
     /// Attempt luck-gated respawn. Returns true if respawned.
-    /// Requires luck >= 10; costs 10 luck per use.
+    /// SPEC §20.2: respawn requires luck >= 1. The 5-luck death cost is applied
+    /// once at death-init (see GameplayScene::tick_goodfairy_countdown); this
+    /// helper therefore does NOT decrement luck.
     pub fn try_respawn(&mut self) -> bool {
         if self.luck >= 1 {
-            self.luck = (self.luck - 5).max(0);
             self.hero_x = self.safe_x;
             self.hero_y = self.safe_y;
             self.region_num = self.safe_r;

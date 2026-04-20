@@ -1379,6 +1379,12 @@ impl GameplayScene {
             self.luck_gate_fired = false;
             self.last_mood = u8::MAX; // force death music re-evaluation
 
+            // SPEC §20.2: every death costs 5 luck (single deduction, any cause).
+            // The luck gate below then reads the post-deduction value to decide
+            // fairy rescue vs brother succession. Fairy rescue itself has no
+            // additional cost.
+            self.state.luck = (self.state.luck - 5).max(0);
+
             // T1-DEATH-MESSAGE: emit death event message (SPEC §20.1)
             let bname = self.brother_name().to_string();
             let death_msg = crate::game::events::event_msg(&self.narr, self.death_type, &bname);
@@ -1468,8 +1474,8 @@ impl GameplayScene {
             if self.goodfairy <= 1 && self.dying {
                 self.dying = false;
                 self.luck_gate_fired = false;
-                // T1-DEATH-FAERY-COST: luck cost is 5 (SPEC §20.2)
-                self.state.luck = (self.state.luck - 5).max(0);
+                // SPEC §20.2: fairy rescue itself has no luck cost.
+                // The 5-luck deduction was already applied once at death-init.
                 // revive(FALSE): return to safe position with full HP; stats unchanged.
                 self.state.hero_x = self.state.safe_x;
                 self.state.hero_y = self.state.safe_y;
@@ -1828,9 +1834,9 @@ impl GameplayScene {
                 if let Some(player) = self.state.actors.first_mut() {
                     player.state = crate::game::actor::ActorState::Dying;
                 }
-                self.state.luck = (self.state.luck - 5).max(0);
                 self.death_type = 5; // combat death (SPEC §20.1)
                 self.dlog("hero killed in combat".to_string());
+                // luck -= 5 is applied uniformly at death-init in tick_goodfairy_countdown.
             }
         } else {
             // Hero (or NPC) hitting an NPC
@@ -5987,15 +5993,17 @@ mod death_tests {
 
     #[test]
     fn test_death_faery_cost() {
-        // T1-DEATH-FAERY-COST: fairy rescue should cost 5 luck, not 10 (SPEC §20.2)
+        // T1-DEATH-FAERY-COST (revised): death costs 5 luck once; fairy rescue
+        // itself has no additional cost. try_respawn() models the revive-only
+        // path and must not decrement luck.
         let mut state = crate::game::game_state::GameState::new();
         state.luck = 10;
         state.safe_x = 100;
         state.safe_y = 200;
         state.safe_r = 3;
-        
+
         assert!(state.try_respawn());
-        assert_eq!(state.luck, 5, "fairy rescue should cost 5 luck");
+        assert_eq!(state.luck, 10, "fairy rescue must not decrement luck");
     }
 
     #[test]
@@ -6083,6 +6091,36 @@ mod death_tests {
         scene.tick_goodfairy_countdown(&lib, 0);
         assert!(scene.dying, "dying must be true after vitality drops to 0");
         assert_eq!(scene.goodfairy, 255, "countdown must start at 255");
+        assert_eq!(scene.state.luck, 15,
+            "SPEC §20.2: death deducts 5 luck once at death-init");
+    }
+
+    #[test]
+    fn t1_death_faery_cost_single_deduction_per_death() {
+        // T1-DEATH-FAERY-COST (revised): death deducts 5 luck exactly once.
+        // Subsequent ticks of the countdown and the fairy-rescue event itself
+        // must NOT deduct additional luck.
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.state.vitality = 0;
+        scene.state.luck = 20;
+        scene.state.brave = 35;
+        scene.state.safe_x = 1;
+        scene.state.safe_y = 1;
+        scene.state.safe_r = 0;
+
+        // Tick 1: enters dying, applies -5 luck deduction.
+        scene.tick_goodfairy_countdown(&lib, 0);
+        assert_eq!(scene.state.luck, 15);
+
+        // Advance through remaining 254 ticks of the countdown.
+        for _ in 0..260 {
+            scene.tick_goodfairy_countdown(&lib, 1);
+        }
+
+        assert!(!scene.dying, "fairy rescue should have fired");
+        assert_eq!(scene.state.luck, 15,
+            "fairy rescue must not apply a second luck deduction");
     }
 
     #[test]
@@ -6129,7 +6167,10 @@ mod death_tests {
         assert_eq!(scene.state.hunger, 0, "hunger must be cleared on revive");
         assert_eq!(scene.state.fatigue, 0, "fatigue must be cleared on revive");
         assert!(!scene.state.battleflag, "battleflag must be cleared on revive");
-        assert_eq!(scene.state.luck, 15, "luck must decrease by 5 on fairy rescue");
+        // SPEC §20.2: the 5-luck cost is applied once at death-init, not at
+        // fairy rescue. This test starts already in the dying state, so no
+        // deduction should occur here.
+        assert_eq!(scene.state.luck, 20, "fairy rescue must not change luck");
     }
 
     #[test]
