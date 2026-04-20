@@ -439,6 +439,10 @@ pub struct DebugConsole {
     /// Actor Watch panel display mode (DBG-LAYOUT-07). false = collapsed (default).
     watch_expanded: bool,
 
+    /// Active log categories used to filter the log panel render (DBG-LOG-05).
+    /// Seeded from `LogCategory::default_enabled()` per DEBUG_SPEC §Log Categories.
+    active_categories: std::collections::HashSet<LogCategory>,
+
     // Latest status snapshot
     status: DebugSnapshot,
 }
@@ -476,6 +480,11 @@ impl DebugConsole {
             pause_request: None,
             step_request: 0,
             watch_expanded: false,
+            active_categories: LogCategory::ALL
+                .iter()
+                .copied()
+                .filter(|c| c.default_enabled())
+                .collect(),
             status: DebugSnapshot::default(),
         })
     }
@@ -694,7 +703,9 @@ impl DebugConsole {
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     pub fn render(&mut self) {
-        let log_entries = &self.log_entries;
+        // DBG-LOG-05: filter log by active categories before rendering.
+        let filtered_entries: Vec<&DebugLogEntry> =
+            filter_log_entries(&self.log_entries, &self.active_categories);
         let scroll_from_bottom = self.scroll_from_bottom;
         let input = format!("> {}", self.input_buffer);
         let status = &self.status;
@@ -920,7 +931,7 @@ impl DebugConsole {
 
             // ── Log ───────────────────────────────────────────────────────
             let log_height = chunks[2].height.saturating_sub(2) as usize; // subtract borders
-            let total = log_entries.len();
+            let total = filtered_entries.len();
             // Compute scroll offset (from top) for ratatui's .scroll((top, 0))
             let top_offset = if total <= log_height {
                 0
@@ -929,7 +940,7 @@ impl DebugConsole {
                 bottom_top.saturating_sub(scroll_from_bottom)
             };
 
-            let log_text: Vec<Line> = log_entries
+            let log_text: Vec<Line> = filtered_entries
                 .iter()
                 .map(|e| Line::raw(format_log_entry(e)))
                 .collect();
@@ -1585,6 +1596,16 @@ fn build_god_str(flags: u8) -> String {
 
 /// Format a single log entry for rendering: `"[CATEGORY] text"`, with an
 /// optional `"[{tick}] "` prefix when `timestamp_ticks` is non-zero.
+/// Filter log entries by the given active-category set (DBG-LOG-05).
+///
+/// Returns references to entries whose `category` is present in `active`.
+fn filter_log_entries<'a>(
+    entries: &'a [DebugLogEntry],
+    active: &std::collections::HashSet<LogCategory>,
+) -> Vec<&'a DebugLogEntry> {
+    entries.iter().filter(|e| active.contains(&e.category)).collect()
+}
+
 fn format_log_entry(entry: &DebugLogEntry) -> String {
     if entry.timestamp_ticks != 0 {
         format!("[{}] [{}] {}", entry.timestamp_ticks, entry.category.label(), entry.text)
@@ -1660,5 +1681,54 @@ mod tests {
     fn format_log_entry_with_nonzero_tick_prefixes_tick() {
         let e = make_entry(LogCategory::Combat, 1234, "hero swings");
         assert_eq!(format_log_entry(&e), "[1234] [COMBAT] hero swings");
+    }
+
+    #[test]
+    fn filter_keeps_only_active_categories() {
+        let entries = vec![
+            make_entry(LogCategory::Combat, 0, "hit"),
+            make_entry(LogCategory::Movement, 0, "step"),
+            make_entry(LogCategory::Quest, 0, "flag"),
+            make_entry(LogCategory::Ai, 0, "think"),
+        ];
+        let active: std::collections::HashSet<LogCategory> =
+            [LogCategory::Combat, LogCategory::Quest].iter().copied().collect();
+        let kept = filter_log_entries(&entries, &active);
+        assert_eq!(kept.len(), 2);
+        assert_eq!(kept[0].text, "hit");
+        assert_eq!(kept[1].text, "flag");
+    }
+
+    #[test]
+    fn filter_empty_active_set_hides_everything() {
+        let entries = vec![
+            make_entry(LogCategory::Combat, 0, "a"),
+            make_entry(LogCategory::General, 0, "b"),
+        ];
+        let active: std::collections::HashSet<LogCategory> = Default::default();
+        let kept = filter_log_entries(&entries, &active);
+        assert!(kept.is_empty());
+    }
+
+    #[test]
+    fn filter_default_active_set_hides_noisy_categories() {
+        // DBG-LOG-05: default seed excludes the 5 noisy categories.
+        let active: std::collections::HashSet<LogCategory> = LogCategory::ALL
+            .iter()
+            .copied()
+            .filter(|c| c.default_enabled())
+            .collect();
+        let entries = vec![
+            make_entry(LogCategory::Combat, 0, "shown"),
+            make_entry(LogCategory::Movement, 0, "hidden"),
+            make_entry(LogCategory::Ai, 0, "hidden"),
+            make_entry(LogCategory::Rendering, 0, "hidden"),
+            make_entry(LogCategory::Animation, 0, "hidden"),
+            make_entry(LogCategory::Time, 0, "hidden"),
+            make_entry(LogCategory::General, 0, "shown"),
+        ];
+        let kept = filter_log_entries(&entries, &active);
+        assert_eq!(kept.len(), 2);
+        assert!(kept.iter().all(|e| e.text == "shown"));
     }
 }
