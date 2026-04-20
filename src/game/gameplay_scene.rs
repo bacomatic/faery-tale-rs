@@ -274,7 +274,6 @@ pub struct GameplayScene {
     pub state: Box<GameState>,
     pub messages: MessageQueue,
     tick_accum: u32,
-    autosave_enabled: bool,
     input: InputState,
     map_x: u16,
     map_y: u16,
@@ -411,7 +410,6 @@ impl GameplayScene {
             state: Box::new(GameState::new()),
             messages: MessageQueue::new(),
             tick_accum: 0,
-            autosave_enabled: true,
             input: InputState::default(),
             map_x: 0,
             map_y: 0,
@@ -3484,9 +3482,6 @@ impl GameplayScene {
             HoldTimeOfDay { hold } => {
                 self.state.freeze_sticky = hold;
             }
-            ToggleAutosave { enable } => {
-                self.autosave_enabled = enable;
-            }
             TriggerWitchEffect => {
                 self.witch_effect.start();
             }
@@ -4819,17 +4814,6 @@ impl Scene for GameplayScene {
                         self.state.tick_counter,
                     );
                 }
-            }
-        }
-
-        // Autosave every 1800 ticks (~60s at 30Hz)
-        if self.autosave_enabled && self.state.tick_counter % 1800 == 0 && self.state.tick_counter > 0 {
-            if let Err(e) = crate::game::persist::save_game(&self.state, 0) {
-                eprintln!("autosave failed: {e}");
-            } else if let Err(e) = crate::game::persist::save_transcript(
-                self.messages.transcript(), 0,
-            ) {
-                eprintln!("autosave transcript failed: {e}");
             }
         }
 

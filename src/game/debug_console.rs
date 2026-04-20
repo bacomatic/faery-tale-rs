@@ -62,7 +62,6 @@ pub struct DebugSnapshot {
     pub fatigue: i16,
     pub god_mode_flags: u8,
     pub time_held: bool,
-    pub autosave_enabled: bool,
     pub song_group_count: usize,
     pub current_song_group: Option<usize>,
     pub cave_mode: bool,
@@ -516,7 +515,6 @@ impl DebugConsole {
                 None => "stopped".to_owned(),
             };
             let hold_str = if status.time_held { "HELD" } else { "free" };
-            let save_str = if status.autosave_enabled { "on" } else { "off" };
 
             let status_text = vec![
                 Line::from(vec![
@@ -551,8 +549,6 @@ impl DebugConsole {
                     Span::raw(format!("{}  ", if god_str.is_empty() { "off" } else { &god_str })),
                     styled_label("Time: "),
                     Span::raw(format!("{}  ", hold_str)),
-                    styled_label("Autosave: "),
-                    Span::raw(format!("{}  ", save_str)),
                 ]),
                 Line::from(vec![
                     styled_label("Music: "),
