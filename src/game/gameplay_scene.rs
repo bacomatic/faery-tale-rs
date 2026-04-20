@@ -3023,7 +3023,7 @@ impl GameplayScene {
                     }
                     2 => {
                         // Two different random items
-                        // Special: first item i==8 → GOLDBASE+3 (100 Gold Pieces, wealth+=100)
+                        // Special: first item i==8 → 100 gold (SPEC §14.10).
                         let raw1 = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         let (item1, gold_special) = if raw1 == 8 {
                             (34usize, true) // GOLDBASE+3 = inv_list[34] = "100 Gold Pieces"
@@ -3031,7 +3031,7 @@ impl GameplayScene {
                             (raw1, false)
                         };
                         if gold_special {
-                            self.state.wealth = self.state.wealth.saturating_add(100);
+                            self.state.gold += 100;
                         }
                         let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
                         if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
@@ -6587,6 +6587,41 @@ mod t2_npc_talk_tests {
         assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
         assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
             "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+}
+
+#[cfg(test)]
+mod t3_loot_container_gold_tests {
+    use super::*;
+    use crate::game::game_state::WorldObject;
+
+    /// SPEC §14.10: tier-2 roll (rand4()==2) with first-item index 8 → gold += 100, no arrows.
+    ///
+    /// tick_counter=2 gives: roll = 2 & 3 = 2 (tier-2), raw1 = (2>>2)&7 + 8 = 8.
+    #[test]
+    fn test_container_tier2_index8_awards_100_gold() {
+        let mut scene = GameplayScene::new();
+        // Force tick so that roll==2 (tier-2) and raw1==8 (index 8).
+        scene.state.tick_counter = 2;
+        let initial_gold = scene.state.gold;
+        let initial_arrows = scene.state.stuff()[8];
+
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 15, // CHEST
+            ob_stat: 1,
+            region: scene.state.region_num,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal: 0,
+        });
+        let world_idx = scene.state.world_objects.len() - 1;
+        scene.handle_take_item(world_idx, 15, "Julian");
+
+        assert_eq!(scene.state.gold, initial_gold + 100,
+            "tier-2 container index 8 must add 100 gold (SPEC §14.10)");
+        assert_eq!(scene.state.stuff()[8], initial_arrows,
+            "tier-2 container index 8 must not change arrow count");
     }
 }
 
