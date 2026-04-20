@@ -44,28 +44,33 @@ This document synthesizes the authoritative reference material ([RESEARCH.md](RE
 
 ### 1.1 Screen Layout
 
-The original game uses a **non-interlaced 320×200 frame** with a mixed-resolution split display: a low-resolution playfield above a hi-resolution status bar. On the Amiga this works by changing pixel timing mid-frame via the Copper.
+The game renders in three distinct display configurations at different scene boundaries:
 
-A faithful port should render each section at its **native resolution** first, then composite into a 640×480 presentation buffer that preserves the intended aspect ratio:
+| Config | Playfield size | Inset from 320×200 | HUD | Used for |
+|--------|---------------|--------------------|-----|----------|
+| **Gameplay** | 288×140 | 16 px horiz, 0 px vert (scanlines 0–139; HUD at 143+) | Visible (640×57 below) | Normal gameplay |
+| **Cinematic** | 312×194 | 4 px horiz, 3 px vert | Hidden | Title text, asset loading, copy protection, victory sunrise |
+| **Storybook** | 320×200 | 0 (edge-to-edge) | Hidden | Intro storybook pages (page0, p1–p3) |
 
-| Area | Purpose | Native Size | Presented Size in 640×480 | Original Amiga Mode |
-|------|---------|-------------|----------------------------|---------------------|
-| Playfield viewport | Game world | 288×140 | 576×280 (2× scale) | Low-res, 5 bitplanes (32 colors) |
-| HI bar | Text, stats, menus, compass | 640×57 | 640×114 (line doubled) | Hi-res, 4 bitplanes (16 colors) |
-| Inter-panel gap | Blank separator | 3 lines | 6 pixels | Non-interlaced spacer |
+Palette is `pagecolors` in Gameplay, `introcolors` in Cinematic/Storybook (with per-frame fade scaling during zoom — see §27.6), overridden to `sun_colors` during the victory sunrise animation (see §15.8).
 
-The composed game view occupies **400 vertical pixels** of the 640×480 canvas and should be centered vertically: **40 px top margin**, then the 280 px playfield, 6 px gap, 114 px HI bar, and **40 px bottom margin**. The 576 px-wide playfield is horizontally centered within the 640 px frame.
+**Presentation in 640×480 canvas** (Gameplay config):
+
+| Area | Native | Presented | Notes |
+|------|--------|-----------|-------|
+| Playfield | 288×140 | 576×280 (2×) | Centered horizontally |
+| Gap | 3 lines | 6 px | Blank separator |
+| HUD bar | 640×57 | 640×114 (line-doubled) | Full-width |
+
+The composed view is 400 px tall, vertically centered with 40 px top/bottom margins. Cinematic and Storybook configs scale their playfield proportionally into the same 400 px vertical slot with their own inset, status bar hidden.
 
 Key constants:
-- `PAGE_DEPTH` = 5 (bitplanes per game page)
-- `TEXT_DEPTH` = 4 (bitplanes per status bar)
-- `SCREEN_WIDTH` = 288 (visible playfield width in pixels)
-- `PHANTA_WIDTH` = 320 (bitmap width including 16px scroll margin on each side)
-- `RAST_HEIGHT` = 200 (original non-interlaced frame height)
-- `PAGE_HEIGHT` = 143 (scanline where text viewport begins; game viewport occupies scanlines 0–139 with ~3 blank lines before the text bar)
-- `TEXT_HEIGHT` = 57 (native HUD/HI bar height before line doubling)
+- `PAGE_DEPTH` = 5 (playfield bitplanes — 32 colors)
+- `TEXT_DEPTH` = 4 (HUD bitplanes — 16 colors)
+- `SCREEN_WIDTH` = 288, `PAGE_HEIGHT` = 143, `TEXT_HEIGHT` = 57 (Gameplay config)
+- `PHANTA_WIDTH` = 320 (playfield bitmap width; scroll margin varies by config)
 
-The playfield viewport has `DxOffset = 16`, `DyOffset = 0`, making the 288-pixel visible window centered within the 320-pixel raster. The scroll margin allows smooth tile scrolling without exposing unrendered edges.
+The 16-pixel per-side scroll margin in Gameplay config allows smooth tile scrolling without exposing unrendered edges. Cinematic and Storybook configs reveal more of the 320-wide bitmap by reducing their inset.
 
 ### 1.2 Double Buffering
 
@@ -2297,8 +2302,8 @@ if (stuff[22])
 
 1. Display victory placard: `placard_text(6)` + `name()` + `placard_text(7)` — "Having defeated the villainous Necromancer and recovered the Talisman, [name] returned to Marheim where he wed the princess…". `placard()` + `Delay(80)`.
 2. Load win picture: `unpackbrush("winpic", bm_draw, 0, 0)` — IFF image from `game/winpic`.
-3. Black out both viewports and hide HUD: `vp_text.Modes = HIRES | SPRITES | VP_HIDE`.
-4. Expand playfield: `screen_size(156)`.
+3. Black out both viewports and hide HUD.
+4. Switch to Cinematic config (312×194, HUD hidden). This triggers a one-frame `introcolors` palette fade per §27.6 which step 5 overrides.
 5. Sunrise animation — 55 frames (i=25 down to −29): slides a window across the `sun_colors[53]` gradient table (53 entries of 12-bit RGB values). Colors 2–27 fade in progressively, colors 29–30 transition through reds. First frame pauses 60 ticks; subsequent frames at 9 ticks each. Total: ~555 ticks ≈ 11.1 seconds.
 6. Final pause `Delay(30)`, then blackout via `LoadRGB4(&vp_page, blackcolors, 32)`.
 
@@ -3272,10 +3277,10 @@ Sample completion: `vce_stat` on voice 2 set to 2. Audio interrupt handler (`aud
 3. Load audio: music + samples from `v6` and `songs` files
 4. Start intro music (tracks 12–15)
 5. Load title image (`page0`), blit to both display pages
-6. Vertical zoom-in: 0 → 160 in steps of 4 via `screen_size()`
+6. Zoom-in: iris opens from center (x=0 to x=160, step +4) with synchronized red→green→blue palette fade-in on `introcolors` (see §27.6).
 7. Three story pages with columnar-reveal animation (`copypage` with `flipscan`)
 8. Final pause (3.8 seconds)
-9. Vertical zoom-out: 156 → 0 in steps of −4
+9. Zoom-out: x=156 down to 0 step −4 with synchronized reverse palette fade. See §27.6.
 10. Copy protection challenge
 
 Player can skip at multiple checkpoints.
@@ -3840,11 +3845,39 @@ Both are used for map messages, door transitions, story placards, and screen cha
 
 ### 27.6 Viewport Zoom (`screen_size`)
 
-Manipulates the Amiga **DIW** (DIWSTRT/DIWSTOP display-window registers) — the hardware CRT visible region — using a 5:8 aspect ratio: `y = x × 5 / 8`. Normal gameplay uses `screen_size(156)`, opening a 312×194 DIW slightly inset from the 320×200 frame. The intro zoom animation reaches `screen_size(160)` for full-screen display.
+An animated iris-zoom effect: the playfield grows/shrinks from a center point, with a synchronized palette fade on `introcolors`. Used for intro and victory.
 
-**This is not the playfield bitmap size.** The `vp_page` lo-res playfield bitmap is always 288×140 (§1.1) and is positioned within the DIW via `DxOffset=16, DyOffset=0`. `screen_size()` only changes the hardware visible region; the game renderer always draws into the same 288×140 bitmap area. The port MUST size its playfield framebuffer and scroll/clip math for 288×140, not 312×194.
+**Step** (one frame, argument `x` in range 0–160):
 
-Port implementation: treat `screen_size()` calls as a no-op for normal gameplay (the CRT DIW has no equivalent in a windowed modern renderer). For the intro zoom and the victory sunrise, animate a masking rectangle (or equivalent letterbox) over the presented frame to reproduce the expanding/contracting CRT aperture effect; do not resize the playfield bitmap itself.
+1. Set playfield aperture to `(x*2) × (y*2)` where `y = (x*5)/8`, centered in the 320×200 frame.
+2. Inversely shrink the HUD: at `x ≥ 152` the HUD is fully hidden; it reappears as `x` shrinks below 152.
+3. Fade the `introcolors` palette by per-channel percentage:
+   - **R%** = `y*2 − 40`
+   - **G%** = `y*2 − 70`
+   - **B%** = `y*2 − 100`
+   
+   Negative percentages clamp to 0 (black). Red brightens first, then green, then blue — a warm sunrise-like fade-in as the viewport opens.
+
+**Key x values:**
+
+| x | Aperture | Config |
+|---|----------|--------|
+| 0 | closed (single point) | — |
+| 152 | 304×190 | HUD just hidden |
+| 156 | 312×194 | Cinematic (title text, copy protection, victory sunrise) |
+| 160 | 320×200 | Storybook (intro pages) |
+
+**Animations:**
+
+- **Zoom-in**: `x = 0..160` step +4 (41 steps). Aperture opens from center with synchronized red→green→blue palette fade-in.
+- **Zoom-out**: `x = 156..0` step −4 (40 steps) with reverse palette fade-out. Starts at 156 rather than 160 purely to skip a redundant no-op first frame (160→160 would not change the display).
+
+**Port requirements:**
+
+- All three effects (aperture resize, HUD shrink, palette fade) MUST be synchronized frame-for-frame.
+- `screen_size(156)` alone (not in a zoom loop) switches to the Cinematic config and applies one frame of the `introcolors` fade at full value; the caller may then override the palette (e.g. victory sequence loads `sun_colors`).
+
+See [§1.1](#11-screen-layout) for the three display configurations.
 
 ### 27.7 Static Display Reset (`stillscreen`)
 

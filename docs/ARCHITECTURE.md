@@ -230,6 +230,71 @@ The game uses the AmigaOS `View`/`ViewPort` system rather than directly construc
 
 A single hardware sprite (sprite 0) is used for the mouse pointer (`fmain.c:796-797,942`). The `SPRITES` flag on `vp_text` enables sprite DMA in the status bar viewport (`fmain.c:818`).
 
+### 3.6 Screen Configurations
+
+The display operates in two distinct viewport configurations, switched at specific scene boundaries:
+
+**Configuration A — Full-Screen Playfield** (set by `screen_size(156)` at `fmain.c:2914-2933`):
+
+```
+┌──────────────────────────────────────────┐  Scanline 0
+│            4 px border                   │
+│  ┌──────────────────────────────────────┐│  Scanline 3
+│  │                                      ││
+│  │     vp_page — LORES Playfield        ││
+│  │     312×194 visible pixels           ││
+│  │     5 bitplanes → 32 colors          ││
+│  │                                      ││
+│  └──────────────────────────────────────┘│  Scanline 197
+│            4 px border                   │
+└──────────────────────────────────────────┘  Scanline 200
+         vp_text hidden (DHeight ≤ 0)
+```
+
+- `DxOffset = 4`, `DyOffset = 3`, `DWidth = 312`, `DHeight = 194`
+- Text viewport `DHeight` = −3 (hidden)
+- No status bar visible — full-screen image display
+- Palette: `introcolors` (faded in by `screen_size()` itself)
+
+**Configuration B — Split Playfield + Status Bar** (set at `fmain.c:1250-1255`):
+
+```
+┌──────────────────────────────────────────┐  Scanline 0
+│            16 px border                  │
+│  ┌──────────────────────────────────┐    │
+│  │     vp_page — LORES Playfield    │    │
+│  │     288×140 visible pixels       │    │
+│  │     5 bitplanes → 32 colors      │    │
+│  └──────────────────────────────────┘    │
+├──────────────────────────────────────────┤  Scanline 143 (PAGE_HEIGHT)
+│        vp_text — HIRES Status Bar        │
+│        640×57 visible pixels             │
+│        4 bitplanes → 16 colors           │
+└──────────────────────────────────────────┘  Scanline 200
+```
+
+- `vp_page`: `DxOffset = 16`, `DyOffset = 0`, `DWidth = 288`, `DHeight = 140`
+- `vp_text`: `DyOffset = 143`, `DHeight = 57`
+- Status bar shows health, inventory, scrolling message text
+- Palette: `pagecolors` (playfield) + `textcolors` (status bar)
+
+**Per-Scene Configuration:**
+
+| Scene | Config | How Set | Citation |
+|-------|--------|---------|----------|
+| Title text (legal notice) | A | `screen_size(156)` | `fmain.c:1153` |
+| Intro zoom-in animation | A (→full) | `screen_size(0..160)` loop, step +4 | `fmain.c:1199` |
+| Intro story pages (p1–p3) | Full-screen | 320×200 — unchanged from zoom-in peak | `fmain.c:1200-1205` |
+| Intro zoom-out animation | A | `screen_size(156..0)` loop, step −4 (snaps from 320×200 to 312×194 on first iteration) | `fmain.c:1209` |
+| Asset loading / copy protection | A | `screen_size(156)` | `fmain.c:1220` |
+| Normal gameplay | B | Direct struct writes | `fmain.c:1250-1255` |
+| Full-screen story messages | B (modified) | `vp_text` hidden via `VP_HIDE` | `fmain2.c:604` |
+| Victory sunrise | A | `screen_size(156)` | `fmain2.c:1613` |
+
+The transition from Config A to B occurs once during initialization: after `revive()` completes, `fmain.c:1250-1255` restores the split layout and calls `MakeVPort()` to rebuild the Copper list. The transition from B back to A occurs only for the victory sequence.
+
+During the intro, `screen_size()` is called in a loop to produce an animated iris zoom. The argument ranges from 0 (collapsed to a single point at center) through 160 (full 320×200) in steps of 4, with a 2-tick `Delay()` per step and an `introcolors` palette fade at each iteration (`fmain.c:2914-2933`). The storybook pages display at the full 320×200 size. The zoom-out starts from 156 (not 160), so the first iteration snaps the viewport from 320×200 down to 312×194 before animating closed (`fmain.c:1209`).
+
 ---
 
 ## 4. Rendering Pipeline
@@ -708,14 +773,43 @@ The witch's attack beam is a rotating wedge-shaped polygon drawn in **COMPLEMENT
 
 | Effect | Function | Mechanism | Citation |
 |--------|----------|-----------|---------|
-| Viewport zoom | `screen_size(x)` | Animates viewport dimensions from point to full screen (5:8 aspect ratio: y = x×5/8) | `fmain.c:2914-2933` |
+| Viewport zoom | `screen_size(x)` | Animated iris zoom with synchronized palette fade (see below) | `fmain.c:2914-2933` |
 | Columnar wipe | `flipscan()` | Right-half then left-half columnar squeeze/expand between `pagea`/`pageb` | `fmain2.c:796-833` |
 | Fade to black | `fade_down()` | 21 steps, 100%→0% via `fade_page()` | `fmain2.c:623-625` |
 | Fade from black | `fade_normal()` | 21 steps, 0%→100% via `fade_page()` | `fmain2.c:627-629` |
 | Static display | `stillscreen()` | Resets scroll offsets to (0,0) and flips page | `fmain2.c:631-634` |
 | Intro pages | `copypage()` | Loads two IFF brushes into `pageb`, then `flipscan()` transition | `fmain2.c:781-791` |
 
-Gameplay uses `screen_size(156)` rather than the full 160, yielding a 312×194 viewport — slightly inset from the 320×200 frame (`fmain.c:1153`, `fmain.c:1220`). The zoom-in intro reaches `screen_size(160)` for full-screen, but normal play snaps to 156.
+#### `screen_size(x)` — Viewport Zoom with Palette Fade
+
+Defined at `fmain.c:2914-2933`. Given argument `x` (half-width in lo-res pixels):
+
+1. Compute `y = (x * 5) / 8` — enforces a fixed 5:8 height-to-width aspect ratio (`fmain.c:2917`).
+2. `Delay(2)` — 40 ms pause for animation pacing (`fmain.c:2919`).
+3. Set `vp_page` geometry, centered on a 320×200 frame (`fmain.c:2921-2925`):
+   - `DxOffset = 160 − x`, `DWidth = x × 2` (horizontal)
+   - `DyOffset = 100 − y`, `DHeight = y × 2` (vertical)
+   - `RxOffset` / `RyOffset` on both `ri_page1` and `ri_page2` match the display offsets, scrolling the bitmap view to stay centered.
+4. Set `vp_text.DHeight = 95 − y` (`fmain.c:2927`). As the playfield expands, the text viewport shrinks; at `y ≥ 95` (`x ≥ 152`) the text height goes ≤ 0, hiding the status bar entirely.
+5. Call `fade_page(y*2 − 40, y*2 − 70, y*2 − 100, 0, introcolors)` (`fmain.c:2930`). This scales the `introcolors` palette by per-channel percentages that increase with `y`:
+
+   | x | y | R% (y×2−40) | G% (y×2−70) | B% (y×2−100) | Visual |
+   |---|---|------------|------------|-------------|--------|
+   | 0 | 0 | −40 (black) | −70 (black) | −100 (black) | All black |
+   | 40 | 25 | 10 | −20 (black) | −50 (black) | Faint red tint |
+   | 80 | 50 | 60 | 30 | 0 (black) | Warm, no blue |
+   | 120 | 75 | 110 (full) | 80 | 50 | Nearly full color |
+   | 156 | 97 | 154 (full) | 124 (full) | 94 | Near-full palette |
+   | 160 | 100 | 160 (full) | 130 (full) | 100 (full) | Full `introcolors` |
+
+   Negative percentages clamp to 0 (black). The `limit` parameter is 0 (FALSE), so no night-mode clamping or blue shift applies. The red channel brightens first, then green, then blue — producing a warm sunrise-like fade-in during zoom-open and a reverse cool-to-black fade during zoom-close.
+
+6. `MakeVPort(&v, &vp_text)` — rebuild the text viewport Copper list (`fmain.c:2932`).
+7. `pagechange()` — swap display buffers and rebuild the page viewport Copper list (`fmain.c:2933`).
+
+When called in a loop (e.g., `for (i=0; i<=160; i+=4) screen_size(i)` at `fmain.c:1199`), the combined effect is an animated iris-open with a synchronized warm palette fade — the viewport expands from a single centered point while the `introcolors` palette fades in red-first. The palette is hardcoded to `introcolors` (`fmain.c:484-488`), so every call to `screen_size()` — including during the victory sequence (`fmain2.c:1613`) — uses the same intro-era palette aesthetic.
+
+See [§3.6](#36-screen-configurations) for the per-scene configuration table and the relationship to normal gameplay mode.
 
 ### 9.4 Day/Night Palette
 

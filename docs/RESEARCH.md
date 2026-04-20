@@ -3635,10 +3635,23 @@ Indoor waveform tweak (`fmain.c:2945-2946`): dungeons (region 9) use `new_wave[1
 
 ### 20.1 Display Architecture
 
-The game uses a split-screen Amiga display with two ViewPorts:
+The display operates in three configurations (see [ARCHITECTURE.md §3.6](ARCHITECTURE.md#36-screen-configurations)).
 
-- **`vp_page`** — lo-res (288×140) playfield for the game world — `fmain.c:14` (`PAGE_HEIGHT 143`), `fmain.c:811-813`.
+**Normal gameplay — split-screen with status bar:**
+
+- **`vp_page`** — lo-res (288×140) playfield for the game world — `fmain.c:14` (`PAGE_HEIGHT 143`), `fmain.c:1250-1255`.
 - **`vp_text`** — hi-res (640×57) status bar at bottom — `fmain.c:16` (`TEXT_HEIGHT 57`), `fmain.c:815-818`.
+
+**Cinematic scenes — near-full-screen playfield** (title text, asset loading, victory):
+
+- **`vp_page`** — lo-res (312×194), set by `screen_size(156)` — `fmain.c:2914-2933`. Slightly inset (4px horizontal, 3px vertical) from the full 320×200 frame.
+- **`vp_text`** — hidden (`DHeight ≤ 0`). No status bar visible.
+
+**Storybook pages — true full-screen** (intro page0 and p1–p3):
+
+- **`vp_page`** — lo-res (320×200), reached by `screen_size(160)` at the peak of the intro zoom-in loop (`fmain.c:1199`). No border, no inset — edge-to-edge display.
+- **`vp_text`** — hidden (`DHeight ≤ 0`).
+- The zoom-in animates from 0 to 160 in steps of 4, opening an iris onto the storybook art. The zoom-out starts from 156 (not 160), snapping the viewport to 312×194 on the first frame before animating closed (`fmain.c:1209`). Both loops use `introcolors` palette fading (`fmain.c:2914-2933`).
 
 Key RastPort assignments — `fmain.c:448`:
 - `rp_map` — for drawing on playfield pages (used during `map_message()` story screens).
