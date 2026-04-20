@@ -36,7 +36,6 @@ pub enum DebugCommand {
     SetDayPhase { phase: u16 },
     SetGameTime { hour: u8, minute: u8 },
     HoldTimeOfDay { hold: bool },
-    ToggleAutosave { enable: bool },
     RestartAsBrother { brother: BrotherId },
     InstaKill,
     TriggerWitchEffect,

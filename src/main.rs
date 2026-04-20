@@ -530,7 +530,6 @@ pub fn main() -> Result<(), String> {
                     fatigue: gs.state.fatigue,
                     god_mode_flags: gs.state.god_mode.bits(),
                     time_held: gs.state.freeze_sticky,
-                    autosave_enabled: false, // field is private; toggled by command
                     song_group_count,
                     current_song_group,
                     cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
