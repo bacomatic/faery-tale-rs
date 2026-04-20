@@ -538,7 +538,7 @@ impl DebugConsole {
                 "/noclip"           => "/noclip — shortcut for /god noclip.",
                 "/magic"| "magic"    => "/magic <light|secret|freeze> — toggle sticky magic effect.",
                 "/swan" | "swan"     => "/swan — summon the swan.",
-                "/time" | "time"     => "/time <HH:MM> | dawn | noon | dusk | midnight | hold | free\n  /time hold — freeze time.  /time free — unfreeze.",
+                "/time" | "time"     => "/time <HH:MM> | dawn | noon | dusk | midnight | hold | resume\n  /time hold — freeze time.  /time resume — unfreeze.",
                 "/brother"          => "/brother <julian|phillip|kevin>",
                 "/save" | "save"    => "/save <on|off> — enable/disable autosave.",
                 "/fx"   | "fx"      => "/fx <witch|teleport|fadeout|fadein>",
@@ -570,7 +570,7 @@ impl DebugConsole {
             "  /noclip        toggle noclip shortcut",
             "  /magic <m>     sticky magic: light/secret/freeze",
             "  /swan          summon the swan",
-            "  /time <t>      set time: HH:MM or dawn/noon/dusk/midnight/hold/free",
+            "  /time <t>      set time: HH:MM or dawn/noon/dusk/midnight/hold/resume",
             "  /brother <b>   switch to julian/phillip/kevin",
             "  /save <on|off> toggle autosave",
             "  /fx <e>        trigger: witch/teleport/fadeout/fadein",
@@ -717,7 +717,7 @@ impl DebugConsole {
     fn cmd_time(&mut self, args: &[&str]) {
         match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
             Some("hold")      => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: true }),
-            Some("free") | Some("unhold") => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: false }),
+            Some("resume") | Some("free") | Some("unhold") => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: false }),
             Some("midnight")  => self.push_cmd(DebugCommand::SetDayPhase { phase: 0 }),
             Some("dawn")      => self.push_cmd(DebugCommand::SetDayPhase { phase: 6000 }),
             Some("noon")      => self.push_cmd(DebugCommand::SetDayPhase { phase: 12000 }),
@@ -735,7 +735,7 @@ impl DebugConsole {
                         _ => self.log("Usage: /time HH:MM  (e.g. /time 08:30)"),
                     }
                 } else {
-                    self.log("Usage: /time <HH:MM | dawn | noon | dusk | midnight | hold | free>");
+                    self.log("Usage: /time <HH:MM | dawn | noon | dusk | midnight | hold | resume>");
                 }
             }
             None => {

@@ -287,7 +287,7 @@ These are modern debug affordances not present in the original game; they expose
 | `/time <HH:MM>` | Jump the daynight clock to a specific time |
 | `/time <period>` | Jump to a named time period: `dawn`, `noon`, `dusk`, `midnight` |
 | `/time hold` | Freeze the daynight clock (time-of-day stops advancing; gameplay continues) |
-| `/time free` | Resume the daynight clock |
+| `/time resume` | Resume the daynight clock |
 | `/save <on\|off>` | Enable or disable autosave |
 | `/fx <effect>` | Trigger a one-shot visual effect: `witch`, `teleport`, `fadeout`, `fadein` |
 
