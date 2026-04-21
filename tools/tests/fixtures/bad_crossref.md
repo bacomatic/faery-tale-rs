@@ -4,7 +4,7 @@
 > Cross-refs: [RESEARCH §1](../../../docs/RESEARCH.md#1-core-data-structures)
 
 ## Overview
-Calls a table that isn't registered.
+Dangling link: [Nowhere](nowhere.md).
 ## Symbols
 None.
 
@@ -12,10 +12,10 @@ None.
 
 Source: `fmain.c:1-10`
 Called by: `entry point`
-Calls: `TABLE:this_does_not_exist`
+Calls: `none`
 
 ```pseudo
 def sample_function(x: int) -> int:
-    """Uses an unregistered table ref."""
+    """OK body."""
     return x
 ```

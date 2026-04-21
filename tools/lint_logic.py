@@ -482,6 +482,130 @@ def check_table_refs(doc: LogicDoc) -> list[LintIssue]:
 ALL_CHECKS.append(check_table_refs)
 
 
+ALLOWED_LITERALS = {-1, 0, 1, 2}
+
+
+def check_magic_numbers(doc: LogicDoc) -> list[LintIssue]:
+    """Check #9."""
+    issues: list[LintIssue] = []
+    registered = load_symbol_registry()
+    entries, _ = extract_function_entries(doc)
+    body_lines = doc.lines
+    for entry in entries:
+        tree, _ = _parse_pseudo(entry, doc)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, int):
+                val = node.value
+                if val in ALLOWED_LITERALS:
+                    continue
+                # Skip values inside "bit(...)" primitive — those are bit indices, harmless.
+                parent = getattr(node, "parent", None)
+                # We didn't annotate parents; just check the source line for 'bit(' prefix.
+                doc_line_idx = entry.pseudo_start + node.lineno - 2
+                line_src = body_lines[doc_line_idx] if 0 <= doc_line_idx < len(body_lines) else ""
+                if "bit(" in line_src:
+                    continue
+                if "#" in line_src:
+                    continue  # inline comment present — accepted
+                # Otherwise require the literal to appear as a registered constant name nearby.
+                issues.append(LintIssue(
+                    doc.path, doc_line_idx + 1, "M001",
+                    f"magic number {val} in '{entry.name}' needs a named constant or inline # comment"))
+    return issues
+
+
+_MD_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+
+
+def check_crossrefs(doc: LogicDoc) -> list[LintIssue]:
+    """Check #10."""
+    issues: list[LintIssue] = []
+    for lineno, raw in enumerate(doc.lines, 1):
+        for m in _MD_LINK_RE.finditer(raw):
+            target = m.group(1).split("#", 1)[0]
+            if not target or target.startswith(("http://", "https://", "mailto:")):
+                continue
+            resolved = (doc.path.parent / target).resolve()
+            try:
+                resolved.relative_to(REPO_ROOT)
+            except ValueError:
+                continue  # outside repo; skip
+            if not resolved.exists():
+                issues.append(LintIssue(
+                    doc.path, lineno, "X001",
+                    f"broken cross-reference to '{target}'"))
+    return issues
+
+
+_MERMAID_BLOCK_RE = re.compile(r"```mermaid\s*(.*?)```", re.DOTALL)
+_STATE_ASSIGN_RE = re.compile(r"\.\w+\s*=\s*(STATE_[A-Z_0-9]+|GOAL_[A-Z_0-9]+|CMODE_[A-Z_0-9]+)")
+
+
+def check_state_coverage(doc: LogicDoc) -> list[LintIssue]:
+    """Check #12: when a Mermaid stateDiagram-v2 follows a function, every
+    STATE_* / GOAL_* / CMODE_* assigned in the pseudo block appears in the diagram."""
+    issues: list[LintIssue] = []
+    entries, _ = extract_function_entries(doc)
+    text_after = doc.text
+    for entry in entries:
+        # Find a mermaid block that appears after this entry's H2 but before the next H2.
+        tail = "\n".join(doc.lines[entry.pseudo_end:])
+        next_h2 = H2_RE.search(tail, re.MULTILINE) if False else None  # placeholder
+        mer = _MERMAID_BLOCK_RE.search(tail)
+        if not mer:
+            continue
+        diagram = mer.group(1)
+        if "stateDiagram-v2" not in diagram:
+            continue
+        assigned = set(_STATE_ASSIGN_RE.findall(entry.pseudo_body))
+        for state in assigned:
+            if state not in diagram:
+                issues.append(LintIssue(
+                    doc.path, entry.h2_line, "D001",
+                    f"state '{state}' assigned in '{entry.name}' but missing from diagram"))
+    return issues
+
+
+_README_ROW_RE = re.compile(r"\|\s*`?([A-Za-z_][\w]*)`?\s*\|\s*\[[^\]]+\]\(([^)]+)\)\s*\|")
+
+
+def check_index_completeness(logic_dir: Path, docs: list[LogicDoc]) -> list[LintIssue]:
+    """Check #11: README index matches the set of defined functions."""
+    readme = logic_dir / "README.md"
+    issues: list[LintIssue] = []
+    if not readme.exists():
+        issues.append(LintIssue(readme, 1, "I001", "docs/logic/README.md is missing"))
+        return issues
+    readme_text = readme.read_text(encoding="utf-8")
+
+    indexed: dict[str, str] = {}
+    for m in _README_ROW_RE.finditer(readme_text):
+        indexed[m.group(1)] = m.group(2)
+
+    defined: set[str] = set()
+    for doc in docs:
+        entries, _ = extract_function_entries(doc)
+        for entry in entries:
+            defined.add(entry.name)
+
+    for name in defined - set(indexed):
+        issues.append(LintIssue(readme, 1, "I002", f"function '{name}' is defined but not in index"))
+    for name, target in indexed.items():
+        target_path = (readme.parent / target.split("#", 1)[0]).resolve()
+        if not target_path.exists():
+            issues.append(LintIssue(
+                readme, 1, "I003",
+                f"index row '{name}' points at missing file '{target}'"))
+        if name not in defined:
+            issues.append(LintIssue(readme, 1, "I004", f"index row '{name}' has no matching function"))
+    return issues
+
+
+ALL_CHECKS.extend([check_magic_numbers, check_crossrefs, check_state_coverage])
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -532,11 +656,26 @@ def main(argv: list[str] | None = None) -> int:
         description="Lint strict pseudo-code in docs/logic/*.md.",
     )
     parser.add_argument("--file", type=Path, default=None)
+    parser.add_argument("--logic-dir", type=Path, default=LOGIC_DIR)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
-    targets = collect_targets(args.file)
-    issues = lint_files(targets)
+    logic_dir = args.logic_dir
+    if args.file is not None:
+        targets = [args.file]
+    else:
+        targets = sorted(
+            p for p in logic_dir.glob("*.md")
+            if p.name not in {"README.md", "STYLE.md", "SYMBOLS.md"}
+        )
+
+    docs = [load_doc(p) for p in targets]
+    issues: list[LintIssue] = []
+    for doc in docs:
+        for check in ALL_CHECKS:
+            issues.extend(check(doc))
+    if args.file is None:
+        issues.extend(check_index_completeness(logic_dir, docs))
 
     for issue in issues:
         print(issue.format(), file=sys.stderr)

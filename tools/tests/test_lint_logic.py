@@ -75,3 +75,34 @@ def test_unknown_table_ref_fails(fixtures_dir):
     result = run_linter("--file", str(fixtures_dir / "unknown_table.md"))
     assert result.returncode != 0
     assert "this_does_not_exist" in (result.stdout + result.stderr)
+
+
+def test_magic_number_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "magic_number.md"))
+    assert result.returncode != 0
+    assert "42" in (result.stdout + result.stderr)
+
+
+def test_bad_crossref_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "bad_crossref.md"))
+    assert result.returncode != 0
+    assert "nowhere.md" in (result.stdout + result.stderr)
+
+
+def test_state_coverage_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "state_coverage.md"))
+    assert result.returncode != 0
+    assert "STATE_B" in (result.stdout + result.stderr)
+
+
+def test_index_orphan_fails(fixtures_dir, tmp_path, monkeypatch):
+    # Exercises Check #11 against a mini logic dir.
+    import os
+    orphan_dir = fixtures_dir / "index_orphan"
+    result = subprocess.run(
+        [sys.executable, str(LINTER), "--logic-dir", str(orphan_dir)],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert result.returncode != 0
+    combined = result.stdout + result.stderr
+    assert "orphan_function" in combined or "ghost_function" in combined

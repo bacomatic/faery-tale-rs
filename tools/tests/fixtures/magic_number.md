@@ -4,7 +4,7 @@
 > Cross-refs: [RESEARCH §1](../../../docs/RESEARCH.md#1-core-data-structures)
 
 ## Overview
-Calls a table that isn't registered.
+Literal 42 without a comment or named constant.
 ## Symbols
 None.
 
@@ -12,10 +12,10 @@ None.
 
 Source: `fmain.c:1-10`
 Called by: `entry point`
-Calls: `TABLE:this_does_not_exist`
+Calls: `none`
 
 ```pseudo
 def sample_function(x: int) -> int:
-    """Uses an unregistered table ref."""
-    return x
+    """Magic number."""
+    return x + 42
 ```
