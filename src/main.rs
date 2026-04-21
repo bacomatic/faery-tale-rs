@@ -16,7 +16,7 @@ use sdl2::surface::Surface;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::game::debug_console::{DebugConsole, DebugSnapshot};
+use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
 use crate::game::game_clock::GameClock;
 use crate::game::game_state::DayPhase;
 use crate::game::settings::{self, GameSettings};
@@ -551,7 +551,7 @@ pub fn main() -> Result<(), String> {
                     vfx_witch_active: gs.is_witch_active(),
                     vfx_teleport_active: gs.is_teleport_active(),
                     vfx_palette_xfade: gs.is_palette_xfade_active(),
-                    time_period: crate::game::debug_console::day_phase_label(gs.state.get_day_phase()),
+                    time_period: crate::game::debug_tui::day_phase_label(gs.state.get_day_phase()),
                     is_paused: clock.paused,
                     princess_captive: gs.state.world_objects.get(9).map_or(false, |o| o.ob_stat != 0),
                     princess_rescues: gs.state.princess as u16,
@@ -568,14 +568,14 @@ pub fn main() -> Result<(), String> {
                     actors: gs.state.actors.iter().enumerate()
                         .filter(|(_, a)| a.is_active())
                         .take(20)
-                        .map(|(slot, a)| crate::game::debug_console::ActorSnapshot::from_actor(slot as u8, a))
+                        .map(|(slot, a)| crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a))
                         .collect(),
                     // Hero top-row extras (DBG-LAYOUT-01)
                     max_vitality: 15 + (gs.state.brave / 4),
                     luck: gs.state.luck,
                     kind: gs.state.kind,
                     hero_weapon: gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
-                    hero_weapon_name: crate::game::debug_console::weapon_short_name(
+                    hero_weapon_name: crate::game::debug_tui::weapon_short_name(
                         gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
                     ).to_string(),
                     hero_state_u8: gs.state.actors.first()
@@ -596,13 +596,13 @@ pub fn main() -> Result<(), String> {
                                 AS::Dying => 3, AS::Dead => 4, AS::Shooting(_) => 5,
                                 AS::Sinking => 6, AS::Falling => 7, AS::Sleeping => 8,
                             };
-                            crate::game::debug_console::actor_state_name(discriminant).to_string()
+                            crate::game::debug_tui::actor_state_name(discriminant).to_string()
                         })
                         .unwrap_or_else(|| "—".to_string()),
                     hero_facing: gs.state.actors.first().map(|a| a.facing).unwrap_or(0),
                     hero_environ: gs.state.actors.first().map(|a| a.environ).unwrap_or(0),
                     active_carrier: gs.state.active_carrier,
-                    active_carrier_name: crate::game::debug_console::carrier_name(
+                    active_carrier_name: crate::game::debug_tui::carrier_name(
                         gs.state.active_carrier,
                     ).to_string(),
                     jewel_timer: gs.state.light_timer.max(0) as u16,
