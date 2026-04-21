@@ -107,5 +107,12 @@ Every documented function appears here with a link to its canonical definition. 
 | `day_fade` | [day-night.md#day_fade](day-night.md#day_fade) | fmain2.c:1653-1660 — outdoor/indoor palette refresh driver (calls fade_page) |
 | `setmood` | [day-night.md#setmood](day-night.md#setmood) | fmain.c:2936-2957 — select music track for mood (death/astral/battle/indoor/day/night) |
 | `hunger_fatigue_tick` | [day-night.md#hunger_fatigue_tick](day-night.md#hunger_fatigue_tick) | fmain.c:2188-2220 — safe-zone + auto-eat + hunger/fatigue advance + warnings |
+| `compute_raftprox` | [carrier-transport.md#compute_raftprox](carrier-transport.md#compute_raftprox) | fmain.c:1455-1464 — derive wcarry / raftprox and latch swan ice-physics environ |
+| `load_carrier` | [carrier-transport.md#load_carrier](carrier-transport.md#load_carrier) | fmain.c:2784-2802 — load swan/turtle/dragon shapes into anim_list[3] at extent center |
+| `carrier_extent_update` | [carrier-transport.md#carrier_extent_update](carrier-transport.md#carrier_extent_update) | fmain.c:2716-2719 — auto-spawn / despawn the slot-3 carrier on xtype==70 transitions |
+| `carrier_tick` | [carrier-transport.md#carrier_tick](carrier-transport.md#carrier_tick) | fmain.c:1494-1547 — CARRIER body: swan mount, turtle mount, turtle water-swim AI, move_extent drag |
+| `raft_tick` | [carrier-transport.md#raft_tick](carrier-transport.md#raft_tick) | fmain.c:1562-1573 — RAFT body: snap anim_list[1] onto hero on terrain 3-5 with raftprox==2 |
+| `swan_dismount` | [carrier-transport.md#swan_dismount](carrier-transport.md#swan_dismount) | fmain.c:1417-1428 — fire-button dismount: lava veto, ±15 velocity gate, two-probe landing clear |
+| `use_sea_shell` | [carrier-transport.md#use_sea_shell](carrier-transport.md#use_sea_shell) | fmain.c:3457-3461 — USE Shell: swamp-rectangle veto then delegate to get_turtle |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

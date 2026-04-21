@@ -467,6 +467,8 @@ blist: list                         # fmain.c:2806-2812 — Bro[3] per-brother s
 hero_place: u16                     # fmain.c:569 — current place id for hero
 tfont: object                       # fmain.c — text (hi-res) TextFont
 rp_text: object                     # fmain.c — hi-res text RastPort
+wcarry: i8                          # fmain.c:563,1456 — anim_list index of closest carrier this frame (1 or 3)
+cycle: u16                          # fmain.c — global animation tick; low bits drive walk-cycle frame selection
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
 afont: object                       # fmain.c — Amber font TextFont
