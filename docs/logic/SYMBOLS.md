@@ -74,12 +74,12 @@ SFX_MONSTER_HIT  = 3   # fmain2.c:241
 SFX_BOW_RELEASE  = 4   # (fired by shoot_step)
 SFX_FIREBALL_HIT = 5   # fmain2.c:239
 
-# Door-type enum subset (fmain.c doorlist)
-DOOR_CAVE   = 4
-DOOR_DESERT = 6
+# Door-type enum subset (fmain.c:213-229 doorlist)
+DOOR_CAVE   = 18   # fmain.c:228 — #define CAVE 18 (also VLOG)
+DOOR_DESERT = 17   # fmain.c:227 — #define DESERT 17
 
 # Region / stat offsets
-STATBASE = 16   # fmain2.c:1602 — first 6 stats live at stuff[STATBASE..STATBASE+5]
+STATBASE = 25   # fmain.c:428 — #define STATBASE 25; stuff[25..30] = Gold Statues / Rose / Turtle Shell / Shard-group stats-range
 
 # Movement / terrain physics (fmain.c walking/ice/lava blocks)
 ICE_VEL_CAP_DEFAULT = 42    # fmain.c:1582 — max |vel_y| on ice
@@ -239,7 +239,7 @@ ACTOR_FILE_BROTHER       = 6          # fmain.c:2889 — brother actor shape fil
 SET_FILE_TAMBRY          = 13         # fmain.c:2889 — Tambry setfig file id
 ANIX_DEFAULT             = 3          # fmain.c:2904 — default anim-index for brother
 GAME_OVER_THRESHOLD      = 3          # fmain.c:2871 — brother>=3 → quit
-GOLDBASE                 = 34         # fmain.c — stuff[] gold slot index
+GOLDBASE                 = 31         # fmain.c:429 — #define GOLDBASE 31 (first gold-counter slot in stuff[])
 ```
 
 ## 2. Enums
