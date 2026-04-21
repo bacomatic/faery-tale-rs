@@ -80,6 +80,73 @@ DOOR_DESERT = 6
 
 # Region / stat offsets
 STATBASE = 16   # fmain2.c:1602 — first 6 stats live at stuff[STATBASE..STATBASE+5]
+
+# Movement / terrain physics (fmain.c walking/ice/lava blocks)
+ICE_VEL_CAP_DEFAULT = 42    # fmain.c:1582 — max |vel_y| on ice
+ICE_VEL_CAP_SWAN    = 40    # fmain.c:1582 — swan terminal velocity
+SPEED_NORMAL        = 2     # fmain.c:1602 — default walking speed
+SPEED_SLOW          = 1     # fmain.c:1602 — wading/deep-water speed
+SPEED_FAST          = 4     # fmain.c:1601 — slippery-terrain speed
+SPEED_BACKWARDS     = -2    # fmain.c:1600 — lava walk-backward speed
+SPEED_RAFT          = 3     # fmain.c:1599 — hero on turtle/raft
+VEL_DISPL_MUL       = 4     # fmain.c:1646-1647 — vel stored as displacement*4
+WORLD_COORD_MASK    = 0x7fff # fsubs.asm:1295 — 15-bit world coordinate mask
+COORD_FLAG_BIT      = 0x8000 # fsubs.asm:1316 — bit 15 of abs_y preserved (semantics unresolved, see PROBLEMS)
+DIR_MASK            = 7     # fmain.c — 8-direction wrap mask
+DIRECTION_STILL     = 9     # fmain.c:1010, fmain2.c:165 — com2 sentinel "no movement"
+ACTOR_BBOX_HALF_X   = 11    # fmain2.c:289 — actor collision half-width
+ACTOR_BBOX_HALF_Y   = 9     # fmain2.c:289 — actor collision half-height
+COLLIDE_ACTOR       = 16    # fmain2.c:289 — proxcheck return code for actor-actor collision
+ICE_VEL_ACCUM_BASE  = 20    # fmain.c:1583 — ice velocity accumulator base (newx(20,d,2)-20 == xdir[d])
+
+# Riding modes (global `riding`)
+RIDING_NONE = 0
+RIDING_RAFT = 5             # fmain.c:1599 — hero on turtle/raft
+RIDING_SWAN = 11            # fmain.c:1582 — hero on swan (ice physics)
+
+# set_course mode constants
+COURSE_MODE_DIRECT     = 0
+COURSE_MODE_PURSUE     = 1   # fmain2.c:138 — deviate when close
+COURSE_MODE_FOLLOW     = 2   # fmain2.c:146 — deviate when close
+COURSE_MODE_BACKUP     = 3   # fmain2.c:149 — reverse direction
+COURSE_MODE_BUMBLE     = 4   # fmain2.c:113 — skip axis snap
+COURSE_MODE_NOWALK     = 5   # fmain2.c:186 — set facing only
+COURSE_MODE_RAW_VECTOR = 6   # fmain2.c:79 — use target_x/y as raw delta
+PURSUE_DEVIATE_DIST    = 40  # fmain2.c:138
+FOLLOW_DEVIATE_DIST    = 30  # fmain2.c:146
+
+# Terrain codes (high nibble of terra_mem[id*4+1]; fsubs.asm:614)
+TERRAIN_OPEN        = 0     # passable
+TERRAIN_BLOCKED     = 1     # impassable
+TERRAIN_WATER_SHAL  = 2
+TERRAIN_WATER_MED   = 3
+TERRAIN_WATER_DEEP  = 4     # ramps environ toward 10
+TERRAIN_WATER_VDEEP = 5     # ramps toward 30, can drown
+TERRAIN_SLIPPERY    = 6     # environ -1
+TERRAIN_ICE         = 7     # environ -2, velocity-based
+TERRAIN_LAVA        = 8     # environ -3, walk-backwards; NPCs blocked
+TERRAIN_PIT         = 9     # fall trigger if xtype==52 & i==0
+TERRAIN_CRYSTAL     = 12    # fmain.c:1611 — passable with stuff[30] shard
+TERRAIN_DOOR        = 15    # fmain.c:1609 — triggers doorfind()
+
+# Environ codes (actor.environ)
+ENVIRON_NORMAL    = 0
+ENVIRON_SLIP      = -1      # terrain 6
+ENVIRON_ICE       = -2      # terrain 7 / pit fall
+ENVIRON_LAVA      = -3      # terrain 8
+ENVIRON_WADE      = 2       # terrain 2
+ENVIRON_BRUSH     = 5       # terrain 3
+ENVIRON_DEEP_SAT  = 10      # ramp target for terrain 4
+ENVIRON_SINK      = 15      # threshold for STATE_SINK
+ENVIRON_DROWN     = 30      # death-depth threshold
+
+# Pit/drain linkage
+PITFALL_XTYPE     = 52      # fmain.c:1767
+PITFALL_LUCK_COST = 2       # fmain.c:1772
+DRAIN_SINK_SECTOR = 181     # fmain.c:1785
+DRAIN_DEST_REGION = 9       # fmain.c:1788
+DRAIN_DEST_X      = 0x1080  # fmain.c:1789
+DRAIN_DEST_Y      = 34950   # fmain.c:1789
 ```
 
 ## 2. Enums
@@ -298,6 +365,16 @@ last_person: i16                    # fmain.c — last greeted NPC race (for pro
 hunger: i16                         # fmain.c:565 — 0..~150, climbs every 128 daynight ticks
 ob_list8: list                      # fmain.c — inside-region object list (ob_table[8])
 witchflag: bool                     # fmain.c:591 — witch is active
+map_x: i16                          # fmain.c — camera world X (top-left of visible playfield)
+map_y: i16                          # fmain.c — camera world Y
+riding: i8                          # fmain.c:563 — mount code (RIDING_*)
+raftprox: u8                        # fmain.c:1459 — 0/1/2 hero proximity to raft/turtle
+frustflag: i8                       # fmain.c — hero frustration counter (scratch-head anim)
+bumped: i8                          # fmain.c:1609 — hero door-nudge latch
+hero_sector: u8                     # fmain.c — current sector index under hero
+new_region: i16                     # fmain.c:614 — pending region-transfer target
+brother: i8                         # fmain.c — hero identity (0 Julian / 1 Phillip / 2 Kevin)
+fallstates: list                    # fmain.c — fall-animation frames per brother
 ```
 
 ## 6. Table references
@@ -312,6 +389,10 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:narr_messages` | `narr.asm` | Indexed by `speak(N)` |
 | `TABLE:key_bindings` | [logic/menu-system.md](menu-system.md) | Keycode → action map |
 | `TABLE:letter_list` | `fmain.c:533-547` | Keyboard-shortcut table: `(letter, menu, choice)` rows consumed by `key_dispatch` |
+| `TABLE:movement_vectors_x` | `fsubs.asm:1276` | `xdir[0..9]`: `-2,0,2,3,2,0,-2,-3,0,0` |
+| `TABLE:movement_vectors_y` | `fsubs.asm:1277` | `ydir[0..9]`: `-2,-3,-2,0,2,3,2,0,0,0` |
+| `TABLE:movement_course_map` | `fmain2.c:55` | `com2[0..8]`: `{0,1,2,7,9,3,6,5,4}`; `(ydir,xdir) → dir or 9=still` |
+| `TABLE:fall_states` | `fmain.c` | Per-brother fall-animation frame indices (6 entries each) |
 
 *(Additional entries appended as new logic docs are authored.)*
 

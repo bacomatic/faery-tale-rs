@@ -50,5 +50,12 @@ Every documented function appears here with a link to its canonical definition. 
 | `checkdead` | [combat.md#checkdead](combat.md#checkdead) | Vitality → STATE_DYING transition + stat bookkeeping |
 | `aftermath` | [combat.md#aftermath](combat.md#aftermath) | Post-battle recap: dead vs fled tally, turtle-egg trigger |
 | `move_figure` | [combat.md#move_figure](combat.md#move_figure) | Displace actor by (dir, dist) if proxcheck clears |
+| `newx` | [movement.md#newx](movement.md#newx) | Compute new X from (x, dir, dist) via `com2` vector table |
+| `newy` | [movement.md#newy](movement.md#newy) | Compute new Y from (y, dir, dist) via `com2` vector table |
+| `walk_step` | [movement.md#walk_step](movement.md#walk_step) | Per-tick WALKING body: deviations, proxcheck, door collision |
+| `still_step` | [movement.md#still_step](movement.md#still_step) | Per-tick STILL body: terrain update only |
+| `proxcheck` | [movement.md#proxcheck](movement.md#proxcheck) | Collision query: terrain + actor blocking |
+| `update_environ` | [movement.md#update_environ](movement.md#update_environ) | Terrain → environ code (sinking/drowning/teleport) |
+| `set_course` | [movement.md#set_course](movement.md#set_course) | Face actor toward a target; used by witch + AI |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
