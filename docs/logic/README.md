@@ -115,5 +115,10 @@ Every documented function appears here with a link to its canonical definition. 
 | `swan_dismount` | [carrier-transport.md#swan_dismount](carrier-transport.md#swan_dismount) | fmain.c:1417-1428 — fire-button dismount: lava veto, ±15 velocity gate, two-probe landing clear |
 | `use_sea_shell` | [carrier-transport.md#use_sea_shell](carrier-transport.md#use_sea_shell) | fmain.c:3457-3461 — USE Shell: swamp-rectangle veto then delegate to get_turtle |
 | `find_place` | [astral-plane.md#find_place](astral-plane.md#find_place) | fmain.c:2647-2720 — Place-name lookup + extent matcher; on xtype change: rescue / astral Loraii preload / forced spawn / carrier update |
+| `take_command` | [inventory.md#take_command](inventory.md#take_command) | fmain.c:3149-3248 — ITEMS→Take dispatch: gold/scrap/fruit/bones/container/itrans pickup + Talisman win latch |
+| `search_body` | [inventory.md#search_body](inventory.md#search_body) | fmain.c:3249-3282 — Take against an actor: loot weapon + arrows (Bow), treasure_probs drop |
+| `use_dispatch` | [inventory.md#use_dispatch](inventory.md#use_dispatch) | fmain.c:3444-3467 — USE submenu: weapon equip, Keys submenu, Sea Shell turtle, Sun Stone witch unmask |
+| `magic_dispatch` | [inventory.md#magic_dispatch](inventory.md#magic_dispatch) | fmain.c:3300-3365 — MAGIC submenu: 7 magic-item effects with precondition guards + charge decrement |
+| `look_command` | [inventory.md#look_command](inventory.md#look_command) | fmain.c:3286-3295 — ITEMS→Look: reveal hidden objects (race==0) within 40 px |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
