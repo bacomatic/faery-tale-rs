@@ -102,5 +102,10 @@ Every documented function appears here with a link to its canonical definition. 
 | `xfer` | [doors.md#xfer](doors.md#xfer) | fmain.c:2625-2645 — teleport hero + re-derive region + reload + nudge-out-of-wall |
 | `doorfind` | [doors.md#doorfind](doors.md#doorfind) | fmain.c:1081-1128 — resolve door tile, match open_list by key, rewrite tiles |
 | `use_key_on_door` | [doors.md#use_key_on_door](doors.md#use_key_on_door) | fmain.c:3472-3488 — CMODE_KEYS case: sweep 9 directions, consume key on success |
+| `tick_daynight` | [day-night.md#tick_daynight](day-night.md#tick_daynight) | fmain.c:2014-2045 — advance daynight, refresh lightlevel, classify dayperiod, regen vitality |
+| `sleep_tick` | [day-night.md#sleep_tick](day-night.md#sleep_tick) | fmain.c:2014-2021 — sleep fast-forward, fatigue drain, wake conditions |
+| `day_fade` | [day-night.md#day_fade](day-night.md#day_fade) | fmain2.c:1653-1660 — outdoor/indoor palette refresh driver (calls fade_page) |
+| `setmood` | [day-night.md#setmood](day-night.md#setmood) | fmain.c:2936-2957 — select music track for mood (death/astral/battle/indoor/day/night) |
+| `hunger_fatigue_tick` | [day-night.md#hunger_fatigue_tick](day-night.md#hunger_fatigue_tick) | fmain.c:2188-2220 — safe-zone + auto-eat + hunger/fatigue advance + warnings |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
