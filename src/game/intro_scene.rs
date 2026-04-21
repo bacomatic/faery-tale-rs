@@ -127,10 +127,10 @@ fn tick_countdown(remaining: &mut u32, delta: u32) -> bool {
 /// 22 steps × 7 ticks/step ≈ 154 ticks ≈ 5.1s.
 const FLIP_MIN_STEP_TICKS: u32 = 7;
 
-/// Title text Y offset for line-doubled rendering.
-/// Original 640×200 HIRES → line-doubled to 640×400, centered in 640×480
-/// canvas with 40px top margin.
-const TITLE_Y_OFFSET: i32 = 40;
+/// Title text Y offset in play_tex coordinates (320×200).
+/// Original 320×200 NTSC display; play_tex is drawn at native resolution and
+/// blitted 2× to the 640×400 window slot. Title text sits at y=20 in play_tex.
+const TITLE_Y_OFFSET: i32 = 20;
 
 pub struct IntroScene {
     phase: IntroPhase,
@@ -270,28 +270,30 @@ impl Scene for IntroScene {
 
         match &mut self.phase {
             IntroPhase::TitleText { ticks_remaining } => {
-                // Draw black background, white text using the Amber font.
-                // Render title to play_tex so TitleFadeOut can fade it via color_mod.
+                // Draw black background + white title text into play_tex at 320×200.
+                // Then blit play_tex to canvas via the Cinematic-config sub-rect
+                // (src=(4,3,312,194), dst=(8,46,624,388)) per SPEC §1.1: a 4-px
+                // horizontal / 3-px vertical black inset border surrounds the
+                // 312×194 playfield region.
                 let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                     play_canvas.set_draw_color(Color::BLACK);
                     play_canvas.clear();
+                    resources.amber_font.set_color_mod(255, 255, 255);
+                    if let Some(placard) = game_lib.find_placard("titletext") {
+                        placard.draw_offset(
+                            resources.amber_font,
+                            play_canvas,
+                            0,
+                            TITLE_Y_OFFSET,
+                        );
+                    }
                 });
 
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-
-                // Render white title text directly onto the canvas.
-                // Line-doubled: normal-width glyphs at 2× height, Y positions
-                // doubled to match original Amiga CRT line-doubling of 640×200.
-                resources.amber_font.set_color_mod(255, 255, 255);
-                if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_line_doubled(
-                        resources.amber_font,
-                        canvas,
-                        0,
-                        TITLE_Y_OFFSET,
-                    );
-                }
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 if tick_countdown(ticks_remaining, delta) {
                     self.advance(game_lib);
@@ -309,40 +311,38 @@ impl Scene for IntroScene {
                     self.music_started = true;
                 }
 
-                // Render white title text to play_tex (black background) on the first
-                // frame so we can fade it out via color_mod.
                 let result = fader.tick(delta);
-
-                // Apply color_mod to play_tex for the fade.
                 let (r, g, b) = match result {
                     FadeResult::ColorMod(r, g, b) => (r, g, b),
                     _ => (255, 255, 255),
                 };
-                play_tex.set_color_mod(r, g, b);
 
-                // Draw black canvas, then blit fading title from play_tex.
-                canvas.set_draw_color(Color::BLACK);
-                canvas.clear();
-
-                // Render white text onto play_tex each frame at full brightness,
-                // then let color_mod dim it.
+                // Render full-brightness title text into play_tex each frame; apply
+                // the fade via play_tex.set_color_mod, then blit through the
+                // Cinematic 312×194 aperture per SPEC §1.1.
                 let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                     play_canvas.set_draw_color(Color::BLACK);
                     play_canvas.clear();
+                    resources.amber_font.set_color_mod(255, 255, 255);
+                    if let Some(placard) = game_lib.find_placard("titletext") {
+                        placard.draw_offset(
+                            resources.amber_font,
+                            play_canvas,
+                            0,
+                            TITLE_Y_OFFSET,
+                        );
+                    }
                 });
-                // Draw title text to canvas with current fade modulation.
-                resources.amber_font.set_color_mod(r, g, b);
-                if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_line_doubled(
-                        resources.amber_font,
-                        canvas,
-                        0,
-                        TITLE_Y_OFFSET,
-                    );
-                }
+
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+                play_tex.set_color_mod(r, g, b);
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
+                play_tex.set_color_mod(255, 255, 255);
 
                 if fader.is_done() {
-                    play_tex.set_color_mod(255, 255, 255);
                     self.advance(game_lib);
                 }
 

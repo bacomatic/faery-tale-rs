@@ -232,8 +232,10 @@ impl Scene for CopyProtectScene {
 
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
                     *ticks_remaining = 0;
@@ -320,8 +322,10 @@ impl Scene for CopyProtectScene {
 
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 // Check for answer submission
                 if self.submit_pending {
@@ -372,8 +376,10 @@ impl Scene for CopyProtectScene {
             CopyProtectPhase::Passed { ticks_remaining } => {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
                     // Transition to fade-out before completing
@@ -391,8 +397,10 @@ impl Scene for CopyProtectScene {
             CopyProtectPhase::Failed { ticks_remaining } => {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
                     let palette = game_lib.find_palette("copyjunk").unwrap();
@@ -416,8 +424,10 @@ impl Scene for CopyProtectScene {
 
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+                let src = Rect::new(4, 3, 312, 194);
+                let dst = Rect::new(8, 46, 624, 388);
+                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
                 if fader.is_done() {
                     play_tex.set_color_mod(255, 255, 255);

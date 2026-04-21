@@ -111,8 +111,10 @@ impl Scene for VictoryScene {
         // scenes — upscaled 2× from 320×200 play_tex).
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
-        let screen_dest = Rect::new(0, 40, 640, 400);
-        canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+        // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
+        let src = Rect::new(4, 3, 312, 194);
+        let dst = Rect::new(8, 46, 624, 388);
+        canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
 
         // Advance phase.
         match &mut self.phase {
