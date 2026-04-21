@@ -76,7 +76,108 @@ def check_file_header(doc: LogicDoc) -> list[LintIssue]:
     return issues
 
 
-ALL_CHECKS = [check_file_header]
+# Section header used in logic docs; everything else at H2 is a function entry.
+RESERVED_H2 = {"Overview", "Symbols", "Notes", "Mermaid"}
+
+H2_RE = re.compile(r"^##\s+(?P<name>\S+)\s*$")
+SOURCE_LINE_RE = re.compile(r"^Source:\s+`")
+CALLED_BY_LINE_RE = re.compile(r"^Called by:\s+")
+CALLS_LINE_RE = re.compile(r"^Calls:\s+")
+PSEUDO_FENCE_RE = re.compile(r"^```pseudo\s*$")
+
+
+@dataclass
+class FunctionEntry:
+    name: str
+    h2_line: int                # 1-based line of the "## name" header
+    source_text: str
+    called_by_text: str
+    calls_text: str
+    pseudo_start: int           # 1-based line of the opening ```pseudo fence
+    pseudo_end: int             # 1-based line of the closing ``` fence
+    pseudo_body: str            # Content between the fences (exclusive)
+
+
+def extract_function_entries(doc: LogicDoc) -> tuple[list[FunctionEntry], list[LintIssue]]:
+    """Locate every ## <name> block and parse its header + fenced body."""
+    issues: list[LintIssue] = []
+    entries: list[FunctionEntry] = []
+    i = 0
+    n = len(doc.lines)
+    while i < n:
+        m = H2_RE.match(doc.lines[i])
+        if not m:
+            i += 1
+            continue
+        name = m.group("name")
+        h2_line = i + 1
+        if name in RESERVED_H2:
+            i += 1
+            continue
+        # Collect the 3 header lines (may have blank lines between).
+        source_text = called_by_text = calls_text = ""
+        j = i + 1
+        while j < n and not PSEUDO_FENCE_RE.match(doc.lines[j]) and not H2_RE.match(doc.lines[j]):
+            line = doc.lines[j]
+            if SOURCE_LINE_RE.match(line):
+                source_text = line
+            elif CALLED_BY_LINE_RE.match(line):
+                called_by_text = line
+            elif CALLS_LINE_RE.match(line):
+                calls_text = line
+            j += 1
+
+        missing = []
+        if not source_text:
+            missing.append("Source")
+        if not called_by_text:
+            missing.append("Called by")
+        if not calls_text:
+            missing.append("Calls")
+        if missing:
+            issues.append(LintIssue(
+                doc.path, h2_line, "F001",
+                f"function '{name}' missing header line(s): {', '.join(missing)}"))
+
+        if j >= n or not PSEUDO_FENCE_RE.match(doc.lines[j]):
+            issues.append(LintIssue(
+                doc.path, h2_line, "F002",
+                f"function '{name}' has no ```pseudo fenced block before next section"))
+            i = j
+            continue
+
+        pseudo_start = j + 1
+        k = j + 1
+        while k < n and not re.match(r"^```\s*$", doc.lines[k]):
+            k += 1
+        if k >= n:
+            issues.append(LintIssue(
+                doc.path, pseudo_start, "F003",
+                f"function '{name}' pseudo block is not closed"))
+            i = k
+            continue
+        pseudo_body = "\n".join(doc.lines[j + 1 : k])
+        entries.append(FunctionEntry(
+            name=name,
+            h2_line=h2_line,
+            source_text=source_text,
+            called_by_text=called_by_text,
+            calls_text=calls_text,
+            pseudo_start=pseudo_start,
+            pseudo_end=k + 1,
+            pseudo_body=pseudo_body,
+        ))
+        i = k + 1
+    return entries, issues
+
+
+def check_function_headers(doc: LogicDoc) -> list[LintIssue]:
+    """Check #2: every function entry has well-formed Source/Called by/Calls lines."""
+    _, issues = extract_function_entries(doc)
+    return issues
+
+
+ALL_CHECKS = [check_file_header, check_function_headers]
 
 
 # ---------------------------------------------------------------------------

@@ -31,3 +31,10 @@ def test_check_file_header_fails_on_missing_header(fixtures_dir):
     result = run_linter("--file", str(fixtures_dir / "missing_header.md"))
     assert result.returncode != 0
     assert "fidelity" in (result.stdout + result.stderr).lower()
+
+
+def test_function_header_missing_calls_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "bad_function_header.md"))
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "called by" in combined or "calls" in combined
