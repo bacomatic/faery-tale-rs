@@ -10,6 +10,7 @@ tools/results/lint_logic.txt when invoked without --file.
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from dataclasses import dataclass, field
@@ -222,6 +223,132 @@ def check_citations(doc: LogicDoc) -> list[LintIssue]:
 
 
 ALL_CHECKS = [check_file_header, check_function_headers, check_citations]
+
+
+PRIMITIVES: set[str] = {
+    "rand", "chance", "min", "max", "clamp", "abs", "sign",
+    "bit", "wrap_u8", "wrap_i16", "wrap_u16",
+    "now_ticks", "speak", "play_sound", "play_music",
+}
+
+
+def _preprocess_pseudo(body: str) -> str:
+    """Strip Markdown comments from pseudo blocks before AST parsing."""
+    return body
+
+
+def _parse_pseudo(entry: "FunctionEntry", doc: LogicDoc) -> tuple[ast.Module | None, list[LintIssue]]:
+    issues: list[LintIssue] = []
+    try:
+        tree = ast.parse(_preprocess_pseudo(entry.pseudo_body), mode="exec")
+    except SyntaxError as exc:
+        issues.append(LintIssue(
+            doc.path,
+            entry.pseudo_start + (exc.lineno or 1) - 1,
+            "P001",
+            f"pseudo block for '{entry.name}' has syntax error: {exc.msg}"))
+        return None, issues
+    return tree, issues
+
+
+def check_pseudo_parses(doc: LogicDoc) -> list[LintIssue]:
+    """Check #4: every pseudo block parses."""
+    issues: list[LintIssue] = []
+    entries, _ = extract_function_entries(doc)
+    for entry in entries:
+        _, errs = _parse_pseudo(entry, doc)
+        issues.extend(errs)
+    return issues
+
+
+def _check_signature(entry: "FunctionEntry", tree: ast.Module, doc: LogicDoc) -> list[LintIssue]:
+    """Check #5: single top-level def with annotated args, return type, and docstring."""
+    issues: list[LintIssue] = []
+    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.FunctionDef):
+        issues.append(LintIssue(
+            doc.path, entry.pseudo_start, "S001",
+            f"pseudo block for '{entry.name}' must contain exactly one top-level def"))
+        return issues
+    func = tree.body[0]
+    if func.name != entry.name:
+        issues.append(LintIssue(
+            doc.path, entry.pseudo_start, "S002",
+            f"function name '{func.name}' does not match H2 '{entry.name}'"))
+    if func.returns is None:
+        issues.append(LintIssue(
+            doc.path, entry.pseudo_start, "S003",
+            f"function '{entry.name}' is missing a return annotation"))
+    for arg in list(func.args.args) + list(func.args.kwonlyargs):
+        if arg.annotation is None:
+            issues.append(LintIssue(
+                doc.path, entry.pseudo_start, "S004",
+                f"argument '{arg.arg}' of '{entry.name}' is missing a type annotation"))
+    # Docstring
+    first = func.body[0] if func.body else None
+    if not (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)):
+        issues.append(LintIssue(
+            doc.path, entry.pseudo_start, "S005",
+            f"function '{entry.name}' must begin with a docstring"))
+    return issues
+
+
+def check_function_signature(doc: LogicDoc) -> list[LintIssue]:
+    issues: list[LintIssue] = []
+    entries, _ = extract_function_entries(doc)
+    for entry in entries:
+        tree, _ = _parse_pseudo(entry, doc)
+        if tree is None:
+            continue
+        issues.extend(_check_signature(entry, tree, doc))
+    return issues
+
+
+FORBIDDEN_NODES: list[tuple[type, str]] = [
+    (ast.Try, "try"),
+    (ast.Raise, "raise"),
+    (ast.With, "with"),
+    (ast.Lambda, "lambda"),
+    (ast.ClassDef, "class"),
+    (ast.Import, "import"),
+    (ast.ImportFrom, "import"),
+    (ast.Global, "global"),
+    (ast.Nonlocal, "nonlocal"),
+    (ast.ListComp, "list comprehension"),
+    (ast.SetComp, "set comprehension"),
+    (ast.DictComp, "dict comprehension"),
+    (ast.GeneratorExp, "generator expression"),
+]
+
+
+def check_forbidden_constructs(doc: LogicDoc) -> list[LintIssue]:
+    """Check #6."""
+    issues: list[LintIssue] = []
+    entries, _ = extract_function_entries(doc)
+    for entry in entries:
+        tree, _ = _parse_pseudo(entry, doc)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            for node_type, label in FORBIDDEN_NODES:
+                if isinstance(node, node_type):
+                    issues.append(LintIssue(
+                        doc.path,
+                        entry.pseudo_start + getattr(node, "lineno", 1) - 1,
+                        "F010",
+                        f"forbidden construct '{label}' in function '{entry.name}'"))
+                    break
+    return issues
+
+
+ALL_CHECKS = [
+    check_file_header,
+    check_function_headers,
+    check_citations,
+    check_pseudo_parses,
+    check_function_signature,
+    check_forbidden_constructs,
+]
 
 
 # ---------------------------------------------------------------------------

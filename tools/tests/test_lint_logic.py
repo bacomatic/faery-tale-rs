@@ -44,3 +44,22 @@ def test_bad_citation_fails(fixtures_dir):
     result = run_linter("--file", str(fixtures_dir / "bad_citation.md"))
     assert result.returncode != 0
     assert "99999999" in (result.stdout + result.stderr)
+
+
+def test_bad_syntax_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "bad_syntax.md"))
+    assert result.returncode != 0
+    assert "syntax" in (result.stdout + result.stderr).lower()
+
+
+def test_forbidden_try_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "forbidden_try.md"))
+    assert result.returncode != 0
+    assert "try" in (result.stdout + result.stderr).lower()
+
+
+def test_bad_signature_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "bad_signature.md"))
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "annotation" in combined or "docstring" in combined
