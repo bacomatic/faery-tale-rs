@@ -3605,7 +3605,35 @@ impl GameplayScene {
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             SummonSwan => {
-                self.dlog("SummonSwan: not yet wired".to_string());
+                use crate::game::npc::*;
+                use crate::game::actor::{Goal, Tactic};
+                let hero_x = self.state.hero_x as i16;
+                let hero_y = self.state.hero_y as i16;
+                if let Some(ref mut table) = self.npc_table {
+                    if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+                        *slot = Npc {
+                            npc_type: NPC_TYPE_SWAN,
+                            race: RACE_NORMAL,
+                            x: hero_x + 48,
+                            y: hero_y,
+                            vitality: 70,
+                            gold: 0,
+                            speed: 1,
+                            weapon: 0,
+                            active: true,
+                            goal: Goal::None,
+                            tactic: Tactic::None,
+                            facing: 0,
+                            state: NpcState::Still,
+                            cleverness: 0,
+                        };
+                        self.dlog("summoned swan near hero (grounded, requires Golden Lasso to mount)".to_string());
+                    } else {
+                        self.dlog("summon swan: no free NPC slots".to_string());
+                    }
+                } else {
+                    self.dlog("summon swan: no npc_table loaded".to_string());
+                }
             }
             RestartAsBrother { brother } => {
                 let b = match brother {
@@ -4270,6 +4298,27 @@ impl GameplayScene {
         }
     }
 
+    /// SPEC §21.4 / RESEARCH §2.6 (`fmain.c:2463-2464`): when the swan is not
+    /// being ridden by the hero, render it using the RAFT sheet (cfile 4) at
+    /// fixed frame 1 instead of the carrier sheet (cfile 11).
+    ///
+    /// Returns `Some((cfile_idx, frame))` if the override applies, else `None`.
+    ///
+    /// `state.flying != 0` indicates the hero is mounted on the swan (see
+    /// `GameState::flying` and magic.rs swan-mount logic). While mounted, the
+    /// normal carrier-sheet render path applies with facing-indexed frame.
+    fn swan_grounded_override(
+        npc: &crate::game::npc::Npc,
+        state: &GameState,
+    ) -> Option<(usize, usize)> {
+        use crate::game::npc::NPC_TYPE_SWAN;
+        if npc.npc_type == NPC_TYPE_SWAN && state.flying == 0 {
+            Some((4, 1))
+        } else {
+            None
+        }
+    }
+
     /// Compute the sprite frame index for an NPC, matching fmain.c:2076–2108.
     /// `npc_idx` is the NPC's index in the table (provides phase offset like original `cycle + i`).
     /// Returns the frame index clamped to `num_frames`.
@@ -4424,11 +4473,19 @@ impl GameplayScene {
         // --- Enemy NPCs from npc_table ---
         if let Some(ref table) = npc_table {
             for (npc_idx, npc) in table.npcs.iter().enumerate().filter(|(_, n)| n.active) {
-                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                let (cfile_idx, override_frame) =
+                    if let Some((ovr_cfile, ovr_frame)) = Self::swan_grounded_override(npc, state) {
+                        (ovr_cfile, Some(ovr_frame))
+                    } else {
+                        let Some(c) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                        (c, None)
+                    };
                 let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
 
                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
-                let frame = Self::npc_animation_frame(npc, npc_idx, state.cycle, sheet.num_frames);
+                let frame = override_frame
+                    .map(|f| f.min(sheet.num_frames.saturating_sub(1)))
+                    .unwrap_or_else(|| Self::npc_animation_frame(npc, npc_idx, state.cycle, sheet.num_frames));
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, crate::game::sprites::SPRITE_H, framebuf, fb_w, fb_h);
@@ -4477,7 +4534,7 @@ impl GameplayScene {
     ///
     /// | Key     | Effect                                                                    |
     /// |---------|---------------------------------------------------------------------------|
-    /// | B       | Grant Golden Lasso (`stuff[5]=1`); swan summon not yet wired              |
+    /// | B       | Grant Golden Lasso (`stuff[5]=1`) and summon a grounded swan |
     /// | .       | Add 3 to random `stuff[]` entry (range 0..=30)                            |
     /// | R       | (stub) logs — fairy rescue is invoked automatically on death              |
     /// | =       | (stub) logs — `prq(2)` brother-bio page overlay not yet wired             |
@@ -4490,7 +4547,9 @@ impl GameplayScene {
         match kc {
             K::B => {
                 self.state.stuff_mut()[5] = 1;
-                self.dlog("cheat1(B): granted Golden Lasso (stuff[5]=1); swan summon TODO");
+                // Also summon a grounded swan near the hero so the lasso is testable.
+                self.apply_command(DebugCommand::SummonSwan);
+                self.dlog("cheat1(B): granted Golden Lasso (stuff[5]=1) and summoned swan");
                 true
             }
             K::Period => {
@@ -5286,12 +5345,20 @@ impl Scene for GameplayScene {
                         RenderKind::Enemy(idx) => {
                             if let Some(ref table) = self.npc_table {
                                 let npc = &table.npcs[idx];
-                                let Some(cfile_idx) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                let (cfile_idx, override_frame) =
+                                    if let Some((ovr_cfile, ovr_frame)) = Self::swan_grounded_override(npc, &self.state) {
+                                        (ovr_cfile, Some(ovr_frame))
+                                    } else {
+                                        let Some(c) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                        (c, None)
+                                    };
                                 let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) else { continue };
 
                                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
 
-                                let frame = Self::npc_animation_frame(npc, idx, self.state.cycle, sheet.num_frames);
+                                let frame = override_frame
+                                    .map(|f| f.min(sheet.num_frames.saturating_sub(1)))
+                                    .unwrap_or_else(|| Self::npc_animation_frame(npc, idx, self.state.cycle, sheet.num_frames));
 
                                 // Mask BEFORE blit
                                 let sprite_info = BlittedSprite {
@@ -7920,5 +7987,72 @@ mod tests_turtle_auto {
         let mut scene = GameplayScene::new();
         scene.state.cheat1 = true;
         assert!(!scene.handle_cheat1_key(Keycode::Z), "Z is not a cheat key");
+    }
+}
+
+#[cfg(test)]
+mod swan_grounded_tests {
+    //! SPEC §21.4 / RESEARCH §2.6: grounded swan renders as RAFT sheet frame 1.
+    use super::*;
+    use crate::game::npc::*;
+
+    fn swan_npc() -> Npc {
+        let mut n = Npc::default();
+        n.npc_type = NPC_TYPE_SWAN;
+        n.race = RACE_NORMAL;
+        n.active = true;
+        n
+    }
+
+    #[test]
+    fn override_applies_when_not_flying() {
+        let npc = swan_npc();
+        let mut state = GameState::new();
+        state.flying = 0;
+        let result = GameplayScene::swan_grounded_override(&npc, &state);
+        assert_eq!(result, Some((4, 1)),
+            "grounded swan must render as RAFT (cfile 4) frame 1");
+    }
+
+    #[test]
+    fn override_skipped_when_flying() {
+        let npc = swan_npc();
+        let mut state = GameState::new();
+        state.flying = 1;
+        assert_eq!(GameplayScene::swan_grounded_override(&npc, &state), None,
+            "mounted swan must render via the normal carrier sheet path");
+    }
+
+    #[test]
+    fn override_does_not_apply_to_non_swan_npcs() {
+        let mut npc = swan_npc();
+        npc.npc_type = NPC_TYPE_HORSE;
+        let state = GameState::new();
+        assert_eq!(GameplayScene::swan_grounded_override(&npc, &state), None);
+
+        npc.npc_type = NPC_TYPE_DRAGON;
+        assert_eq!(GameplayScene::swan_grounded_override(&npc, &state), None);
+
+        npc.npc_type = NPC_TYPE_ORC;
+        assert_eq!(GameplayScene::swan_grounded_override(&npc, &state), None);
+    }
+
+    #[test]
+    fn summon_swan_spawns_active_grounded_npc() {
+        let mut scene = GameplayScene::new();
+        // Manually provision a small NpcTable so the handler has somewhere to write.
+        use crate::game::npc::{NpcTable, MAX_NPCS};
+        let npcs: [Npc; MAX_NPCS] = std::array::from_fn(|_| Npc::default());
+        scene.npc_table = Some(NpcTable { npcs });
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 2000;
+
+        scene.apply_command(DebugCommand::SummonSwan);
+
+        let table = scene.npc_table.as_ref().unwrap();
+        let swan = table.npcs.iter().find(|n| n.active && n.npc_type == NPC_TYPE_SWAN)
+            .expect("SummonSwan must activate a swan slot");
+        assert_eq!(swan.state, NpcState::Still, "spawned swan must be stationary");
+        assert_eq!(swan.x as i32, 1000 + 48, "spawned swan is offset from hero");
     }
 }
