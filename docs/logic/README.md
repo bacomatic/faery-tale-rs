@@ -30,8 +30,5 @@ Every documented function appears here with a link to its canonical definition. 
 
 | Function | File | Purpose |
 |---|---|---|
-| `option_handler` | [menu-system.md#option_handler](menu-system.md#option_handler) | Dispatch a menu selection |
-| `key_dispatch` | [menu-system.md#key_dispatch](menu-system.md#key_dispatch) | Map rawkey to menu action |
-| `advance_goal` | [ai-system.md#advance_goal](ai-system.md#advance_goal) | One tick of NPC goal FSM |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

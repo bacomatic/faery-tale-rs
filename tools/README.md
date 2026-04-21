@@ -30,6 +30,9 @@ tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 
 # Run any script with --help for options
 tools/run.sh <script>.py --help
+
+# Lint docs/logic/*.md strict pseudo-code
+tools/run.sh lint_logic.py
 ```
 
 ## Naming Conventions
@@ -37,6 +40,7 @@ tools/run.sh <script>.py --help
 | Prefix | Purpose | Example |
 |--------|---------|---------|
 | `validate_` | Check documentation accuracy | `validate_citations.py` |
+| `lint_`     | Lint structured documentation | `lint_logic.py` |
 | `extract_` | Pull data from source files | `extract_table.py` |
 | `verify_` | Test formulas/algorithms | `verify_combat_damage.py` |
 | `decode_` | Parse binary assets | `decode_map_sector.py` |
