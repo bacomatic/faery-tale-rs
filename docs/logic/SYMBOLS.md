@@ -177,6 +177,39 @@ DISK_CHAN_ACTOR_SHAPES   = 8          # fmain.c:2052, fmain2.c:745
 WEAPON_PROBS_COLUMNS     = 4          # fmain.c:2757
 TREASURE_PROBS_COLUMNS   = 8          # fmain.c:3272
 SETFIG_RACE_BIT          = 0x80       # fmain.c:3271 — bit 7 marks setfigs (no loot)
+
+# Brother succession / revive
+ARROWBASE                = 35         # fmain.c:429 — per-brother inventory array size
+STARTING_DIRK            = 1          # fmain.c — stuff[] dirk slot initial count
+TAMBRY_SPAWN_X           = 19036      # fmain.c:2893 — hero respawn world X
+TAMBRY_SPAWN_Y           = 15755      # fmain.c:2894 — hero respawn world Y
+TAMBRY_REGION            = 3          # fmain.c:2895 — starting region
+RAFT_INIT_X              = 13668      # fmain.c:2860 — raft carrier world X at new game
+RAFT_INIT_Y              = 14470      # fmain.c:2861 — raft carrier world Y at new game
+SETFIG_INIT_Y            = 15000      # fmain.c:2869 — initial setfig ob_listg Y
+MAP_CAMERA_OFFSET_X      = 144        # fmain.c:2883 — map-coord centering offset X
+MAP_CAMERA_OFFSET_Y      = 90         # fmain.c:2884 — map-coord centering offset Y
+VIT_BASE                 = 15         # fmain.c:2854 — base HP for revive, priest heal
+VIT_BRAVE_DIV            = 4          # fmain.c:2854 — brave/4 HP bonus term
+DAYNIGHT_RESET           = 8000       # fmain.c:2898 — daynight timer at revive
+LIGHTLEVEL_RESET         = 300        # fmain.c:2899 — lightlevel at revive
+VIEWSTATUS_CORRUPT       = 99         # fmain2.c:1544 — save-load failure marker
+VIEWSTATUS_PLACARD       = 2          # fmain.c:2871 — game-over placard mode
+VIEWSTATUS_PLAYFIELD     = 3          # fmain.c:2911 — normal play view mode
+PRINCESS_OBJ_SLOT        = 9          # fmain.c:3397 — ob_list8 princess-captive slot
+BONES_OBJ_ID             = 28         # fmain.c:3174 — bones world object type id
+GHOST_OFFSET             = 2          # fmain.c — ghost-sprite anim offset for bones
+OB_STAT_BONES_ON_GROUND  = 1          # fmain.c:3177 — bones ground state
+OB_STAT_SETFIG_ACTIVE    = 3          # fmain.c:2867 — setfig active state
+PLACARD_HOLD_TICKS       = 120        # fmain.c — death-placard hold duration
+PLACARD_GAP_TICKS        = 80         # fmain.c — placard gap duration
+PLACARD_CLEAR_TICKS      = 10         # fmain.c — placard clear duration
+GAME_OVER_DELAY          = 500        # fmain.c — delay before all-dead quit
+ACTOR_FILE_BROTHER       = 6          # fmain.c:2889 — brother actor shape file id
+SET_FILE_TAMBRY          = 13         # fmain.c:2889 — Tambry setfig file id
+ANIX_DEFAULT             = 3          # fmain.c:2904 — default anim-index for brother
+GAME_OVER_THRESHOLD      = 3          # fmain.c:2871 — brother>=3 → quit
+GOLDBASE                 = 34         # fmain.c — stuff[] gold slot index
 ```
 
 ## 2. Enums
@@ -420,6 +453,20 @@ quitflag: bool                      # fmain.c:590 — main-loop termination latc
 fatigue: i16                        # fmain.c — hero rest meter; climbs with time, reset by tavern sleep
 dayperiod: i16                      # fmain.c — coarse day-segment index driving bartender branch
 nearest: i16                        # fmain.c — side-effect output of nearest_fig: anim_list index of closest live actor within queried radius (0 = none)
+safe_x: u16                         # fmain.c:558 — safe-point (last rest) world X
+safe_y: u16                         # fmain.c:559 — safe-point world Y
+safe_r: u16                         # fmain.c:559 — safe-point region
+lightlevel: u16                     # fmain.c:571 — current light/brightness counter
+secret_timer: i16                   # fmain.c:577 — countdown for secret events
+light_timer: i16                    # fmain.c:577 — countdown for lighting changes
+fiery_death: bool                   # fmain.c — fiery-death-box latch
+julstuff: list                      # fmain.c:432 — Julian's per-brother inventory array (ARROWBASE size)
+philstuff: list                     # fmain.c:432 — Phillip's inventory array
+kevstuff: list                      # fmain.c:432 — Kevin's inventory array
+blist: list                         # fmain.c:2806-2812 — Bro[3] per-brother stats array
+hero_place: u16                     # fmain.c:569 — current place id for hero
+tfont: object                       # fmain.c — text (hi-res) TextFont
+rp_text: object                     # fmain.c — hi-res text RastPort
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
 afont: object                       # fmain.c — Amber font TextFont
@@ -451,6 +498,7 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:fall_states` | `fmain.c` | Per-brother fall-animation frame indices (6 entries each) |
 | `TABLE:weapon_probs` | `fmain2.c:860-868` | 8 rows × 4 cols; indexed by `encounter.arms * 4 + wt` |
 | `TABLE:treasure_probs` | `fmain2.c:852-858` | 5 rows × 8 cols; indexed by `encounter.treasure * 8 + rand8` |
+| `TABLE:blist` | `fmain.c:2806-2812` | 3-row `Bro {brave,luck,kind,wealth,stuff}` per-brother stats array |
 
 *(Additional entries appended as new logic docs are authored.)*
 

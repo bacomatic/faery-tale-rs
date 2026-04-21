@@ -87,5 +87,7 @@ Every documented function appears here with a link to its canonical definition. 
 | `locktest` | [save-load.md#locktest](save-load.md#locktest) | Non-destructive AmigaDOS path-presence probe |
 | `waitnewdisk` | [save-load.md#waitnewdisk](save-load.md#waitnewdisk) | Poll the input handler for a disk-insert event up to ~30s |
 | `buy_dispatch` | [shops.md#buy_dispatch](shops.md#buy_dispatch) | CMODE_BUY case: bartender-gated `jtrans` row lookup, gold check, food/arrow/stuff side effect |
+| `revive` | [brother-succession.md#revive](brother-succession.md#revive) | Start / restart active brother: place bones + ghost, load next `blist[]` stats, teleport to Tambry, placards, or fairy-rescue the current brother |
+| `pickup_brother_bones` | [brother-succession.md#pickup_brother_bones](brother-succession.md#pickup_brother_bones) | Merge a dead brother's item inventory into the current brother's on bones pickup; retire both ghost set-figures |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
