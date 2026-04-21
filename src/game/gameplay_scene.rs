@@ -393,6 +393,11 @@ pub struct GameplayScene {
     luck_gate_fired: bool,
     /// Death type for event message (5=combat, 6=drowning, 27=lava, 0=starvation).
     death_type: usize,
+    /// SPEC §13.2: per-world-object TALKING flicker timer (15 ticks).
+    /// Keyed by `world_idx` into `state.world_objects`. While > 0, the
+    /// SetFig sprite's frame index gets `+ bitrand(1)` on render
+    /// (`fmain.c:1556` — `dex += rand2()`). Decremented each tick.
+    talk_flicker: std::collections::HashMap<usize, u8>,
 }
 
 /// What kind of figure was found by nearest_fig.
@@ -486,6 +491,7 @@ impl GameplayScene {
             goodfairy: 0,
             luck_gate_fired: false,
             death_type: 0,
+            talk_flicker: std::collections::HashMap::new(),
         }
     }
 
@@ -1638,6 +1644,14 @@ impl GameplayScene {
                 let sf_goal = self.state.world_objects
                     .get(*world_idx)
                     .map_or(0u8, |o| o.goal) as usize;
+                // SPEC §13.2 / R-NPC-020: enter TALKING flicker state for 15
+                // ticks if this SetFig has can_talk = true
+                // (Wizard, Priest, King, Ranger, Beggar — fmain.c:3376-3377).
+                if k < crate::game::sprites::SETFIG_TABLE.len()
+                    && crate::game::sprites::SETFIG_TABLE[k].can_talk
+                {
+                    self.talk_flicker.insert(*world_idx, 15);
+                }
                 // Per-setfig dialogue (fmain.c:4188-4261).
                 match k {
                     0 => {
@@ -2109,6 +2123,13 @@ impl GameplayScene {
     fn update_actors(&mut self, _delta: u32) {
         use crate::game::npc_ai::tick_npc;
         use crate::game::npc::NpcState;
+
+        // SPEC §13.2: decrement TALKING flicker timers; drop expired entries.
+        // fmain.c:1557 — when `tactic` reaches 0, NPC returns to STILL.
+        self.talk_flicker.retain(|_, t| {
+            *t = t.saturating_sub(1);
+            *t > 0
+        });
 
         let hero_x = self.state.hero_x as i32;
         let hero_y = self.state.hero_y as i32;
@@ -5326,7 +5347,18 @@ impl Scene for GameplayScene {
                                 let sf_entry = SETFIG_TABLE[setfig_idx];
                                 let cfile_idx = sf_entry.cfile_entry as usize;
                                 if let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) {
-                                    let frame = (sf_entry.image_base as usize) % sheet.num_frames;
+                                    // SPEC §13.2 / R-NPC-020: while TALKING (flicker
+                                    // timer > 0), add rand2() (0 or 1) to the frame
+                                    // index — fmain.c:1556 `dex += rand2()`. This
+                                    // produces a random per-tick jitter between two
+                                    // adjacent sprite frames only for SetFigs with
+                                    // can_talk=true (guarded at entry in handle_setfig_talk).
+                                    let jitter = if self.talk_flicker.contains_key(&idx) {
+                                        crate::game::combat::bitrand(1) as usize
+                                    } else {
+                                        0
+                                    };
+                                    let frame = (sf_entry.image_base as usize + jitter) % sheet.num_frames;
                                     if let Some(fp) = sheet.frame_pixels(frame) {
                                         // Original does ystart = yc - map_y - 8; ystart -= 18 (total: -26).
                                         // actor_rel_pos already applies a Y offset of -26, matching that total,
@@ -7300,6 +7332,83 @@ mod t2_npc_talk_tests {
         assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
         assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
             "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
+    }
+
+    // ── T4-NPC-TALK-ANIM (#168) ───────────────────────────────────────────────
+
+    #[test]
+    fn t4_talk_flicker_set_on_cantalk_setfig() {
+        // SPEC §13.2 / R-NPC-020: talking to a SetFig with can_talk=true enters
+        // the TALKING state for 15 ticks. Types: Wizard(0), Priest(1), King(5),
+        // Ranger(12), Beggar(13).
+        for &k in &[0u8, 1, 5, 12, 13] {
+            let mut scene = scene_with_speeches(60);
+            scene.state.kind = 15;
+            scene.state.brave = 40;
+            scene.state.vitality = 10;
+            let widx = push_setfig(&mut scene, k, 0);
+            let fig = NearestFig {
+                kind: FigKind::SetFig { world_idx: widx, setfig_type: k },
+                dist: 0,
+            };
+            scene.handle_setfig_talk(&fig, "Julian");
+            assert_eq!(
+                scene.talk_flicker.get(&widx).copied(),
+                Some(15),
+                "setfig type {k} should trigger 15-tick TALKING flicker"
+            );
+        }
+    }
+
+    #[test]
+    fn t4_talk_flicker_not_set_on_noncantalk_setfig() {
+        // Guard, Princess, Noble, Sorceress, Bartender, Witch, Spectre, Ghost —
+        // can_talk = false. Speech still dispatches but flicker must NOT trigger.
+        for &k in &[2u8, 3, 4, 6, 7, 8, 9, 10, 11] {
+            let mut scene = scene_with_speeches(60);
+            scene.state.kind = 15;
+            let widx = push_setfig(&mut scene, k, 0);
+            let fig = NearestFig {
+                kind: FigKind::SetFig { world_idx: widx, setfig_type: k },
+                dist: 0,
+            };
+            scene.handle_setfig_talk(&fig, "Julian");
+            assert!(
+                !scene.talk_flicker.contains_key(&widx),
+                "setfig type {k} (can_talk=false) must not set flicker"
+            );
+        }
+    }
+
+    #[test]
+    fn t4_talk_flicker_decrements_and_expires() {
+        // SPEC §13.2: flicker timer decrements each tick; entry removed at 0.
+        // fmain.c:1557 — when `tactic` reaches 0, return to STILL.
+        let mut scene = scene_with_speeches(60);
+        scene.state.kind = 15;
+        let widx = push_setfig(&mut scene, 0, 0); // Wizard
+        let fig = NearestFig {
+            kind: FigKind::SetFig { world_idx: widx, setfig_type: 0 },
+            dist: 0,
+        };
+        scene.handle_setfig_talk(&fig, "Julian");
+        assert_eq!(scene.talk_flicker.get(&widx).copied(), Some(15));
+
+        for expected in (0..15).rev() {
+            scene.update_actors(1);
+            if expected == 0 {
+                assert!(
+                    !scene.talk_flicker.contains_key(&widx),
+                    "flicker entry must be removed when timer reaches 0"
+                );
+            } else {
+                assert_eq!(
+                    scene.talk_flicker.get(&widx).copied(),
+                    Some(expected as u8),
+                    "timer should be {expected} after decrement"
+                );
+            }
+        }
     }
 }
 
