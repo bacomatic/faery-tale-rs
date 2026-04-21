@@ -99,5 +99,8 @@ Every documented function appears here with a link to its canonical definition. 
 | `flipscan` | [visual-effects.md#flipscan](visual-effects.md#flipscan) | 22-frame columnar wipe between pagea and pageb using flip1/flip2/flip3 tables |
 | `screen_size` | [visual-effects.md#screen_size](visual-effects.md#screen_size) | Resize playfield viewport to 2x×2y; sync palette brightness via fade_page |
 | `win_colors` | [visual-effects.md#win_colors](visual-effects.md#win_colors) | Victory placard + winpic + 55-frame sunrise walk of sun_colors[] |
+| `xfer` | [doors.md#xfer](doors.md#xfer) | fmain.c:2625-2645 — teleport hero + re-derive region + reload + nudge-out-of-wall |
+| `doorfind` | [doors.md#doorfind](doors.md#doorfind) | fmain.c:1081-1128 — resolve door tile, match open_list by key, rewrite tiles |
+| `use_key_on_door` | [doors.md#use_key_on_door](doors.md#use_key_on_door) | fmain.c:3472-3488 — CMODE_KEYS case: sweep 9 directions, consume key on success |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
