@@ -120,5 +120,8 @@ Every documented function appears here with a link to its canonical definition. 
 | `use_dispatch` | [inventory.md#use_dispatch](inventory.md#use_dispatch) | fmain.c:3444-3467 — USE submenu: weapon equip, Keys submenu, Sea Shell turtle, Sun Stone witch unmask |
 | `magic_dispatch` | [inventory.md#magic_dispatch](inventory.md#magic_dispatch) | fmain.c:3300-3365 — MAGIC submenu: 7 magic-item effects with precondition guards + charge decrement |
 | `look_command` | [inventory.md#look_command](inventory.md#look_command) | fmain.c:3286-3295 — ITEMS→Look: reveal hidden objects (race==0) within 40 px |
+| `select_frust_anim` | [frustration.md#select_frust_anim](frustration.md#select_frust_anim) | fmain.c:1655-1659 — Hero sprite override from frustflag thresholds (20 / 40) |
+| `trigger_frust` | [frustration.md#trigger_frust](frustration.md#trigger_frust) | fmain.c:1654-1661 — Blocked dispatch: hero frustflag++ vs NPC `tactic = TACTIC_FRUST` |
+| `resolve_frust_tactic` | [frustration.md#resolve_frust_tactic](frustration.md#resolve_frust_tactic) | fmain.c:2141-2144 — AI-tick reroll of a latched TACTIC_FRUST / TACTIC_SHOOTFRUST |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
