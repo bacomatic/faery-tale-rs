@@ -178,6 +178,10 @@ WEAPON_PROBS_COLUMNS     = 4          # fmain.c:2757
 TREASURE_PROBS_COLUMNS   = 8          # fmain.c:3272
 SETFIG_RACE_BIT          = 0x80       # fmain.c:3271 — bit 7 marks setfigs (no loot)
 
+# Astral / find_place
+MAP_FLUX                 = 50         # fmain2.c — coordinate straddle tolerance
+EXT_COUNT                = 23         # fmain.c:338-370 — extent_list row count
+
 # Brother succession / revive
 ARROWBASE                = 35         # fmain.c:429 — per-brother inventory array size
 STARTING_DIRK            = 1          # fmain.c — stuff[] dirk slot initial count
@@ -469,6 +473,13 @@ tfont: object                       # fmain.c — text (hi-res) TextFont
 rp_text: object                     # fmain.c — hi-res text RastPort
 wcarry: i8                          # fmain.c:563,1456 — anim_list index of closest carrier this frame (1 or 3)
 cycle: u16                          # fmain.c — global animation tick; low bits drive walk-cycle frame selection
+xreg: i16                           # fmain.c — hero region-X coord for find_place
+yreg: i16                           # fmain.c — hero region-Y coord for find_place
+extent_list: list                   # fmain.c:338-370 — TABLE:extent_list rows
+place_tbl: list                     # fmain2.c — TABLE:place_tbl rows
+place_msg: list                     # narr.asm — TABLE:place_msg indices
+inside_tbl: list                    # fmain2.c — TABLE:inside_tbl rows
+inside_msg: list                    # narr.asm — TABLE:inside_msg indices
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
 afont: object                       # fmain.c — Amber font TextFont
@@ -501,6 +512,11 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:weapon_probs` | `fmain2.c:860-868` | 8 rows × 4 cols; indexed by `encounter.arms * 4 + wt` |
 | `TABLE:treasure_probs` | `fmain2.c:852-858` | 5 rows × 8 cols; indexed by `encounter.treasure * 8 + rand8` |
 | `TABLE:blist` | `fmain.c:2806-2812` | 3-row `Bro {brave,luck,kind,wealth,stuff}` per-brother stats array |
+| `TABLE:extent_list` | `fmain.c:338-370` | 23-row `Extent {x1,y1,x2,y2,etype,v1,v2,v3}`; encounter/activation rectangles |
+| `TABLE:place_tbl` | `fmain2.c` | Outdoor place-name bounding-box table |
+| `TABLE:place_msg` | `narr.asm` | Outdoor place-name message table |
+| `TABLE:inside_tbl` | `fmain2.c` | Indoor place-name bounding-box table |
+| `TABLE:inside_msg` | `narr.asm` | Indoor place-name message table |
 
 *(Additional entries appended as new logic docs are authored.)*
 

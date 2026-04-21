@@ -114,5 +114,6 @@ Every documented function appears here with a link to its canonical definition. 
 | `raft_tick` | [carrier-transport.md#raft_tick](carrier-transport.md#raft_tick) | fmain.c:1562-1573 — RAFT body: snap anim_list[1] onto hero on terrain 3-5 with raftprox==2 |
 | `swan_dismount` | [carrier-transport.md#swan_dismount](carrier-transport.md#swan_dismount) | fmain.c:1417-1428 — fire-button dismount: lava veto, ±15 velocity gate, two-probe landing clear |
 | `use_sea_shell` | [carrier-transport.md#use_sea_shell](carrier-transport.md#use_sea_shell) | fmain.c:3457-3461 — USE Shell: swamp-rectangle veto then delegate to get_turtle |
+| `find_place` | [astral-plane.md#find_place](astral-plane.md#find_place) | fmain.c:2647-2720 — Place-name lookup + extent matcher; on xtype change: rescue / astral Loraii preload / forced spawn / carrier update |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
