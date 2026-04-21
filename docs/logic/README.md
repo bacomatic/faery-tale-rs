@@ -79,5 +79,12 @@ Every documented function appears here with a link to its canonical definition. 
 | `bartender_speech` | [npc-dialogue.md#bartender_speech](npc-dialogue.md#bartender_speech) | Bartender TALK speech: fatigue + dayperiod tri-branch |
 | `ranger_hint` | [npc-dialogue.md#ranger_hint](npc-dialogue.md#ranger_hint) | Ranger TALK speech: region-2 override or goal-indexed cave hint |
 | `proximity_auto_speak` | [npc-dialogue.md#proximity_auto_speak](npc-dialogue.md#proximity_auto_speak) | Phase 14: one-shot greeting for 5 named NPC races when nearest_person changes |
+| `savegame` | [save-load.md#savegame](save-load.md#savegame) | Top-level save/load dispatcher: disk detection, slot file open, record stream, post-load fixup |
+| `serialize_save_record` | [save-load.md#serialize_save_record](save-load.md#serialize_save_record) | Write the thirteen blocks of the save record in order |
+| `deserialize_save_record` | [save-load.md#deserialize_save_record](save-load.md#deserialize_save_record) | Read the thirteen blocks of the save record in order |
+| `saveload_block` | [save-load.md#saveload_block](save-load.md#saveload_block) | Low-level Read/Write primitive directed by `svflag` |
+| `mod1save` | [save-load.md#mod1save](save-load.md#mod1save) | Blocks 5-8: brother inventories + reseat `stuff` + missiles |
+| `locktest` | [save-load.md#locktest](save-load.md#locktest) | Non-destructive AmigaDOS path-presence probe |
+| `waitnewdisk` | [save-load.md#waitnewdisk](save-load.md#waitnewdisk) | Poll the input handler for a disk-insert event up to ~30s |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
