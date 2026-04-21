@@ -503,7 +503,7 @@ def check_magic_numbers(doc: LogicDoc) -> list[LintIssue]:
                 # Skip values inside "bit(...)" primitive — those are bit indices, harmless.
                 parent = getattr(node, "parent", None)
                 # We didn't annotate parents; just check the source line for 'bit(' prefix.
-                doc_line_idx = entry.pseudo_start + node.lineno - 2
+                doc_line_idx = entry.pseudo_start + node.lineno - 1
                 line_src = body_lines[doc_line_idx] if 0 <= doc_line_idx < len(body_lines) else ""
                 if "bit(" in line_src:
                     continue

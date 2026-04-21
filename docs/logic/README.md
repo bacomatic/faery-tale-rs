@@ -30,5 +30,7 @@ Every documented function appears here with a link to its canonical definition. 
 
 | Function | File | Purpose |
 |---|---|---|
+| `option_handler` | [menu-system.md#option_handler](menu-system.md#option_handler) | Dispatch one menu-slot mouse event on `enabled[hit]` action type |
+| `key_dispatch` | [menu-system.md#key_dispatch](menu-system.md#key_dispatch) | Route one code from the input ring buffer to the appropriate handler |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

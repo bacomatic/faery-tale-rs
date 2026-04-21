@@ -50,10 +50,11 @@ GOAL_FOLLOWER  = 9
 GOAL_CONFUSED  = 10
 ```
 
-### 2.3 Motion states
+### 2.3 Motion states (`ftale.h:9-20`, `fmain.c:88-103`)
 
 ```pseudo
-# Populated in Wave 3 (see spec §6.4). Placeholder header only.
+# Partial — additional states populated in Wave 3 (see spec §6.4).
+STATE_DEAD = 15             # ftale.h:14
 ```
 
 ### 2.4 Menu modes (`fmain.c:494`)
@@ -136,6 +137,13 @@ cmode: i8                           # Current menu mode (CMODE_*)
 leader: i8                          # 0 = hero alive, non-zero = brother succession active
 hit: i8                             # Last hit menu entry index (fmain.c)
 hitgo: i8                           # Latched action trigger
+real_options: list[i8]              # fmain.c:515 — length 12; screen-slot → menus[cmode].enabled[] index (-1 = empty)
+letter_list: list                   # fmain.c:533-547 — TABLE:letter_list; struct letters { letter, menu, choice }
+keydir: i16                         # fmain.c:1289 — current latched keypad direction code (0 = none)
+keyfight: bool                      # fmain.c:1291 — '0' held-down fight-mode latch
+viewstatus: i8                      # fmain.c:584 — 0 = normal playfield; nonzero = transient full-screen (map, inventory, placard)
+cheat1: bool                        # fmain.c:558 — debug cheat enable
+handler_data: object                # fmain.c — input-handler shared state; .lastmenu, .qualifier, .pickup, .laydown
 ```
 
 ## 6. Table references
@@ -149,12 +157,35 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:item_effects` | [RESEARCH §6](../RESEARCH.md#6-items--inventory) | Inventory slot effects |
 | `TABLE:narr_messages` | `narr.asm` | Indexed by `speak(N)` |
 | `TABLE:key_bindings` | [logic/menu-system.md](menu-system.md) | Keycode → action map |
+| `TABLE:letter_list` | `fmain.c:533-547` | Keyboard-shortcut table: `(letter, menu, choice)` rows consumed by `key_dispatch` |
 
 *(Additional entries appended as new logic docs are authored.)*
 
 ## 7. KeyCode values
 
+Values in the input ring buffer are not raw Amiga rawkey scancodes: the input
+handler's `keytrans` table (`fsubs.asm:281-300`) translates each rawkey into one
+of four encodings before it reaches `getkey()`:
+
+- ASCII for printable character keys (`'I'`, `'1'`, `' '`, `'?'`, …).
+- Small integers `1..4` for cursor arrows and `10..19` for F1–F10
+  (`fsubs.asm:240-241`).
+- Small integers `20..29` for the numeric keypad, consumed as `keydir`
+  (`fmain.c:1287-1290`).
+- Synthetic codes `0x61..0x6c` produced on left-mouse-down over the menu
+  strip (`fsubs.asm:138-152`), indicating which of the 12 menu slots was hit.
+
+All codes may have bit 7 (`0x80`) OR-ed in to denote a key-up / mouse-up event
+(`fsubs.asm:96-98`).
+
 ```pseudo
-# Raw Amiga rawkey codes used by menu dispatch. See fmain.c:1240-1290.
-# Populated in Task 15 when menu-system.md is authored.
+KEY_UP_BIT       = 0x80       # fsubs.asm:96 — OR-ed into code on key-up / mouse-up
+KEY_CODE_MASK    = 0x7f       # fmain.c:1290 — mask that strips the up-bit
+MOUSE_MENU_BASE  = 0x61       # fsubs.asm:147 — first synthetic menu-slot code ('a'); slots are 0x61..0x6c
+KEY_SPACE        = 32         # fmain.c:1345 — ' '; only letter that fires while paused
+KEY_FIGHT_DOWN   = 48         # fmain.c:1291 — '0' held-down triggers fight mode
+KEY_DIGIT_1      = 49         # fmain.c:1342 — '1', first of the 6-key range on the KEYS submenu
+KEY_DIGIT_6      = 54         # fmain.c:1342 — '6', last of the KEYS digit range
+KEY_KEYDIR_LO    = 20         # fmain.c:1289 — keypad keydir range low
+KEY_KEYDIR_HI    = 29         # fmain.c:1289 — keypad keydir range high
 ```
