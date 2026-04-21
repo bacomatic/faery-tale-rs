@@ -1561,8 +1561,8 @@ Extents with etype 80–83 set `xtype ≥ 50`, failing the `xtype < 50` guard. T
 | Camera snap X | > 70 pixels | Instant camera reposition |
 | Camera snap Y (down) | > 44 pixels | Asymmetric for sprite offset |
 | Camera snap Y (up) | > 24 pixels | Asymmetric for sprite offset |
-| Frustration threshold 1 | > 20 | Scratching-head animation |
-| Frustration threshold 2 | > 40 | Special animation index 40 |
+| Player frust threshold 1 | > 20 | Head-shake (dex=84/85, §9.8) |
+| Player frust threshold 2 | > 40 | Fixed south-facing pose (dex=40, §9.8) |
 | Hunger stumble threshold | > 120 | 1/4 chance of direction deflection |
 
 ### B. Brother Stats

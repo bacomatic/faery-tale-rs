@@ -93,6 +93,11 @@ pub struct GameState {
     pub lightlevel: u16,
     pub cycle: u32,
     pub flasher: u32,
+    /// Consecutive-tick blocked counter for the player (SPEC §9.8).
+    /// Combat-gated: any active enemy NPC resets it to 0. Otherwise increments
+    /// when all three deviation directions fail, resets on any successful move.
+    /// Render thresholds: 0–20 normal, 21–40 head-shake, 41+ frozen south-facing pose.
+    pub frustflag: u8,
 
     // Flags
     pub battleflag: bool,
@@ -220,6 +225,7 @@ impl GameState {
             lightlevel: 300, // full brightness at startup (original: explicit init)
             cycle: 0,
             flasher: 0,
+            frustflag: 0,
 
             battleflag: false,
             quitflag: false,

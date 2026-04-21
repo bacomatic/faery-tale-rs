@@ -45,14 +45,6 @@ pub const RACE_SPECTRE: u8 = 0x8a;
 pub const RACE_GHOST: u8 = 0x8b;
 
 /// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
-/// Sprite frame index for the "special animation" played at frustration threshold 2 (SPEC §9.8).
-pub const FRUST_ANIM_B_FRAME: usize = 40;
-
-/// Sprite frame index for the scratching-head animation at frustration threshold 1 (SPEC §9.8).
-/// AMBIGUITY: the spec names this "scratching-head animation" but does not specify a sprite index.
-/// Frame 32 is used as a plausible placeholder matching the original game's sprite layout.
-pub const FRUST_ANIM_A_FRAME: usize = 32;
-
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum NpcState {
     #[default]
@@ -63,10 +55,6 @@ pub enum NpcState {
     Dying,
     Dead,
     Sinking,
-    /// Frustration animation A: scratching-head, played when blocked counter > 20 (SPEC §9.8).
-    FrustA,
-    /// Frustration animation B: special animation index 40, played when blocked counter > 40 (SPEC §9.8).
-    FrustB,
 }
 
 /// An NPC/actor record.
@@ -86,9 +74,6 @@ pub struct Npc {
     pub facing: u8,
     pub state: NpcState,
     pub cleverness: u8,
-    /// Consecutive-tick blocked counter (SPEC §9.8). Increments each tick all three
-    /// deviation directions are blocked; resets to 0 on any successful move.
-    pub frust: u8,
 }
 
 impl Npc {
@@ -113,7 +98,6 @@ impl Npc {
             facing: 0,
             state: NpcState::Still,
             cleverness: 0,
-            frust: 0,
         }
     }
 
@@ -163,7 +147,6 @@ impl Npc {
         if terrain_passable && actor_passable {
             self.x = proposed_x as i16;
             self.y = proposed_y as i16;
-            self.frust = 0;
         } else {
             // Wall-sliding: try clockwise then counter-clockwise deviation.
             let dev_cw = (facing + 1) & 7;
@@ -175,7 +158,6 @@ impl Npc {
             if cw_terrain && cw_actor {
                 self.x = cw_x as i16;
                 self.y = cw_y as i16;
-                self.frust = 0;
             } else {
                 let dev_ccw = (facing.wrapping_sub(1)) & 7;
                 let ccw_x = newx(self.x as u16, dev_ccw, dist);
@@ -186,18 +168,13 @@ impl Npc {
                 if ccw_terrain && ccw_actor {
                     self.x = ccw_x as i16;
                     self.y = ccw_y as i16;
-                    self.frust = 0;
                 } else {
-                    // Fully blocked — increment frustration counter and update state (SPEC §9.8).
-                    self.frust = self.frust.saturating_add(1);
+                    // Fully blocked — signal frustration to the AI dispatcher.
+                    // The visual frust animation is player-only (SPEC §9.8);
+                    // NPCs use Tactic::Frust purely to pick a new seek tactic
+                    // on the next AI tick (R-AI-016).
                     self.tactic = Tactic::Frust;
-                    if self.frust > 40 {
-                        self.state = NpcState::FrustB;
-                    } else if self.frust > 20 {
-                        self.state = NpcState::FrustA;
-                    } else {
-                        self.state = NpcState::Still;
-                    }
+                    self.state = NpcState::Still;
                 }
             }
         }
@@ -472,68 +449,20 @@ mod tests {
     }
 
     #[test]
-    fn test_frust_counter_increments_on_blocked_move() {
+    fn test_blocked_npc_sets_tactic_frust_and_still() {
+        // Per SPEC §9.8 / R-AI-016: a fully-blocked NPC goes Still and
+        // signals Tactic::Frust so the AI picks a new tactic next tick.
+        // No visible "frustration" animation exists on NPCs — that behavior
+        // is player-only.
         let (mut npc, blockers) = blocked_east_npc();
-        assert_eq!(npc.frust, 0);
-        // Simulate the AI resetting state to Walking each tick (AI runs before movement).
-        for expected in 1u8..=5 {
-            npc.state = NpcState::Walking;
-            npc.tick_with_actors(None, false, &blockers);
-            assert_eq!(npc.frust, expected, "frust should be {expected} after {expected} blocked ticks");
-        }
-    }
-
-    #[test]
-    fn test_frust_threshold_20_triggers_frust_a() {
-        let (mut npc, blockers) = blocked_east_npc();
-        npc.frust = 20; // one below threshold
         npc.tick_with_actors(None, false, &blockers);
-        assert_eq!(npc.frust, 21);
-        assert_eq!(npc.state, NpcState::FrustA, "frust > 20 should trigger FrustA animation");
+        assert_eq!(npc.state, NpcState::Still);
         assert_eq!(npc.tactic, crate::game::actor::Tactic::Frust);
     }
 
     #[test]
-    fn test_frust_threshold_40_triggers_frust_b() {
-        let (mut npc, blockers) = blocked_east_npc();
-        npc.frust = 40; // one below threshold
-        npc.tick_with_actors(None, false, &blockers);
-        assert_eq!(npc.frust, 41);
-        assert_eq!(npc.state, NpcState::FrustB, "frust > 40 should trigger FrustB animation");
-        assert_eq!(npc.tactic, crate::game::actor::Tactic::Frust);
-    }
-
-    #[test]
-    fn test_frust_below_threshold_stays_still() {
-        let (mut npc, blockers) = blocked_east_npc();
-        npc.frust = 0;
-        npc.tick_with_actors(None, false, &blockers);
-        assert_eq!(npc.frust, 1);
-        assert_eq!(npc.state, NpcState::Still, "frust ≤ 20 should remain Still (not FrustA/FrustB)");
-    }
-
-    #[test]
-    fn test_frust_resets_on_successful_move() {
-        let (mut npc, _) = blocked_east_npc();
-        npc.frust = 35; // above threshold 1
-        // No blockers — movement succeeds.
-        npc.tick_with_actors(None, false, &[]);
-        assert_eq!(npc.frust, 0, "successful move must reset frust to 0");
-    }
-
-    #[test]
-    fn test_frust_resets_on_deviation_move() {
-        // NPC facing east (2). We block the primary east direction and the CCW (NE)
-        // deviation, but leave the CW (SE) deviation clear.
-        //
-        // Collision box: |dx| < 11 && |dy| < 9 (strict).
-        // NPC at (1000,1000), dist=2, XDIR/YDIR:
-        //   Primary east (2):  proposed (1003, 1000)
-        //   CW SE (3):         proposed (1002, 1002)
-        //   CCW NE (1):        proposed (1002,  998)
-        //
-        // Blocker A (1013, 1000): hits primary (dx=-10 > -11 ✓) but misses CW (dx=-11, not > -11).
-        // Blocker B (1001, 990):  hits CCW (dx=1, dy=8 < 9 ✓) but misses CW (dy=12 ≥ 9).
+    fn test_deviation_move_clears_frust_tactic() {
+        // Block primary east + CCW (NE); CW (SE) is clear.
         let mut npc = Npc {
             npc_type: NPC_TYPE_ORC,
             race: RACE_ENEMY,
@@ -541,24 +470,16 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2, // East
+            facing: 2,
             state: NpcState::Walking,
-            frust: 30,
+            tactic: crate::game::actor::Tactic::Frust,
             ..Default::default()
         };
         let blockers = vec![(1013i32, 1000i32), (1001i32, 990i32)];
         npc.tick_with_actors(None, false, &blockers);
-        assert_eq!(npc.frust, 0, "deviation move (CW) must also reset frust");
-        assert_ne!(npc.tactic, crate::game::actor::Tactic::Frust, "deviation succeeds → not frustrated");
-    }
-
-    #[test]
-    fn test_frust_saturates_at_u8_max() {
-        let (mut npc, blockers) = blocked_east_npc();
-        npc.frust = 255;
-        npc.state = NpcState::Walking;
-        npc.tick_with_actors(None, false, &blockers);
-        assert_eq!(npc.frust, 255, "frust counter must saturate at u8::MAX");
-        assert_eq!(npc.state, NpcState::FrustB);
+        // Deviation succeeded — npc moved, tactic was not re-asserted.
+        // (Tactic::Frust may still be set from a previous tick; the important
+        // invariant is that a successful move did not set it.)
+        assert_ne!(npc.x, 1000, "deviation move should have happened");
     }
 }

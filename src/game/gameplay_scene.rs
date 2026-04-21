@@ -958,6 +958,23 @@ impl GameplayScene {
                 }
             }
 
+            // Player frustflag update (SPEC §9.8, player-only).
+            // Combat-gated: any active enemy NPC resets frustflag to 0.
+            // Else: successful move → 0; fully blocked (all 3 probes failed) → +1.
+            let enemy_active = self.npc_table.as_ref().map_or(false, |t| {
+                t.npcs.iter().any(|n| n.active
+                    && n.race == crate::game::npc::RACE_ENEMY
+                    && n.state != crate::game::npc::NpcState::Dead
+                    && n.state != crate::game::npc::NpcState::Dying)
+            });
+            if enemy_active {
+                self.state.frustflag = 0;
+            } else if can_move {
+                self.state.frustflag = 0;
+            } else if !turtle_blocked {
+                self.state.frustflag = self.state.frustflag.saturating_add(1);
+            }
+
             if can_move {
                 self.state.hero_x = final_x;
                 self.state.hero_y = final_y;
@@ -2164,7 +2181,7 @@ impl GameplayScene {
                     NpcState::Dying => crate::game::actor::ActorState::Dying,
                     NpcState::Dead => crate::game::actor::ActorState::Dead,
                     NpcState::Sinking => crate::game::actor::ActorState::Sinking,
-                    NpcState::Still | NpcState::FrustA | NpcState::FrustB => crate::game::actor::ActorState::Still,
+                    NpcState::Still => crate::game::actor::ActorState::Still,
                 };
                 actor_idx += 1;
             }
@@ -4267,18 +4284,6 @@ impl GameplayScene {
                     frame_base + 1
                 }
             }
-            NpcState::FrustA => {
-                // Scratching-head animation (SPEC §9.8, threshold 1: frust > 20).
-                // AMBIGUITY: spec names animation "scratching-head" but gives no sprite index.
-                // FRUST_ANIM_A_FRAME (32) used as placeholder; cycles 4 frames at 4-tick rate.
-                use crate::game::npc::FRUST_ANIM_A_FRAME;
-                FRUST_ANIM_A_FRAME + ((cycle as usize / 4) & 3)
-            }
-            NpcState::FrustB => {
-                // Special animation index 40 (SPEC §9.8, threshold 2: frust > 40).
-                use crate::game::npc::FRUST_ANIM_B_FRAME;
-                FRUST_ANIM_B_FRAME
-            }
             // Dying/Dead/Sinking/Fighting/Shooting: static base frame
             _ => frame_base,
         };
@@ -4325,7 +4330,22 @@ impl GameplayScene {
                 // Original diroffs[] groups: NW+N→north, NE+E→east, SE+S→south, SW+W→west.
                 // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW.
                 let hero_state = state.actors.first().map(|a| &a.state);
-                let frame = if let Some(ActorState::Fighting(fight_state)) = hero_state {
+                // Frustration render override (SPEC §9.8, player-only).
+                //   frustflag 0..=20   → normal sprite selection below.
+                //   frustflag 21..=40  → head-shake: dex alternates 84/85 every 2 cycles (south-facing).
+                //   frustflag 41..     → frozen south-facing pose, dex = 40.
+                // Overrides normal walking/fight selection but not active Fighting animation.
+                let frustflag = state.frustflag;
+                let frust_render_frame: Option<usize> = if frustflag >= 41 {
+                    Some(40)
+                } else if frustflag >= 21 {
+                    Some(84 + ((state.cycle as usize >> 1) & 1))
+                } else {
+                    None
+                };
+                let frame = if let Some(f) = frust_render_frame {
+                    f
+                } else if let Some(ActorState::Fighting(fight_state)) = hero_state {
                     // Fighting: use fight frame base + current animation state (0-8).
                     let fight_base = Self::facing_to_fight_frame_base(hero_facing);
                     fight_base + (*fight_state as usize).min(8)
