@@ -34,6 +34,7 @@ Documentation is three-tiered:
 3. **STORYLINE.md** — Narrative layer: quest progression, NPC dialogue trees, event sequences as Mermaid diagrams
 4. **PROBLEMS.md** — Open questions that cannot be answered from source code alone, awaiting expert input
 5. **world_db.json** — Pre-computed spatial database cross-referencing all location-dependent game data (see [Spatial Database](#spatial-database) below)
+6. **docs/logic/\*\*.md** — Normative pseudo-code specifications for every non-trivial branching function. The source of truth for porters.
 
 ## Spatial Database
 
@@ -135,6 +136,14 @@ If the same question has been investigated 3+ times without resolution, one of t
 3. The approach is wrong — try an experiment instead of more code reading
 
 Do not dispatch a 4th investigation without changing the approach.
+
+### Logic Docs Are the Normative Form
+
+Pseudo-code lives only in `docs/logic/`. Do not add pseudo-code blocks to `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, or `docs/STORYLINE.md` — those remain prose + tables + Mermaid only. When a behavior has been captured in `docs/logic/<subsystem>.md`, link to its anchor from RESEARCH instead of paraphrasing the logic.
+
+- The grammar is defined in [`docs/logic/STYLE.md`](../docs/logic/STYLE.md).
+- Global identifiers, enums, structs, constants, and table refs are declared in [`docs/logic/SYMBOLS.md`](../docs/logic/SYMBOLS.md). SYMBOLS.md changes are orchestrator-reviewed; agents propose additions in their report rather than edit it directly.
+- Run `tools/run.sh lint_logic.py` after any change under `docs/logic/`. A clean lint is required before the task is considered complete.
 
 ### Don't Trust Summaries
 
