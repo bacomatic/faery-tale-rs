@@ -57,5 +57,13 @@ Every documented function appears here with a link to its canonical definition. 
 | `proxcheck` | [movement.md#proxcheck](movement.md#proxcheck) | Collision query: terrain + actor blocking |
 | `update_environ` | [movement.md#update_environ](movement.md#update_environ) | Terrain → environ code (sinking/drowning/teleport) |
 | `set_course` | [movement.md#set_course](movement.md#set_course) | Face actor toward a target; used by witch + AI |
+| `place_extent_encounters` | [encounters.md#place_extent_encounters](encounters.md#place_extent_encounters) | Phase 14i: drain `encounter_number` into dead/empty slots around the hero |
+| `roll_wilderness_encounter` | [encounters.md#roll_wilderness_encounter](encounters.md#roll_wilderness_encounter) | Phase 14j: danger_level vs rand64 roll + biome overrides + `load_actors` |
+| `set_loc` | [encounters.md#set_loc](encounters.md#set_loc) | Pick (encounter_x, encounter_y) on a 150–213 px ring around hero |
+| `set_encounter` | [encounters.md#set_encounter](encounters.md#set_encounter) | Place one ENEMY in anim_list[i]: collision-free coord, race, weapon, goal, HP |
+| `prep` | [encounters.md#prep](encounters.md#prep) | Wait on actor-shape disk I/O channel 8, then build the sprite mask table |
+| `load_actors` | [encounters.md#load_actors](encounters.md#load_actors) | Set `encounter_number` and async-read the new race's shape file if needed |
+| `roll_treasure` | [encounters.md#roll_treasure](encounters.md#roll_treasure) | Corpse drop lookup into `treasure_probs[tier*8 + rand8]` (0 for setfigs) |
+| `roll_weapon` | [encounters.md#roll_weapon](encounters.md#roll_weapon) | Enemy weapon lookup into `weapon_probs[arms*4 + col]` |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

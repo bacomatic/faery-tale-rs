@@ -147,6 +147,36 @@ DRAIN_SINK_SECTOR = 181     # fmain.c:1785
 DRAIN_DEST_REGION = 9       # fmain.c:1788
 DRAIN_DEST_X      = 0x1080  # fmain.c:1789
 DRAIN_DEST_Y      = 34950   # fmain.c:1789
+
+# Encounter pipeline (fmain.c:2058-2770, fmain2.c:1714-1720)
+MAX_TRY                  = 15         # fmain.c:2736 — set_encounter retry cap
+ENCOUNTER_SPREAD         = 63         # fmain.c:2065, 2744 — default jitter box
+ENCOUNTER_RETRY_LIMIT    = 10         # fmain.c:2061 — cluster-point attempts per 14i tick
+PLACE_CADENCE_MASK       = 15         # fmain.c:2058 — 14i cadence
+ROLL_CADENCE_MASK        = 31         # fmain.c:2080 — 14j cadence
+SPECIAL_EXTENT_FLOOR     = 50         # fmain.c:2059, 2081
+BIOME_UNIFORM_MASK       = 3          # fmain.c:2060 — (xtype & 3)==0 disables mixflag
+INDOOR_DANGER_BIAS       = 5          # fmain.c:2082
+OUTDOOR_DANGER_BIAS      = 2          # fmain.c:2083
+DANGER_ROLL_RANGE        = 63         # fmain.c:2085
+SETLOC_RING_MIN_DIST     = 150        # fmain2.c:1717
+SETLOC_RING_MAX_DELTA    = 63         # fmain2.c:1717
+MIXFLAG_PAIR_BIT         = bit(1)     # fmain.c:2754
+MIXFLAG_REROLL_WEAPON    = bit(2)     # fmain.c:2756
+XTYPE_SWAMP              = 7          # fmain.c:2087
+XTYPE_SPIDER             = 8          # fmain.c:2089
+XTYPE_WRAITH_FORCED      = 49         # fmain.c:2090 — reserved
+XTYPE_ASTRAL             = 52         # fmain.c:2696, 2746
+ASTRAL_VOID_TERRAIN      = 7          # fmain.c:2746
+DKNIGHT_PIN_X            = 21635      # fmain.c:2741
+DKNIGHT_PIN_Y            = 25762      # fmain.c:2741
+DKNIGHT_RACE_FILTER      = 7          # fmain.c:2741
+SPRITE_ANCHOR_OFFSET_X   = 8          # fmain.c:2765
+SPRITE_ANCHOR_OFFSET_Y   = 26         # fmain.c:2766
+DISK_CHAN_ACTOR_SHAPES   = 8          # fmain.c:2052, fmain2.c:745
+WEAPON_PROBS_COLUMNS     = 4          # fmain.c:2757
+TREASURE_PROBS_COLUMNS   = 8          # fmain.c:3272
+SETFIG_RACE_BIT          = 0x80       # fmain.c:3271 — bit 7 marks setfigs (no loot)
 ```
 
 ## 2. Enums
@@ -375,6 +405,15 @@ hero_sector: u8                     # fmain.c — current sector index under her
 new_region: i16                     # fmain.c:614 — pending region-transfer target
 brother: i8                         # fmain.c — hero identity (0 Julian / 1 Phillip / 2 Kevin)
 fallstates: list                    # fmain.c — fall-animation frames per brother
+encounter_x: u16                    # fmain.c — cluster-origin x for current spawn batch
+encounter_y: u16                    # fmain.c — cluster-origin y for current spawn batch
+encounter_type: i16                 # fmain.c — pending race code for load_actors
+mixflag: i32                        # fmain.c — per-batch race/weapon mixing flags (bits 1, 2)
+wt: i8                              # fmain.c — weapon_probs[] column index for current batch
+danger_level: i16                   # fmain.c:2082-2083 — scratch var for 14j roll
+actor_file: i8                      # fmain.c — currently loaded enemy shape file id
+nextshape: object                   # fmain.c — destination chip-RAM pointer for next read_shapes()
+seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .maskloc .width .height .count
 ```
 
 ## 6. Table references
@@ -393,6 +432,8 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:movement_vectors_y` | `fsubs.asm:1277` | `ydir[0..9]`: `-2,-3,-2,0,2,3,2,0,0,0` |
 | `TABLE:movement_course_map` | `fmain2.c:55` | `com2[0..8]`: `{0,1,2,7,9,3,6,5,4}`; `(ydir,xdir) → dir or 9=still` |
 | `TABLE:fall_states` | `fmain.c` | Per-brother fall-animation frame indices (6 entries each) |
+| `TABLE:weapon_probs` | `fmain2.c:860-868` | 8 rows × 4 cols; indexed by `encounter.arms * 4 + wt` |
+| `TABLE:treasure_probs` | `fmain2.c:852-858` | 5 rows × 8 cols; indexed by `encounter.treasure * 8 + rand8` |
 
 *(Additional entries appended as new logic docs are authored.)*
 
