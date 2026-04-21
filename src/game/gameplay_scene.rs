@@ -2630,7 +2630,7 @@ impl GameplayScene {
             // handle_key() already blocks non-Space keys when paused, but verify any
             // direct GameAction::Take path (key_bindings) also checks paused state.
             MenuAction::Take         => self.do_option(GameAction::Take),
-            MenuAction::Look         => self.do_option(GameAction::LookAround),
+            MenuAction::Look         => self.do_option(GameAction::Look),
             MenuAction::Yell         => self.do_option(GameAction::Yell),
             MenuAction::Say          => self.do_option(GameAction::Speak),
             MenuAction::Ask          => self.do_option(GameAction::Ask),
@@ -2956,12 +2956,6 @@ impl GameplayScene {
                 self.messages.push("Dropped item.");
                 self.dlog("DropItem: stub");
             }
-            GameAction::LookAround => {
-                let region = self.state.region_num;
-                let msg = format!("Region {}. Vitality: {}. Gold: {}.",
-                    region, self.state.vitality, self.state.gold);
-                self.messages.push(msg);
-            }
             GameAction::Talk => {
                 // Talk is the same as Ask/Speak: range 50, nearest NPC (fmain.c:4167).
                 self.do_option(GameAction::Speak);
@@ -3071,23 +3065,36 @@ impl GameplayScene {
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::Look => {
-                // Describe terrain at hero position (original: event 38 = item visible, event 20 = nothing special).
-                let terrain_name = if let Some(ref world) = self.map_world {
-                    match collision::px_to_terrain_type(world, self.state.hero_x as i32, self.state.hero_y as i32) {
-                        0 => "open ground",
-                        1 => "hard rock",
-                        2 => "shallow water",
-                        3 => "deep water",
-                        4 => "swamp",
-                        5 => "water",
-                        6 => "trees",
-                        7 => "rough terrain",
-                        _  => "unknown terrain",
+                // SPEC §14.19 / RESEARCH §11.7 / menu row 7 (`fmain.c:3290-3296`):
+                // Scan OBJECTS within range 40 of hero in the current region.
+                // Reveal any hidden items (ob_stat=5) by calling change_object(i, 1):
+                //   ob_stat 5 → 1, visible → true (so subsequent Take can pick them up).
+                // Feedback: event(38) "You spy something!" if any object was nearby,
+                // else event(20) "You see nothing unusual."
+                use crate::game::collision::calc_dist;
+                const LOOK_RANGE: i32 = 40;
+                let hx = self.state.hero_x as i32;
+                let hy = self.state.hero_y as i32;
+                let region = self.state.region_num;
+                let mut found = false;
+                for obj in self.state.world_objects.iter_mut() {
+                    if obj.region != region { continue; }
+                    if obj.ob_stat == 3 { continue; } // setfigs are not OBJECTS
+                    if obj.ob_id == 0x1d { continue; } // empty chest
+                    if calc_dist(hx, hy, obj.x as i32, obj.y as i32) >= LOOK_RANGE {
+                        continue;
                     }
+                    found = true;
+                    if obj.ob_stat == 5 {
+                        obj.ob_stat = 1;
+                        obj.visible = true;
+                    }
+                }
+                if found {
+                    self.messages.push("You spy something!");
                 } else {
-                    "open ground"
-                };
-                self.messages.push(format!("You see: {}.", terrain_name));
+                    self.messages.push("You see nothing unusual.");
+                }
             }
             GameAction::Take => {
                 // Take: nearest_fig(0, 30) — find nearest item within range 30 (fmain.c:3876-4000).
@@ -6152,9 +6159,91 @@ mod ui_menu_tests {
         scene.state.stuff_mut()[0] = 1;
         scene.menu.menus[MenuMode::Use as usize].enabled[0] = 8;
 
-        scene.do_option(GameAction::LookAround);
+        scene.do_option(GameAction::Look);
 
         assert_eq!(scene.menu.menus[MenuMode::Use as usize].enabled[0], 10);
+    }
+}
+
+#[cfg(test)]
+mod look_handler_tests {
+    use super::*;
+    use crate::game::game_state::WorldObject;
+
+    fn scene_with_hidden_item_at(ox: u16, oy: u16, region: u8) -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        scene.state.region_num = region;
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 1000;
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 22,        // arbitrary pickable item
+            ob_stat: 5,       // hidden (revealed by Look)
+            region,
+            x: ox,
+            y: oy,
+            visible: false,
+            goal: 0,
+        });
+        scene
+    }
+
+    #[test]
+    fn look_reveals_hidden_item_within_range_40() {
+        let mut scene = scene_with_hidden_item_at(1010, 1005, 8);
+        scene.do_option(GameAction::Look);
+        let obj = &scene.state.world_objects[0];
+        assert_eq!(obj.ob_stat, 1, "hidden item should flip to ob_stat=1");
+        assert!(obj.visible, "revealed item must be visible");
+    }
+
+    #[test]
+    fn look_ignores_hidden_item_beyond_range_40() {
+        let mut scene = scene_with_hidden_item_at(1100, 1100, 8);
+        scene.do_option(GameAction::Look);
+        let obj = &scene.state.world_objects[0];
+        assert_eq!(obj.ob_stat, 5, "out-of-range hidden item must stay hidden");
+        assert!(!obj.visible);
+    }
+
+    #[test]
+    fn look_ignores_item_in_other_region() {
+        let mut scene = scene_with_hidden_item_at(1010, 1005, 3);
+        scene.state.region_num = 8; // hero in a different region
+        scene.do_option(GameAction::Look);
+        assert_eq!(scene.state.world_objects[0].ob_stat, 5);
+    }
+
+    #[test]
+    fn take_picks_up_item_after_look_reveals_it() {
+        // Hidden Sea Shell (ob_id 108 maps to stuff[24]) near hero: Look → Take flow.
+        let mut scene = GameplayScene::new();
+        scene.state.region_num = 8;
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 1000;
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 108,
+            ob_stat: 5,
+            region: 8,
+            x: 1010,
+            y: 1005,
+            visible: false,
+            goal: 0,
+        });
+
+        // Take before Look: item is hidden, nothing to pick up.
+        assert!(
+            scene.state.find_nearest_item(8, 1000, 1000, 30).is_none(),
+            "hidden item must not be findable before Look"
+        );
+
+        scene.do_option(GameAction::Look);
+        assert!(scene.state.world_objects[0].visible, "Look should reveal it");
+
+        // After Look, Take should find the now-visible item.
+        assert!(
+            scene.state.find_nearest_item(8, 1000, 1000, 30).is_some(),
+            "revealed item must be findable by Take"
+        );
     }
 }
 
