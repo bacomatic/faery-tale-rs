@@ -2949,7 +2949,7 @@ The `bitrand`/`randN` variants use bitwise AND, producing uniform results only w
 
 | Timer | Declared | While > 0 |
 |-------|----------|-----------|
-| `freeze_timer` | short | Enemies frozen, `daynight` frozen, encounters suppressed |
+| `freeze_timer` | short | All non-hero actors skip movement (see §9.5); `daynight` frozen; encounters suppressed. AI tactic selection may still run for non-hostile NPCs, but none move. |
 | `light_timer` | short | Green Jewel warm amber glow in `day_fade()` |
 | `secret_timer` | short | Secret passages visible; dungeon color 31 = bright green |
 

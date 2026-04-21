@@ -278,6 +278,25 @@ pub fn rand256() -> i16 {
     melee_rand(256) as i16
 }
 
+/// Compute NPC movement speed per tick based on terrain type (SPEC §9.5).
+/// Applies the same speed chain as the hero, but derived directly from the
+/// raw terrain type rather than the hero's stateful `environ` accumulator.
+///
+/// `race_ignores_terrain`: true for wraiths (RACE_WRAITH) and snakes
+/// (RACE_SNAKE) — both bypass the terrain-speed chain entirely and always
+/// use normal speed 2 (`fmain.c:1639`).
+pub fn npc_speed_for_terrain(terrain: u8, race_ignores_terrain: bool) -> i8 {
+    if race_ignores_terrain {
+        return 2;
+    }
+    match terrain {
+        6 => 4,            // slippery (ice / smooth) → fast
+        2 | 3 => 1,        // shallow/deep water → slow
+        t if t > 6 => 1,   // any deeper water bands → slow
+        _ => 2,            // default walking speed
+    }
+}
+
 /// Compute hero movement speed based on terrain environ and riding status (SPEC §9.5).
 /// Returns signed speed value for newx/newy multiplication.
 pub fn hero_speed_for_env(environ: i8, riding_raft: bool) -> i8 {

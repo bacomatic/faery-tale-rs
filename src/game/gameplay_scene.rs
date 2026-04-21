@@ -2141,8 +2141,10 @@ impl GameplayScene {
             for i in 0..table.npcs.len() {
                 if !table.npcs[i].active { continue; }
                 if table.npcs[i].state != NpcState::Walking { continue; }
-                // SPEC §19.3: hostile enemies (race < 7) do not move when frozen.
-                if freeze && table.npcs[i].race < 7 { continue; }
+                // SPEC §9.5 / §19.3: when frozen, all non-hero actors skip
+                // movement entirely (fmain.c:1473 `goto statc`). AI may still
+                // select tactics for non-hostile NPCs, but none of them move.
+                if freeze { continue; }
                 // Build collision list: hero + all other active, alive NPCs.
                 let mut others: Vec<(i32, i32)> = Vec::with_capacity(crate::game::npc::MAX_NPCS + 1);
                 others.push((hero_x, hero_y));

@@ -126,7 +126,7 @@ impl Npc {
         indoor: bool,
         other_actors: &[(i32, i32)],
     ) {
-        use crate::game::collision::{proxcheck, actor_collides, newx, newy};
+        use crate::game::collision::{proxcheck, actor_collides, newx, newy, px_to_terrain_type};
         use crate::game::actor::Tactic;
 
         if !self.active || self.state != NpcState::Walking {
@@ -134,7 +134,13 @@ impl Npc {
         }
 
         let facing = self.facing;
-        let dist = 2i32;
+        // Terrain-based speed (SPEC §9.5 / R-INPUT-009): all actors share the
+        // same speed-by-terrain chain. Wraiths (race 2) and Snakes (race 4)
+        // bypass the chain per fmain.c:1639 — always normal speed 2.
+        let race_ignores_terrain = self.race == RACE_WRAITH || self.race == RACE_SNAKE;
+        let terrain_here = world.map_or(0u8, |w|
+            px_to_terrain_type(w, self.x as i32, self.y as i32));
+        let dist = crate::game::combat::npc_speed_for_terrain(terrain_here, race_ignores_terrain) as i32;
 
         let proposed_x = newx(self.x as u16, facing, dist);
         let proposed_y = newy(self.y as u16, facing, dist, indoor);
@@ -481,5 +487,25 @@ mod tests {
         // (Tactic::Frust may still be set from a previous tick; the important
         // invariant is that a successful move did not set it.)
         assert_ne!(npc.x, 1000, "deviation move should have happened");
+    }
+
+    #[test]
+    fn test_npc_speed_for_terrain_chain() {
+        use crate::game::combat::npc_speed_for_terrain;
+        // SPEC §9.5: slippery (terrain 6) → fast, water (2,3) → slow, else → normal.
+        assert_eq!(npc_speed_for_terrain(6, false), 4, "slippery = fast");
+        assert_eq!(npc_speed_for_terrain(2, false), 1, "shallow water = slow");
+        assert_eq!(npc_speed_for_terrain(3, false), 1, "deep water = slow");
+        assert_eq!(npc_speed_for_terrain(0, false), 2, "grass = normal");
+        assert_eq!(npc_speed_for_terrain(1, false), 2, "default = normal");
+    }
+
+    #[test]
+    fn test_wraith_and_snake_ignore_terrain_speed() {
+        use crate::game::combat::npc_speed_for_terrain;
+        // fmain.c:1639 — wraiths and snakes bypass terrain-speed entirely.
+        assert_eq!(npc_speed_for_terrain(2, true), 2, "wraith/snake in water = normal speed");
+        assert_eq!(npc_speed_for_terrain(6, true), 2, "wraith/snake on slippery = normal speed");
+        assert_eq!(npc_speed_for_terrain(3, true), 2, "wraith/snake in deep water = normal speed");
     }
 }
