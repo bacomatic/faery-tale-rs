@@ -189,6 +189,8 @@ xtype: u16                          # fmain.c:575 — current extent's encounter
 extn: object                        # fmain.c:338 — pointer to the currently-active extent_list[] entry; .v3 = race filter
 turtle_eggs: bool                   # fmain.c:134 — turtle-eggs-delivered flag
 encounter_chart: list               # fmain.c:52 — TABLE:encounter_chart; row per race with .arms .cleverness .hitpoints .treasure .file_id
+nearest_person: i16                 # fmain.c — index into anim_list of the closest live actor within 50 px of hero (0 = none)
+goodfairy: u8                       # fmain.c:592 — fairy resurrection counter; 1 = immediate revive, <120 shows fairy sprite
 ```
 
 ## 6. Table references

@@ -33,5 +33,16 @@ Every documented function appears here with a link to its canonical definition. 
 | `option_handler` | [menu-system.md#option_handler](menu-system.md#option_handler) | Dispatch one menu-slot mouse event on `enabled[hit]` action type |
 | `key_dispatch` | [menu-system.md#key_dispatch](menu-system.md#key_dispatch) | Route one code from the input ring buffer to the appropriate handler |
 | `advance_goal` | [ai-system.md#advance_goal](ai-system.md#advance_goal) | Per-tick NPC goal FSM |
+| `game_tick` | [game-loop.md#game_tick](game-loop.md#game_tick) | Canonical 24-phase per-frame sequence |
+| `process_input_key` | [game-loop.md#process_input_key](game-loop.md#process_input_key) | Phase 2: key dispatch + viewstatus 1/2/4 handling |
+| `resolve_player_state` | [game-loop.md#resolve_player_state](game-loop.md#resolve_player_state) | Phase 7: player motion state from input |
+| `actor_tick` | [game-loop.md#actor_tick](game-loop.md#actor_tick) | Phase 9: per-actor type/state dispatch |
+| `check_door` | [game-loop.md#check_door](game-loop.md#check_door) | Phase 12: door straddle + transfer |
+| `redraw_or_scroll` | [game-loop.md#redraw_or_scroll](game-loop.md#redraw_or_scroll) | Phase 13: full redraw vs scroll vs no-motion |
+| `no_motion_tick` | [game-loop.md#no_motion_tick](game-loop.md#no_motion_tick) | Phase 14: periodic game logic when map is stationary |
+| `melee_hit_detection` | [game-loop.md#melee_hit_detection](game-loop.md#melee_hit_detection) | Phase 15: weapon-reach proximity → dohit |
+| `missile_tick` | [game-loop.md#missile_tick](game-loop.md#missile_tick) | Phase 16: age + advance in-flight missiles |
+| `sort_sprites` | [game-loop.md#sort_sprites](game-loop.md#sort_sprites) | Phase 19: bubble-sort anim_index by Y + nearest-person |
+| `render_sprites` | [game-loop.md#render_sprites](game-loop.md#render_sprites) | Phase 22: body + weapon blits with terrain mask |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
