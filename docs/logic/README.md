@@ -123,5 +123,17 @@ Every documented function appears here with a link to its canonical definition. 
 | `select_frust_anim` | [frustration.md#select_frust_anim](frustration.md#select_frust_anim) | fmain.c:1655-1659 — Hero sprite override from frustflag thresholds (20 / 40) |
 | `trigger_frust` | [frustration.md#trigger_frust](frustration.md#trigger_frust) | fmain.c:1654-1661 — Blocked dispatch: hero frustflag++ vs NPC `tactic = TACTIC_FRUST` |
 | `resolve_frust_tactic` | [frustration.md#resolve_frust_tactic](frustration.md#resolve_frust_tactic) | fmain.c:2141-2144 — AI-tick reroll of a latched TACTIC_FRUST / TACTIC_SHOOTFRUST |
+| `add_device` | [input-handling.md#add_device](input-handling.md#add_device) | fmain.c:3017-3036 — install priority-51 input.device handler and reset the ring buffer |
+| `wrap_device` | [input-handling.md#wrap_device](input-handling.md#wrap_device) | fmain.c:3038-3046 — detach the handler and free its device resources |
+| `handler_interface` | [input-handling.md#handler_interface](input-handling.md#handler_interface) | fsubs.asm:63-218 — event-chain callback: timer heartbeat, rawkey translate, mouse-strip synth, pointer clamp |
+| `handle_rawkey` | [input-handling.md#handle_rawkey](input-handling.md#handle_rawkey) | fsubs.asm:84-111 — translate one RAWKEY via keytrans and enqueue the 128-byte ring buffer |
+| `handle_rawmouse` | [input-handling.md#handle_rawmouse](input-handling.md#handle_rawmouse) | fsubs.asm:112-157 — left-button transitions → synthesize menu-slot codes in status-bar strip |
+| `keybuf_push` | [input-handling.md#keybuf_push](input-handling.md#keybuf_push) | fsubs.asm:105-113 — 128-slot wrap; drop on overflow |
+| `update_pointer` | [input-handling.md#update_pointer](input-handling.md#update_pointer) | fsubs.asm:163-200 — accumulate mouse deltas, clamp to status-bar strip, MoveSprite |
+| `getkey` | [input-handling.md#getkey](input-handling.md#getkey) | fsubs.asm:281-295 — pop one translated code from the 128-byte ring buffer (0 if empty) |
+| `decode_mouse` | [input-handling.md#decode_mouse](input-handling.md#decode_mouse) | fsubs.asm:1488-1590 — per-frame direction fuser (mouse > joystick > keydir) + compass refresh |
+| `decode_mouse_strip` | [input-handling.md#decode_mouse_strip](input-handling.md#decode_mouse_strip) | fsubs.asm:1497-1530 — cursor → 3×3 compass grid in the status-bar strip |
+| `decode_joystick` | [input-handling.md#decode_joystick](input-handling.md#decode_joystick) | fsubs.asm:1533-1562 — read JOY1DAT, derive (xjoy, yjoy), look up direction via com2[] |
+| `decode_keydir` | [input-handling.md#decode_keydir](input-handling.md#decode_keydir) | fsubs.asm:1567-1580 — latched keypad 20..29 → direction 0..9 |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

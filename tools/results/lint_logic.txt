@@ -1,5 +1,7 @@
 # lint_logic.py report
-# targets: 18 file(s)
-# issues:  0
+# targets: 1 file(s)
+# issues:  3
 
-OK — no issues.
+tools/tests/fixtures/index_orphan/README.md:1: [I002] function 'orphan_function' is defined but not in index
+tools/tests/fixtures/index_orphan/README.md:1: [I003] index row 'ghost_function' points at missing file 'missing.md'
+tools/tests/fixtures/index_orphan/README.md:1: [I004] index row 'ghost_function' has no matching function

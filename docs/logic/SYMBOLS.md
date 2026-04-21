@@ -182,6 +182,32 @@ SETFIG_RACE_BIT          = 0x80       # fmain.c:3271 — bit 7 marks setfigs (no
 MAP_FLUX                 = 50         # fmain2.c — coordinate straddle tolerance
 EXT_COUNT                = 23         # fmain.c:338-370 — extent_list row count
 
+# Input handler (Amiga input.device)
+INPUT_EVENT_RAWKEY       = 1          # fsubs.asm:51
+INPUT_EVENT_RAWMOUSE     = 2          # fsubs.asm:52
+INPUT_EVENT_TIMER        = 6          # fsubs.asm:54
+INPUT_EVENT_DISKIN       = 0x10       # fsubs.asm:55
+IND_ADDHANDLER           = 9          # AmigaOS input.device command
+IND_REMHANDLER           = 10         # AmigaOS input.device command
+KEY_UP_BIT               = 0x80       # fsubs.asm:95 — rawkey up/release bit
+KEY_CODE_MASK            = 0x7F       # fsubs.asm:96
+KEYTRANS_MAX_SCANCODE    = 0x5A       # fsubs.asm:97
+MOUSE_LEFT_BUTTON        = 0x4000     # fsubs.asm:118
+MOUSE_BUTTON_MASK        = 0x6000     # fsubs.asm:1493
+MOUSE_MENU_X_LO          = 215        # fsubs.asm:134
+MOUSE_MENU_X_HI          = 265        # fsubs.asm:136
+MOUSE_MENU_X_SPLIT       = 240        # fsubs.asm:146
+MOUSE_MENU_Y_TOP         = 144        # fsubs.asm:139
+MOUSE_MENU_BASE          = 0x61       # fsubs.asm:142
+MOUSE_DIR_COLS_X_LO      = 265        # fsubs.asm:1501
+MOUSE_DIR_COL_MID_LO     = 292        # fsubs.asm:1509
+MOUSE_DIR_COL_MID_HI     = 300        # fsubs.asm:1515
+MOUSE_DIR_ROW_MID_LO     = 166        # fsubs.asm:1522
+MOUSE_DIR_ROW_MID_HI     = 174        # fsubs.asm:1525
+JOY1DAT_HIGH             = 0xDFF00C   # fsubs.asm:1533
+JOY1DAT_LOW              = 0xDFF00D   # fsubs.asm:1540
+DIR_NONE                 = 9          # alias of DIRECTION_STILL
+
 # Brother succession / revive
 ARROWBASE                = 35         # fmain.c:429 — per-brother inventory array size
 STARTING_DIRK            = 1          # fmain.c — stuff[] dirk slot initial count
@@ -480,6 +506,14 @@ place_tbl: list                     # fmain2.c — TABLE:place_tbl rows
 place_msg: list                     # narr.asm — TABLE:place_msg indices
 inside_tbl: list                    # fmain2.c — TABLE:inside_tbl rows
 inside_msg: list                    # narr.asm — TABLE:inside_msg indices
+handler_data: object                # fsubs.asm — input handler state struct (ticker, qualifier, xsprite, ysprite, keybuf[128], laydown, pickup, lastmenu, newdisk, pbase, gbase, vbase)
+handlerStuff: object                # fmain.c:3025-3027 — Interrupt struct wired into input.device
+inputDevPort: object                # fmain.c:3021 — MsgPort for input.device
+inputRequestBlock: object           # fmain.c:3022 — IORequest for input.device
+keytrans: list                      # fsubs.asm:221-226 — 91-byte scancode→code table
+oldir: i16                          # fsubs.asm — cached last direction from decode_mouse
+com2: list                          # fmain2.c:55 — TABLE:movement_course_map
+object: object                      # opaque Amiga OS pointer (MsgPort, IORequest, Interrupt, InputEvent, SimpleSprite, etc.)
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
 afont: object                       # fmain.c — Amber font TextFont
@@ -517,6 +551,7 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:place_msg` | `narr.asm` | Outdoor place-name message table |
 | `TABLE:inside_tbl` | `fmain2.c` | Indoor place-name bounding-box table |
 | `TABLE:inside_msg` | `narr.asm` | Indoor place-name message table |
+| `TABLE:keytrans` | `fsubs.asm:221-226` | 91-byte scancode → normalized keycode lookup |
 
 *(Additional entries appended as new logic docs are authored.)*
 
