@@ -456,6 +456,32 @@ def check_symbol_resolution(doc: LogicDoc) -> list[LintIssue]:
 ALL_CHECKS.append(check_symbol_resolution)
 
 
+_CALLS_TABLE_RE = re.compile(r"TABLE:([A-Za-z_][\w]*)")
+
+
+def check_table_refs(doc: LogicDoc) -> list[LintIssue]:
+    """Check #8: every TABLE:name reference (in Calls: lines or pseudo bodies) is registered."""
+    issues: list[LintIssue] = []
+    registered = load_symbol_registry()
+    entries, _ = extract_function_entries(doc)
+    for entry in entries:
+        search_targets = [
+            (entry.calls_text, entry.h2_line),
+            (entry.pseudo_body, entry.pseudo_start),
+        ]
+        for text, anchor in search_targets:
+            for m in _CALLS_TABLE_RE.finditer(text):
+                name = f"TABLE:{m.group(1)}"
+                if name not in registered:
+                    issues.append(LintIssue(
+                        doc.path, anchor, "T001",
+                        f"unregistered table reference '{name}' in function '{entry.name}'"))
+    return issues
+
+
+ALL_CHECKS.append(check_table_refs)
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------

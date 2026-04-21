@@ -69,3 +69,9 @@ def test_unknown_symbol_fails(fixtures_dir):
     result = run_linter("--file", str(fixtures_dir / "unknown_symbol.md"))
     assert result.returncode != 0
     assert "undefined_global" in (result.stdout + result.stderr)
+
+
+def test_unknown_table_ref_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "unknown_table.md"))
+    assert result.returncode != 0
+    assert "this_does_not_exist" in (result.stdout + result.stderr)
