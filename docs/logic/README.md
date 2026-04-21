@@ -135,5 +135,8 @@ Every documented function appears here with a link to its canonical definition. 
 | `decode_mouse_strip` | [input-handling.md#decode_mouse_strip](input-handling.md#decode_mouse_strip) | fsubs.asm:1497-1530 — cursor → 3×3 compass grid in the status-bar strip |
 | `decode_joystick` | [input-handling.md#decode_joystick](input-handling.md#decode_joystick) | fsubs.asm:1533-1562 — read JOY1DAT, derive (xjoy, yjoy), look up direction via com2[] |
 | `decode_keydir` | [input-handling.md#decode_keydir](input-handling.md#decode_keydir) | fsubs.asm:1567-1580 — latched keypad 20..29 → direction 0..9 |
+| `px_to_im` | [terrain-collision.md#px_to_im](terrain-collision.md#px_to_im) | fsubs.asm:542-620 — pixel → terrain type via sub-tile mask + image/sector/terra chain |
+| `prox` | [terrain-collision.md#prox](terrain-collision.md#prox) | fsubs.asm:1590-1614 — two-probe collision: right ≥10 / left ≥8 thresholds |
+| `mapxy` | [terrain-collision.md#mapxy](terrain-collision.md#mapxy) | fsubs.asm:1085-1130 — image-tile coord → sector_mem byte offset (doorfind uses for tile rewrite) |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
