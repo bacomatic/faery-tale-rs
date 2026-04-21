@@ -125,7 +125,7 @@ The linter checks that every identifier used in a pseudo block is either defined
 
 ## 3. Pseudo-Code Grammar
 
-Everything inside a fenced ` ```pseudo ` block must conform to this grammar. The linter parses these blocks with Python's `ast` module after preprocessing (see 5.x), giving free syntax validation.
+Everything inside a fenced ` ```pseudo ` block must conform to this grammar. The linter parses these blocks with Python's `ast` module after preprocessing (see §3.7), giving free syntax validation.
 
 ### 3.1 Function header (mandatory)
 
