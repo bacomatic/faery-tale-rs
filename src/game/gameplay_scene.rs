@@ -139,16 +139,21 @@ fn compass_dir_for_facing(facing: u8) -> usize {
 /// Pick the compass highlight segment (comptable index 0..=7) or 9 for
 /// "no highlight" per SPECIFICATION §25.7.
 ///
-/// The original highlights the compass from the *resolved input direction this
-/// tick*, not from the persistent `facing` value. Facing is retained when the
-/// player stops so the sprite keeps its orientation, but the compass wedge
-/// must clear. We treat the hero as idle when their ActorState is `Still` and
-/// no movement was produced this tick (`moving == false`).
-fn compass_dir_for_player(state: &ActorState, moving: bool, facing: u8) -> usize {
-    if matches!(state, ActorState::Still) && !moving {
-        9
-    } else {
-        compass_dir_for_facing(facing)
+/// Per RESEARCH.md §4.5 / §4.6, the highlight is driven by the resolved input
+/// direction this frame (`oldir`), not by persistent `facing`. When input is
+/// idle (`Direction::None`), index 9 is returned, which is a null comptable
+/// region — the base `_hinor` bitmap renders with no `_hivar` overlay.
+fn compass_dir_for_input(dir: Direction) -> usize {
+    match dir {
+        Direction::NW => 0,
+        Direction::N  => 1,
+        Direction::NE => 2,
+        Direction::E  => 3,
+        Direction::SE => 4,
+        Direction::S  => 5,
+        Direction::SW => 6,
+        Direction::W  => 7,
+        Direction::None => 9,
     }
 }
 
@@ -2271,14 +2276,7 @@ impl GameplayScene {
         let msgs_visible: Vec<&str> = msgs[msg_start..].to_vec();
         let textcolors = &self.textcolors;
         let compass_regions = &self.compass_regions;
-        let input_comptable_dir = {
-            let player = self.state.actors.first();
-            let (state, moving) = match player {
-                Some(a) => (a.state.clone(), a.moving),
-                None => (ActorState::Still, false),
-            };
-            compass_dir_for_player(&state, moving, self.state.facing)
-        };
+        let input_comptable_dir = compass_dir_for_input(self.current_direction());
         let hiscreen_opt = resources.find_image("hiscreen");
         let amber_font = resources.amber_font;
         let topaz_font = resources.topaz_font;
@@ -5678,50 +5676,35 @@ mod tests {
     }
 
     #[test]
-    fn test_compass_dir_for_player_idle_clears_highlight() {
-        // Spec §25.7: idle hero (Still + not moving) → direction 9 (no highlight).
-        for facing in 0u8..=7 {
-            assert_eq!(
-                compass_dir_for_player(&ActorState::Still, false, facing),
-                9,
-                "idle hero should return 9 regardless of persistent facing ({facing})"
-            );
-        }
+    fn test_compass_dir_for_input_idle_clears_highlight() {
+        // Spec §25.7: no input this tick → direction 9 (no highlight).
+        assert_eq!(compass_dir_for_input(Direction::None), 9);
     }
 
     #[test]
-    fn test_compass_dir_for_player_walking_uses_facing() {
-        // Walking → highlight wedge corresponding to facing (comptable index = (facing+1)%8).
+    fn test_compass_dir_for_input_maps_all_directions() {
+        // RESEARCH §4.5: input direction drives the highlight wedge.
         let cases = [
-            (0u8, 1usize), (1, 2), (2, 3), (3, 4),
-            (4, 5), (5, 6), (6, 7), (7, 0),
+            (Direction::NW, 0usize),
+            (Direction::N,  1),
+            (Direction::NE, 2),
+            (Direction::E,  3),
+            (Direction::SE, 4),
+            (Direction::S,  5),
+            (Direction::SW, 6),
+            (Direction::W,  7),
         ];
-        for (facing, expected) in cases {
-            assert_eq!(
-                compass_dir_for_player(&ActorState::Walking, true, facing),
-                expected
-            );
+        for (dir, expected) in cases {
+            assert_eq!(compass_dir_for_input(dir), expected, "direction {:?}", dir);
         }
     }
 
     #[test]
-    fn test_compass_dir_for_player_attempting_move_still_highlights() {
-        // Walking but blocked (moving == false): still "attempting to move" this tick,
-        // so the wedge must remain lit.
-        assert_eq!(
-            compass_dir_for_player(&ActorState::Walking, false, 2),
-            3
-        );
-    }
-
-    #[test]
-    fn test_compass_dir_for_player_still_with_moving_flag_highlights() {
-        // Defensive: if something sets moving=true while state==Still, we treat it as
-        // non-idle and keep the highlight (the AND guard prevents false idle detection).
-        assert_eq!(
-            compass_dir_for_player(&ActorState::Still, true, 0),
-            1
-        );
+    fn test_compass_dir_for_input_regression_after_release() {
+        // After an input pulse ends, the next tick must clear the highlight
+        // even if persistent facing is still set. This is the #162 regression.
+        let _facing_retained: u8 = 2; // facing persists — the helper ignores it
+        assert_eq!(compass_dir_for_input(Direction::None), 9);
     }
 
     #[test]

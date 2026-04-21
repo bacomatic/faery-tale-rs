@@ -22,7 +22,7 @@ The fundamental actor record, used for the player, NPCs, and enemies. Defined in
 | 9 | 1 | `race` | UBYTE | Race (indexes `encounter_chart[]`) |
 | 10 | 1 | `index` | char | Current animation frame image index |
 | 11 | 1 | `visible` | char | On-screen visibility flag |
-| 12 | 1 | `weapon` | char | Weapon type: 0=none, 1=dagger, 2=mace, 3=sword, 4=bow, 5=wand |
+| 12 | 1 | `weapon` | char | Weapon type: 0=none, 1=Dirk, 2=mace, 3=sword, 4=bow, 5=wand |
 | 13 | 1 | `environ` | char | Environment/terrain state (see [P1](PROBLEMS.md)) |
 | 14 | 1 | `goal` | char | Current goal mode ([§2.2](#22-goal-modes)) |
 | 15 | 1 | `tactic` | char | Current tactical mode ([§2.3](#23-tactical-modes)) |
@@ -32,6 +32,8 @@ The fundamental actor record, used for the player, NPCs, and enemies. Defined in
 | 20 | 1 | `vel_x` | char | X velocity (slippery/ice physics) |
 | 21 | 1 | `vel_y` | char | Y velocity (slippery/ice physics) |
 | **22** | | | | **Total size** (`l_shape` in `ftale.i`) |
+
+Terminology note: the original source comment at `fmain.c:72` labels weapon 1 as "dagger", but the in-game inventory/item text uses "Dirk" (`fmain.c:381`, `fmain.c:502`, `fmain.c:2850`). This documentation uses "Dirk" for the player-facing item name.
 
 A commented-out `APTR source_struct` field appears in both C and assembly definitions (`ftale.h:66`, `ftale.i:21`), suggesting a removed feature.
 
@@ -395,8 +397,8 @@ Defined at `fmain2.c:860-868`. 8 groups of 4 entries (32 total). Indexed by `arm
 | Group | Values | Weapons |
 |-------|--------|---------|
 | 0 | 0,0,0,0 | None |
-| 1 | 1,1,1,1 | All daggers |
-| 2 | 1,2,1,2 | Daggers and maces |
+| 1 | 1,1,1,1 | All dirks |
+| 2 | 1,2,1,2 | Dirks and maces |
 | 3 | 1,2,3,2 | Mostly maces, some swords |
 | 4 | 4,4,3,2 | Bows and swords |
 | 5 | 5,5,5,5 | All magic wands |
