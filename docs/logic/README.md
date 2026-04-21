@@ -73,5 +73,11 @@ Every documented function appears here with a link to its canonical definition. 
 | `get_turtle` | [quests.md#get_turtle](quests.md#get_turtle) | USE Shell: spawn turtle carrier on a nearby deep-water tile |
 | `try_win_condition` | [quests.md#try_win_condition](quests.md#try_win_condition) | Post-pickup Talisman check: set quitflag + run the end-game sequence |
 | `end_game_sequence` | [quests.md#end_game_sequence](quests.md#end_game_sequence) | Win placard + winpic + 55-frame sunrise fade + blackout |
+| `talk_dispatch` | [npc-dialogue.md#talk_dispatch](npc-dialogue.md#talk_dispatch) | CMODE_TALK dispatch: Yell/Say/Ask range + per-setfig/carrier/enemy speech |
+| `wizard_hint` | [npc-dialogue.md#wizard_hint](npc-dialogue.md#wizard_hint) | Wizard TALK speech: kind gate + goal-indexed quest hints |
+| `priest_speech` | [npc-dialogue.md#priest_speech](npc-dialogue.md#priest_speech) | Priest TALK speech: writ→statue, kind rebuke, or daily-rotating heal + hint |
+| `bartender_speech` | [npc-dialogue.md#bartender_speech](npc-dialogue.md#bartender_speech) | Bartender TALK speech: fatigue + dayperiod tri-branch |
+| `ranger_hint` | [npc-dialogue.md#ranger_hint](npc-dialogue.md#ranger_hint) | Ranger TALK speech: region-2 override or goal-indexed cave hint |
+| `proximity_auto_speak` | [npc-dialogue.md#proximity_auto_speak](npc-dialogue.md#proximity_auto_speak) | Phase 14: one-shot greeting for 5 named NPC races when nearest_person changes |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

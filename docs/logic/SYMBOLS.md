@@ -417,6 +417,9 @@ seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .ma
 princess: i16                       # fmain.c:568 — princess rescue counter (0..3)
 wealth: i32                         # fmain.c — hero gold
 quitflag: bool                      # fmain.c:590 — main-loop termination latch
+fatigue: i16                        # fmain.c — hero rest meter; climbs with time, reset by tavern sleep
+dayperiod: i16                      # fmain.c — coarse day-segment index driving bartender branch
+nearest: i16                        # fmain.c — side-effect output of nearest_fig: anim_list index of closest live actor within queried radius (0 = none)
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
 afont: object                       # fmain.c — Amber font TextFont
