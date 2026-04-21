@@ -3170,6 +3170,19 @@ Princess counter persists across succession. However, `ob_list8[9].ob_stat` IS r
   - Blocked in lava zone: event 32 ("Ground is too hot")
   - Blocked at high velocity: event 33 ("Flying too fast")
 
+#### Sprite Selection (RESEARCH §2.2, `fmain.c:1497-1510, 2463-2464`)
+
+The swan sprite is **not** driven by the motion-state enum. Two distinct rendering paths apply based on whether the swan is being ridden:
+
+| Situation | Condition | Sheet | Frame |
+|-----------|-----------|-------|-------|
+| Mounted / flying | `riding == 11` | `cfiles[11]` (carrier) | facing 0–7 (`dex = d`, `fmain.c:1507`) |
+| Grounded, not ridden | `riding != 11` && `actor_file == 11` | `cfiles[4]` (RAFT) | fixed frame `1` (`atype = RAFT; inum = 1`, `fmain.c:2463-2464`) |
+
+The RAFT sheet (cfile 4, file\_id 1348) holds 2 images: frame 0 is the raft itself, frame 1 is the grounded-swan image. Frame 1 is reachable **only** via the grounded-swan render override; the raft handler itself never writes `an->index`, so the raft always uses frame 0.
+
+When grounded, the swan holds position (`xtest = abs_x; ytest = abs_y`, `fmain.c:1504-1506`) — it does not walk or animate.
+
 ### 21.5 Dragon
 
 - Actor slot 3, type DRAGON, `actor_file = 10`
