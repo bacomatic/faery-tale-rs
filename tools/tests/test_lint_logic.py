@@ -63,3 +63,9 @@ def test_bad_signature_fails(fixtures_dir):
     assert result.returncode != 0
     combined = (result.stdout + result.stderr).lower()
     assert "annotation" in combined or "docstring" in combined
+
+
+def test_unknown_symbol_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "unknown_symbol.md"))
+    assert result.returncode != 0
+    assert "undefined_global" in (result.stdout + result.stderr)

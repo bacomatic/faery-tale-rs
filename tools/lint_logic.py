@@ -231,6 +231,12 @@ PRIMITIVES: set[str] = {
     "now_ticks", "speak", "play_sound", "play_music",
 }
 
+# Built-in type names used in annotations — always resolvable.
+BUILTIN_TYPES: set[str] = {
+    "int", "str", "bool", "float", "bytes", "list", "dict", "set", "tuple",
+    "u8", "u16", "u32", "i8", "i16", "i32",
+}
+
 
 def _preprocess_pseudo(body: str) -> str:
     """Strip Markdown comments from pseudo blocks before AST parsing."""
@@ -349,6 +355,105 @@ ALL_CHECKS = [
     check_function_signature,
     check_forbidden_constructs,
 ]
+
+
+SYMBOLS_FILE = LOGIC_DIR / "SYMBOLS.md"
+
+# Identifier-assignment inside SYMBOLS.md ```pseudo blocks, e.g.
+#   MAXSHAPES = 25
+#   DIR_NW = 0
+#   struct Shape:
+_SYMBOLS_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*[:=]")
+_SYMBOLS_STRUCT_RE = re.compile(r"^struct\s+([A-Za-z_][A-Za-z0-9_]*)\s*:")
+_SYMBOLS_TABLE_RE = re.compile(r"`TABLE:([A-Za-z_][\w]*)`")
+
+
+def load_symbol_registry() -> set[str]:
+    """Return the set of identifiers declared in SYMBOLS.md."""
+    names: set[str] = set()
+    if not SYMBOLS_FILE.exists():
+        return names
+    text = SYMBOLS_FILE.read_text(encoding="utf-8")
+    # All fenced ``` blocks (any language) are treated as declaration zones.
+    in_fence = False
+    for raw in text.splitlines():
+        if raw.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            continue
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        m_struct = _SYMBOLS_STRUCT_RE.match(stripped)
+        if m_struct:
+            names.add(m_struct.group(1))
+            continue
+        m_assign = _SYMBOLS_ASSIGN_RE.match(stripped)
+        if m_assign:
+            names.add(m_assign.group(1))
+            continue
+    # Table names from the markdown table.
+    for m in _SYMBOLS_TABLE_RE.finditer(text):
+        names.add(f"TABLE:{m.group(1)}")
+    return names
+
+
+def _parse_calls_list(calls_line: str) -> set[str]:
+    body = calls_line.split(":", 1)[1].strip() if ":" in calls_line else ""
+    if body.lower() in ("", "none"):
+        return set()
+    names: set[str] = set()
+    for token in body.split(","):
+        token = token.strip().strip("`")
+        if not token:
+            continue
+        names.add(token)
+    return names
+
+
+def check_symbol_resolution(doc: LogicDoc) -> list[LintIssue]:
+    """Check #7: every referenced name resolves."""
+    issues: list[LintIssue] = []
+    entries, _ = extract_function_entries(doc)
+    registered = load_symbol_registry()
+    for entry in entries:
+        tree, _ = _parse_pseudo(entry, doc)
+        if tree is None:
+            continue
+        func = tree.body[0] if tree.body and isinstance(tree.body[0], ast.FunctionDef) else None
+        if func is None:
+            continue
+        locals_: set[str] = {arg.arg for arg in func.args.args}
+        locals_.update(arg.arg for arg in func.args.kwonlyargs)
+        called = _parse_calls_list(entry.calls_text)
+        for node in ast.walk(func):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        locals_.add(target.id)
+            elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+                locals_.add(node.target.id)
+            elif isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+                locals_.add(node.target.id)
+        for node in ast.walk(func):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                nm = node.id
+                if nm in locals_ or nm in called or nm in registered or nm in PRIMITIVES:
+                    continue
+                if nm in BUILTIN_TYPES:
+                    continue
+                if nm in {"True", "False", "None"}:
+                    continue
+                issues.append(LintIssue(
+                    doc.path,
+                    entry.pseudo_start + node.lineno - 1,
+                    "N001",
+                    f"unresolved symbol '{nm}' in function '{entry.name}'"))
+    return issues
+
+
+ALL_CHECKS.append(check_symbol_resolution)
 
 
 # ---------------------------------------------------------------------------
