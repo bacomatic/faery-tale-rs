@@ -22,7 +22,7 @@ The fundamental actor record, used for the player, NPCs, and enemies. Defined in
 | 9 | 1 | `race` | UBYTE | Race (indexes `encounter_chart[]`) |
 | 10 | 1 | `index` | char | Current animation frame image index |
 | 11 | 1 | `visible` | char | On-screen visibility flag |
-| 12 | 1 | `weapon` | char | Weapon type: 0=none, 1=dagger, 2=mace, 3=sword, 4=bow, 5=wand |
+| 12 | 1 | `weapon` | char | Weapon type: 0=none, 1=Dirk, 2=mace, 3=sword, 4=bow, 5=wand |
 | 13 | 1 | `environ` | char | Environment/terrain state (see [P1](PROBLEMS.md)) |
 | 14 | 1 | `goal` | char | Current goal mode ([§2.2](#22-goal-modes)) |
 | 15 | 1 | `tactic` | char | Current tactical mode ([§2.3](#23-tactical-modes)) |
@@ -32,6 +32,8 @@ The fundamental actor record, used for the player, NPCs, and enemies. Defined in
 | 20 | 1 | `vel_x` | char | X velocity (slippery/ice physics) |
 | 21 | 1 | `vel_y` | char | Y velocity (slippery/ice physics) |
 | **22** | | | | **Total size** (`l_shape` in `ftale.i`) |
+
+Terminology note: the original source comment at `fmain.c:72` labels weapon 1 as "dagger", but the in-game inventory/item text uses "Dirk" (`fmain.c:381`, `fmain.c:502`, `fmain.c:2850`). This documentation uses "Dirk" for the player-facing item name.
 
 A commented-out `APTR source_struct` field appears in both C and assembly definitions (`ftale.h:66`, `ftale.i:21`), suggesting a removed feature.
 
@@ -205,13 +207,15 @@ Defined at `ftale.h:9-25` (canonical) and duplicated at `fmain.c:90-103`.
 | 16 | `SINK` | Sinking (quicksand/water) |
 | 17 | `OSCIL` | Oscillation animation 1 (comment: "and 18") — vestigial, never assigned |
 | 18 | *(implicit)* | Oscillation animation 2 (paired with OSCIL) — vestigial, never assigned |
-| 19 | `TALKING` | Speaking/dialogue |
+| 19 | `TALKING` | SETFIG-only: 15-tick image flicker while speech text displays |
 | 20 | `FROZEN` | Frozen in place (freeze spell) |
-| 21 | `FLYING` | Vestigial — defined but never assigned; Swan uses WALKING + `riding` |
+| 21 | `FLYING` | Vestigial — defined but never assigned; swan flight does not use `state==FLYING` |
 | 22 | `FALL` | Falling; velocity-based with 25% friction per tick (`fmain.c:1737-1738`) |
 | 23 | `SLEEP` | Sleeping |
 | 24 | `SHOOT1` | Bow up — aiming |
 | 25 | `SHOOT3` | Bow fired, arrow given velocity |
+
+`FLYING` is a dead enum value in the shipped code: no assignment site uses it. The swan/bird carrier instead uses `type == CARRIER`, `actor_file == 11`, and `riding == 11`. The hero remains in normal WALKING/STILL logic with `environ = -2` forcing inertial movement (`fmain.c:1464`, `fmain.c:1581-1596`), while the swan sprite image is selected directly from facing (`dex = d`, `fmain.c:1507`) rather than from the motion-state table.
 
 ### 2.2 Goal Modes
 
@@ -351,7 +355,7 @@ struct { BYTE cfile_entry, image_base, can_talk; }
 | 12 | Ranger | 17 | 0 | 1 | `fmain.c:36` |
 | 13 | Beggar | 17 | 4 | 1 | `fmain.c:37` |
 
-`cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables generic dialogue initiation.
+`cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables the TALKING visual effect (see [§13.2](#132-talk-system)) — it does not gate speech dispatch.
 
 ### 2.7 encounter_chart — Monster Combat Stats
 
@@ -393,8 +397,8 @@ Defined at `fmain2.c:860-868`. 8 groups of 4 entries (32 total). Indexed by `arm
 | Group | Values | Weapons |
 |-------|--------|---------|
 | 0 | 0,0,0,0 | None |
-| 1 | 1,1,1,1 | All daggers |
-| 2 | 1,2,1,2 | Daggers and maces |
+| 1 | 1,1,1,1 | All dirks |
+| 2 | 1,2,1,2 | Dirks and maces |
 | 3 | 1,2,3,2 | Mostly maces, some swords |
 | 4 | 4,4,3,2 | Bows and swords |
 | 5 | 5,5,5,5 | All magic wands |
@@ -841,10 +845,20 @@ Returns: 0 = clear, terrain code = terrain-blocked, 16 = actor-blocked.
 
 #### Player Collision Deviation (`fmain.c:1612-1626`)
 
-When the player walks into a wall:
-1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1613-1617`)
-2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1620-1624`)
-3. All three blocked: `frustflag++` (`fmain.c:1654-1660`). At `frustflag > 20`: scratching-head animation. At `frustflag > 40`: special animation index 40.
+When any actor walks into a wall, the game auto-deviates before declaring a block (`fmain.c:1612-1626`):
+1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1614-1618`)
+2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1621-1625`)
+3. All three blocked → `goto blocked` (`fmain.c:1626`)
+
+This deviation logic runs for **all actors** (player and NPCs alike). At the `blocked:` label (`fmain.c:1654`), the paths diverge:
+
+- **NPCs** (`i != 0`): `an->tactic = FRUST` — see [§8.4 Frustration Cycle](#84-frustration-cycle)
+- **Player** (`i == 0`): `frustflag++` with escalating visual feedback. This provides visual feedback when the player walks into impassable terrain — the character turns south and shakes his head repeatedly:
+   - **0–20 frames**: Normal standing sprite (`fmain.c:1663`)
+   - **21–40 frames**: Head-shaking animation — oscillation sprites 84/85, alternating every 2 game cycles — `dex = 84+((cycle>>1)&1)` (`fmain.c:1658`). These are figures 64/65 (`fmain.c:200-201`).
+   - **41+ frames**: Hardcoded `dex = 40` (`fmain.c:1657`) — statelist[40] is figure 35 (south-facing pose). The character snaps to face south regardless of actual facing direction.
+
+`frustflag` is a global `char` (`fmain.c:589`), only **incremented** for the player (`i == 0`), but **reset to 0** by any actor's successful action inside the shared animation loop (`fmain.c:1468`). Reset points: successful walk (`fmain.c:1650`), sink state (`fmain.c:1577`), shooting (`fmain.c:1707`), melee combat (`fmain.c:1715`), dying (`fmain.c:1725`). Since the flag exists solely to provide visual feedback that the hero is blocked, the NPC resets are harmless — during encounters, active NPCs reset it each tick, but the player is unlikely to be stuck against a wall in combat anyway. The escalating head-shaking animation is designed for solo exploration moments when the player walks into impassable terrain.
 
 ### 5.5 World Wrapping
 
@@ -932,20 +946,24 @@ Velocity halves approximately every 3 ticks. Position continues updating by `vel
 
 ### 5.8 Movement Speed by Terrain
 
-Speed value `e` passed to `newx`/`newy` during WALKING (`fmain.c:1599-1604`):
+Speed value `e` passed to `newx`/`newy` during WALKING (`fmain.c:1599-1602`). The if/else chain applies to **all actors** — hero and NPC share the same code path:
 
-| Condition | Speed | Effect |
-|-----------|-------|--------|
-| Hero riding raft (`riding==5`) | 3 | Fast overland |
-| `environ == −3` (terrain 8) | −2 | Direction reversal zone (near Necromancer); reverses player input |
-| `environ == −2` (terrain 7) | N/A | Ice physics (velocity-based, no direct speed) |
-| `environ == −1` (terrain 6) | 4 | Fast terrain |
-| `environ == 2` or `> 6` | 1 | Wading / deep water |
-| Default | 2 | Normal walking |
-
-For non-hero actors: `e = 1` in water/deep terrain, `e = 2` otherwise (with the same environ exceptions above).
+| Condition | Speed | Hero | NPC | Effect |
+|-----------|-------|------|-----|--------|
+| `i==0 && riding==5` | 3 | Yes | — | Turtle riding (hero-only, `fmain.c:1599`) |
+| `environ == −3` (terrain 8) | −2 | Yes | Unreachable | Direction reversal; `proxcheck` blocks NPCs from terrain 8 (`fmain2.c:282`) |
+| `environ == −2` (terrain 7) | velocity | Yes | Yes | Ice physics — no `i==0` guard (`fmain.c:1581-1598`) |
+| `environ == −1` (terrain 6) | 4 | Yes | Yes | Fast terrain, 2× normal speed (`fmain.c:1601`) |
+| `environ == 2` or `> 6` | 1 | Yes | Yes | Wading / deep water, half speed (`fmain.c:1602`) |
+| Default | 2 | Yes | Yes | Normal walking (`fmain.c:1602`) |
 
 Negative speed (−2 for terrain 8) causes backward movement along the current facing direction — the `newx`/`newy` `muls.w` handles the sign inversion.
+
+**NPC terrain access**: `proxcheck` zeroes terrain types 8 and 9 only for the hero (`fmain2.c:282`). NPCs are blocked by Probe 2 (`fsubs.asm:1608-1609`, threshold ≥ 8), so they can never reach terrain 8 (direction reversal) or 9 (pits) under normal gameplay. This makes `environ == −3` effectively hero-only despite the speed code having no actor check.
+
+**Race-based terrain immunity**: Wraiths (`race == 2`) skip terrain collision entirely (`fmain2.c:279-280`), but their terrain is forced to 0 at `fmain.c:1639`, giving them normal speed (e=2) on all surfaces. Snakes (`race == 4`) also have terrain forced to 0 (`fmain.c:1639`). See [§6.3](#63-collision-detection) for collision details.
+
+**Wading speed gap**: The check `k == 2 || k > 6` creates a speed anomaly during water depth ramping. For terrain 4 (deep water), where environ ramps 0→10, actors cycle through: normal speed (environ 0–1) → slow (environ 2) → normal (environ 3–6) → slow (environ 7–10). This brief normal-speed window at environ 3–6 affects hero and NPCs identically.
 
 ### 5.9 Hunger Stumble (`fmain.c:1442-1445`)
 
@@ -1032,20 +1050,29 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source c
 | 6 | Slippery | −1 | Speed becomes 4 (`fmain.c:1601`, `1771`) |
 | 7 | Velocity ice | −2 | Momentum-based physics with directional impulse (`fmain.c:1580-1595`) |
 | 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); reverses player input near Necromancer area |
-| 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1776-1783`) |
+| 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1766-1774`) |
 | 10+ | Blocked | — | `_prox` blocks at second probe point (`fsubs.asm:1608-1609`); first probe blocks at ≥10 (`fsubs.asm:1598-1599`) |
 | 12 | Crystal wall | — | Blocked unless `stuff[30]` (crystal shard) is held (`fmain.c:1611`). Exists only in terra set 8 (under+furnish, Region 8 building interiors) — tile index 93, found in 12 sectors: small chambers, twisting tunnels, forked intersections, and doom tower. **Not present** in the spirit world or dungeons (terra set 10 maps tile 93 to type 1/impassable). |
 | 15 | Door | — | Triggers `doorfind()` attempt when player bumps it (`fmain.c:1609`) |
 
 #### Environ Effects
 
-The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. Key thresholds:
+The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. The sinker section applies to **all actors** — both hero and NPCs get environ updates identically (except where noted). Key thresholds:
 
 - `environ > 15`: instant death — `vitality = 0` (`fmain.c:1845`)
 - `environ > 2`: gradual drowning — `vitality--` per tick (`fmain.c:1846`)
-- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`)
+- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`) — hero only
 
 Water damage is gated by the `fiery_death` flag (`fmain.c:1843`); see [P17](PROBLEMS.md).
+
+**NPC drowning immunity by race**: The drowning damage check at `fmain.c:1849-1851` uses the local variable `k`, which is repurposed from environ to `an->race` at `fmain.c:1802`. The condition `k != 2 && k != 3` therefore checks **race**, not environ — race 2 (wraith) and race 3 (skeleton) are immune to drowning damage. Additionally, wraiths (`race == 2`) and snakes (`race == 4`) have their terrain forced to 0 at `fmain.c:1639`, preventing them from entering water environ at all.
+
+**Hero-only environ rules**:
+- `i==0 && raftprox` → environ forced to 0 (turtle proximity prevents drowning, `fmain.c:1761`)
+- `j == 9 && i==0 && xtype == 52` → FALL state + environ −2 (pit traps, `fmain.c:1766-1774`)
+- `riding == 11` → environ forced to −2 before the loop (swan mount, `fmain.c:1464`)
+
+For NPCs, terrain 9 (pit/fall) produces no environ change — no sinker branch matches, so `k` retains its previous value (`fmain.c:1766`).
 
 ### 6.3 Collision Detection
 
@@ -1071,27 +1098,39 @@ Wraps `_prox` with three additional layers:
 2. **Player override** (`fmain2.c:281-283`): For the hero (`i==0`), terrain types 8 and 9 are treated as passable — the player walks *into* lava and pits (they cause effects but don't block).
 3. **Actor collision** (`fmain2.c:285-292`): Checks all active actors for bounding-box overlap (22×18 pixels: `|dx| < 11`, `|dy| < 9`). Skips self, slot 1 (raft/companion), CARRIER type (type 5), and DEAD actors. Returns 16 on actor collision.
 
-#### Player Collision Deviation (`fmain.c:1612-1626`)
+#### Collision Deviation (`fmain.c:1612-1626`)
 
-When the player's movement is terrain-blocked, the game auto-deviates:
+When any actor's movement is blocked, the game auto-deviates (this is NOT player-only):
 
 1. Try `dir + 1` (clockwise) — if clear, commit
 2. Try `dir − 2` (counterclockwise from original) — if clear, commit
-3. All three blocked: `frustflag++` — at 20+, scratching-head animation (`fmain.c:1654-1660`)
+3. All three blocked: player gets `frustflag++` with escalating animations; NPCs get `an->tactic = FRUST`. See [§5.4](#player-collision-deviation-fmainc1612-1626) for threshold details and the `frustflag` scope bug.
 
 ### 6.4 Movement Speed by Terrain
 
-Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](#58-movement-speed-by-terrain):
+Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](#58-movement-speed-by-terrain). The speed assignment at `fmain.c:1599-1602` is a single if/else chain evaluated for every actor:
 
-| Condition | Speed | Source |
-|-----------|-------|--------|
-| Riding raft (`riding==5`) | 3 | `fmain.c:1599` |
-| `environ == −3` (lava) | −2 | `fmain.c:1600` |
-| `environ == −1` (slippery) | 4 | `fmain.c:1601` |
-| `environ == 2` or `> 6` | 1 | `fmain.c:1603` |
-| Default | 2 | `fmain.c:1604` |
+| Condition | Speed | Source | Applies To |
+|-----------|-------|--------|------------|
+| `i==0 && riding==5` | 3 | `fmain.c:1599` | Hero only (turtle mount) |
+| `environ == −3` (lava) | −2 | `fmain.c:1600` | All actors (but NPCs blocked from terrain 8 by `proxcheck`) |
+| `environ == −1` (slippery) | 4 | `fmain.c:1601` | All actors |
+| `environ == 2` or `> 6` | 1 | `fmain.c:1602` | All actors |
+| Default | 2 | `fmain.c:1602` | All actors |
 
-Crystal shard (`stuff[30]`) overrides terrain type 12 blocking: `if (stuff[30] && j==12) goto newloc` (`fmain.c:1611`).
+Per-speed pixel displacement per frame (from direction vectors at `fsubs.asm:1277-1278`):
+
+| Speed (e) | Cardinal px/frame | Diagonal px/frame |
+|-----------|-------------------|--------------------|
+| −2 | 3 (reversed) | 2 (reversed) |
+| 1 | 1 | 1 |
+| 2 | 3 | 2 |
+| 3 | 4 | 3 |
+| 4 | 6 | 4 |
+
+Crystal shard (`stuff[30]`) overrides terrain type 12 blocking: `if (stuff[30] && j==12) goto newloc` (`fmain.c:1611`). Hero-only — NPCs are always blocked by terrain ≥ 10.
+
+**NPC freeze**: When `freeze_timer` is active, all non-hero actors (`i > 0`) skip movement processing entirely via `goto statc` (`fmain.c:1473`). Talin's inline comment `/* what about wizard? */` suggests this blanket freeze may have been broader than intended.
 
 ### 6.5 Memory Layout
 
@@ -1120,7 +1159,7 @@ Each image tile has a 4-byte entry:
 | Byte | Name | Purpose |
 |------|------|---------|
 | 0 | `maptag` | Image characteristics / mask data (used by `maskit`: `fmain.c:2595`) |
-| 1 | terrain | High nibble = terrain type (0–15); low nibble = mask application rule |
+| 1 | terrain | High nibble = terrain type (0–15); low nibble = sprite mask application rule |
 | 2 | `tiles` | 8-bit sub-tile collision bitmask |
 | 3 | `big_colors` | Dominant tile color (used for rendering) |
 
@@ -1549,7 +1588,7 @@ The AI loop processes actors 2 through `anix-1` (skipping player and raft). Proc
 4. **Distance & battle detection** (`fmain.c:2123-2131`): Within 300×300 pixels sets `actors_on_screen = TRUE` and `battleflag = TRUE`.
 5. **Random reconsider** (`fmain.c:2132`): `r = !bitrand(15)` → 1/16 (6.25%) base probability of reconsidering tactics.
 6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health → FLEE; unarmed → CONFUSED.
-7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random tactic: ranged picks from {FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP}; melee picks from {BUMBLE_SEEK, RANDOM}.
+7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random escape tactic; see [§8.4](#84-frustration-cycle) for details. Note: SHOOTFRUST is dead code (defined but never assigned — see [§8.4](#84-frustration-cycle)).
 8. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
 9. **FLEE** (`fmain.c:2172`): `do_tactic(i, BACKUP)`.
 10. **FOLLOWER** (`fmain.c:2173`): `do_tactic(i, FOLLOW)`.
@@ -1587,13 +1626,68 @@ Melee engagement threshold: `thresh = 14 − mode` (`fmain.c:2162`). DKnight (ra
 
 ### 8.4 Frustration Cycle
 
-When an actor is blocked during movement, `tactic` is set to FRUST (`fmain.c:1660-1661`). Next tick, the AI loop catches FRUST and selects a random escape tactic:
+When an NPC actor is blocked during movement, `tactic` is set to FRUST (`fmain.c:1661`). On the next AI tick, the frustration handler (`fmain.c:2141-2143`) catches this and selects a random escape tactic:
 
 ```
 walk → blocked → FRUST → random tactic → walk → ...
 ```
 
-This loop prevents enemies from getting permanently stuck on obstacles.
+This prevents enemies from getting permanently stuck on obstacles.
+
+#### Blocked Check (`fmain.c:1654-1661`)
+
+The blocked handler is in the WALKING/STILL state section of the animation loop (`fmain.c:1468`). When all three movement directions (original, clockwise +1, counterclockwise −2) are blocked by `proxcheck()` — a deviation sequence shared by all actors (see [§5.4](#player-collision-deviation-fmainc1612-1626)):
+
+- **Player** (`i == 0`): Increments `frustflag` and plays escalating animations — see [§5.4](#player-collision-deviation-fmainc1612-1626) for details.
+- **NPC** (`i != 0`): Sets `an->tactic = FRUST` for AI resolution next tick
+
+#### Escape Tactic Selection (`fmain.c:2141-2143`)
+
+```c
+if (tactic == FRUST || tactic == SHOOTFRUST)
+{   if (an->weapon & 4) do_tactic(i,rand4()+2);   /* ranged */
+    else do_tactic(i,rand2()+3);                    /* melee */
+}
+```
+
+| Weapon Type | Expression | Range | Possible Tactics |
+|-------------|-----------|-------|------------------|
+| Ranged (`weapon & 4` set) | `rand4()+2` | 2–5 | FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP |
+| Melee (`weapon & 4` clear) | `rand2()+3` | 3–4 | BUMBLE_SEEK, RANDOM |
+
+Ranged actors get more escape options (4 tactics) than melee actors (2 tactics), giving archers more variety in obstacle navigation.
+
+#### Cross-Goal-Mode Effect
+
+The frustration handler fires **before** the goal-mode dispatch chain (`fmain.c:2144+`), meaning it applies to **all** goal modes — not just hostile ones:
+
+- A **FLEE** actor that gets blocked receives BUMBLE_SEEK or RANDOM instead of BACKUP, potentially moving it *toward* the player
+- A **CONFUSED** actor that gets blocked may BUMBLE_SEEK toward the player despite being "confused"
+- A **FOLLOWER** that gets blocked may move in a direction that doesn't lead to the leader
+
+This is likely a bug — the frustration handler doesn't check `mode` before reassigning the tactic.
+
+#### SHOOTFRUST: Dead Code
+
+SHOOTFRUST (value 9, `ftale.h:51`) is tested at `fmain.c:2141` but **never assigned anywhere in the codebase**. The comment "arrows not getting through" (`fmain.c:131`) suggests it was planned for a mechanic where archers whose missiles consistently miss would switch tactics, but the detection code was never written. The missile collision code (`fmain.c:2260-2300`) and `dohit()` (`fmain2.c:230-247`) never modify the archer's `tactic` field. See also [PROBLEMS.md §P11](PROBLEMS.md#p11-unused-tactics-hide-7-door_seek-11-door_let-12--resolved).
+
+#### Tactic Field Overloading
+
+The `tactic` field in `struct shape` (`ftale.h:63`) is repurposed depending on actor state:
+
+| Actor State | Purpose of `tactic` | Values | Source |
+|-------------|---------------------|--------|--------|
+| AI-controlled (WALKING/FIGHTING) | Tactical sub-goal | 0–10 (tactic constants) | `fmain.c:2121` |
+| TALKING (SETFIG) | Speech image-toggle countdown | 15→0 | `fmain.c:3377`, `fmain.c:1557` |
+| DYING | Death animation countdown | 7→0 | `fmain.c:2773`, `fmain.c:1747` |
+| FALL | Fall frame counter | 0→30 | `fmain.c:1770`, `fmain.c:1733-1736` |
+| FALL (rendering) | Type selector: <16 → ENEMY sprite, ≥16 → OBJECTS sprite | any | `fmain.c:2457` |
+
+These overloaded uses don't conflict in practice: DYING/TALKING/FALL actors are handled in the animation state machine before the AI loop processes them, so their timer values never reach the frustration handler.
+
+#### `set_encounter()` Missing Initialization
+
+`set_encounter()` (`fmain.c:2736-2770`) does not initialize `an->tactic` when spawning a new enemy. The field retains the stale value from the previous occupant of that `anim_list[]` slot. If the stale value is 0 (FRUST), the frustration handler fires on the first AI tick, giving the actor a random direction — a minor cosmetic bug.
 
 ### 8.5 Cleverness Effects
 
@@ -1776,6 +1870,67 @@ an->weapon = weapon_probs[w];
 | 10 | Dragon | DRAGON | Has its own fireball attack logic |
 
 Carrier extent position: set to a 500×400 box centered on a point via `move_extent()` at `fmain2.c:1560-1566`.
+
+##### Swan State / Sprite Model (`fmain.c:1497-1510`, `fmain.c:1581-1596`, `fmain.c:2463-2464`)
+
+The swan is **not** driven by the global motion-state enum in the way a reader might expect:
+
+- `FLYING` (21) is never assigned anywhere.
+- `load_carrier(11)` initializes the carrier slot to `state = STILL` (`fmain.c:2798`).
+- The carrier update branch ignores `an->state` for the swan and uses `actor_file == 11` as the discriminator (`fmain.c:1497`).
+- When mounted, the code sets `riding = 11`, snaps the swan position to the hero, and selects the swan image with `dex = d`, where `d` is facing 0-7 (`fmain.c:1498-1507`). This gives exactly 8 directional swan frames, with no walk/fly cycle.
+- When not mounted, the swan simply holds position (`xtest = an->abs_x; ytest = an->abs_y`, `fmain.c:1504-1506`).
+- While mounted, the **hero** uses WALKING-state inertial movement with `environ = -2`; this is the actual flight implementation (`fmain.c:1464`, `fmain.c:1581-1596`).
+- When grounded and not ridden, rendering special-cases the swan to use the RAFT sheet with `inum = 1` instead of the carrier sheet (`fmain.c:2463-2464`).
+
+Implementation consequence: the swan's visible "states" are really a carrier-type special case, not entries in the actor state machine. For implementation purposes, model it as:
+
+| Swan Situation | Governing Flags / State | Sprite Selection |
+|----------------|-------------------------|------------------|
+| Grounded, idle | `type=CARRIER`, `actor_file=11`, `riding=0`, slot state typically `STILL` | Rendered as RAFT image 1 (`fmain.c:2463-2464`) |
+| Mounted / flying | `type=CARRIER`, `actor_file=11`, `riding=11`; hero uses WALKING + `environ=-2` | Carrier image index = facing 0-7 (`fmain.c:1507`) |
+| Dismount attempt | `riding==11` plus velocity / landing checks | No separate swan state; either stay mounted or drop to grounded case (`fmain.c:1417-1427`) |
+
+##### Raft State / Sprite Model (`fmain.c:1562-1574`, `fmain2.c:643-648`)
+
+The raft is a purely passive sprite that never animates:
+
+- `cfiles[4]`: width=2, height=32, **count=2**, `seq_num=RAFT`, file\_id=1348 — only 2 images in the sheet.
+- The RAFT handler (`fmain.c:1562`) does `goto statc`, skipping the `an->index = dex` write at raise. `an->index` stays at 0 (set by `load_carrier` init at `fmain.c:2797`) forever. **Frame 0 is the only raft image used.**
+- Frame 1 in the same RAFT sheet is the grounded-swan image; it is only accessed via the render override `atype = RAFT; inum = 1` (`fmain.c:2463-2464`). The raft itself has no use for frame 1.
+- Mount condition (`fmain.c:1562-1574`): `wcarry==1` (no active\_carrier), `raftprox==2` (within 9px of hero), and destination terrain is 3–5 (water/shore). When all three hold, raft snaps to hero position and `riding = 1`.
+- Screen offset: −16/−16 (as established at `fmain.c:1857`).
+
+| Raft Situation | Governing Flags | Sprite Selection |
+|----------------|-----------------|------------------|
+| On water near hero | `type=RAFT`, `wcarry==1`, `raftprox==2`, terrain 3–5 | RAFT image 0 — static, no animation (`fmain.c:2797`) |
+| Out of range / wrong terrain | same `type=RAFT`, conditions false | `goto statc`, `riding=0`; sprite still image 0 but not drawn over hero |
+
+##### Turtle State / Sprite Model (`fmain.c:1511-1545`)
+
+The turtle has 16 frames (8 directions × 2-frame walk cycle): `cfiles[5]`: width=2, height=32, count=16, `seq_num=CARRIER`, file\_id=1351.
+
+Unlike the raft, the turtle handler exits via `goto raise` → `an->index = dex` is written every tick.
+
+- **Mounted** (`fmain.c:1511-1519`): Conditions: `raftprox && wcarry==3`. Sets `dex = d*2`; adds `cycle&1` only if the hero is in WALKING state (`fmain.c:1518`). So when the hero stands still, the turtle holds the first frame of its current direction; when the hero walks, the two-frame cycle runs.
+- **Autonomous** (`fmain.c:1520-1542`): `dex = d+d+(cycle&1)` — always animates 2-frame cycle regardless of movement.
+- Screen offset: −16/−16, same as the raft (`fmain.c:1857`).
+
+| Turtle Situation | Governing Flags | Sprite Selection |
+|------------------|-----------------|------------------|
+| Mounted, hero still | `riding=5`, hero `state!=WALKING` | `dex = facing*2` (frame 0 of current direction) |
+| Mounted, hero walking | `riding=5`, hero `state==WALKING` | `dex = facing*2 + (cycle&1)` — 2-frame cycle |
+| Autonomous (not mounted) | `riding=0`, autonomous handler | `dex = facing*2 + (cycle&1)` — always cycles |
+
+##### Turtle Autonomous Movement (`fmain.c:1520-1542`)
+
+When not ridden, the turtle is restricted to **terrain type 5 only** (very deep water). It uses `px_to_im()` directly — not `proxcheck()` — and only commits position updates when the result is exactly 5 (`fmain.c:1523,1527,1531,1541`). Shallower water (types 2–4) and all land types are impassable to the autonomous turtle.
+
+Each tick, 4 directions are probed in priority order from the current facing `d`: `d`, `(d+1)&7`, `(d-1)&7`, `(d-2)&7`. The first direction landing on terrain 5 is selected (`fmain.c:1521-1534`). If all fail, the turtle does not move. Speed is always 3 (`fmain.c:1521-1522`).
+
+`load_carrier()` does not initialize `an->facing` (`fmain.c:2784-2801`), and the carrier handler exits via `goto raise` (`fmain.c:1545`), bypassing the `an->facing = d` write at `newloc:` (`fmain.c:1633`). The turtle's facing is therefore never persisted — it retries the same directional probe sequence every tick.
+
+**Bug — extent drift**: When no valid direction exists, `xtest`/`ytest` retain the last failed probe's coordinates. `move_extent(1, xtest, ytest)` still executes (`fmain.c:1545`), repositioning the extent to a non-water location while `abs_x`/`abs_y` stay fixed. See [PROBLEMS.md §P22](PROBLEMS.md).
 
 #### Spider Pit (etype 53, index 3)
 
@@ -2503,7 +2658,7 @@ Defined at `fmain.c:22-36`, the `setfig_table[]` maps 14 NPC types:
 | 12 | Ranger | 17 | 0 | Yes | 0x8c |
 | 13 | Beggar | 17 | 4 | Yes | 0x8d |
 
-`can_talk` controls only the talking animation (15-tick timer) — `fmain.c:3376-3379`. All 14 types have speech dispatch code regardless.
+`can_talk` controls only the TALKING state visual effect (15-tick timer) — `fmain.c:3376-3379`. While `tactic` counts down from 15 to 0, each render tick randomly selects between two adjacent sprite images (`dex += rand2()` — `fmain.c:1556`) producing a flickering jitter, not a true animation sequence. When the timer expires the NPC returns to STILL (`fmain.c:1557`). All 14 types have speech dispatch code regardless.
 
 Race code: `id + 0x80` (OR'd with 0x80 in `set_objects` — `fmain2.c:1280`). Vitality: `2 + id*2` (`fmain2.c:1274`). The `goal` field stores the object list index — `fmain2.c:1275` — which selects variant dialogue for wizards, rangers, and beggars.
 
@@ -2520,6 +2675,10 @@ Entry point: `do_option()` at `fmain.c:3367-3422`.
 | Ask (hit=7) | `nearest_fig(1,50)` — 50 units | Functionally identical to Say |
 
 All three share the same dispatch logic after the range check. There is no separate Ask handler.
+
+#### TALKING Visual Effect
+
+Before speech dispatch, if the target is a SETFIG with `can_talk=1`, the NPC enters the TALKING state for 15 ticks (`fmain.c:3376-3377`). Only 5 of 14 NPC types have `can_talk=1`: **Wizard**, **Priest**, **King**, **Ranger**, and **Beggar**. During each render tick, the sprite image randomly toggles between two adjacent frames (`dex += rand2()` — `fmain.c:1556`), producing a visual flicker. When the timer expires, the NPC returns to STILL (`fmain.c:1557`). This is purely cosmetic — all 14 types receive speech text regardless of `can_talk`.
 
 #### Dispatch Logic (`fmain.c:3375-3422`)
 
@@ -3560,10 +3719,23 @@ Indoor waveform tweak (`fmain.c:2945-2946`): dungeons (region 9) use `new_wave[1
 
 ### 20.1 Display Architecture
 
-The game uses a split-screen Amiga display with two ViewPorts:
+The display operates in three configurations (see [ARCHITECTURE.md §3.6](ARCHITECTURE.md#36-screen-configurations)).
 
-- **`vp_page`** — lo-res (288×140) playfield for the game world — `fmain.c:14` (`PAGE_HEIGHT 143`), `fmain.c:811-813`.
+**Normal gameplay — split-screen with status bar:**
+
+- **`vp_page`** — lo-res (288×140) playfield for the game world — `fmain.c:14` (`PAGE_HEIGHT 143`), `fmain.c:1250-1255`.
 - **`vp_text`** — hi-res (640×57) status bar at bottom — `fmain.c:16` (`TEXT_HEIGHT 57`), `fmain.c:815-818`.
+
+**Cinematic scenes — near-full-screen playfield** (title text, asset loading, victory):
+
+- **`vp_page`** — lo-res (312×194), set by `screen_size(156)` — `fmain.c:2914-2933`. Slightly inset (4px horizontal, 3px vertical) from the full 320×200 frame.
+- **`vp_text`** — hidden (`DHeight ≤ 0`). No status bar visible.
+
+**Storybook pages — true full-screen** (intro page0 and p1–p3):
+
+- **`vp_page`** — lo-res (320×200), reached by `screen_size(160)` at the peak of the intro zoom-in loop (`fmain.c:1199`). No border, no inset — edge-to-edge display.
+- **`vp_text`** — hidden (`DHeight ≤ 0`).
+- The zoom-in animates from 0 to 160 in steps of 4, opening an iris onto the storybook art. The zoom-out starts from 156 (not 160), snapping the viewport to 312×194 on the first frame before animating closed (`fmain.c:1209`). Both loops use `introcolors` palette fading (`fmain.c:2914-2933`).
 
 Key RastPort assignments — `fmain.c:448`:
 - `rp_map` — for drawing on playfield pages (used during `map_message()` story screens).

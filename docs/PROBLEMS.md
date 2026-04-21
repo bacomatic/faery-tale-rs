@@ -71,7 +71,7 @@ Additional behaviors gated by environ: submersion sprite offset (`fmain.c:2491-2
 ### P4. High weapon overlay indices (80+) in statelist — RESOLVED
 
 **Source**: `fmain.c:164-203` — statelist entries with `wpn_no` values 80–87
-**Resolution**: Values 80+ are encoded indices where bit 7 (0x80) serves as a control flag. The rendering code at `fmain.c:2444` computes `inum = statelist[inum].wpn_no + k` where `k` is a weapon-type offset (0=bow, 32=mace, 48=sword, 64=dagger). The check at `fmain.c:2524` tests `inum & 128`: when the high bit is set, inum is masked to 7 bits and the sprite gets a +8 pixel y-offset with reduced height (8px instead of 16px). This allows the same wpn_no values to encode different geometric offsets for ranged vs. melee weapon overlays depending on weapon type.
+**Resolution**: Values 80+ are encoded indices where bit 7 (0x80) serves as a control flag. The rendering code at `fmain.c:2444` computes `inum = statelist[inum].wpn_no + k` where `k` is a weapon-type offset (0=bow, 32=mace, 48=sword, 64=Dirk). The check at `fmain.c:2524` tests `inum & 128`: when the high bit is set, inum is masked to 7 bits and the sprite gets a +8 pixel y-offset with reduced height (8px instead of 16px). This allows the same wpn_no values to encode different geometric offsets for ranged vs. melee weapon overlays depending on weapon type.
 
 ---
 
@@ -162,10 +162,10 @@ The four `newstate[]` columns are transition targets selected at random each tic
 
 ---
 
-### P11. Unused tactics: HIDE (7), DOOR_SEEK (11), DOOR_LET (12) — RESOLVED
+### P11. Unused tactics: HIDE (7), SHOOTFRUST (9), DOOR_SEEK (11), DOOR_LET (12) — RESOLVED
 
-**Source**: `ftale.h:49-54`
-**Resolution**: HIDE was a planned enemy tactic that was never implemented. DOOR_SEEK and DOOR_LET were planned for the DKnight's door-blocking behavior but were replaced by hardcoded logic: the DKnight stands STILL facing south outside melee range and attacks within 16 pixels (`fmain.c:2162-2169`). All three tactic values have no case in `do_tactic()` (`fmain2.c:1664-1700`) and fall through as silent no-ops.
+**Source**: `ftale.h:42-54`
+**Resolution**: HIDE was a planned enemy tactic that was never implemented. DOOR_SEEK and DOOR_LET were planned for the DKnight's door-blocking behavior but were replaced by hardcoded logic: the DKnight stands STILL facing south outside melee range and attacks within 16 pixels (`fmain.c:2162-2169`). SHOOTFRUST (value 9, `ftale.h:51`) is tested in the frustration handler at `fmain.c:2141` but never assigned — the comment "arrows not getting through" indicates a planned mechanic where archers would detect ineffective ranged attacks and switch tactics, but the detection code was never written. All four tactic values have no assignment path in normal gameplay; HIDE, DOOR_SEEK, and DOOR_LET also have no case in `do_tactic()` (`fmain2.c:1664-1700`), while SHOOTFRUST has a handler (shared with FRUST) that can never be reached.
 
 ---
 
@@ -187,6 +187,32 @@ The four `newstate[]` columns are transition targets selected at random each tic
 
 **Source**: `fmain.c:240-243`
 **Resolution**: Likely an editing artifact — possibly placeholder entries that were pasted in but never removed. The duplicates are functionally harmless since all four are byte-identical and the door index is not used after the search.
+
+---
+
+## Open Problems
+
+### P22. Turtle extent drifts away from actual turtle position
+
+**Source**: `fmain.c:1520-1545`
+
+**Description**: When the autonomous turtle cannot find terrain type 5 (very deep water) in any of its 4 probed directions, `xtest`/`ytest` retain the coordinates from the last failed probe (direction `(d-2)&7`). The `move_extent(1, xtest, ytest)` call at `fmain.c:1545` still executes unconditionally, repositioning the turtle's 500×400 extent box to the failed probe's non-water coordinates. Meanwhile, the turtle's actual position (`an->abs_x`, `an->abs_y`) remains unchanged because the guard `if (j == 5)` at `fmain.c:1541` rejects the move.
+
+Over time, if the turtle repeatedly fails to find water in one direction, the extent gradually walks away from the turtle's true position. Since the extent controls carrier activation (`fmain.c:2716-2719`), this can make the turtle unreachable — the hero enters the extent zone, `load_carrier(5)` fires, but the carrier spawns at the extent center (now on non-water terrain), not at the turtle's actual position.
+
+**Impact**: The turtle can become effectively lost after extended autonomous movement in areas with narrow deep-water channels. Summoning via Sea Shell (`get_turtle()`, `fmain.c:3510-3517`) works around this by explicitly repositioning both the extent and the carrier.
+
+**Fix**: Guard the `move_extent` call with the same terrain check: only update the extent when the turtle actually moves (i.e., when `j == 5`). At `fmain.c:1541-1545`, the fix would be:
+
+```c
+j = px_to_im(xtest,ytest);
+if (j == 5) {
+    an->abs_x = xtest; an->abs_y = ytest;
+    move_extent(e,xtest,ytest);
+}
+```
+
+Instead of the current unconditional `move_extent(e,xtest,ytest)` after the position update.
 
 
 

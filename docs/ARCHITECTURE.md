@@ -230,6 +230,71 @@ The game uses the AmigaOS `View`/`ViewPort` system rather than directly construc
 
 A single hardware sprite (sprite 0) is used for the mouse pointer (`fmain.c:796-797,942`). The `SPRITES` flag on `vp_text` enables sprite DMA in the status bar viewport (`fmain.c:818`).
 
+### 3.6 Screen Configurations
+
+The display operates in two distinct viewport configurations, switched at specific scene boundaries:
+
+**Configuration A — Full-Screen Playfield** (set by `screen_size(156)` at `fmain.c:2914-2933`):
+
+```
+┌──────────────────────────────────────────┐  Scanline 0
+│            4 px border                   │
+│  ┌──────────────────────────────────────┐│  Scanline 3
+│  │                                      ││
+│  │     vp_page — LORES Playfield        ││
+│  │     312×194 visible pixels           ││
+│  │     5 bitplanes → 32 colors          ││
+│  │                                      ││
+│  └──────────────────────────────────────┘│  Scanline 197
+│            4 px border                   │
+└──────────────────────────────────────────┘  Scanline 200
+         vp_text hidden (DHeight ≤ 0)
+```
+
+- `DxOffset = 4`, `DyOffset = 3`, `DWidth = 312`, `DHeight = 194`
+- Text viewport `DHeight` = −3 (hidden)
+- No status bar visible — full-screen image display
+- Palette: `introcolors` (faded in by `screen_size()` itself)
+
+**Configuration B — Split Playfield + Status Bar** (set at `fmain.c:1250-1255`):
+
+```
+┌──────────────────────────────────────────┐  Scanline 0
+│            16 px border                  │
+│  ┌──────────────────────────────────┐    │
+│  │     vp_page — LORES Playfield    │    │
+│  │     288×140 visible pixels       │    │
+│  │     5 bitplanes → 32 colors      │    │
+│  └──────────────────────────────────┘    │
+├──────────────────────────────────────────┤  Scanline 143 (PAGE_HEIGHT)
+│        vp_text — HIRES Status Bar        │
+│        640×57 visible pixels             │
+│        4 bitplanes → 16 colors           │
+└──────────────────────────────────────────┘  Scanline 200
+```
+
+- `vp_page`: `DxOffset = 16`, `DyOffset = 0`, `DWidth = 288`, `DHeight = 140`
+- `vp_text`: `DyOffset = 143`, `DHeight = 57`
+- Status bar shows health, inventory, scrolling message text
+- Palette: `pagecolors` (playfield) + `textcolors` (status bar)
+
+**Per-Scene Configuration:**
+
+| Scene | Config | How Set | Citation |
+|-------|--------|---------|----------|
+| Title text (legal notice) | A | `screen_size(156)` | `fmain.c:1153` |
+| Intro zoom-in animation | A (→full) | `screen_size(0..160)` loop, step +4 | `fmain.c:1199` |
+| Intro story pages (p1–p3) | Full-screen | 320×200 — unchanged from zoom-in peak | `fmain.c:1200-1205` |
+| Intro zoom-out animation | A | `screen_size(156..0)` loop, step −4 (snaps from 320×200 to 312×194 on first iteration) | `fmain.c:1209` |
+| Asset loading / copy protection | A | `screen_size(156)` | `fmain.c:1220` |
+| Normal gameplay | B | Direct struct writes | `fmain.c:1250-1255` |
+| Full-screen story messages | B (modified) | `vp_text` hidden via `VP_HIDE` | `fmain2.c:604` |
+| Victory sunrise | A | `screen_size(156)` | `fmain2.c:1613` |
+
+The transition from Config A to B occurs once during initialization: after `revive()` completes, `fmain.c:1250-1255` restores the split layout and calls `MakeVPort()` to rebuild the Copper list. The transition from B back to A occurs only for the victory sequence.
+
+During the intro, `screen_size()` is called in a loop to produce an animated iris zoom. The argument ranges from 0 (collapsed to a single point at center) through 160 (full 320×200) in steps of 4, with a 2-tick `Delay()` per step and an `introcolors` palette fade at each iteration (`fmain.c:2914-2933`). The storybook pages display at the full 320×200 size. The zoom-out starts from 156 (not 160), so the first iteration snaps the viewport from 320×200 down to 312×194 before animating closed (`fmain.c:1209`).
+
 ---
 
 ## 4. Rendering Pipeline
@@ -708,14 +773,43 @@ The witch's attack beam is a rotating wedge-shaped polygon drawn in **COMPLEMENT
 
 | Effect | Function | Mechanism | Citation |
 |--------|----------|-----------|---------|
-| Viewport zoom | `screen_size(x)` | Animates viewport dimensions from point to full screen (5:8 aspect ratio: y = x×5/8) | `fmain.c:2914-2933` |
+| Viewport zoom | `screen_size(x)` | Animated iris zoom with synchronized palette fade (see below) | `fmain.c:2914-2933` |
 | Columnar wipe | `flipscan()` | Right-half then left-half columnar squeeze/expand between `pagea`/`pageb` | `fmain2.c:796-833` |
 | Fade to black | `fade_down()` | 21 steps, 100%→0% via `fade_page()` | `fmain2.c:623-625` |
 | Fade from black | `fade_normal()` | 21 steps, 0%→100% via `fade_page()` | `fmain2.c:627-629` |
 | Static display | `stillscreen()` | Resets scroll offsets to (0,0) and flips page | `fmain2.c:631-634` |
 | Intro pages | `copypage()` | Loads two IFF brushes into `pageb`, then `flipscan()` transition | `fmain2.c:781-791` |
 
-Gameplay uses `screen_size(156)` rather than the full 160, yielding a 312×194 viewport — slightly inset from the 320×200 frame (`fmain.c:1153`, `fmain.c:1220`). The zoom-in intro reaches `screen_size(160)` for full-screen, but normal play snaps to 156.
+#### `screen_size(x)` — Viewport Zoom with Palette Fade
+
+Defined at `fmain.c:2914-2933`. Given argument `x` (half-width in lo-res pixels):
+
+1. Compute `y = (x * 5) / 8` — enforces a fixed 5:8 height-to-width aspect ratio (`fmain.c:2917`).
+2. `Delay(2)` — 40 ms pause for animation pacing (`fmain.c:2919`).
+3. Set `vp_page` geometry, centered on a 320×200 frame (`fmain.c:2921-2925`):
+   - `DxOffset = 160 − x`, `DWidth = x × 2` (horizontal)
+   - `DyOffset = 100 − y`, `DHeight = y × 2` (vertical)
+   - `RxOffset` / `RyOffset` on both `ri_page1` and `ri_page2` match the display offsets, scrolling the bitmap view to stay centered.
+4. Set `vp_text.DHeight = 95 − y` (`fmain.c:2927`). As the playfield expands, the text viewport shrinks; at `y ≥ 95` (`x ≥ 152`) the text height goes ≤ 0, hiding the status bar entirely.
+5. Call `fade_page(y*2 − 40, y*2 − 70, y*2 − 100, 0, introcolors)` (`fmain.c:2930`). This scales the `introcolors` palette by per-channel percentages that increase with `y`:
+
+   | x | y | R% (y×2−40) | G% (y×2−70) | B% (y×2−100) | Visual |
+   |---|---|------------|------------|-------------|--------|
+   | 0 | 0 | −40 (black) | −70 (black) | −100 (black) | All black |
+   | 40 | 25 | 10 | −20 (black) | −50 (black) | Faint red tint |
+   | 80 | 50 | 60 | 30 | 0 (black) | Warm, no blue |
+   | 120 | 75 | 110 (full) | 80 | 50 | Nearly full color |
+   | 156 | 97 | 154 (full) | 124 (full) | 94 | Near-full palette |
+   | 160 | 100 | 160 (full) | 130 (full) | 100 (full) | Full `introcolors` |
+
+   Negative percentages clamp to 0 (black). The `limit` parameter is 0 (FALSE), so no night-mode clamping or blue shift applies. The red channel brightens first, then green, then blue — producing a warm sunrise-like fade-in during zoom-open and a reverse cool-to-black fade during zoom-close.
+
+6. `MakeVPort(&v, &vp_text)` — rebuild the text viewport Copper list (`fmain.c:2932`).
+7. `pagechange()` — swap display buffers and rebuild the page viewport Copper list (`fmain.c:2933`).
+
+When called in a loop (e.g., `for (i=0; i<=160; i+=4) screen_size(i)` at `fmain.c:1199`), the combined effect is an animated iris-open with a synchronized warm palette fade — the viewport expands from a single centered point while the `introcolors` palette fades in red-first. The palette is hardcoded to `introcolors` (`fmain.c:484-488`), so every call to `screen_size()` — including during the victory sequence (`fmain2.c:1613`) — uses the same intro-era palette aesthetic.
+
+See [§3.6](#36-screen-configurations) for the per-scene configuration table and the relationship to normal gameplay mode.
 
 ### 9.4 Day/Night Palette
 
@@ -752,7 +846,7 @@ Both protection mechanisms trigger once during startup. After the intro sequence
 
 ### 10.1 Riddle System
 
-`copy_protect_junk()` (`fmain2.c:1309-1334`) presents 3 random fill-in-the-blank questions from the game manual. Eight question/answer pairs are stored in `narr.asm:63-85` and `fmain2.c:1306-1308` respectively. Comparison is case-sensitive (uppercase required), prefix-only — the loop walks the correct answer until its NUL terminator but does not verify length, so "LIGHTXYZ" would pass for "LIGHT" (`fmain2.c:1330-1331`). Failure triggers graceful exit (`fmain.c:1238`, `goto quit_all`).
+`copy_protect_junk()` (`fmain2.c:1309-1334`) presents 3 random fill-in-the-blank questions from the game manual. Eight question/answer pairs are stored in `narr.asm:63-85` and `fmain2.c:1306-1308` respectively. Comparison is prefix-only — the loop walks the correct answer until its NUL terminator but does not verify length, so "LIGHTXYZ" would pass for "LIGHT" (`fmain2.c:1330-1331`). Case is not a factor: the `keytrans` table (`fsubs.asm:221-224`) maps all letter keys to uppercase, so player input is always uppercase before it reaches the comparison. Failure triggers graceful exit (`fmain.c:1238`, `goto quit_all`).
 
 In practice, the **first** question is effectively deterministic on a normal startup path: the RNG seed starts at `seed1 = 19837325` (`fmain.c:682`), and the game reaches `copy_protect_junk()` directly after the intro/protection setup without any earlier `rand()` consumption on that path (`fmain.c:1212-1238`). The first `rand8()` draw in the question loop therefore resolves to index 1 (`fmain2.c:1315-1317`), so the opening prompt is ordinarily **"Make haste, but take...?"**
 
@@ -903,7 +997,9 @@ Swan dismount is blocked in the lava zone (`fiery_death`, event 32: "Ground is t
 ### 13.3 Movement Physics
 
 - **Raft**: Follows hero position exactly on water/shore terrain (`fmain.c:1562-1572`).
-- **Turtle**: Intended to be a **water-only** carrier. When unmounted, its autonomous carrier logic probes candidate positions with `px_to_im()` and only commits moves where the terrain code is exactly 5 (water) (`fmain.c:1521-1542`). When mounted, the player's normal WALKING step is forced to speed 3 (`fmain.c:1599-1605`), but this should not be read as "the turtle can travel freely on land" — the design intent and carrier placement logic remain water-bound.
+- **Turtle (autonomous)**: Restricted to **terrain type 5 only** (very deep water). The autonomous handler at `fmain.c:1520-1542` uses `px_to_im()` — not `proxcheck()` — and only commits moves where the result is exactly 5. Shallower water types (2–4) and all land are impassable. Each tick, 4 directions are probed in priority order: current facing `d`, `(d+1)&7`, `(d-1)&7`, `(d-2)&7` — the first that lands on terrain 5 is selected (`fmain.c:1521-1534`). If none succeed, the turtle stays put. Speed is always 3 (`fmain.c:1521-1522`). The facing direction (`an->facing`) is **never updated** by the carrier handler — the `goto raise` exit at `fmain.c:1545` bypasses the `an->facing = d` write at `newloc:` (`fmain.c:1633`), so the turtle retries the same 4-direction sequence every tick.
+- **Turtle (mounted)**: The player's WALKING step is forced to speed 3 (`fmain.c:1599`). Movement goes through standard `proxcheck()`, so the rider can walk onto any non-blocked terrain. The `raftprox` flag overrides `environ` to 0 (`fmain.c:1768`), preventing drowning. The turtle's actual position only updates when the hero stands on terrain 5 (`fmain.c:1541`); walking onto land causes the turtle sprite to stay at the water's edge. Once the hero moves >16px away, `raftprox` drops to 0 and the rider dismounts automatically. Riding also neutralizes lava push-back (terrain type 8, `e = -2`) since the speed-3 override is checked first (`fmain.c:1599`).
+- **Turtle extent drift bug**: When the autonomous turtle cannot find terrain 5 in any of 4 probed directions, `xtest`/`ytest` retain the coordinates from the last failed probe. `move_extent(1, xtest, ytest)` at `fmain.c:1545` still executes, repositioning the 500×400 extent box to a non-water location while the turtle's actual `abs_x`/`abs_y` remain unchanged. Over time this can cause the extent to drift away from the turtle, potentially making it unreachable. See [PROBLEMS.md §P22](PROBLEMS.md).
 - **Mounted-turtle exploit**: The rider can attack continuously in the direction of travel and use melee recoil to shove the mounted position across otherwise invalid terrain. `dohit()` pushes the attacker forward with `move_figure(i,fc,2)` after a successful hit (`fmain2.c:242-245`), and `move_figure()` applies only the generic `proxcheck()` collision test before rewriting `abs_x/abs_y` (`fmain2.c:322-329`). That bypasses the turtle carrier's explicit `px_to_im(...) == 5` water-only movement rule (`fmain.c:1521-1542`), enabling transit over terrain the turtle is not supposed to cross.
 - **Swan**: Inertial flight physics via `environ == -2` (`fmain.c:1581-1596`):
   - Velocity accumulates via directional acceleration
