@@ -86,5 +86,6 @@ Every documented function appears here with a link to its canonical definition. 
 | `mod1save` | [save-load.md#mod1save](save-load.md#mod1save) | Blocks 5-8: brother inventories + reseat `stuff` + missiles |
 | `locktest` | [save-load.md#locktest](save-load.md#locktest) | Non-destructive AmigaDOS path-presence probe |
 | `waitnewdisk` | [save-load.md#waitnewdisk](save-load.md#waitnewdisk) | Poll the input handler for a disk-insert event up to ~30s |
+| `buy_dispatch` | [shops.md#buy_dispatch](shops.md#buy_dispatch) | CMODE_BUY case: bartender-gated `jtrans` row lookup, gold check, food/arrow/stuff side effect |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
