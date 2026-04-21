@@ -249,7 +249,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-COMBAT-009 | Bow attacks require SHOOT1 (aiming) → SHOOT3 (release) animation states and arrow inventory. |
 | R-COMBAT-010 | Dragon shall have 25% chance per frame (`rand4() == 0`) of launching a fireball at the hero. Witch shall deal `rand2() + 1` (1–2) damage when `witchflag` is set and distance < 100. |
 | R-COMBAT-011 | The 9-state `trans_list[]` fight animation shall cycle through states 0→1→2→3→4→5→6→8→0 via `newstate[0]`. Each tick selects a random transition: `trans_list[state].newstate[rand4()]`. Monsters at states 6 or 7 are forced to state 8. |
-| R-COMBAT-012 | Weapon types: 0=none, 1=dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch (monster-only). Damage equals weapon code; touch clamps to 5. Strike range = `weapon_code * 2` pixels. |
+| R-COMBAT-012 | Weapon types: 0=none, 1=Dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch (monster-only). Damage equals weapon code; touch clamps to 5. Strike range = `weapon_code * 2` pixels. |
 | R-COMBAT-013 | Near-miss sound shall play when Chebyshev distance < `bv + 2` and weapon ≠ wand: `effect(1, 150 + rand256())`. |
 | R-COMBAT-014 | `checkdead(i, dtype)` shall trigger when vitality < 1 and state is not DYING or DEAD. Sets `goal=DEATH`, `state=DYING`, `tactic=7`. DKnight death triggers `speak(42)`. SETFIG (non-witch) death causes `kind −= 3`. Enemy death (i > 0) grants `brave++`. Player death (i == 0) triggers `event(dtype)`, `luck −= 5`, `setmood(TRUE)`. |
 | R-COMBAT-015 | Death animation: `tactic` counts down from 7 to 0 (7 frames), sprites 80/81 alternating. At tactic 0, state transitions to DEAD with sprite index 82. |

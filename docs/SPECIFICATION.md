@@ -563,7 +563,7 @@ The fundamental actor record, 22 bytes total, used for player, NPCs, and enemies
 | 9 | 1 | `race` | u8 | Race (indexes `encounter_chart[]`) |
 | 10 | 1 | `index` | u8 | Current animation frame image index |
 | 11 | 1 | `visible` | u8 | On-screen visibility flag |
-| 12 | 1 | `weapon` | u8 | Weapon: 0=none, 1=dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch |
+| 12 | 1 | `weapon` | u8 | Weapon: 0=none, 1=Dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch |
 | 13 | 1 | `environ` | i8 | Environment/terrain state |
 | 14 | 1 | `goal` | u8 | Current goal mode (§11.1) |
 | 15 | 1 | `tactic` | u8 | Current tactical mode (§11.2) |
