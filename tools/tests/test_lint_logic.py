@@ -38,3 +38,9 @@ def test_function_header_missing_calls_fails(fixtures_dir):
     assert result.returncode != 0
     combined = (result.stdout + result.stderr).lower()
     assert "called by" in combined or "calls" in combined
+
+
+def test_bad_citation_fails(fixtures_dir):
+    result = run_linter("--file", str(fixtures_dir / "bad_citation.md"))
+    assert result.returncode != 0
+    assert "99999999" in (result.stdout + result.stderr)

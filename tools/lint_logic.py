@@ -25,6 +25,28 @@ HEADER_FIDELITY_RE = re.compile(r"^>\s*Fidelity:\s*behavioral\b", re.MULTILINE)
 HEADER_CROSSREF_RE = re.compile(r"^>\s*Cross-refs:\s*", re.MULTILINE)
 HEADER_SOURCES_RE = re.compile(r"Source files:\s*", re.MULTILINE)
 
+CITATION_RE = re.compile(r"`([A-Za-z][\w]*\.(?:c|asm|h|i|p)):(\d+)(?:-(\d+))?`")
+SOURCE_EXTS = {".c", ".asm", ".h", ".i", ".p"}
+
+
+def _source_line_counts() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entry in REPO_ROOT.iterdir():
+        if entry.is_file() and entry.suffix.lower() in SOURCE_EXTS:
+            with entry.open("r", errors="replace") as fh:
+                counts[entry.name] = sum(1 for _ in fh)
+    return counts
+
+
+_SOURCE_COUNTS_CACHE: dict[str, int] | None = None
+
+
+def source_line_counts() -> dict[str, int]:
+    global _SOURCE_COUNTS_CACHE
+    if _SOURCE_COUNTS_CACHE is None:
+        _SOURCE_COUNTS_CACHE = _source_line_counts()
+    return _SOURCE_COUNTS_CACHE
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -177,7 +199,29 @@ def check_function_headers(doc: LogicDoc) -> list[LintIssue]:
     return issues
 
 
-ALL_CHECKS = [check_file_header, check_function_headers]
+def check_citations(doc: LogicDoc) -> list[LintIssue]:
+    """Check #3: every `file.ext:LINE` citation resolves inside the repo."""
+    issues: list[LintIssue] = []
+    counts = source_line_counts()
+    for lineno, raw in enumerate(doc.lines, 1):
+        for m in CITATION_RE.finditer(raw):
+            filename = m.group(1)
+            start = int(m.group(2))
+            end = int(m.group(3)) if m.group(3) else start
+            if filename not in counts:
+                issues.append(LintIssue(
+                    doc.path, lineno, "C001",
+                    f"unknown source file '{filename}' in citation {m.group(0)}"))
+                continue
+            if start < 1 or end > counts[filename] or end < start:
+                issues.append(LintIssue(
+                    doc.path, lineno, "C002",
+                    f"line range out of bounds in {m.group(0)} "
+                    f"({filename} has {counts[filename]} lines)"))
+    return issues
+
+
+ALL_CHECKS = [check_file_header, check_function_headers, check_citations]
 
 
 # ---------------------------------------------------------------------------
