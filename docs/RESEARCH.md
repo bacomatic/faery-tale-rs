@@ -1157,7 +1157,7 @@ Each image tile has a 4-byte entry:
 | Byte | Name | Purpose |
 |------|------|---------|
 | 0 | `maptag` | Image characteristics / mask data (used by `maskit`: `fmain.c:2595`) |
-| 1 | terrain | High nibble = terrain type (0–15); low nibble = mask application rule |
+| 1 | terrain | High nibble = terrain type (0–15); low nibble = sprite mask application rule |
 | 2 | `tiles` | 8-bit sub-tile collision bitmask |
 | 3 | `big_colors` | Dominant tile color (used for rendering) |
 

@@ -234,8 +234,8 @@ Image banks are loaded from disk as 40 sectors each (20480 bytes = 5 planes × 4
 
 Terrain data is loaded as two 512-byte halves (one per terrain table ID) into a 1024-byte buffer (`terra_mem`). Each tile has a terrain entry; the terrain entry format for each tile provides:
 - Byte 0: mask shape index (index into shadow mask data for terrain occlusion)
-- Byte 1 lower nibble (bits 0–3): terrain walkability (0–3 scale, where 0 = fully walkable)
-- Byte 1 upper nibble (bits 4–7): mask mode (0–7, controlling occlusion behavior)
+- Byte 1 upper nibble (bits 4–7): terrain type (0–15, drives movement speed and water physics)
+- Byte 1 lower nibble (bits 0–3): mask application rule (0–7, controls sprite occlusion behavior)
 
 ### 3.3 Map Rendering
 
