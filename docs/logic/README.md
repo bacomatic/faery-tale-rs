@@ -65,5 +65,13 @@ Every documented function appears here with a link to its canonical definition. 
 | `load_actors` | [encounters.md#load_actors](encounters.md#load_actors) | Set `encounter_number` and async-read the new race's shape file if needed |
 | `roll_treasure` | [encounters.md#roll_treasure](encounters.md#roll_treasure) | Corpse drop lookup into `treasure_probs[tier*8 + rand8]` (0 for setfigs) |
 | `roll_weapon` | [encounters.md#roll_weapon](encounters.md#roll_weapon) | Enemy weapon lookup into `weapon_probs[arms*4 + col]` |
+| `give_item_to_npc` | [quests.md#give_item_to_npc](quests.md#give_item_to_npc) | GIVE submenu dispatch on (slot hit, target race): gold / bone / no-op |
+| `check_quest_flag` | [quests.md#check_quest_flag](quests.md#check_quest_flag) | Read a `stuff[]` slot and return a menu-enable byte (8 or 10) |
+| `necromancer_death_drop` | [quests.md#necromancer_death_drop](quests.md#necromancer_death_drop) | STATE_DYING transition: race 9 → woodcutter+Talisman; race 0x89 drops Lasso |
+| `leave_item` | [quests.md#leave_item](quests.md#leave_item) | Drop a ground-state world object at actor i's feet via `ob_listg[0]` |
+| `rescue` | [quests.md#rescue](quests.md#rescue) | Princess-rescue cinematic + Marheim teleport + Writ/gold/keys grant |
+| `get_turtle` | [quests.md#get_turtle](quests.md#get_turtle) | USE Shell: spawn turtle carrier on a nearby deep-water tile |
+| `try_win_condition` | [quests.md#try_win_condition](quests.md#try_win_condition) | Post-pickup Talisman check: set quitflag + run the end-game sequence |
+| `end_game_sequence` | [quests.md#end_game_sequence](quests.md#end_game_sequence) | Win placard + winpic + 55-frame sunrise fade + blackout |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

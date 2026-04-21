@@ -414,6 +414,20 @@ danger_level: i16                   # fmain.c:2082-2083 — scratch var for 14j 
 actor_file: i8                      # fmain.c — currently loaded enemy shape file id
 nextshape: object                   # fmain.c — destination chip-RAM pointer for next read_shapes()
 seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .maskloc .width .height .count
+princess: i16                       # fmain.c:568 — princess rescue counter (0..3)
+wealth: i32                         # fmain.c — hero gold
+quitflag: bool                      # fmain.c:590 — main-loop termination latch
+ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
+rp: object                          # fmain.c — shared drawing RastPort
+afont: object                       # fmain.c — Amber font TextFont
+fp_drawing: object                  # fmain.c — current drawing page (FaceRec)
+vp_page: object                     # fmain.c — playfield ViewPort
+vp_text: object                     # fmain.c — hi-res status-bar ViewPort
+bm_draw: object                     # fmain.c — scratch BitMap pointer for drawing page
+blackcolors: list                   # fmain.c — 32-entry all-black palette
+sun_colors: list                    # fmain2.c:1569-1578 — 53-entry sunrise gradient
+fader: list                         # fmain.c — 32-entry palette scratch buffer
+screen_size: i16                    # fmain.c — playfield height passed to ScreenSize()
 ```
 
 ## 6. Table references

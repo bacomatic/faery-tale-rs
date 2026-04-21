@@ -1,5 +1,5 @@
 # lint_logic.py report
-# targets: 6 file(s)
+# targets: 7 file(s)
 # issues:  0
 
 OK — no issues.
