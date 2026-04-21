@@ -1987,35 +1987,28 @@ impl GameplayScene {
 
     /// T3-CARRY-TURTLE-AUTO: Autonomous turtle movement when unmounted (SPEC §21.3).
     ///
-    /// When the hero is NOT riding the turtle (`riding != 5`) but the turtle carrier is
-    /// active (`wcarry == 3`, `active_carrier == CARRIER_TURTLE`), the turtle drifts on
-    /// its own along water tiles.  Movement is attempted every 4 ticks.
+    /// Runs EVERY tick (`fmain.c:1520-1542`). The turtle:
     ///
-    /// Direction probe order (SPEC §21.3: "tries current direction, then ±1, then −2"):
-    ///   offsets [0, +1, −1, −2] are applied to the turtle's current facing (mod 8).
-    /// The first candidate whose probe points both return terrain code 5 (water) is
-    /// committed.  If no water direction is found the turtle stays still and its facing
-    /// is randomised for the next attempt.
+    /// 1. Probes 4 directions in priority order from current `facing`:
+    ///    `d`, `(d+1)&7`, `(d-1)&7`, `(d-2)&7`. Each probe steps **3 pixels**
+    ///    and commits only when BOTH probe points return terrain type **5**
+    ///    (very deep water). Types 2–4 and all land are impassable.
+    /// 2. **Does not persist facing** on success or failure — the autonomous
+    ///    handler exits via `goto raise` which bypasses the `facing = d` write
+    ///    at `newloc:` (`fmain.c:1545, 1633`). Facing is instead updated every
+    ///    16 ticks by the CARRIER AI path via `set_course(SC_AIM)` aimed at
+    ///    the hero — producing slow hero-seeking drift.
     ///
-    /// # Ambiguities noted
-    /// - **Cadence**: the spec does not state a sub-tick cadence; every-4-ticks is used
-    ///   so the turtle drifts at roughly ¼ of ridden speed.
-    /// - **RNG rate**: no explicit probability given; the turtle always tries to move
-    ///   each cadence tick (deterministic direction search, then pseudo-random re-face).
+    /// Extent drift (original bug, `move_extent` on failed probes): NOT
+    /// reproduced — we simply skip any position update when all probes fail.
     fn update_turtle_autonomous(&mut self) {
         use crate::game::game_state::CARRIER_TURTLE;
         use crate::game::collision::{newx, newy, px_to_terrain_type};
 
-        // Only run when turtle carrier is active and not being ridden.
         if self.state.wcarry != 3
             || self.state.riding == 5
             || self.state.active_carrier != CARRIER_TURTLE
         {
-            return;
-        }
-
-        // Cadence: attempt a move every 4 game ticks (~7.5 times/s at 30 Hz).
-        if self.state.tick_counter % 4 != 0 {
             return;
         }
 
@@ -2024,26 +2017,37 @@ impl GameplayScene {
             return;
         }
 
+        // --- 16-tick hero-seeking facing update (CARRIER AI path,
+        //     set_course mode 5 = SC_AIM: facing only, no state change). ---
+        if self.state.tick_counter % 16 == 0 {
+            let tx = self.state.actors[slot].abs_x as i32;
+            let ty = self.state.actors[slot].abs_y as i32;
+            let hx = self.state.hero_x as i32;
+            let hy = self.state.hero_y as i32;
+            if let Some(dir) = Self::facing_toward(tx, ty, hx, hy) {
+                self.state.actors[slot].facing = dir;
+            }
+        }
+
+        // --- Per-tick water-direction probe. ---
         let turtle_x = self.state.actors[slot].abs_x;
         let turtle_y = self.state.actors[slot].abs_y;
-        let facing   = self.state.actors[slot].facing;
-        let indoor   = self.state.region_num >= 8;
+        let facing = self.state.actors[slot].facing;
+        let indoor = self.state.region_num >= 8;
 
-        // Probe direction offsets (SPEC §21.3): current, +1, -1, -2.
         const DIR_OFFSETS: [i8; 4] = [0, 1, -1, -2];
+        const TURTLE_SPEED: i32 = 3;
 
-        // Determine movement in a borrow-safe block: compute result then apply.
-        let result: Option<(u16, u16, u8)> = if let Some(ref world) = self.map_world {
+        let result: Option<(u16, u16)> = if let Some(ref world) = self.map_world {
             let mut found = None;
             for &off in &DIR_OFFSETS {
                 let probe_dir = facing.wrapping_add(off as u8) & 7;
-                let nx = newx(turtle_x, probe_dir, 2);
-                let ny = newy(turtle_y, probe_dir, 2, indoor);
-                // Require BOTH probe points to be exactly terrain 5 (water-only rule).
+                let nx = newx(turtle_x, probe_dir, TURTLE_SPEED);
+                let ny = newy(turtle_y, probe_dir, TURTLE_SPEED, indoor);
                 let right = px_to_terrain_type(world, nx as i32 + 4, ny as i32 + 2);
-                let left  = px_to_terrain_type(world, nx as i32 - 4, ny as i32 + 2);
+                let left = px_to_terrain_type(world, nx as i32 - 4, ny as i32 + 2);
                 if right == 5 && left == 5 {
-                    found = Some((nx, ny, probe_dir));
+                    found = Some((nx, ny));
                     break;
                 }
             }
@@ -2053,19 +2057,34 @@ impl GameplayScene {
         };
 
         match result {
-            Some((nx, ny, dir)) => {
-                self.state.actors[slot].abs_x  = nx;
-                self.state.actors[slot].abs_y  = ny;
-                self.state.actors[slot].facing = dir;
+            Some((nx, ny)) => {
+                self.state.actors[slot].abs_x = nx;
+                self.state.actors[slot].abs_y = ny;
                 self.state.actors[slot].moving = true;
             }
             None => {
+                // No valid water direction — stay put. Do NOT mutate facing;
+                // that is the CARRIER AI path's job at 16-tick cadence.
                 self.state.actors[slot].moving = false;
-                // Pseudo-random re-face so the turtle tries a new heading next cadence.
-                self.state.actors[slot].facing =
-                    ((self.state.tick_counter >> 3) & 7) as u8;
             }
         }
+    }
+
+    /// Snap the vector from (x0,y0) → (x1,y1) onto one of 8 compass directions.
+    /// Returns `None` if the points coincide. Convention matches `Actor::facing`:
+    /// 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW.
+    fn facing_toward(x0: i32, y0: i32, x1: i32, y1: i32) -> Option<u8> {
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+        // atan2(dx, -dy): north is -y, so angle 0 = up. Then divide into 8 octants.
+        let angle = (dx as f32).atan2(-dy as f32); // radians, (-π, π]
+        let two_pi = std::f32::consts::TAU;
+        let normalized = (angle + two_pi) % two_pi; // [0, 2π)
+        let octant = ((normalized / two_pi) * 8.0 + 0.5).floor() as i32 & 7;
+        Some(octant as u8)
     }
 
     /// Advance all active NPCs by one frame using the AI pipeline.
@@ -7584,47 +7603,34 @@ mod tests_turtle_auto {
         scene
     }
 
-    /// (a) Unmounted turtle moves eventually: over N cadence ticks the position changes.
+    /// (a) Unmounted turtle moves every tick: run a few ticks, position changes.
     ///
-    /// SPEC §21.3: "Autonomous movement (unridden): probes candidate positions with
-    /// px_to_im(), only commits moves where terrain code is exactly 5 (water)."
+    /// SPEC §21.3: "runs every tick; probes 4 directions, commits the first that
+    /// lands on terrain 5 at speed 3."
     #[test]
     fn test_turtle_auto_moves_when_unmounted() {
         let mut scene = turtle_unmounted_scene();
         let initial_x = scene.state.actors[3].abs_x;
         let initial_y = scene.state.actors[3].abs_y;
 
-        // Advance tick_counter to the first cadence boundary (multiple of 4).
-        scene.state.tick_counter = 0;
-
-        // Run enough ticks to guarantee at least one cadence step fires.
-        // Cadence is every 4 ticks; 8 ticks = 2 attempts.
-        for _ in 0..8 {
-            scene.state.tick_counter += 1;
-            scene.update_turtle_autonomous();
-        }
+        // No cadence gate: a single tick should already move the turtle.
+        scene.state.tick_counter = 1;
+        scene.update_turtle_autonomous();
 
         let new_x = scene.state.actors[3].abs_x;
         let new_y = scene.state.actors[3].abs_y;
         assert!(
             new_x != initial_x || new_y != initial_y,
-            "unmounted turtle must move on water: initial ({initial_x},{initial_y}), \
+            "unmounted turtle must move on water each tick: initial ({initial_x},{initial_y}), \
              final ({new_x},{new_y})"
         );
     }
 
     /// (b) Turtle stays on water — probe commits only terrain-5 tiles.
-    ///
-    /// We install a world where only exactly the tiles matching terrain==5 are water.
-    /// Since all_water_world() returns 5 everywhere, every move is valid.
-    /// Verify the committed position still has terrain==5 under the turtle.
     #[test]
     fn test_turtle_stays_on_water_after_move() {
         let mut scene = turtle_unmounted_scene();
-        scene.state.tick_counter = 3; // will fire on tick 4 (0%4==0 is at counter 0, 4, 8...)
-
-        // Fire exactly one cadence step.
-        scene.state.tick_counter = 4;
+        scene.state.tick_counter = 1;
         scene.update_turtle_autonomous();
 
         let tx = scene.state.actors[3].abs_x;
@@ -7641,9 +7647,6 @@ mod tests_turtle_auto {
     }
 
     /// (c) Mounted turtle does NOT auto-move.
-    ///
-    /// SPEC §21.3: autonomous movement is only for the unridden turtle.
-    /// When riding==5 the turtle must remain stationary regardless of cadence.
     #[test]
     fn test_turtle_no_auto_move_when_mounted() {
         let mut scene = turtle_unmounted_scene();
@@ -7652,7 +7655,6 @@ mod tests_turtle_auto {
         let initial_x = scene.state.actors[3].abs_x;
         let initial_y = scene.state.actors[3].abs_y;
 
-        // Drive many cadence ticks.
         for t in 0..32u32 {
             scene.state.tick_counter = t;
             scene.update_turtle_autonomous();
@@ -7668,59 +7670,84 @@ mod tests_turtle_auto {
         );
     }
 
-    /// (d) Cadence gate: update_turtle_autonomous is a no-op on ticks not divisible by 4.
+    /// (d) No cadence gate — SPEC §21.3 clarifies turtle runs every tick.
+    ///     Verify: on non-tick-16 ticks facing is preserved; on tick-16 ticks
+    ///     facing is updated toward the hero.
     #[test]
-    fn test_turtle_cadence_gate() {
+    fn test_turtle_facing_not_modified_between_carrier_ai_ticks() {
         let mut scene = turtle_unmounted_scene();
+        // All-non-water world: probes will fail, so abs_x/abs_y are frozen.
+        scene.map_world = Some(WorldData::empty());
 
-        let initial_x = scene.state.actors[3].abs_x;
-        let initial_y = scene.state.actors[3].abs_y;
+        let initial_facing = scene.state.actors[3].facing;
 
-        // Only test ticks 1, 2, 3 — cadence fires at multiples of 4 (0, 4, 8 ...).
-        for t in [1u32, 2, 3] {
+        // Tick 1..15 — no carrier-AI tick; facing must not change.
+        for t in 1u32..16 {
             scene.state.tick_counter = t;
             scene.update_turtle_autonomous();
         }
-
         assert_eq!(
-            scene.state.actors[3].abs_x, initial_x,
-            "turtle must not move on non-cadence ticks"
-        );
-        assert_eq!(
-            scene.state.actors[3].abs_y, initial_y,
-            "turtle must not move on non-cadence ticks"
+            scene.state.actors[3].facing, initial_facing,
+            "turtle facing must NOT be mutated by the autonomous probe (was {initial_facing})"
         );
     }
 
-    /// (e) When no water direction is found (all non-water world), turtle stays put
-    ///     but re-faces (pseudo-random new heading for next attempt).
+    /// (e) When no water direction is found, turtle does not move AND does not
+    ///     re-randomize facing — the original handler bypasses the `facing = d`
+    ///     write (`fmain.c:1545, 1633`).
     #[test]
-    fn test_turtle_refacing_when_no_water() {
+    fn test_turtle_no_refacing_when_blocked() {
         let mut scene = turtle_unmounted_scene();
-        // Replace world with all-non-water (terrain 0 = passable/land).
-        scene.map_world = Some(WorldData::empty()); // terra_mem all zeros → terrain 0
+        scene.map_world = Some(WorldData::empty()); // all non-water
 
         let initial_x = scene.state.actors[3].abs_x;
         let initial_y = scene.state.actors[3].abs_y;
         let initial_facing = scene.state.actors[3].facing;
 
-        scene.state.tick_counter = 4; // cadence tick
+        // Pick a tick that is NOT a 16-tick boundary so the CARRIER AI path
+        // does not fire — we want to verify the probe handler alone.
+        scene.state.tick_counter = 5;
         scene.update_turtle_autonomous();
 
+        assert_eq!(scene.state.actors[3].abs_x, initial_x, "no move on non-water");
+        assert_eq!(scene.state.actors[3].abs_y, initial_y, "no move on non-water");
         assert_eq!(
-            scene.state.actors[3].abs_x, initial_x,
-            "turtle must not move on non-water"
+            scene.state.actors[3].facing, initial_facing,
+            "facing must be untouched on probe failure (original: goto raise bypasses facing = d)"
         );
+    }
+
+    /// (f) CARRIER AI path: every 16 ticks the turtle re-aims at the hero
+    ///     via the SC_AIM-equivalent hero-seeking update.
+    #[test]
+    fn test_turtle_faces_hero_every_16_ticks() {
+        let mut scene = turtle_unmounted_scene();
+        // Put the hero well to the east of the turtle; facing should snap to 2 (E).
+        scene.state.actors[3].abs_x = 1000;
+        scene.state.actors[3].abs_y = 1000;
+        scene.state.actors[3].facing = 4; // S (wrong direction)
+        scene.state.hero_x = 2000;
+        scene.state.hero_y = 1000;
+        // All non-water so abs_x/y don't change — we only care about facing.
+        scene.map_world = Some(WorldData::empty());
+
+        scene.state.tick_counter = 16;
+        scene.update_turtle_autonomous();
         assert_eq!(
-            scene.state.actors[3].abs_y, initial_y,
-            "turtle must not move on non-water"
+            scene.state.actors[3].facing, 2,
+            "turtle should face E (2) when hero is due east; got {}",
+            scene.state.actors[3].facing
         );
-        // Facing should change to the pseudo-random value derived from tick_counter.
-        let expected_facing = ((scene.state.tick_counter >> 3) & 7) as u8;
+
+        // Hero due north → facing 0.
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 100;
+        scene.state.tick_counter = 32;
+        scene.update_turtle_autonomous();
         assert_eq!(
-            scene.state.actors[3].facing, expected_facing,
-            "turtle should re-face when no water direction available; \
-             initial facing was {initial_facing}"
+            scene.state.actors[3].facing, 0,
+            "turtle should face N (0) when hero is due north; got {}",
+            scene.state.actors[3].facing
         );
     }
 

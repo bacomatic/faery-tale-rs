@@ -207,11 +207,13 @@ Defined at `ftale.h:9-25` (canonical) and duplicated at `fmain.c:90-103`.
 | 18 | *(implicit)* | Oscillation animation 2 (paired with OSCIL) — vestigial, never assigned |
 | 19 | `TALKING` | SETFIG-only: 15-tick image flicker while speech text displays |
 | 20 | `FROZEN` | Frozen in place (freeze spell) |
-| 21 | `FLYING` | Vestigial — defined but never assigned; Swan uses WALKING + `riding` |
+| 21 | `FLYING` | Vestigial — defined but never assigned; swan flight does not use `state==FLYING` |
 | 22 | `FALL` | Falling; velocity-based with 25% friction per tick (`fmain.c:1737-1738`) |
 | 23 | `SLEEP` | Sleeping |
 | 24 | `SHOOT1` | Bow up — aiming |
 | 25 | `SHOOT3` | Bow fired, arrow given velocity |
+
+`FLYING` is a dead enum value in the shipped code: no assignment site uses it. The swan/bird carrier instead uses `type == CARRIER`, `actor_file == 11`, and `riding == 11`. The hero remains in normal WALKING/STILL logic with `environ = -2` forcing inertial movement (`fmain.c:1464`, `fmain.c:1581-1596`), while the swan sprite image is selected directly from facing (`dex = d`, `fmain.c:1507`) rather than from the motion-state table.
 
 ### 2.2 Goal Modes
 
@@ -1866,6 +1868,57 @@ an->weapon = weapon_probs[w];
 | 10 | Dragon | DRAGON | Has its own fireball attack logic |
 
 Carrier extent position: set to a 500×400 box centered on a point via `move_extent()` at `fmain2.c:1560-1566`.
+
+##### Swan State / Sprite Model (`fmain.c:1497-1510`, `fmain.c:1581-1596`, `fmain.c:2463-2464`)
+
+The swan is **not** driven by the global motion-state enum in the way a reader might expect:
+
+- `FLYING` (21) is never assigned anywhere.
+- `load_carrier(11)` initializes the carrier slot to `state = STILL` (`fmain.c:2798`).
+- The carrier update branch ignores `an->state` for the swan and uses `actor_file == 11` as the discriminator (`fmain.c:1497`).
+- When mounted, the code sets `riding = 11`, snaps the swan position to the hero, and selects the swan image with `dex = d`, where `d` is facing 0-7 (`fmain.c:1498-1507`). This gives exactly 8 directional swan frames, with no walk/fly cycle.
+- When not mounted, the swan simply holds position (`xtest = an->abs_x; ytest = an->abs_y`, `fmain.c:1504-1506`).
+- While mounted, the **hero** uses WALKING-state inertial movement with `environ = -2`; this is the actual flight implementation (`fmain.c:1464`, `fmain.c:1581-1596`).
+- When grounded and not ridden, rendering special-cases the swan to use the RAFT sheet with `inum = 1` instead of the carrier sheet (`fmain.c:2463-2464`).
+
+Implementation consequence: the swan's visible "states" are really a carrier-type special case, not entries in the actor state machine. For implementation purposes, model it as:
+
+| Swan Situation | Governing Flags / State | Sprite Selection |
+|----------------|-------------------------|------------------|
+| Grounded, idle | `type=CARRIER`, `actor_file=11`, `riding=0`, slot state typically `STILL` | Rendered as RAFT image 1 (`fmain.c:2463-2464`) |
+| Mounted / flying | `type=CARRIER`, `actor_file=11`, `riding=11`; hero uses WALKING + `environ=-2` | Carrier image index = facing 0-7 (`fmain.c:1507`) |
+| Dismount attempt | `riding==11` plus velocity / landing checks | No separate swan state; either stay mounted or drop to grounded case (`fmain.c:1417-1427`) |
+
+##### Raft State / Sprite Model (`fmain.c:1562-1574`, `fmain2.c:643-648`)
+
+The raft is a purely passive sprite that never animates:
+
+- `cfiles[4]`: width=2, height=32, **count=2**, `seq_num=RAFT`, file\_id=1348 — only 2 images in the sheet.
+- The RAFT handler (`fmain.c:1562`) does `goto statc`, skipping the `an->index = dex` write at raise. `an->index` stays at 0 (set by `load_carrier` init at `fmain.c:2797`) forever. **Frame 0 is the only raft image used.**
+- Frame 1 in the same RAFT sheet is the grounded-swan image; it is only accessed via the render override `atype = RAFT; inum = 1` (`fmain.c:2463-2464`). The raft itself has no use for frame 1.
+- Mount condition (`fmain.c:1562-1574`): `wcarry==1` (no active\_carrier), `raftprox==2` (within 9px of hero), and destination terrain is 3–5 (water/shore). When all three hold, raft snaps to hero position and `riding = 1`.
+- Screen offset: −16/−16 (as established at `fmain.c:1857`).
+
+| Raft Situation | Governing Flags | Sprite Selection |
+|----------------|-----------------|------------------|
+| On water near hero | `type=RAFT`, `wcarry==1`, `raftprox==2`, terrain 3–5 | RAFT image 0 — static, no animation (`fmain.c:2797`) |
+| Out of range / wrong terrain | same `type=RAFT`, conditions false | `goto statc`, `riding=0`; sprite still image 0 but not drawn over hero |
+
+##### Turtle State / Sprite Model (`fmain.c:1511-1545`)
+
+The turtle has 16 frames (8 directions × 2-frame walk cycle): `cfiles[5]`: width=2, height=32, count=16, `seq_num=CARRIER`, file\_id=1351.
+
+Unlike the raft, the turtle handler exits via `goto raise` → `an->index = dex` is written every tick.
+
+- **Mounted** (`fmain.c:1511-1519`): Conditions: `raftprox && wcarry==3`. Sets `dex = d*2`; adds `cycle&1` only if the hero is in WALKING state (`fmain.c:1518`). So when the hero stands still, the turtle holds the first frame of its current direction; when the hero walks, the two-frame cycle runs.
+- **Autonomous** (`fmain.c:1520-1542`): `dex = d+d+(cycle&1)` — always animates 2-frame cycle regardless of movement.
+- Screen offset: −16/−16, same as the raft (`fmain.c:1857`).
+
+| Turtle Situation | Governing Flags | Sprite Selection |
+|------------------|-----------------|------------------|
+| Mounted, hero still | `riding=5`, hero `state!=WALKING` | `dex = facing*2` (frame 0 of current direction) |
+| Mounted, hero walking | `riding=5`, hero `state==WALKING` | `dex = facing*2 + (cycle&1)` — 2-frame cycle |
+| Autonomous (not mounted) | `riding=0`, autonomous handler | `dex = facing*2 + (cycle&1)` — always cycles |
 
 ##### Turtle Autonomous Movement (`fmain.c:1520-1542`)
 
