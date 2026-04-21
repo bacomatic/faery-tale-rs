@@ -50,11 +50,18 @@ GOAL_FOLLOWER  = 9
 GOAL_CONFUSED  = 10
 ```
 
-### 2.3 Motion states (`ftale.h:9-20`, `fmain.c:88-103`)
+### 2.3 Motion states (`ftale.h:10-23`, `fmain.c:90-103`)
 
 ```pseudo
 # Partial — additional states populated in Wave 3 (see spec §6.4).
-STATE_DEAD = 15             # ftale.h:14
+STATE_FIGHTING = 0          # ftale.h:12
+STATE_WALKING  = 12         # ftale.h:10
+STATE_STILL    = 13         # ftale.h:11
+STATE_DYING    = 14         # ftale.h:13
+STATE_DEAD     = 15         # ftale.h:14
+STATE_FALL     = 22         # ftale.h:20
+STATE_SHOOT1   = 24         # ftale.h:22 — bow up / aiming
+STATE_SHOOT3   = 25         # ftale.h:23 — bow fired, arrow given velocity
 ```
 
 ### 2.4 Menu modes (`fmain.c:494`)
@@ -70,6 +77,35 @@ CMODE_KEYS  = 6
 CMODE_GIVE  = 7
 CMODE_USE   = 8
 CMODE_FILE  = 9
+```
+
+### 2.5 Tactical modes (`fmain.c:122-132`, `ftale.h:39-50`)
+
+```pseudo
+TACTIC_FRUST       = 0      # fmain.c:122 — all tactics frustrated, pick something else
+TACTIC_PURSUE      = 1      # fmain.c:123
+TACTIC_FOLLOW      = 2      # fmain.c:124
+TACTIC_BUMBLE_SEEK = 3      # fmain.c:125
+TACTIC_RANDOM      = 4      # fmain.c:126
+TACTIC_BACKUP      = 5      # fmain.c:127
+TACTIC_EVADE       = 6      # fmain.c:128
+TACTIC_HIDE        = 7      # fmain.c:129
+TACTIC_SHOOT       = 8      # fmain.c:130
+TACTIC_SHOOTFRUST  = 9      # fmain.c:131
+TACTIC_EGG_SEEK    = 10     # fmain.c:132 — snakes seeking turtle eggs
+```
+
+### 2.6 Actor/sequence types (`ftale.h:88`)
+
+```pseudo
+# enum sequences { PHIL, OBJECTS, ENEMY, RAFT, SETFIG, CARRIER, DRAGON };
+PHIL    = 0
+OBJECTS = 1
+ENEMY   = 2
+RAFT    = 3
+SETFIG  = 4
+CARRIER = 5
+DRAGON  = 6
 ```
 
 ## 3. Bitfield flags
@@ -144,6 +180,15 @@ keyfight: bool                      # fmain.c:1291 — '0' held-down fight-mode 
 viewstatus: i8                      # fmain.c:584 — 0 = normal playfield; nonzero = transient full-screen (map, inventory, placard)
 cheat1: bool                        # fmain.c:558 — debug cheat enable
 handler_data: object                # fmain.c — input-handler shared state; .lastmenu, .qualifier, .pickup, .laydown
+hero_x: u16                         # fmain.c:558 — hero world X (shorthand for anim_list[0].abs_x)
+hero_y: u16                         # fmain.c:558 — hero world Y
+daynight: u16                       # fmain.c:572 — free-running tick counter; low bits drive periodic checks
+battleflag: bool                    # fmain.c:588 — at least one hostile is on-screen this tick
+actors_on_screen: bool              # fmain.c:585 — any non-hero actor within ±300 px of hero this tick
+xtype: u16                          # fmain.c:575 — current extent's encounter type (0 = normal; >59 = special)
+extn: object                        # fmain.c:338 — pointer to the currently-active extent_list[] entry; .v3 = race filter
+turtle_eggs: bool                   # fmain.c:134 — turtle-eggs-delivered flag
+encounter_chart: list               # fmain.c:52 — TABLE:encounter_chart; row per race with .arms .cleverness .hitpoints .treasure .file_id
 ```
 
 ## 6. Table references

@@ -216,3 +216,22 @@ Instead of the current unconditional `move_extent(e,xtest,ytest)` after the posi
 
 
 
+
+### P23. AI clever/stupid bit test misaligns with cleverness column
+
+**Source**: `fmain.c:2148`, `fmain.c:2761-2762`, `ftale.h:28-31`
+
+**Description**: The AI re-plan frequency for hostile actors hinges on `(mode & 2) == 0`: mode values with bit 1 clear re-plan their tactic at a 1/4 per-tick rate, while bit-1-set modes re-plan at 1/16. This divides the four hostile goals as follows:
+
+| Goal | Value | `& 2` | Re-plan rate |
+|------|-------|-------|--------------|
+| `ATTACK1` | 1 | 0 | 1/4 |
+| `ATTACK2` | 2 | 2 | 1/16 |
+| `ARCHER1` | 3 | 2 | 1/16 |
+| `ARCHER2` | 4 | 0 | 1/4 |
+
+The spawn code at `fmain.c:2761-2762` selects between the stupid/clever pair via `ATTACK1 + encounter_chart[race].cleverness` (and equivalently for `ARCHER1`). So a cleverness of 1 produces `ATTACK2` (clever, rare re-plan) for melee — consistent — but `ARCHER2` (clever, frequent re-plan) for bow-wielders — the opposite cadence. The `ARCHER2` branch thus re-plans as often as `ATTACK1`, not as rarely as `ATTACK2`, despite the "clever" label.
+
+**Impact**: Clever archers (cleverness=1 race with a bow) visually dither more than their melee counterparts. Whether intentional (a design quirk where archery's higher variance compensates) or an off-by-one (e.g. the mask should have been `& 1`) cannot be determined from source alone.
+
+**Investigation needed**: Review by someone familiar with MicroIllusions/Talin design notes. If no record exists, this is likely observable in-game by comparing re-target cadence of clever melee vs. clever archer monsters of the same race.
