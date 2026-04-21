@@ -17,6 +17,69 @@ Changes to this file are orchestrator-reviewed. Append-mostly.
 MAXSHAPES = 25              # fmain.c:68 — render queue size (not actor array size)
 MAX_ACTORS = 20             # fmain.c:70 — anim_list[] length
 MAX_MONSTERS = 7            # fmain.c:2064 — concurrent hostile cap
+
+# Weapon codes (fmain.c:77 comment, fmain2.c:231-246, fmain.c:2245-2246)
+WEAPON_NONE        = 0
+WEAPON_DIRK        = 1
+WEAPON_MACE        = 2
+WEAPON_SWORD       = 3
+WEAPON_BOW         = 4
+WEAPON_WAND        = 5
+WEAPON_TOUCH       = 8      # fmain.c:2245 — monster-only, clamped to 5 for reach/damage
+WEAPON_RANGED_BIT  = bit(2) # fmain.c:2244 — set for bow (4) and wand (5)
+
+# Combat constants
+DYING_FRAMES        = 7     # fmain.c:2773 — tactic countdown set on STATE_DYING
+MISSILE_MAX_FLIGHT  = 40    # fmain.c:2274 — max ticks before a missile self-expires
+ARROW_HIT_RADIUS    = 6     # fmain.c:2279
+FIREBALL_HIT_RADIUS = 9     # fmain.c:2280
+MONSTER_DODGE_FLOOR = 20    # fmain.c:2283 — missile dodge for non-hero targets
+NEAR_MISS_MARGIN    = 2     # fmain.c:2262 — extra px band that triggers the clang
+HERO_REACH_BASE     = 5     # fmain.c:2249
+BRAVE_PER_REACH     = 20    # fmain.c:2249
+REACH_SOFT_CAP      = 14    # fmain.c:2250
+REACH_HARD_CEILING  = 15    # fmain.c:2250
+
+# Stat deltas (aftermath / death)
+LUCK_PER_DEATH           = 5   # fmain.c:2777
+KIND_PER_NPC_KILL        = 3   # fmain.c:2775
+AFTERMATH_BRAVELY_THRESH = 5   # fmain2.c:263
+SPECIAL_XTYPE_FLOOR      = 50  # fmain2.c:264
+
+# dohit source-channel markers (passed as i)
+DOHIT_SOURCE_ARROW    = -1   # fmain2.c:238
+DOHIT_SOURCE_FIREBALL = -2   # fmain2.c:239
+
+# checkdead dtype codes — narr.asm message-table indices
+DTYPE_HIT_AND_KILLED = 5   # fmain2.c:246 / narr.asm:16
+DTYPE_DROWNED        = 6
+DTYPE_BURNED         = 7
+DTYPE_STONED         = 8
+
+# Missile-type enum (struct missile.missile_type)
+MISSILE_INACTIVE = 0
+MISSILE_ARROW    = 1
+MISSILE_FIREBALL = 2
+MISSILE_SPENT    = 3   # fmain.c:2295 — fireball puff frame
+
+# stuff[] slot indices (inventory / quest flags)
+STUFF_SUNSTONE = 7   # fmain2.c:233 — zero means no Sunstone
+STUFF_FOOD     = 24  # fmain.c:2221 — food ration slot (auto-eat in safe zone)
+
+# sample[] indices passed to effect(sample, pitch) — fmain.c:3616
+SFX_PLAYER_HIT   = 0   # fmain2.c:240
+SFX_NEAR_MISS    = 1   # fmain.c:2262
+SFX_ARROW_HIT    = 2   # fmain2.c:238
+SFX_MONSTER_HIT  = 3   # fmain2.c:241
+SFX_BOW_RELEASE  = 4   # (fired by shoot_step)
+SFX_FIREBALL_HIT = 5   # fmain2.c:239
+
+# Door-type enum subset (fmain.c doorlist)
+DOOR_CAVE   = 4
+DOOR_DESERT = 6
+
+# Region / stat offsets
+STATBASE = 16   # fmain2.c:1602 — first 6 stats live at stuff[STATBASE..STATBASE+5]
 ```
 
 ## 2. Enums
@@ -53,13 +116,18 @@ GOAL_CONFUSED  = 10
 ### 2.3 Motion states (`ftale.h:10-23`, `fmain.c:90-103`)
 
 ```pseudo
-# Partial — additional states populated in Wave 3 (see spec §6.4).
 STATE_FIGHTING = 0          # ftale.h:12
 STATE_WALKING  = 12         # ftale.h:10
 STATE_STILL    = 13         # ftale.h:11
 STATE_DYING    = 14         # ftale.h:13
 STATE_DEAD     = 15         # ftale.h:14
+STATE_SINK     = 16         # ftale.h:15
+STATE_OSCIL    = 17         # ftale.h:16 — also 18
+STATE_TALKING  = 19         # ftale.h:18
+STATE_FROZEN   = 20         # ftale.h:19
+STATE_FLYING   = 21         # ftale.h:20
 STATE_FALL     = 22         # ftale.h:20
+STATE_SLEEP    = 23         # ftale.h:21
 STATE_SHOOT1   = 24         # ftale.h:22 — bow up / aiming
 STATE_SHOOT3   = 25         # ftale.h:23 — bow fired, arrow given velocity
 ```
@@ -106,6 +174,30 @@ RAFT    = 3
 SETFIG  = 4
 CARRIER = 5
 DRAGON  = 6
+```
+
+### 2.7 Monster & setfig race codes (`fmain.c:51-62`, `fmain.c:35-36`)
+
+```pseudo
+# ENEMY races — indices into encounter_chart[]
+RACE_OGRE        = 0
+RACE_ORCS        = 1
+RACE_WRAITH      = 2
+RACE_SKELETON    = 3
+RACE_SNAKE       = 4
+RACE_SALAMANDER  = 5
+RACE_SPIDER      = 6
+RACE_DKNIGHT     = 7
+RACE_LORAII      = 8
+RACE_NECROMANCER = 9
+RACE_WOODCUTTER  = 10
+
+# SETFIG races (bit 7 set; index into setfig_table)
+RACE_WITCH       = 0x89
+RACE_SPECTRE     = 0x8a
+RACE_GHOST       = 0x8b
+RACE_PRINCESS    = 0x84
+RACE_BEGGAR      = 0x8d
 ```
 
 ## 3. Bitfield flags
@@ -191,6 +283,21 @@ turtle_eggs: bool                   # fmain.c:134 — turtle-eggs-delivered flag
 encounter_chart: list               # fmain.c:52 — TABLE:encounter_chart; row per race with .arms .cleverness .hitpoints .treasure .file_id
 nearest_person: i16                 # fmain.c — index into anim_list of the closest live actor within 50 px of hero (0 = none)
 goodfairy: u8                       # fmain.c:592 — fairy resurrection counter; 1 = immediate revive, <120 shows fairy sprite
+brave: i16                          # fmain.c — hero bravery; +1 per kill (checkdead)
+luck: i16                           # fmain.c — hero luck; -5 per player death
+kind: i16                           # fmain.c — hero kindness; -3 per SETFIG/NPC kill
+stuff: list[u8]                     # fmain.c — inventory / quest-item counters; indexed by STUFF_* and inv_list slots
+freeze_timer: i16                   # fmain.c:577 — time-stop remaining ticks; nonzero freezes all but hero
+missile_list: list                  # fmain.c:2270 — missile[0..5]; fields: missile_type, speed, direction, archer, abs_x, abs_y, time_of_flight
+sample: list                        # fmain.c:3616 — SFX buffer indexed by SFX_*
+encounter_number: i16               # fmain.c — pending-encounter counter
+actors_loading: bool                # fmain.c — async enemy-load in progress
+active_carrier: i16                 # fmain.c:574 — non-zero if any carrier actor is active
+region_num: u16                     # fmain.c:614 — currently loaded region (0..9)
+last_person: i16                    # fmain.c — last greeted NPC race (for proximity narration)
+hunger: i16                         # fmain.c:565 — 0..~150, climbs every 128 daynight ticks
+ob_list8: list                      # fmain.c — inside-region object list (ob_table[8])
+witchflag: bool                     # fmain.c:591 — witch is active
 ```
 
 ## 6. Table references

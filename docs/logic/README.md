@@ -44,5 +44,11 @@ Every documented function appears here with a link to its canonical definition. 
 | `missile_tick` | [game-loop.md#missile_tick](game-loop.md#missile_tick) | Phase 16: age + advance in-flight missiles |
 | `sort_sprites` | [game-loop.md#sort_sprites](game-loop.md#sort_sprites) | Phase 19: bubble-sort anim_index by Y + nearest-person |
 | `render_sprites` | [game-loop.md#render_sprites](game-loop.md#render_sprites) | Phase 22: body + weapon blits with terrain mask |
+| `dohit` | [combat.md#dohit](combat.md#dohit) | Apply damage with immunity / SFX / knockback / death roll |
+| `melee_swing` | [combat.md#melee_swing](combat.md#melee_swing) | Per-attacker body: reach, Chebyshev target match, near-miss |
+| `missile_step` | [combat.md#missile_step](combat.md#missile_step) | Per-missile body: age, terrain, victim scan, advance |
+| `checkdead` | [combat.md#checkdead](combat.md#checkdead) | Vitality → STATE_DYING transition + stat bookkeeping |
+| `aftermath` | [combat.md#aftermath](combat.md#aftermath) | Post-battle recap: dead vs fled tally, turtle-egg trigger |
+| `move_figure` | [combat.md#move_figure](combat.md#move_figure) | Displace actor by (dir, dist) if proxcheck clears |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
