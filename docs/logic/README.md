@@ -89,5 +89,15 @@ Every documented function appears here with a link to its canonical definition. 
 | `buy_dispatch` | [shops.md#buy_dispatch](shops.md#buy_dispatch) | CMODE_BUY case: bartender-gated `jtrans` row lookup, gold check, food/arrow/stuff side effect |
 | `revive` | [brother-succession.md#revive](brother-succession.md#revive) | Start / restart active brother: place bones + ghost, load next `blist[]` stats, teleport to Tambry, placards, or fairy-rescue the current brother |
 | `pickup_brother_bones` | [brother-succession.md#pickup_brother_bones](brother-succession.md#pickup_brother_bones) | Merge a dead brother's item inventory into the current brother's on bones pickup; retire both ghost set-figures |
+| `fade_page` | [visual-effects.md#fade_page](visual-effects.md#fade_page) | Scale 32-entry palette by (r,g,b) weights with night floors, torch tint, sky/water blue boost |
+| `colorplay` | [visual-effects.md#colorplay](visual-effects.md#colorplay) | 32-frame random-palette strobe used at teleport events |
+| `fade_down` | [visual-effects.md#fade_down](visual-effects.md#fade_down) | Ramp pagecolors from 100% to 0% brightness over 21 frames |
+| `fade_normal` | [visual-effects.md#fade_normal](visual-effects.md#fade_normal) | Ramp pagecolors from 0% to 100% brightness over 21 frames |
+| `map_message` | [visual-effects.md#map_message](visual-effects.md#map_message) | Enter full-screen placard mode: fade out, retarget rp to map RastPort, hide text VP |
+| `message_off` | [visual-effects.md#message_off](visual-effects.md#message_off) | Leave full-screen placard mode: fade out, reattach rp to text VP, queue a fade-in |
+| `copypage` | [visual-effects.md#copypage](visual-effects.md#copypage) | Intro page: hold, blit pageb→pagea, unpack next brush pair into pageb, flipscan |
+| `flipscan` | [visual-effects.md#flipscan](visual-effects.md#flipscan) | 22-frame columnar wipe between pagea and pageb using flip1/flip2/flip3 tables |
+| `screen_size` | [visual-effects.md#screen_size](visual-effects.md#screen_size) | Resize playfield viewport to 2x×2y; sync palette brightness via fade_page |
+| `win_colors` | [visual-effects.md#win_colors](visual-effects.md#win_colors) | Victory placard + winpic + 55-frame sunrise walk of sun_colors[] |
 
 *(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
