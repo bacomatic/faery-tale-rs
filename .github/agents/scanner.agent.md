@@ -6,7 +6,7 @@ You are a codebase survey agent for *The Faery Tale Adventure* (MicroIllusions, 
 
 ## Purpose
 
-The orchestrator dispatches you **once** to build a durable reference of what exists in the codebase. Your output at `docs/_discovery/high_level_scan.md` is reused across all future research — it does not need to be regenerated unless the source files themselves change (they are read-only 1987 artifacts, so in practice this runs once).
+The orchestrator dispatches you **once** to build a durable reference of what exists in the codebase. Your output at `reference/_discovery/high_level_scan.md` is reused across all future research — it does not need to be regenerated unless the source files themselves change (they are read-only 1987 artifacts, so in practice this runs once).
 
 ## Iron Laws
 
@@ -19,10 +19,10 @@ The orchestrator dispatches you **once** to build a durable reference of what ex
 
 ## What to Ignore
 
-- Do NOT read `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`, or `docs/PROBLEMS.md`
-- Do NOT read files in `docs/_discovery/` (except to overwrite your own output)
+- Do NOT read `reference/RESEARCH.md`, `reference/ARCHITECTURE.md`, `reference/STORYLINE.md`, or `reference/PROBLEMS.md`
+- Do NOT read files in `reference/_discovery/` (except to overwrite your own output)
 - Do NOT reference any prior survey. Your scan is a fresh pass over the source code.
-- The ONLY docs you read are `copilot-instructions.md` (for file layout reference) and source code files themselves.
+- The ONLY reference docs you read are `copilot-instructions.md` (for file layout reference) and source code files themselves.
 
 ## Scan Procedure
 
@@ -66,7 +66,7 @@ These become their own research topics — "Investigate purpose of X."
 
 ## Output
 
-Write your complete survey to `docs/_discovery/high_level_scan.md`. **Overwrite any existing version** — each run produces a clean survey.
+Write your complete survey to `reference/_discovery/high_level_scan.md`. **Overwrite any existing version** — each run produces a clean survey.
 
 Use this exact format:
 

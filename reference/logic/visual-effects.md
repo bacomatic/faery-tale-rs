@@ -16,7 +16,7 @@ Two specialised routines close the system. [`map_message`](#map_message) and [`m
 Related effects documented elsewhere:
 - The end-game sunrise after the victory placard is `end_game_sequence` in [quests.md#end_game_sequence](quests.md#end_game_sequence); it wraps [`win_colors`](#win_colors).
 - Brother-succession placards (death + next-brother-set-out text) are in [brother-succession.md#revive](brother-succession.md#revive).
-- The witch beam (XOR polygon, `witch_fx`) is a per-tick rendering effect and lives with combat drawing; it is not re-documented here. See `docs/_discovery/visual-effects.md` for the trace.
+- The witch beam (XOR polygon, `witch_fx`) is a per-tick rendering effect and lives with combat drawing; it is not re-documented here. See `reference/_discovery/visual-effects.md` for the trace.
 
 ## Symbols
 
@@ -389,7 +389,7 @@ Several short routines are not given their own entries because each is ≤3 line
 - **Flasher border blink** — `fmain.c:1368-1370`. Not a function; in the main loop's `viewstatus == 1` branch, `SetRGB4(vp_page, 31, 15, 15, 15)` or `(0,0,0)` is called on alternating 16-tick intervals using `flasher & 16`, blinking color 31 (the dialogue cursor / prompt highlight).
 - **`xfer()` viewstatus = 99** — `fmain.c:2625-2645`. Not a visual effect per se, but the teleport entry point sets `viewstatus = 99` to force a full redraw and recolor on the next tick. Included here because `colorplay()` is often scheduled alongside it.
 - **Unlinked assembly duplicates** — `fsupp.asm:1-26` (`_colorplay`), `fsupp.asm:27-34` (`_stillscreen`), `fsupp.asm:36-42` (`_skipint`). The makefile does **not** assemble or link `fsupp.asm`; the live versions are the C ones in `fmain2.c`. Porters should ignore these.
-- **Witch beam XOR rendering** (`witch_fx`, `fmain2.c:917-965`) is a combat-layer per-tick renderer, not a cinematic transition. See `docs/_discovery/visual-effects.md` for the full trace; it will be documented with combat drawing in a future wave.
+- **Witch beam XOR rendering** (`witch_fx`, `fmain2.c:917-965`) is a combat-layer per-tick renderer, not a cinematic transition. See `reference/_discovery/visual-effects.md` for the full trace; it will be documented with combat drawing in a future wave.
 
 ### Night/day palette coupling
 

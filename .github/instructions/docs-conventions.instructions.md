@@ -1,6 +1,6 @@
 ---
 description: "Use when editing documentation files — enforces source citation format, section numbering, cross-references, and single-source-of-truth rules for RESEARCH.md"
-applyTo: "docs/**"
+applyTo: "reference/**"
 ---
 # Documentation Conventions
 
@@ -16,7 +16,7 @@ applyTo: "docs/**"
 
 ## Cross-References
 
-- Between docs: `[STORYLINE.md §5](STORYLINE.md#5-npc-dialogue-trees)`
+- Between reference docs: `[STORYLINE.md §5](STORYLINE.md#5-npc-dialogue-trees)`
 - To sections within RESEARCH.md: `[§6 Inventory](RESEARCH.md#6-inventory--items)`
 - Diagrams use Mermaid syntax (flowcharts, state diagrams, sequence diagrams)
 
@@ -26,7 +26,7 @@ RESEARCH.md is the single source of truth for game mechanics documentation. Edit
 
 ## Open Problems
 
-When something cannot be determined from source code alone (magic numbers, platform-dependent behavior, gameplay intent vs. bugs), log it in `docs/PROBLEMS.md` using the entry template. Never guess or infer — file a problem for expert review.
+When something cannot be determined from source code alone (magic numbers, platform-dependent behavior, gameplay intent vs. bugs), log it in `reference/PROBLEMS.md` using the entry template. Never guess or infer — file a problem for expert review.
 
 ## Experiment Results
 

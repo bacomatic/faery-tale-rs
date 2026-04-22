@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract quest-related data from source code into docs/quest_db.json.
+"""Extract quest-related data from source code into reference/quest_db.json.
 
 Builds a structured database of all narrative/quest data:
 - NPCs (setfig_table + dialogue routing + world locations)
@@ -17,7 +17,7 @@ Data is extracted from hardcoded source tables (same approach as
 decode_map_data.py) since the original 1987 source cannot be compiled.
 
 Usage:
-    python tools/extract_quest_data.py                # writes docs/quest_db.json
+    python tools/extract_quest_data.py                # writes reference/quest_db.json
     python tools/extract_quest_data.py --pretty       # pretty-printed output
     python tools/extract_quest_data.py --validate     # cross-check with world_db
 """
@@ -792,9 +792,9 @@ def build_quest_db():
 
 def validate_with_world_db(quest_db):
     """Cross-check quest_db against world_db.json for consistency."""
-    world_db_path = os.path.join(REPO_ROOT, "docs", "world_db.json")
+    world_db_path = os.path.join(REPO_ROOT, "reference", "world_db.json")
     if not os.path.exists(world_db_path):
-        print("WARNING: docs/world_db.json not found, skipping validation")
+        print("WARNING: reference/world_db.json not found, skipping validation")
         return []
 
     with open(world_db_path) as f:
@@ -834,7 +834,7 @@ def validate_with_world_db(quest_db):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract quest data into docs/quest_db.json")
+    parser = argparse.ArgumentParser(description="Extract quest data into reference/quest_db.json")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     parser.add_argument("--validate", action="store_true", help="Cross-check with world_db.json")
     parser.add_argument("--stdout", action="store_true", help="Print to stdout instead of file")
@@ -859,7 +859,7 @@ def main():
     if args.stdout:
         print(json_str)
     else:
-        output_path = os.path.join(REPO_ROOT, "docs", "quest_db.json")
+        output_path = os.path.join(REPO_ROOT, "reference", "quest_db.json")
         with open(output_path, "w") as f:
             f.write(json_str)
             f.write("\n")

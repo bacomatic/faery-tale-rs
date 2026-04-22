@@ -1,6 +1,6 @@
 # Logic Documentation — Index
 
-This directory contains strict, linter-backed pseudo-code specifications for every non-trivial branching function in *The Faery Tale Adventure*. Combined with [ARCHITECTURE.md](../ARCHITECTURE.md), [RESEARCH.md](../RESEARCH.md), [STORYLINE.md](../STORYLINE.md), and the spatial/quest JSON databases, these docs are sufficient to reproduce the game's behavior without reading the 1987 source.
+This directory contains strict, linter-backed pseudo-code specifications for every non-trivial branching function in *The Faery Tale Adventure*. Combined with [ARCHITECTURE.md](../ARCHITECTURE.md), [RESEARCH.md](../RESEARCH.md), [STORYLINE.md](../STORYLINE.md), and the spatial/quest JSON databases, these reference docs are sufficient to reproduce the game's behavior without reading the 1987 source.
 
 **Fidelity target:** behavioral. Same inputs produce the same observable gameplay. Implementation primitives (RNG algorithm, integer widths when not observable, fixed-point layout) are left to the porter.
 
@@ -20,7 +20,7 @@ tools/run.sh lint_logic.py
 1. [STYLE.md](STYLE.md) — learn the grammar.
 2. [SYMBOLS.md](SYMBOLS.md) — skim the registry.
 3. `game-loop.md` *(Wave 2)* — the canonical per-frame sequence.
-4. Subsystem docs in order of gameplay centrality (Wave 3+): combat → movement → encounters → quests → npc-dialogue → save-load → shops → brother-succession → visual-effects.
+4. Subsystem reference docs in order of gameplay centrality (Wave 3+): combat → movement → encounters → quests → npc-dialogue → save-load → shops → brother-succession → visual-effects.
 
 ---
 
@@ -139,4 +139,4 @@ Every documented function appears here with a link to its canonical definition. 
 | `prox` | [terrain-collision.md#prox](terrain-collision.md#prox) | fsubs.asm:1590-1614 — two-probe collision: right ≥10 / left ≥8 thresholds |
 | `mapxy` | [terrain-collision.md#mapxy](terrain-collision.md#mapxy) | fsubs.asm:1085-1130 — image-tile coord → sector_mem byte offset (doorfind uses for tile rewrite) |
 
-*(Rows are appended as new logic docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*
+*(Rows are appended as new logic reference docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

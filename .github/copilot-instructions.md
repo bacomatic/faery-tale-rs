@@ -14,12 +14,12 @@ Agents may only read source files to verify or extract information for documenta
 
 ```
 (root)              Original source code (Aztec C + 68000 assembly) — READ ONLY
-docs/
+reference/
   ARCHITECTURE.md   System architecture overview, Mermaid diagrams, display geometry
   RESEARCH.md       Comprehensive mechanics reference (20 numbered sections)
   STORYLINE.md      Quest flows and NPC interactions as Mermaid state diagrams
   world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
-  _discovery/       Raw findings from discovery agents — working notes, not final docs
+  _discovery/       Raw findings from discovery agents — working notes, not final reference docs
   superpowers/      Plans and specs for the reverse-engineering project itself
 game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
 ToArchive/          Original distribution package — READ ONLY
@@ -34,11 +34,11 @@ Documentation is three-tiered:
 3. **STORYLINE.md** — Narrative layer: quest progression, NPC dialogue trees, event sequences as Mermaid diagrams
 4. **PROBLEMS.md** — Open questions that cannot be answered from source code alone, awaiting expert input
 5. **world_db.json** — Pre-computed spatial database cross-referencing all location-dependent game data (see [Spatial Database](#spatial-database) below)
-6. **docs/logic/\*\*.md** — Normative pseudo-code specifications for every non-trivial branching function. The source of truth for porters.
+6. **reference/logic/\*\*.md** — Normative pseudo-code specifications for every non-trivial branching function. The source of truth for porters.
 
 ## Spatial Database
 
-`docs/world_db.json` is a machine-readable spatial index generated from the game's binary map data and hardcoded source tables. **Discovery agents must consult this file when investigating any location-dependent mechanic** — doors, encounters, quest triggers, object placement, terrain features, or reachability questions.
+`reference/world_db.json` is a machine-readable spatial index generated from the game's binary map data and hardcoded source tables. **Discovery agents must consult this file when investigating any location-dependent mechanic** — doors, encounters, quest triggers, object placement, terrain features, or reachability questions.
 
 The database contains:
 - **objects** (129): Every world object with pixel coords, region, sector, grid position, type, and place name
@@ -60,26 +60,26 @@ Subagents **cannot dispatch other subagents**. All agents are dispatched directl
 Orchestrator (top-level agent or user)
   ├── scanner      (one-time broad survey → _discovery/high_level_scan.md)
   ├── discovery    (traces code paths, writes to _discovery/)
-  ├── researcher   (reviews discovery files, writes final docs)
+  ├── researcher   (reviews discovery files, writes final reference docs)
   └── experimenter (writes/runs verification scripts under tools/)
 ```
 
 ### Agent Roles
 
-- **Orchestrator** reads existing docs and discovery files, decomposes topics, dispatches agents one at a time, and reviews all output. It does NOT read source code in detail or do systematic exploration.
-- **Scanner Agent** performs a broad, shallow scan of all source files and writes a structured topic inventory to `docs/_discovery/high_level_scan.md`. It runs **once** — the output is a durable reference as long as the source code hasn't changed. It does NOT trace mechanics or write final documentation.
-- **Discovery Agent** traces mechanics across source files and writes raw findings to `docs/_discovery/`. It does NOT write final documentation or dispatch other agents.
-- **Researcher Agent** reviews discovery files in `docs/_discovery/`, synthesizes findings, and writes final documentation to `docs/`. It does NOT do systematic code exploration, dispatch agents, or write to `docs/_discovery/`.
+- **Orchestrator** reads existing reference docs and discovery files, decomposes topics, dispatches agents one at a time, and reviews all output. It does NOT read source code in detail or do systematic exploration.
+- **Scanner Agent** performs a broad, shallow scan of all source files and writes a structured topic inventory to `reference/_discovery/high_level_scan.md`. It runs **once** — the output is a durable reference as long as the source code hasn't changed. It does NOT trace mechanics or write final documentation.
+- **Discovery Agent** traces mechanics across source files and writes raw findings to `reference/_discovery/`. It does NOT write final documentation or dispatch other agents.
+- **Researcher Agent** reviews discovery files in `reference/_discovery/`, synthesizes findings, and writes final documentation to `reference/`. It does NOT do systematic code exploration, dispatch agents, or write to `reference/_discovery/`.
 - **Experimenter Agent** writes and runs verification scripts under `tools/`. It does NOT write documentation or discovery files.
 
 ### Iterative Wave Workflow
 
 Research on any topic follows this cycle. The orchestrator drives every step.
 
-1. **Scan** (once): Dispatch `scanner` → produces `docs/_discovery/high_level_scan.md`. Reuse this across all topics.
-2. **Discover**: Dispatch `discovery` agent for a specific topic → produces/updates a `docs/_discovery/<topic>.md` file.
+1. **Scan** (once): Dispatch `scanner` → produces `reference/_discovery/high_level_scan.md`. Reuse this across all topics.
+2. **Discover**: Dispatch `discovery` agent for a specific topic → produces/updates a `reference/_discovery/<topic>.md` file.
 3. **Review**: Orchestrator reads the discovery file. If gaps remain, dispatch `discovery` again with a narrower prompt.
-4. **Document**: Dispatch `researcher` agent with the discovery file path → researcher reads it and writes to `docs/`.
+4. **Document**: Dispatch `researcher` agent with the discovery file path → researcher reads it and writes to `reference/`.
 5. **Verify**: Dispatch `experimenter` agent to validate specific claims → produces results in `tools/results/`.
 6. **Correct**: If verification finds issues, loop back to step 2 or 4.
 
@@ -94,7 +94,7 @@ Each agent dispatch handles **exactly one topic** (e.g., "combat damage formula"
 - **Source citations**: `file.c:LINE` or `file.c:START-END` (e.g., `fmain.c:1609`, `narr.asm:251-347`). All paths are relative to the repo root.
 - **Speech references**: `speak(N)` where N is the index into `narr.asm` message table.
 - **Section numbering**: RESEARCH.md uses `## N. Title` / `### N.M Subtitle`. Sections files use matching numbers.
-- **Cross-references**: Markdown links between docs (e.g., `[STORYLINE.md §5](STORYLINE.md#5-npc-dialogue-trees)`).
+- **Cross-references**: Markdown links between reference docs (e.g., `[STORYLINE.md §5](STORYLINE.md#5-npc-dialogue-trees)`).
 - **Diagrams**: Mermaid syntax for flowcharts, state diagrams, and sequence diagrams.
 
 ## Verification Workflow
@@ -104,7 +104,7 @@ When documenting a game mechanic:
 1. **Read the source code** to extract the actual logic — never guess or infer from game behavior alone.
 2. **Cite specific lines** using the `file:line` format.
 3. **Cross-reference multiple code paths** when a system spans files (e.g., direction encoding verified via `fsubs.asm` movement vectors, `com2` table, and `fmain2.c` `set_course()`).
-4. **Log unresolvable questions** in `docs/PROBLEMS.md` when something cannot be determined from source code alone (magic numbers, platform-dependent behavior, gameplay intent vs. bugs). Never guess — file a problem instead.
+4. **Log unresolvable questions** in `reference/PROBLEMS.md` when something cannot be determined from source code alone (magic numbers, platform-dependent behavior, gameplay intent vs. bugs). Never guess — file a problem instead.
 
 ## Anti-Drift Rules
 
@@ -116,7 +116,7 @@ No mechanic may be documented without a source code citation. No citation may be
 
 ### Never Guess
 
-If you cannot determine something from the source code, the correct response is to log it in `docs/PROBLEMS.md`. The incorrect response is to write "probably", "likely", "seems to", or "based on game behavior." There is no middle ground.
+If you cannot determine something from the source code, the correct response is to log it in `reference/PROBLEMS.md`. The incorrect response is to write "probably", "likely", "seems to", or "based on game behavior." There is no middle ground.
 
 ### Structured Escalation
 
@@ -139,11 +139,11 @@ Do not dispatch a 4th investigation without changing the approach.
 
 ### Logic Docs Are the Normative Form
 
-Pseudo-code lives only in `docs/logic/`. Do not add pseudo-code blocks to `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, or `docs/STORYLINE.md` — those remain prose + tables + Mermaid only. When a behavior has been captured in `docs/logic/<subsystem>.md`, link to its anchor from RESEARCH instead of paraphrasing the logic.
+Pseudo-code lives only in `reference/logic/`. Do not add pseudo-code blocks to `reference/RESEARCH.md`, `reference/ARCHITECTURE.md`, or `reference/STORYLINE.md` — those remain prose + tables + Mermaid only. When a behavior has been captured in `reference/logic/<subsystem>.md`, link to its anchor from RESEARCH instead of paraphrasing the logic.
 
-- The grammar is defined in [`docs/logic/STYLE.md`](../docs/logic/STYLE.md).
-- Global identifiers, enums, structs, constants, and table refs are declared in [`docs/logic/SYMBOLS.md`](../docs/logic/SYMBOLS.md). SYMBOLS.md changes are orchestrator-reviewed; agents propose additions in their report rather than edit it directly.
-- Run `tools/run.sh lint_logic.py` after any change under `docs/logic/`. A clean lint is required before the task is considered complete.
+- The grammar is defined in [`reference/logic/STYLE.md`](../reference/logic/STYLE.md).
+- Global identifiers, enums, structs, constants, and table refs are declared in [`reference/logic/SYMBOLS.md`](../reference/logic/SYMBOLS.md). SYMBOLS.md changes are orchestrator-reviewed; agents propose additions in their report rather than edit it directly.
+- Run `tools/run.sh lint_logic.py` after any change under `reference/logic/`. A clean lint is required before the task is considered complete.
 
 ### Don't Trust Summaries
 

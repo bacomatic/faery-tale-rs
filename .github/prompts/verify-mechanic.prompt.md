@@ -33,10 +33,10 @@ Verify findings against at least two independent code paths when possible (e.g.,
 
 ## Step 4: Compare against existing documentation
 
-Check what [RESEARCH.md](../../docs/RESEARCH.md), [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), and [STORYLINE.md](../../docs/STORYLINE.md) currently say about this mechanic. Identify:
+Check what [RESEARCH.md](../../reference/RESEARCH.md), [ARCHITECTURE.md](../../reference/ARCHITECTURE.md), and [STORYLINE.md](../../reference/STORYLINE.md) currently say about this mechanic. Identify:
 - **Correct claims** — cite the source lines that confirm them
 - **Incorrect claims** — cite the source lines that contradict them
-- **Missing information** — note what the code reveals that the docs don't cover
+- **Missing information** — note what the code reveals that the reference docs don't cover
 
 ## Step 5: Self-verify before reporting
 
@@ -54,6 +54,6 @@ Present a summary with:
 - Proposed corrections or additions, if any
 - **Status**: COMPLETE | PARTIAL | NEEDS_REFINEMENT | BLOCKED
 
-If anything about the mechanic **cannot be determined from source code alone** (magic numbers without comments, platform-dependent behavior, gameplay intent vs. bugs), log it in [PROBLEMS.md](../../docs/PROBLEMS.md) using the template in that file. Never guess — file a problem instead.
+If anything about the mechanic **cannot be determined from source code alone** (magic numbers without comments, platform-dependent behavior, gameplay intent vs. bugs), log it in [PROBLEMS.md](../../reference/PROBLEMS.md) using the template in that file. Never guess — file a problem instead.
 
 **Do not edit other documentation yet.** Wait for approval before making changes. When approved, update RESEARCH.md directly.

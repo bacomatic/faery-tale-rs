@@ -1,6 +1,6 @@
 # tools/ — Experiment Scripts for Research Verification
 
-This directory contains scripts that mechanically verify research claims made in the `docs/` documentation against the original 1987 source code. Scripts are created and run by the `@experimenter` agent, either standalone or as a subagent spawned by `@researcher`.
+This directory contains scripts that mechanically verify research claims made in the `reference/` documentation against the original 1987 source code. Scripts are created and run by the `@experimenter` agent, either standalone or as a subagent spawned by `@researcher`.
 
 ## Setup
 
@@ -31,7 +31,7 @@ tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 # Run any script with --help for options
 tools/run.sh <script>.py --help
 
-# Lint docs/logic/*.md strict pseudo-code
+# Lint reference/logic/*.md strict pseudo-code
 tools/run.sh lint_logic.py
 ```
 

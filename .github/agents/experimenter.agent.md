@@ -54,7 +54,7 @@ NO RESULT CLAIMS WITHOUT RUNNING THE SCRIPT AND READING THE OUTPUT
 | Thought | Reality |
 |---------|---------|
 | "The script should produce..." | Run it. "Should" is not evidence. |
-| "This confirms what the docs say" | Does the OUTPUT confirm it, or do YOU think it confirms it? |
+| "This confirms what the reference docs say" | Does the OUTPUT confirm it, or do YOU think it confirms it? |
 | "Close enough to expected" | Quantify the difference. Close enough may be a bug. |
 | "The error is just a minor issue" | Report the error. Let the researcher decide if it matters. |
 | "I'll report PASS and note the discrepancy" | A discrepancy is not a PASS. Use PARTIAL. |

@@ -1,6 +1,6 @@
 # Symbol Registry (Normative)
 
-Every identifier used in a ` ```pseudo ` block under `docs/logic/` must be resolvable to one of:
+Every identifier used in a ` ```pseudo ` block under `reference/logic/` must be resolvable to one of:
 - A function argument or local assignment in the same block.
 - A function listed in the `Calls:` header of the same function.
 - An entry in this registry.
@@ -553,7 +553,7 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:inside_msg` | `narr.asm` | Indoor place-name message table |
 | `TABLE:keytrans` | `fsubs.asm:221-226` | 91-byte scancode → normalized keycode lookup |
 
-*(Additional entries appended as new logic docs are authored.)*
+*(Additional entries appended as new logic reference docs are authored.)*
 
 ## 7. KeyCode values
 

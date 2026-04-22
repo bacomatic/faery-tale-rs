@@ -313,7 +313,7 @@ The `terra1` and `terra2` values are 0–10 indices added to `TERRA_BLOCK` (149)
 
 The `sector` field is either 32 (`f6a`, 64 blocks for outdoor regions) or 96 (`f9a`, 64 blocks for indoor regions).
 
-The `setchar` field is defined and initialized but **never read** by any runtime code. Values (22,21,22,21,0,23,0,24,0,0) — see `docs/_discovery/disk-io.md` for analysis.
+The `setchar` field is defined and initialized but **never read** by any runtime code. Values (22,21,22,21,0,23,0,24,0,0) — see `reference/_discovery/disk-io.md` for analysis.
 
 ### 7.2 cfiles[18] — Character Sprite Block Map (fmain2.c:643-666)
 

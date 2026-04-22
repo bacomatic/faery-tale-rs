@@ -65,4 +65,4 @@ Details:
 
 ## Referencing Results from Documentation
 
-Files in `tools/results/` are gitignored and transient. **Never link to them from docs.** When documenting experiment findings, inline the key results directly into the doc entry — include the reproduction command and a bullet summary of findings. The `tools/results/` directory is for local inspection only.
+Files in `tools/results/` are gitignored and transient. **Never link to them from reference docs.** When documenting experiment findings, inline the key results directly into the doc entry — include the reproduction command and a bullet summary of findings. The `tools/results/` directory is for local inspection only.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lint strict pseudo-code in docs/logic/*.md.
+"""Lint strict pseudo-code in reference/logic/*.md.
 
 Usage:
     python tools/lint_logic.py [--verbose] [--file PATH]
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LOGIC_DIR = REPO_ROOT / "docs" / "logic"
+LOGIC_DIR = REPO_ROOT / "reference" / "logic"
 RESULTS_DIR = REPO_ROOT / "tools" / "results"
 RESULTS_FILE = RESULTS_DIR / "lint_logic.txt"
 
@@ -576,7 +576,7 @@ def check_index_completeness(logic_dir: Path, docs: list[LogicDoc]) -> list[Lint
     readme = logic_dir / "README.md"
     issues: list[LintIssue] = []
     if not readme.exists():
-        issues.append(LintIssue(readme, 1, "I001", "docs/logic/README.md is missing"))
+        issues.append(LintIssue(readme, 1, "I001", "reference/logic/README.md is missing"))
         return issues
     readme_text = readme.read_text(encoding="utf-8")
 
@@ -653,7 +653,7 @@ def write_report(issues: list[LintIssue], targets: list[Path]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="lint_logic",
-        description="Lint strict pseudo-code in docs/logic/*.md.",
+        description="Lint strict pseudo-code in reference/logic/*.md.",
     )
     parser.add_argument("--file", type=Path, default=None)
     parser.add_argument("--logic-dir", type=Path, default=LOGIC_DIR)

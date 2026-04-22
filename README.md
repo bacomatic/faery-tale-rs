@@ -8,13 +8,13 @@ A research and documentation project for reverse-engineering *The Faery Tale Adv
 
 ```
 (root)              Original source code (Aztec C + 68000 assembly) — READ ONLY
-docs/
+reference/
   ARCHITECTURE.md   System architecture overview, Mermaid diagrams, display geometry
   RESEARCH.md       Comprehensive mechanics reference (20 numbered sections)
   STORYLINE.md      Quest flows and NPC interactions as Mermaid state diagrams
   PROBLEMS.md       Open questions that can't be answered from source code alone
   world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
-  _discovery/       Raw findings from discovery agents — working notes, not final docs
+  _discovery/       Raw findings from discovery agents — working notes, not final reference docs
 game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
 ToArchive/          Original distribution package — READ ONLY
 tools/              Verification scripts and 68k assembly testing
@@ -27,7 +27,7 @@ tools/              Verification scripts and 68k assembly testing
   copilot-instructions.md   Workspace instructions and anti-drift rules
   agents/                   Agent definitions (researcher, discovery, experimenter)
   prompts/                  Task prompts (verify-mechanic, reverse-engineer, etc.)
-  instructions/             File-scoped conventions (docs, tools)
+  instructions/             File-scoped conventions (reference, tools)
 ```
 
 ## Documentation
@@ -36,10 +36,10 @@ The documentation is three-tiered:
 
 | Document | Purpose |
 |----------|---------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | High-level system overview: 19 subsystems, data flow, game loop, display geometry |
-| [RESEARCH.md](docs/RESEARCH.md) | Ground truth: 20 numbered sections covering every game mechanic with formulas, data tables, and source citations |
-| [STORYLINE.md](docs/STORYLINE.md) | Narrative layer: quest progression, NPC dialogue trees, event sequences |
-| [PROBLEMS.md](docs/PROBLEMS.md) | Open questions that can't be answered from source code alone |
+| [ARCHITECTURE.md](reference/ARCHITECTURE.md) | High-level system overview: 19 subsystems, data flow, game loop, display geometry |
+| [RESEARCH.md](reference/RESEARCH.md) | Ground truth: 20 numbered sections covering every game mechanic with formulas, data tables, and source citations |
+| [STORYLINE.md](reference/STORYLINE.md) | Narrative layer: quest progression, NPC dialogue trees, event sequences |
+| [PROBLEMS.md](reference/PROBLEMS.md) | Open questions that can't be answered from source code alone |
 
 ## Prerequisites
 
@@ -58,7 +58,7 @@ Research is driven by AI agents in VS Code Copilot. Because VS Code does not sup
 User / Orchestrator
   ├── @scanner      (one-time broad survey → _discovery/high_level_scan.md)
   ├── @discovery    (traces code paths, writes to _discovery/)
-  ├── @researcher   (reviews discovery files, writes final docs)
+  ├── @researcher   (reviews discovery files, writes final reference docs)
   └── @experimenter (writes/runs verification scripts under tools/)
 ```
 
@@ -68,9 +68,9 @@ Work proceeds in iterative waves — dispatch one agent, review its output, then
 
 | Agent | Role | Scope |
 |-------|------|-------|
-| `@scanner` | Broad codebase survey — shallow scan of all source files, produces a topic inventory | Reads source code, writes `docs/_discovery/high_level_scan.md`. Runs once. |
-| `@discovery` | Deep code exploration — traces mechanics across files, follows all references | Reads source code, writes raw findings to `docs/_discovery/`. Does NOT write final documentation. |
-| `@researcher` | Synthesizes discovery findings into final documentation | Reviews `docs/_discovery/` files, does lightweight verification reads, writes to `docs/`. Does NOT do systematic code exploration or write to `_discovery/`. |
+| `@scanner` | Broad codebase survey — shallow scan of all source files, produces a topic inventory | Reads source code, writes `reference/_discovery/high_level_scan.md`. Runs once. |
+| `@discovery` | Deep code exploration — traces mechanics across files, follows all references | Reads source code, writes raw findings to `reference/_discovery/`. Does NOT write final documentation. |
+| `@researcher` | Synthesizes discovery findings into final documentation | Reviews `reference/_discovery/` files, does lightweight verification reads, writes to `reference/`. Does NOT do systematic code exploration or write to `_discovery/`. |
 | `@experimenter` | Experimental verification — writes and runs scripts that mechanically validate claims | Reads source code, writes scripts and results under `tools/`. Does NOT write documentation. |
 
 **Example prompts:**
@@ -83,7 +83,7 @@ Work proceeds in iterative waves — dispatch one agent, review its output, then
 | Prompt | Purpose |
 |--------|---------|
 | `/reverse-engineer` | Top-level orchestration — scans codebase, decomposes into topics, dispatches one researcher per topic sequentially |
-| `/verify-mechanic` | Structured verification of a specific game mechanic — traces code, cross-references paths, compares against existing docs |
+| `/verify-mechanic` | Structured verification of a specific game mechanic — traces code, cross-references paths, compares against existing reference docs |
 | `/run-experiment` | Dispatches the experimenter agent to write and run a verification script |
 | `/update-doc` | Applies approved changes to documentation files with citation enforcement |
 
@@ -97,17 +97,17 @@ Work proceeds in iterative waves — dispatch one agent, review its output, then
 
 | Instruction | Auto-attaches to | Enforces |
 |-------------|-------------------|----------|
-| `docs-conventions` | `docs/**` | Source citation format (`file.c:LINE`), speech references (`speak(N)`), section numbering, read-only source protection |
+| `docs-conventions` | `reference/**` | Source citation format (`file.c:LINE`), speech references (`speak(N)`), section numbering, read-only source protection |
 | `tools-conventions` | `tools/**` | Naming conventions, result format, source read-only constraint, tool reuse policy |
 
 ### Iterative Wave Workflow
 
 Research on any topic follows this cycle. The user drives every step.
 
-1. **Scan** (once): Dispatch `@scanner` → produces `docs/_discovery/high_level_scan.md`. Reuse across all topics.
-2. **Discover**: Dispatch `@discovery` for a specific topic → produces/updates a `docs/_discovery/<topic>.md` file.
+1. **Scan** (once): Dispatch `@scanner` → produces `reference/_discovery/high_level_scan.md`. Reuse across all topics.
+2. **Discover**: Dispatch `@discovery` for a specific topic → produces/updates a `reference/_discovery/<topic>.md` file.
 3. **Review**: Read the discovery file. If gaps remain, dispatch `@discovery` again with a narrower prompt.
-4. **Document**: Dispatch `@researcher` with the discovery file path → researcher reviews and writes to `docs/`.
+4. **Document**: Dispatch `@researcher` with the discovery file path → researcher reviews and writes to `reference/`.
 5. **Verify**: Dispatch `@experimenter` to validate specific claims → produces results in `tools/results/`.
 6. **Correct**: If verification finds issues, loop back to step 2 or 4.
 
@@ -115,7 +115,7 @@ Each agent dispatch handles **exactly one topic** (e.g., "combat damage formula"
 
 ### Monitoring PROBLEMS.md
 
-Agents log questions in [PROBLEMS.md](docs/PROBLEMS.md) whenever they encounter something that can't be determined from source code alone — magic numbers, ambiguous variable names, platform-specific Amiga behavior, or cases where gameplay intent is unclear (intentional design vs. bug).
+Agents log questions in [PROBLEMS.md](reference/PROBLEMS.md) whenever they encounter something that can't be determined from source code alone — magic numbers, ambiguous variable names, platform-specific Amiga behavior, or cases where gameplay intent is unclear (intentional design vs. bug).
 
 **Check this file periodically.** Your play-testing experience and domain knowledge is needed to resolve these entries.
 

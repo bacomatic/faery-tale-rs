@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Validate source citations in documentation files.
 
-Scans docs/**/*.md for backtick-wrapped citations like `file.c:LINE` or
+Scans reference/**/*.md for backtick-wrapped citations like `file.c:LINE` or
 `file.c:START-END`, then verifies each referenced file exists and the
 line numbers are within range.
 
 Usage:
-    python tools/validate_citations.py [--file docs/RESEARCH.md] [--verbose]
+    python tools/validate_citations.py [--file reference/RESEARCH.md] [--verbose]
 """
 
 import argparse
@@ -49,8 +49,8 @@ def find_doc_files(specific_file=None):
     """Return list of documentation markdown files to scan."""
     if specific_file:
         return [os.path.join(REPO_ROOT, specific_file)]
-    docs_dir = os.path.join(REPO_ROOT, 'docs')
-    return sorted(glob.glob(os.path.join(docs_dir, '**', '*.md'), recursive=True))
+    reference_dir = os.path.join(REPO_ROOT, 'reference')
+    return sorted(glob.glob(os.path.join(reference_dir, '**', '*.md'), recursive=True))
 
 
 def extract_citations(filepath):

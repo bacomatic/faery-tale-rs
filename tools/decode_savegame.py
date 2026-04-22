@@ -157,7 +157,7 @@ def decode_misc(data, offset, show_hex):
     print("  *** WARNING: field names below assume source declaration")
     print("      order matches BSS layout.  Disassembly shows it does")
     print("      not — only map_x at offset 0 is confirmed.  See")
-    print("      docs/PROBLEMS.md §P21. ***")
+    print("      reference/PROBLEMS.md §P21. ***")
     print("=" * 60)
     if show_hex:
         print(hexdump(data, offset, 80))

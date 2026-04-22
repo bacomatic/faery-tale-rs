@@ -451,7 +451,7 @@ The game stops music, clears the text screen, then `close_all()` frees all resou
 
 - **Can princess > 2 actually occur?**: With 3 brothers and the `ob_list8[9].ob_stat` reset in revive, theoretically all 3 brothers could each rescue a princess (princess goes 0→1→2→3). If `princess == 3` and another rescue somehow triggered, `placard_text(8+9)` = `placard_text(17)` which is msg11 (the post-rescue text) — the display would be garbled but not crash. In practice this shouldn't happen because `ob_list8[9].ob_stat = 0` after rescue and only resets on brother death.
 
-- **Full quest chain intermediaries**: The complete sequence of 5 golden figurines, spectre bone quest, sorceress interaction, dream knight, etc. — these are part of the broader NPC quest chain documented in `docs/_discovery/npc-quests.md`, not fully re-traced here as they are outside the direct win-condition scope.
+- **Full quest chain intermediaries**: The complete sequence of 5 golden figurines, spectre bone quest, sorceress interaction, dream knight, etc. — these are part of the broader NPC quest chain documented in `reference/_discovery/npc-quests.md`, not fully re-traced here as they are outside the direct win-condition scope.
 
 ## Refinement Log
 - 2026-04-06: Initial discovery pass — complete trace of rescue(), win_colors(), quitflag, placard texts, necromancer death, and full win path.

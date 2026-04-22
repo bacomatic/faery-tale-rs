@@ -20,9 +20,9 @@ Run a structured reverse-engineering pass as described below. You are the **top-
 
 ```
 You (orchestrator)
-  ├── scanner      → docs/_discovery/high_level_scan.md (run once)
-  ├── discovery    → docs/_discovery/<topic>.md
-  ├── researcher   → docs/RESEARCH.md, ARCHITECTURE.md, STORYLINE.md
+  ├── scanner      → reference/_discovery/high_level_scan.md (run once)
+  ├── discovery    → reference/_discovery/<topic>.md
+  ├── researcher   → reference/RESEARCH.md, ARCHITECTURE.md, STORYLINE.md
   └── experimenter → tools/ + tools/results/
 ```
 
@@ -30,10 +30,10 @@ No agent dispatches other agents. You are the only dispatcher.
 
 ## Phase 1: Ensure High-Level Scan Exists
 
-Check if `docs/_discovery/high_level_scan.md` exists and has content. 
+Check if `reference/_discovery/high_level_scan.md` exists and has content. 
 
 - **If it exists**: Read it. This is your topic map. Skip directly to Phase 2.
-- **If it doesn't exist**: Dispatch the `scanner` agent with prompt: "Perform a full codebase survey." After it completes, read `docs/_discovery/high_level_scan.md` — do NOT trust the summary, read the file.
+- **If it doesn't exist**: Dispatch the `scanner` agent with prompt: "Perform a full codebase survey." After it completes, read `reference/_discovery/high_level_scan.md` — do NOT trust the summary, read the file.
 
 The scan only needs to run **once** since the source files are read-only 1987 artifacts.
 
@@ -49,7 +49,7 @@ Using the high-level scan and the requested scope, decompose into **focused, sin
 **Decomposition rules:**
 - A topic spanning 3+ source files or 5+ interacting subsystems → split it
 - A topic described in more than 2 sentences → make it more specific
-- Check `docs/_discovery/` for existing work before duplicating effort
+- Check `reference/_discovery/` for existing work before duplicating effort
 
 **Phase 2 output:** A numbered list of research topics, each with:
 1. A clear, specific title
@@ -66,7 +66,7 @@ Dispatch the `discovery` agent with a focused prompt specifying:
 - The single topic to investigate
 - Which source files to start with
 - What specific questions to answer
-- Path to an existing `docs/_discovery/` file if refining
+- Path to an existing `reference/_discovery/` file if refining
 
 After it returns, **read the discovery file** (not just the summary). Check:
 - Are the questions answered with citations?
@@ -83,7 +83,7 @@ Dispatch the `researcher` agent with:
 - What doc sections to create/update
 - Any specific questions that emerged from the discovery review
 
-After it returns, read what was written to `docs/`. Check for unsupported claims.
+After it returns, read what was written to `reference/`. Check for unsupported claims.
 
 ### Wave C: Verification (when needed)
 For claims involving data tables, formulas, or binary assets, dispatch the `experimenter` agent with:

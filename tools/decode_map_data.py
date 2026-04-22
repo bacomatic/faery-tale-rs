@@ -900,7 +900,7 @@ def cmd_overworld(image_file):
                                 for dx in range(SCALE):
                                     pixels[bx + dx, by + dy] = color
 
-    out_path = os.path.join(REPO_ROOT, 'docs', 'overworld.png')
+    out_path = os.path.join(REPO_ROOT, 'reference', 'overworld.png')
     img.save(out_path)
     print(f'Overworld map: {img_w}x{img_h} pixels')
     print(f'  128 sector cols x 128 sector rows (8 regions in 2x4 grid)')
@@ -1032,7 +1032,7 @@ def sector_terrain_summary(region_idx, sector_num, sector_data, terra_sets):
 
 
 def cmd_export_world_db(image_file, output_path):
-    """Export unified spatial database as JSON to docs/world_db.json."""
+    """Export unified spatial database as JSON to reference/world_db.json."""
     import json
 
     # Read all region maps
@@ -1414,7 +1414,7 @@ def main():
     group.add_argument('--overworld', action='store_true',
                        help='Generate complete overworld map PNG (all 8 outdoor regions)')
     group.add_argument('--export-world-db', action='store_true',
-                       help='Export unified spatial database to docs/world_db.json')
+                       help='Export unified spatial database to reference/world_db.json')
 
     parser.add_argument('--region', type=int, default=0,
                         help='Region index for --sector-detail (default: 0)')
@@ -1448,7 +1448,7 @@ def main():
         cmd_overworld(IMAGE_PATH)
         return
     elif args.export_world_db:
-        out = os.path.join(REPO_ROOT, 'docs', 'world_db.json')
+        out = os.path.join(REPO_ROOT, 'reference', 'world_db.json')
         cmd_export_world_db(IMAGE_PATH, out)
         return  # export handles its own output
 

@@ -507,8 +507,8 @@ The princess counter does NOT reset between brothers. If Julian rescues Katra (p
 ## Cross-Cutting Findings
 
 - **ob_list8[9] reset in revive**: `fmain.c:2843` — the princess object is re-enabled to `ob_stat = 3` during every brother succession. This interacts with the princess rescue system in `fmain2.c:1586`.
-- **Combat discovery overlap**: The `dohit()` → `checkdead()` path is documented in `docs/_discovery/combat.md`. The goodfairy mechanism is also partially documented there.
-- **AI suspension during fairy**: `fmain.c:2112` — `if (goodfairy && goodfairy < 120) break;` completely halts enemy AI during fairy animation. Documented in `docs/_discovery/ai-system.md:217`.
+- **Combat discovery overlap**: The `dohit()` → `checkdead()` path is documented in `reference/_discovery/combat.md`. The goodfairy mechanism is also partially documented there.
+- **AI suspension during fairy**: `fmain.c:2112` — `if (goodfairy && goodfairy < 120) break;` completely halts enemy AI during fairy animation. Documented in `reference/_discovery/ai-system.md:217`.
 - **Inventory merge on bone pickup**: `fmain.c:3173-3177` — this is part of the object interaction system, interacting with the inventory system.
 - **shape_read uses brother**: `fmain2.c:676` — `read_shapes(brother-1)` — the graphics loading system depends on the brother variable.
 

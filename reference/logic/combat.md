@@ -18,7 +18,7 @@ paths (drowning, lava, witch petrification). When `battleflag` falls back to
 zero on the next Phase 14 tick, `aftermath` tallies corpses and fled enemies
 and fires the summary line.
 
-The two loops in `docs/logic/game-loop.md` (`melee_hit_detection` and
+The two loops in `reference/logic/game-loop.md` (`melee_hit_detection` and
 `missile_tick`) are the canonical per-frame drivers; the per-attacker and
 per-missile bodies documented here are pure refactorings of those inner
 loops. See [`Notes`](#notes) for how they compose.

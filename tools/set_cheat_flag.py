@@ -26,7 +26,7 @@ Source references:
   - Cheat key handlers: fmain.c:1293-1340
   - Map region gate: fmain.c:3310
   - Save format (80-byte misc block): fmain2.c:1507
-  - Offset table: docs/_discovery/save-load.md:186
+  - Offset table: reference/_discovery/save-load.md:186
 """
 
 import argparse

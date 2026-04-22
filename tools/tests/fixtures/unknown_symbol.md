@@ -1,7 +1,7 @@
 # Test Subsystem — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c
-> Cross-refs: [RESEARCH §1](../../../docs/RESEARCH.md#1-core-data-structures)
+> Cross-refs: [RESEARCH §1](../../../reference/RESEARCH.md#1-core-data-structures)
 
 ## Overview
 Uses a symbol not registered anywhere.
