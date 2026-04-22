@@ -1,7 +1,7 @@
 # Shops — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §6](../RESEARCH.md#6-items--inventory), [RESEARCH §17](../RESEARCH.md#17-npc-interactions), [npc-dialogue.md](npc-dialogue.md#bartender_speech), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [_discovery/npc-item-location-map.md](../_discovery/npc-item-location-map.md)
+> Cross-refs: [RESEARCH §10](../RESEARCH.md#10-inventory--items), [RESEARCH §13](../RESEARCH.md#13-npc-dialogue--quests), [npc-dialogue.md](npc-dialogue.md#bartender_speech), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [_discovery/npc-item-location-map.md](../_discovery/npc-item-location-map.md)
 
 ## Overview
 

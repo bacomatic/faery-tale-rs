@@ -1,7 +1,7 @@
 # Encounters — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c, fsubs.asm
-> Cross-refs: [RESEARCH §8](../RESEARCH.md#8-encounters--monster-spawning), [_discovery/encounters.md](../_discovery/encounters.md), [logic/game-loop.md](game-loop.md), [logic/combat.md](combat.md)
+> Cross-refs: [RESEARCH §8](../RESEARCH.md#9-encounter--spawning), [_discovery/encounters.md](../_discovery/encounters.md), [logic/game-loop.md](game-loop.md), [logic/combat.md](combat.md)
 
 ## Overview
 
@@ -309,7 +309,7 @@ def roll_weapon(arms: int, col: int) -> int:
   trio is used by the `find_place` forced-extent path (etypes 50–61, 83).
   `find_place` sets `encounter_x = hero_x` and `encounter_y = hero_y` directly,
   bypassing `set_loc`, then calls the same primitives. See
-  [_discovery/encounters.md](../_discovery/encounters.md#find_place) for the
+  [_discovery/encounters.md](../_discovery/encounters.md#find_place--fmainc2647-2720) for the
   extent-category switch.
 - **Mixflag zeroing.** `mixflag` is freshly rolled each 14i pass, so its bit
   layout is only meaningful for the duration of one placement batch. Bit 1

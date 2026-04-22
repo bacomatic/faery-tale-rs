@@ -1,7 +1,7 @@
 # Quests & Win Condition — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §6](../RESEARCH.md#6-items--inventory), [RESEARCH §18](../RESEARCH.md#18-quest-progression), [STORYLINE.md](../STORYLINE.md), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [_discovery/quest-stat-items.md](../_discovery/quest-stat-items.md), [_discovery/win-condition.md](../_discovery/win-condition.md)
+> Cross-refs: [RESEARCH §10](../RESEARCH.md#10-inventory--items), [RESEARCH §13.4](../RESEARCH.md#134-quest-progression-flags), [STORYLINE.md](../STORYLINE.md), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [_discovery/quest-stat-items.md](../_discovery/quest-stat-items.md), [_discovery/win-condition.md](../_discovery/win-condition.md)
 
 ## Overview
 

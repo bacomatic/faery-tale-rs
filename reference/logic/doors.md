@@ -1,7 +1,7 @@
 # Doors — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c
-> Cross-refs: [RESEARCH §6](../RESEARCH.md#6-doors), [game-loop.md#check_door](game-loop.md#check_door), [menu-system.md#option_handler](menu-system.md#option_handler), [movement.md#walk_step](movement.md#walk_step), [_discovery/doors.md](../_discovery/doors.md)
+> Cross-refs: [RESEARCH §6](../RESEARCH.md#12-door-system), [game-loop.md#check_door](game-loop.md#check_door), [menu-system.md#option_handler](menu-system.md#option_handler), [movement.md#walk_step](movement.md#walk_step), [_discovery/doors.md](../_discovery/doors.md)
 
 ## Overview
 

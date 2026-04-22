@@ -1,7 +1,7 @@
 # Inventory — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §6](../RESEARCH.md#6-items--inventory), [_discovery/inventory.md](../_discovery/inventory.md), [quests.md](quests.md), [shops.md](shops.md), [carrier-transport.md](carrier-transport.md), [doors.md](doors.md), [menu-system.md](menu-system.md)
+> Cross-refs: [RESEARCH §10](../RESEARCH.md#10-inventory--items), [_discovery/inventory.md](../_discovery/inventory.md), [quests.md](quests.md), [shops.md](shops.md), [carrier-transport.md](carrier-transport.md), [doors.md](doors.md), [menu-system.md](menu-system.md)
 
 ## Overview
 
@@ -425,7 +425,7 @@ precondition miss.
 `break` before `case 7:` at `fmain.c:3353`, so every successful stone
 teleport also runs the Glass Vial heal — a single Blue Stone use both
 teleports *and* heals. This is documented in
-[RESEARCH §6](../RESEARCH.md#6-items--inventory) and verified by the lack of
+[RESEARCH §10](../RESEARCH.md#10-inventory--items) and verified by the lack of
 `break;` between the `xfer()` call and the `vitality += rand8()+4` block.
 
 **Kill-spell race gate.** The `race < 7` test at `fmain.c:3362` means the

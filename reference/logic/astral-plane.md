@@ -1,7 +1,7 @@
 # Astral Plane — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c
-> Cross-refs: [RESEARCH §9](../RESEARCH.md#9-encounter-extents), [movement.md#walk_step](movement.md#walk_step), [encounters.md#set_encounter](encounters.md#set_encounter), [day-night.md#setmood](day-night.md#setmood), [carrier-transport.md#carrier_extent_update](carrier-transport.md#carrier_extent_update), [doors.md#xfer](doors.md#xfer), [brother-succession.md#revive](brother-succession.md#revive), [_discovery/astral-plane.md](../_discovery/astral-plane.md)
+> Cross-refs: [RESEARCH §9](../RESEARCH.md#9-encounter--spawning), [movement.md#walk_step](movement.md#walk_step), [encounters.md#set_encounter](encounters.md#set_encounter), [day-night.md#setmood](day-night.md#setmood), [carrier-transport.md#carrier_extent_update](carrier-transport.md#carrier_extent_update), [doors.md#xfer](doors.md#xfer), [brother-succession.md#revive](brother-succession.md#revive), [_discovery/astral-plane.md](../_discovery/astral-plane.md)
 
 ## Overview
 

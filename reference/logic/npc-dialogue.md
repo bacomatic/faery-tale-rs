@@ -1,7 +1,7 @@
 # NPC Dialogue — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, narr.asm
-> Cross-refs: [RESEARCH §17](../RESEARCH.md#17-npc-interactions), [STORYLINE.md](../STORYLINE.md), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [quests.md](quests.md#give_item_to_npc), [game-loop.md](game-loop.md#no_motion_tick)
+> Cross-refs: [RESEARCH §13](../RESEARCH.md#13-npc-dialogue--quests), [STORYLINE.md](../STORYLINE.md), [_discovery/npc-quests.md](../_discovery/npc-quests.md), [quests.md](quests.md#give_item_to_npc), [game-loop.md](game-loop.md#no_motion_tick)
 
 ## Overview
 
@@ -200,7 +200,7 @@ def bartender_speech() -> None:
 hears the morning greeting regardless of time; tired hero at night hears the
 shop prompt; tired hero in daytime hears the drink pitch. The actual shop
 menu (`CMODE_BUY`) is opened by a separate action and its transactions are
-documented in [RESEARCH §7](../RESEARCH.md#7-shops).
+documented in [RESEARCH §13.6](../RESEARCH.md#136-shop-system).
 
 ## ranger_hint
 

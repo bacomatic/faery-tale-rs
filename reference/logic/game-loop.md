@@ -1,7 +1,7 @@
 # Game Loop — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c
-> Cross-refs: [ARCHITECTURE.md](../ARCHITECTURE.md), [_discovery/game-loop.md](../_discovery/game-loop.md), [RESEARCH §2](../RESEARCH.md#2-game-loop--tick-structure)
+> Cross-refs: [ARCHITECTURE.md](../ARCHITECTURE.md), [_discovery/game-loop.md](../_discovery/game-loop.md), [RESEARCH §2](../RESEARCH.md#17-main-game-loop)
 
 ## Overview
 

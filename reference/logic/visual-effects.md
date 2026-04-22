@@ -1,7 +1,7 @@
 # Visual Effects — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §20](../RESEARCH.md#20-visual-effects), [ARCHITECTURE.md — Display](../ARCHITECTURE.md#display), [quests.md#end_game_sequence](quests.md#end_game_sequence), [brother-succession.md#revive](brother-succession.md#revive)
+> Cross-refs: [RESEARCH §20](../ARCHITECTURE.md#9-visual-effects), [ARCHITECTURE.md — Display](../ARCHITECTURE.md#3-display-system), [quests.md#end_game_sequence](quests.md#end_game_sequence), [brother-succession.md#revive](brother-succession.md#revive)
 
 ## Overview
 

@@ -1,7 +1,7 @@
 # Save / Load — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §19](../RESEARCH.md#19-save-load-system), [_discovery/save-load.md](../_discovery/save-load.md), [_discovery/disk-io.md](../_discovery/disk-io.md)
+> Cross-refs: [RESEARCH §19](../RESEARCH.md#119-saveload-of-object-state), [_discovery/save-load.md](../_discovery/save-load.md), [_discovery/disk-io.md](../_discovery/disk-io.md)
 
 ## Overview
 
