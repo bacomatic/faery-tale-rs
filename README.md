@@ -13,12 +13,12 @@ really. Especially do not expect updates in a timely manner.
 - Build/run commands and developer setup: this file (`README.md`)
 - Agent constraints and working contract: `AGENTS.md`
 - Reference/source-of-truth docs: `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`
-- Implementation contract: `docs/SPECIFICATION.md`
-- Requirements and user stories: `docs/REQUIREMENTS.md`
+- Implementation contract: `SPECIFICATION.md`
+- Requirements and user stories: `REQUIREMENTS.md`
 
 # Build
 
-This repository is now developed **from the reference documents in `docs/`**, especially `docs/SPECIFICATION.md`. To build locally, clone the repository and run Cargo from the project root.
+This repository is now developed **from the reference documents in `docs/`**, especially `SPECIFICATION.md`. To build locally, clone the repository and run Cargo from the project root.
 
 There will be no releases, nor special efforts to ensure compatibility with every platform. Primary development is done on Linux, but Cargo and SDL2 should make other platforms workable as well.
 

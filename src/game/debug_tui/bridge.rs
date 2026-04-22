@@ -1,6 +1,6 @@
 //! Debug TUI bridge: the data interface between the game loop and the TUI.
 //!
-//! Per `docs/DEBUG_SPECIFICATION.md` §Architecture, this module defines the
+//! Per `DEBUG_SPECIFICATION.md` §Architecture, this module defines the
 //! snapshot/command types that flow between the game and the debug console.
 //! Label helpers used by both panels and command-dump output live here too.
 //!

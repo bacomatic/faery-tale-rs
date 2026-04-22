@@ -2,7 +2,7 @@
 //! `commands` (feature-gated rendering/dispatch), and `stub` (no-op when
 //! the `debug-tui` feature is disabled).
 //!
-//! See `docs/DEBUG_SPECIFICATION.md` §Architecture.
+//! See `DEBUG_SPECIFICATION.md` §Architecture.
 
 pub mod bridge;
 pub use bridge::*;
