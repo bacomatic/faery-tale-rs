@@ -2,21 +2,6 @@
 
 This file is the entry point for all project documentation. Copy this file to any branch or repository, link to it, and agents can navigate the full doc set without extra context.
 
-## Document Ownership (read before editing anything in `docs/`)
-
-The following documents are **owned by this project** and may be edited by agents (with user approval):
-
-| Owned by this project (editable) | Purpose |
-|---|---|
-| [SPECIFICATION.md](SPECIFICATION.md) | Implementation contract synthesized from the upstream research docs. |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Requirements and user stories for the Rust port. |
-| [DEBUG_SPECIFICATION.md](DEBUG_SPECIFICATION.md) | Debug/diagnostics subsystem specification. |
-| [GUIDELINES.md](GUIDELINES.md) | Rust coding guidelines for agents working on this port. |
-
-**Every other file in `docs/` is READ-ONLY.** They are maintained in a separate upstream project and mirrored here as authoritative reference material. Agents **must not** modify any read-only doc under any circumstances — propose changes to the user instead, who will carry them upstream.
-
-Read-only docs include (non-exhaustive): `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, everything under `logic/` and `_discovery/`, and all machine-readable data (`world_db.json`, `quest_db.json`, region PNGs, `overworld.png`).
-
 ## How To Use This Index
 
 1. Start with the canonical docs in this order:
@@ -27,18 +12,8 @@ Read-only docs include (non-exhaustive): `RESEARCH.md`, `ARCHITECTURE.md`, `STOR
 2. Use docs/logic/ for normative pseudo-code behavior.
 3. Use docs/world_db.json and docs/quest_db.json for machine-readable data lookup.
 4. Use docs/_discovery/ as supporting trace notes, not final truth.
-5. Resolve implementation details through SPECIFICATION.md and REQUIREMENTS.md — the only docs this project owns.
 
-## Project-Owned Documentation (editable with user approval)
-
-| Document | Purpose |
-|---|---|
-| [SPECIFICATION.md](SPECIFICATION.md) | Implementation contract — what the Rust port must do, synthesized from the upstream research docs. |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Requirements and user stories for the Rust port. |
-| [DEBUG_SPECIFICATION.md](DEBUG_SPECIFICATION.md) | Debug/diagnostics subsystem specification. |
-| [GUIDELINES.md](GUIDELINES.md) | Rust coding guidelines for agents working on this port. |
-
-## Canonical Documentation (Primary Sources — READ-ONLY)
+## Canonical Documentation (Primary Sources)
 
 | Document | Purpose |
 |---|---|
