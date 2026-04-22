@@ -25,7 +25,7 @@ Defined in `ftale.h:27-37` (duplicated in `fmain.c:107-117`):
 
 ### How Goal Modes Are Assigned
 
-**At spawn** (`fmain.c:2761-2762`, `fmain2.c:2761-2762` — duplicated in both `set_encounter()` copies):
+**At spawn** (`fmain.c:2761-2762` — inside `set_encounter()`):
 ```
 if (an->weapon&4) an->goal = ARCHER1 + encounter_chart[race].cleverness;
 else an->goal = ATTACK1 + encounter_chart[race].cleverness;

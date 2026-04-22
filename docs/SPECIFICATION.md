@@ -4,7 +4,7 @@
 > **Target fidelity:** Faithful reproduction of the original 1987 Amiga game by MicroIllusions
 > **Timing basis:** NTSC-only, 30 fps gameplay tick (60 Hz audio VBL)
 
-This document synthesizes the authoritative reference material ([RESEARCH.md](RESEARCH.md), [ARCHITECTURE.md](ARCHITECTURE.md), [STORYLINE.md](STORYLINE.md)) into a single implementation-ready specification. It defines the systems, data structures, algorithms, and behaviors required to reproduce the original game.
+This document synthesizes the authoritative reference material ([RESEARCH.md](../reference/RESEARCH.md), [ARCHITECTURE.md](../reference/ARCHITECTURE.md), [STORYLINE.md](../reference/STORYLINE.md)) into a single implementation-ready specification. It defines the systems, data structures, algorithms, and behaviors required to reproduce the original game.
 
 ---
 

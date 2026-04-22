@@ -4,14 +4,14 @@ This file is the entry point for all project documentation. Copy this file to an
 
 ## How To Use This Index
 
-1. Start with the canonical docs in this order:
+1. Start with the canonical reference docs in this order:
    1. ARCHITECTURE.md
    2. RESEARCH.md
    3. STORYLINE.md
    4. PROBLEMS.md
-2. Use docs/logic/ for normative pseudo-code behavior.
-3. Use docs/world_db.json and docs/quest_db.json for machine-readable data lookup.
-4. Use docs/_discovery/ as supporting trace notes, not final truth.
+2. Use reference/logic/ for normative pseudo-code behavior.
+3. Use reference/world_db.json and reference/quest_db.json for machine-readable data lookup.
+4. Use reference/_discovery/ as supporting trace notes, not final truth.
 
 ## Canonical Documentation (Primary Sources)
 
@@ -30,7 +30,7 @@ These files define strict pseudo-code for branching logic and runtime behavior.
 
 | Document | Purpose |
 |---|---|
-| [logic/README.md](logic/README.md) | Logic docs overview, reading order, and function index. |
+| [logic/README.md](logic/README.md) | Logic reference docs overview, reading order, and function index. |
 | [logic/STYLE.md](logic/STYLE.md) | Grammar and writing rules for logic pseudo-code. |
 | [logic/SYMBOLS.md](logic/SYMBOLS.md) | Shared symbol registry (enums, globals, constants, references). |
 | [logic/game-loop.md](logic/game-loop.md) | Canonical per-frame sequence and tick phases. |
@@ -56,7 +56,7 @@ These files define strict pseudo-code for branching logic and runtime behavior.
 
 ## Discovery Notes (Raw Trace Artifacts)
 
-These are working research notes produced by exploration waves. They are useful context but are not the final authority over canonical docs.
+These are working research notes produced by exploration waves. They are useful context but are not the final authority over canonical reference docs.
 
 | Document | Focus |
 |---|---|
@@ -122,14 +122,14 @@ These are working research notes produced by exploration waves. They are useful 
 
 - Mechanics truth: start at [RESEARCH.md](RESEARCH.md), jump to matching [logic/](logic/) file for exact branching behavior.
 - Narrative and quest flow: start at [STORYLINE.md](STORYLINE.md), then verify mechanics in [RESEARCH.md](RESEARCH.md).
-- Architectural orientation: start at [ARCHITECTURE.md](ARCHITECTURE.md), then drill into specific subsystem docs.
+- Architectural orientation: start at [ARCHITECTURE.md](ARCHITECTURE.md), then drill into specific subsystem reference docs.
 - Uncertain or disputed claim: check [PROBLEMS.md](PROBLEMS.md), then inspect matching discovery artifact in [_discovery/](_discovery/).
-- Location-dependent questions: use [world_db.json](world_db.json) first, then corroborate in RESEARCH and logic docs.
+- Location-dependent questions: use [world_db.json](world_db.json) first, then corroborate in RESEARCH and logic reference docs.
 
 ## Trust Model
 
-- Final authority for mechanics: RESEARCH.md + docs/logic/*.md
+- Final authority for mechanics: RESEARCH.md + reference/logic/*.md
 - Final authority for architecture: ARCHITECTURE.md
 - Final authority for narrative progression: STORYLINE.md
 - Open uncertainties and unresolved edge cases: PROBLEMS.md
-- Supporting trace context only: docs/_discovery/*
+- Supporting trace context only: reference/_discovery/*

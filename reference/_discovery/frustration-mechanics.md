@@ -3,7 +3,7 @@
 **Status**: complete
 **Investigated**: 2026-04-19
 **Requested by**: orchestrator
-**Prompt summary**: Trace the NPC frustration field — what it does, where it's set, what SHOOTFRUST is, and identify gaps in the authoritative docs.
+**Prompt summary**: Trace the NPC frustration field — what it does, where it's set, what SHOOTFRUST is, and identify gaps in the authoritative reference docs.
 
 ## Overview
 

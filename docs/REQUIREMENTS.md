@@ -1,6 +1,6 @@
 # The Faery Tale Adventure — Requirements & User Stories
 
-> Derived from [RESEARCH.md](RESEARCH.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [STORYLINE.md](STORYLINE.md).
+> Derived from [RESEARCH.md](../reference/RESEARCH.md), [ARCHITECTURE.md](../reference/ARCHITECTURE.md), and [STORYLINE.md](../reference/STORYLINE.md).
 > Target: Rust/SDL2 reimplementation faithful to the 1987 Amiga original.
 
 Each requirement is a testable statement. User stories follow the format:

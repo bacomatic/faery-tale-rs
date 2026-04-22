@@ -1639,7 +1639,7 @@ Clever enemies (cleverness=1): Orcs, Wraith, Snake, Spider, DKnight, Loraii. Stu
 
 Assigned when a hostile actor loses its weapon (`weapon < 1`, `fmain.c:2151-2152`). On the first tick, `do_tactic(i, RANDOM)` runs. On subsequent ticks, CONFUSED (value 10) fails all goal-mode checks in the dispatch chain (none match), so **no AI processing occurs** — the actor continues walking in its last random direction until blocked.
 
-> **Normative logic:** [docs/logic/ai-system.md](logic/ai-system.md).
+> **Normative logic:** [reference/logic/ai-system.md](logic/ai-system.md).
 
 ---
 
@@ -3487,7 +3487,7 @@ The keyboard handler at `fmain.c:1343-1360` loops through `letter_list`, matches
 
 **KEYS special** (`fmain.c:1341-1343`): If `cmode == KEYS` and key is '1'–'6', calls `do_option(key - '1' + 5)` directly.
 
-> **Normative logic:** [docs/logic/menu-system.md](logic/menu-system.md).
+> **Normative logic:** [reference/logic/menu-system.md](logic/menu-system.md).
 
 ---
 

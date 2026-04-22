@@ -455,7 +455,7 @@ Asset loading requirement descriptor.
 
 Used by `file_index[10]` (one per map region F1-F10) — `fmain.c:615-625` — and `current_loads` for tracking what's loaded — `fmain.c:614`.
 
-### struct in_work — `ftale.h:110-121`
+### struct in_work — `ftale.h:110-120`
 
 Input handler shared data area.
 

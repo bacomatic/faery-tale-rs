@@ -18,7 +18,7 @@ runs only on ticks where the scroll delta is zero and so is the carrier of
 most periodic game logic — AI, encounter spawning, day/night advance,
 hunger, fatigue. Phases 15–24 run unconditionally on every non-short-circuited
 tick. Phase numbers in this document are the canonical anchors that every
-other logic doc in `docs/logic/` references when it says "runs in phase N".
+other logic doc in `reference/logic/` references when it says "runs in phase N".
 
 ## Symbols
 
@@ -833,7 +833,7 @@ def render_sprites() -> None:
 
 ## Notes
 
-- **Phase 14 is nested inside Phase 13.** The canonical `redraw_or_scroll` function calls `no_motion_tick` when both scroll deltas are zero (or after the viewstatus full-redraw path via the `viewchange` label at `fmain.c:1994`). Other logic docs that say "runs in Phase 14" are therefore implicitly "runs inside Phase 13's no-motion branch" — hero-scrolling frames skip the entire block.
+- **Phase 14 is nested inside Phase 13.** The canonical `redraw_or_scroll` function calls `no_motion_tick` when both scroll deltas are zero (or after the viewstatus full-redraw path via the `viewchange` label at `fmain.c:1994`). Other logic reference docs that say "runs in Phase 14" are therefore implicitly "runs inside Phase 13's no-motion branch" — hero-scrolling frames skip the entire block.
 - **Three early-exit paths.** The `while (!quitflag)` loop has three `continue` short-circuits that bypass the rendering phases (15–24). From outermost to innermost: viewstatus 1 or 4 inside `process_input_key` (`fmain.c:1373`), pause gate `game_paused()` (`fmain.c:1378`), and — indirectly — the freeze-timer gate inside `no_motion_tick` that skips AI/encounters/hunger but NOT rendering.
 - **`viewstatus` transitions.** The playfield gate takes values 0 (normal), 1 (big map, blocks everything but input), 2 (placard hold — `Delay(200)` then bump to 99), 3 (fade-in queued for Phase 24), 4 (pickup placard, same as 1), 98 (mid-redraw: run one more redraw pass), 99 (corrupt sentinel: force two redraws). The 99 → 98 → 0 sequence at `fmain.c:1991-1993` is why a torch-lit or region-load redraw takes two frames to fully settle.
 - **Frame rate source of truth.** `page_flip` at Phase 23 calls `WaitBOVP(&vp_text)` inside `pagechange`. This is the hardware gate that caps the loop at the Amiga vertical-blank rate. The `Delay(1)` calls inside the pause branch and the viewstatus-1/4 branch are not frame-rate equivalents — they release the CPU without producing a rendered frame.

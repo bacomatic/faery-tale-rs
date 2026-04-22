@@ -1,6 +1,6 @@
 # Logic Documentation Style Guide (Normative)
 
-This document is the normative grammar for pseudo-code blocks under `docs/logic/`. Every ` ```pseudo ` fenced block must conform. The linter (`tools/lint_logic.py`) enforces this grammar.
+This document is the normative grammar for pseudo-code blocks under `reference/logic/`. Every ` ```pseudo ` fenced block must conform. The linter (`tools/lint_logic.py`) enforces this grammar.
 
 ## Rationale
 
@@ -125,7 +125,7 @@ State-machine functions are written as `match` on the current state variable wit
 
 ## 10. Tick ordering
 
-Where per-frame ordering matters, `docs/logic/game-loop.md` declares the canonical phase sequence. Other docs reference phase numbers (e.g., "runs in phase 3").
+Where per-frame ordering matters, `reference/logic/game-loop.md` declares the canonical phase sequence. Other reference docs reference phase numbers (e.g., "runs in phase 3").
 
 ## 11. File-level checklist (enforced by linter)
 
@@ -133,4 +133,4 @@ Where per-frame ordering matters, `docs/logic/game-loop.md` declares the canonic
 - [ ] Header block with `> Fidelity:` and `> Cross-refs:` lines.
 - [ ] `## Overview` and `## Symbols` sections present.
 - [ ] Every `## <Name>` (other than `Overview`/`Symbols`/`Notes`/`Mermaid`) is a function entry with the full header + pseudo block.
-- [ ] Every function appears in `docs/logic/README.md` index.
+- [ ] Every function appears in `reference/logic/README.md` index.
