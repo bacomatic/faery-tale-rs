@@ -53,9 +53,9 @@ Two fonts are used:
    - Loaded via `LoadSeg` (not `OpenDiskFont`), cast through `DiskFontHeader` struct
    - Used for: in-game scrolling messages and map-message/placard text
    - Applied when scrolling text is established: `SetFont(rp,afont); SetAPen(rp,10); SetBPen(rp,11);` — `fmain.c:1168`
-   - The font file at [game/fonts/Amber/9](game/fonts/Amber/9) is the Amiga font data
+   - The font file at [game/fonts/Amber/9](../../game/fonts/Amber/9) is the Amiga font data
 
-The standalone [text.c](text.c) is a separate test program (not part of the game build) that tests disk font rendering via the Intuition/GfxBase API. Its `infont` references `"sapphire.font"`, size 19 — `text.c:154`. This is unrelated to the game's font system.
+The standalone [text.c](../../text.c) is a separate test program (not part of the game build) that tests disk font rendering via the Intuition/GfxBase API. Its `infont` references `"sapphire.font"`, size 19 — `text.c:154`. This is unrelated to the game's font system.
 
 ## _prdec (Decimal Number Printing) — fsubs.asm:342-378
 

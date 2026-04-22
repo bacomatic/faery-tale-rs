@@ -453,7 +453,7 @@ Notes:
   actor take pure diagonals more often — a readable signal that a
   "stupid" AI is active ([ai-system.md §advance_goal](ai-system.md#advance_goal)).
 - Caller-side tactic-to-mode mapping is in
-  [ai-system.md](ai-system.md) and [_discovery/movement.md](../_discovery/movement.md#how-do_tactic-maps-tactics-to-set_course-modes).
+  [ai-system.md](ai-system.md) and [_discovery/movement.md](../_discovery/movement.md#how-do_tactic-maps-tactics-to-set_course-modes-fmain2c1664-1700).
 - `move_figure` — used by `dohit`'s knock-back and the proxcheck-gated
   commit helper — is documented in
   [combat.md#move_figure](combat.md#move_figure); it is not redefined

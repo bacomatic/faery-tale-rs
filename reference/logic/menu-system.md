@@ -1,7 +1,7 @@
 # Menu System — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fsubs.asm
-> Cross-refs: [RESEARCH §13](../RESEARCH.md#13-menu-system), [_discovery/menu-system.md](../_discovery/menu-system.md)
+> Cross-refs: [RESEARCH §13](../RESEARCH.md#18-menu-system), [_discovery/menu-system.md](../_discovery/menu-system.md)
 
 ## Overview
 

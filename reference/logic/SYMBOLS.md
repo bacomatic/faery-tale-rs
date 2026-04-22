@@ -533,9 +533,9 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 
 | Name | Resolves to | Notes |
 |---|---|---|
-| `TABLE:encounter_chart` | [RESEARCH §8](../RESEARCH.md#8-encounters--monster-spawning) | Race stats keyed by `Shape.race` |
-| `TABLE:menu_options` | [RESEARCH §13](../RESEARCH.md#13-menu-system) | Per-mode label + enabled byte template |
-| `TABLE:item_effects` | [RESEARCH §6](../RESEARCH.md#6-items--inventory) | Inventory slot effects |
+| `TABLE:encounter_chart` | [RESEARCH §9](../RESEARCH.md#9-encounter--spawning) | Race stats keyed by `Shape.race` |
+| `TABLE:menu_options` | [RESEARCH §18](../RESEARCH.md#18-menu-system) | Per-mode label + enabled byte template |
+| `TABLE:item_effects` | [RESEARCH §10](../RESEARCH.md#10-inventory--items) | Inventory slot effects |
 | `TABLE:narr_messages` | `narr.asm` | Indexed by `speak(N)` |
 | `TABLE:key_bindings` | [logic/menu-system.md](menu-system.md) | Keycode → action map |
 | `TABLE:letter_list` | `fmain.c:533-547` | Keyboard-shortcut table: `(letter, menu, choice)` rows consumed by `key_dispatch` |

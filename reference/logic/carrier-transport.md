@@ -1,7 +1,7 @@
 # Carrier Transport — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §11](../RESEARCH.md#11-carriers--transport), [_discovery/carrier-transport-system.md](../_discovery/carrier-transport-system.md), [_discovery/carriers.md](../_discovery/carriers.md), [logic/movement.md](movement.md), [logic/quests.md#get_turtle](quests.md#get_turtle), [logic/game-loop.md](game-loop.md)
+> Cross-refs: [RESEARCH §11](../RESEARCH.md#96-special-extents), [_discovery/carrier-transport-system.md](../_discovery/carrier-transport-system.md), [_discovery/carriers.md](../_discovery/carriers.md), [logic/movement.md](movement.md), [logic/quests.md#get_turtle](quests.md#get_turtle), [logic/game-loop.md](game-loop.md)
 
 ## Overview
 

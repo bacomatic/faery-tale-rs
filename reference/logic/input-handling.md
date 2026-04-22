@@ -29,7 +29,7 @@ duplicated here.
 
 No new locals are declared in this file. All identifiers resolve to entries in
 [SYMBOLS.md](SYMBOLS.md), the `handler_data` fields enumerated in
-[_discovery/input-handling.md §2](../_discovery/input-handling.md#2-struct-in_work-ftaleh110-119),
+[_discovery/input-handling.md §2](../_discovery/input-handling.md#2-struct-in_work--ftaleh110-119),
 and the `event` fields `type`, `qualifier`, `rawkey`, `dx`, `dy`, `next`
 (Amiga `struct InputEvent`: `ie_Class=4(a0)`, `ie_Code=6(a0)`,
 `ie_Qualifier=8(a0)`, `ie_X=10(a0)`, `ie_Y=12(a0)`,
@@ -327,7 +327,7 @@ def decode_keydir() -> i16:
   storing `lastmenu` after the enqueue.
 - `TABLE:keytrans` (`fsubs.asm:221-226`, 91 bytes) and the keypad → direction
   encoding are documented in
-  [_discovery/input-handling.md §4](../_discovery/input-handling.md#4-keytrans-table-fsubsasm221-226).
+  [_discovery/input-handling.md §4](../_discovery/input-handling.md#4-keytrans-table--fsubsasm221-226).
 - The `MOUSE_LEFT_BUTTON` mask in `handle_rawmouse` is the left-button bit.
   `decode_mouse` gates on `MOUSE_BUTTON_MASK` (`0x6000`), which additionally
   accepts the right button. This is deliberate: either button forces the

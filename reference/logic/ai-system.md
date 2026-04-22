@@ -1,7 +1,7 @@
 # AI System — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, ftale.h
-> Cross-refs: [RESEARCH §9](../RESEARCH.md#9-combat-system), [_discovery/ai-system.md](../_discovery/ai-system.md)
+> Cross-refs: [RESEARCH §9](../RESEARCH.md#7-combat-system), [_discovery/ai-system.md](../_discovery/ai-system.md)
 
 ## Overview
 

@@ -1,7 +1,7 @@
 # Day/Night Cycle — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §3](../RESEARCH.md#3-day-night-cycle), [game-loop.md#no_motion_tick](game-loop.md#no_motion_tick), [visual-effects.md#fade_page](visual-effects.md#fade_page)
+> Cross-refs: [RESEARCH §3](../RESEARCH.md#19-daynight-cycle), [game-loop.md#no_motion_tick](game-loop.md#no_motion_tick), [visual-effects.md#fade_page](visual-effects.md#fade_page)
 
 ## Overview
 

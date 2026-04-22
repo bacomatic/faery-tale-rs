@@ -907,7 +907,7 @@ Source: `fmain.c:2870-2872`.
 | Topic | RESEARCH.md Section | STORYLINE.md Section |
 |-------|-------------------|---------------------|
 | Brother stats & succession | [§15 Brother Succession](RESEARCH.md#15-brother-succession) | [§4 Brother Succession](#4-brother-succession-narrative) |
-| Carrier / transport system | [§14 Carrier System](RESEARCH.md#14-carrier-system) | [§2.4 Transport Progression](#24-transport-progression) |
+| Carrier / transport system | [§9.6 Special Extents](RESEARCH.md#96-special-extents) | [§2.4 Transport Progression](#24-transport-progression) |
 | Combat system | [§7 Combat](RESEARCH.md#7-combat-system) | [§3.6 Witch](#36-witch), [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
 | Dark Knight encounter | [§9.8 Dark Knight](RESEARCH.md#98-dark-knight-dknight) | [§3.13 DreamKnight & Necromancer](#313-dreamknight--necromancer-auto-speak-only) |
 | Dialogue dispatch | [§13 NPC Dialogue](RESEARCH.md#13-npc-dialogue--quests) | [§3 NPC Dialogue Trees](#3-npc-dialogue-trees) |

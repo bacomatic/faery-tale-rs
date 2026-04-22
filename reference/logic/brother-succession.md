@@ -1,7 +1,7 @@
 # Brother Succession — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c
-> Cross-refs: [RESEARCH §17](../RESEARCH.md#17-brother-succession), [STORYLINE.md](../STORYLINE.md), [game-loop.md#resolve_player_state](game-loop.md#resolve_player_state)
+> Cross-refs: [RESEARCH §17](../RESEARCH.md#15-brother-succession), [STORYLINE.md](../STORYLINE.md), [game-loop.md#resolve_player_state](game-loop.md#resolve_player_state)
 
 ## Overview
 

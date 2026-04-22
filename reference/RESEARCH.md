@@ -1600,7 +1600,7 @@ This is likely a bug — the frustration handler doesn't check `mode` before rea
 
 #### SHOOTFRUST: Dead Code
 
-SHOOTFRUST (value 9, `ftale.h:51`) is tested at `fmain.c:2141` but **never assigned anywhere in the codebase**. The comment "arrows not getting through" (`fmain.c:131`) suggests it was planned for a mechanic where archers whose missiles consistently miss would switch tactics, but the detection code was never written. The missile collision code (`fmain.c:2260-2300`) and `dohit()` (`fmain2.c:230-247`) never modify the archer's `tactic` field. See also [PROBLEMS.md §P11](PROBLEMS.md#p11-unused-tactics-hide-7-door_seek-11-door_let-12--resolved).
+SHOOTFRUST (value 9, `ftale.h:51`) is tested at `fmain.c:2141` but **never assigned anywhere in the codebase**. The comment "arrows not getting through" (`fmain.c:131`) suggests it was planned for a mechanic where archers whose missiles consistently miss would switch tactics, but the detection code was never written. The missile collision code (`fmain.c:2260-2300`) and `dohit()` (`fmain2.c:230-247`) never modify the archer's `tactic` field. See also [PROBLEMS.md §P11](PROBLEMS.md#p11-unused-tactics-hide-7-shootfrust-9-door_seek-11-door_let-12--resolved).
 
 #### Tactic Field Overloading
 
@@ -3674,7 +3674,7 @@ Two fonts:
 1. **Topaz 8** (`tfont`) — ROM font, loaded via `OpenFont(&topaz_ta)` — `fmain.c:650`, `fmain.c:779`. Used for status bar labels, menu text, and map-mode text.
 2. **Amber 9** (`afont`) — custom disk font from `fonts/Amber/9` — `fmain.c:774-782`. Loaded via `LoadSeg` (not `OpenDiskFont`), cast through `DiskFontHeader`. Used for in-game scrolling messages and placard text. Applied at `fmain.c:1168`: `SetFont(rp,afont); SetAPen(rp,10); SetBPen(rp,11)`.
 
-Note: [text.c](text.c) is a standalone test program referencing `"sapphire.font"` at size 19 — unrelated to the game's font system.
+Note: [text.c](../text.c) is a standalone test program referencing `"sapphire.font"` at size 19 — unrelated to the game's font system.
 
 ### 20.3 `_ssp` — Scrolling String Print
 

@@ -566,7 +566,7 @@ The `file_index[10]` table (`fmain.c:615-625`) maps each region to its required 
 
 ### 7.1 Overview
 
-The main loop is `while (!quitflag)` at `fmain.c:1270`. Each iteration is one game tick, locked to the vertical blank via `WaitBOVP(&vp_text)` in `pagechange()` (~50 Hz PAL, ~60 Hz NTSC). The loop has 24 sequential phases. See [§17 Game Loop in RESEARCH.md](RESEARCH.md#17-game-loop--tick-structure) for full details.
+The main loop is `while (!quitflag)` at `fmain.c:1270`. Each iteration is one game tick, locked to the vertical blank via `WaitBOVP(&vp_text)` in `pagechange()` (~50 Hz PAL, ~60 Hz NTSC). The loop has 24 sequential phases. See [§17 Game Loop in RESEARCH.md](RESEARCH.md#17-main-game-loop) for full details.
 
 ### 7.2 Phase Structure
 
