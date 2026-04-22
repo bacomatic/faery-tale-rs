@@ -12,13 +12,13 @@ really. Especially do not expect updates in a timely manner.
 
 - Build/run commands and developer setup: this file (`README.md`)
 - Agent constraints and working contract: `AGENTS.md`
-- Reference/source-of-truth docs: `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`
+- Reference/source-of-truth docs: `reference/RESEARCH.md`, `reference/ARCHITECTURE.md`, `reference/STORYLINE.md`
 - Implementation contract: `SPECIFICATION.md`
 - Requirements and user stories: `REQUIREMENTS.md`
 
 # Build
 
-This repository is now developed **from the reference documents in `docs/`**, especially `SPECIFICATION.md`. To build locally, clone the repository and run Cargo from the project root.
+This repository is now developed **from the reference documents in `reference/`**, especially `SPECIFICATION.md`. To build locally, clone the repository and run Cargo from the project root.
 
 There will be no releases, nor special efforts to ensure compatibility with every platform. Primary development is done on Linux, but Cargo and SDL2 should make other platforms workable as well.
 
@@ -61,7 +61,7 @@ Project goals:
 
 This project is released under the MIT open source license. You are free to do whatever you want with it.
 
-Historical reverse-engineering work informed the reference documents, but the repository now proceeds from the documentation/specification in `docs/` rather than from a checked-in copy of the old source tree.
+Historical reverse-engineering work informed the reference documents, but the repository now proceeds from the documentation/specification in `reference/` rather than from a checked-in copy of the old source tree.
 
 # Note to developers
 

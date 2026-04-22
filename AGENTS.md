@@ -9,7 +9,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - **Fidelity first**: be true to the original game. Do not add enhancements or modernizations.
 - Fidelity means matching the documented original behavior and player experience, even if the implementation structure differs.
 - Do not intentionally "fix" original behavior unless reproducing the original bug would require extra work.
-- This repository is now **specification-driven**: rely on the checked-in reference docs in `docs/`, not on any historical source dump.
+- This repository is now **specification-driven**: rely on the checked-in reference docs in `reference/`, not on any historical source dump.
 
 ## Timing invariant (critical)
 
@@ -18,7 +18,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Agent working rules
 
-- **Always start with `docs/README.md`** — it is the entry point for all project documentation and lists exactly which docs are owned by this project (editable) versus read-only upstream reference material.
+- **Always start with `reference/README.md`** — it is the entry point for all project documentation and lists exactly which docs are owned by this project (editable) versus read-only upstream reference material.
 - **Always follow `GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, follow `AGENTS.md` and the project reference docs first.
 - Make minimal, surgical changes consistent with existing code style.
 - Prefer root-cause fixes over surface patches.
@@ -34,25 +34,25 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Document ownership
 
-The authoritative list lives in `docs/README.md`. Summary for quick reference:
+The authoritative list lives in `reference/README.md`. Summary for quick reference:
 
 - **Owned by this project (editable with user approval):** `SPECIFICATION.md`, `REQUIREMENTS.md`, `DEBUG_SPECIFICATION.md`, `GUIDELINES.md`.
-- **READ-ONLY (maintained upstream; agents must never modify):** everything else under `docs/`, including `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, and all files under `docs/logic/` and `docs/_discovery/`.
+- **READ-ONLY (maintained upstream; agents must never modify):** everything else under `reference/`, including `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, and all files under `reference/logic/` and `reference/_discovery/`.
 - Always ask the user before editing any owned doc; surface desired changes to read-only docs as discussion points only.
 
 ## Canonical sources by topic
 
-- Entry point for all documentation: `docs/README.md`
+- Entry point for all documentation: `reference/README.md`
 - Build/run commands and developer setup: `README.md` (repo root)
-- **Authoritative reference docs (READ-ONLY — agents must never modify; only the user may edit):** `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`, `docs/PROBLEMS.md`, `docs/logic/**`, `docs/_discovery/**`
+- **Authoritative reference docs (READ-ONLY — agents must never modify; only the user may edit):** `reference/RESEARCH.md`, `reference/ARCHITECTURE.md`, `reference/STORYLINE.md`, `reference/PROBLEMS.md`, `reference/logic/**`, `reference/_discovery/**`
 - **Project-owned docs (editable with user approval):** `SPECIFICATION.md`, `REQUIREMENTS.md`, `DEBUG_SPECIFICATION.md`, `GUIDELINES.md`
 - Current Rust implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 
 ## Game mechanics research order
 
 When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
-1. **First**: check `docs/RESEARCH.md` — it is the authoritative source of truth for verified mechanics.
-2. Use `docs/ARCHITECTURE.md` for subsystem structure/data flow and `docs/STORYLINE.md` for quest/scenario flow.
+1. **First**: check `reference/RESEARCH.md` — it is the authoritative source of truth for verified mechanics.
+2. Use `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
 3. Use `SPECIFICATION.md` to resolve implementation details and keep the port internally consistent.
 4. Do not create competing source-of-truth documents unless the user explicitly requests it.
 
