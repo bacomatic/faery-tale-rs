@@ -18,6 +18,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Agent working rules
 
+- **Always start with `docs/README.md`** — it is the entry point for all project documentation and lists exactly which docs are owned by this project (editable) versus read-only upstream reference material.
 - **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, follow `AGENTS.md` and the project reference docs first.
 - Make minimal, surgical changes consistent with existing code style.
 - Prefer root-cause fixes over surface patches.
@@ -29,14 +30,22 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Always call `font.set_color_mod(r, g, b)` before every `render_string()` call. The canonical white/default is `set_color_mod(255, 255, 255)`. SDL2 color mod is stateful; failing to reset it causes text to render in the previous scene's tint color.
 - When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
 - **Fail Fast** If you cannot find an answer, say you don't know rather than guessing. This gives the user the opportunity to clarify or provide more information, and prevents implementation errors. Often this indicates a gap in the reference documentation that should be filled.
+- **Do not invent player-facing strings.** Any message shown to the user must come from `faery.toml` (`[narr]` tables such as `event_msg`, `speeches`, `place_msg`, etc.) via `crate::game::events`. Never hardcode narrative prose in Rust code.
+
+## Document ownership
+
+The authoritative list lives in `docs/README.md`. Summary for quick reference:
+
+- **Owned by this project (editable with user approval):** `docs/SPECIFICATION.md`, `docs/REQUIREMENTS.md`, `docs/DEBUG_SPECIFICATION.md`, `docs/GUIDELINES.md`.
+- **READ-ONLY (maintained upstream; agents must never modify):** everything else under `docs/`, including `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, and all files under `docs/logic/` and `docs/_discovery/`.
+- Always ask the user before editing any owned doc; surface desired changes to read-only docs as discussion points only.
 
 ## Canonical sources by topic
 
-- Build/run commands and developer setup: `README.md`
-- **Authoritative reference docs (source of truth; READ-ONLY — agents must never modify these files under any circumstances; only the user may edit them):** `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`
-- Implementation contract (synthesized from the reference docs): `docs/SPECIFICATION.md`, `docs/DEBUG_SPECIFICATION.md`
-- Requirements and user stories: `docs/REQUIREMENTS.md`
-- Rust coding guidelines for agents: `docs/GUIDELINES.md`
+- Entry point for all documentation: `docs/README.md`
+- Build/run commands and developer setup: `README.md` (repo root)
+- **Authoritative reference docs (READ-ONLY — agents must never modify; only the user may edit):** `docs/RESEARCH.md`, `docs/ARCHITECTURE.md`, `docs/STORYLINE.md`, `docs/PROBLEMS.md`, `docs/logic/**`, `docs/_discovery/**`
+- **Project-owned docs (editable with user approval):** `docs/SPECIFICATION.md`, `docs/REQUIREMENTS.md`, `docs/DEBUG_SPECIFICATION.md`, `docs/GUIDELINES.md`
 - Current Rust implementation details: source under `src/` (especially `src/main.rs` and `src/game/`)
 
 ## Game mechanics research order
