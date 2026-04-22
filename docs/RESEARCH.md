@@ -733,20 +733,7 @@ The vectors are **not** unit vectors. Cardinal directions have magnitude 3, diag
 
 #### newx (`fsubs.asm:1280-1295`)
 
-```
-newx(x, dir, speed):
-    if dir > 7: return x
-    return (x + (xdir[dir] * speed) >> 1) & 0x7FFF
-```
-
-Steps:
-1. Load `x`, `dir`, `speed` from stack (`fsubs.asm:1282-1286`)
-2. If `dir > 7`: return `x` unchanged (`fsubs.asm:1287-1288`)
-3. `xdir[dir] * speed` — signed 16×16→32 multiply via `muls.w` (`fsubs.asm:1292`)
-4. `lsr.w #1` — logical right shift by 1 (`fsubs.asm:1293`)
-5. Add to `x` and mask to 15-bit `& 0x7FFF` (`fsubs.asm:1294-1295`)
-
-**Note**: Step 4 uses `lsr.w` (logical shift), not `asr.w` (arithmetic). For negative products this introduces a +1 pixel bias, but the result is clamped to 15 bits (`& 0x7FFF`) in step 5, making the difference negligible.
+Returns `x` unchanged when `dir > 7`; otherwise signed-multiplies `xdir[dir]` by `speed`, logically right-shifts one bit, adds to `x`, and masks to the 15-bit range. The logical (not arithmetic) right shift introduces a +1 pixel bias for negative products but the final mask makes this invisible to all callers. Full pseudo-code: [logic/movement.md § newx](logic/movement.md#newx).
 
 #### newy (`fsubs.asm:1298-1318`)
 
@@ -821,16 +808,7 @@ Most tactics only call `set_course` when a random check passes — `!(rand()&7)`
 
 ### 5.4 move_figure — Position Commit with Collision
 
-`move_figure(fig, dir, dist)` at `fmain2.c:322-330`:
-
-```c
-xtest = newx(anim_list[fig].abs_x, dir, dist);
-ytest = newy(anim_list[fig].abs_y, dir, dist);
-if (proxcheck(xtest, ytest, fig)) return FALSE;
-anim_list[fig].abs_x = xtest;
-anim_list[fig].abs_y = ytest;
-return TRUE;
-```
+`move_figure(fig, dir, dist)` at `fmain2.c:322-330` computes a tentative (`xtest`, `ytest`) via `newx`/`newy`, returns FALSE if `proxcheck` reports a block, and otherwise commits the new position and returns TRUE. Full pseudo-code: [logic/combat.md § move_figure](logic/combat.md#move_figure).
 
 Used primarily for combat knockback (`fmain2.c:250`: `move_figure(j, fc, 2)`). Normal per-tick walking is handled **inline** in the main game loop (`fmain.c:1596-1650`), which performs `newx`/`newy` and `proxcheck` directly, then applies terrain effects, velocity, and animation.
 
@@ -868,16 +846,7 @@ Both `_newx` and `_newy` mask results with `& 0x7FFF` — clamping to the 15-bit
 
 #### Hero Wrap Boundaries (`fmain.c:1831-1839`)
 
-For outdoor regions (`region_num < 8`) only, applied to the hero (index 0):
-
-```c
-if (abs_x < 300)      abs_x = 32565;
-else if (abs_x > 32565) abs_x = 300;
-else if (abs_y < 300)  abs_y = 32565;
-else if (abs_y > 32565) abs_y = 300;
-```
-
-This creates a toroidal world with wrap boundaries at 300 and 32565. Indoor regions (`region_num ≥ 8`) do not wrap. NPCs are never wrapped — they can exist at any coordinate.
+For outdoor regions (`region_num < 8`) only, applied to the hero (index 0): if `abs_x` or `abs_y` drops below 300 the hero is teleported to 32565 on that axis, and vice versa, creating a toroidal world with wrap boundaries at 300 and 32565. Indoor regions (`region_num ≥ 8`) do not wrap. NPCs are never wrapped — they can exist at any coordinate. Full pseudo-code: [logic/movement.md § World wrapping](logic/movement.md#world-wrapping).
 
 #### Relative Positioning — wrap() (`fsubs.asm:1350-1356`)
 
@@ -988,52 +957,19 @@ The `_px_to_im` function (`fsubs.asm:542-620`) converts absolute pixel coordinat
 
 #### Stage 1: Sub-Tile Bit Selection (`fsubs.asm:548-559`)
 
-A mask byte `d4` selects one of 8 spatial zones within a 16×32 image tile:
-
-```
-d4 = 0x80                      ; start at bit 7
-if bit 3 of x set: d4 >>= 4   ; select east/west half
-if bit 3 of y set: d4 >>= 1   ; select north/south quarter
-if bit 4 of y set: d4 >>= 2   ; further subdivide vertically
-```
-
-The 8 sub-tile zones allow a single tile to be partially passable — e.g., a wall tile with a walkable gap on one side.
+A mask byte `d4` selects one of 8 spatial zones within a 16×32 image tile. It starts as `0x80` and is shifted right by 4, 1, and 2 bits depending on bits 3 of `x`, bit 3 of `y`, and bit 4 of `y` respectively, yielding one of eight distinct bit positions. The 8 sub-tile zones allow a single tile to be partially passable — e.g., a wall tile with a walkable gap on one side. Full pseudo-code: [logic/terrain-collision.md § px_to_im](logic/terrain-collision.md#px_to_im).
 
 #### Stage 2: Pixel to Sector Coordinates (`fsubs.asm:561-589`)
 
-```
-imx = x >> 4           ; pixel to image-tile X (16 px/tile)
-imy = y >> 5           ; pixel to image-tile Y (32 px/tile)
-secx = (imx >> 4) - xreg
-secy = (imy >> 3) - yreg
-```
-
-Sector X wrapping (`fsubs.asm:567-572`): if bit 6 of `secx` is set, clamp to 0 or 63 based on bit 5. Sector Y clamped to 0–31 (`fsubs.asm:577-579`).
-
-Map grid index: `secy * 128 + secx + xreg` (`fsubs.asm:581-583`).
+Pixel coordinates are reduced to image-tile coordinates (`imx = x >> 4`, `imy = y >> 5`; tiles are 16×32 pixels), then to sector coordinates (`secx = (imx >> 4) − xreg`, `secy = (imy >> 3) − yreg`). Sector X is wrapped: if bit 6 of `secx` is set, it is clamped to 0 or 63 based on bit 5 (`fsubs.asm:567-572`). Sector Y is clamped to 0–31 (`fsubs.asm:577-579`). The final map grid index is `secy * 128 + secx + xreg` (`fsubs.asm:581-583`). Full pseudo-code: [logic/terrain-collision.md § px_to_im](logic/terrain-collision.md#px_to_im).
 
 #### Stage 3: Sector Tile Lookup (`fsubs.asm:590-604`)
 
-```
-sec_num  = map_mem[map_index]
-local_imx = imx & 15
-local_imy = imy & 7
-offset   = sec_num * 128 + local_imy * 16 + local_imx
-image_id = sector_mem[offset]
-```
-
-Each sector is 16 columns × 8 rows = 128 tile IDs.
+The map grid index from Stage 2 selects a sector number (`sec_num = map_mem[map_index]`). The low bits of `imx` and `imy` (`imx & 15`, `imy & 7`) index into that sector's 16×8 = 128-tile layout, yielding the image ID (`sector_mem[sec_num*128 + (imy&7)*16 + (imx&15)]`). Full pseudo-code: [logic/terrain-collision.md § px_to_im](logic/terrain-collision.md#px_to_im).
 
 #### Stage 4: Terrain Attribute Lookup (`fsubs.asm:606-616`)
 
-```
-terra_index = image_id * 4
-tbit = terra_mem[terra_index + 2]      ; sub-tile collision mask
-if (tbit & d4) == 0: return 0          ; passable
-else: return terra_mem[terra_index + 1] >> 4   ; terrain type (high nibble)
-```
-
-The AND of the sub-tile mask (`d4` from Stage 1) with the tile feature byte enables per-zone collision — only if the specific zone's bit is set does the terrain type apply.
+Each image ID has a 4-byte record in `terra_mem`. Byte +2 is the sub-tile collision mask; if it ANDed with Stage 1's `d4` bit is zero, the zone is passable and `px_to_im` returns 0. Otherwise the function returns the high nibble of byte +1 — the terrain type code. The per-zone AND is what makes a single image tile partially passable. Full pseudo-code: [logic/terrain-collision.md § px_to_im](logic/terrain-collision.md#px_to_im).
 
 ### 6.2 Terrain Types
 
@@ -1643,12 +1579,7 @@ The blocked handler is in the WALKING/STILL state section of the animation loop 
 
 #### Escape Tactic Selection (`fmain.c:2141-2143`)
 
-```c
-if (tactic == FRUST || tactic == SHOOTFRUST)
-{   if (an->weapon & 4) do_tactic(i,rand4()+2);   /* ranged */
-    else do_tactic(i,rand2()+3);                    /* melee */
-}
-```
+When an actor's tactic is `FRUST` or `SHOOTFRUST`, a new random tactic is dispatched via `do_tactic`: ranged actors (`weapon & 4` set) get `rand4()+2` (one of FOLLOW / BUMBLE_SEEK / RANDOM / BACKUP); melee actors get `rand2()+3` (BUMBLE_SEEK or RANDOM). Full pseudo-code: [logic/frustration.md § resolve_frust_tactic](logic/frustration.md#resolve_frust_tactic).
 
 | Weapon Type | Expression | Range | Possible Tactics |
 |-------------|-----------|-------|------------------|
@@ -3607,18 +3538,7 @@ Periods 1–3, 5, 7–8, 10–11 are silent transitions.
 
 ### 19.2 `day_fade` — Palette Interpolation
 
-Defined at `fmain2.c:1653-1660`. Called every tick from Phase 14d (`fmain.c:2039`):
-
-```c
-day_fade()
-{   register long ll;
-    if (light_timer) ll = 200; else ll = 0;
-    if ((daynight & 3) == 0 || viewstatus > 97)
-        if (region_num < 8)
-             fade_page(lightlevel-80+ll, lightlevel-61, lightlevel-62, TRUE, pagecolors);
-        else fade_page(100, 100, 100, TRUE, pagecolors);
-}
-```
+Defined at `fmain2.c:1653-1660`. Called every tick from Phase 14d (`fmain.c:2039`). The routine only runs its palette update every 4 ticks (`daynight & 3 == 0`) or while a screen rebuild is in progress (`viewstatus > 97`). Outdoors (`region_num < 8`) it calls `fade_page(lightlevel − 80 + ll, lightlevel − 61, lightlevel − 62, TRUE, pagecolors)`, where `ll = 200` when the Green Jewel `light_timer` is active and `ll = 0` otherwise. Indoors (`region_num ≥ 8`) it forces full brightness `(100, 100, 100)` with no day/night variation. Full pseudo-code: [logic/day-night.md § day_fade](logic/day-night.md#day_fade).
 
 - **Green Jewel light bonus**: `light_timer > 0` adds 200 to red parameter (warm amber glow).
 - **Update rate**: Every 4 ticks (`daynight & 3 == 0`) or during screen rebuild (`viewstatus > 97`).

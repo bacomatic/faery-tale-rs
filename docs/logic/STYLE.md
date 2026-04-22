@@ -2,7 +2,19 @@
 
 This document is the normative grammar for pseudo-code blocks under `docs/logic/`. Every ` ```pseudo ` fenced block must conform. The linter (`tools/lint_logic.py`) enforces this grammar.
 
-See the design spec at [`../superpowers/specs/2026-04-20-logic-docs-design.md`](../superpowers/specs/2026-04-20-logic-docs-design.md) for rationale.
+## Rationale
+
+The logic tier exists so that the full documentation set — logic + [ARCHITECTURE](../ARCHITECTURE.md) + [RESEARCH](../RESEARCH.md) + [STORYLINE](../STORYLINE.md) + `world_db.json` + `quest_db.json` — is sufficient to re-implement *The Faery Tale Adventure* without consulting the 1987 source. The target audience is both human porters and AI coding agents: the format is readable as Markdown, and each fenced block is machine-parseable by the linter.
+
+The fidelity target is **behavioral, not implementation**: same inputs produce the same observable gameplay. The grammar specifies *what* happens (rolls, thresholds, state transitions, ordering) and leaves primitives (RNG algorithm, fixed-point layout, integer widths when not observable) to the porter. Consequences:
+
+- Integer widths are declared only when overflow or wrap is observable.
+- Randomness is expressed via `rand(lo, hi)` / `chance(n, d)`; any uniform PRNG with adequate period is acceptable.
+- Save-file byte layout **is** bit-exact — save compatibility is observable.
+- Per-frame ordering **is** exact when it changes outcomes.
+- Graphics, audio, and input-device APIs stay as prose in RESEARCH.md — any port will swap them for SDL or an equivalent.
+
+The strict, normalized grammar below makes every file parseable by the same tool, makes cross-references mechanically checkable, and makes the pseudo-code a contract rather than a suggestion.
 
 ## 1. Per-file structure
 
