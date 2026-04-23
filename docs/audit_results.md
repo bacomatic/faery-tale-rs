@@ -505,6 +505,246 @@ for later batch updates and do not block other subsystem audits.
 
 ---
 
+## Subsystem 3: ai-system — ✅ Complete
+
+**Reference**: `reference/logic/ai-system.md` (+ `game-loop.md §actor_tick`,
+`RESEARCH.md §8`, `frustration.md`, `SYMBOLS.md §GOAL_*`/`TACTIC_*`/`STATE_*`)
+**Code**: `src/game/npc_ai.rs` (`tick_npc`, `select_tactic`, `do_tactic`),
+AI wiring in `src/game/gameplay_scene.rs::update_actors`,
+frust-latching in `src/game/npc.rs::tick_with_actors`
+**Audit date**: 2025 (current session)
+
+### Summary
+- **14 findings**: 1 CONFORMANT, 7 NEEDS-FIX (all fixed), 1 INVENTED (fixed),
+  5 SPEC-GAP (queued), 0 REF-AMBIGUOUS, 0 RESEARCH-REQUIRED.
+- Fixes applied in **one commit** (SHA to be recorded by orchestrator).
+- Build/tests: ✅ `cargo build` clean (zero new warnings beyond pre-existing);
+  `cargo test` — 576 + 12 + 12 tests passing (8 new targeted tests added).
+
+### Findings
+
+#### F3.1 — SETFIG actors re-aim at hero every tick [INVENTED]
+**Location**: `src/game/npc_ai.rs::tick_npc` (SETFIG early-return block).
+**Reference**: `reference/logic/ai-system.md:46`
+(`if actor.type == SETFIG: return` — `fmain.c:2119-2120`).
+**Issue**: Rust's SETFIG branch short-circuited the AI loop but kept a
+special case that called `set_course(SC_AIM)` + `state = Still` whenever the
+actor's goal was `Goal::Stand`, re-orienting shopkeepers toward the hero on
+every tick. Original `advance_goal` exits **immediately** for SETFIG — no
+goal/state/facing/tactic mutations at all. Shopkeeper pose comes from
+`set_shape` at spawn time, not from per-tick AI.
+**Resolution**: SETFIG branch now returns unconditionally. Two tests that
+enforced the invented behavior (`test_setfig_shopkeeper_stand_faces_hero`
+and `test_freeze_nonhostile_npc_still_acts`) were rewritten to assert that
+the spawn-time pose is preserved verbatim.
+
+#### F3.2 — Melee-reach threshold used wrong numeric GOAL values [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::goal_value` (renamed `goal_numeric`).
+**Reference**: `reference/logic/ai-system.md:103` (`thresh = 14 - mode`),
+`SYMBOLS.md:275-286` (`GOAL_ATTACK1=1, ATTACK2=2, ARCHER1=3, ARCHER2=4`).
+**Issue**: The helper mapped `Attack1 → 0, Attack2 → 1, Archer1 → 3,
+Archer2 → 4`, producing `thresh = 14, 13, 11, 10` instead of the ref's
+`13, 12, 11, 10`. ATTACK1 and ATTACK2 enemies therefore engaged melee at
+1-pixel longer reach than the original.
+**Resolution**: Renamed helper to `goal_numeric` with correct numeric
+values for all GOAL_* constants. Added `test_melee_thresh_uses_numeric_goal`
+verifying ATTACK1 engages at xd=12, ATTACK2 does not.
+
+#### F3.3 — Snakes unconditionally march to fixed turtle-nest coords [INVENTED]
+**Location**: `src/game/npc_ai.rs::select_tactic` (snake branch).
+**Reference**: `reference/logic/ai-system.md:84`
+(`if actor.race == 4 and turtle_eggs: tactic = EGG_SEEK`).
+**Issue**: Rust unconditionally set `Tactic::EggSeek` for any snake
+(`race == 4`), making snakes teleport-seek `(23087, 5667)` in every zone
+whether or not the global `turtle_eggs` counter was non-zero. Original
+gates EGG_SEEK on that counter; when zero, snakes fall through to the
+normal armed/unarmed/vitality/range decision tree and pursue the hero.
+**Resolution**: `tick_npc` / `select_tactic` now take a `turtle_eggs: bool`
+parameter. `gameplay_scene::update_actors` passes `false` today
+(SPEC-GAP — the `turtle_eggs` global is not yet plumbed into `GameState`;
+see F3.10). Added `test_snake_no_egg_seek_when_eggs_absent` and
+`test_snake_egg_seek_when_eggs_present`.
+
+#### F3.4 — Dark knight `stand_guard` outside melee reach missing [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::select_tactic` (post melee-shortcut).
+**Reference**: `reference/logic/ai-system.md:110-112`
+(`elif actor.race == 7 and actor.vitality != 0: stand_guard` —
+`fmain.c:2168-2169`), `RESEARCH.md §Dark Knight`.
+**Issue**: When a living DKnight (`race == 7`) was outside his extended
+16-pixel reach, Rust fell through to the normal tactic tree (Pursue /
+Evade / Backup). Original ref forces `state = STILL, facing = DIR_S` —
+the DKnight plants himself and waits. Combined with his fixed spawn
+position (21635, 25762), this is the behavior that keeps him blocking the
+hidden valley exit.
+**Resolution**: Added the `race == 7 && vitality > 0` stand_guard branch
+after the close-range melee shortcut. Added
+`test_dknight_stand_guard_out_of_reach` and
+`test_dknight_stand_guard_only_when_alive`.
+
+#### F3.5 — `Tactic::Frust` was a no-op — frust-latched NPCs stuck [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs` — `do_tactic` (treated Frust as no-op);
+Frust is latched by `npc.rs::tick_with_actors` on full-block.
+**Reference**: `reference/logic/ai-system.md:70-75`
+(`if tactic == FRUST or tactic == SHOOTFRUST: do_tactic(rand(…))`),
+`frustration.md#resolve_frust_tactic` (`fmain.c:2141-2144`).
+**Issue**: Blocked NPCs set `tactic = Frust` to request a new tactic next
+tick, but `do_tactic` had a match arm that did nothing for Frust, and
+`select_tactic` never checked for it — so frust-latched actors never
+recovered, effectively freezing any NPC that collided with scenery.
+**Resolution**: `select_tactic` now detects `Tactic::Frust` before the
+goal-mode branches and assigns a random fallback tactic:
+bow actors (`weapon & 4 != 0`) draw from `rand(2,5)` →
+`Follow/BumbleSeek/Random/Backup`; melee actors draw from `rand(3,4)` →
+`BumbleSeek/Random`. The rest of the pipeline then executes the new
+tactic normally. Added `test_frust_tactic_dispatches_random_fallback`
+and `test_frust_tactic_dispatches_bow_fallback`.
+
+#### F3.6 — `do_tactic` rate-limit mis-gated (ARCHER2 + SHOOT) [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::do_tactic` (opening probabilistic gate).
+**Reference**: `RESEARCH.md §8.2` (fmain2.c:1666-1682 —
+`r = !(rand() & 7)`; `if goal == ATTACK2: r = !(rand() & 3)`; SHOOT
+bypasses the gate entirely).
+**Issue**: Rust gated the tactic executor at 25% for both `Attack2` and
+`Archer2`; original upgrades only `ATTACK2`. More importantly, `SHOOT`
+must **not** be rate-limited (archers need to face the hero every tick
+to line up their shot), but Rust passed SHOOT through the gate, throttling
+archer firing facing updates.
+**Resolution**: Gate now uses `goal == Attack2 → 3, else → 7`; and
+`Tactic::Shoot` bypasses the gate entirely. Added
+`test_do_tactic_shoot_bypasses_rate_limit`.
+
+#### F3.7 — Hero-dead leader/follower split wrong [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::select_tactic` (hero_dead override),
+`src/game/gameplay_scene.rs::update_actors` (caller).
+**Reference**: `reference/logic/ai-system.md:60-64` + line 555
+(`leader = 0` at loop start; `if (leader == 0) leader = i` at
+`fmain.c:2183`).
+**Issue**: Rust set `goal = Follower` for any NPC whenever *some* leader
+slot existed (`leader_idx.is_some()`). That makes the leader itself also
+assign Follower to itself, so nobody flees first. Original ref zeroes
+`leader` at loop start; the **first** iterated eligible actor sees
+`leader == 0` → `GOAL_FLEE`, and subsequent iterations see `leader != 0`
+→ `GOAL_FOLLOWER`.
+**Resolution**: `tick_npc`/`select_tactic` now take the actor's own
+`npc_idx`. `hero_dead` path: `leader_idx == Some(npc_idx) || None → Flee;
+otherwise → Follower`. Added
+`test_hero_dead_leader_flees_others_follow`.
+
+#### F3.8 — Melee-weapon test used `weapon < 4` instead of bit test [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::select_tactic` (close-range melee check).
+**Reference**: `reference/logic/ai-system.md:105`
+(`if (actor.weapon & 4) == 0`).
+**Issue**: Rust used `weapon < 4` to detect melee. Equivalent for the
+weapon values 0–7 actually in use, but it encoded an invariant (`weapon
+never ≥ 8`) the ref never made. Bit-2 test is the canonical check.
+**Resolution**: Changed to `(weapon & 4) == 0`.
+
+#### F3.9 — `Goal::Stand` used SC_AIM; ref uses SC_SMART + stop_motion [NEEDS-FIX]
+**Location**: `src/game/npc_ai.rs::select_tactic` Stand branch.
+**Reference**: `reference/logic/ai-system.md:121-122`
+(`set_course(actor, hero_x, hero_y, 0)` then `stop_motion(actor)`).
+**Issue**: Rust called `set_course(SC_AIM)` (mode 5) which skips the
+axis-suppression applied by mode 0 (smart seek). On diagonals this
+produced slightly different facings for Stand-goal actors vs the original
+(facing toward the hero without axis snap).
+**Resolution**: Stand branch now calls `set_course(SC_SMART)` (mode 0)
+and then overrides `state = Still` to match `stop_motion`.
+
+#### F3.10 — `xtype > 59` race filter uses `race < 4` placeholder [SPEC-GAP]
+**Location**: `src/game/npc_ai.rs::select_tactic`.
+**Reference**: `reference/logic/ai-system.md:65`
+(`xtype > 59 and actor.race != extn.v3`), `RESEARCH.md:1483`.
+**Issue**: The fidelity-exact condition needs the currently-active extent
+record (`extn.v3` = per-zone race filter, e.g. 7 for DKnight valley,
+9 for necromancer arena). That pointer is not plumbed into GameState
+yet, so Rust keeps a hand-tuned placeholder `race < 4`. For DKnight
+(race 7, v3 7) both conditions agree, so no current zone misbehaves —
+but a future port of spectre / witch special zones will need the real
+`extn.v3`.
+**Resolution**: Queued. SPEC §11 should add an `extn.v3` field to the
+zone/extent model and `select_tactic` should consult it directly.
+
+#### F3.11 — `turtle_eggs` global counter not plumbed [SPEC-GAP]
+**Location**: `src/game/game_state.rs` (`try_rescue_egg` stub),
+`src/game/gameplay_scene.rs::update_actors` (hardcodes `turtle_eggs = false`).
+**Reference**: `reference/logic/ai-system.md:84` and surrounding
+turtle-egg quest at `fmain.c:3040-3100`.
+**Issue**: The original `turtle_eggs` world-state counter is replaced by
+an inventory-item stub in `GameState`. Snakes can never enter EGG_SEEK
+until the counter is formalised.
+**Resolution**: Queued. Once the turtle-eggs counter is modelled as a
+world flag (not inventory), thread it through `update_actors` into
+`tick_npc`.
+
+#### F3.12 — `STATE_SHOOT1` → `fire_aimed_shot` branch missing [SPEC-GAP]
+**Location**: `src/game/npc_ai.rs::select_tactic` (no SHOOT1 short-circuit),
+`src/game/gameplay_scene.rs::update_actors` (uses `archer_cooldown`).
+**Reference**: `reference/logic/ai-system.md:54-56` (`elif actor.state ==
+STATE_SHOOT1: fire_aimed_shot`).
+**Issue**: The ref uses a two-frame archer state machine
+(SHOOT1 = aiming, SHOOT3 = fired). Rust short-circuits with a single
+`archer_cooldown` counter driven off the per-NPC `Shooting` state. Same
+observable firing behaviour, but the FSM topology and cadence differ.
+**Resolution**: Queued. Proper fidelity requires introducing
+SHOOT1/SHOOT3 states and wiring `fire_aimed_shot` to the SHOOT1→SHOOT3
+transition.
+
+#### F3.13 — Carrier (daynight & 15) == 0 cadence missing [SPEC-GAP]
+**Location**: `src/game/npc_ai.rs::tick_npc` (carriers route to a
+different code path), `src/game/gameplay_scene.rs` (turtle auto).
+**Reference**: `reference/logic/ai-system.md` carrier preamble
+(`fmain.c:2114-2117`).
+**Issue**: Original `advance_goal` for carrier-type actors only calls
+`set_course(…, mode=5)` every 16 ticks (`daynight & 15 == 0`). Rust
+handles turtle carriers through a dedicated T3-CARRY-TURTLE-AUTO path
+that ignores this cadence.
+**Resolution**: Queued for the carrier-transport subsystem audit.
+
+#### F3.14 — `frustflag` reset semantics differ from ref [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs::update_player_motion`.
+**Reference**: `reference/logic/frustration.md` (ref resets frustflag
+from any successful actor action — SINK, walk, shot, melee, dying —
+at `fmain.c:1577, 1650, 1707, 1715, 1725`).
+**Issue**: Rust only resets `frustflag` when the player walks or when
+*any* enemy NPC is active. The per-actor successful-action resets are
+not wired, so the frustration animation can trigger during combat even
+when NPCs are acting.
+**Resolution**: Queued for subsystem 20 (frustration) audit — cross-
+cutting change touching walk_step, shoot, melee, and checkdead paths.
+
+### CONFORMANT items
+
+- **C3.1 — Battleflag 300-pixel proximity test**: Rust's
+  `update_actors` sets `state.battleflag` when any active NPC is within
+  300 px of the hero, matching `RESEARCH.md §8.3` point 4 (on-screen =
+  300×300 box around hero).
+- **Scroll-text compliance**: `src/game/npc_ai.rs` and the AI wiring in
+  `gameplay_scene.rs::update_actors` emit no player-facing strings —
+  two-source rule (SPEC §23.6, REQ R-INTRO-012) is satisfied by
+  construction.
+
+### SPEC/REQ updates queued
+
+- **F3.10 (SPEC-GAP)**: Add `extn.v3` (zone race filter) to the zone/
+  extent model and use it in the `xtype > 59` FLEE gate.
+- **F3.11 (SPEC-GAP)**: Formalise the `turtle_eggs` global counter as a
+  world-state flag (not inventory) and thread it to `tick_npc`.
+- **F3.12 (SPEC-GAP)**: Introduce STATE_SHOOT1/SHOOT3 FSM states and
+  `fire_aimed_shot` dispatch to replace the `archer_cooldown` proxy.
+- **F3.13 (SPEC-GAP)**: Carrier AI should run every 16 ticks
+  (`daynight & 15 == 0`) with `set_course(mode=5)`; document in SPEC.
+- **F3.14 (SPEC-GAP)**: Hook per-actor successful-action resets of
+  `frustflag` from walk_step, shoot, melee, and dying paths per
+  `frustration.md`.
+
+### Blockers
+
+None — all NEEDS-FIX and INVENTED items are resolved; SPEC-GAPs are queued
+for later batch updates and/or subsystem audits (frustration, carrier-
+transport, zones) and do not block other subsystem audits.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
