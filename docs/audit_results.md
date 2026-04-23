@@ -1249,6 +1249,231 @@ C5.8).
 
 ---
 
+## Subsystem 6: doors — ✅ Complete
+
+**Reference**: `reference/logic/doors.md` (primary) +
+`reference/logic/game-loop.md#check_door`, `movement.md#walk_step`,
+`dialog_system.md §"Door / key feedback"` and §"USE menu",
+`messages.md`, `inventory.md`, `RESEARCH.md §12 door system`,
+`SYMBOLS.md` (`STATBASE`, `KEYBASE`, `TERRAIN_DOOR`).
+**Code**: `src/game/doors.rs` (`DoorEntry`, `key_req`, `doorfind`,
+`doorfind_exit`, `doorfind_nearest_by_bump_radius`,
+`entry_spawn`/`exit_spawn`, `apply_door_tile_replacement`),
+`src/game/gameplay_scene.rs` (bump-open at ≈lines 1093-1185,
+walk-through entry at ≈lines 1028-1067, `MenuAction::TryKey` at
+≈lines 2754-2808), `src/game/menu.rs` (`MenuMode::Keys` visibility),
+`faery.toml [[doors]]` (86-entry `doorlist` port).
+**Audit date**: 2025 (current session)
+
+### Summary
+- **9 findings**: 4 CONFORMANT, 0 NEEDS-FIX, 2 INVENTED (both fixed),
+  2 REF-AMBIGUOUS (queued), 1 SPEC-GAP (queued), 0 RESEARCH-REQUIRED.
+- Fixes applied in **one commit**.
+- Build/tests: ✅ `cargo build` clean (zero new warnings);
+  `cargo test` — 579 + 12 + 12 tests passing (no new tests added or
+  modified; existing door tests in `src/game/doors.rs` still green).
+
+### Findings
+
+#### F6.1 — `TryKey` zero-count path prints invented "No such key." [INVENTED]
+**Location**: `src/game/gameplay_scene.rs::handle_menu_action`
+(`MenuAction::TryKey`, zero-key guard ≈line 2760).
+**Reference**: `reference/logic/doors.md#use_key_on_door`
+(`fmain.c:3475`): `if (stuff[hit+KEYBASE] == 0) goto menu0;` — the
+original **silently** returns to the items menu without printing
+anything when the player selects a key of which they hold zero. The
+only "no keys" message in the KEYS flow is `"% has no keys!"` at
+`fmain.c:3450`, emitted one level up in the USE → Keys toggle gate
+when the sum of all six key counts is zero; in the Rust port that
+gate is already enforced visually by `menu.rs::set_options`
+(enabled flag `8` hides the submenu when no keys exist).
+**Issue**: The Rust handler emitted a fabricated `"No such key."`
+message in this path — not present in `faery.toml [narr]` nor in
+`reference/logic/dialog_system.md`, violating the two-source
+scroll-text rule.
+**Resolution**: Dropped the message; the zero-count branch now
+silently falls through to `gomenu(Items)`, matching the ref. The
+`bumped_door` latch is cleared unconditionally on KEYS entry
+(addresses F6.3 below).
+
+#### F6.2 — `TryKey` no-match path prints invented "Key didn't fit." [INVENTED]
+**Location**: `src/game/gameplay_scene.rs::handle_menu_action`
+(`MenuAction::TryKey`, both "no nearest door" and "key mismatch"
+branches, ≈lines 2787/2790).
+**Reference**: `reference/logic/doors.md#use_key_on_door`
+(`fmain.c:3483-3485`) and
+`reference/logic/dialog_system.md §"USE menu"` row 3483-3485:
+`extract("% tried a ") + inv_list[KEYBASE+hit].name + " but it didn't" + print("fit.")` — a single assembled line of the form
+`"{brother} tried a {key name} but it didn't fit."`.
+**Issue**: Rust emitted the invented `"Key didn't fit."` (no `%`
+substitution, no key name) on both the "no door in bump radius" and
+"door found but wrong key" paths. Violates the two-source rule and
+drops the `%`-name + `{key name}` composition.
+**Resolution**: Replaced both branches with the ref-accurate
+composition `format!("{} tried a {} but it didn't fit.", bname,
+stuff_index_name(16+idx))`, using the already-ported `inv_list`
+name table in `world_objects::stuff_index_name` (indices 16..21 =
+Gold/Green/Blue/Red/Grey/White Key).
+
+#### F6.3 — KEYS submenu entry did not clear the `bumped` lock-message latch [CONFORMANT]
+**Location**: `src/game/gameplay_scene.rs::handle_menu_action`
+(`MenuAction::TryKey`, ≈line 2762).
+**Reference**: `reference/logic/doors.md#use_key_on_door`
+(`fmain.c:3474`): `bumped = 0` is the first statement of
+`use_key_on_door`, before the zero-key guard and the 9-direction
+sweep. The intent is to guarantee that a subsequent door bump
+(even after an unsuccessful key try) re-speaks `"It's locked."`
+rather than staying silent behind the suppression latch.
+**Issue**: Rust only cleared `bumped_door = None` on the success
+path inside the sweep; failing key tries left the latch set,
+causing the next bump on the same door to stay silent.
+**Resolution**: Moved `self.bumped_door = None` to the top of the
+`TryKey` arm (before the zero-count guard), matching
+`fmain.c:3474`. Classified CONFORMANT after fix (the reset is now
+unconditional on KEYS entry).
+
+#### F6.4 — `doorfind_nearest_by_bump_radius` approximates the 9-direction sweep with a 32×64 px window [REF-AMBIGUOUS]
+**Location**: `src/game/doors.rs::doorfind_nearest_by_bump_radius`
+(search window `BUMP_PROX_X=32`, `BUMP_PROX_Y=64`), used by both the
+terrain-15 bump path in `apply_player_input` (≈lines 1117-1118)
+and the `TryKey` sweep (≈line 2766).
+**Reference**: `reference/logic/doors.md#use_key_on_door`
+(`fmain.c:3477-3481`) — the original iterates
+`for (i=0; i<9; i++) doorfind(newx(hero_x,i,16), newy(hero_y,i,16),
+hit+1);` — i.e. 9 canonical directions × 16 px, each probing live
+`sector_mem` for `TERRAIN_DOOR=15` and then looking up the tile id
+in `open_list[17]`. Rust has no `sector_mem`/`open_list` layer; the
+port keeps the 86-entry `doorlist[]` only and drives unlock from it.
+**Issue**: The bump-radius search (filter by |Δx| < 32 ∧ |Δy| < 64,
+min Euclidean distance) can match a door up to 31 px east/west
+or 63 px north/south of the hero, whereas the ref only triggers
+for a door whose upper-left tile lies at exactly one of 9 probed
+`(hero_x ± {0,3,2,3}, hero_y ± {0,3,2,3})` pixel offsets (scaled
+by 16). Net effect: a key used adjacent-but-not-facing a door
+could succeed in Rust where it would fail in the ref, and the
+terrain-15 bump path could match a more distant door than
+`doorfind`'s tile-level probe would.
+**Resolution**: Flagged REF-AMBIGUOUS, no fix. A faithful port
+requires either (a) porting `open_list` + `sector_mem` tile-level
+lookup, or (b) shrinking `BUMP_PROX_*` to ~16 px and ensuring the
+door's `src_x/src_y` are stored as the upper-left tile corner so
+the 9-direction projection lands inside the match box. Both are
+larger refactors spanning tile-data storage and are out of scope
+for this per-subsystem audit.
+
+#### F6.5 — `find_place`/`place_msg`/`inside_msg` narration is not fired on door transitions [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` outdoor→indoor and
+indoor→outdoor branches (≈lines 1033-1040, 1137-1143);
+`NarrConfig.place_msg`/`inside_msg` (`src/game/game_library.rs:181`)
+are loaded but never read.
+**Reference**: `reference/logic/game-loop.md#check_door`
+(`fmain.c:1889` and `fmain.c:1912` companion): both halves of the
+door teleport call `find_place(2)` / `find_place(False)` after
+`xfer(...)`, which (per
+`reference/logic/astral-plane.md#find_place`) resolves the current
+extent's `xtype` and emits the matching entry from `place_msg[]`
+(outdoor) or `inside_msg[]` (indoor), e.g. `"% came to a small
+chamber."`, `"He entered the tavern."`, `"He unlocked the door and
+entered."`.
+**Issue**: The Rust port never narrates place/room names on door
+transitions; the `[narr] place_msg` / `inside_msg` tables in
+`faery.toml` are dead data. This is broader than the doors
+subsystem (the outdoor extent-crossing path in
+`no_motion_tick`/`find_place` is also unported) but is user-visible
+every time the hero steps through a door.
+**Resolution**: Queued as SPEC-GAP. Porting requires the
+`find_place` extent-matching loop (`fmain.c:2647-2720`) plus the
+`_place_tbl` / `_inside_tbl` tile-range tables; both are in
+`reference/_discovery/` but not yet mirrored in `faery.toml`.
+Leaving unfixed here per subsystem-scope rule; flagged for the
+eventual cross-cutting narration pass.
+
+#### F6.6 — Opened-door state persists across region reloads rather than resetting with `sector_mem` [REF-AMBIGUOUS]
+**Location**: `src/game/gameplay_scene.rs::GameplayScene.opened_doors`
+(`HashSet<usize>`, ≈line 367); cleared only per-door in the
+walk-through branch (≈line 1141).
+**Reference**: `reference/logic/doors.md` "Notes" section:
+_"Opened-door state is not saved. `doorfind` writes directly into
+`sector_mem` via `mapxy`; these edits live for the lifetime of the
+currently loaded sector. Any `xfer` that triggers a region reload
+discards them."_ I.e. the ref's "is-open" bit lives in the tile
+graphic itself, which is re-read from disk on every region swap.
+**Issue**: The Rust port keeps a durable `opened_doors: HashSet`
+that survives region transitions and save/load (not serialised in
+`persist.rs`, so it's cleared on load — but persists across any
+number of `xfer`s within a single run). A player who unlocks a
+door and later returns will still see `opened_doors.contains(idx)`
+true and will be allowed a second walk-through without re-bumping;
+in the ref the tile would have reverted to the "closed" graphic
+after the first region reload and would need re-unlocking.
+**Resolution**: Flagged REF-AMBIGUOUS. The fix depends on the
+port's eventual `load_all` / `sector_mem` architecture — once the
+Rust map layer re-reads tiles from disk on region swap, the
+`opened_doors` set should be cleared inside the region-transition
+handler (not in save-load). Until then, the current behaviour is
+slightly more permissive than the ref but not exploitable
+(the door table's `dst_x/dst_y` is still gated by the
+sub-tile `hero_x & 15` / `hero_y & 0x10` guard, and keys are
+consumed exactly once per open).
+
+### CONFORMANT items
+
+- **C6.1 — Door type → key-requirement mapping (`key_req`)**:
+  `src/game/doors.rs::key_req` matches the `open_list[17]`
+  `keytype` column enumerated at `fmain.c:1059-1078` / ref
+  `reference/logic/doors.md` §Symbols: `HWOOD`/`VWOOD`/`HCITY`/
+  `VCITY`/`LOG`/`STAIR`/`CAVE` → NOKEY; `HSTONE`/`VSTONE` → GREEN
+  (`stuff[17]`); `CRYST` → KBLUE (`stuff[18]`); `SECRET` → RED
+  (`stuff[19]`); `HSTON2`/`VSTON2` → GREY (`stuff[20]`); `MARBLE`
+  → WHITE (`stuff[21]`); `BLACK` → Talisman (per RESEARCH §12);
+  `DESERT` → GoldStatues (`stuff[25] >= 5`, via `STATBASE=25`).
+- **C6.2 — Sub-tile entry/exit guards**: both the outdoor walk-on
+  entry (`gameplay_scene.rs::apply_player_input` ≈lines 1047-1050)
+  and the indoor exit (`doors.rs::doorfind_exit`) apply the
+  `hero_y & 0x10` (horizontal) / `hero_x & 15` (vertical) guards
+  with the correct polarity per `game-loop.md#check_door`
+  (`fmain.c:1878-1879, 1909-1910`): enter when upper-half /
+  left-portion, exit when lower-half / right-portion.
+- **C6.3 — `entry_spawn` / `exit_spawn` offsets**: the destination
+  coordinate offsets per door class match `check_door`
+  (`fmain.c:1882-1885, 1912-1915`) exactly — CAVE: `(+24, +16)`
+  on enter, `(-4, +16)` on exit; horizontal: `(+16, +0)` enter,
+  `(+16, +34)` exit; vertical: `(-1, +16)` enter, `(+20, +16)`
+  exit. Riding (`riding != 0`) short-circuits both directions per
+  `fmain.c:1859` (`check_door` early-return), matching
+  SPEC §21.7 T1-CARRY-DOOR-BLOCK.
+- **C6.4 — Scroll-text compliance**: the only strings this
+  subsystem speaks are the direct literals `"It opened."`
+  (`fmain.c:1117`), `"It's locked."` (`fmain.c:1122`), and the
+  composed `"% tried a <keyname> but it didn't fit."`
+  (`fmain.c:3483-3485`), all three enumerated in
+  `reference/logic/dialog_system.md §"Door / key feedback"` and
+  §"USE menu". No scroll-area text is invented; the narration
+  gap is the missing `place_msg`/`inside_msg` path (F6.5), not
+  anything the door handler itself prints.
+
+### SPEC/REQ updates queued
+
+- **F6.4 (REF-AMBIGUOUS)**: Decide the port's tile-level unlock
+  strategy (port `open_list` + `sector_mem` vs. tighten the
+  `BUMP_PROX_*` window on the existing `DoorEntry` table).
+- **F6.5 (SPEC-GAP)**: Port `find_place` + `_place_tbl` /
+  `_inside_tbl` so door transitions emit the matching
+  `[narr] place_msg` / `inside_msg` line.
+- **F6.6 (REF-AMBIGUOUS)**: Clear `opened_doors` on region
+  reload once the Rust map layer re-reads tiles from disk.
+
+### Blockers
+
+None — the two INVENTED scroll-text violations are fixed; the
+remaining items (F6.4 REF-AMBIGUOUS, F6.5 SPEC-GAP, F6.6
+REF-AMBIGUOUS) are queued for the cross-cutting narration /
+map-reload passes and do not block downstream subsystem audits.
+Two-source rule: ✅ door subsystem speaks only ref-literal
+(`dialog_system.md`) strings.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
