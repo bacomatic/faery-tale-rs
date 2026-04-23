@@ -1804,6 +1804,278 @@ strings remain in the TALK / Yell / proximity paths.
 
 ---
 
+## Subsystem 8: shops
+
+**Scope**: bartender (race `0x88`) BUY-menu dispatch — the
+game's only vendor NPC.  Covers jtrans row map, gold gating,
+per-slot side effects (food eat, arrow bundle, generic item),
+scroll-text narration, and the BUY vs TALK split (pub /
+inn / temple behaviour defers to subsystem 7).
+
+**Primary ref**: `reference/logic/shops.md` (`buy_dispatch`
+pseudo-code, `fmain.c:3424-3442`, `TABLE:jtrans` at
+`fmain2.c:850`), cross-referenced with
+`reference/logic/dialog_system.md` (literal registry),
+`reference/logic/messages.md §1` (event_msg indices 22, 23,
+13), and `reference/logic/npc-dialogue.md#bartender_speech`
+(TALK path).
+
+**Code surface audited**: `src/game/shop.rs`,
+`src/game/gameplay_scene.rs::do_buy_slot` plus all seven
+`GameAction::Buy*` arms, the `GameAction::Speak`/`Ask`
+near-shopkeeper branch, `src/game/shop_inventory_tests.rs`.
+
+### Findings
+
+#### F8.1 — Buy-menu inventory slots were mapped to the wrong `stuff[]` indices [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs` BUY arms +
+`src/game/shop.rs::buy_item`.
+**Reference**: `reference/logic/shops.md` jtrans row table
+(`fmain2.c:850`): Food→0, Arrow→8, Vial→11, Mace→1, Sword→2,
+Bow→3, Totem→13.
+**Issue**: The port routed BUY slots as
+`stuff[0/1/11/8/10/9/13]++` (food→Dirk, arrow→Mace, mace→Arrows,
+sword→slot 10, bow→slot 9).  Five of the seven slots landed in
+the wrong inventory byte — buying a Mace overwrote the arrow
+count, buying a Sword / Bow wrote into slots the original never
+uses for those items, and buying Food incremented the Dirk
+counter.
+**Fix**: Replaced the ad-hoc `do_buy(item_idx, name)` helper
+with a single jtrans-driven dispatch, `shop::JTRANS =
+[(0,3),(8,10),(11,15),(1,30),(2,45),(3,75),(13,20)]`, and a
+seven-arm `do_buy_slot(slot)` in `gameplay_scene`.
+
+#### F8.2 — Food slot granted `stuff[0]++` (Dirk) instead of firing `eat(50)` + `event(22)` [NEEDS-FIX → FIXED]
+**Location**: old `GameAction::BuyFood` and
+`shop::buy_item(state, 0)`.
+**Reference**: `shops.md:44-47` — "Item `i == 0` is a
+sentinel… Food branch fires `eat(50)` and a narration event"
+(`fmain.c:3433`).
+**Issue**: Shop-path incremented `stuff[0]` (the Dirk
+count); no-shop-path fell through to an invented `eat_food`
+helper that *decremented* `stuff[0]`.  Either way the Dirk
+counter was data-corrupted on every food interaction.
+**Fix**: `BuyOutcome::Food` now calls `state.eat_amount(50)`
+and narrates `event_msg[22]` ("% bought some food and ate
+it.").  Additionally pushes `event_msg[13]` ("% was feeling
+quite full.") whenever the meal takes hunger below zero, per
+`shops.md:131-133` (`fmain2.c:1704-1708`).  The no-shop
+fallback is now silent (matches `fmain.c:3425-3426` silent
+break).
+
+#### F8.3 — Arrow slot granted `stuff[1]++` (Mace) instead of the 10-arrow bundle at `stuff[8]` [NEEDS-FIX → FIXED]
+**Location**: old `GameAction::BuyArrow` →
+`do_buy(..., 1, "arrows", ...)`.
+**Reference**: `shops.md:47-48` and table row for slot 6
+(`fmain.c:3434`): `stuff[i] += 10`, `event(23)`.
+**Issue**: Arrows were mis-routed to `stuff[1]` (Mace) with a
+bundle size of 1 and invented "Bought arrows for N gold."
+scroll text.
+**Fix**: `BuyOutcome::Arrows` does `stuff[8] = stuff[8]
+.saturating_add(10)` and narrates `event_msg[23]` ("% bought
+some arrows.") — no other side effect.
+
+#### F8.4 — `wealth` gate used `< cost`; original is `<= j` (strict 1-gold margin) [NEEDS-FIX → FIXED]
+**Location**: old `shop::buy_item`: `if state.gold < cost`.
+**Reference**: `shops.md:97` / `fmain.c:3430` — `if wealth <=
+j: print("Not enough money!")`.  The 1-gold margin is
+explicitly called out as "deliberate, not a bug"
+(`shops.md:123-126`).
+**Issue**: Port allowed a purchase at exactly the listed
+price (e.g. `wealth == 30` could buy a 30-gold Mace); the
+original refuses.  Net: port players got one extra marginal
+purchase per tight-budget encounter.
+**Fix**: `shop::buy_slot` now checks `state.wealth <= price`
+and returns `BuyResult::NotEnough`.  Locked in by
+`buy_slot_strict_gold_margin` / `buy_slot_one_over_price_succeeds`.
+
+#### F8.5 — Shop currency field diverged from the UI / save-file field [NEEDS-FIX → FIXED]
+**Location**: `src/game/shop.rs` (deducted from `state.gold:
+i32`) vs. the stat-line render (`gameplay_scene.rs:2407`
+reads `state.wealth: i16`) and `persist.rs:47,162` (save file
+uses `wealth`).
+**Reference**: `shops.md` consistently names the currency
+field `wealth` (`fmain.c:3431: wealth = wealth - j`).
+**Issue**: Purchases decremented `gold`, which is neither
+rendered in the `Wlth:` stat line nor persisted — the
+displayed / saved balance drifted from the in-memory one after
+every buy.
+**Fix**: Shop now operates on `state.wealth` throughout.  The
+wider `gold` vs. `wealth` split (combat / loot still award
+`gold`) is flagged below but out of scope for this subsystem.
+
+#### F8.6 — Invented scroll strings in the BUY path [INVENTED → REMOVED]
+**Location**: former BUY arms + `do_buy` helper.
+**Reference**: `dialog_system.md:340-341` (literal registry):
+only `"% bought a {item_name}."` and `"Not enough money!"`
+are sanctioned shop literals.
+**Issue**: The port emitted five distinct invented strings:
+`"Bought {} for {} gold."`, `"Bought food for {} gold."`,
+`"Cannot buy {}: {}"`, `"No shopkeeper nearby."`, and
+`"Not enough gold"` (the `buy_item` `Err` payload).  None
+appear in `faery.toml [narr]` or the dialog_system literal
+table.
+**Fix**: Narration now uses `event_msg[22]` (food),
+`event_msg[23]` (arrows), `format!("{} bought a {}.", bname,
+stuff_index_name(inv_idx))` (generic item — authorised literal
+template), and `"Not enough money!"` (authorised literal).
+No-shop and out-of-range-slot paths are silent.
+
+#### F8.7 — TALK-near-shopkeeper showed an invented multi-line "Shopkeeper: What do you need?" menu [INVENTED → REMOVED]
+**Location**: `GameAction::Speak | GameAction::Ask` branch,
+formerly short-circuiting on `has_shopkeeper_nearby`.
+**Reference**: `shops.md:16-18` — TALK resolves through
+`bartender_speech` (subsystem 7, case 8 of
+`handle_setfig_talk`) which selects
+`speak(13/12/14)` from fatigue / dayperiod
+(`fmain.c:3406-3408`).  There is no in-dialogue price menu;
+the BUY menu is the commercial surface.
+**Issue**: The port rendered a multi-line scroll block
+(`"Shopkeeper: What do you need?\n  Food - 3 gold\n…"`) that
+overrode the bartender's proper speech path — every TALK near
+a bartender showed this invented menu instead of
+`speak(13/12/14)`.  All of it was invented scroll text
+(none in `faery.toml` or `dialog_system.md`).
+**Fix**: Removed the `near_shop` branch; TALK near a
+bartender now falls straight into `handle_setfig_talk`, which
+already handles case 8 correctly per subsystem 7's C7.7.
+
+#### F8.8 — Inn / temple / pub: no code paths; sleep trigger is terrain-based [CONFORMANT]
+**Reference**: `shops.md:52-57` — the TALK tree *mentions*
+ale (`speak(14)`) and lodging (`speak(12)`), but there is no
+code path that sells ale or charges gold for lodging.  The
+player rests by walking onto a sleeping-spot tile (ref lines
+53-56).  Priest healing is part of `handle_setfig_talk` case 1
+(subsystem 7 C7.4: `15 + brave/4` at `fmain.c:3391`) and is
+triggered by TALK, not by a shop transaction.  Pub
+"drinks" / rumours: none exist; `speak(14)` is purely
+informational (subsystem 7 C7.7).
+**Status**: Nothing to port.  The shop subsystem is
+exhausted by the seven-slot `buy_dispatch`; inn/temple/pub are
+not separate commercial surfaces.
+
+#### F8.9 — Shop hours / quest-gated stock: no gating in source [CONFORMANT]
+**Reference**: `shops.md` — enabled[] template marks every
+BUY slot as "immediate-action" with no dynamic enable/disable
+(`fmain.c:525`); the buy-menu is always open regardless of
+`dayperiod` or quest state (`shops.md:23-26`).  The only
+time-of-day speech gating is TALK-side (bartender
+`speak(12)` at `dayperiod > 7` — subsystem 7 C7.7).
+**Status**: Port matches: no hour / quest gate on any BUY
+arm.
+
+#### F8.10 — Nearest-shopkeeper proximity gate uses a 32×32 bounding box, not the shared `nearest_person` global [REF-AMBIGUOUS]
+**Location**: `shop::has_shopkeeper_nearby`.
+**Reference**: `shops.md:87-91` / `fmain.c:3425-3426` —
+the original checks
+`anim_list[nearest_person].race == 0x88`, where
+`nearest_person` is a global side-effect of the most recent
+`nearest_fig` call (typically set by a prior TALK).
+**Issue**: The port does not yet model the
+`nearest_person`-as-shared-global pattern.  The current box
+is a coarse stand-in that produces roughly the right answer
+(a bartender within a 32-px box qualifies) but diverges at the
+edges — the original would happily process a BUY *without* a
+nearby bartender if the last `nearest_fig` (e.g. a long-range
+TALK) happened to land on one.
+**Classification**: REF-AMBIGUOUS at the port-architecture
+level — fixing this requires a cross-cutting `nearest_person`
+refactor shared with subsystems 7 (TALK) and 11 (GIVE).  Left
+as-is for now; documented here for the future
+`nearest_person` port.
+
+#### F8.11 — `stuff[]` byte saturation at 255 preserves original u8 wrap window [CONFORMANT]
+**Location**: `shop::buy_slot` uses `u8::saturating_add`.
+**Reference**: `stuff[]` is a `byte[]` in the original
+(`stuff` global declared as `char stuff[36]`).  The original
+does not check for overflow; a player could theoretically
+wrap a slot past 255 by sheer volume of purchases, though in
+practice gold runs out long before (Bow at 75 gold × 255 =
+19 125 gold).
+**Status**: Port's saturating_add introduces a *tighter*
+ceiling than the original's wrap, but the wrap is
+unreachable in practice given gold economy.  Documented here
+only so the saturate-vs-wrap choice is explicit; keeping
+saturate (safer and player-visibly identical within the
+practical range).
+
+### What matches (confirmed conformant)
+
+- **C8.1 — Seven-slot jtrans layout**: `shop::JTRANS`
+  mirrors `fmain2.c:850` exactly:
+  `{(0,3),(8,10),(11,15),(1,30),(2,45),(3,75),(13,20)}`.
+  Locked in by the seven `t2_shop_costs_*` tests plus four
+  per-slot side-effect tests in `shop.rs`.
+- **C8.2 — Bartender race byte**: `RACE_SHOPKEEPER = 0x88`
+  (`src/game/npc.rs:37`), matching setfig index 8 / race
+  byte `0x88` from `shops.md:7-12`.
+- **C8.3 — `hit > 11` → return, not break**: modelled by
+  `BuyResult::Silent` for `slot >= JTRANS.len()`; the menu
+  refresh (`set_options`) still happens in the BUY-arm
+  wrapper, matching `shops.md:118-122` (fall-through via
+  `do_option`'s trailing refresh).
+- **C8.4 — Food sentinel `eat(50)` + `event(22)`**:
+  `event_msg[22]` = "% bought some food and ate it."
+  (`faery.toml:1617`) and the conditional `event_msg[13]`
+  "% was feeling quite full." fire per `shops.md:131-133`.
+- **C8.5 — Arrow sentinel bundle size 10**: `stuff[8] +=
+  10` and `event_msg[23]` = "% bought some arrows."
+  (`faery.toml:1618`).
+- **C8.6 — Generic item narration template**: `"% bought a
+  <name>."` using `stuff_index_name(inv_idx)` — the names
+  match `inv_list[].name` ordering from `fmain.c:428`
+  (`src/game/world_objects.rs:70-77`), authorised by
+  `dialog_system.md:340`.
+- **C8.7 — `"Not enough money!"` literal**: emitted
+  unchanged (authorised by `dialog_system.md:341`,
+  `shops.md:65`).
+- **C8.8 — No inn / temple / pub commercial paths**:
+  matches `shops.md:52-57` — the only vendor is the
+  bartender, and the only commercial surface is the seven-
+  slot BUY menu.
+- **C8.9 — No quest / time gating on BUY**: matches
+  `shops.md:23-26` (`enabled[]` template marks every slot as
+  immediate-action, always green).
+
+### SPEC/REQ updates queued
+
+- **F8.10 (REF-AMBIGUOUS)**: model `nearest_person` as a
+  shared global (or per-frame cache) so BUY / TALK / GIVE
+  all agree on the target figure; fold
+  `has_shopkeeper_nearby` into that lookup.  Cross-cutting
+  with subsystems 7, 11.
+- **(gold/wealth split, follow-up)**: `state.gold: i32` is
+  still written by combat (`combat.rs:167`), loot
+  (`loot.rs:69`), and several quest arms, while the UI /
+  save file read `state.wealth: i16`.  Awards via `gold`
+  never appear in the `Wlth:` stat line or persist.  Out of
+  scope for shops (now reads/writes `wealth`), but should be
+  unified during the combat-loot audit.
+- **(`eat()` event(13) fan-out, follow-up)**: the shop path
+  now fires `event_msg[13]` on satiation-crossover, but the
+  two other `eat_amount` callers (`pickup_fruit`,
+  `try_safe_autoeat`) do not.  `shops.md:131-133` says
+  `eat()` itself fires it; pushing the narration into
+  `GameState::eat_amount` would require threading a
+  message-queue reference and is better done during the
+  inventory subsystem audit.
+
+### Blockers
+
+None — all five NEEDS-FIX findings (F8.1-F8.5) and both
+INVENTED findings (F8.6-F8.7) are fixed.  F8.10 is the sole
+REF-AMBIGUOUS item and is queued on the `nearest_person`
+port refactor.
+
+**Two-source rule**: ✅ the shops subsystem now emits only
+strings that resolve through `faery.toml [narr] event_msg`
+(indices 22, 23, 13) or literals sanctioned by
+`dialog_system.md:340-341` (`"Not enough money!"` and
+`"% bought a <name>."`).  All five invented strings have
+been removed.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
