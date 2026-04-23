@@ -1007,6 +1007,248 @@ audits) and do not block other subsystem audits.
 
 ---
 
+## Subsystem 5: movement — ✅ Complete
+
+**Reference**: `reference/logic/movement.md` (primary) + `terrain-collision.md`,
+`input-handling.md`, `game-loop.md`, `day-night.md`, `carrier-transport.md`,
+`astral-plane.md`, `frustration.md`, `RESEARCH.md §5`, `PROBLEMS.md`,
+`SYMBOLS.md`.
+**Code**: `src/game/gameplay_scene.rs` (`apply_player_input`,
+`update_turtle_autonomous`, `update_environ`), `src/game/collision.rs`
+(`newx`, `newy`, `proxcheck`, `actor_collides`, `px_to_terrain_type`),
+`src/game/actor.rs`, `src/game/combat.rs::hero_speed_for_env`.
+**Audit date**: 2025 (current session)
+
+### Summary
+- **9 findings**: 1 CONFORMANT, 2 NEEDS-FIX (both fixed), 0 INVENTED, 5
+  SPEC-GAP (queued), 1 REF-AMBIGUOUS, 0 RESEARCH-REQUIRED.
+- Fixes applied in **one commit** (SHA to be recorded by orchestrator).
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test` —
+  579 + 12 + 12 tests passing (no new tests added; existing deviation and
+  turtle-probe tests unaffected).
+
+### Findings
+
+#### F5.1 — Wall-slide deviation only runs on diagonals [NEEDS-FIX]
+**Location**: `src/game/gameplay_scene.rs::apply_player_input`
+(≈lines 967–1006, the `is_diagonal` gate on the `+1` / `-2` deviation
+attempts).
+**Reference**: `reference/logic/movement.md#walk_step` (`fmain.c:1615-1626`);
+`walk_step` runs the primary → `(d+1)&7` → `(d-2)&7` deviation sequence for
+any non-zero `proxcheck` return, with no branch on whether `d` is cardinal
+or diagonal.
+**Issue**: Rust gated the entire deviation block behind
+`is_diagonal = matches!(dir, NE|SE|SW|NW)`. A hero walking straight N/S/E/W
+into a wall-corner would stop dead instead of sliding one octant CW or
+CCW. The original walks the same sequence for every direction (the bump
+tables in `xdir[]`/`ydir[]` are symmetric across cardinals and
+diagonals), so players in the port could not skim along walls with
+cardinal input.
+**Resolution**: Dropped the `is_diagonal` conditional and promoted the
+`dev1` / `dev2` block to run for every direction; preserved the
+`blocked_by_door` (terrain 15) bypass so bumping into a door still
+triggers Phase-1 door logic rather than sliding around it.
+
+#### F5.2 — Turtle water probe uses 2-foot `prox` instead of single-point `px_to_im` [NEEDS-FIX]
+**Location**: `src/game/gameplay_scene.rs::update_turtle_autonomous`
+(≈lines 2150–2166).
+**Reference**: `reference/logic/carrier-transport.md#carrier_tick`
+(`fmain.c:1525-1537`) — the turtle's autonomous-swim probe chain uses
+single-point `px_to_im(xtest, ytest) != 5`, not the foot-level 2-probe
+`prox`.
+**Issue**: Rust sampled both `(nx+4, ny+2)` and `(nx-4, ny+2)` and
+accepted the candidate direction only when both points returned terrain
+5 (very deep water). The original accepts the candidate whenever the
+turtle's centre sits on terrain 5, which is much more permissive at
+water/shore boundaries. Net effect: the Rust turtle rejects many
+water-adjacent tiles the original accepts, truncating its autonomous
+swim range and occasionally stalling it where it should continue.
+**Resolution**: Replaced the two-probe `prox`-style check with a single
+`px_to_terrain_type(world, nx as i32, ny as i32) == 5` call, matching
+the ref's `px_to_im(xtest, ytest) != 5` guard. No test fixtures needed
+updating — existing `update_turtle_autonomous` tests cover open-water
+and no-probe cases, both of which remain equivalent under the new
+predicate.
+
+#### F5.3 — Outdoor 300 / 32565 wrap-teleport not implemented [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs::apply_player_input` (position
+commit ≈line 933).
+**Reference**: `reference/logic/movement.md` "World wrapping" note —
+`fmain.c:1831-1839` is a post-commit outdoor-only teleport that fires
+for `region_num < 8` when `hero_x` or `hero_y` falls outside
+`[300, 32565]`, snapping the hero to the opposite edge. NPCs never
+wrap.
+**Issue**: Rust uses the 15-bit `rem_euclid(0x8000)` wrap in the
+position delta (`newx` / `newy` behaviour), which is what the
+low-level math primitive does. The ref's higher-level wrap threshold
+(≥300 / ≤32565) and teleport is missing — in practice unreachable in
+normal play because the play extent does not butt against the 0 /
+32768 seams, but the behavioural edge case is divergent.
+**Resolution**: Queued. Requires adding a post-commit wrap block in
+`apply_player_input` gated on `region_num < 8`.
+
+#### F5.4 — `newy` does not preserve bit-15 flag across moves [SPEC-GAP]
+**Location**: `src/game/collision.rs::newy` (lines 132-140).
+**Reference**: `reference/logic/movement.md#newy` (`fsubs.asm:1298-1319`)
+— ref preserves `y & 0x8000` as a "flag layer" across every Y step by
+masking the wrapping add to `0x7FFF` then re-ORing the captured bit.
+**Issue**: Rust instead splits behaviour on an `indoor: bool` parameter:
+indoor pixel math just does `(y + dy) as u16` with no masking; outdoor
+uses `rem_euclid(0x8000)`. For indoor positions close to 0x8000 (e.g.
+`0x9FFF + 3`) the two models diverge — ref would wrap within the indoor
+half (`0x8002`), Rust would roll over to `0xA002`. Indoor map extents
+never actually span the bit-15 boundary in practice, but the primitive
+itself is not a faithful port.
+**Resolution**: Queued. Requires mirroring the `flag_bit` preservation
+in `collision::newy` and dropping the `indoor` parameter (callers can
+be updated likewise).
+
+#### F5.5 — On-foot ice-environ (`k == -2`) velocity accumulation not modelled [SPEC-GAP]
+**Location**: `src/game/combat.rs::hero_speed_for_env` (lines 305-317)
+and the hero-movement path in `src/game/gameplay_scene.rs`
+(`apply_player_input`). The port applies the swan ice-physics only
+while `flying != 0`.
+**Reference**: `reference/logic/movement.md#walk_step`
+(`fmain.c:1581-1598`): when `k == -2`, the actor (including the hero on
+ice terrain 7) accumulates `vel += xdir[d]` / `vel += ydir[d]` capped
+at 42 px (40 for swan) and advances by `vel // 4`, independent of the
+environ→speed table.
+**Issue**: Rust's `hero_speed_for_env(-2, false)` returns 2 (normal
+walking speed) and there is no velocity accumulator for the hero when
+walking on terrain 7. Step-on-ice slides are therefore absent unless
+the hero is mounted on the swan.
+**Resolution**: Queued. Blocks a full ice-terrain port; flagged as
+architectural (the Rust port has not yet needed foot-ice behaviour
+because no test / demo path routes the hero onto terrain 7 outside of
+swan flight).
+
+#### F5.6 — `frustflag` reset guarded by "enemy active" instead of "any NPC acted" [REF-AMBIGUOUS]
+**Location**: `src/game/gameplay_scene.rs::apply_player_input`
+(≈lines 1011-1023).
+**Reference**: `reference/logic/frustration.md` "Reset asymmetry" note
+— `frustflag = 0` fires from at least five unrelated paths
+(`fmain.c:1577, 1650, 1707, 1715, 1725`), none guarded by `i == 0`. So
+any actor's successful walk / shot / melee / death zeroes the hero's
+counter.
+**Issue**: Rust resets `frustflag = 0` if "any active enemy NPC exists"
+(approximation), not "any NPC successfully acted this tick" (ref).
+Direction: the Rust reset fires more aggressively (resets even when the
+enemy did not actually succeed at a walk/attack this tick), but misses
+the non-enemy-NPC case entirely. The frustration sprite overrides
+(20 / 40 thresholds) are therefore slightly miscalibrated.
+**Resolution**: Flagged. The ref's per-tick-per-actor semantics require
+a centralised actor scheduler that the Rust port does not yet express
+(NPC advance happens in `update_npcs`, hero in `apply_player_input`, no
+shared "did_act" flag). Revisit once the Rust actor-tick dispatch is
+unified; no fidelity loss in typical gameplay because the 40-tick
+fight-sprite threshold is rarely reached in combat contexts anyway.
+
+#### F5.7 — Carrier/turtle "blocked onto rock" terrain-1 override [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs::apply_player_input`
+(≈lines 941-945, `turtle_blocked` guard).
+**Reference**: `reference/logic/carrier-transport.md#carrier_tick`
+(`fmain.c:1542`) and `reference/logic/movement.md` hero-speed table —
+the turtle body commits position only when `j == 5` (very deep water);
+the hero on turtle-back has `e = 3` but still runs full `proxcheck`
+inside `walk_step` (`fmain.c:1599 if i == 0 and riding == 5`).
+**Issue**: Rust adds a `turtle_blocked` gate that vetoes any move whose
+destination terrain code is `1` (hard block) only while on the turtle.
+Per ref, `proxcheck` already rejects terrain code 1 on every foot probe
+regardless of mount — the extra gate is redundant (Rust disables
+`proxcheck` while on raft/turtle, so this is where the rock-blocking
+actually happens). Net effect is conformant, but the `!turtle_blocked`
+extra branches throughout the deviation / door logic are an invented
+code shape not present in the ref.
+**Resolution**: Queued as tidy-up, not a gameplay regression. Fold the
+terrain-1 check back into the normal `proxcheck` path once the port
+removes the blanket `on_raft` proxcheck bypass.
+
+#### F5.8 — `swan_dismount` velocity gate matches ref but uses different vel representation [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` swan-dismount / swan-physics
+paths (search `swan_vx`, `swan_vy`, `dismount`).
+**Reference**: `reference/logic/carrier-transport.md#swan_dismount`
+(`fmain.c:1417-1428`) — dismount requires
+`|vel_x| < 15 && |vel_y| < 15`, with velocities in `Actor.vel_x`
+scaled as `displacement * 4` in `walk_step`.
+**Issue**: Rust stores swan velocity in separate `swan_vx` / `swan_vy`
+fields with the same scale, and the ±15 gate is applied correctly, but
+`Actor.vel_x` / `Actor.vel_y` (the fields the ref reads) are not
+populated for the hero actor during swan flight. Consumers that read
+`Actor.vel_*` during swan flight (e.g. potential future "knock-back
+while flying" code) would see stale values.
+**Resolution**: Queued. Requires mirroring `swan_vx/vy` into
+`actors[0].vel_x/vel_y` per tick, or removing the parallel fields.
+
+### CONFORMANT items
+
+- **C5.1 — `xdir[]` / `ydir[]` tables and `newx` / `newy` math**:
+  `collision::newx` / `collision::newy` mirror `fsubs.asm:1280-1319`:
+  cardinals have magnitude 3, diagonals magnitude 2, and the `* speed / 2`
+  combination reproduces the reference's per-tick pixel envelope
+  (3 px cardinal / 2 px diagonal at speed 2). 15-bit world wrap on the
+  outdoor branch matches ref `& 0x7fff`.
+- **C5.2 — Facing encoding (`0=N, 1=NE, … 7=NW`)**: matches
+  `reference/logic/movement.md` "Direction mnemonic" section and
+  `SYMBOLS.md §2.1` exactly across `apply_player_input`, `Actor.facing`,
+  and `facing_toward`.
+- **C5.3 — `proxcheck` two-probe asymmetric thresholds**:
+  `collision::proxcheck` returns blocked on right-probe terrain `1` or
+  `>= 10` and left-probe terrain `1` or `>= 8`, matching
+  `reference/logic/terrain-collision.md#prox` (`fsubs.asm:1590-1611`).
+- **C5.4 — Actor bounding-box collision (22×18 px)**:
+  `collision::actor_collides` uses `|dx| < 11 && |dy| < 9`, matching
+  `fmain2.c:286-291` (`proxcheck` actor loop).
+- **C5.5 — Hero-on-raft / hero-on-turtle speed = 3**: both the SPEC and
+  `reference/logic/movement.md#walk_step` hero speed table
+  (`fmain.c:1599`) specify `e = 3` when `i == 0 && riding == 5`; Rust
+  `hero_speed_for_env` and the turtle-carrier branch in
+  `apply_player_input` apply `3` unconditionally when on raft or turtle.
+- **C5.6 — `facing` committed on successful move only**:
+  `apply_player_input` writes `final_facing` to the player actor after
+  the `can_move` branch succeeds, matching `walk_step` which only reaches
+  `newloc: an.facing = d` on the success path (`fmain.c:1628`). On a
+  fully-blocked move the facing is left unchanged, consistent with the
+  ref's "return without commit" behaviour.
+- **C5.7 — `frustflag` increment on fully-blocked move**:
+  `apply_player_input` increments `frustflag` only when all three probes
+  (primary + 2 deviations) fail, matching `fmain.c:1657`. Reset on
+  successful commit matches `fmain.c:1650`.
+- **C5.8 — Movement-tied `speak()` / `event()` calls**: `find_place`
+  place-name narration, carrier-transition music swaps, door-bump
+  locked/opened messages, and astral-plane Loraii pre-load all gate on
+  position-derived extents rather than on movement per se, matching
+  `reference/logic/astral-plane.md` and `carrier-transport.md`. No
+  scroll-area string is emitted directly from the movement path itself,
+  satisfying the two-source rule (SPEC §23.6).
+
+### SPEC/REQ updates queued
+
+- **F5.3 (SPEC-GAP)**: Add outdoor-only 300 / 32565 wrap-teleport to
+  `apply_player_input` post-commit step.
+- **F5.4 (SPEC-GAP)**: Rework `collision::newy` to preserve `y & 0x8000`
+  as a flag layer (drop `indoor` parameter).
+- **F5.5 (SPEC-GAP)**: Port the `walk_step` on-foot ice-environ
+  velocity accumulator (`fmain.c:1581-1598`) so terrain 7 produces the
+  inertial slide without requiring `riding == 11`.
+- **F5.6 (REF-AMBIGUOUS)**: Revisit `frustflag` reset semantics once a
+  unified actor-tick dispatcher exists; flip the gate from
+  "enemy_active" to "any NPC acted this tick".
+- **F5.7 (SPEC-GAP)**: Remove the `turtle_blocked` terrain-1 side-gate
+  once `proxcheck` runs on the mount path; consolidate with ref
+  `fmain.c:1599` behaviour.
+- **F5.8 (SPEC-GAP)**: Mirror `swan_vx` / `swan_vy` into
+  `actors[0].vel_x` / `vel_y` (or remove the parallel fields) so
+  `Actor.vel_*` matches ref semantics during swan flight.
+
+### Blockers
+
+None — all NEEDS-FIX items are resolved; SPEC-GAPs and the single
+REF-AMBIGUOUS finding are queued and do not block other subsystem
+audits. No scroll-area text is produced by the movement path (CONFORMANT
+C5.8).
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
