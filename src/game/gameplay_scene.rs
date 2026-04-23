@@ -1799,31 +1799,74 @@ impl GameplayScene {
         }
     }
 
-    /// Helper: buy one unit of item_idx from a nearby shopkeeper (npc-107).
-    /// Mirrors fmain.c BUY case: check race==0x88, wealth>j, stuff[i]++.
-    fn do_buy(
-        state: &mut GameState,
-        npc_table: &Option<crate::game::npc::NpcTable>,
-        item_idx: usize,
-        item_name: &str,
-        messages: &mut crate::game::message_queue::MessageQueue,
-    ) {
-        let hero_x = state.hero_x as i16;
-        let hero_y = state.hero_y as i16;
-        let near_shop = npc_table.as_ref().map_or(false, |t| {
-            crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
+    /// BUY menu dispatch (`buy_dispatch`, `fmain.c:3424-3442`).
+    ///
+    /// `slot` is the menu hit minus 5 (0..=6 ⇒ Food, Arrow, Vial, Mace,
+    /// Sword, Bow, Totem).  Mirrors the original's silent-break when
+    /// nearest person is not a bartender (`race != 0x88`,
+    /// `fmain.c:3426`), the `"Not enough money!"` denial
+    /// (`fmain.c:3440`, dialog_system.md:341), and the three per-branch
+    /// side-effects / narrations at `fmain.c:3433-3437`.
+    fn do_buy_slot(&mut self, slot: usize) {
+        use crate::game::shop::{buy_slot, has_shopkeeper_nearby, BuyOutcome, BuyResult};
+
+        let hero_x = self.state.hero_x as i16;
+        let hero_y = self.state.hero_y as i16;
+        let near_shop = self.npc_table.as_ref().map_or(false, |t| {
+            has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
         });
-        if near_shop {
-            match crate::game::shop::buy_item(state, item_idx) {
-                Ok(cost) => {
-                    messages.push(format!("Bought {} for {} gold.", item_name, cost));
-                }
-                Err(reason) => {
-                    messages.push(format!("Cannot buy {}: {}", item_name, reason));
-                }
+        // fmain.c:3425-3426 — silent break on no nearest bartender.
+        if !near_shop {
+            return;
+        }
+
+        match buy_slot(&mut self.state, slot) {
+            BuyResult::Silent => {}
+            BuyResult::NotEnough => {
+                // dialog_system.md:341 — hard-coded denial literal.
+                self.messages.push("Not enough money!");
             }
-        } else {
-            messages.push("No shopkeeper nearby.");
+            BuyResult::Bought(BuyOutcome::Food) => {
+                // fmain.c:3433 — event(22) + eat(50).  eat(50) additionally
+                // fires event(13) "% was feeling quite full." whenever the
+                // meal takes hunger below zero (shops.md, fmain2.c:1704-1708).
+                let bname = self.brother_name().to_string();
+                self.messages
+                    .push(crate::game::events::event_msg(&self.narr, 22, &bname));
+                let hunger_before = self.state.hunger;
+                self.state.eat_amount(50);
+                if hunger_before < 50 {
+                    self.messages
+                        .push(crate::game::events::event_msg(&self.narr, 13, &bname));
+                }
+                self.dlog(format!(
+                    "BUY food: wealth={}, hunger {}→{}",
+                    self.state.wealth, hunger_before, self.state.hunger
+                ));
+            }
+            BuyResult::Bought(BuyOutcome::Arrows) => {
+                // fmain.c:3434 — event(23) "% bought some arrows." (10-bundle).
+                let bname = self.brother_name().to_string();
+                self.messages
+                    .push(crate::game::events::event_msg(&self.narr, 23, &bname));
+                self.dlog(format!(
+                    "BUY arrows: wealth={}, arrows={}",
+                    self.state.wealth,
+                    self.state.stuff()[8]
+                ));
+            }
+            BuyResult::Bought(BuyOutcome::Item { inv_idx }) => {
+                // fmain.c:3436-3437 — extract("% bought a ") + inv_list[i].name
+                // + ".".  Literal authorised by dialog_system.md:340.
+                let bname = self.brother_name().to_string();
+                let item_name = crate::game::world_objects::stuff_index_name(inv_idx);
+                self.messages
+                    .push(format!("{} bought a {}.", bname, item_name));
+                self.dlog(format!(
+                    "BUY stuff[{}]++: wealth={}",
+                    inv_idx, self.state.wealth
+                ));
+            }
         }
     }
 
@@ -2964,69 +3007,24 @@ impl GameplayScene {
     fn do_option(&mut self, action: GameAction) {
         self.dlog(format!("do_option: {:?}", action));
         match action {
-            GameAction::BuyFood => {
-                let hero_x = self.state.hero_x as i16;
-                let hero_y = self.state.hero_y as i16;
-                let near_shop = self.npc_table.as_ref().map_or(false, |t| {
-                    crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
-                });
-                if near_shop {
-                    match crate::game::shop::buy_item(&mut self.state, 0) {
-                        Ok(cost) => {
-                            self.messages.push(format!("Bought food for {} gold.", cost));
-                        }
-                        Err(reason) => {
-                            self.messages.push(format!("Cannot buy: {}", reason));
-                        }
-                    }
-                } else if self.state.eat_food() {
-                    let bname = self.brother_name().to_string();
-                    self.messages.push(crate::game::events::event_msg(&self.narr, 37, &bname));
-                    self.dlog(format!("eat_food: consumed food, hunger={}", self.state.hunger));
-                } else {
-                    self.messages.push("No food.");
-                    self.dlog("eat_food: no food in pack");
-                }
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            // Shop BUY menu items (npc-107): mirrors fmain.c BUY case / jtrans[] table.
-            // label5 = "Food ArrowVial Mace SwordBow  Totem" — 7 items, hits 5-11.
-            GameAction::BuyArrow => {
-                Self::do_buy(&mut self.state, &self.npc_table, 1, "arrows", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            GameAction::BuyVial => {
-                // ITEM_VIAL = 11 in stuff[] (magic healing potion).
-                Self::do_buy(&mut self.state, &self.npc_table, 11, "vial", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            GameAction::BuyMace => {
-                // Mace → weapon slot 8 (dagger/mace, cheapest weapon).
-                Self::do_buy(&mut self.state, &self.npc_table, 8, "mace", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            GameAction::BuySword => {
-                // Sword → weapon slot 10 (long sword).
-                Self::do_buy(&mut self.state, &self.npc_table, 10, "sword", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            GameAction::BuyBow => {
-                // Bow → weapon slot 9 (short sword / bow).
-                Self::do_buy(&mut self.state, &self.npc_table, 9, "bow", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
-            GameAction::BuyTotem => {
-                // ITEM_TOTEM = 13 in stuff[].
-                Self::do_buy(&mut self.state, &self.npc_table, 13, "totem", &mut self.messages);
-                let wealth = self.state.wealth;
-                self.menu.set_options(self.state.stuff(), wealth);
-            }
+            // Shop BUY menu — seven-slot dispatch (fmain.c:3424-3442,
+            // TABLE:jtrans at fmain2.c:850).  label5 = "Food Arrow Vial
+            // Mace Sword Bow  Totem" (fmain.c:500); slots 0..=6 map to
+            // BUY `hit` values 5..=11.  Per reference/logic/shops.md:
+            //   0 Food  → eat(50) + event(22)
+            //   1 Arrow → stuff[8] += 10 + event(23)
+            //   2 Vial  → stuff[11]++
+            //   3 Mace  → stuff[1]++
+            //   4 Sword → stuff[2]++
+            //   5 Bow   → stuff[3]++
+            //   6 Totem → stuff[13]++
+            GameAction::BuyFood  => { self.do_buy_slot(0); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyArrow => { self.do_buy_slot(1); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyVial  => { self.do_buy_slot(2); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyMace  => { self.do_buy_slot(3); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuySword => { self.do_buy_slot(4); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyBow   => { self.do_buy_slot(5); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyTotem => { self.do_buy_slot(6); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
             GameAction::Inventory => {
                 self.dlog(format!("Inventory: {}", self.state.inventory_summary()));
                 self.state.viewstatus = 4;
@@ -3271,35 +3269,15 @@ impl GameplayScene {
                 }
             }
             GameAction::Speak | GameAction::Ask => {
-                // Talk: nearest_fig(1, 50). Check shopkeeper first, then setfig dialogue.
-                // Fallback: turtle carrier shell dialogue (SPEC §13.7).
+                // Talk: nearest_fig(1, 50).  Per reference/logic/shops.md
+                // the bartender has no separate "What do you need?" menu:
+                // TALK resolves through `handle_setfig_talk` case 8
+                // (`fmain.c:3406-3408`, `bartender_speech`) which selects
+                // `speak(13/12/14)` from fatigue / dayperiod.  The BUY
+                // menu itself is the commercial surface.  Fallback: turtle
+                // carrier shell dialogue (SPEC §13.7).
                 let bname = self.brother_name().to_string();
-                let hero_x = self.state.hero_x as i16;
-                let hero_y = self.state.hero_y as i16;
-                let near_shop = self.npc_table.as_ref().map_or(false, |t| {
-                    crate::game::shop::has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
-                });
-                if near_shop {
-                    // Shopkeeper buy menu (unchanged from existing code).
-                    let items = [
-                        (0,  "Food"),
-                        (1,  "Arrows"),
-                        (11, "Vial"),
-                        (8,  "Mace"),
-                        (10, "Sword"),
-                        (9,  "Bow"),
-                        (13, "Totem"),
-                    ];
-                    let mut menu = String::from("Shopkeeper: What do you need?\n");
-                    for (idx, name) in &items {
-                        let cost = crate::game::shop::ITEM_COSTS.get(*idx).copied().unwrap_or(0);
-                        if cost > 0 {
-                            menu.push_str(&format!("  {} - {} gold\n", name, cost));
-                        }
-                    }
-                    menu.push_str(&format!("  (Your gold: {})", self.state.gold));
-                    self.messages.push(menu);
-                } else if let Some(fig) = self.nearest_fig(1, 50) {
+                if let Some(fig) = self.nearest_fig(1, 50) {
                     self.handle_setfig_talk(&fig, &bname);
                 } else if self.state.active_carrier == crate::game::game_state::CARRIER_TURTLE {
                     // T2-NPC-TURTLE-DIALOG: turtle carrier shell dialogue (SPEC §13.7).
