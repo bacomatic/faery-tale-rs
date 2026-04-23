@@ -664,9 +664,13 @@ impl GameState {
     }
 
     /// Board a raft carrier. Returns true if successful.
+    ///
+    /// Ref `carrier-transport.md#raft_tick` (`fmain.c:1572`): raft mount sets
+    /// the `riding` global to `1` (raft discriminant). See SYMBOLS.md riding.
     pub fn board_raft(&mut self) -> bool {
         if self.active_carrier == CARRIER_RAFT {
             self.on_raft = true;
+            self.riding = 1;
             true
         } else {
             false
@@ -674,20 +678,28 @@ impl GameState {
     }
 
     /// Disembark from raft.
+    ///
+    /// Ref `carrier-transport.md#raft_tick` (`fmain.c:1563`): raft dismount
+    /// clears `riding` to 0.
     pub fn leave_raft(&mut self) {
         self.on_raft = false;
         self.active_carrier = 0;
         self.wcarry = 0;
+        self.riding = 0;
     }
 
     /// Summon turtle using a shell item. Returns true if successful.
     /// Turtle acts like raft for water traversal (on_raft=true) but cannot enter mountains.
+    ///
+    /// Ref `carrier-transport.md#carrier_tick` (`fmain.c:1517`): turtle mount
+    /// sets `riding = 5` (via `RIDING_RAFT` constant, misleadingly named).
     pub fn summon_turtle(&mut self) -> bool {
         if self.stuff()[ITEM_SHELL] > 0 {
             self.stuff_mut()[ITEM_SHELL] -= 1;
             self.active_carrier = CARRIER_TURTLE;
             self.on_raft = true;
             self.wcarry = 3;  // SPEC §21.3: turtle is in actor slot 3
+            self.riding = 5;
             true
         } else {
             false
@@ -717,11 +729,15 @@ impl GameState {
 
     /// Attempt to start swan flight. Returns true if successful.
     /// Requires: has_lasso AND a swan carrier is nearby (active_carrier == CARRIER_SWAN).
+    ///
+    /// Ref `carrier-transport.md#carrier_tick` (`fmain.c:1502`): swan mount
+    /// sets `riding = RIDING_SWAN` (11).
     pub fn start_swan_flight(&mut self) -> bool {
         if self.has_lasso() && self.active_carrier == CARRIER_SWAN {
             self.flying = 1;
             self.swan_vx = 0;
             self.swan_vy = 0;
+            self.riding = 11;
             true
         } else {
             false
@@ -729,10 +745,14 @@ impl GameState {
     }
 
     /// Stop swan flight (land). Resets velocity.
+    ///
+    /// Ref `carrier-transport.md#swan_dismount` (`fmain.c:1423`): on successful
+    /// dismount commit `riding = 0`.
     pub fn stop_swan_flight(&mut self) {
         self.flying = 0;
         self.swan_vx = 0;
         self.swan_vy = 0;
+        self.riding = 0;
     }
 
     /// Apply directional input to swan velocity (SPEC §21.4).
@@ -792,10 +812,14 @@ impl GameState {
     }
 
     /// Check if turtle summon is blocked in the central region (SPEC §21.3).
-    /// Returns true if position is inside X ∈ [11194, 21373] AND Y ∈ [10205, 16208].
+    ///
+    /// Ref `carrier-transport.md#use_sea_shell` (`fmain.c:3458`):
+    /// `in_swamp = hero_x < 21373 && hero_x > 11194 && hero_y < 16208 && hero_y > 10205`
+    /// — strict inequalities, i.e. the edge coordinates (11194 / 21373 /
+    /// 10205 / 16208) are **outside** the veto box.
     pub fn is_turtle_summon_blocked(&self) -> bool {
-        (11194..=21373).contains(&self.hero_x)
-            && (10205..=16208).contains(&self.hero_y)
+        self.hero_x > 11194 && self.hero_x < 21373
+            && self.hero_y > 10205 && self.hero_y < 16208
     }
 
     /// Move the active carrier actor to the hero's current position (SPEC §21.7).
@@ -1381,14 +1405,23 @@ mod tests {
         s.hero_y = 16209;
         assert!(!s.is_turtle_summon_blocked(), "Y above upper bound");
 
-        // Inside the forbidden region.
+        // Inside the forbidden region (strict inequality per fmain.c:3458).
+        // Edge values (11194, 21373, 10205, 16208) are OUTSIDE the box.
         s.hero_x = 11194;
         s.hero_y = 10205;
-        assert!(s.is_turtle_summon_blocked(), "at lower corner");
+        assert!(!s.is_turtle_summon_blocked(), "at lower corner (strictly outside)");
 
         s.hero_x = 21373;
         s.hero_y = 16208;
-        assert!(s.is_turtle_summon_blocked(), "at upper corner");
+        assert!(!s.is_turtle_summon_blocked(), "at upper corner (strictly outside)");
+
+        s.hero_x = 11195;
+        s.hero_y = 10206;
+        assert!(s.is_turtle_summon_blocked(), "just inside lower corner");
+
+        s.hero_x = 21372;
+        s.hero_y = 16207;
+        assert!(s.is_turtle_summon_blocked(), "just inside upper corner");
 
         s.hero_x = 16000;
         s.hero_y = 13000;

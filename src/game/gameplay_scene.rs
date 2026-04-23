@@ -3088,11 +3088,13 @@ impl GameplayScene {
                 self.dlog(format!("Rebinding mode: {}", self.rebinding.active));
             }
             GameAction::Board => {
-                if self.state.board_raft() {
-                    self.messages.push("You board the raft.");
-                } else {
-                    self.messages.push("Nothing to board here.");
-                }
+                // Ref `carrier-transport.md#raft_tick` (`fmain.c:1562-1573`):
+                // raft boarding is automatic when the hero is within 9 px of
+                // the raft on terrain 3-5. There is no explicit BOARD command
+                // in the original; this action is a debug convenience. The
+                // original emits no scroll-area text on board/leave — any
+                // string here would violate the two-source rule (SPEC §23.6).
+                let _ = self.state.board_raft();
             }
             GameAction::Sleep => {
                 let at_door = crate::game::doors::doorfind(
@@ -3215,12 +3217,15 @@ impl GameplayScene {
                 }
             }
             GameAction::SummonTurtle => {
-                if self.state.is_turtle_summon_blocked() {
-                    self.messages.push("The turtle won't come here.");
-                } else if self.state.summon_turtle() {
-                    self.messages.push("You summon the turtle!");
-                } else {
-                    self.messages.push("You have no shells to summon a turtle.");
+                // Ref `carrier-transport.md#use_sea_shell` (`fmain.c:3457-3461`):
+                // swamp-box veto is silently inert ("'break' out of the case
+                // without calling get_turtle"); a successful summon also emits
+                // no event text. Any scroll-area string here violates the
+                // two-source rule (SPEC §23.6). Inventory-empty is already
+                // filtered upstream by the menu `hitgo` gate, but preserve
+                // the silent no-op path here for safety.
+                if !self.state.is_turtle_summon_blocked() {
+                    let _ = self.state.summon_turtle();
                 }
                 let wealth = self.state.wealth;
                 self.menu.set_options(self.state.stuff(), wealth);
