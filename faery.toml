@@ -1501,7 +1501,7 @@ lines = [
 [placards.kevin_dead]
 lines = [
     {x = 20, y = 31, text = "And so ends our sad tale." },
-    {x = 25, y = 45, text = "The Lesson of the Story:" },
+    {x = 24, y = 45, text = "The Lesson of the Story:" },
     {x = 66, y = 88, text = "Stay at Home!" }
 ]
 
@@ -1517,47 +1517,57 @@ lines = [
 ]
 
 [placards.rescue_katra]
+# NOTE: Original narr.asm msg8a reads "...their love for each, other,..."
+# with a stray comma after "each" — this is a typo in the original source
+# (confirmed: Karla's msg9a and Kandy's msg10a both read "for each other,").
+# Per project policy, we correct grammar bugs while staying faithful to
+# intended behavior. Do not re-insert the comma after "each".
+# Per placard.md §"Deliberate deviation from source: the msg8a typo", the
+# corrected author-intent splits "for each" / "other, % knew that" across
+# two lines (y=59 / y=70), matching the pen-position flow of the original.
+# X-coordinate 20 is the rendered value (source encodes as 21/2=10 byte,
+# ssp doubles on read → 20); do not use 21.
 lines = [
-    {x = 21, y = 26, text = "% had rescued Katra," },
-    {x = 21, y = 37, text = "Princess of Marheim." },
-    {x = 21, y = 48, text = "Though they had pledged" },
-    {x = 21, y = 59, text = "their love for each, " },
-    {x = 21, y = 70, text = "other, % knew that" },
-    {x = 21, y = 81, text = " his quest could not" },
-    {x = 21, y = 92, text = "be forsaken." }
+    {x = 20, y = 26, text = "% had rescued Katra," },
+    {x = 20, y = 37, text = "Princess of Marheim." },
+    {x = 20, y = 48, text = "Though they had pledged" },
+    {x = 20, y = 59, text = "their love for each" },
+    {x = 20, y = 70, text = "other, % knew that" },
+    {x = 20, y = 81, text = " his quest could not" },
+    {x = 20, y = 92, text = "be forsaken." }
 ]
 
 [placards.rescue_karla]
 lines = [
-    {x = 21, y = 33, text = "% had rescued Karla" },
-    {x = 21, y = 44, text = "(Katra's sister), Princess" },
-    {x = 21, y = 55, text = "of Marheim. Though they" },
-    {x = 21, y = 66, text = "had pledged their love" },
-    {x = 21, y = 77, text = "for each other, %" },
-    {x = 21, y = 88, text = "knew that his quest" },
-    {x = 21, y = 99, text = "could not be forsaken." }
+    {x = 20, y = 33, text = "% had rescued Karla" },
+    {x = 20, y = 44, text = "(Katra's sister), Princess" },
+    {x = 20, y = 55, text = "of Marheim. Though they" },
+    {x = 20, y = 66, text = "had pledged their love" },
+    {x = 20, y = 77, text = "for each other, %" },
+    {x = 20, y = 88, text = "knew that his quest" },
+    {x = 20, y = 99, text = "could not be forsaken." }
 ]
 
 [placards.rescue_kandy]
 lines = [
-    {x = 21, y = 26, text = "% had rescued Kandy" },
-    {x = 21, y = 37, text = "(Katra's and Karla's" },
-    {x = 21, y = 48, text = "sister), Princess of" },
-    {x = 21, y = 59, text = "Marheim. Though they had" },
-    {x = 21, y = 70, text = "pledged their love for" },
-    {x = 21, y = 81, text = "each other, % knew " },
-    {x = 21, y = 92, text = "that his quest could" },
-    {x = 21, y = 103, text = "not be forsaken." }
+    {x = 20, y = 26, text = "% had rescued Kandy" },
+    {x = 20, y = 37, text = "(Katra's and Karla's" },
+    {x = 20, y = 48, text = "sister), Princess of" },
+    {x = 20, y = 59, text = "Marheim. Though they had" },
+    {x = 20, y = 70, text = "pledged their love for" },
+    {x = 20, y = 81, text = "each other, % knew" },
+    {x = 20, y = 92, text = "that his quest could" },
+    {x = 20, y = 103, text = "not be forsaken." }
 ]
 
 [placards.princess_home]
 lines = [
-    {x = 71, y = 37, text = "After seeing the" },
-    {x = 35, y = 48, text = "princess safely to her" },
-    {x = 35, y = 59, text = "home city, and with a" },
-    {x = 35, y = 70, text = "king's gift in gold," },
-    {x = 35, y = 81, text = "% once more set" },
-    {x = 35, y = 92, text = "out on his quest." }
+    {x = 70, y = 37, text = "After seeing the" },
+    {x = 34, y = 48, text = "princess safely to her" },
+    {x = 34, y = 59, text = "home city, and with a" },
+    {x = 34, y = 70, text = "king's gift in gold," },
+    {x = 34, y = 81, text = "% once more set" },
+    {x = 34, y = 92, text = "out on his quest." }
 ]
 
 
@@ -1834,7 +1844,7 @@ speeches = [
     # 44 — necromancer msg 2 (transformed)
     "% gasped. The Necromancer had been transformed into a normal man. All of his evil was gone.",
     # 45 — sorceress (golden figurine)
-    "\"%\" said the Sorceress. \"Welcome. Here is one of the five golden figurines you will need.\"\n\"Thank you.\" said %.",
+    "\"%.\" said the Sorceress. \"Welcome. Here is one of the five golden figurines you will need.\"\n\"Thank you.\" said %.",
     # 46 — witch (look into my eyes)
     "\"Look into my eyes and Die!!\" hissed the witch.\n\"Not a chance!\" replied %",
     # 47 — spectre msg (bring ancient bones)
