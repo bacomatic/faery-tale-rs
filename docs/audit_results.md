@@ -2354,9 +2354,193 @@ invented strings have been removed.
 
 ---
 
+## Subsystem 10: day-night — ✅ Complete
+
+**Refs**: `reference/logic/day-night.md` (primary), `reference/logic/encounters.md`
+(night cadence), `reference/logic/ai-system.md`, `reference/logic/movement.md`,
+`reference/logic/shops.md`, `reference/logic/visual-effects.md`.
+
+**Code surface audited**:
+- `src/game/game_clock.rs` (30 Hz tick; NANOS_PER_TICK unchanged)
+- `src/game/game_state.rs` (`daynight_tick`, `sleep_advance_daynight`,
+  `get_day_phase`, `dayperiod_from_daynight`, persist/load)
+- `src/game/gameplay_scene.rs` (palette fade, setmood, sleep loop, spectre
+  visibility, bartender dayperiod gate, priest daynight%3)
+- `src/game/palette_fader.rs` (`fade_page`, light_timer red boost)
+
+### Findings
+
+#### F10.1 — `dayperiod` only took 4 values instead of 12 (NEEDS-FIX → fixed)
+**Severity**: NEEDS-FIX.
+**Location**: `game_state.rs::daynight_tick` (pre-fix lines 305-339).
+**Reference**: `reference/logic/day-night.md#tick_daynight`, fmain.c:2029
+(`bucket = daynight / 2000`; `dayperiod = bucket` on every bucket change,
+switch only fires events on `{0, 4, 6, 9}`).
+**Issue**: The port only updated `dayperiod` when `daynight` crossed one of
+`{0, 8000, 12000, 18000}` (the four event-firing buckets), pinning its value
+to the set `{0, 4, 6, 9}`. In the original `dayperiod` is `daynight / 2000`
+(0..=11); the four-way `switch` only controls *which* buckets emit narrator
+events, not whether `dayperiod` advances. Downstream consumers saw the
+wrong value:
+- Bartender gate `state.dayperiod > 7` (`gameplay_scene.rs:1763`) fired only
+  during `daynight ∈ [18000, 24000)` (bucket 9) rather than `[16000, 24000)`
+  (buckets 8..=11), so the "late hours" speech 12 was skipped during bucket 8.
+- `get_day_phase()` collapsed any value ∉ `{0,4,6,9}` to `Midnight`.
+**Fix**: Rewrote `daynight_tick` to compute `new_bucket = daynight / 2000`
+and assign `dayperiod = new_bucket` on every bucket transition. It returns
+`true` only for buckets `{0, 4, 6, 9}` so the event dispatch in `tick()`
+is unchanged. Updated `get_day_phase` to map buckets 0..=3 → Midnight,
+4..=5 → Morning, 6..=8 → Midday, 9..=11 → Evening. `dayperiod_from_daynight`
+retained for persist.rs round-trips (still the correct formula).
+**Status**: Fixed.
+
+#### F10.2 — `sleep_advance_daynight` missed battle-wake roll + abs_y tile snap (NEEDS-FIX → fixed)
+**Severity**: NEEDS-FIX.
+**Location**: `game_state.rs::sleep_advance_daynight` (pre-fix lines
+431-454).
+**Reference**: `reference/logic/day-night.md#sleep_tick`, fmain.c:2017-2021.
+The wake predicate in the original is a three-way OR:
+1. `fatigue == 0`,
+2. `fatigue < 30 && daynight ∈ (9000, 10000)`,
+3. `battleflag && rand64() == 0` (1-in-64 per sleep-tick).
+On wake, `anim_list[0].abs_y = abs_y & 0xffe0; hero_y = abs_y` (fmain.c:2021)
+snaps the hero to the nearest 32-px tile row.
+**Issue**: The port implemented only (1) and (2); the battle-wake clause
+and the tile snap were missing. A hero forced to sleep by hunger (event
+24) or exhaustion (event 12) who was attacked mid-sleep would keep
+sleeping instead of jolting awake as the original does.
+**Fix**: Added `battle_wake_roll` helper (tick-derived rand64, same style
+as `encounter.rs::rand64_from_tick`) and OR'd it into the wake predicate
+under `battleflag`. On wake, `actors[0].abs_y &= 0xffe0` and `hero_y` is
+synced. Consumer-side: `gameplay_scene.rs` already clears `self.sleeping`
+on the returned `should_wake`, so no call-site changes were needed.
+**Status**: Fixed. F9.13 (RESEARCH-REQUIRED, port `rand4`/`rand8`/`rand64`
+to a real LCG stream) subsumes the deterministic-roll deviation noted in
+the inventory audit — the new `battle_wake_roll` uses the same tick-salted
+placeholder until that wider RNG pass lands.
+
+#### F10.3 — Invented `DayNightPhase` enum + thresholds (INVENTED → removed)
+**Severity**: INVENTED.
+**Location**: `gameplay_scene.rs` (pre-fix lines 202-220, 302, 446,
+4999-5003).
+**Reference**: `reference/logic/day-night.md` — no such three-way
+Night/Dawn/Day categorisation exists. The reference uses only:
+- `lightlevel` (0..=300 triangle),
+- `lightlevel < 40` → Spectre visibility (fmain.c:2027),
+- `lightlevel > 120` → day/night *music* threshold (fmain.c:2948),
+- `dayperiod` (0..=11) for narrator events.
+**Issue**: The port defined `DayNightPhase { Night (<60), Dawn (60..=149),
+Day (>=150), Dusk (unused/reserved) }` — a fabricated categorisation whose
+thresholds (60, 149, a reserved "Dusk") don't appear anywhere in the
+reference. The enum was used only to emit a debug log line on phase
+change (`self.dlog("Day/night phase: …")`) and never gated any game
+behaviour. Still: invented thresholds leaking into any user-visible
+surface (even debug) violate the fidelity-first principle.
+**Fix**: Removed the `DayNightPhase` enum, the `day_night_phase` field,
+its initialiser, and the debug log in `update()`. Palette / spectre /
+music logic is unaffected; they already drive off `lightlevel` directly.
+**Status**: Fixed.
+
+#### F10.4 — Stale comment in `daynight_tick` (NEEDS-FIX → fixed as part of F10.1)
+**Severity**: NEEDS-FIX (doc only).
+**Location**: `game_state.rs::daynight_tick` pre-fix line 310.
+**Issue**: The doc comment claimed "boundaries at 0, 6000, 12000, 18000";
+the actual boundary array used 8000 (bucket 4 = daynight 8000). 6000 has
+no referent in the ref. Corrected as part of the F10.1 rewrite; new doc
+cites fmain.c:2029 directly.
+
+#### F10.5 — 30 Hz tick cadence (CONFORMANT)
+`game_clock.rs::NANOS_PER_TICK = 33_333_334` (30 FPS NTSC invariant) and
+the per-frame `tick(delta_ticks)` → `daynight_tick()` pipeline matches
+`no_motion_tick`'s +1/tick advance. Per the project invariant this file
+was not touched.
+
+#### F10.6 — `freeze_timer` halts the clock (CONFORMANT)
+`daynight_tick` early-returns when `freeze_timer > 0`
+(`game_state.rs:313-315`), matching fmain.c:2023. The magic subsystem
+audit (F2) already verified the +100 increment and per-tick decrement.
+
+#### F10.7 — `lightlevel` triangle wave (CONFORMANT)
+`lightlevel = daynight / 40; if ≥ 300 → 600 - lightlevel` matches
+fmain.c:2025-2026 exactly, both in `daynight_tick` and in the
+post-sleep refresh path.
+
+#### F10.8 — Spectre visibility gate (CONFORMANT)
+`gameplay_scene.rs::update_spectre_visibility` toggles `ob_listg[5]`
+on `lightlevel < 40`, matching fmain.c:2027-2028.
+
+#### F10.9 — `day_fade` palette driver (CONFORMANT)
+`Self::should_update_palette` = `(daynight & 3) == 0 || viewstatus > 97`;
+`compute_current_palette` computes `(lightlevel - 80 + 200·light_on,
+lightlevel - 61, lightlevel - 62)` for outdoor regions and full brightness
+for region ≥ 8. Matches fmain2.c:1655-1660 / `day-night.md#day_fade`.
+
+#### F10.10 — `setmood` day/night music threshold (CONFORMANT)
+`gameplay_scene.rs:3593` uses `lightlevel > 120` for the outdoor day
+vs. night track selection, matching fmain.c:2948 and
+`day-night.md#setmood`. Higher-priority overrides (death, astral,
+battle, indoor) precede the lightlevel check as per the reference.
+
+#### F10.11 — Narrator events 28/29/30/31 (CONFORMANT)
+The four dayperiod-transition events ("It was midnight.", "It was
+morning.", "It was midday.", "Evening was drawing near.") are pushed
+through `events::event_msg(&narr, ev, &bname)` and sourced from
+`faery.toml [narr].event_msg`. No invented strings. Two-source rule: ✅.
+
+#### F10.12 — Hunger/fatigue + safe-zone/auto-eat cadence (CONFORMANT)
+Covered by Subsystem 9 (inventory) for the auto-eat branch and the
+existing `hunger_fatigue_step` mirrors `hunger_fatigue_tick`
+(fmain.c:2188-2220 / `day-night.md#hunger_fatigue_tick`).
+
+#### F10.13 — Natural healing every 1024 daynight ticks (CONFORMANT)
+`(daynight & 0x3FF) == 0 && !battleflag && vitality < heal_cap(brave)`
+gate matches fmain.c:2040-2043. Sleep's 64× acceleration naturally
+yields ≈63× faster healing because the check runs inside the 63-step
+loop — same invariant as the reference.
+
+#### F10.14 — Shop hours / night encounter swap / night AI / night movement (CONFORMANT by omission)
+None of these exist in the reference. `reference/logic/shops.md`
+documents no hour enforcement; `encounters.md` cadence is
+`(daynight & 15)` / `(daynight & 31)` but the encounter *tables* are
+not swapped by time of day; `ai-system.md` and `movement.md` contain
+no `lightlevel`/`daynight` gates. No port divergence.
+
+#### F10.15 — Cheat key advances daynight (CONFORMANT)
+F9 adds 1000 to `daynight` (`gameplay_scene.rs:4675`), matching the
+cheat behaviour described in `day-night.md` Notes (fmain.c:1336,
+cheat key 18 adds 1000). Key remap (F9 vs. cheat-key 18) is an input
+layer difference, not a clock primitive.
+
+#### F10.16 — Persist round-trip (CONFORMANT)
+`persist.rs` saves/restores `daynight`, `dayperiod`, `lightlevel`,
+`freeze_timer`, `light_timer`, `secret_timer`, `game_days`, `fatigue`,
+`hunger`. After F10.1 the saved `dayperiod` can now carry any bucket
+0..=11; the existing `state.dayperiod = sf.dayperiod as u8` (line 221)
+accepts the full range.
+
+### Summary
+- **16 findings**: 11 CONFORMANT (F10.5–F10.16), 3 NEEDS-FIX fixed
+  (F10.1 dayperiod bucket width, F10.2 sleep battle-wake + abs_y snap,
+  F10.4 stale comment), 1 INVENTED removed (F10.3 DayNightPhase enum).
+- Build: ✅ `cargo build` clean, zero new warnings.
+- Tests: ✅ 586 + 12 + 12 passing.
+
+### SPEC/REQ updates queued
+None from this subsystem.
+
+### Blockers
+None.
+
+**Two-source rule**: ✅ the day-night subsystem emits only the four
+period-transition strings (events 28-31) resolved through
+`faery.toml [narr].event_msg`; no hard-coded prose introduced or
+retained.
+
+
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
 SPEC-GAP items that need user adjudication before proceeding._
-
----
