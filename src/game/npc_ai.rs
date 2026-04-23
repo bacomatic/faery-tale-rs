@@ -13,7 +13,7 @@ fn ai_rand(tick: u32, salt: u32) -> u32 {
 }
 
 /// Execute the current tactic — gates set_course behind a probabilistic check.
-/// Ports do_tactic from fmain2.c:2075.
+/// Ports do_tactic from fmain2.c:1664-1700 (see RESEARCH §8.2).
 ///
 /// `leader_idx`: if Some(i), the index of the leader NPC in `npcs` for Follow/Evade.
 /// `npcs`: read-only snapshot of NPC positions for Follow/Evade targets.
@@ -33,13 +33,16 @@ pub fn do_tactic(
 
     let r = ai_rand(tick, npc.x as u32 ^ npc.y as u32);
 
-    // Probabilistic gate: ~12.5% for most goals, ~25% for Attack2/Archer2.
-    let mask = match npc.goal {
-        Goal::Attack2 | Goal::Archer2 => 3, // !(rand & 3) → 25%
-        _ => 7,                              // !(rand & 7) → 12.5%
-    };
-    if (r & mask) != 0 {
-        return; // No re-aim this tick.
+    // Per RESEARCH §8.2 (fmain2.c:1666-1669): SHOOT bypasses the rate-limit; all
+    // other tactics are gated at 12.5% default, upgraded to 25% only when
+    // goal == ATTACK2 (clever melee). ARCHER2 is NOT in the 25% bucket here;
+    // the 25% fast-reconsider for ATTACK1/ARCHER2 lives in select_tactic's
+    // re-plan gate (a separate clock per ai-system.md#advance_goal).
+    if npc.tactic != Tactic::Shoot {
+        let mask: u32 = if npc.goal == Goal::Attack2 { 3 } else { 7 };
+        if (r & mask) != 0 {
+            return; // No re-aim this tick.
+        }
     }
 
     match npc.tactic {
@@ -204,12 +207,13 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: u8) {
 /// (`race < 7`) skip all AI — they do not change tactic, facing, or movement state.
 /// Non-hostile NPCs (`race >= 7`, e.g. shopkeepers, villagers) are always processed.
 ///
-/// Per SPEC §11.5 step 3: SETFIG actors (`race >= 0x80`) are excluded from the
-/// standard AI loop entirely — no random wandering, no chase, no tactic selection.
-/// The only scripted behavior retained is `Goal::Stand`, which keeps the actor
-/// facing the hero while remaining Still (used by shopkeepers and other fixed NPCs).
+/// Per SPEC §11.5 step 3 and ref ai-system.md:46 (`if actor.type == SETFIG: return`):
+/// SETFIG actors (`race >= 0x80`) short-circuit the entire goal FSM. No facing,
+/// state, goal, or tactic changes occur on any tick. Their spawn-time pose is
+/// whatever `set_shape` / init code assigned.
 pub fn tick_npc(
     npc: &mut Npc,
+    npc_idx: usize,
     hero_x: i32,
     hero_y: i32,
     hero_dead: bool,
@@ -217,73 +221,104 @@ pub fn tick_npc(
     npcs: &[(i32, i32)],
     tick: u32,
     xtype: u16,
+    turtle_eggs: bool,
     freeze: bool,
 ) {
-    // SETFIG actors (race >= 0x80): skipped entirely from standard AI (§11.5 step 3).
-    // Stand goal is the only scripted behavior: face hero, stay Still.
+    // SETFIG actors (race >= 0x80): return unconditionally — ref ai-system.md:46.
     if npc.race >= 0x80 {
-        if npc.goal == Goal::Stand {
-            set_course(npc, hero_x, hero_y, SC_AIM);
-            npc.state = NpcState::Still;
-        }
         return;
     }
 
     if freeze && npc.race < 7 {
         return;
     }
-    select_tactic(npc, hero_x, hero_y, hero_dead, leader_idx, xtype, tick);
+    select_tactic(npc, npc_idx, hero_x, hero_y, hero_dead, leader_idx, xtype, turtle_eggs, tick);
     do_tactic(npc, hero_x, hero_y, leader_idx, npcs, tick);
 }
 
-/// Goal value for close-range melee threshold computation.
-fn goal_value(goal: &Goal) -> i32 {
+/// Numeric GOAL_* value matching SYMBOLS.md:275-286. Used for melee-reach
+/// threshold `thresh = 14 - mode` at ref ai-system.md:103.
+fn goal_numeric(goal: &Goal) -> i32 {
     match goal {
-        Goal::Attack1 => 0,
-        Goal::Attack2 => 1,
+        Goal::User => 0,
+        Goal::Attack1 => 1,
+        Goal::Attack2 => 2,
         Goal::Archer1 => 3,
         Goal::Archer2 => 4,
+        Goal::Flee => 5,
+        Goal::Stand => 6,
+        // GOAL_DEATH = 7 (no Rust equivalent in this enum)
+        // GOAL_WAIT = 8 (no Rust equivalent)
+        Goal::Follower => 9,
+        Goal::Confused => 10,
         _ => 0,
     }
 }
 
 /// Select tactic for this NPC based on goal, distance, state.
-/// Ports the tactic decision tree from fmain.c:2500-2595.
+/// Ports `advance_goal` from fmain.c:2109-2183 (see `reference/logic/ai-system.md`).
 ///
-/// `hero_dead`: true if hero is dead/falling.
-/// `leader_idx`: index of leader NPC for follower logic.
-/// `xtype`: terrain type from game state.
+/// `npc_idx`: this NPC's slot index in the actor table — used for the hero-dead
+///   leader/follower split (ref ai-system.md:60-64: first iterated actor becomes
+///   `leader`, later ones become FOLLOWERS).
+/// `hero_dead`: true if hero is dead/falling (STATE_DEAD or STATE_FALL).
+/// `leader_idx`: pre-computed first-active-hostile slot index.
+/// `xtype`: special-encounter terrain classifier.
+/// `turtle_eggs`: true when the global turtle-eggs counter is non-zero (ref
+///   ai-system.md:84). When false, snake race falls through to the normal AI.
 /// `tick`: current game tick for RNG.
 pub fn select_tactic(
     npc: &mut Npc,
+    npc_idx: usize,
     hero_x: i32,
     hero_y: i32,
     hero_dead: bool,
     leader_idx: Option<usize>,
     xtype: u16,
+    turtle_eggs: bool,
     tick: u32,
 ) {
     let r = ai_rand(tick, npc.x as u32 ^ (npc.y as u32).wrapping_mul(3));
 
-    // === Goal overrides (checked every tick) ===
+    // === Forced mode overrides (ref ai-system.md:58-67) ===
 
-    // Hero dead → flee or follow leader.
+    // Hero dead/fall: first active hostile takes FLEE, rest take FOLLOWER
+    // (ref fmain.c:2133-2136, 2183 — leader starts at 0, set after each iteration).
     if hero_dead {
-        npc.goal = if leader_idx.is_some() {
-            Goal::Follower
-        } else {
-            Goal::Flee
+        let is_first_leader = match leader_idx {
+            Some(li) => li == npc_idx,
+            None => true,
         };
+        npc.goal = if is_first_leader { Goal::Flee } else { Goal::Follower };
     }
 
-    // Vitality critically low → flee.
-    if npc.vitality < 2 {
+    // Vitality critically low → FLEE (ref ai-system.md:65).
+    // SPEC-GAP: original gate is `xtype > 59 && race != extn.v3`; we use the
+    // placeholder `race < 4` until `extn` is plumbed. For DKnight (race 7,
+    // v3 = 7) both conditions agree — DKnight does not flee in his zone.
+    if npc.vitality < 2 || (xtype > 59 && npc.race < 4) {
         npc.goal = Goal::Flee;
     }
 
-    // High xtype + non-special race → flee (original: xtype > 59 && race != special).
-    if xtype > 59 && npc.race < 4 {
-        npc.goal = Goal::Flee;
+    // === Frust dispatch (ref ai-system.md:70-75, fmain.c:2141-2144) ===
+    // Must run BEFORE the mode branches: a frust-latched actor in any goal
+    // (including FLEE/FOLLOWER/STAND/WAIT/CONFUSED) receives a random fallback
+    // tactic. See frustration.md#resolve_frust_tactic.
+    if npc.tactic == Tactic::Frust {
+        let rr = r >> 16;
+        npc.tactic = if (npc.weapon & 4) != 0 {
+            // bow/wand: rand(2, 5) → FOLLOW, BUMBLE_SEEK, RANDOM, BACKUP
+            match rr & 3 {
+                0 => Tactic::Follow,
+                1 => Tactic::BumbleSeek,
+                2 => Tactic::Random,
+                _ => Tactic::Backup,
+            }
+        } else {
+            // melee: rand(3, 4) → BUMBLE_SEEK, RANDOM
+            if rr & 1 == 0 { Tactic::BumbleSeek } else { Tactic::Random }
+        };
+        return;
     }
 
     // === Non-hostile goal modes (bypass tactic tree) ===
@@ -297,7 +332,9 @@ pub fn select_tactic(
             return;
         }
         Goal::Stand => {
-            set_course(npc, hero_x, hero_y, SC_AIM);
+            // Ref ai-system.md:121-122: set_course(mode=0 smart seek) + stop_motion.
+            // SC_SMART applies axis suppression; then state is forced Still.
+            set_course(npc, hero_x, hero_y, SC_SMART);
             npc.state = NpcState::Still;
             return;
         }
@@ -311,26 +348,31 @@ pub fn select_tactic(
         _ => {} // Attack/Archer goals continue to tactic tree.
     }
 
-    // === Close-range melee check (every tick, bypasses re-aim gate) ===
+    // === Close-range melee check + DKnight stand_guard (ref ai-system.md:102-114) ===
     let xd = (hero_x - npc.x as i32).abs();
     let yd = (hero_y - npc.y as i32).abs();
-
-    let is_melee = npc.weapon < 4; // weapons 0-3 are melee (dirk, mace, sword, etc.)
-    if is_melee {
-        let mut thresh = 14 - goal_value(&npc.goal);
-        if npc.race == 7 {
-            // DKnight
-            thresh = 16;
-        }
-        if xd < thresh && yd < thresh {
-            // Close-range melee: aim directly and fight.
-            set_course(npc, hero_x, hero_y, SC_DIRECT);
-            npc.state = NpcState::Fighting;
-            return;
-        }
+    // Ref: thresh = 14 - mode (numeric GOAL_*); dark knight (race 7) uses 16.
+    let thresh = if npc.race == 7 { 16 } else { 14 - goal_numeric(&npc.goal) };
+    // Ref: `(weapon & 4) == 0` — bit 2 clear means melee (non-bow/wand).
+    let is_melee = (npc.weapon & 4) == 0;
+    if is_melee && xd < thresh && yd < thresh {
+        // Inside melee range with a non-bow weapon: aim directly and fight.
+        set_course(npc, hero_x, hero_y, SC_DIRECT);
+        npc.state = NpcState::Fighting;
+        return;
+    }
+    if npc.race == 7 && npc.vitality > 0 {
+        // Living dark knight outside melee reach: stand_guard — state = STILL,
+        // facing = DIR_S (south). Ref ai-system.md:110-112 (fmain.c:2168-2169).
+        npc.state = NpcState::Still;
+        npc.facing = 4;
+        return;
     }
 
-    // === Recalculation gate (probabilistic, varies by goal) ===
+    // === Re-plan gate (ref ai-system.md:80-81, fmain.c:2132, 2148) ===
+    // `r = chance(1, 16)` baseline; `(mode & 2) == 0` upgrades to `chance(1, 4)`.
+    // Numeric values: ATTACK1=1 (bit1=0, 1/4), ATTACK2=2 (bit1=1, 1/16),
+    // ARCHER1=3 (bit1=1, 1/16), ARCHER2=4 (bit1=0, 1/4).
     let gate_mask = match npc.goal {
         Goal::Attack1 | Goal::Archer2 => 3, // ~25%
         _ => 15,                             // ~6.25%
@@ -339,17 +381,15 @@ pub fn select_tactic(
         return; // Keep current tactic this tick.
     }
 
-    // === Tactic decision tree ===
+    // === Tactic decision tree (ref ai-system.md:83-101) ===
 
-    // Snake race + turtle eggs special case.
-    if npc.race == 4 {
-        // RACE_SNAKE
+    // Snake + turtle_eggs global: march to nest coords (ref line 84).
+    if npc.race == 4 && turtle_eggs {
         npc.tactic = Tactic::EggSeek;
         return;
     }
 
-    // No weapon → CONFUSED goal (§11.9). Assign goal, execute first-tick random walk
-    // directly (do_tactic is gated for Confused goal on all subsequent ticks).
+    // Disarmed → CONFUSED + first-tick random walk.
     if npc.weapon == 0 {
         npc.goal = Goal::Confused;
         npc.tactic = Tactic::Random;
@@ -358,24 +398,23 @@ pub fn select_tactic(
         return;
     }
 
-    // Low vitality + 50% chance → evade.
+    // Wounded evade: vitality < 6 AND coin flip (ref line 90).
     if npc.vitality < 6 && (r >> 8) & 1 == 0 {
         npc.tactic = Tactic::Evade;
         return;
     }
 
-    // Archer-specific range brackets.
+    // Archer range bands (ref lines 94-99).
     let is_archer = matches!(npc.goal, Goal::Archer1 | Goal::Archer2);
     if is_archer {
         if xd < 40 && yd < 30 {
-            npc.tactic = Tactic::Backup; // Too close.
+            npc.tactic = Tactic::Backup;
             return;
         }
         if xd < 70 && yd < 70 {
-            npc.tactic = Tactic::Shoot; // In range.
+            npc.tactic = Tactic::Shoot;
             return;
         }
-        // Far away → pursue.
         npc.tactic = Tactic::Pursue;
         return;
     }
@@ -568,7 +607,7 @@ mod tests {
         let mut npc = make_npc(100, 100);
         npc.goal = Goal::Attack1;
         npc.tactic = Tactic::Pursue;
-        select_tactic(&mut npc, 200, 100, true, None, 0, 42);
+        select_tactic(&mut npc, 0, 200, 100, true, None, 0, false, 42);
         assert_eq!(npc.goal, Goal::Flee);
     }
 
@@ -577,7 +616,7 @@ mod tests {
         let mut npc = make_npc(100, 100);
         npc.goal = Goal::Attack1;
         npc.vitality = 1;
-        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, 42);
         assert_eq!(npc.goal, Goal::Flee);
     }
 
@@ -589,7 +628,7 @@ mod tests {
             npc.goal = Goal::Archer1;
             npc.weapon = 4;
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 120, 110, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 120, 110, false, None, 0, false, tick);
             if npc.tactic == Tactic::Backup {
                 backed_up = true;
                 break;
@@ -606,7 +645,7 @@ mod tests {
             npc.goal = Goal::Archer1;
             npc.weapon = 4;
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 160, 140, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 160, 140, false, None, 0, false, tick);
             if npc.tactic == Tactic::Shoot {
                 shooting = true;
                 break;
@@ -622,7 +661,7 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack1;
             npc.weapon = 1;
-            select_tactic(&mut npc, 105, 105, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 105, 105, false, None, 0, false, tick);
             if npc.state == NpcState::Fighting {
                 fighting = true;
                 break;
@@ -638,7 +677,7 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack1;
             npc.weapon = 0;
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.tactic == Tactic::Random {
                 // Updated: goal must also be Confused (§11.9).
                 assert_eq!(npc.goal, Goal::Confused, "weapon=0 NPC must have Goal::Confused");
@@ -654,7 +693,7 @@ mod tests {
         let mut npc = make_npc(100, 100);
         npc.goal = Goal::Flee;
         npc.tactic = Tactic::Pursue;
-        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, 42);
         assert_eq!(npc.tactic, Tactic::Backup);
     }
 
@@ -662,7 +701,7 @@ mod tests {
     fn test_select_tactic_stand_goal_stays_still() {
         let mut npc = make_npc(100, 100);
         npc.goal = Goal::Stand;
-        select_tactic(&mut npc, 200, 100, false, None, 0, 42);
+        select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, 42);
         assert_eq!(npc.state, NpcState::Still);
     }
 
@@ -689,7 +728,7 @@ mod tests {
             npc.goal = Goal::Archer1;
             npc.weapon = 4; // bow
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 120, 110, false, None, 0, tick); // xd=20, yd=10 → Backup
+            select_tactic(&mut npc, 0, 120, 110, false, None, 0, false, tick); // xd=20, yd=10 → Backup
             if npc.tactic == Tactic::Backup {
                 reconsider_archer1 += 1;
             }
@@ -699,7 +738,7 @@ mod tests {
             npc.goal = Goal::Archer2;
             npc.weapon = 4;
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 120, 110, false, None, 0, tick); // xd=20, yd=10 → Backup
+            select_tactic(&mut npc, 0, 120, 110, false, None, 0, false, tick); // xd=20, yd=10 → Backup
             if npc.tactic == Tactic::Backup {
                 reconsider_archer2 += 1;
             }
@@ -717,7 +756,7 @@ mod tests {
             npc.weapon = 1;
             npc.vitality = 3; // < 6
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.tactic == Tactic::Evade {
                 reconsider_attack1 += 1;
             }
@@ -728,7 +767,7 @@ mod tests {
             npc.weapon = 1;
             npc.vitality = 3;
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.tactic == Tactic::Evade {
                 reconsider_attack2 += 1;
             }
@@ -797,7 +836,7 @@ mod tests {
         let initial_facing = npc.facing;
 
         for tick in 0..100u32 {
-            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, true);
+            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, true);
             assert_eq!(
                 npc.state, NpcState::Still,
                 "Frozen hostile NPC changed state at tick {tick}"
@@ -812,7 +851,9 @@ mod tests {
     #[test]
     fn test_freeze_nonhostile_npc_still_acts() {
         // SPEC §19.3: NPCs with race >= 7 (e.g. shopkeepers) are not frozen enemies.
-        // (d) non-hostile NPCs are unaffected by freeze.
+        // Ref ai-system.md:46 `if actor.type == SETFIG: return` — SETFIG actors short-
+        // circuit advance_goal unconditionally. Shopkeeper (race 0x88, SETFIG) therefore
+        // does NOT re-aim at the hero per tick; its spawn-time pose is preserved.
         use crate::game::npc::RACE_SHOPKEEPER;
         let mut npc = Npc {
             npc_type: 1,
@@ -822,14 +863,13 @@ mod tests {
             vitality: 10,
             active: true,
             goal: Goal::Stand,
+            facing: 4, // spawn facing south
             ..Default::default()
         };
-        // Stand goal always aims at hero and stays Still — this is normal AI behavior.
-        // tick_npc with freeze=true should still process non-hostile NPCs.
-        tick_npc(&mut npc, 200, 100, false, None, &[], 0, 0, true);
-        // Stand goal: set_course(SC_AIM) + state = Still — should not panic.
+        // SETFIG short-circuit: state/facing/goal must not be touched, even with freeze=true.
+        tick_npc(&mut npc, 0, 200, 100, false, None, &[], 0, 0, false, true);
         assert_eq!(npc.state, NpcState::Still);
-        assert_eq!(npc.facing, 2, "Shopkeeper should face hero (East)");
+        assert_eq!(npc.facing, 4, "SETFIG shopkeeper spawn facing must be preserved");
     }
 
     #[test]
@@ -843,7 +883,7 @@ mod tests {
             npc.weapon = 1;
             npc.facing = 0;
             npc.state = NpcState::Still;
-            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
             if npc.state != NpcState::Still || npc.facing != 0 {
                 acted = true;
                 break;
@@ -890,7 +930,7 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack1;
             npc.weapon = 0; // unarmed
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.goal == Goal::Confused {
                 got_confused = true;
                 break;
@@ -910,7 +950,7 @@ mod tests {
             npc.goal = Goal::Attack1;
             npc.weapon = 0;
             npc.state = NpcState::Still;
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.goal == Goal::Confused {
                 assert_eq!(npc.state, NpcState::Walking, "first CONFUSED tick must set Walking");
                 assert!(npc.facing <= 7, "facing must be 0–7, got {}", npc.facing);
@@ -942,7 +982,7 @@ mod tests {
                 let mut npc = make_npc(100, 100);
                 npc.goal = Goal::Attack1;
                 npc.weapon = 0;
-                select_tactic(&mut npc, 200, 100, false, None, 0, t);
+                select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, t);
                 npc.goal == Goal::Confused
             })
             .expect("could not bootstrap Confused state");
@@ -950,7 +990,7 @@ mod tests {
         let mut npc = make_npc(100, 100);
         npc.goal = Goal::Attack1;
         npc.weapon = 0;
-        select_tactic(&mut npc, 200, 100, false, None, 0, seed_tick);
+        select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, seed_tick);
         assert_eq!(npc.goal, Goal::Confused);
 
         // Snapshot state after first tick.
@@ -960,7 +1000,7 @@ mod tests {
 
         // Simulate 10 subsequent ticks: neither facing nor tactic should change.
         for tick in (seed_tick + 1)..(seed_tick + 11) {
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             do_tactic(&mut npc, 200, 100, None, &[], tick);
 
             assert_eq!(npc.goal, Goal::Confused, "Confused goal must persist on tick {tick}");
@@ -993,7 +1033,7 @@ mod tests {
             npc.weapon = 1;           // weapon restored
             npc.tactic = Tactic::Random; // leftover from confused period
             // Hero is far → no melee engage.
-            select_tactic(&mut npc, 200, 100, false, None, 0, tick);
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             // Should NOT assign Confused; when gate fires, should choose Pursue.
             assert_ne!(
                 npc.goal,
@@ -1030,7 +1070,7 @@ mod tests {
             ..Default::default()
         };
         for tick in 0..200u32 {
-            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
             assert_eq!(
                 npc.state,
                 NpcState::Still,
@@ -1060,7 +1100,7 @@ mod tests {
             npc.weapon = 1;
             npc.state = NpcState::Still;
             npc.facing = 0;
-            tick_npc(&mut npc, 200, 100, false, None, &[], tick, 0, false);
+            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
             if npc.state != NpcState::Still || npc.facing != 0 {
                 acted = true;
                 break;
@@ -1069,10 +1109,11 @@ mod tests {
         assert!(acted, "Regular hostile NPC must still receive AI updates");
     }
 
-    /// (c) SETFIG shopkeeper with Stand goal faces the hero and stays Still.
-    /// Scripted Stand behavior is preserved even though generic AI is skipped.
+    /// (c) SETFIG shopkeeper with Stand goal: per ref ai-system.md:46
+    /// (`if actor.type == SETFIG: return`), advance_goal is a no-op for SETFIG
+    /// actors — their spawn pose (state, facing, tactic) is preserved verbatim.
     #[test]
-    fn test_setfig_shopkeeper_stand_faces_hero() {
+    fn test_setfig_shopkeeper_stand_preserves_spawn_pose() {
         use crate::game::npc::RACE_SHOPKEEPER;
         let mut npc = Npc {
             npc_type: 1,
@@ -1082,18 +1123,198 @@ mod tests {
             vitality: 10,
             active: true,
             goal: Goal::Stand,
+            facing: 4, // spawn facing south
+            state: NpcState::Still,
             ..Default::default()
         };
-        // Hero is due East at (200, 100).
-        tick_npc(&mut npc, 200, 100, false, None, &[], 0, 0, false);
+        // Hero is due East at (200, 100); SETFIG must NOT re-orient.
+        tick_npc(&mut npc, 0, 200, 100, false, None, &[], 0, 0, false, false);
         assert_eq!(
             npc.state,
             NpcState::Still,
-            "SETFIG shopkeeper with Stand goal must stay Still"
+            "SETFIG shopkeeper must stay Still"
         );
         assert_eq!(
-            npc.facing, 2,
-            "SETFIG shopkeeper must face hero East (facing=2)"
+            npc.facing, 4,
+            "SETFIG shopkeeper spawn facing must be preserved (ref short-circuits AI)"
         );
+    }
+
+    // ── Subsystem 3 (ai-system) audit — targeted regression tests ──────────
+
+    /// F3.4: a living dark knight (race 7) that is OUT of melee reach with a
+    /// melee weapon stands still facing south — ref ai-system.md:110-112.
+    #[test]
+    fn test_dknight_stand_guard_out_of_reach() {
+        let mut npc = Npc {
+            npc_type: 6,
+            race: 7, // DKnight
+            x: 100,
+            y: 100,
+            vitality: 10,
+            weapon: 2, // melee (bit 2 = 0)
+            active: true,
+            goal: Goal::Attack1,
+            tactic: Tactic::Pursue,
+            state: NpcState::Walking,
+            facing: 2, // east before tick
+            ..Default::default()
+        };
+        // Hero far away (300 away) — beyond DKnight thresh of 16.
+        select_tactic(&mut npc, 0, 400, 100, false, None, 0, false, 42);
+        assert_eq!(npc.state, NpcState::Still, "DKnight out of reach → STILL");
+        assert_eq!(npc.facing, 4, "DKnight stand_guard faces south");
+    }
+
+    /// F3.4: a dead dark knight (vitality == 0) does NOT stand_guard — falls
+    /// through to the normal AI pipeline (ref: `vitality != 0` gate).
+    #[test]
+    fn test_dknight_stand_guard_only_when_alive() {
+        let mut npc = Npc {
+            npc_type: 6,
+            race: 7,
+            x: 100,
+            y: 100,
+            vitality: 0, // dead
+            weapon: 2,
+            active: true,
+            goal: Goal::Attack1,
+            ..Default::default()
+        };
+        // vitality < 2 forces FLEE override, which pre-empts stand_guard.
+        select_tactic(&mut npc, 0, 400, 100, false, None, 0, false, 42);
+        assert_eq!(npc.goal, Goal::Flee);
+        assert_eq!(npc.tactic, Tactic::Backup);
+    }
+
+    /// F3.2: melee-reach threshold `thresh = 14 - mode` with numeric GOAL values.
+    /// ATTACK1 (mode 1) → thresh 13; ATTACK2 (mode 2) → thresh 12.
+    #[test]
+    fn test_melee_thresh_uses_numeric_goal() {
+        // At (xd, yd) = (12, 0): ATTACK1 (thresh 13) engages; ATTACK2 (thresh 12) does NOT.
+        let mut a1 = make_npc(100, 100);
+        a1.goal = Goal::Attack1;
+        a1.weapon = 1; // melee (bit 2 = 0)
+        select_tactic(&mut a1, 0, 112, 100, false, None, 0, false, 0);
+        assert_eq!(a1.state, NpcState::Fighting, "ATTACK1 at xd=12 must engage");
+
+        let mut a2 = make_npc(100, 100);
+        a2.goal = Goal::Attack2;
+        a2.weapon = 1;
+        // Force the reconsider gate closed so we don't accidentally pick Pursue.
+        // We only care that Fighting is NOT entered; at xd=12 thresh=12, 12 < 12 is false.
+        select_tactic(&mut a2, 0, 112, 100, false, None, 0, false, 0);
+        assert_ne!(a2.state, NpcState::Fighting, "ATTACK2 at xd=12 must NOT engage");
+    }
+
+    /// F3.5: a frust-latched NPC receives a randomized fallback tactic, not a no-op.
+    #[test]
+    fn test_frust_tactic_dispatches_random_fallback() {
+        let mut changed = false;
+        for tick in 0..200u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Attack1;
+            npc.tactic = Tactic::Frust;
+            npc.weapon = 1; // melee → BUMBLE_SEEK or RANDOM
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
+            if matches!(npc.tactic, Tactic::BumbleSeek | Tactic::Random) {
+                changed = true;
+                break;
+            }
+        }
+        assert!(changed, "Frust must dispatch to BUMBLE_SEEK/RANDOM for melee actors");
+    }
+
+    #[test]
+    fn test_frust_tactic_dispatches_bow_fallback() {
+        let mut seen: Vec<Tactic> = Vec::new();
+        for tick in 0..1000u32 {
+            let mut npc = make_npc(100, 100);
+            npc.goal = Goal::Archer1;
+            npc.tactic = Tactic::Frust;
+            npc.weapon = 4; // bow, bit 2 set
+            select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
+            if !seen.contains(&npc.tactic) {
+                seen.push(npc.tactic.clone());
+            }
+        }
+        // Bow frust fallback: rand(2,5) → FOLLOW/BUMBLE_SEEK/RANDOM/BACKUP.
+        let allowed = [Tactic::Follow, Tactic::BumbleSeek, Tactic::Random, Tactic::Backup];
+        for t in &seen {
+            assert!(allowed.contains(t), "bow frust dispatch produced illegal tactic {:?}", t);
+        }
+        assert!(seen.len() >= 3, "bow frust dispatch must randomize: seen={:?}", seen);
+    }
+
+    /// F3.7: on hero death, the NPC at `leader_idx` flees; others follow.
+    #[test]
+    fn test_hero_dead_leader_flees_others_follow() {
+        let mut leader = make_npc(100, 100);
+        leader.goal = Goal::Attack1;
+        // Leader slot = 2; this NPC is at idx 2.
+        select_tactic(&mut leader, 2, 400, 400, true, Some(2), 0, false, 0);
+        assert_eq!(leader.goal, Goal::Flee, "leader flees when hero is dead");
+
+        let mut follower = make_npc(150, 150);
+        follower.goal = Goal::Attack1;
+        select_tactic(&mut follower, 3, 400, 400, true, Some(2), 0, false, 0);
+        assert_eq!(follower.goal, Goal::Follower, "non-leader follows when hero is dead");
+    }
+
+    /// F3.6: SHOOT tactic bypasses the do_tactic rate limit (ref RESEARCH §8.2,
+    /// fmain2.c:1666-1682 — SHOOT case runs every tick).
+    #[test]
+    fn test_do_tactic_shoot_bypasses_rate_limit() {
+        // If the gate were active, facing would only update ~12.5% of ticks.
+        // SHOOT must run every tick → over 100 ticks we expect near-100% updates.
+        let mut updates = 0u32;
+        for tick in 0..100u32 {
+            let mut npc = make_npc(100, 100);
+            npc.tactic = Tactic::Shoot;
+            npc.goal = Goal::Archer1;
+            npc.facing = 7; // starting facing NW; hero east → should change
+            do_tactic(&mut npc, 200, 100, None, &[], tick);
+            if npc.facing != 7 { updates += 1; }
+        }
+        // With the SHOOT-bypass, should be very close to 100.
+        assert!(updates >= 90, "SHOOT must not be rate-limited: updates={updates}/100");
+    }
+
+    /// F3.3: snakes do NOT unconditionally march to the turtle nest — only when
+    /// the global turtle_eggs counter is non-zero (ref ai-system.md:84).
+    #[test]
+    fn test_snake_no_egg_seek_when_eggs_absent() {
+        let mut npc = make_npc(100, 100);
+        npc.race = 4; // snake
+        npc.goal = Goal::Attack1;
+        npc.weapon = 1;
+        let mut saw_egg_seek = false;
+        for tick in 0..500u32 {
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ false, tick);
+            if npc.tactic == Tactic::EggSeek {
+                saw_egg_seek = true;
+                break;
+            }
+        }
+        assert!(!saw_egg_seek, "snake must not enter EGG_SEEK when turtle_eggs == 0");
+    }
+
+    #[test]
+    fn test_snake_egg_seek_when_eggs_present() {
+        let mut npc = make_npc(100, 100);
+        npc.race = 4;
+        npc.goal = Goal::Attack1;
+        npc.weapon = 1;
+        let mut saw_egg_seek = false;
+        for tick in 0..500u32 {
+            npc.tactic = Tactic::Pursue;
+            select_tactic(&mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ true, tick);
+            if npc.tactic == Tactic::EggSeek {
+                saw_egg_seek = true;
+                break;
+            }
+        }
+        assert!(saw_egg_seek, "snake must select EGG_SEEK when turtle_eggs is set");
     }
 }

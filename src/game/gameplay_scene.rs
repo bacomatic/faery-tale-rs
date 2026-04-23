@@ -2231,9 +2231,13 @@ impl GameplayScene {
             });
 
             // 1. AI decision pass.
-            for npc in &mut table.npcs {
+            // SPEC-GAP: `turtle_eggs` global counter (fmain.c) isn't plumbed yet;
+            // pass false so snakes fall through to normal AI rather than unconditionally
+            // marching to the nest (ref ai-system.md:84).
+            let turtle_eggs = false;
+            for (npc_idx, npc) in table.npcs.iter_mut().enumerate() {
                 if !npc.active { continue; }
-                tick_npc(npc, hero_x, hero_y, hero_dead, leader_idx, &positions, tick, xtype, freeze);
+                tick_npc(npc, npc_idx, hero_x, hero_y, hero_dead, leader_idx, &positions, tick, xtype, turtle_eggs, freeze);
             }
 
             // 2. Movement execution pass (sequential — later NPCs see earlier updates).
