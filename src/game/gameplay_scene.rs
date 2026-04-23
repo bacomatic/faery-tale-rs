@@ -1590,25 +1590,33 @@ impl GameplayScene {
         }
     }
 
-    /// Execute princess rescue sequence (SPEC §15.6).
-    /// Awards Writ, gold, keys, teleports hero, and clears princess captive flag.
+    /// Execute princess rescue sequence (SPEC §15.6 / reference/logic/quests.md#rescue).
+    ///
+    /// Ports the post-cinematic state mutations from `rescue()` in
+    /// `fmain2.c:1584-1603`:
+    ///   - `speak(18)` — king's post-rescue line (writ designation).
+    ///   - `stuff[28] = 1` — grant Writ.
+    ///   - `wealth += 100` — 100 gold reward.
+    ///   - `stuff[16..22] += 3` — +3 of each of the six key types.
+    ///   - `ob_list8[9].ob_stat = 0` — clear princess captive flag.
+    ///   - `princess += 1` — advance the rescued-princess counter.
+    ///   - `xfer(5511, 33780, 0)` — teleport hero to Marheim castle drop.
+    ///
+    /// The placard cinematic (placard_text 8+i/9+i/10+i with name
+    /// interpolation, then 17/18 post-rescue placards) and the
+    /// `move_extent(0, 22205, 21231)` / `ob_list8[2].ob_id = 4` cast swap
+    /// are not yet plumbed through this port — see the Subsystem 11 audit
+    /// (RESEARCH-REQUIRED) for plumbing requirements.
     fn execute_princess_rescue(&mut self) {
         const ITEM_WRIT: usize = 28;  // stuff[28] = Writ
-        const ITEM_STATUE: usize = 25; // stuff[25] = gold statues
 
-        // Princess names: Katra (0), Karla (1), Kandy (2)
-        let princess_names = ["Katra", "Karla", "Kandy"];
-        let princess_idx = self.state.princess as usize;
-        let princess_name = princess_names.get(princess_idx).unwrap_or(&"Princess");
-
-        let bname = self.hero_name();
-        self.messages.push(format!("{} has rescued {}!", bname, princess_name));
+        let bname = self.brother_name().to_string();
 
         // Award Writ (stuff[28] = 1)
         self.state.stuff_mut()[ITEM_WRIT] = 1;
 
         // Award 100 gold
-        self.state.gold += 100;
+        self.state.wealth = self.state.wealth.saturating_add(100);
 
         // Award +3 of each key type (stuff[16..22] are the 6 key types)
         for i in 16..22 {
@@ -1633,7 +1641,11 @@ impl GameplayScene {
             // Region change will be processed on next frame
         }
 
-        self.dlog(format!("Princess rescue complete: {} (count={})", princess_name, self.state.princess));
+        // King's post-rescue line (fmain2.c:1599, `speak(18)`): the writ
+        // designation speech sourced from faery.toml [narr].speeches[18].
+        self.messages.push(crate::game::events::speak(&self.narr, 18, &bname));
+
+        self.dlog(format!("Princess rescue complete (count={})", self.state.princess));
     }
 
     /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
@@ -2103,14 +2115,18 @@ impl GameplayScene {
                 }
             }
             // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
+            // Per reference/logic/quests.md#leave_item, `leave_item` places the
+            // dropped object at `(abs_x, abs_y + 10)` — i.e. at the actor's
+            // feet. Apply the same +10 Y offset the witch-lasso drop below uses.
             if let Some((tx, ty)) = necro_talisman_pos {
                 use crate::game::game_state::WorldObject;
+                let drop_y = (ty as i32 + 10).clamp(0, u16::MAX as i32) as u16;
                 self.state.world_objects.push(WorldObject {
                     ob_id: 139,
                     ob_stat: 1, // ground item
                     region: self.state.region_num,
                     x: tx as u16,
-                    y: ty as u16,
+                    y: drop_y,
                     visible: true,
                     goal: 0,
                 });
@@ -2846,69 +2862,122 @@ impl GameplayScene {
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             MenuAction::GiveGold => {
+                // Port of give_item_to_npc hit==5 branch (fmain.c:3493-3500 /
+                // reference/logic/quests.md#give_item_to_npc). Requires a
+                // nearby actor cached by the last TALK/GIVE proximity scan;
+                // here we fall back to `nearest_fig(1, 50)`. When `wealth > 2`
+                // spend 2 gold, probabilistically bump kindness, and speak the
+                // correct line based on target race (beggar 0x8d → speak(24+goal),
+                // others → speak(50)). If `wealth <= 2` or no target is in
+                // range, the original function silently returns — no
+                // scroll-text is emitted.
                 use crate::game::menu::MenuMode;
-                let hero_x = self.state.hero_x as i16;
-                let hero_y = self.state.hero_y as i16;
-                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
-                    t.npcs.iter().any(|n| {
-                        n.active
-                            && (n.x - hero_x).abs() < 32
-                            && (n.y - hero_y).abs() < 32
-                    })
-                });
-                if !npc_nearby {
-                    self.messages.push("There is no one nearby.".to_string());
-                } else if self.state.wealth <= 2 {
-                    self.messages.push("Not enough gold.".to_string());
-                } else {
-                    self.state.wealth -= 2;
-                    self.messages.push("You gave gold.".to_string());
+                use crate::game::npc::RACE_BEGGAR;
+                let bname = self.brother_name().to_string();
+                if let Some(fig) = self.nearest_fig(1, 50) {
+                    if self.state.wealth > 2 {
+                        self.state.wealth -= 2;
+                        // kind++ chance: mirrors `if (rand64() > kind) kind++;`
+                        // (fmain.c:3496). Use the same tick-driven hash used
+                        // elsewhere in the port for rand64().
+                        let roll = {
+                            let tick = self.state.tick_counter;
+                            let h = tick.wrapping_mul(1664525).wrapping_add(1013904223);
+                            ((h >> 10) & 63) as i16
+                        };
+                        if roll > self.state.kind && self.state.kind < i16::MAX {
+                            self.state.kind += 1;
+                        }
+                        // Dispatch on target race / setfig_type.
+                        let (is_beggar, sf_goal) = match &fig.kind {
+                            FigKind::SetFig { world_idx, setfig_type } => {
+                                let goal = self.state.world_objects
+                                    .get(*world_idx)
+                                    .map_or(0u8, |o| o.goal) as usize;
+                                (*setfig_type == 13, goal)
+                            }
+                            FigKind::Npc(idx) => {
+                                let race = self.npc_table.as_ref()
+                                    .and_then(|t| t.npcs.get(*idx))
+                                    .map_or(0u8, |n| n.race);
+                                (race == RACE_BEGGAR, 0usize)
+                            }
+                        };
+                        if is_beggar {
+                            // speak(24 + goal): goal==3 overflows to speak(27)
+                            // per the original bug (reference/logic/quests.md).
+                            self.messages.push(crate::game::events::speak(&self.narr, 24 + sf_goal, &bname));
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 50, &bname));
+                        }
+                    }
                 }
                 self.menu.gomenu(MenuMode::Items);
                 let wealth = self.state.wealth;
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             MenuAction::GiveWrit => {
+                // Per reference/logic/quests.md#give_item_to_npc, GIVE slot 7
+                // (Writ) is a dead slot in `give_item_to_npc`: the function
+                // has no `hit == 7` branch, so selecting it is a silent
+                // no-op that simply falls through to `gomenu(CMODE_ITEMS)`.
+                // (Writ is consumed only via the passive priest-TALK check at
+                // fmain.c:3383-3388, not through GIVE.)
                 use crate::game::menu::MenuMode;
-                let hero_x = self.state.hero_x as i16;
-                let hero_y = self.state.hero_y as i16;
-                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
-                    t.npcs.iter().any(|n| {
-                        n.active
-                            && (n.x - hero_x).abs() < 32
-                            && (n.y - hero_y).abs() < 32
-                    })
-                });
-                if !npc_nearby {
-                    self.messages.push("There is no one nearby.".to_string());
-                } else if self.state.stuff()[28] == 0 {
-                    self.messages.push("You don't have one.".to_string());
-                } else {
-                    self.state.stuff_mut()[28] -= 1;
-                    self.messages.push("You gave the writ.".to_string());
-                }
                 self.menu.gomenu(MenuMode::Items);
                 let wealth = self.state.wealth;
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             MenuAction::GiveBone => {
+                // Port of give_item_to_npc hit==8 branch (fmain.c:3501-3506 /
+                // reference/logic/quests.md#give_item_to_npc). Requires a
+                // nearby actor and stuff[29] (Bone) nonzero. For non-spectre
+                // targets speak(21) "no use for it" with no consumption; for
+                // the Spectre (race 0x8a / setfig_type 10) speak(48), consume
+                // the bone, and drop a Crystal Shard (ob_id 140) at the
+                // spectre's feet via leave_item semantics (y + 10).
                 use crate::game::menu::MenuMode;
-                let hero_x = self.state.hero_x as i16;
-                let hero_y = self.state.hero_y as i16;
-                let npc_nearby = self.npc_table.as_ref().map_or(false, |t| {
-                    t.npcs.iter().any(|n| {
-                        n.active
-                            && (n.x - hero_x).abs() < 32
-                            && (n.y - hero_y).abs() < 32
-                    })
-                });
-                if !npc_nearby {
-                    self.messages.push("There is no one nearby.".to_string());
-                } else if self.state.stuff()[29] == 0 {
-                    self.messages.push("You don't have one.".to_string());
-                } else {
-                    self.state.stuff_mut()[29] -= 1;
-                    self.messages.push("You gave the bone.".to_string());
+                use crate::game::npc::RACE_SPECTRE;
+                let bname = self.brother_name().to_string();
+                if self.state.stuff()[29] != 0 {
+                    if let Some(fig) = self.nearest_fig(1, 50) {
+                        let (is_spectre, drop_pos) = match &fig.kind {
+                            FigKind::SetFig { world_idx, setfig_type } => {
+                                let pos = self.state.world_objects
+                                    .get(*world_idx)
+                                    .map(|o| (o.x, o.y));
+                                (*setfig_type == 10, pos)
+                            }
+                            FigKind::Npc(idx) => {
+                                let info = self.npc_table.as_ref()
+                                    .and_then(|t| t.npcs.get(*idx))
+                                    .map(|n| (n.race, n.x as u16, n.y as u16));
+                                match info {
+                                    Some((r, x, y)) => (r == RACE_SPECTRE, Some((x, y))),
+                                    None => (false, None),
+                                }
+                            }
+                        };
+                        if is_spectre {
+                            self.messages.push(crate::game::events::speak(&self.narr, 48, &bname));
+                            self.state.stuff_mut()[29] = 0;
+                            if let Some((sx, sy)) = drop_pos {
+                                use crate::game::game_state::WorldObject;
+                                let drop_y = (sy as i32 + 10).clamp(0, u16::MAX as i32) as u16;
+                                self.state.world_objects.push(WorldObject {
+                                    ob_id: 140, // Crystal Shard
+                                    ob_stat: 1,
+                                    region: self.state.region_num,
+                                    x: sx,
+                                    y: drop_y,
+                                    visible: true,
+                                    goal: 0,
+                                });
+                            }
+                        } else {
+                            self.messages.push(crate::game::events::speak(&self.narr, 21, &bname));
+                        }
+                    }
                 }
                 self.menu.gomenu(MenuMode::Items);
                 let wealth = self.state.wealth;
@@ -5719,7 +5788,9 @@ mod tests {
             .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
         assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
         assert_eq!(talisman.x, expected_x, "talisman x must match death location");
-        assert_eq!(talisman.y, expected_y, "talisman y must match death location");
+        // leave_item places the drop at y+10 (reference/logic/quests.md#leave_item,
+        // fmain2.c:1193).
+        assert_eq!(talisman.y, expected_y + 10, "talisman y must equal death y + 10 (leave_item offset)");
         assert!(talisman.visible, "talisman must be visible");
         assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
     }
@@ -6838,7 +6909,7 @@ mod quest_tests {
     fn test_princess_rescue_awards_items() {
         let mut gs = GameplayScene::new();
         gs.state.princess = 0;
-        gs.state.gold = 50;
+        gs.state.wealth = 50;
 
         // Setup princess as captive
         while gs.state.world_objects.len() <= 9 {
@@ -6859,8 +6930,8 @@ mod quest_tests {
         // Check Writ awarded
         assert_eq!(gs.state.stuff()[28], 1, "Writ should be awarded");
 
-        // Check gold awarded
-        assert_eq!(gs.state.gold, 150, "100 gold should be added");
+        // Check wealth awarded (fmain2.c:1600, `wealth = wealth + 100`)
+        assert_eq!(gs.state.wealth, 150, "100 gold should be added to wealth");
 
         // Check keys awarded (+3 of each, indices 16-21)
         for i in 16..22 {
