@@ -964,8 +964,9 @@ impl GameplayScene {
                     || (collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)
                         && !collision::actor_collides(new_x as i32, new_y as i32, &npc_positions)));
 
-            // Direction deviation (wall-sliding): fmain.c checkdev1/checkdev2.
-            // Only for diagonal directions when the original direction was blocked.
+            // Direction deviation (wall-sliding): fmain.c:1615-1625 walk_step.
+            // Ref applies the +1 CW / -2 CCW deviation for ALL 8 directions, not just
+            // diagonals; cardinal walls must slide the same way (see movement.md#walk_step).
             // Skip deviation when blocked by a door tile (terrain 15) — the player must
             // bump the door to open it, not slide around it.
             let blocked_by_door = !can_move && self.map_world.as_ref().map_or(false, |w| {
@@ -976,31 +977,28 @@ impl GameplayScene {
             if !can_move && !turtle_blocked && !blocked_by_door
                 && self.state.flying == 0 && !self.state.on_raft
             {
-                let is_diagonal = matches!(dir, Direction::NE | Direction::SE | Direction::SW | Direction::NW);
-                if is_diagonal {
-                    let indoor = self.state.region_num >= 8;
-                    // checkdev1: try (facing + 1) & 7
-                    let dev1 = (facing + 1) & 7;
-                    let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
-                    let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
-                    if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32)
-                        && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions) {
-                        final_x = dev1_x;
-                        final_y = dev1_y;
-                        final_facing = dev1;
+                let indoor = self.state.region_num >= 8;
+                // checkdev1: try (facing + 1) & 7
+                let dev1 = (facing + 1) & 7;
+                let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
+                let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
+                if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32)
+                    && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions) {
+                    final_x = dev1_x;
+                    final_y = dev1_y;
+                    final_facing = dev1;
+                    can_move = true;
+                } else {
+                    // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
+                    let dev2 = (dev1.wrapping_sub(2)) & 7;
+                    let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
+                    let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
+                    if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32)
+                        && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions) {
+                        final_x = dev2_x;
+                        final_y = dev2_y;
+                        final_facing = dev2;
                         can_move = true;
-                    } else {
-                        // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
-                        let dev2 = (dev1.wrapping_sub(2)) & 7;
-                        let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
-                        let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
-                        if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32)
-                            && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions) {
-                            final_x = dev2_x;
-                            final_y = dev2_y;
-                            final_facing = dev2;
-                            can_move = true;
-                        }
                     }
                 }
             }
@@ -2153,9 +2151,10 @@ impl GameplayScene {
                 let probe_dir = facing.wrapping_add(off as u8) & 7;
                 let nx = newx(turtle_x, probe_dir, TURTLE_SPEED);
                 let ny = newy(turtle_y, probe_dir, TURTLE_SPEED, indoor);
-                let right = px_to_terrain_type(world, nx as i32 + 4, ny as i32 + 2);
-                let left = px_to_terrain_type(world, nx as i32 - 4, ny as i32 + 2);
-                if right == 5 && left == 5 {
+                // Ref carrier_tick (fmain.c:1525-1537): single-point `px_to_im(xtest, ytest) != 5`
+                // guards each probe — not the 2-foot `prox` test. Turtle may straddle a
+                // water/non-water boundary as long as its centre sits on terrain 5.
+                if px_to_terrain_type(world, nx as i32, ny as i32) == 5 {
                     found = Some((nx, ny));
                     break;
                 }
