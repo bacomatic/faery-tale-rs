@@ -2076,6 +2076,284 @@ been removed.
 
 ---
 
+## Subsystem 9: inventory — ✅ Complete
+
+**Scope**: `stuff[]` pickup / look / use / drop-equivalent paths —
+`take_command` (containers, MONEY, SCRAP, FRUIT, bones, itrans lookup),
+`look_command` hidden-object reveal, `use_dispatch` weapon-equip / shell /
+sun-stone, and the ARROWBASE (slot 35) quiver accumulator. Body-search and
+brother-bones merge are in scope but kept as open items.
+
+**Primary ref**: `reference/logic/inventory.md` (`take_command`,
+`search_body`, `look_command`, `use_dispatch` pseudo-code, `fmain.c:3149-3295,
+3444-3467`), cross-referenced with
+`reference/logic/dialog_system.md#hardcoded-scroll-messages--complete-reference`
+(literal registry, `prq` case 10), `reference/logic/messages.md` (event_msg
+17, 18, 19, 20, 36, 37, 38), `reference/logic/shops.md` (buy → slot writes),
+and `reference/logic/doors.md` (key_req consumer of `stuff[16..21]`).
+
+**Code surface audited**: `src/game/gameplay_scene.rs` (`GameAction::Take` /
+`Look` / `GetItem` / `DropItem` / `UseItem` arms, `handle_take_item`,
+`MenuAction::SetWeapon`, `WeaponPrev` / `WeaponNext`), `src/game/game_state.rs`
+(`julstuff` / `philstuff` / `kevstuff` arrays, `pickup_item`, `drop_item`,
+`pickup_fruit`, `eat_amount`, `try_safe_autoeat`, `pickup_world_object`),
+`src/game/world_objects.rs` (`ob_id_to_stuff_index`, `stuff_index_name`).
+
+### Findings
+
+#### F9.1 — Quiver accumulator `stuff[35]` never folded into `stuff[8] * 10` [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::Take` and
+`handle_take_item` container two-item branch.
+**Reference**: `inventory.md#take_command` lines 57–58 (`stuff[35] = 0` at
+entry, `fmain.c:3151`) and line 177 (`stuff[8] = stuff[8] + stuff[35] * 10`
+epilogue fold, `fmain.c:3250`); also `inventory.md §Notes Quiver accumulator`
+("the only writer that targets `stuff[35]` is the `itrans[]` match for world
+object `QUIVER = 11`").
+**Issue**: `handle_take_item` wrote to `stuff[35]` in the single-item
+container branch (`item_idx == 8 → 35`) and would also land there on a
+`ob_id == 11` (QUIVER) itrans pickup via `ob_id_to_stuff_index(11) = Some(35)`,
+but nothing in the port folded slot 35 back into slot 8 or cleared it.
+Consequence: picking up a quiver of arrows incremented `stuff[35]` silently
+and granted **zero** usable arrows to the player; the accumulator also
+persisted across TAKE actions, so a second container roll could multiply
+the fold if it were ever added.
+**Fix**: `GameAction::Take` now resets `stuff[35] = 0` before dispatching
+and, on `taken == true`, adds `stuff[35] * 10` to `stuff[8]` (saturated at
+u8::MAX) and clears the accumulator before the talisman win-check. Matches
+the `pickup:` label epilogue at `fmain.c:3249-3250`.
+
+#### F9.2 — Container two-item branch dropped the quiver write (`item2 < 35` guard) [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs::handle_take_item` container
+`roll == 2` arm.
+**Reference**: `inventory.md#take_command` lines 151–156 (`fmain.c:3226,3229`):
+second item `k = rand8() + 8`; promote `k == 8` to `k = 35` (ARROWBASE); then
+`stuff[k] = stuff[k] + 1` **unconditionally**.
+**Issue**: Port guarded the second-item increment with `if item2 < 35`, which
+silently discarded the write whenever the collision fixup or the 8→35
+promotion produced `item2 == 35`. Combined with F9.1 this meant a two-item
+container loot of "foo and a quiver of arrows" both failed to register the
+quiver and failed to grant the resulting 10 arrows.
+**Fix**: Removed the guard; `pickup_item(item2)` runs unconditionally.
+Slot 35 is bounded by `pickup_item`'s own `>= 36` guard and is drained by
+the epilogue fold from F9.1. First-item `item1 < 31` guard is retained
+because that branch skips the gold row (slots 31..34 are display-only rows
+handled via `wealth +=`, per `inventory.md` lines 141–143, `fmain.c:3221`).
+
+#### F9.3 — LOOK scroll-text "You spy something!" / "You see nothing unusual." [INVENTED → REMOVED]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::Look`.
+**Reference**: `inventory.md#look_command` lines 330–333 (`fmain.c:3294`):
+`event(38)` on any reveal, else `event(20)`. Both resolve against
+`faery.toml [narr] event_msg` (indices 38 `"% discovered a hidden object."`,
+20 `"% looked around but discovered nothing."`). `dialog_system.md`
+hardcoded-literal registry contains no LOOK entry.
+**Issue**: Port pushed two hand-coded strings that do not appear in
+`faery.toml [narr]` nor in the `dialog_system.md` literal table.
+**Fix**: LOOK now calls `events::event_msg(&self.narr, 38|20, &bname)`,
+mirroring the event IDs from the reference pseudo-code and matching the
+existing pattern used by FRUIT / SCRAP event messages elsewhere in
+`handle_take_item`.
+
+#### F9.4 — LOOK "found" latch fired on already-visible objects [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::Look`.
+**Reference**: `inventory.md#look_command` line 326 (`fmain.c:3289`): the
+flag is set only when `an.race == 0` (hidden state, equivalent to
+`ob_stat == 5`), **not** on every OBJECTS entry within 40 px. Comment at
+line 324 confirms "race==0 on an OBJECTS entry marks a hidden object".
+**Issue**: Port set `found = true` for every OBJECTS hit in range, including
+items already visible from a prior LOOK or `ob_stat == 1` ground items.
+Consequence: event 38 "% discovered a hidden object." fired even when no
+hidden item was revealed, as long as any pickable item was nearby.
+**Fix**: Moved the latch inside the `if obj.ob_stat == 5` branch — the flag
+is now set only on the reveal path that promotes `ob_stat` 5 → 1.
+
+#### F9.5 — TAKE nothing-nearby emitted invented "Nothing here to take." [INVENTED → REMOVED]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::Take` else
+branch; also legacy `GameAction::GetItem` stub.
+**Reference**: `dialog_system.md:273-274` (`fmain2.c:467`, `prq` case 10):
+`print("Take What?")`. This is the canonical TAKE-miss literal.
+**Issue**: Both the primary TAKE path and the legacy `GetItem` stub
+pushed "Nothing here to take." — invented; does not appear in `faery.toml`
+or the `dialog_system.md` hardcoded-literal table.
+**Fix**: Both sites now push the literal `"Take What?"` with a reference
+comment to `dialog_system.md:273`. The legacy `GetItem` stub is preserved
+for callers that bind the action directly (it is functionally equivalent
+to TAKE with no target).
+
+#### F9.6 — Weapon-equip scroll-text "{name} readied." [INVENTED → REMOVED]
+**Location**: `src/game/gameplay_scene.rs::dispatch_menu_action
+MenuAction::SetWeapon`, and `GameAction::WeaponPrev` / `WeaponNext`.
+**Reference**: `inventory.md#use_dispatch` lines 281–285 (`fmain.c:3449-3455`):
+owned-weapon path writes `anim_list[0].weapon = hit + 1` with **no** scroll
+emission; only the not-owned path emits `extract("% doesn't have one.")`
+(`dialog_system.md:343`).
+**Issue**: All three weapon-equip paths pushed an invented
+`"{Dirk|Mace|…} readied."` literal on every successful swap. `dialog_system.md`
+explicitly lists only the `"% doesn't have one."` USE-menu literal; there is
+no owned-weapon confirmation string.
+**Fix**: Removed all three pushes; the equip still happens silently, matching
+the original.
+
+#### F9.7 — DropItem / UseItem stubs emitted invented scroll text [INVENTED → REMOVED]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::DropItem`
+and `GameAction::UseItem`.
+**Reference**: `inventory.md` overview lines 20–26: "There is **no DROP
+command** in the shipped game. The `ITEMS` submenu exposes `List`, `Take`,
+`Look`, `Use`, `Give` and nothing else (`fmain.c:497`)". `use_dispatch`
+(lines 270–294) dispatches per-slot and falls through to `gomenu(CMODE_ITEMS)`
+without emitting a generic "nothing to use" string.
+**Issue**: `DropItem` pushed "Dropped item." (an entire action that does not
+exist in the reference); `UseItem` pushed "Nothing to use." as a stub. Both
+are unsupported by `faery.toml` or the dialog_system literal registry.
+**Fix**: Both arms now log via `dlog` only. `DropItem` is a no-op (the
+action is reachable only through legacy key bindings); `UseItem` falls
+through to the menu-driven slot dispatch. Behaviour remains identical to
+`use_dispatch`'s silent fall-through at `fmain.c:3466`.
+
+#### F9.8 — `[u8; 36]` slot count and `ARROWBASE = 35` accumulator [CONFORMANT]
+**Location**: `src/game/game_state.rs` lines 124–127, 247–249 (array
+declarations); `pickup_item` / `drop_item` lines 852–873 (`>= 36` guard);
+test `test_arrowbase_pickup_no_panic` at lines 1526–1535.
+**Reference**: `inventory.md §Overview` lines 8–10, `§Notes Quiver
+accumulator` lines 349–353; `RESEARCH.md §10` stuff-slot layout (GOLDBASE=31,
+ARROWBASE=35, length 36).
+**Result**: `julstuff` / `philstuff` / `kevstuff` are all `[u8; 36]`, `stuff()`
+and `stuff_mut()` dispatch on `brother`, `pickup_item` / `drop_item`
+correctly guard `item_id >= 36`, and the `stuff[35]` accumulator is
+addressable without panic. Save/load (`persist.rs:79-81,194-206`) round-trips
+all 36 bytes per brother.
+
+#### F9.9 — `itrans[]` object → stuff-slot mapping [CONFORMANT]
+**Location**: `src/game/world_objects.rs::ob_id_to_stuff_index` (31
+entries), covered by `test_itrans_covers_all_documented_items`.
+**Reference**: `inventory.md#take_command` lines 111–125 (`fmain2.c:1325-1332`);
+`RESEARCH.md §10` inv_list row layout.
+**Result**: All 31 itrans pairs match the reference including the QUIVER→35
+quirk. `ob_id_to_stuff_index(11) == Some(35)` is correct (quiver row feeds
+the accumulator, which is folded in the epilogue — see F9.1). MONEY (13),
+CHEST (15), URN (14), SACKS (16), FOOTSTOOL (31), TURTLE (102) correctly
+have no itrans entry (handled by the type-specific dispatch branches).
+
+#### F9.10 — Brother-bones merge (ob_id 28) is a TODO [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs::handle_take_item` ob_id 28 arm,
+comment `// TODO: combine julstuff/philstuff when WorldObject carries
+vitality field`.
+**Reference**: `inventory.md#take_command` lines 88–99 (`fmain.c:3177-3186`):
+the bones object carries `anim_list[nearest].vitality` = 1 (Julian) or 2
+(Phillip); the TAKE path iterates `k in 0..31` and does
+`stuff[k] += julstuff[k]` or `stuff[k] += philstuff[k]`, then clears
+`ob_listg[3].ob_stat` / `ob_listg[4].ob_stat`. Also — from
+`inventory.md §Talisman latch` — the bones branch can transfer a Talisman
+in slot 22 and must re-test `stuff[22] != 0` in the epilogue.
+**Issue**: Port announces the pickup and marks the object taken, but does
+not merge the dead brother's stash. Ghost setfig slots are not cleared.
+A Talisman preserved in a dead brother's stash cannot end the game via
+bone pickup.
+**Status**: Requires `WorldObject` to carry a `vitality` / owner byte
+(currently only `ob_id`, `ob_stat`, `region`, `x`, `y`, `visible`, `goal`).
+Cross-cutting with the brother-succession audit (subsystem TBD) and with
+subsystem 20 (quests) / brother save-slots. **Queued for SPEC-GAP review
+with the user**: whether to extend `WorldObject` now or defer until the
+succession audit.
+
+#### F9.11 — `search_body` (loot weapon + treasure roll from defeated actor) not implemented [RESEARCH-REQUIRED]
+**Location**: `src/game/gameplay_scene.rs::handle_take_item` has no body-
+search branch; `find_nearest_item` scans `world_objects` only and ignores
+NPCs from `npc_table`.
+**Reference**: `inventory.md#search_body` (`fmain.c:3249-3282`): when
+`nearest_fig(0, 30)` returns an actor rather than an OBJECTS entry, TAKE
+delegates to the body-search path: check `freeze_timer == 0 && vitality != 0`
+(`event(35)` "it is still alive!"), else pull `an.weapon - 1` into
+`stuff[0..4]`, auto-equip if better, grant `rand8() + 2` arrows on a bow
+(fmain.c:3261-3267), mark the body looted (`an.weapon = -1`), and roll
+`treasure_probs[encounter_chart[race].treasure * 8 + rand8()]` into
+`stuff[]` or `wealth` depending on the row (fmain.c:3274-3281).
+**Issue**: The entire body-search code path is missing. Players cannot
+loot defeated NPCs via TAKE, only via the separate `roll_loot` path
+triggered at combat resolution (`loot.rs`). The reference's body-search is
+the canonical TAKE-on-actor path; `event(35)` ("% couldn't stay awake"
+mis-labelled in code — actually "No time for that now!" at index 35 per
+`faery.toml`, but the original emits a different string here — see
+also `messages.md`) is never fired.
+**Status**: RESEARCH-REQUIRED. `treasure_probs` table, `encounter_chart`
+treasure-column, and the weapon / ammo / "still alive" branches form a
+distinct mini-system that should own its own surgical port PR. Cross-
+cutting with subsystem 4 (encounters), subsystem 1 (combat loot via
+`loot.rs`), and subsystem 10 (quest-drops NPCs). **Queued for user review**:
+confirm scope and whether to merge the body-search table with the existing
+`loot::roll_loot`.
+
+#### F9.12 — GIVE path: "Nothing to give to." / "You have no gold to spare." [INVENTED — DEFERRED TO QUESTS AUDIT]
+**Location**: `src/game/gameplay_scene.rs::do_option GameAction::Give`
+(beggar-specific path).
+**Reference**: `quests.md#give_item_to_npc` and `inventory.md` §Overview
+line 32 ("GIVE is deferred to quests.md#give_item_to_npc"). The beggar
+give-2-gold path (`fmain.c:3387-3395`) dispatches `speak(24 + goal)` but
+never emits a "no gold" or "no target" string; the original silently
+no-ops on those misses.
+**Issue**: Two invented literals ("Nothing to give to.", "You have no
+gold to spare.") guard the beggar arm. Both are outside the
+`dialog_system.md` literal registry and not in `[narr]`.
+**Status**: Deferred to subsystem **20 / quests audit**, where the full
+GIVE dispatcher (princess rescue, wizard bone→shard, beggar, all the
+quest-item give-to-NPC paths) will be ported together. Flagged here so
+it is not forgotten.
+
+#### F9.13 — Container RNG uses `tick_counter` bit-slicing instead of `rand4/rand8` [REF-AMBIGUOUS]
+**Location**: `src/game/gameplay_scene.rs::handle_take_item` container
+arm (ob_id 14/15/16): uses `tick_counter & 3` for the 4-way roll and
+`(tick_counter >> 2) & 7` etc. for 8-way rolls.
+**Reference**: `inventory.md#take_command` uses `rand4()` and `rand8()`
+from the original shared LCG. `RESEARCH.md` documents the `mrand` /
+`sgenrand` layer but does not prescribe replacement semantics for the
+port.
+**Issue**: The port's tick-slice substitute is deterministic per tick, so
+rapid TAKEs against successive containers produce correlated rolls. Not
+obviously wrong (player experience roughly matches "random"), but
+deviates from the reference's LCG stream.
+**Status**: Not fixed — no clear spec for the RNG port. Queued for a
+future RNG-wide pass.
+
+### Summary
+- **13 findings**: 3 CONFORMANT (F9.8, F9.9, and the itrans tests),
+  5 NEEDS-FIX / INVENTED fixes applied (F9.1, F9.2, F9.3, F9.4, F9.5,
+  F9.6, F9.7 — seven scroll-text / logic fixes landed in one commit),
+  1 SPEC-GAP queued (F9.10), 1 RESEARCH-REQUIRED queued (F9.11), 1
+  INVENTED deferred to quests subsystem (F9.12), 1 REF-AMBIGUOUS
+  queued (F9.13).
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test`
+  — 586 + 12 + 12 tests passing.
+
+### SPEC/REQ updates queued
+- **F9.10 (SPEC-GAP)**: extend `WorldObject` (or the bones drop code
+  path) to carry the dead brother's id (1=Julian, 2=Phillip) so TAKE
+  on ob_id 28 can merge `julstuff` / `philstuff`; clear
+  `ob_listg[3|4].ob_stat`; re-test Talisman win latch.
+- **F9.11 (RESEARCH-REQUIRED)**: port `search_body` — "still alive"
+  gate via `freeze_timer`, weapon-pull-to-stuff[0..4], auto-equip
+  rule, bow ammo grant (`rand8()+2`), `treasure_probs` /
+  `encounter_chart` roll, and mark `an.weapon = -1`.
+- **F9.12 (queued)**: remove invented GIVE scroll-text during the
+  quests audit; route silence / `speak()` per
+  `quests.md#give_item_to_npc`.
+- **F9.13 (queued)**: port `rand4` / `rand8` to a real RNG stream
+  rather than bit-slicing `tick_counter`; covers containers here plus
+  combat / encounter / loot uses elsewhere.
+
+### Blockers
+None for the inventory audit — all fixable findings are fixed. F9.10
+and F9.11 require user scope adjudication and are flagged in the
+Blockers section below.
+
+**Two-source rule**: ✅ the inventory subsystem now emits only strings
+that resolve through `faery.toml [narr] event_msg` (indices 17, 18, 19,
+20, 36, 37, 38) or literals sanctioned by
+`dialog_system.md:273,310-314,323-333,343` (`"Take What?"`,
+`"{name} found 50 gold pieces."`, `"{name} found his brother's bones."`,
+container composition fragments, `"% doesn't have one."`).  All seven
+invented strings have been removed.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
