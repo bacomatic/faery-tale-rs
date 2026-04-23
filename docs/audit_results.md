@@ -3066,6 +3066,247 @@ items:
 
 ---
 
+## Subsystem 13: brother-succession — ✅ Complete
+
+### Scope
+Hero-death → next-brother transition, bones/ghost placement, dead-
+brother inventory recovery, fairy rescue vs succession gating, game
+over on three deaths, save/load of per-brother state, Tambry respawn,
+stat + inventory reset rules.
+
+Authoritative refs: `reference/logic/brother-succession.md`,
+`reference/logic/combat.md#checkdead`,
+`reference/logic/game-loop.md#resolve_player_state`,
+`reference/logic/inventory.md`,
+`reference/logic/save-load.md`,
+`reference/logic/dialog_system.md#announce_treasure`,
+`reference/logic/messages.md` events 5–11.
+
+### Findings
+
+#### F13.1 — Bones/ghost placement: all four slots toggled unconditionally, no coords set (NEEDS-FIX, fixed)
+`reference/logic/brother-succession.md` §revive (fmain.c:2837-2840):
+on succession, *only the dying brother's* bones + ghost are placed —
+`ob_listg[brother].xc = hero_x`, `yc = hero_y`, `ob_stat = 1`, and
+`ob_listg[brother + GHOST_OFFSET].ob_stat = 3`. The guard
+`brother > 0 && brother < 3` skips Kevin's death (brother == 3).
+
+The port set `ob_stat`/`visible` for *all four* candidate slots
+(`world_objects[1..=4]`) any time either ran, and never wrote the
+death coordinates (`hero_x`, `hero_y`) onto the bones object. Fixed
+`tick_goodfairy_countdown` (`gameplay_scene.rs:1462-1495`) to:
+- Read the 1-based dying-brother index from `state.brother` *before*
+  advancing succession.
+- Place only `world_objects[brother]` (bones) and
+  `world_objects[brother + 2]` (ghost), mirroring the 1-based
+  `ob_listg[brother]` / `ob_listg[brother + GHOST_OFFSET]` scheme.
+- Write `bones.x = hero_x`, `bones.y = hero_y` so subsequent pickup
+  reflects the actual death location.
+- Skip the entire block when `brother >= 3` (Kevin) — the game is
+  over; no bones are left.
+
+#### F13.2 — `pickup_brother_bones` inventory merge missing (NEEDS-FIX, fixed)
+`reference/logic/brother-succession.md` §pickup_brother_bones
+(fmain.c:3173-3178):
+```
+announce_treasure("his brother's bones.")
+ob_listg[3].ob_stat = 0          # retire Julian's ghost
+ob_listg[4].ob_stat = 0          # retire Phillip's ghost
+for k in 0..GOLDBASE (=31):
+    if x == 1:  stuff[k] += julstuff[k]
+    else:       stuff[k] += philstuff[k]
+```
+where `x = anim_list[nearest].vitality & 0x7f` is the dead brother's
+1-based index (1=Julian, 2=Phillip). Both ghost set-figures retire
+regardless of which set of bones was picked up, and gold slots
+(`GOLDBASE..ARROWBASE` = 31..34) are intentionally *not* merged.
+
+The port's bones-28 branch in `handle_take_item`
+(`gameplay_scene.rs:3487-3492`) emitted the announce_treasure line
+and marked the object taken, but carried a `TODO` — no inventory
+merge and no ghost retirement. Fixed to:
+- Retire both `world_objects[3]` and `world_objects[4]` ghost
+  set-figures (set `ob_stat = 0`, `visible = false`) whenever either
+  set of bones is picked up, matching fmain.c:3174.
+- Snapshot the donor array (`julstuff` when `world_idx == 1`,
+  `philstuff` otherwise — the port's slot scheme encodes the same
+  1/2 identity the reference reads from `vitality & 0x7f`) and
+  add it into the current brother's `stuff[0..31]` with
+  `saturating_add`. Slots 31..35 (gold + quiver) are deliberately
+  skipped.
+- Keep the scroll text as the existing `announce_treasure`
+  composition (`"{name} found his brother's bones."`), which is
+  authorised by `reference/logic/dialog_system.md`:159-171 /
+  fmain2.c:586-590 — the two-source rule is satisfied (literal comes
+  from the reference, not invented).
+
+#### F13.3 — Invented "A faery saved {name}!" scroll text (INVENTED / NEEDS-FIX, fixed)
+`reference/logic/brother-succession.md` §revive (fmain.c:2894):
+`revive(FALSE)` (fairy rescue / fall return) calls `fade_down()`
+and performs the common finalisation (reset `hero_x/y` to
+`safe_x/y`, refill vitality, clear hunger/fatigue, restart music via
+`setmood(True)`). **No event message is emitted.** The player sees a
+fade-down and finds themselves back at the safe-zone.
+
+The port pushed an invented scroll message `"A faery saved {bname}!"`
+on the `goodfairy <= 1` rescue branch. Removed that push; the music
+restart (`last_mood = u8::MAX`) and state reset already mirror the
+rest of the `revive(FALSE)` finalisation. Test coverage continues to
+pass — no existing test asserted on the invented string.
+
+#### F13.4 — Succession order (Julian → Phillip → Kevin) (CONFORMANT)
+`GameState::next_brother` scans
+`(active_brother + offset) % 3` for `offset ∈ {1, 2}` and returns the
+first living index. In normal play the dying brother's slot is always
+`active_brother`, and the strictly-sequential deaths mean Phillip can
+only follow Julian and Kevin can only follow Phillip. The modulo-3
+wrap is harmless: by the time it could select a lower index, all
+lower slots are already marked dead. Matches the original
+1→2→3 succession driven by `brother = brother + 1` at fmain.c:2847.
+
+#### F13.5 — Stats + inventory reset on succession (CONFORMANT)
+`activate_brother_from_config` (`game_state.rs:574-621`):
+- Loads `brave/luck/kind/wealth` from the per-brother record
+  (mirrors `blist[]` load at fmain.c:2844-2846).
+- Computes `vitality = 15 + brave / 4` (matches VIT_BASE +
+  brave/VIT_BRAVE_DIV, fmain.c:2901).
+- Zeroes all 36 slots of the new brother's `stuff[]` array and sets
+  `stuff[0] = 1` (dirk) — reference wipes slots `0..GOLDBASE-1`
+  only, but the new brother's array was already zero at those gold
+  slots in the first (and only) succession into that brother, so
+  the observable result is identical.
+- Equips the dirk on the player actor (`player.weapon = 1`),
+  matching fmain.c:2850 `stuff[0] = an->weapon = 1`.
+- Clears `light_timer`, `secret_timer`, `freeze_timer`, `hunger`,
+  `fatigue`, matching the timer resets in the common revive tail
+  (fmain.c:2902-2903).
+- Teleports to the configured spawn (Tambry at `(19036, 15755)`,
+  region 3 via `faery.toml [[brothers]].spawn = "tambry"`), setting
+  `safe_x/y/r` so a subsequent fairy rescue returns here.
+
+Per-brother stuff arrays (`julstuff`, `philstuff`, `kevstuff`) are
+preserved across the swap (not touched) so the dead brother's
+inventory waits for bones pickup.
+
+#### F13.6 — Death trigger + luck cost (CONFORMANT)
+`gameplay_scene.rs:1428-1452`: on `vitality <= 0` the scene latches
+`dying = true`, sets `goodfairy = 255`, and applies a single
+`luck = max(0, luck - 5)` deduction. Matches
+`reference/logic/combat.md#checkdead` (fmain.c:2777 `luck -= 5`).
+Fairy rescue (`goodfairy <= 1`) applies no additional cost, matching
+the SPEC §20.2 note.
+
+#### F13.7 — Luck-gate branch (luck < 1 → succession) (CONFORMANT)
+`tick_goodfairy_countdown` at `goodfairy <= 199` reads
+post-deduction `luck` once (via `luck_gate_fired`). If `luck < 1`,
+skip the fairy countdown and run succession immediately; otherwise
+continue to the rescue at `goodfairy <= 1`. Matches
+`resolve_player_state` (fmain.c:1390-1395): `if luck < 1 &&
+goodfairy < 200: revive(True)` else continue countdown.
+
+#### F13.8 — Permadeath (all three dead) (CONFORMANT)
+When `next_brother()` returns `None`, the port sets
+`quit_requested = true`, which terminates gameplay. Reference
+revive(True) instead reloads `blist[3]` (OOB — documented in
+PROBLEMS.md), sets `quitflag = True`, and draws the end-of-tale
+placard (msg6) with a 500-tick delay before exiting. Port skips the
+cosmetic OOB read and the end-placard cinematic — the latter is an
+existing placard-plumbing gap tracked under the quest / intro placard
+subsystem (out of scope for brother-succession fidelity here).
+
+#### F13.9 — Scroll text on transition (CONFORMANT, after F13.3)
+After F13.3 the succession scroll text is exactly `event_msg[9]` +
+`event_msg[10]` (Phillip) or `event_msg[11]` (Kevin) sourced from
+`faery.toml [narr].event_msg` via `crate::game::events::event_msg`,
+matching `reference/logic/brother-succession.md` §revive fmain.c:2884-
+2891. The bones-pickup literal
+`"{name} found his brother's bones."` is authorised by
+`reference/logic/dialog_system.md#announce_treasure`. No invented
+scroll strings remain on this subsystem's paths.
+
+The full placard cinematic (`placard_text(0..6)` "Julian set out
+.." / "So Phillip ...") is not plumbed in the port — see F11.8 for
+the parallel placard-plumbing gap on princess rescue. RESEARCH-
+REQUIRED, same blocker.
+
+#### F13.10 — Inventory reset vs inherit on fairy rescue (CONFORMANT)
+`revive(FALSE)` does not touch `stuff` (reference §"Inventory carry-
+over"). Port's fairy-rescue branch (`goodfairy <= 1`) only resets
+`hero_x/y`, `vitality`, `hunger`, `fatigue`, `battleflag` — it does
+not call `activate_brother_from_config`. Inventory is therefore
+fully preserved across fairy rescue, matching reference.
+
+#### F13.11 — Quest flag carryover on succession (`princess`, `witchflag`) (CONFORMANT)
+Reference §revive never resets `princess`, `witchflag`, or the
+non-per-brother global counters. `activate_brother_from_config` leaves
+these fields untouched. Cross-reference: quests audit F11.6.
+
+#### F13.12 — Gold (wealth) inheritance (CONFORMANT)
+Reference clears `stuff[GOLDBASE..ARROWBASE-1]` implicitly by design
+(new brother's array was zero; see §"Inventory carry-over") and
+loads `wealth` fresh from `blist[]`. Port overwrites
+`state.wealth = bro.wealth` on succession and zeroes all 36 stuff
+slots. The dead brother's gold remains stored in his own
+`julstuff`/`philstuff` array (slots 31..34) and is **not** recovered
+on bones pickup (reference explicitly excludes gold from the merge,
+see F13.2). Matches reference faithfully.
+
+#### F13.13 — Voluntary swap: no (CONFORMANT by omission)
+Reference provides no voluntary brother-swap mechanic — succession
+happens only through the `revive(True)` path in `resolve_player_state`
+(STATE_DEAD/FALL + luck < 1). Port has no player-facing swap action;
+debug TUI or tests may mutate `active_brother` directly, but no
+GameAction wires into `activate_brother`. CONFORMANT.
+
+#### F13.14 — Save/load of per-brother state (CONFORMANT)
+`persist.rs:22-82` serialises `julstuff`, `philstuff`, `kevstuff`,
+`brother`, `active_brother`, and the full brother-dependent stat set
+(`brave`, `luck`, `kind`, `wealth`, `vitality`, `hunger`, `fatigue`,
+`safe_x/y/r`, `region_num`). `brother_alive[3]` is not persisted
+explicitly but is reconstructable: any brother with a non-empty
+`julstuff/philstuff` snapshot or a `brother > 1` must have died —
+not important for fidelity (original mod1save does not persist a
+liveness table either; it relies on `brother`'s value and the
+bones/ghost `ob_listg` entries which *are* persisted via
+`world_objects`). `reference/logic/save-load.md#mod1save` re-seats
+`stuff = blist[brother-1].stuff` on load, which the port mirrors via
+`stuff()` dispatching on `active_brother`.
+
+#### F13.15 — Home position / region for next brother (CONFORMANT)
+`activate_brother_from_config` pulls `(x, y, region)` from the
+configured location (`faery.toml [[brothers]].spawn = "tambry"` →
+location `tambry`). Fallback constants `(19036, 15755, 3)` match
+`reference/logic/brother-succession.md` `TAMBRY_SPAWN_X`,
+`TAMBRY_SPAWN_Y`, `TAMBRY_REGION` exactly.
+
+### Summary
+- **15 findings**: 3 NEEDS-FIX / INVENTED fixed (F13.1 bones
+  placement coords + slot scoping, F13.2 pickup_brother_bones
+  inventory merge + ghost retirement, F13.3 invented fairy-rescue
+  scroll text), 11 CONFORMANT (F13.4 succession order, F13.5 stats
+  + inventory reset, F13.6 death trigger + luck cost, F13.7 luck-gate
+  branch, F13.8 permadeath, F13.9 scroll text two-source, F13.10
+  fairy-rescue carryover, F13.11 quest flags, F13.12 wealth, F13.13
+  voluntary swap, F13.14 save/load, F13.15 home position), 1
+  RESEARCH-REQUIRED partial (F13.8/F13.9 end-of-tale + succession
+  placards — rolls up to the F11.8 placard-plumbing blocker).
+- Build: ✅ `cargo build` clean, zero new warnings (the 6 pre-
+  existing warnings are unchanged).
+- Tests: ✅ 586 + 12 + 12 passing.
+
+### SPEC/REQ updates queued
+None from this subsystem.
+
+### Blockers
+- **End-of-tale + succession placards** — The original draws
+  `placard_text(0..6)` and holds 500 ticks on the third death. Not
+  plumbed in the port. This is the same placard-dispatcher gap
+  identified under F11.8 (princess rescue). No separate blocker
+  raised; will be resolved together when placard plumbing lands.
+
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
