@@ -640,31 +640,68 @@ impl GameplayScene {
         }
     }
 
-    /// Attempt to cast a magic spell, checking for Necromancer arena block first.
-    /// SPEC §19.1: Magic is blocked when extn->v3 == 9 (Necromancer arena).
+    /// Attempt to cast a magic spell from the MAGIC submenu.
+    ///
+    /// Mirrors `magic_dispatch` (`fmain.c:3300-3365`).  Order of checks
+    /// follows the ref: not-owned ⇒ event(21); then `extn.v3 == 9` arena
+    /// ⇒ speak(59); then apply the effect.  All player-facing text is
+    /// sourced from `faery.toml [narr]` tables or documented
+    /// `dialog_system.md` literals — nothing is invented here.
     fn try_cast_spell(&mut self, item_idx: usize) {
-        // Check if hero is in Necromancer arena (v3 == 9)
+        use crate::game::magic::MagicResult;
+
+        let bname = self.brother_name().to_string();
+
+        // fmain.c:3303 — slot empty ⇒ event(21) "% does not have that item."
+        if self.state.stuff()[item_idx] == 0 {
+            let msg = crate::game::events::event_msg(&self.narr, 21, &bname);
+            self.messages.push(msg);
+            return;
+        }
+
+        // fmain.c:3304 — extent dampener (astral zone v3==9) ⇒ speak(59).
         let in_necro_arena = crate::game::zones::find_zone(
             &self.zones,
             self.state.hero_x,
-            self.state.hero_y
+            self.state.hero_y,
         )
         .and_then(|idx| self.zones.get(idx))
         .map_or(false, |z| z.v3 == 9);
-
         if in_necro_arena {
-            // SPEC §19.1: speak(59) - "Your magic won't work here, fool!"
-            let bname = self.brother_name().to_string();
             let msg = crate::game::events::speak(&self.narr, 59, &bname);
             self.messages.push(msg);
-        } else {
-            match use_magic(&mut self.state, item_idx) {
-                Ok(msg) => self.messages.push(msg),
-                Err(e)  => self.messages.push(e),
-            }
-            let wealth = self.state.wealth;
-            self.menu.set_options(self.state.stuff(), wealth);
+            return;
         }
+
+        match use_magic(&mut self.state, item_idx) {
+            MagicResult::NoOwned => {
+                let msg = crate::game::events::event_msg(&self.narr, 21, &bname);
+                self.messages.push(msg);
+            }
+            // fmain.c: precondition miss (wrong sector / region>7 / riding>1)
+            // is a silent early-return that preserves the charge.
+            MagicResult::Suppressed => {}
+            // Green Jewel / Crystal Orb / Gold Ring / Bird Totem: no text.
+            MagicResult::Applied => {}
+            MagicResult::Healed { capped } | MagicResult::StoneTeleport { capped } => {
+                // fmain.c:3351-3352 — `"That feels a lot better!"` is
+                // printed only when the heal did NOT clamp at the cap.
+                // Source: dialog_system.md:339 (hardcoded literal).
+                if !capped {
+                    self.messages.push("That feels a lot better!");
+                }
+            }
+            MagicResult::MassKill { in_battle, .. } => {
+                // fmain.c:3362 — `if (battleflag) event(34);` — "They're all dead!" he cried.
+                if in_battle {
+                    let msg = crate::game::events::event_msg(&self.narr, 34, &bname);
+                    self.messages.push(msg);
+                }
+            }
+        }
+
+        let wealth = self.state.wealth;
+        self.menu.set_options(self.state.stuff(), wealth);
     }
 
     /// Decode 8-way direction from current input flags.
@@ -6599,7 +6636,7 @@ mod t1_arena_spectre_tests {
     fn test_magic_allowed_outside_necromancer_arena() {
         // Magic should work normally outside the arena.
         let mut scene = test_scene();
-        
+
         // Create zone WITHOUT v3 == 9
         scene.zones = vec![
             ZoneConfig {
@@ -6610,22 +6647,21 @@ mod t1_arena_spectre_tests {
                 v1: 0, v2: 0, v3: 0,
             }
         ];
-        
+
         // Place hero in normal zone
         scene.state.hero_x = 1500;
         scene.state.hero_y = 1500;
-        
+
         // Give hero a magic item
         scene.state.stuff_mut()[ITEM_LANTERN] = 1;
-        
+
         // Try to cast spell
         scene.try_cast_spell(ITEM_LANTERN);
-        
-        // Should receive success message (not the block message)
+
+        // Ref fmain.c:3306 — Green Jewel (Lantern) emits no scroll text on success.
         let msgs: Vec<&str> = scene.messages.iter().collect();
-        assert_eq!(msgs.len(), 1);
-        assert!(!msgs[0].contains("won't work here"));
-        
+        assert!(msgs.is_empty() || !msgs.iter().any(|m| m.contains("won't work here")));
+
         // Item should be consumed
         assert_eq!(scene.state.stuff()[ITEM_LANTERN], 0);
     }
