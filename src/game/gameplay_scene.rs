@@ -1463,24 +1463,32 @@ impl GameplayScene {
                     // Luck depleted — the Good Fairy cannot rescue; next brother takes over.
                     self.dying = false;
                     self.luck_gate_fired = false;
-                    // SPEC §15.2: On brother death, set bones/ghost world objects visible.
-                    // ob_listg[1-2].ob_stat = 1 (bones), ob_listg[3-4].ob_stat = 3 (ghosts).
-                    if self.state.world_objects.len() > 4 {
-                        if self.state.world_objects[1].ob_id == 28 {
-                            self.state.world_objects[1].ob_stat = 1;
-                            self.state.world_objects[1].visible = true;
+                    // brother-succession.md §revive (fmain.c:2837-2840):
+                    //   if (brother > 0 && brother < 3) {
+                    //     ob_listg[brother].xc = hero_x; yc = hero_y; ob_stat = 1;
+                    //     ob_listg[brother + GHOST_OFFSET].ob_stat = 3;
+                    //   }
+                    // Only the *current* dying brother's bones/ghost are placed.
+                    // Slot scheme in port: world_objects[brother] = bones (1=Julian, 2=Phillip),
+                    // world_objects[brother+2] = ghost set-figure (3=Julian, 4=Phillip).
+                    // Kevin (brother == 3) leaves no bones — game is over.
+                    let dying = self.state.brother as usize;
+                    if (1..=2).contains(&dying) {
+                        let death_x = self.state.hero_x;
+                        let death_y = self.state.hero_y;
+                        if let Some(bones) = self.state.world_objects.get_mut(dying) {
+                            if bones.ob_id == 28 {
+                                bones.x = death_x;
+                                bones.y = death_y;
+                                bones.ob_stat = 1;
+                                bones.visible = true;
+                            }
                         }
-                        if self.state.world_objects[2].ob_id == 28 {
-                            self.state.world_objects[2].ob_stat = 1;
-                            self.state.world_objects[2].visible = true;
-                        }
-                        if self.state.world_objects[3].ob_id == 10 || self.state.world_objects[3].ob_id == 11 {
-                            self.state.world_objects[3].ob_stat = 3;
-                            self.state.world_objects[3].visible = true;
-                        }
-                        if self.state.world_objects[4].ob_id == 10 || self.state.world_objects[4].ob_id == 11 {
-                            self.state.world_objects[4].ob_stat = 3;
-                            self.state.world_objects[4].visible = true;
+                        if let Some(ghost) = self.state.world_objects.get_mut(dying + 2) {
+                            if ghost.ob_id == 10 || ghost.ob_id == 11 {
+                                ghost.ob_stat = 3;
+                                ghost.visible = true;
+                            }
                         }
                     }
                     if let Some(next) = self.state.next_brother() {
@@ -1540,8 +1548,10 @@ impl GameplayScene {
                 self.state.hunger = 0;
                 self.state.fatigue = 0;
                 self.state.battleflag = false;
+                // brother-succession.md §revive (fmain.c:2894): revive(FALSE) calls
+                // fade_down() with no event/print. The original emits no scroll text on
+                // fairy rescue. Do not invent one.
                 let bname = self.brother_name().to_string();
-                self.messages.push(format!("A faery saved {}!", &bname));
                 self.last_mood = u8::MAX; // restart normal music
                 self.dlog(format!("faery revived {}, luck now {}", &bname, self.state.luck));
             }
@@ -3484,10 +3494,35 @@ impl GameplayScene {
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
-            // BROTHER'S BONES (ob_id 28): combine saved brother's inventory
+            // BROTHER'S BONES (ob_id 28): merge dead brother's inventory + retire ghosts.
+            // Port of pickup_brother_bones (fmain.c:3173-3178); see
+            // reference/logic/brother-succession.md §pickup_brother_bones.
             28 => {
+                // announce_treasure("his brother's bones.") → "{name} found his brother's bones."
                 self.messages.push(format!("{} found his brother's bones.", bname));
-                // TODO: combine julstuff/philstuff when WorldObject carries vitality field
+                // Both ghost set-figures retire regardless of which bones were picked up
+                // (ob_listg[3].ob_stat = 0, ob_listg[4].ob_stat = 0; fmain.c:3174).
+                for ghost_idx in [3usize, 4usize] {
+                    if let Some(g) = self.state.world_objects.get_mut(ghost_idx) {
+                        if g.ob_id == 10 || g.ob_id == 11 {
+                            g.ob_stat = 0;
+                            g.visible = false;
+                        }
+                    }
+                }
+                // Merge 31 pre-gold slots: stuff[k] += julstuff[k] (x == 1) else philstuff[k].
+                // `x` in ref == anim_list[nearest].vitality & 0x7f (1=Julian, 2=Phillip).
+                // Port slot scheme: world_objects[1] = Julian's bones, [2] = Phillip's bones.
+                // Gold slots (GOLDBASE=31 .. ARROWBASE=35) are intentionally not merged.
+                let donor_snapshot: [u8; 36] = if world_idx == 1 {
+                    self.state.julstuff
+                } else {
+                    self.state.philstuff
+                };
+                let stuff = self.state.stuff_mut();
+                for k in 0..31usize {
+                    stuff[k] = stuff[k].saturating_add(donor_snapshot[k]);
+                }
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
