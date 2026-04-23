@@ -39,7 +39,9 @@ const FIGHT_TRANS_LIST: [[u8; 4]; 9] = [
 ];
 
 /// Proximity radius (pixels) for auto-speech checks (SPEC §13.4).
-const PROXIMITY_SPEECH_RANGE: i32 = 35;
+/// Per `reference/logic/game-loop.md#sort_sprites` (`fmain.c:2370`): speech
+/// proximity radius is 50 px.
+const PROXIMITY_SPEECH_RANGE: i32 = 50;
 /// Princess world object index (ob_list8[9]) used for captive flag checks.
 const PRINCESS_OB_INDEX: usize = 9;
 
@@ -1660,18 +1662,23 @@ impl GameplayScene {
     fn handle_setfig_talk(&mut self, fig: &NearestFig, bname: &str) {
         match &fig.kind {
             FigKind::Npc(idx) => {
-                // Enemy NPC — use race-based speech (existing logic).
+                // Enemy NPC — per `reference/logic/npc-dialogue.md` talk_dispatch
+                // (`fmain.c:3422`): ENEMY type fires `speak(an.race)`; races 0..9
+                // map 1:1 to speech indices 0..9.  Setfig-race NPCs
+                // (RACE_SHOPKEEPER/BEGGAR/WITCH/SPECTRE/GHOST) retain their
+                // setfig-switch speech indices from `talk_dispatch` so that any
+                // port-specific spawning through `npc_table` still yields the
+                // correct line.
                 if let Some(ref table) = self.npc_table {
                     if let Some(npc) = table.npcs.get(*idx) {
                         use crate::game::npc::*;
                         let speech_id: usize = match npc.race {
-                            RACE_NORMAL     => 3,
-                            RACE_UNDEAD     => 2,
-                            RACE_WRAITH     => 2,
-                            RACE_ENEMY      => 1,
-                            RACE_SNAKE      => 4,
                             RACE_SHOPKEEPER => 12,
                             RACE_BEGGAR     => 23,
+                            RACE_WITCH      => 46,
+                            RACE_SPECTRE    => 47,
+                            RACE_GHOST      => 49,
+                            r if r < 10     => r as usize,
                             _               => 6,
                         };
                         self.messages.push(crate::game::events::speak(&self.narr, speech_id, bname));
@@ -1717,12 +1724,26 @@ impl GameplayScene {
                         self.messages.push(crate::game::events::speak(&self.narr, 15, bname));
                     }
                     4 => {
-                        // Princess: speak(16).
-                        self.messages.push(crate::game::events::speak(&self.narr, 16, bname));
+                        // Princess (fmain.c:3397): speak(16) only if princess still captive
+                        // (ob_list8[9].ob_stat != 0).
+                        let princess_captive = self.state.world_objects
+                            .get(PRINCESS_OB_INDEX)
+                            .map(|obj| obj.ob_stat != 0)
+                            .unwrap_or(false);
+                        if princess_captive {
+                            self.messages.push(crate::game::events::speak(&self.narr, 16, bname));
+                        }
                     }
                     5 => {
-                        // King: speak(17).
-                        self.messages.push(crate::game::events::speak(&self.narr, 17, bname));
+                        // King (fmain.c:3398): speak(17) only if princess still captive
+                        // (ob_list8[9].ob_stat != 0).
+                        let princess_captive = self.state.world_objects
+                            .get(PRINCESS_OB_INDEX)
+                            .map(|obj| obj.ob_stat != 0)
+                            .unwrap_or(false);
+                        if princess_captive {
+                            self.messages.push(crate::game::events::speak(&self.narr, 17, bname));
+                        }
                     }
                     6 => {
                         // Noble: speak(20).
@@ -3237,22 +3258,16 @@ impl GameplayScene {
             }
             GameAction::Yell => {
                 // Yell: nearest_fig(1, 100). If NPC within 35 → speak(8) "No need to shout!"
-                // Otherwise yell the next brother's name (fmain.c:4167-4175).
+                // Otherwise dispatch to the normal TALK switch (fmain.c:3367-3423).
+                // If no target is in yell range, the original handler silently
+                // returns (`fmain.c:3369`); no brother-name shout is emitted.
                 let bname = self.brother_name().to_string();
                 if let Some(fig) = self.nearest_fig(1, 100) {
                     if fig.dist < 35 {
                         self.messages.push(crate::game::events::speak(&self.narr, 8, &bname));
                     } else {
-                        // NPC in yell range but not close — show dialogue
                         self.handle_setfig_talk(&fig, &bname);
                     }
-                } else {
-                    let next_brother = match self.state.brother {
-                        1 => "Phillip",
-                        2 => "Kevin",
-                        _ => "Julian",
-                    };
-                    self.messages.push(format!("{}!", next_brother));
                 }
             }
             GameAction::Speak | GameAction::Ask => {
@@ -3297,9 +3312,9 @@ impl GameplayScene {
                         57
                     };
                     self.messages.push(crate::game::events::speak(&self.narr, speech, &bname));
-                } else {
-                    self.messages.push("There is no one here to talk to.");
                 }
+                // Else: no target within 50 px and no turtle carrier — the
+                // original `talk_dispatch` silently returns (`fmain.c:3369`).
             }
             GameAction::Quit => {
                 self.quit_requested = true;
