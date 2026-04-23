@@ -1824,10 +1824,10 @@ Note: `narr.asm` labels speak(6) as "loraii" and speak(7) as "necromancer", refl
 
 ### 14.1 Inventory Structure
 
-Three static arrays per brother, plus a pointer for the active brother:
+Three static arrays per brother, plus a pointer for the active brother. Each array is sized to include both the 35 active inventory slots **and** the 1-byte `ARROWBASE` accumulator, i.e. 36 bytes in memory. The save-file payload serializes only the first 35 bytes (see §24).
 
 ```
-UBYTE julstuff[ARROWBASE], philstuff[ARROWBASE], kevstuff[ARROWBASE];
+UBYTE julstuff[ARROWBASE + 1], philstuff[ARROWBASE + 1], kevstuff[ARROWBASE + 1]; // 36 bytes each
 UBYTE *stuff; // bound to current brother via blist[brother-1].stuff
 ```
 
@@ -1919,7 +1919,7 @@ All consumed on use (`--stuff[4+hit]`). Guarded by `extn->v3 == 9` check — mag
 | 27 | Herb | Vestigial — defined in inventory system but no world placement, no handler, not obtainable. |
 | 28 | Writ | Royal commission: obtained from `rescue()` after saving princess. Grants `princess++`, 100 gold, and 3 of each key type (`stuff[16..21] += 3`). Shown to Priest triggers `speak(39)` and reveals gold statue (`ob_listg[10]` set to stat 1). GIVE menu entry exists but has no handler — the Writ functions only as a passive dialogue check. |
 | 29 | Bone | Found underground at `(3723, 39340)` in ob_list9. Given to Spectre (race `0x8a`): `speak(48)`, drops crystal shard. Non-spectre NPCs reject with `speak(21)`. |
-| 30 | Crystal Shard | Overrides terrain type 12 collision blocking. Type-12 walls appear in dungeon labyrinth sectors (2, 3, 5–9, 11–12, 35) and doom tower sectors 137–138 near the stargate portal. Never consumed. Obtained from Spectre trade. |
+| 30 | Crystal Shard | Overrides terrain type 12 collision blocking. Type-12 walls appear only in terra set 8 (Region 8 building interiors) — specifically the maze-layout sectors 2, 3, 5–9, 11–12, 35 and Doom Tower sectors 137–138 adjacent to the Stargate portal. Terra set 10 (Region 9 dungeons) is unaffected — the same tile index 93 maps to terrain type 1 there. Never consumed. Obtained from Spectre trade. |
 
 #### Gold Statue Locations
 
@@ -2392,6 +2392,31 @@ Vitality = `15 + brave/4`. Placard texts for succession:
 - Phillip starts: `placard_text(1)`, `placard_text(2)` + `event(9)`, `event(10)`
 - Kevin starts: `placard_text(3)`, `placard_text(4)` + `event(9)`, `event(11)`
 - All dead: `placard_text(5)` ("Stay at Home!") → `quitflag = TRUE`
+
+### 15.13 Stargate Portal
+
+The Stargate is the narrative name for the bidirectional door pair at `doorlist[14..15]` (`fmain.c:254-255`). Mechanically it is a plain pair of `STAIR`-type doors (value 15, horizontal) routed through the generic `check_door` / [`xfer()`](#166-the-xfer-function) flow — there is **no stargate-specific code path**.
+
+| Entry | Role | Outdoor Endpoint | Indoor Endpoint | Destination `secs` |
+|-------|------|------------------|-----------------|--------------------|
+| `doorlist[14]` | Citadel entry | Outdoor Citadel-of-Doom approach (inside the fiery_death zone) | Doom castle interior (region 8, sectors 135–138) | 1 |
+| `doorlist[15]` | Spirit Plane portal | Doom castle interior (region 8, within sec 135–138) | Spirit Plane / astral maze (region 9, sectors 43–59, 100, 143–149) | 2 |
+
+**Traversal requirements (door-level):** none. The Stargate doors themselves have no key, no statue count, and no item check — unlike `DESERT` doors (5-statue gate, §15.5) or locked doors (key-of-type, §16.3). The gameplay progression gates that guard the Stargate are upstream:
+
+- **Rose** (`stuff[23]`) to survive the fiery_death zone surrounding the Citadel approach (§18.9, §14.5).
+- **Crystal Shard** (`stuff[30]`) to traverse the terrain-12 walls *inside* the Spirit Plane once the Stargate has already been crossed (§9.13, §14.5, §15.5).
+- Reaching `doorlist[14]` physically (crossing lava on foot) implicitly requires Rose; there is no code check at the door itself.
+
+**Post-traversal behavior:** all Spirit Plane behaviors are extent-driven by `find_place` (xtype 52), not by the door. The `xfer()` call performs a standard region reload with fade on enter and instant exit (§16.5–§16.6). On the Spirit Plane, the following hazards activate automatically via the astral extent:
+
+- Astral music override (tracks 16–19) via `setmood`.
+- Loraii-type encounters forced via encounter_type 8 (§12.7).
+- Pit-fall trap: `j == 9 && i == 0 && xtype == 52` → `STATE_FALL`, `luck -= 2`, goodfairy revive to `(safe_x, safe_y)`.
+- Quicksand drain (sector 181): teleport to `(0x1080, 34950)` in region 9 rather than killing (§16.7).
+- Velocity-ice (terrain 7) and backwards-walk lava (terrain 8) environ effects within the astral extent.
+
+The Stargate is the only door pair whose outdoor endpoint sits inside the fiery_death rectangle, and the only door pair whose indoor destination is region 9 via the `secs == 2` flag (§16.1).
 
 
 ## 16. Doors & Buildings
@@ -3014,7 +3039,7 @@ If `luck >= 1` when the gate first fires, fairy rescue is guaranteed. Since luck
 | Phillip | 2 | 20 | 35 | 15 | 15 | 20 | 6 |
 | Kevin | 3 | 15 | 20 | 35 | 10 | 18 | 3 |
 
-Each brother has an independent 35-byte inventory array (`ARROWBASE = 35`): `julstuff`, `philstuff`, `kevstuff`.
+Each brother has an independent 36-byte inventory array in memory (35 active slots 0–34 plus `ARROWBASE = 35` accumulator): `julstuff`, `philstuff`, `kevstuff`. The save-file payload serializes 35 bytes per brother (the accumulator is transient and not persisted — see §24).
 
 Design: Julian is the strongest fighter (highest bravery/HP), Phillip has the most fairy rescues available (highest luck), Kevin is the diplomat (highest kindness, weakest combatant).
 
@@ -3155,6 +3180,8 @@ Princess counter persists across succession. However, `ob_list8[9].ob_stat` IS r
 **Mounted-turtle exploit** (original behavior — preserve): melee recoil from `dohit()` pushes the rider via `move_figure(i, fc, 2)` (`fmain2.c:242-245, 322-329`), which only applies `proxcheck()` and bypasses the autonomous turtle's `px_to_im(...)==5` water-only rule, enabling transit over terrain the turtle itself cannot cross.
 
 ### 21.4 Swan (Bird)
+
+**Terminology.** The flying carrier is called **"Swan"** in all player-facing narrative (event messages, quest texts, STORYLINE.md). Internally the original source code calls it **"bird"** — the actor file is `cfiles[11]`, the extent handler is `load_carrier(BIRD)`, and `actor_file == 11` is checked as the bird identifier. This specification uses "Swan" in narrative/UX context and "bird" when referring to code-level identifiers (`actor_file == 11`, `riding == 11`, `load_carrier(BIRD)`, `cfiles[11]`). The two names refer to the same entity.
 
 - Actor slot 3, type CARRIER, `actor_file = 11`
 - Extent zone 0 at (2118, 27237)
@@ -3419,6 +3446,17 @@ Three functions indexing into null-terminated string tables and calling `extract
 - `msg(table, n)` — generic: explicit table + index.
 
 Common handler `msg1`: skips `n` null-terminated strings to find target, then calls `extract()`.
+
+#### Scroll-area message provenance (invariant)
+
+Every string that reaches the HI scroll area shall originate from exactly one of two authoritative sources — no other source is permitted:
+
+1. **`narr.asm` tables**, shipped in this project as the `[narr]` section of `faery.toml` (`event_msg`, `place_msg`, `inside_msg`, `speeches`) and dispatched through `event(n)`, `speak(n)`, `msg(table, n)`. These are indexed null-terminated strings, printed via `extract()` with `%` → brother-name substitution.
+2. **Hardcoded string literals from `fmain.c` / `fmain2.c`**, enumerated exhaustively in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md) under "Hardcoded scroll messages — complete reference". These are composed via `print`, `print_cont`, `prdec`, `extract` and cover door/key feedback, bow/arrow prompts, TAKE-treasure composition, TAKE-body-search composition, USE-menu responses, battle aftermath, eating, and floppy-only save/load prompts.
+
+The complete set of valid scroll-area text is therefore exactly the union of these two inventories. Any string emitted to the scroll area that is not traceable to a `[narr]` index **or** to a specific row in `dialog_system.md`'s hardcoded-message tables is a fidelity violation. Implementors porting these literals should either keep them as the hardcoded composition strings documented in `dialog_system.md` (preserving `extract()` wrapping, `%` substitution, and `prdec` zero-padding semantics) or lift them verbatim into `faery.toml` under a non-`[narr]` table; either way, no new player-facing prose may be invented in Rust code.
+
+Primitives (`print`, `print_cont`, `prdec`, `extract`) and the print-queue dispatcher (`ppick`) are specified behaviorally in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md) §§"print"–"ppick".
 
 ### 23.7 Placard Text Messages
 

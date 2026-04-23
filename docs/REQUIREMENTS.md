@@ -73,12 +73,15 @@ Each requirement is a testable statement. User stories follow the format:
 | R-WORLD-002 | The world shall be divided into 10 regions: 8 outdoor (2×4 grid, indices 0–7), 1 building interior (index 8), 1 dungeon (index 9). |
 | R-WORLD-003 | Region number shall be computed from tile-level sector coordinates using the formula: `region = (xs >> 6) & 1 + ((ys >> 5) & 3) * 2`, where xs and ys are derived from pixel coordinates via `tile_x = map_x >> 4`, `tile_y = map_y >> 5`, `sector_x = tile_x >> 4`, `sector_y = tile_y >> 3`. |
 | R-WORLD-004 | Each region shall load its own tileset (4 image banks of 64 tiles each = 256 tiles), two terrain property tables (1024 bytes total), sector map (256 sectors × 128 bytes = 32768 bytes), and region map (4096 bytes). Asset configuration is defined by `file_index[10]`, which specifies 4 image bank references, 2 terrain table IDs, sector map start, region map start, and setfig character set ID. |
-| R-WORLD-005 | Terrain properties shall be encoded as 4-byte entries: byte 0 = mask shape index (for terrain occlusion), byte 1 lower nibble (bits 0–3) = walkability (0–3), byte 1 upper nibble (bits 4–7) = mask mode (0–7, controlling occlusion behavior). |
+| R-WORLD-005 | Terrain properties shall be encoded as 4-byte entries: byte 0 = mask shape index (for terrain occlusion), byte 1 **upper nibble (bits 4–7) = terrain type (0–15, drives movement speed, water/ice/lava/pit physics, and collision)**, byte 1 **lower nibble (bits 0–3) = mask application rule (0–7, controls sprite occlusion behavior)**, byte 2 = sub-tile collision mask (8 sub-regions), byte 3 = big_color. |
 | R-WORLD-006 | Crossing a region boundary shall trigger automatic region data reload. Region transitions occur via outdoor boundary crossing (`gen_mini`), door transitions, or respawn. Non-blocking incremental loading (`load_next`) shall be used during normal gameplay; blocking loading (`load_all`) for immediate transitions. |
 | R-WORLD-007 | A minimap cache (19×6 = 114 entries) shall be maintained, mapping viewport tile positions to terrain tile IDs for fast terrain mask lookups during sprite compositing. The `genmini` function resolves world coordinates through the two-level map hierarchy to fill this buffer. |
 | R-WORLD-008 | The map shall use a two-level hierarchy: a region map (128×32 grid of sector indices, 4 KB) and sector data (256 sectors × 128 bytes each, where each sector is a 16×8 grid of tile indices). |
 | R-WORLD-009 | Each region shall support up to 250 world objects per sector, each described by a 6-byte `struct object` (x, y, object type ID, status byte). Two object arrays (`ob_listg[]`, `ob_list8[]`) shall track active objects. |
 | R-WORLD-010 | Desert access restriction: if `region == 4` and the player has fewer than 5 gold statues (`stuff[STATBASE] < 5`), desert map squares shall be blocked. |
+| R-WORLD-011 | Tiles shall be 16×32 pixels. Each region loads 4 image banks of 64 tiles each = 256 distinct tile IDs. Each bank occupies `IMAGE_SZ = 81920` bytes (256 tiles × 5 bitplanes × 64 bytes per plane). |
+| R-WORLD-012 | The visible playfield shall be a 19×6 tile grid (304×192 pixels), matching the 320×200 raster with a 16-pixel horizontal scroll margin. |
+| R-WORLD-013 | A 19×6 = 114-entry `minimap` cache shall map viewport tile positions to terrain tile IDs for fast terrain-mask lookups during sprite compositing. `genmini()` rebuilds this buffer on full redraws by resolving world coordinates through the two-level (region-map → sector) hierarchy. |
 
 ### User Stories
 
@@ -100,6 +103,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-SCROLL-003 | Incremental tile scrolling shall shift all 5 bitplanes by one tile in any of 8 directions. After shifting, `strip_draw()` shall repair a single exposed column and `row_draw()` shall repair a single exposed row. |
 | R-SCROLL-004 | The game logic sub-block (Phase 14: AI, encounters, hunger/fatigue, day/night advancement) shall only execute on frames where the map did not scroll (`dif_x == 0 && dif_y == 0`). During continuous scrolling, only actor movement, combat, and rendering occur. |
 | R-SCROLL-005 | The visible playfield shall display a 19×6 grid of tiles (each 16×32 pixels), fitting within the 320-pixel raster width (304 pixels of tiles + 16 px scroll margin) and 200-scanline raster height (192 scanlines of tiles). |
+| R-SCROLL-006 | The `viewstatus` display-state flag shall implement the following states: `0` = normal rendering; `1` = picking/dialogue (skip rest of tick, flasher blink active); `2` = full-screen map-message overlay; `3` = fade-in (fires `fade_normal()` after next `pagechange()`, then returns to 0); `4` = alternate picking (same as 1); `98` = full rebuild; `99` = full rebuild on init. Full map redraws shall occur for values 99, 98, and 3. |
 
 ### User Stories
 
@@ -127,6 +131,8 @@ Each requirement is a testable statement. User stories follow the format:
 | R-SPRITE-009 | Up to 6 missiles shall be tracked simultaneously via `missile_list[6]`. Each missile has world position, type (NULL/arrow/rock/thing/fireball), time of flight, speed (0 = unshot), direction, and archer ID. Active missiles shall be added to `anim_list` as OBJECTS type, up to `anix2 = 20` total slots. |
 | R-SPRITE-010 | Each sprite set shall track its dimensions and loading state via `struct seq_info`: width (pixels), height (pixels), frame count, image data pointer, mask data pointer, bytes per frame, and currently loaded file index. |
 | R-SPRITE-011 | Sprite frame addressing shall use the formula: image = `seq_list[type].location + (planesize × 5 × frame_index)`, mask = `seq_list[type].maskloc + (planesize × frame_index)`. |
+| R-SPRITE-012 | Walk-cycle base offsets shall be driven by the 16-entry `diroffs[]` table `{16,16,24,24,0,0,8,8,56,56,68,68,32,32,44,44}`. Indices 0–7 (paired) select walk animation bases per facing direction (0=N, 1=NE, …, 7=NW); indices 8–15 select fight/shoot animation bases. |
+| R-SPRITE-013 | The 87-entry `statelist` table shall map `(motion_state, facing, frame)` tuples to 4-byte records `{figure: i8, wpn_no: i8, wpn_x: i8, wpn_y: i8}`. Layout: indices 0–31 = 8-frame walk cycles (S, W, N, E × 8), 32–79 = 12-state fight cycles (S, W, N, E × 12, with states 0–8 = swing, 9 = duplicate swing, 10–11 = ranged frames), 80–82 = death (3 frames), 83 = sinking, 84–85 = oscillation, 86 = asleep. |
 
 ### User Stories
 
@@ -146,7 +152,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-ZMASK-001 | Sprites shall be Z-sorted back-to-front by Y-coordinate using a bubble sort of `anim_index[]` before rendering each frame. The sort also determines `nearest_person` for NPC interaction. |
 | R-ZMASK-002 | Depth adjustments: dead actors render at Y−32, riding hero at Y−32, actor slot 1 (mount/companion) at Y−32, deeply sunk actors (environ > 25) at Y+32. |
 | R-ZMASK-003 | Sprite compositing shall use a 4-stage pipeline: (1) `save_blit` — save background under sprite footprint; (2) `maskit` × N — stamp terrain occlusion masks from `shadow_mem` into compositing buffer for each overlapping tile-column; (3) `mask_blit` — combine sprite transparency mask with terrain occlusion mask; (4) `shape_blit` — cookie-cut draw sprite onto screen using formula D = (A·B) + (¬A·C), where A = compositing mask, B = sprite data, C = screen background. |
-| R-ZMASK-004 | Terrain occlusion masks shall be applied per tile-column and tile-row that a sprite overlaps, based on the tile's mask mode (0–7) from terrain properties. Mode 0 = no occlusion; modes 1–7 implement documented skip conditions. |
+| R-ZMASK-004 | Terrain occlusion masks shall be applied per tile-column and tile-row that a sprite overlaps, using the mask mode read from the lower nibble of the terrain-rule byte (`terra_mem[image_id*4 + 1] & 15`). Modes 0–7 apply the following per-column skip conditions (see SPEC §6.3): mode 0 = always skip (no occlusion, flat ground); mode 1 = skip first column (right-side-only occlusion); mode 2 = skip when `ystop > 35` (top-only, low wall); mode 3 = skip when `hero_sector == 48` and actor is not NPC 1 (bridge — hero walks over); mode 4 = skip when first column OR `ystop > 35` (combined right + top); mode 5 = skip when first column AND `ystop > 35` (right AND top); mode 6 = full-tile mask (tile 64) when not on the bottom row (two-story buildings); mode 7 = skip when `ystop > 20` (stricter top-only). Mask mode values 8–15 are not used by any shipped terra set. |
 | R-ZMASK-005 | Carriers, arrows, fairy sprites (object indices 100–101), and certain NPC races shall skip terrain masking entirely. |
 | R-ZMASK-006 | Background restoration (`rest_blit`) shall run in reverse compositing order to correctly rebuild overlapping backgrounds. Maximum sprites per frame: `MAXSHAPES` = 25, limited by backsave buffer capacity (5920 bytes per page). |
 
@@ -175,6 +181,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-FADE-008 | The status bar palette (`textcolors[20]`) shall NOT be affected by day/night fading. |
 | R-FADE-009 | A blue night-shift factor `g2 = (100 - green%) / 3` shall be applied to the blue channel calculation, creating additional blue tinting as green brightness decreases. |
 | R-FADE-010 | Outdoor RGB parameters derived from `lightlevel`: red = `lightlevel − 80` (+ 200 if light spell), green = `lightlevel − 61`, blue = `lightlevel − 62`. |
+| R-FADE-011 | Per-color palette scaling in `fade_page(r, g, b, limit, colors)` shall apply: (1) Green Jewel boost — if `light_timer > 0` and a palette entry's red < green, raise red to match green; (2) per-channel scale `r1 = (r × r1) / 1600`, `g1 = (g × g1) / 1600`, `b1 = (b × b1 + g2 × g1) / 100`, where `g2 = (100 − g) / 3`; (3) twilight vegetation boost for colors 16–24 — green% 21–49 → +2 blue, green% 50–74 → +1 blue; (4) clamping when `limit == TRUE` — red ∈ [10,100], green ∈ [25,100], blue ∈ [60,100]. Color 31 is overridden before scaling per-region (see R-FADE-005). Results are written to `fader[]` and loaded to the hardware palette. |
 
 ### User Stories
 
@@ -310,6 +317,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-AI-028 | Weapon selection at spawn: `weapon_probs[arms * 4 + wt]` where `wt` is re-randomized per enemy if `mixflag & 4`, otherwise shared within batch. |
 | R-AI-029 | Peace zones (etype 80–83) set `xtype ≥ 50`, failing the `xtype < 50` guard on danger checks, completely suppressing random encounters. The `aggressive` field in `encounter_chart[]` is never read at runtime. |
 | R-AI-030 | Only extents 0 (bird) and 1 (turtle) are persisted in savegames. Turtle extent starts at (0,0,0,0) and must be repositioned via `move_extent()`. |
+| R-AI-031 | Spirit Plane (astral) hazards shall activate automatically while the hero is inside an extent with `etype == 52`, independent of any door/portal entry logic. Required behaviors: (a) music override to astral tracks 16–19 via `setmood`; (b) forced `encounter_type = 8` (Loraii) with synchronous actor-shape load; (c) pit-fall trap — terrain probe returning `j == 9 && i == 0` with `xtype == 52` sets `STATE_FALL`, `luck -= 2`, and routes recovery through `goodfairy` → `revive(FALSE)` back to `(safe_x, safe_y)`; (d) quicksand drain at `hero_sector == 181` teleports the hero to `(0x1080, 34950)` in region 9 via `xfer` instead of killing (NPCs die outright); (e) velocity-ice (terrain 7) accepts monster placement even when `proxcheck` fails; (f) backwards-walk lava (terrain 8) environ `k = −3` reverses hero motion. Exiting the extent box fires `find_place` with a new `xtype` and `carrier_extent_update` zeroes `active_carrier`. |
 
 ### User Stories
 
@@ -372,7 +380,7 @@ Each requirement is a testable statement. User stories follow the format:
 
 | ID | Requirement |
 |----|-------------|
-| R-INV-001 | Each brother shall have a `stuff[]` array of at least 36 elements (indices 0–34 active, index 35 as temporary accumulator): weapons (0–4), special items (5–8), magic consumables (9–15), keys (16–21), quest/stat items (22–30), gold pickups (31–34). Index 35 (`ARROWBASE`) shall serve as a temporary accumulator for quiver pickups, with `stuff[8] += stuff[ARROWBASE] * 10` applied after Take. |
+| R-INV-001 | Each brother shall have a `stuff[]` array of 36 elements in memory (indices 0–34 active inventory, index 35 = `ARROWBASE` transient accumulator): weapons (0–4), special items (5–8), magic consumables (9–15), keys (16–21), quest/stat items (22–30), gold pickups (31–34). Index 35 (`ARROWBASE`) shall serve as a temporary accumulator for quiver pickups, with `stuff[8] += stuff[ARROWBASE] * 10` applied after Take. The save-file payload serializes the 35 active slots only (see R-SAVE-003). |
 | R-INV-002 | Item pickup shall use the `itrans` translation table (31 ob_id→stuff-index pairs, 0-terminated) to map ground object types to inventory slots. Lookup shall be a linear scan of pairs until the terminator. On match, `stuff[index]` shall be incremented. |
 | R-INV-003 | Body search on dead enemies shall roll weapon drop then treasure drop from probability tables. |
 | R-INV-004 | Weapon damage ranges: Dirk 1–3, Mace 2–4, Sword 3–5, Bow 4–11 (missile, consumes arrows), Wand 4–11 (missile, no ammo cost). Equipping a weapon via USE shall set `weapon = hit + 1`. |
@@ -390,7 +398,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-INV-016 | Sun Stone (stuff[7]) shall make the Witch (race `0x89`) vulnerable to melee weapons. Without it, attacks on the Witch shall produce `speak(58)`: "Stupid fool, you can't hurt me with that!" |
 | R-INV-017 | Golden Lasso (stuff[5]) shall enable mounting the swan carrier. The Witch shall drop the lasso on death. |
 | R-INV-018 | Sea Shell (stuff[6]) USE shall call `get_turtle()` to summon the sea turtle carrier near water. Summoning shall be blocked inside the rectangle (11194–21373, 10205–16208). |
-| R-INV-019 | Crystal Shard (stuff[30]) shall override terrain type 12 collision blocking in dungeons. The shard shall never be consumed. |
+| R-INV-019 | Crystal Shard (stuff[30]) shall override terrain type 12 collision blocking. Terrain type 12 tiles exist only in terra set 8 (Region 8 building interiors) — specifically the maze-layout sectors (2, 3, 5–9, 11–12, 35) and Doom Tower sectors 137–138. They are **not** present in Region 9 (dungeons/caves). The shard shall never be consumed. |
 | R-INV-020 | On brother succession (`revive(TRUE)`), all inventory shall be wiped. Starting loadout for the new brother shall be one Dirk only (`stuff[0] = 1`). |
 | R-INV-021 | Special-cased pickups bypassing `itrans`: gold bag (ob_id 13) adds 50 to wealth; scrap (ob_id 20) triggers `event(17)` plus region-specific event; dead brother bones (ob_id 28) recovers dead brother's full inventory; containers (ob_id 14 urn, 15 chest, 16 sacks) use the container loot system; turtle eggs (ob_id 102) and footstool (ob_id 31) cannot be taken. |
 | R-INV-022 | World objects shall use a 6-byte record: world X (u16), world Y (u16), ob_id (i8), ob_stat (i8). ob_stat values: 0 = disabled/skipped, 1 = on ground (pickable), 2 = in inventory/taken (skipped), 3 = setfig NPC, 4 = dead setfig, 5 = hidden (revealed by Look), 6 = cabinet item. |
@@ -460,6 +468,8 @@ Each requirement is a testable statement. User stories follow the format:
 - As a player, if all three brothers perish, the game ends with a game-over message.
 - As a player, each new brother can trigger a new princess rescue, advancing through Katra, Karla, and Kandy.
 - As a player, I must visit the Spectre at night and trade the King's Bone for the Crystal Shard to navigate the Spirit Plane.
+- As a player, the Necromancer can only be damaged by a ranged weapon (Bow or Wand) — melee strikes are deflected, and magic is suppressed inside his arena.
+- As a player, once I have the Rose I can cross the lava surrounding the Citadel of Doom; without it, standing in the fiery_death zone drains my vitality each tick and deep exposure kills me instantly.
 
 ---
 
@@ -487,6 +497,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-DOOR-015 | Collision-triggered door opening: when the player bumps terrain type 15, `doorfind(xtest, ytest, 0)` shall be called automatically, opening only NOKEY doors. |
 | R-DOOR-016 | CAVE and VLOG door types shall share value 18; code checking for CAVE shall also match VLOG entries. Both shall use the same teleportation offset. |
 | R-DOOR-017 | Key types for locked doors: NOKEY (0), GOLD (1), GREEN (2), KBLUE (3), RED (4), GREY (5), WHITE (6). Keys shall be consumed on successful use (`stuff[hit + KEYBASE]--`). |
+| R-DOOR-018 | The Stargate portal shall be implemented as the door pair at `doorlist[14..15]` using the generic `STAIR` door type (value 15, horizontal) with **no** stargate-specific code path. Entry 14 transitions outdoor Citadel-of-Doom approach → region 8 Doom castle interior (sectors 135–138); entry 15 transitions region 8 interior → region 9 Spirit Plane (astral sectors 43–59, 100, 143–149). The Stargate doors themselves shall have no key requirement, no statue requirement, and no item check — progression is gated upstream by the Rose (lava immunity to reach the Citadel) and downstream by the Crystal Shard (terrain-12 walls inside the Spirit Plane), never by the door. Fade-on-enter / instant-on-exit follows the standard door transition rules. |
 
 ### User Stories
 
@@ -496,6 +507,7 @@ Each requirement is a testable statement. User stories follow the format:
 - As a player, I must dismount my carrier before I can enter any building.
 - As a player, I can bump into unlocked doors to open them automatically.
 - As a player, sinking fully in quicksand at the correct location teleports me to the dungeon.
+- As a player, once I can cross the lava to the Citadel of Doom, the Stargate inside transports me to the Spirit Plane — the door itself requires no key or item, but the path to it requires the Rose for lava immunity.
 
 ---
 
@@ -563,6 +575,9 @@ Each requirement is a testable statement. User stories follow the format:
 | R-SURV-022 | Kindness: −3 for killing non-witch SETFIGs, clamped ≥ 0. Probabilistic +1 from giving gold: `if (rand64() > kind) kind++`. Below 10, wizards and priests give dismissive dialogue. Initial: Julian = 15, Phillip = 15, Kevin = 35. |
 | R-SURV-023 | Wealth: +50 from gold bags, +100 from containers, +100 from princess rescue, +variable from corpse loot. −price for shop purchases, −2 for giving gold. Initial: Julian = 20, Phillip = 15, Kevin = 10. |
 | R-SURV-024 | HUD shall display Brv, Lck, Knd, Wlth (via prq(7)) and Vit (via prq(4)). Hunger and fatigue are NOT displayed on the HUD — communicated only through event messages. |
+| R-SURV-025 | All random values shall be produced by a single 32-bit LCG: `seed = low16(seed) × 45821 + 1; output = ror32(seed, 6) & 0x7FFFFFFF`. The 68000 `mulu.w` operates on the low 16 bits only, giving an effective state space of 2¹⁶ and a maximum period of 65536. |
+| R-SURV-026 | The LCG shall be seeded once at startup with `0x012ED98D` (19837325). There shall be no runtime reseeding from wall-clock, VBlank counter, or input. Sequence variation between sessions comes solely from per-keystroke discarded `rand()` calls during the copy-protection loop. |
+| R-SURV-027 | Helper RNG functions shall match the originals exactly: `rand2() = rand() & 1`, `rand4() = rand() & 3`, `rand8() = rand() & 7`, `rand64() = rand() & 63`, `rand256() = rand() & 255`, `bitrand(x) = rand() & x`, `rnd(n) = (rand() & 0xFFFF) % n` (true modulo via 16-bit division). Results are uniform only for power-of-two-minus-one masks. |
 
 ### User Stories
 
@@ -574,6 +589,7 @@ Each requirement is a testable statement. User stories follow the format:
 - As a player, I can eat fruit to reduce hunger, and my character auto-eats in safe zones.
 - As a player, my stats (bravery, luck, kindness, wealth) change through gameplay actions.
 - As a player, hunger and fatigue are communicated through text messages, not HUD numbers.
+- As a player, walking into the lava around the Citadel of Doom burns me — deeper exposure kills outright, but the Rose grants full immunity.
 
 ---
 
@@ -621,7 +637,7 @@ Each requirement is a testable statement. User stories follow the format:
 | R-DEATH-008 | Fairy animation at `goodfairy` 119–20 (fairy sprite approaches hero, `battleflag = FALSE`, AI suspended), resurrection glow at 19–2, revival `revive(false)` at `goodfairy == 1`. |
 | R-DEATH-009 | Brother succession (`revive(true)`): place ghost at death location (brothers 1–2 only), reset `ob_list8[9].ob_stat = 3` (princess captive), load next brother stats from `blist[]`, clear inventory (zero 31 slots, give single Dirk), reset all timers to 0, spawn at Tambry (19036, 15755) in region 3, display brother-specific placard, load brother sprites, display journey message. |
 | R-DEATH-010 | Fairy revival (`revive(false)`): teleport to last safe zone (`safe_x, safe_y`), full HP (`15 + brave / 4`), clear hunger/fatigue to 0, set `daynight = 8000`, `lightlevel = 300`. Skips ghost placement, stat/inventory reset, and placard text. |
-| R-DEATH-011 | Brother base stats: Julian (brave=35, luck=20, kind=15, wealth=20, HP=23), Phillip (brave=20, luck=35, kind=15, wealth=15, HP=20), Kevin (brave=15, luck=20, kind=35, wealth=10, HP=18). Each has an independent 35-byte inventory array. |
+| R-DEATH-011 | Brother base stats: Julian (brave=35, luck=20, kind=15, wealth=20, HP=23), Phillip (brave=20, luck=35, kind=15, wealth=15, HP=20), Kevin (brave=15, luck=20, kind=35, wealth=10, HP=18). Each brother has an independent inventory array (35 active slots + 1 ARROWBASE accumulator = 36 bytes in memory; 35-byte serialized payload — see R-INV-001, R-SAVE-003). |
 | R-DEATH-012 | Max fairy rescues per brother (from initial luck / 5): Julian = 3, Phillip = 6, Kevin = 3. |
 | R-DEATH-013 | Succession placard text: Julian → placard(0); Phillip → placard(1) + placard(2) ("Julian's luck ran out…"); Kevin → placard(3) + placard(4) ("Phillip's cleverness could not save him…"). Journey start: event(9), plus event(10) for Phillip or event(11) for Kevin. |
 | R-DEATH-014 | Dead brother ghost: bones at death location (`ob_listg[brother]`), ghost setfig activated (`ob_listg[brother + 2].ob_stat = 3`). Only for brothers 1 and 2 (Kevin has no successor). |
@@ -724,6 +740,9 @@ Each requirement is a testable statement. User stories follow the format:
 | R-INTRO-009 | Line width constraints: max 36 chars for scroll text, 29 for placard text. |
 | R-INTRO-010 | Player may skip the intro at multiple checkpoints. |
 | R-INTRO-011 | `placard()` visual effect: recursive fractal line pattern on `rp_map` using `xmod`/`ymod` offset tables (±4 pixel deltas), mirror-symmetric with center at (284,124), 16×15 outer iterations with 5 inner passes, color 1 for most lines, color 24 for first inner pass. |
+| R-INTRO-012 | **Scroll-area message provenance.** Every string rendered to the HI scroll area (via `print`, `print_cont`, `extract`, `prdec`, or the `ppick` print-queue dispatcher) shall originate from exactly one of two authoritative sources: (a) the `[narr]` tables in `faery.toml` (`event_msg`, `place_msg`, `inside_msg`, `speeches`) dispatched through `event(n)`, `speak(n)`, or `msg(table, n)`; or (b) the hardcoded string literals enumerated in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md) under "Hardcoded scroll messages — complete reference" (door/key feedback, bow/arrow prompts, TAKE treasure composition, TAKE body-search composition, USE-menu responses, battle aftermath, eating, and floppy-only save/load prompts). No other source of scroll-area text is permitted; implementations shall not invent new player-facing prose in Rust code. |
+| R-INTRO-013 | **Hardcoded literal fidelity.** Every row in the `dialog_system.md` "Hardcoded scroll messages — complete reference" tables shall be rendered under its documented trigger condition with its documented composition order (including `extract()` word-wrap at 37 chars, `%` → brother-name substitution, and `prdec` zero-padded decimal insertion for numeric fragments such as arrow counts and foe counts). The floppy-only save/load prompts (`fmain2.c:1498`, `:1499`, `:1532`, `:1533`, `:1538`) may be omitted on hard-drive-equivalent configurations, matching the original's conditional-compilation behavior. |
+| R-INTRO-014 | **Print primitives and queue.** The four text primitives (`print`, `print_cont`, `prdec`, `extract`) and the 32-entry circular print queue dispatched by `ppick` shall behave as specified in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md): `print()` scrolls the HI area up 10 pixels and redraws at y=42 within the clip rect (TXMIN=16, TYMIN=5, TXMAX=400, TYMAX=44); `print_cont()` appends in place without scrolling; `extract()` word-wraps at 37 chars using a 200-byte row buffer with `%` → `datanames[brother-1]` substitution and CR (13) as a forced break; `prdec()` appends zero-padded decimals via `print_cont`; the queue supports codes 2, 3, 4, 5, 7, and 10 (drops silently when full). |
 
 ### User Stories
 
@@ -731,6 +750,7 @@ Each requirement is a testable statement. User stories follow the format:
 - As a player, I can skip the intro to get into the game quickly.
 - As a player, I see location names when entering named areas.
 - As a player, I see decorative placard borders during story sequences.
+- As a player, every message that appears in the scroll area is one the original 1987 game would have shown in the same situation — no modern additions, reworded prose, or developer debug text leaks into my playthrough.
 
 ---
 
@@ -851,14 +871,14 @@ Each requirement ID maps to its specification section:
 | Requirement Prefix | Specification Section |
 |--------------------|----------------------|
 | R-DISP | §1 Display & Rendering |
-| R-WORLD | §2 World Structure |
+| R-WORLD | §2 World Structure, §3 Tile & Map System |
 | R-SCROLL | §4 Scrolling & Camera |
-| R-SPRITE | §5 Sprite System |
+| R-SPRITE | §5 Sprite System, §8 Characters & Animation |
 | R-ZMASK | §6 Terrain Masking & Z-Sorting |
 | R-FADE | §7 Color Palettes & Day/Night Fading |
 | R-INPUT | §9 Player Movement & Input |
 | R-COMBAT | §10 Combat System |
-| R-AI | §9, §11, §12 AI, Behavior, Encounters |
+| R-AI | §11, §12 AI & Behavior, Encounter Generation |
 | R-NPC | §13 NPCs & Dialogue |
 | R-INV | §14 Inventory & Items |
 | R-QUEST | §15 Quest System |
@@ -873,4 +893,5 @@ Each requirement ID maps to its specification section:
 | R-SAVE | §24 Save/Load System |
 | R-UI | §25 UI & Menu System |
 | R-ASSET | §26 Asset Formats |
+| R-FX | §27 Special Effects |
 | R-FX | §27 Special Effects |

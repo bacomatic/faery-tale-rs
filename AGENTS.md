@@ -30,7 +30,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 - Always call `font.set_color_mod(r, g, b)` before every `render_string()` call. The canonical white/default is `set_color_mod(255, 255, 255)`. SDL2 color mod is stateful; failing to reset it causes text to render in the previous scene's tint color.
 - When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
 - **Fail Fast** If you cannot find an answer, say you don't know rather than guessing. This gives the user the opportunity to clarify or provide more information, and prevents implementation errors. Often this indicates a gap in the reference documentation that should be filled.
-- **Do not invent player-facing strings.** Any message shown to the user must come from `faery.toml` (`[narr]` tables such as `event_msg`, `speeches`, `place_msg`, etc.) via `crate::game::events`. Never hardcode narrative prose in Rust code.
+- **Do not invent player-facing strings.** Any message shown to the user must come from one of two authoritative sources: (1) `faery.toml` (`[narr]` tables such as `event_msg`, `speeches`, `place_msg`, `inside_msg`) via `crate::game::events`, or (2) the hardcoded string literals exhaustively enumerated in `reference/logic/dialog_system.md` ("Hardcoded scroll messages — complete reference"). No other source of scroll-area text is permitted — never hardcode new narrative prose in Rust code. See `docs/SPECIFICATION.md` §23.6 and `docs/REQUIREMENTS.md` R-INTRO-012/013/014.
 
 ## Document ownership
 
