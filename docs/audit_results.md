@@ -3307,6 +3307,280 @@ None from this subsystem.
 
 ---
 
+## Subsystem 14: carrier-transport
+
+**Scope**: raft / swan / turtle / dragon (the four transport actors
+sharing `anim_list[1]` = raft slot and `anim_list[3]` = carrier slot
+per `reference/logic/carrier-transport.md#overview`), their mount,
+dismount, autonomous movement, extent-driven spawn/despawn, and
+scroll-area messaging. Cross-checked against movement F5.7/F5.8,
+encounters F4.2 (`active_carrier` gate), and npc-ai F3.13 (turtle-
+egg cadence).
+
+Note on scope: the task brief mentioned "swan/turtle/snake/horse"
+carriers, but `reference/logic/carrier-transport.md#overview` lists
+exactly four transport actors — **raft, swan, turtle, dragon**
+(dragon is non-rideable). There is no horse carrier and snakes are
+enemy actors (race 4), not mounts. The port's `NPC_TYPE_HORSE = 3`
+(`src/game/npc.rs:14`) maps to cfile 5 (= turtle in ref) and is a
+port-local naming artefact only (debug-TUI label); it carries no
+carrier-semantic weight.
+
+#### F14.1 — `riding` global never updated on mount/dismount [NEEDS-FIX, fixed]
+**Location**: `src/game/game_state.rs` (`board_raft`, `leave_raft`,
+`summon_turtle`, `start_swan_flight`, `stop_swan_flight`).
+**Reference**: `reference/logic/carrier-transport.md#carrier_tick`
+(`fmain.c:1502` swan → `riding = RIDING_SWAN` = 11;
+`fmain.c:1517` turtle → `riding = RIDING_RAFT` = 5;
+`fmain.c:1538` turtle-not-mounted → `riding = 0`);
+`reference/logic/carrier-transport.md#raft_tick` (`fmain.c:1563`
+raft → `riding = 0` at entry; `fmain.c:1572` raft-boarded →
+`riding = 1`); `reference/logic/SYMBOLS.md:103-105`
+(`RIDING_NONE=0 / RIDING_RAFT=5 / RIDING_SWAN=11`; raft literal
+`1` at `fmain.c:1572`).
+**Issue**: The port declared `GameState.riding: i16` and gated
+magic (`src/game/magic.rs:164`, ITEM_RING "while mounted on
+swan/dragon: silent no-op"; `fmain.c:3308`) and combat/door logic
+(`gameplay_scene.rs:1012, 1033, 1115`) on it, but no mount-flow ever
+wrote it. `board_raft()` toggled `on_raft` only; `summon_turtle()`
+set `active_carrier + wcarry + on_raft` only; `start_swan_flight()`
+set `flying` only. Result: in real gameplay `state.riding` was
+frozen at its `GameState::new()` default of `0`, so the ITEM_RING
+gate never blocked casting from the turtle or swan, and the
+no-ride-through-door guards behaved as if the hero were always on
+foot — contradicting tests `magic.rs::test_ring_blocked_on_turtle`
+and `test_ring_blocked_on_swan` which only pass because they poke
+`state.riding` directly.
+**Resolution**: Write `riding` inside each mount/dismount helper to
+match the ref discriminant:
+- `board_raft()`   → `riding = 1`
+- `leave_raft()`   → `riding = 0` (also clears `on_raft`,
+  `active_carrier`, `wcarry` as before)
+- `summon_turtle()`→ `riding = 5`
+- `start_swan_flight()` → `riding = 11`
+- `stop_swan_flight()`  → `riding = 0`
+No behavioural change when `riding` is already aligned; existing
+tests unaffected.
+
+#### F14.2 — Invented scroll-text on board / summon [INVENTED, fixed]
+**Location**: `src/game/gameplay_scene.rs` (`GameAction::Board`,
+`GameAction::SummonTurtle`).
+**Reference**: `reference/logic/carrier-transport.md#raft_tick`
+(`fmain.c:1562-1573`, implicit auto-board, no `event()` call);
+`reference/logic/carrier-transport.md#use_sea_shell`
+(`fmain.c:3457-3461`, "silently inert" swamp veto, no `event()`
+on success either); `reference/logic/dialog_system.md` (no
+board/summon literals listed); `faery.toml [narr].event_msg` (no
+raft-board or turtle-summon strings — indices 32/33 cover only
+the swan-dismount lava veto / velocity gate).
+**Issue**: Five invented literal strings were pushed to the scroll
+area:
+- `"You board the raft."`, `"Nothing to board here."`
+  (`GameAction::Board`)
+- `"You summon the turtle!"`, `"You have no shells to summon a
+  turtle."`, `"The turtle won't come here."`
+  (`GameAction::SummonTurtle`)
+None exist in `faery.toml [narr]` nor in
+`reference/logic/dialog_system.md`. The original emits no
+scroll-area text on any of these paths: raft boarding is an
+implicit per-frame snap (`raftprox == 2` gate), and the Sea Shell
+handler either calls `get_turtle` silently or is vetoed silently
+inside the swamp rectangle.
+**Resolution**: Removed all five pushes. `GameAction::Board` now
+calls `board_raft()` for its side-effects only; `GameAction::
+SummonTurtle` does the swamp-veto check and falls through to
+`summon_turtle()` silently. The `hitgo` gate (inventory slot
+non-empty) is enforced upstream by the menu driver so the "no
+shells" fallback is unreachable via the normal USE flow — the
+silent no-op path here is kept purely as a safety net, matching
+the reference's silent fall-through.
+
+#### F14.3 — Turtle-summon swamp-veto bounds inclusive, ref is strict [NEEDS-FIX, fixed]
+**Location**: `src/game/game_state.rs::is_turtle_summon_blocked`.
+**Reference**: `reference/logic/carrier-transport.md#use_sea_shell`
+(`fmain.c:3458`):
+```
+in_swamp = hero_x < 21373 && hero_x > 11194
+         && hero_y < 16208 && hero_y > 10205
+```
+— all four inequalities are **strict**; the boundary coordinates
+`(11194, 21373, 10205, 16208)` lie **outside** the veto box.
+**Issue**: The port used `(11194..=21373).contains(&hero_x) &&
+(10205..=16208).contains(&hero_y)` — inclusive on all four
+edges, spuriously blocking turtle summons at four lines of pixels
+that the original allows. The existing test
+`test_turtle_summon_region_blocking` baked in this off-by-one by
+asserting the corner pixels (11194, 10205) and (21373, 16208) are
+"inside".
+**Resolution**: Rewrote the predicate as
+`hero_x > 11194 && hero_x < 21373 && hero_y > 10205 &&
+hero_y < 16208`. Updated the existing corner-case test to assert
+those edges are now outside the veto box and added "just inside"
+probes at (11195, 10206) / (21372, 16207) to pin the new
+boundary. No new test file; test count unchanged.
+
+#### F14.4 — Swan mount / dismount UI not wired [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` (no caller of
+`start_swan_flight` / `can_dismount_swan` / `stop_swan_flight`
+outside `#[cfg(test)]`).
+**Reference**: `reference/logic/carrier-transport.md#carrier_tick`
+(`fmain.c:1497-1509`, swan-mount via `raftprox != 0 && wcarry == 3
+&& stuff[5] != 0`, Golden-Lasso-gated, auto-mount on proximity);
+`reference/logic/carrier-transport.md#swan_dismount`
+(`fmain.c:1417-1428`, fire-button dismount with `fiery_death`
+veto → `event(32)`, velocity gate `|vel| < 15` → `event(33)`,
+double `proxcheck` at hero_y − 14 / hero_y − 4).
+**Issue**: `start_swan_flight` / `stop_swan_flight` /
+`can_dismount_swan` exist in `game_state.rs` with correct semantics
+(velocity gate, lasso precondition) but no input path ever calls
+them outside unit tests. The reference's swan-proximity auto-mount
+(analogous to the raft-auto-board block at
+`gameplay_scene.rs:1184-1236` but for `wcarry == 3` + lasso) and
+the `pia` fire-button dismount branch are both absent. `fiery_death`
+is computed (`gameplay_scene.rs:1563-1566`) but never consulted by a
+dismount path (`event(32)` / `event(33)` narr strings 32 and 33 in
+`faery.toml` are dead-code on the event side). Consequence: swan is
+currently reachable only by tests and the `SummonSwan` debug NPC
+spawn (`gameplay_scene.rs:8304`), never by the published gameplay
+action surface.
+**Resolution**: Queued — not fixed this pass. Plumbing swan mount
+needs the carrier-slot proximity block (twin of raft-auto-board at
+9/16 px), the `active_carrier == CARRIER_SWAN` gate, and a
+fire-button-driven dismount that invokes `can_dismount_swan()`,
+routes the two vetos through `events::event_msg(&narr, 32, name)`
+/ `event_msg(&narr, 33, name)`, and lands only when both
+`proxcheck` probes clear. Cross-refs F5.8 (swan velocity
+representation).
+
+#### F14.5 — Carrier extent auto-spawn / despawn not implemented [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` (zone-change block at
+`≈lines 5160-5190`). No port of `carrier_extent_update`.
+**Reference**: `reference/logic/carrier-transport.md#carrier_extent_update`
+(`fmain.c:2716-2719`). On every zone transition: if the new
+extent's `xtype < 70` clear `active_carrier = 0`; if `xtype == 70`
+and either nothing is loaded or the hero isn't riding and the
+requested carrier differs, call `load_carrier(extn.v3)`. The
+three carrier extents in `faery.toml` are the swan (v3=11), turtle
+(v3=5), and dragon (v3=10) extents (`faery.toml:834-868`).
+**Issue**: The port updates `state.xtype` on zone change
+(`gameplay_scene.rs:5167-5170`) but does not use the value to
+drive carrier (re)spawn or despawn. Entering a swan/turtle/dragon
+extent doesn't clear the previous carrier out of slot 3, and
+leaving a carrier extent on foot doesn't zero `active_carrier` —
+so the F4.2 encounter-suppression gate can stay latched forever
+after a single visit (though in practice the port spawns carriers
+via `SummonTurtle` / debug NPC flows rather than extent-driven
+loads, so the suppression is usually idle).
+**Resolution**: Queued. Requires (a) plumbing `extn.v3` through
+the zone/extent loader into the zone-change handler, (b) adding
+an `if xtype < 70 { active_carrier = 0 }` branch in the same
+block, and (c) adding the `xtype == 70 && (active_carrier == 0 ||
+(riding == 0 && actor_file != v3))` reload path that repositions
+the slot-3 actor to `(v3-extent.x1 + 250, y1 + 200)` — the same
+center-snap as the original's `load_carrier`. Cross-ref F4.2.
+
+#### F14.6 — Raft-proximity block does not also cover swan carrier [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs:1184-1236`
+("Raft proximity detection").
+**Reference**: `reference/logic/carrier-transport.md#compute_raftprox`
+(`fmain.c:1455-1464`) — `raftprox` / `wcarry` are computed once per
+frame against `anim_list[wcarry]` where `wcarry = 3` when
+`active_carrier != 0` else `1`. One unified block; all three
+carrier modes (raft, turtle, swan) share the same 16/9 px
+thresholds against slot 1 or slot 3.
+**Issue**: The port's proximity block only scans for
+`NPC_TYPE_RAFT` and never considers the swan/turtle carriers in
+slot 3. Coupled with F14.4, this means the swan can never
+auto-mount via proximity even when lasso + nearby swan is set up
+by debug spawn. Turtle auto-mount does work because
+`summon_turtle()` directly sets `on_raft = true` instead of
+going through `raftprox`.
+**Resolution**: Queued. Fold slot-3 proximity into the same block,
+selecting actor index via `wcarry` exactly as the reference's
+`compute_raftprox` does. Dependent on F14.4.
+
+#### F14.7 — Carrier-encounter suppression path (F4.2) relies on `active_carrier` only, confirmed CONFORMANT
+Cross-referencing `gameplay_scene.rs:5198-5211` (the `try_trigger_
+encounter` call site introduced by F4.2) against
+`reference/logic/encounters.md#roll_wilderness_encounter` and
+F14.1's `riding` plumbing: the gate is on `active_carrier`, which
+is set by `summon_turtle` and by the raft auto-board block and is
+cleared by `leave_raft`. Swan mount in the port (absent — F14.4)
+would also need `active_carrier = CARRIER_SWAN` to suppress
+encounters, matching the ref. No fix required; the F4.2 gate is
+already correct for the carriers that *are* plumbed.
+
+#### F14.8 — Turtle autonomous swim (F5.7 cross-check) [CONFORMANT]
+`update_turtle_autonomous` (`gameplay_scene.rs:2179-2247`) implements
+the ref's 4-direction probe sequence `[d, d+1, d-1, d-2]` at
+TURTLE_SPEED = 3, keyed on `px_to_terrain_type == 5`
+(TERRAIN_WATER_VDEEP) single-point test, matching
+`carrier-transport.md#carrier_tick` (`fmain.c:1523-1537`). The
+16-tick hero-seeking facing update reproduces the `set_course(SC_AIM)`
+cadence noted in the reference. F5.7 already documented the
+companion terrain-1 guard as a separate tidy-up and not a
+gameplay regression.
+
+#### F14.9 — Combat on carrier [REF-AMBIGUOUS]
+**Reference**: `reference/logic/carrier-transport.md` does not
+state whether melee `Fight` or `Shoot` (`fmain.c:1417-1428` only
+covers the swan-dismount branch of `pia` — fire-button swings are
+handled by the same `resolve_player_state` section but elided in
+this doc); `reference/logic/combat.md` does not re-gate on
+`riding`. The port allows `Fight` and `Shoot` regardless of
+`riding`.
+**Issue**: Without a clear `reference/` statement that combat is
+suppressed on turtle / swan / raft, we cannot classify as
+NEEDS-FIX. No fix applied.
+
+#### F14.10 — Turtle-egg global counter cadence (F3.13 cross-check) [SPEC-GAP, unchanged]
+F3.11 already tracks the missing `turtle_eggs` global counter.
+`update_actors` (`gameplay_scene.rs:2301-2307`) still passes
+`turtle_eggs = false` unconditionally, so carrier-side effects
+(the turtle rewarding the hero with a Sea Shell, the snake-EGG_SEEK
+branch) are dormant. This is the F3.13 cadence gap; no new fix
+introduced here. Carrier-transport is consistent with that state.
+
+### Summary
+- **10 findings**: 3 NEEDS-FIX / INVENTED fixed (F14.1 missing
+  `riding` writes on all five mount/dismount helpers, F14.2
+  five invented scroll-text literals on board/summon paths,
+  F14.3 strict-vs-inclusive swamp veto bounds + test update),
+  3 SPEC-GAP queued (F14.4 swan mount/dismount input plumbing
+  + `event(32/33)` wiring, F14.5 `carrier_extent_update` auto-
+  spawn/despawn on zone change, F14.6 unified slot-1/slot-3
+  proximity block), 1 CONFORMANT carry-through (F14.7 F4.2
+  encounter suppression, F14.8 turtle autonomous swim),
+  1 REF-AMBIGUOUS (F14.9 combat gating on carrier),
+  1 cross-reference to existing gap (F14.10 turtle-egg counter
+  F3.13).
+- Build: ✅ `cargo build` clean, zero new warnings (baseline was
+  0 warnings; no new warnings introduced).
+- Tests: ✅ 586 + 12 + 12 passing after `test_turtle_summon_
+  region_blocking` update to match ref strict inequality.
+
+### SPEC/REQ updates queued
+None from this subsystem; existing SPEC §21.3 swamp-box language
+says "inside X ∈ [11194, 21373] AND Y ∈ [10205, 16208]" but uses
+inclusive brackets colloquially — the ref source code (`fmain.c:3458`)
+uses strict inequality. If a future SPEC pass formalises the
+boundary semantics, F14.3 is the citation.
+
+### Blockers
+- **Swan mount/dismount input plumbing** (F14.4) — gameplay can
+  reach swan flight only via debug today. Unblocking requires
+  proximity detection for slot-3 carriers (F14.6), a fire-button
+  branch that threads `fiery_death` and the velocity gate into
+  `event(32)` / `event(33)` narr calls, and a `proxcheck`-based
+  landing commit. None of these are scroll-text fidelity risks;
+  all player-facing strings (`"Ground is too hot for swan to
+  land."`, `"Flying too fast to dismount."`) already exist at
+  `faery.toml [narr].event_msg[32..=33]`, so the two-source rule
+  is pre-satisfied.
+
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
