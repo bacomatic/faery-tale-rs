@@ -240,6 +240,18 @@ SET_FILE_TAMBRY          = 13         # fmain.c:2889 — Tambry setfig file id
 ANIX_DEFAULT             = 3          # fmain.c:2904 — default anim-index for brother
 GAME_OVER_THRESHOLD      = 3          # fmain.c:2871 — brother>=3 → quit
 GOLDBASE                 = 31         # fmain.c:429 — #define GOLDBASE 31 (first gold-counter slot in stuff[])
+
+# Scroll-area (HI text region) geometry (fmain2.c:486-489)
+TXMIN = 16    # fmain2.c:486 — left clip edge of scroll raster
+TXMAX = 400   # fmain2.c:487 — right clip edge
+TYMIN = 5     # fmain2.c:488 — top clip edge
+TYMAX = 44    # fmain2.c:489 — bottom clip edge
+
+# Enemy actor array start index
+ENEMY_ACTOR_START = 3  # fmain2.c:1263 — actors 0=hero, 1=swan, 2=raft; enemies from index 3
+
+# extract() message buffer (fmain2.c:507 — static char mesbuf[200])
+mesbuf = 0             # fmain2.c:507 — 200-byte static buffer used by extract() for row assembly
 ```
 
 ## 2. Enums
@@ -516,6 +528,10 @@ com2: list                          # fmain2.c:55 — TABLE:movement_course_map
 object: object                      # opaque Amiga OS pointer (MsgPort, IORequest, Interrupt, InputEvent, SimpleSprite, etc.)
 ob_listg: list                      # fmain2.c — global object table entries (11 slots incl. scratch [0])
 rp: object                          # fmain.c — shared drawing RastPort
+rp_map: object                      # fsubs.asm:380 — full-screen placard RastPort (BitMap redirected to live playfield by map_message)
+mst: list                           # narr.asm:237 — TABLE:mst; 20-entry placard message offset table
+xmod: list                          # fsubs.asm:384 — TABLE:xmod; 16-entry signed x-delta table for placard() spiral
+ymod: list                          # fsubs.asm:385 — TABLE:ymod; 16-entry signed y-delta table for placard() spiral
 afont: object                       # fmain.c — Amber font TextFont
 fp_drawing: object                  # fmain.c — current drawing page (FaceRec)
 vp_page: object                     # fmain.c — playfield ViewPort
@@ -552,6 +568,9 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:inside_tbl` | `fmain2.c` | Indoor place-name bounding-box table |
 | `TABLE:inside_msg` | `narr.asm` | Indoor place-name message table |
 | `TABLE:keytrans` | `fsubs.asm:221-226` | 91-byte scancode → normalized keycode lookup |
+| `TABLE:mst`  | `narr.asm:237` | 20-entry pc-relative placard message offset table; indexed by `placard_text(N)` |
+| `TABLE:xmod` | `fsubs.asm:384` | 16-entry signed x-delta table: `[-4,-4,-4,0,0,0,4,4,0,-4,0,4,4,0,0,0]` |
+| `TABLE:ymod` | `fsubs.asm:385` | 16-entry signed y-delta table: `[0,0,0,4,4,4,0,0,-4,0,-4,0,0,4,4,4]` |
 
 *(Additional entries appended as new logic reference docs are authored.)*
 

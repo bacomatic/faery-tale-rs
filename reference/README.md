@@ -33,6 +33,9 @@ These files define strict pseudo-code for branching logic and runtime behavior.
 | [logic/README.md](logic/README.md) | Logic reference docs overview, reading order, and function index. |
 | [logic/STYLE.md](logic/STYLE.md) | Grammar and writing rules for logic pseudo-code. |
 | [logic/SYMBOLS.md](logic/SYMBOLS.md) | Shared symbol registry (enums, globals, constants, references). |
+| [logic/messages.md](logic/messages.md) | Authoritative reference of all indexed narr.asm message tables (`speak`, `event`, `msg`, `placard_text`, `question`). |
+| [logic/dialog_system.md](logic/dialog_system.md) | Scroll-area print primitives (`print`, `print_cont`, `extract`, `prdec`) and hardcoded-string inventory. |
+| [logic/placard.md](logic/placard.md) | Full-screen placard message rendering and animated border logic. |
 | [logic/game-loop.md](logic/game-loop.md) | Canonical per-frame sequence and tick phases. |
 | [logic/input-handling.md](logic/input-handling.md) | Input pipeline, ring buffer handling, and direction decoding. |
 | [logic/movement.md](logic/movement.md) | Movement vectors, course-setting, walk/still updates, collision entry points. |
