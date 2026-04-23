@@ -2743,6 +2743,329 @@ None from this subsystem.
 
 ---
 
+## Subsystem 12: astral-plane
+
+**Scope**: fidelity audit of the astral-plane ("Spirit Plane") subsystem —
+entry detection, Loraii preload, forced spawn, pit-fall / quicksand hazards,
+music / palette overrides, magic dampener, carrier interaction, and
+scroll-text. Authoritative ref: `reference/logic/astral-plane.md`
+(primary, `fmain.c:353, 2647-2720`), with cross-cutting mechanics in
+`movement.md` (pit-fall, quicksand), `encounters.md` (set_encounter /
+terrain-7), `carrier-transport.md` (carrier_extent_update),
+`day-night.md` (setmood), and `magic.md` (v3==9 dampener).
+
+**Key principle from `astral-plane.md`**: the astral plane is **not a
+distinct game mode**. There is no `astral_state` flag, no
+spell-cast entry path, no timer, no HP/MP gating, no inventory lock, and
+no Amulet item — the astral plane is purely a **coordinate box** in
+region 9 (dungeons) bounded by `(0x2400, 0x8200)..(0x3100, 0x8a00)`
+with `etype == 52`. Every observable astral behavior is produced by
+pre-existing subsystems gated on `xtype == 52`, `hero_sector == 181`,
+or a direct coordinate test.
+
+Accordingly, the "absent feature" items in the audit checklist —
+body-position save-for-return, astral duration, HP/MP gating during
+astral, inventory-access block during astral, death-triggered astral
+path, astral-specific Rust state flag — are all **CONFORMANT by
+omission**: the port correctly *does not* implement them because the
+reference explicitly says they don't exist.
+
+#### F12.1 — Astral entry: Loraii preload / forced spawn on xtype==52 transition (NEEDS-FIX — deferred to encounters subsystem)
+**Location**: `src/game/gameplay_scene.rs` zone-change hook (lines
+5124-5154) updates `state.xtype` from `zones[idx].etype` but only
+dispatches on `etype == 83` (princess rescue). No branch exists for
+`etype == 52` (astral).
+**Reference**: `reference/logic/astral-plane.md#find_place`
+(`fmain.c:2695-2698`): on the xtype transition to 52, `find_place`
+sets `encounter_type = 8` (Loraii), calls `load_actors` (which sets
+`encounter_number = extn.v1 + rand(0, extn.v2 - 1)` →
+`3 + rand(0, 0) = 3` for the astral zone), `prep(ENEMY)`, `motor_off`,
+and clears `actors_loading`. Actual slot placement is deferred to the
+next `place_extent_encounters` (Phase 14i) pass, which drains
+`encounter_number` into `anim_list[3..6]` via `set_encounter` using a
+63-px spread around a randomly-picked ring origin.
+**Issue**: In the port, entering the astral zone triggers no Loraii
+spawn. The `xtype >= 50` gate in
+`encounter.rs::try_trigger_encounter` (line 143) correctly suppresses
+random encounters inside the astral zone, which means **no enemies
+ever spawn** on the astral plane. The hero can wander the astral box
+unopposed.
+**Dependency chain**: A faithful fix requires three already-tracked
+SPEC-GAPs:
+  - **F4.6** (SPEC-GAP): model `encounter_number` as a persistent
+    16-tick-drain counter sourced from `extn.v1 + rand(0, extn.v2-1)`.
+  - **F4.9** (SPEC-GAP): accept terrain-code 7 ("void") as a valid
+    placement in `set_encounter` when `xtype == 52`. Without F4.9
+    Loraii cannot be placed on void tiles inside the astral extent —
+    every placement attempt falls through and the 16-tick drain
+    accomplishes nothing.
+  - **F4.10** (SPEC-GAP): 9-attempt cluster-origin retry with
+    walkability check.
+Also requires a new "on xtype transition to 52, set
+`encounter_type = 8` and seed `encounter_number = 3`" hook at the
+`last_zone` change site.
+**Resolution**: Deferred. The surgical fix in this subsystem would be
+to call `spawn_encounter_group(table, 8, hero_x, hero_y, tick)` once
+on first xtype-52 entry. That spawn helper:
+  - caps at 4 enemies (spec: 3 for astral via v1=3),
+  - uses only `actor_collides` (misses F4.9 terrain-7 acceptance),
+  - picks a single ring-origin with no walkability retry (misses F4.10).
+Applying it here would produce Loraii spawns but with the wrong
+count/placement envelope compared to the original — i.e. it would
+substitute one divergence for another. Left un-fixed pending F4.6 /
+F4.9 / F4.10. Queued as **NEEDS-FIX-DEFERRED**.
+
+#### F12.2 — Astral pit-fall (terrain 9 + xtype==52) → STATE_FALL, luck −= 2 (SPEC-GAP — movement subsystem)
+**Location**: `src/game/gameplay_scene.rs::update_environ` (lines
+1356-1415). The `match terrain` table handles codes 0/2/3/4/5/6/7/8
+but the `_ =>` catch-all silently drops terrain codes 9-15 (line
+1400) and there is no `xtype == 52` astral branch.
+**Reference**: `reference/logic/movement.md#update_environ`
+(`fmain.c:1767-1775`): `elif j == 9 and i == 0 and xtype == 52:` —
+when the hero (actor index 0) steps on a pit tile (terrain 9) inside
+the astral extent, the engine puts the actor into `STATE_FALL`
+(`an.index = fallstates[brother * 6]`), zeroes `an.tactic` (reused as
+the FALL frame counter), docks `luck -= 2`, re-kicks `setmood`, and
+assigns `k = -2` so the fall obeys ice-momentum physics. Recovery is
+handled by `resolve_player_state` → `goodfairy` countdown →
+`revive(FALSE)`, which respawns the hero at `(safe_x, safe_y)` with
+fresh vitality. Outside the astral extent, terrain 9 pits are inert
+(the same `j == 9 && i == 0 && xtype == 52` triple is the only
+read).
+**Issue**: The port has no `STATE_FALL` (the debug-TUI bridge
+hard-codes `7 => "FALL"` at `src/game/debug_tui/bridge.rs:263` but no
+actor state uses this index), no `fallstates` table, no `tactic`-as-
+frame-counter, and no luck penalty on pit entry. Hero can walk
+indefinitely on astral pit tiles.
+**Resolution**: Queued. This is a movement subsystem concern (already
+audited as Sub 5) and would require adding an `ActorState::Falling`
+variant plus frame counter, the `fallstates` index lookup, and
+routing STATE_FALL through `resolve_player_state`. Classify as
+**SPEC-GAP (movement)** and delegate to that subsystem's next pass.
+
+#### F12.3 — Astral quicksand drain (hero_sector == 181 → xfer to region 9) (SPEC-GAP — movement subsystem)
+**Location**: `src/game/gameplay_scene.rs::update_environ` (no 181
+sector handling anywhere in src/).
+**Reference**: `reference/logic/movement.md#update_environ`
+(`fmain.c:1785-1792`): inside the deep-water ramp, when
+`k == 30` (death-depth threshold) AND `hero_sector == 181` (drain
+sector), `xfer(0x1080, 34950, False)` teleports the drowning hero to
+region 9 at `(0x1080, 34950)` instead of killing them. NPCs sharing
+the 181 sector die outright (`an.vitality = 0`).
+**Issue**: The port has no sector-181 branch. A hero sinking in a
+quicksand tile currently takes the normal environ-damage path
+(gameplay_scene.rs:1583 — drowning damage at environ==30). The astral
+"soft-death" rescue teleport is absent.
+**Resolution**: Queued. Requires `update_environ` to check
+`state.hero_sector == 181` at the `environ == 30` threshold and route
+through a new `xfer`-equivalent to `(0x1080, 34950)` in region 9.
+Classify as **SPEC-GAP (movement)**; cross-linked to this
+subsystem for traceability.
+
+#### F12.4 — Astral terrain-7 ("void") spawn acceptance (SPEC-GAP — already F4.9)
+**Reference**: `reference/logic/encounters.md#set_encounter`
+(`fmain.c:2746`): inside the jittered placement loop, if the usual
+`proxcheck` rejects a slot, a second check `xtype == 52 &&
+px_to_im(xtest, ytest) == 7` accepts the slot anyway — so Loraii
+can spawn on "void" tiles that are normally unwalkable.
+**Status**: Already flagged in **F4.9 (SPEC-GAP)** under the
+encounters subsystem. No new action here; noted for audit trail.
+
+#### F12.5 — Astral music override (setmood priority) (CONFORMANT)
+**Location**: `src/game/gameplay_scene.rs::setmood` (lines
+3621-3645).
+**Reference**: `reference/logic/day-night.md#setmood`
+(`fmain.c:2939-2941`): when the hero's coordinates fall inside the
+astral box `(0x2400, 0x8200)..(0x3100, 0x8a00)`, setmood returns
+`track[16..19]` (group 4). This override beats battle / indoor /
+day-night and is surpassed only by the death theme.
+**Observation**: The port's `setmood` evaluates in the ref-specified
+priority order: death (vitality ≤ 0) → astral-zone coordinates →
+battle → dungeon → day/night. Bounds match the ref exactly
+(`hero_x >= 0x2400 && hero_x <= 0x3100 && hero_y >= 0x8200 &&
+hero_y <= 0x8a00` — note inclusive comparisons vs the ref's strict
+`>` in `find_place`, but `setmood` itself uses the standard
+rectangle test in the original). **CONFORMANT**.
+
+#### F12.6 — Magic suppression in v3==9 zones (CONFORMANT, but see note)
+**Location**: `src/game/gameplay_scene.rs::try_cast_spell` (lines
+642-654).
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3304`, see `magic.md:264-269`): `extn.v3 == 9` suppresses
+all MAGIC-submenu spells with `speak(59)` and does **not** consume
+the charge.
+**Observation**: The port correctly checks `zones[idx].v3 == 9` and
+emits `speak(59)` before the dispatch. The astral zone in
+`faery.toml:937-945` has `v3 = 8` (Loraii race), not 9. The
+Necromancer arena extent (fmain.c:344) has `etype == 53` and the
+dampener v3==9 — so the dampener applies to the Necromancer arena
+(which *sits inside* the astral box but is a separate extent), not
+to the astral plane proper. **CONFORMANT**: the port matches the ref
+gate verbatim.
+
+#### F12.7 — Astral scroll-text "% entered the Spirit Plane." (SPEC-GAP — place-name dispatch not implemented)
+**Location**: `state.hero_place` exists as a field (`game_state.rs:63`)
+and persists, but no code in `src/` writes it; `place_tbl` /
+`inside_tbl` dispatch is not implemented.
+**Reference**: `reference/logic/astral-plane.md#find_place` lines
+2661-2673: on extent change, `find_place` scans `place_tbl` /
+`inside_tbl`, picks a `place_idx`, and when the resolved `place_idx`
+changes **and** `flag != 0`, calls `msg(ms_table, place_idx)` to
+speak the place-name. The astral plane uses `inside_msg[11] =
+"% entered the Spirit Plane."` (narr.asm:213 / `faery.toml:1727-1728`).
+Because the astral extent is in region 9 (> 7), the `inside_tbl` /
+`inside_msg` arm fires — the hero's name is interpolated into the
+`%` token.
+**Issue**: The port never speaks any place-name; no caller writes
+`state.hero_place` or emits `inside_msg[11]`.
+**Resolution**: SPEC-GAP. This is a broad, non-astral-specific gap
+(all place-names are absent, not only "Spirit Plane"). Queue for a
+future dedicated place-name / `find_place` pass. No astral-specific
+fix at this time.
+
+#### F12.8 — Carrier despawn on astral entry (`carrier_extent_update`, xtype<70) (SPEC-GAP — carrier subsystem)
+**Location**: No `carrier_extent_update`-equivalent exists in
+`src/game/gameplay_scene.rs` on zone transition.
+**Reference**: `reference/logic/carrier-transport.md#carrier_extent_update`
+(`fmain.c:2716-2719`): after xtype is latched on extent change, if
+`xtype < 70` then `active_carrier = 0` (auto-despawn any bird /
+turtle / dragon currently loaded in slot 3). Astral entry
+(`xtype == 52`) triggers this clear.
+**Issue**: The port's zone-transition handler (gameplay_scene.rs:
+5129-5154) only updates `state.xtype` and handles the princess
+rescue — it does not zero `active_carrier` on non-carrier extent
+transitions. In practice the hero cannot reach the astral extent
+while mounted (astral entry is via stargate / xfer into region 9,
+which re-derives carrier state), so this gap has no observable
+effect on the astral path today. But the clear is ref-required on
+*every* xtype<70 transition, not only astral.
+**Resolution**: Queued as **SPEC-GAP (carrier-transport)**;
+documented here for cross-reference. No astral-specific fix.
+
+#### F12.9 — Astral exit: extent walk-out / stargate (`STAIR` door) (CONFORMANT by cross-ref)
+**Reference**: `reference/logic/astral-plane.md` Overview §"Exit":
+walking out of the extent box re-fires the zone-change dispatch with
+a new `xtype`; the stargate door pair at `fmain.c:227-228` (`STAIR`
+entries) uses the generic `xfer` primitive to teleport between the
+astral box and the doom-tower area. **No astral-specific exit code
+runs on door entry.**
+**Observation**: The port's zone-change detector
+(gameplay_scene.rs:5128) fires on every extent crossing, so extent-
+walk-out exit is automatic. STAIR doors (subject of the doors
+subsystem audit) handle the stargate via the generic door path.
+**CONFORMANT by cross-ref** — no code is needed in the astral path.
+
+#### F12.10 — `encounter_chart[8]` Loraii stats (CONFORMANT)
+**Location**: `src/game/encounter.rs::ENCOUNTER_CHART_FULL[8]`
+(line 31): `{ hp: 12, arms: 6, clever: 1, treasure: 0, cfile: 9 }`.
+**Reference**: `reference/logic/astral-plane.md` Overview (citing
+`fmain.c:61`) — "Loraii (`encounter_chart[8]`, 12 HP, 3–4 bodies
+per batch, file 9)". Port matches exactly. `cfile = 9` also matches
+`sprites.rs:30 // 9 necromancer/farmer/loraii`. **CONFORMANT**.
+
+#### F12.11 — No "astral state" flag, no Amulet, no spell-cast entry (CONFORMANT by omission)
+**Reference**: `reference/logic/astral-plane.md` Overview:
+  - "There is **no dedicated astral state bit**."
+  - "The game has no Amulet item (see `inv_list[]` at
+    `fmain.c:391-424`); the closest named item is the Talisman
+    (`stuff[11]`, the victory object)."
+  - "No **death-while-holding-Amulet** entry path."
+  - `reference/logic/magic.md` lists no "Astral Projection" spell
+    — the Blue Stone (case 5) is the only teleport spell, and it
+    teleports to a stone-circle sector, not to the astral plane.
+**Observation**: The port has no `astral_mode` flag, no Amulet item
+(items are sourced from `faery.toml [narr].inv_list` / `stuff`),
+and no astral-projection spell. Magic dispatch in `magic.rs` covers
+the full ref spell set with no astral-entry path. **CONFORMANT by
+omission**.
+
+#### F12.12 — No astral duration timer / HP-MP gating / inventory lock (CONFORMANT by omission)
+**Reference**: `reference/logic/astral-plane.md` Overview: "There is
+**no 'astral tick'** … Every check that alters behavior re-evaluates
+the box each frame." No HP drain on astral, no MP (the game has no
+MP stat at all — magic is per-charge via `stuff[]` slot counts), no
+inventory lock, no duration.
+**Observation**: The port has no such mechanics. **CONFORMANT by
+omission**.
+
+#### F12.13 — No death-triggered astral transition (CONFORMANT)
+**Reference**: `reference/logic/astral-plane.md` Notes: hero death
+always routes through `checkdead` → `STATE_DYING` →
+`resolve_player_state` → `revive`, which respawns the brother at
+`(safe_x, safe_y)` or at Tambry `(19036, 15755)`. Neither path
+reads any inventory item to decide destination.
+**Observation**: `tick_goodfairy_countdown` (gameplay_scene.rs:1428)
+respawns at `safe_x, safe_y` on `revive(FALSE)`. **CONFORMANT**.
+
+#### F12.14 — Day/night interaction with astral (CONFORMANT)
+**Reference**: `reference/logic/day-night.md#setmood` — astral
+music override beats day/night. Astral extent has no additional
+day-night gating in `astral-plane.md`.
+**Observation**: F12.5 above confirms the music priority matches.
+No other day-night interaction is specified. **CONFORMANT**.
+
+#### F12.15 — Palette / rendering differences for astral (CONFORMANT by omission)
+**Reference**: `reference/logic/astral-plane.md` and
+`reference/logic/visual-effects.md` — no astral-specific palette or
+flicker effect is specified. The spec's only "visual" astral
+behavior is the music override (F12.5). The fall-pits use the
+generic `STATE_FALL` sprite (via `fallstates[brother * 6]`), and
+Loraii use their own shape-file (cfile 9).
+**Observation**: No palette swap is required. **CONFORMANT by
+omission**.
+
+#### F12.16 — Two-source scroll-text compliance (CONFORMANT, pending F12.7)
+**Observation**: No astral-specific scroll text is emitted by the
+port today (F12.7). When F12.7 is addressed, the single string
+`inside_msg[11] = "% entered the Spirit Plane."` must come from
+`faery.toml [narr].inside_msg[11]` via `crate::game::events::msg` —
+which it already does at `faery.toml:1727-1728`. **CONFORMANT** by
+construction (no invented astral narrative strings exist in `src/`).
+
+### Summary
+
+- **16 findings**: 0 NEEDS-FIX-now, 0 INVENTED, 0 fixes applied in
+  this audit. The astral plane is a pure cross-cutting feature whose
+  entry-point dispatcher (`find_place`) and all downstream mechanics
+  live in already-audited subsystems (encounters, movement,
+  day-night, magic, carrier, doors, combat/revive). Every astral
+  gap found in this pass is either (a) CONFORMANT (F12.5, F12.6,
+  F12.9, F12.10, F12.11, F12.12, F12.13, F12.14, F12.15, F12.16),
+  or (b) SPEC-GAP / NEEDS-FIX-DEFERRED to the owning subsystem
+  (F12.1 → encounters F4.6 + F4.9 + F4.10; F12.2 → movement;
+  F12.3 → movement; F12.4 → encounters F4.9; F12.7 →
+  place-name dispatch; F12.8 → carrier-transport).
+- **No INVENTED state found** in `src/` — the port does **not**
+  wrongly introduce an "astral mode" flag, an Amulet item, an
+  Astral Projection spell, an HP/MP gate, or an astral duration
+  timer. The port correctly treats the astral plane as a coordinate
+  box.
+- Build: ✅ `cargo build` clean. Tests: ✅ unchanged (no changes to
+  source files in this subsystem). 6 pre-existing `let mut dragon`
+  warnings unchanged.
+
+### SPEC/REQ updates queued
+None new from this subsystem. All gaps roll up to existing queued
+items:
+  - F4.6 (`encounter_number` persistent counter + 14i drain)
+  - F4.9 (xtype==52 + terrain-7 placement acceptance)
+  - F4.10 (9-try cluster-origin walkability retry)
+  - Movement: STATE_FALL pit-fall + sector-181 drain
+  - Carrier: `carrier_extent_update` xtype<70 clear
+  - Place-name: `find_place` place_tbl / inside_tbl dispatch
+
+### Blockers
+- **F12.1** — Astral Loraii spawn is blocked on F4.6 + F4.9 +
+  F4.10. Until those three are resolved together, a faithful astral
+  spawn cannot be wired. Suggest scheduling them as a single
+  encounters-revisit task alongside the movement pit-fall /
+  quicksand items (F12.2 / F12.3) so astral-plane behavior lights
+  up end-to-end in one pass.
+
+
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
