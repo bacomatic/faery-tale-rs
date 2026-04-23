@@ -2540,6 +2540,209 @@ retained.
 
 ---
 
+## Subsystem 11: quests
+
+### Scope
+Quest-state flags (`stuff[]` slots, `princess` counter, `witchflag`),
+GIVE submenu dispatch (`give_item_to_npc`), princess-rescue sequence,
+necromancer / witch death drops, turtle summon, Talisman pickup / win
+condition.
+
+Authoritative refs: `reference/logic/quests.md`, `STORYLINE.md`,
+`reference/logic/brother-succession.md`, `reference/logic/inventory.md`,
+`reference/logic/messages.md`.
+
+### Findings
+
+#### F11.1 — `MenuAction::GiveGold` invented scroll text + no race dispatch (INVENTED / NEEDS-FIX, fixed)
+Per `reference/logic/quests.md#give_item_to_npc` (fmain.c:3493-3500),
+`GIVE Gold` must, when `wealth > 2`, spend 2 gold, probabilistically
+bump `kind` (`rand64() > kind → kind++`), and then speak based on the
+target's race: beggar (`race == 0x8d`) → `speak(24 + goal)`, anyone
+else → `speak(50)`. No scroll message is emitted when the branch is
+skipped (`wealth <= 2` or no nearby actor — silent early return at
+fmain.c:3491).
+
+The port emitted invented scroll strings "There is no one nearby.",
+"Not enough gold.", "You gave gold.", never raised `kind`, and never
+dispatched on race. Replaced with a faithful port that uses
+`nearest_fig(1, 50)` to locate the target, applies the tick-driven
+`rand64()` pattern (same hash used by `encounter.rs::rand64_from_tick`)
+for the kindness roll, and routes through `speak(24+goal)` /
+`speak(50)` via `crate::game::events::speak`. Silent no-op when no
+target is in range or `wealth <= 2`. No invented strings remain on
+this path.
+
+#### F11.2 — `MenuAction::GiveWrit` consumed the Writ and invented text (INVENTED / NEEDS-FIX, fixed)
+`reference/logic/quests.md#give_item_to_npc` "Notes on dead slots":
+"GIVE entries 6 (Book) and 7 (Writ) are reachable from the menu when
+their `stuff_flag` byte is set, but this function has no `hit == 6`
+or `hit == 7` branch — selecting either is a silent no-op that simply
+falls through to `gomenu(CMODE_ITEMS)`." The Writ is consumed only via
+the passive priest-TALK check at fmain.c:3383-3388, never via GIVE.
+
+The port consumed `stuff[28]` and emitted "You gave the writ." /
+"You don't have one." / "There is no one nearby." Replaced with the
+silent no-op that returns straight to the Items menu.
+
+#### F11.3 — `MenuAction::GiveBone` missing Spectre exchange + invented text (INVENTED / NEEDS-FIX, fixed)
+`give_item_to_npc` hit==8 (fmain.c:3501-3506): for non-spectre targets,
+`speak(21)` "no use for it" with **no** consumption; for the Spectre
+(race 0x8a / setfig_type 10) `speak(48)`, consume the bone
+(`stuff[29] = 0`), and `leave_item(i, 140)` to drop a Crystal Shard at
+the spectre's feet (`y + 10`).
+
+The port unconditionally decremented `stuff[29]` and pushed "You gave
+the bone." / "You don't have one." Replaced with the reference-accurate
+dispatch that keeps the bone when offered to a non-spectre, consumes
+it and drops `ob_id 140` (Crystal Shard) as a ground item at the
+spectre's `(x, y+10)` when offered to a spectre, and speaks through
+`faery.toml [narr].speeches[21]` / `[48]`.
+
+#### F11.4 — Princess rescue: invented "has rescued" text + missing `speak(18)` (INVENTED / NEEDS-FIX, fixed)
+`reference/logic/quests.md#rescue` / fmain2.c:1584-1603 specifies the
+post-cinematic side-effects in order: `xfer(5511, 33780, 0)`,
+`move_extent(0, 22205, 21231)`, `ob_list8[2].ob_id = 4`,
+`stuff[28] = 1`, `speak(18)` (the king's post-rescue writ-designation
+line), `wealth += 100`, `ob_list8[9].ob_stat = 0`,
+`stuff[16..22] += 3`.
+
+The port pushed an invented scroll message
+`"{bname} has rescued {princess_name}!"`, wrote to the non-authoritative
+`state.gold` field (ignoring `wealth`), and never emitted `speak(18)`.
+Fixed:
+- Removed the invented scroll line entirely (the rescue narrative is a
+  placard cinematic, not scroll text — placard plumbing covered below).
+- Switched the gold reward to `state.wealth += 100` (the HUD `Wlth:`
+  counter; matches `fmain2.c:1600`). Updated
+  `test_princess_rescue_awards_items` from `gold`/150 → `wealth`/150.
+- Added `speak(18)` — sourced from `faery.toml [narr].speeches[18]`
+  ("Here is a writ designating you as my official agent…").
+
+The remaining rescue-function behaviour that the port does not yet
+reproduce is captured as F11.8 below (RESEARCH-REQUIRED).
+
+#### F11.5 — Talisman drop missing `leave_item` y+10 offset (NEEDS-FIX, fixed)
+`reference/logic/quests.md#leave_item` (fmain2.c:1192-1195) places
+any dropped world object at `(abs_x, abs_y + 10)` — the actor's feet.
+Both `necromancer_death_drop(i, 139)` and the witch's `leave_item(i, 27)`
+flow through this helper.
+
+The port's witch-lasso drop already applied `+10`; the necromancer
+Talisman drop used the raw death `y`. Updated the Talisman drop to
+apply the same `+10` offset and updated
+`test_necromancer_death_drops_talisman_at_death_location` to assert
+`talisman.y == expected_y + 10`.
+
+#### F11.6 — Quest flags, save/load, brother-succession persistence (CONFORMANT)
+`persist.rs` serialises `julstuff`, `philstuff`, `kevstuff`, `princess`,
+`witchflag`, and the current-brother `stuff[]` swap point. Per
+`reference/logic/brother-succession.md` §revive, succession clears
+`stuff[0..GOLDBASE-1]` on the new brother (wiping quest items like
+Writ, Lasso, Crystal Shard, Talisman, etc.); the port's
+`activate_brother_from_config` does exactly this (`*self.stuff_mut() = [0u8; 36]`
+then `stuff[0] = 1` dirk). The `princess` counter is not reset on
+succession, matching the reference. Fairy rescue leaves `stuff` intact
+(port's fairy-rescue path does not call the brother-activation helper).
+
+#### F11.7 — Necromancer transform + Talisman / Witch Lasso drop flags (CONFORMANT)
+`handle_npc_deaths` transforms the Necromancer in place to Woodcutter
+(`race = 10`, `vitality = 10`, `state = Still`, `weapon = 0`) and drops
+`ob_id 139` (Talisman) at the death coords; the Witch stays dead and
+drops `ob_id 27` (Golden Lasso). Both match
+`reference/logic/quests.md#necromancer_death_drop` (fmain.c:1749-1757).
+After F11.5 the Y offsets match too.
+
+#### F11.8 — Princess-rescue cinematic (placards + extent / cast swap) (RESEARCH-REQUIRED)
+The reference `rescue()` function runs a three-placard narrative
+(`placard_text(8+i)` / `(9+i)` / `(10+i)` with `name()` interpolation,
+where `i = princess * 3`), holds 380 ticks, clears the inner rect,
+renders `placard_text(17)` + `name()` + `placard_text(18)`, then
+executes `move_extent(0, 22205, 21231)` and `ob_list8[2].ob_id = 4`
+(cast swap: noble → princess) along with the stat mutations. The port
+performs only the stat mutations and the hero teleport. Placing
+this as RESEARCH-REQUIRED rather than fixing in-audit because:
+- The `rescue_katra` / `rescue_karla` / `rescue_kandy` /
+  `princess_home` placard tables already exist in `faery.toml`
+  (lines 1519-1571), but there is no `placard_scene`-style dispatcher
+  for mid-game placards; plumbing the cinematic requires a new scene
+  bridge or scroll-area reflow that is outside the quests subsystem.
+- `ob_list8[2].ob_id = 4` is the noble → princess cast swap inside
+  the Marheim throne-room scene — `move_extent` for extent 0 (the
+  bird extent) relocates the next-phase trigger. Neither `move_extent`
+  nor the `ob_list8[2]` cast-swap primitive is plumbed into the port's
+  world-object model today.
+
+Flagged for user adjudication (see Blockers below).
+
+#### F11.9 — `GameAction::Give` hotkey (`G` key) is a Rust convenience (SPEC-GAP)
+The `G` key bound to `GameAction::Give` (key_bindings.rs:215) invokes a
+beggar-only subset of `give_item_to_npc` directly. The original game
+has no `G` hotkey; all GIVE dispatch flows through the inventory
+submenu (`CMODE_GIVE`). This path was not touched by this audit —
+existing tests `test_beggar_give_goal{0,2,3}_speaks_{24,26,27}`
+exercise it. SPEC/REQ is silent on a dedicated GIVE hotkey. Flagged
+for user adjudication (whether to keep the convenience binding or
+drop it in favour of pure menu-driven GIVE).
+
+#### F11.10 — Turtle summon (`get_turtle`) (CONFORMANT by reference, partial plumbing)
+`reference/logic/quests.md#get_turtle` (fmain.c:3510-3517): USE Shell
+rolls `set_loc()` up to 25 times seeking a `px_to_im == 5` (very-deep
+water) tile; on success `move_extent(1, encounter_x, encounter_y)` +
+`load_carrier(5)`, with an exclusion box check in the USE handler
+(11194 < x < 21373, 10205 < y < 16208). `state.try_summon_turtle()` +
+the USE-submenu wiring produce the expected effect. The retry loop and
+deep-water tile check are present. `move_extent(1, …)` (relocating the
+turtle-eggs extent) is not plumbed; leave as SPEC-GAP and covered by
+the carrier-transport subsystem in a later pass.
+
+#### F11.11 — Talisman pickup → victory latch (CONFORMANT)
+`try_win_condition` (fmain.c:3244-3247) sets `quitflag = True`,
+`viewstatus = 2`, and calls `end_game_sequence` when `stuff[22]` becomes
+nonzero at pickup. The port's `victory_triggered` flag + `main.rs`
+transition to the `victory_scene` reproduces this. Tests
+`test_talisman_pickup_triggers_victory` and
+`test_non_talisman_pickup_does_not_trigger_victory` cover the latch.
+
+#### F11.12 — Stat gates (desert, lava/rose, crystal shard, lasso/bird, sunstone) (CONFORMANT by omission here)
+Per `reference/logic/quests.md#Notes`, all stat/quest-item gates live
+in their owning subsystem (movement, combat, door-handler). They are
+audited elsewhere (F5/F1/F6 subsystems) and were not re-audited under
+this subsystem to avoid double-coverage.
+
+#### F11.13 — Scroll-text compliance on this subsystem's paths (CONFORMANT after F11.1-F11.4)
+After F11.1-F11.4 the quest-dispatch paths
+(`MenuAction::Give{Gold,Writ,Bone}`, `execute_princess_rescue`) emit
+only speeches sourced from `faery.toml [narr].speeches` (indices 18,
+21, 24+goal, 48, 50) or no text at all. Two-source rule: ✅.
+
+### Summary
+- **13 findings**: 4 NEEDS-FIX+INVENTED fixed (F11.1 GiveGold, F11.2
+  GiveWrit, F11.3 GiveBone, F11.4 princess-rescue text + speak(18)),
+  1 NEEDS-FIX fixed (F11.5 talisman y+10 offset), 5 CONFORMANT
+  (F11.6, F11.7, F11.10 partial, F11.11, F11.12, F11.13), 1
+  RESEARCH-REQUIRED (F11.8 rescue cinematic), 1 SPEC-GAP (F11.9 `G`
+  hotkey).
+- Build: ✅ `cargo build` clean, zero new warnings (the 6 pre-existing
+  `let mut dragon` warnings are unchanged).
+- Tests: ✅ 586 + 12 + 12 passing.
+
+### SPEC/REQ updates queued
+None from this subsystem.
+
+### Blockers
+- **F11.8** — Princess-rescue placard cinematic (`placard_text` 8+i /
+  9+i / 10+i, 17, 18) and the `move_extent(0, 22205, 21231)` /
+  `ob_list8[2].ob_id = 4` cast swap are not plumbed. User to decide
+  whether to add mid-game placard scene plumbing now or defer.
+- **F11.9** — `GameAction::Give` / `G` hotkey is not in the reference.
+  User to decide whether to keep the convenience binding or remove it
+  to match the original's menu-only GIVE flow.
+
+
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
