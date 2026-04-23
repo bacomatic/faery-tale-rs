@@ -1474,6 +1474,336 @@ Two-source rule: ✅ door subsystem speaks only ref-literal
 
 ---
 
+## Subsystem 7: npc-dialogue
+
+**Scope**: `CMODE_TALK` dispatch (Yell / Say / Ask), proximity
+auto-speech, and per-NPC speech selection for setfig NPCs
+(wizard, priest, guards, princess, king, noble, sorceress,
+bartender, witch, spectre, ghost, ranger, beggar) and enemy
+races. GIVE-item dialogue is covered by subsystem 11 (quests);
+shop BUY menu by a later subsystem.
+
+**Primary ref**: `reference/logic/npc-dialogue.md` (pseudo-code
+for `talk_dispatch`, `wizard_hint`, `priest_speech`,
+`bartender_speech`, `ranger_hint`, `proximity_auto_speak`),
+cross-referenced with `reference/logic/game-loop.md#sort_sprites`
+(speech proximity radius) and `reference/logic/messages.md §2`
+(speech-index table 0..60).
+
+**Code surface audited**:
+`src/game/gameplay_scene.rs::update_proximity_speech`
+(`fmain.c:2094-2103`), `handle_setfig_talk` (`fmain.c:3367-3423`),
+the `GameAction::Yell` / `GameAction::Speak` / `GameAction::Ask`
+branches in `do_option`, and their interaction with
+`nearest_fig` (`fmain2.c:426-442`).
+
+### Findings
+
+#### F7.1 — Proximity speech range hard-coded to 35 px, spec says 50 px [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs:42`
+(`const PROXIMITY_SPEECH_RANGE: i32 = 35`).
+**Reference**: `reference/logic/game-loop.md#sort_sprites`
+(`fmain.c:2370`): `perdist = 50` is the speech-proximity radius
+used to compute `nearest_person`; `proximity_auto_speak` then
+greets that actor via the `_speeches` table.
+**Issue**: The port's auto-speech ring was 15 px tighter than
+the original, so the beggar / witch / princess / necromancer /
+dark-knight greetings fired later than they should and could be
+walked past entirely along tangent paths.
+**Fix**: Changed `PROXIMITY_SPEECH_RANGE` from 35 to 50. The
+existing proximity tests (`test_proximity_auto_speech_*`)
+parameterise on the constant and still pass at the new radius.
+
+#### F7.2 — Princess TALK case missing captive-flag guard [NEEDS-FIX → FIXED]
+**Location**: `handle_setfig_talk`, case 4
+(`src/game/gameplay_scene.rs` ≈line 1720).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+case 4 (`fmain.c:3397`):
+```
+if ob_list8[9].ob_stat != 0:    # princess still captive
+    speak(16)
+```
+**Issue**: Rust unconditionally fired `speak(16)` ("Please,
+sir, rescue me from this horrible prison!") every time the
+player selected TALK near a princess, even after
+`execute_princess_rescue` cleared `world_objects[9].ob_stat` to
+0. The original falls silent once the princess has been
+rescued.
+**Fix**: Guarded `speak(16)` on
+`world_objects[PRINCESS_OB_INDEX].ob_stat != 0`, matching the
+same check already used in `update_proximity_speech` and the
+rescue-zone trigger.
+
+#### F7.3 — King TALK case missing princess-captive guard [NEEDS-FIX → FIXED]
+**Location**: `handle_setfig_talk`, case 5
+(`src/game/gameplay_scene.rs` ≈line 1725).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+case 5 (`fmain.c:3398`):
+```
+if ob_list8[9].ob_stat != 0:    # princess still captive
+    speak(17)
+```
+**Issue**: Rust unconditionally fired `speak(17)` ("I cannot
+help you, young man. My armies are decimated…") even after
+rescue. The original keys the despondent-king line on the same
+princess-captive flag as case 4 — once a princess has been
+brought back (`ob_stat == 0`), the king stands silent until the
+writ cutscene (`speak(18)`, out of scope here) is triggered.
+**Fix**: Same `PRINCESS_OB_INDEX` guard as F7.2.
+
+#### F7.4 — Enemy-race TALK speech indices inverted [NEEDS-FIX → FIXED]
+**Location**: `handle_setfig_talk`, `FigKind::Npc` branch
+(`src/game/gameplay_scene.rs` ≈line 1667).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+(`fmain.c:3422`): `if an.type == ENEMY: speak(an.race)` — races
+0..9 map 1:1 to `_speeches[0..9]` (ogre, goblin-man, wraith,
+skeleton, snake, salamander, loraii, "Die foolish mortal!",
+"No need to shout!", ranger-goal-0). Confirmed by
+`reference/logic/messages.md §2`.
+**Issue**: The Rust mapping was:
+```
+RACE_NORMAL (0)  → speak(3)   // should be speak(0)  (ogre)
+RACE_UNDEAD (1)  → speak(2)   // should be speak(1)  (goblin)
+RACE_WRAITH (2)  → speak(2)                           (ok)
+RACE_ENEMY  (3)  → speak(1)   // should be speak(3)  (skeleton)
+RACE_SNAKE  (4)  → speak(4)                           (ok)
+```
+Three of the five enemy races produced the wrong banter line on
+TALK, and the fallback `_ => 6` silently mapped every uncovered
+race to the Loraii "no reply" slot instead of honouring the
+`speak(an.race)` identity.
+**Fix**: Replaced the custom table with `race if race < 10 =>
+race as usize` (the direct `speak(an.race)` path). Preserved
+special-cased setfig-race NPCs that live in `npc_table` under
+the current port architecture (`RACE_SHOPKEEPER → 12`,
+`BEGGAR → 23`, `WITCH → 46`, `SPECTRE → 47`, `GHOST → 49`) so
+that TALK still produces the correct setfig-switch line for
+those actors when they are reached via `FigKind::Npc` rather
+than `FigKind::SetFig`. Added `WITCH/SPECTRE/GHOST` cases that
+were missing entirely; the fallback `_ => 6` is retained for
+truly unknown high-bit races.
+
+#### F7.5 — Invented "next-brother" shout string on empty Yell [INVENTED → FIXED]
+**Location**: `do_option(GameAction::Yell)` no-target branch
+(`src/game/gameplay_scene.rs` ≈line 3250).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+lines 49-50:
+```
+if nearest == 0:    # no target within range
+    return
+```
+The spec is explicit: `talk_dispatch` silently returns when
+`nearest_fig` finds nothing inside the 100 px yell radius.
+There is no "yell brother's name" behaviour in
+`fmain.c:3367-3423`, and `reference/logic/dialog_system.md`
+does not list any such scroll-text literal.
+**Issue**: Rust emitted `"Phillip!"`, `"Kevin!"`, or
+`"Julian!"` via `self.messages.push(format!("{}!", …))` when
+yelling with no NPC in range. That is both an invented
+behaviour and an invented scroll-text literal (violates the
+two-source rule — not in `faery.toml [narr]` and not in
+`dialog_system.md`).
+**Fix**: Removed the fallback arm; empty-yell is now a silent
+return matching the ref. Yell inside 100 px still routes to
+the "No need to shout, son!" cutoff (`speak(8)`) or the normal
+setfig switch, unchanged.
+
+#### F7.6 — Invented "There is no one here to talk to." fallback [INVENTED → FIXED]
+**Location**: `do_option(GameAction::Speak | GameAction::Ask)`
+no-target branch (`src/game/gameplay_scene.rs` ≈line 3301).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+lines 49-50 (silent return when `nearest == 0`); confirmed by
+`reference/logic/dialog_system.md "Hardcoded scroll messages"`
+— the string is not enumerated there and does not exist in
+`faery.toml`.
+**Issue**: Speak/Ask with no target in 50 px pushed a
+hard-coded English string onto the scroll queue. Violates the
+two-source rule and the silent-return invariant of
+`talk_dispatch`.
+**Fix**: Removed the `else { self.messages.push(…) }` arm.
+The turtle-carrier fallback (`active_carrier == CARRIER_TURTLE
+→ speak(56)/speak(57)`) still fires when applicable; otherwise
+the handler silently returns.
+
+#### F7.7 — Sorceress TALK lacks ob_listg[9] first-visit gate and rand64() luck check [SPEC-GAP]
+**Location**: `handle_setfig_talk`, case 7
+(`src/game/gameplay_scene.rs` ≈line 1737).
+**Reference**: `reference/logic/npc-dialogue.md#talk_dispatch`
+case 7 (`fmain.c:3400-3404`):
+```
+if ob_listg[9].ob_stat != 0:      # already given the figurine
+    if luck < rand64():           # rand64() ∈ [0,63]
+        luck = luck + 5
+else:
+    speak(45)
+    ob_listg[9].ob_stat = 1       # mark figurine as ground-dropped
+prq(7)
+```
+**Issue**: The Rust port unconditionally fires `speak(45)` on
+every visit, boosts `luck += 5` whenever `luck < 64` (cap
+is invented; original's `rand64()` gate produces a
+probabilistic boost that tops out at 63 via the rand
+distribution, not a hard comparison to 64), and never marks the
+sorceress-statue slot as placed. It also omits the `prq(7)`
+gift-voice priority queue write.
+**Resolution**: Flagged SPEC-GAP. Fixing requires a dedicated
+`ob_listg[9]` slot tracking for the sorceress figurine (the
+current `world_objects` architecture loads ground items with
+`ob_stat=1` pre-set and does not distinguish "not-yet-gifted"
+from "already-dropped"), plus a `prq()` port. Both are
+cross-cutting changes beyond this subsystem's scope. Left as
+a queued item for the quest-item / voice-priority pass.
+
+#### F7.8 — Priest TALK lacks writ branch (speak(39)/speak(19)) and prq(4) heal-voice [SPEC-GAP]
+**Location**: `handle_setfig_talk`, case 1
+(`src/game/gameplay_scene.rs` ≈line 1704).
+**Reference**: `reference/logic/npc-dialogue.md#priest_speech`
+(`fmain.c:3382-3394`):
+```
+if stuff[28] != 0:                        # player holds writ
+    if ob_listg[10].ob_stat == 0:
+        speak(39); ob_listg[10].ob_stat = 1
+    else:
+        speak(19)
+    return
+if kind < 10: speak(40); return
+speak(36 + daynight%3)
+anim_list[0].vitality = 15 + brave/4
+prq(4)
+```
+**Issue**: Rust implements only the `kind < 10` / `kind >= 10
++ heal` halves. It skips the writ entry (which should take
+precedence over both branches), so a hero carrying the writ
+(`stuff[28] == 1` after princess rescue) still hears the
+rotating daily hint and receives a heal instead of being
+handed the priest's golden statue (`speak(39)` + drop) or the
+already-given rebuke (`speak(19)`). `prq(4)` is also unported.
+**Resolution**: Flagged SPEC-GAP. Requires an `ob_listg[10]`
+slot for the priest-statue drop and a `prq()` port (same
+dependencies as F7.7). Left as a queued item.
+
+#### F7.9 — `last_person` keyed on actor index instead of race [REF-AMBIGUOUS]
+**Location**: `update_proximity_speech`
+(`src/game/gameplay_scene.rs::PersonId`, ≈lines 417-429,
+consumed at ≈line 1331).
+**Reference**: `reference/logic/npc-dialogue.md#proximity_auto_speak`:
+_"The suppression is **keyed on race**, not on actor index, so
+leaving and re-entering the same NPC's range re-fires the
+speech only if a different race was encountered in between."_
+(`fmain.c:2094, 2103` — `k = anim_list[nearest_person].race`
+then `last_person = k`).
+**Issue**: The Rust `PersonId` enum stores
+`Npc(idx)` / `SetFig(world_idx)`, so two different beggar
+setfigs or two necromancer NPCs are treated as distinct
+targets. In the ref, moving directly from one beggar to
+another would NOT re-fire `speak(23)` because both share
+`race == 0x8d`; the Rust port re-fires because the indices
+differ.
+**Resolution**: Flagged REF-AMBIGUOUS — the ref semantics are
+clear, but the fix requires routing both `FigKind::Npc` and
+`FigKind::SetFig` through a common "race byte" lookup
+(`npc_table[i].race` for enemies; `0x80 | setfig_type` for
+setfigs), which is a structural change to `PersonId`. No
+player-facing regressions from the current behaviour were
+surfaced in tests (the game ships with one beggar, one witch,
+one princess, so the race-vs-index distinction rarely fires);
+left for a later architecture pass.
+
+### CONFORMANT items
+
+- **C7.1 — Yell radius doubling and shout-too-close cutoff**:
+  `GameAction::Yell` calls `nearest_fig(1, 100)` (100 px yell
+  radius) and falls through to `speak(8)` ("No need to shout,
+  son!") when `fig.dist < 35`, then exits without entering the
+  setfig switch — matching `talk_dispatch` lines 45-56
+  (`fmain.c:3368, 3373`).
+- **C7.2 — Say/Ask radius 50 px**: both
+  `GameAction::Speak` and `GameAction::Ask` call
+  `nearest_fig(1, 50)` per `fmain.c:3368` else-branch.
+- **C7.3 — Wizard `kind<10` rebuke and goal-indexed hints**:
+  `handle_setfig_talk` case 0 fires `speak(35)` for
+  `kind<10` (`fmain.c:3380`) and `speak(27 + goal)` otherwise
+  (`fmain.c:3381`), with `goal` pulled from the setfig
+  `WorldObject` — matching `wizard_hint` and the 27..34 hint
+  table in `messages.md §2`.
+- **C7.4 — Priest `kind<10` rebuke, rotating daily hint, and
+  heal formula**: case 1 fires `speak(40)` for `kind<10`
+  (`fmain.c:3388`); otherwise `speak(36 + daynight%3)`
+  (`fmain.c:3390`) and heal to `15 + brave/4` (`fmain.c:3391`),
+  matching `priest_speech` bodies (writ branch caveated in
+  F7.8).
+- **C7.5 — Guard (front + back) share `speak(15)`**: cases
+  2 and 3 both fire the single guard line (`fmain.c:3395-3396`).
+- **C7.6 — Noble `speak(20)` unconditional**: case 6 mirrors
+  `fmain.c:3399`.
+- **C7.7 — Bartender three-way branch**: case 8 selects
+  `speak(13)` for `fatigue < 5`, `speak(12)` for
+  `dayperiod > 7`, else `speak(14)` (`fmain.c:3406-3408`).
+- **C7.8 — Ranger region-2 override + goal-indexed hint**:
+  case 12 fires `speak(22)` in `region_num == 2` and
+  `speak(53 + goal)` otherwise (`fmain.c:3412-3413`).
+- **C7.9 — Witch / spectre / ghost flat `speak(46/47/49)`**:
+  cases 9-11 match `fmain.c:3409-3411`.
+- **C7.10 — Beggar TALK `speak(23)`**: case 13 matches the
+  proximity greeting (`fmain.c:3415`), and the GIVE-gold path
+  fires the `speak(24 + goal)` prophecy per subsystem 11.
+- **C7.11 — 15-tick TALKING flicker on `can_talk` setfigs**:
+  `handle_setfig_talk` sets `talk_flicker[world_idx] = 15`
+  iff `SETFIG_TABLE[k].can_talk`, and the timer decrements to
+  zero in `update_actors` — matching `fmain.c:3375-3377` and
+  the `tactic`-to-STATE_STILL transition at `fmain.c:1557`.
+  (Verified by `t4_talk_flicker_*` tests.)
+- **C7.12 — Turtle carrier shell dialogue**: the
+  `active_carrier == CARRIER_TURTLE` fallback in
+  `GameAction::Speak` fires `speak(56)` and awards `stuff[6]`
+  on first contact, then `speak(57)` on subsequent TALKs
+  (`fmain.c:3418-3420`). (Verified by
+  `test_turtle_dialog_*` tests.)
+- **C7.13 — Proximity auto-speech coverage**:
+  `update_proximity_speech` fires `speak(23/46/16/43/41)` for
+  beggar / witch / princess (captive-gated) / necromancer /
+  dark-knight and no-ops for every other race, matching
+  `proximity_auto_speak` cases at `fmain.c:2097-2101`.
+- **C7.14 — Dead target exclusion**: `nearest_fig` filters on
+  `active` (for `Npc`) and `visible` + `ob_stat == 3` (for
+  `SetFig`); combined with the `checkdead` → `active=false`
+  path in combat, this satisfies the ref's `STATE_DEAD` skip
+  at `fmain.c:3371`.
+- **C7.15 — Speech-index literals match `messages.md §2`**:
+  every concrete `speak(N)` call in `handle_setfig_talk`,
+  `update_proximity_speech`, and the beggar-gold / turtle /
+  yell branches references an index that matches the
+  enumerated `_speeches` entry in `messages.md` — no invented
+  indices.
+
+### SPEC/REQ updates queued
+
+- **F7.7 (SPEC-GAP)**: Model `ob_listg[9]` (sorceress figurine
+  drop slot) and the `rand64()`-gated repeat-visit luck boost.
+  Dependency: `prq()` / voice-priority port.
+- **F7.8 (SPEC-GAP)**: Model `ob_listg[10]` (priest statue
+  drop slot) and wire the `stuff[28]` writ branch through
+  `handle_setfig_talk`. Same `prq()` dependency.
+- **F7.9 (REF-AMBIGUOUS)**: Migrate `PersonId` from
+  index-keyed to race-keyed once cross-subsystem "race byte"
+  lookup utilities are in place.
+
+### Blockers
+
+None — the four NEEDS-FIX findings (F7.1-F7.4) and two
+INVENTED findings (F7.5-F7.6) are fixed; the remaining items
+(F7.7 SPEC-GAP, F7.8 SPEC-GAP, F7.9 REF-AMBIGUOUS) are queued
+on cross-cutting dependencies (`ob_listg` slot tracking,
+`prq()` port, race-keyed proximity dedup) and do not block
+downstream subsystem audits.
+Two-source rule: ✅ the npc-dialogue subsystem now speaks only
+strings that resolve through `faery.toml [narr] speeches` via
+`crate::game::events::speak`, plus the ref-literal
+`"No need to shout, son!"` at `speak(8)` — no hard-coded scroll
+strings remain in the TALK / Yell / proximity paths.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
