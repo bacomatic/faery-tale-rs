@@ -745,6 +745,268 @@ transport, zones) and do not block other subsystem audits.
 
 ---
 
+## Subsystem 4: encounters — ✅ Complete
+
+**Reference**: `reference/logic/encounters.md` (primary) + `RESEARCH.md §2.7`,
+`§9`, `game-loop.md` (no_motion_tick Phase 14h/14i/14j), `day-night.md` (no
+night modifier — encounter cadence lives entirely in `no_motion_tick`),
+`PROBLEMS.md`.
+**Code**: `src/game/encounter.rs`, encounter call sites in
+`src/game/gameplay_scene.rs` (`try_trigger_encounter`, `spawn_encounter_group`,
+`SpawnEncounterRandom` / `SpawnEncounterType` debug handlers).
+**Audit date**: 2025 (current session)
+
+### Summary
+- **11 findings**: 1 CONFORMANT, 3 NEEDS-FIX (all fixed), 2 INVENTED (both
+  removed/replaced), 5 SPEC-GAP (queued), 0 REF-AMBIGUOUS, 0
+  RESEARCH-REQUIRED.
+- Fixes applied in **one commit** (SHA to be recorded by orchestrator).
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test` —
+  579 + 12 + 12 tests passing (3 new targeted tests: weapon_probs groups 2
+  and 3; carrier-blocks-trigger).
+
+### Findings
+
+#### F4.1 — `WEAPON_PROBS` groups 2 and 3 held wrong values [NEEDS-FIX]
+**Location**: `src/game/encounter.rs::WEAPON_PROBS`.
+**Reference**: `reference/logic/encounters.md#roll_weapon`
+(`weapon_probs[arms*4+col]`, `fmain2.c:860-868`); `RESEARCH.md §2.7 →
+weapon_probs`.
+**Issue**: Rust had group 2 = `1,1,2,1` and group 3 = `2,1,2,2`. The
+authoritative table (`fmain2.c:862-863`, RESEARCH §2.7) is group 2 =
+`1,2,1,2` ("dirks and maces") and group 3 = `1,2,3,2` ("mostly maces, some
+swords"). Group 2 is the Ogre's arms row (`encounter_chart[0].arms = 2`) so
+ogres were rolling dirks 75 % of the time instead of dirks 50 % / maces
+50 %. Group 3 is the Skeleton's row (`arms = 3`), which in the ref has a
+1-in-4 chance of a sword — the Rust table made swords impossible for
+skeletons.
+**Resolution**: Replaced the two rows with the ref-exact values. Added
+`test_weapon_probs_group2` and `test_weapon_probs_group3` locking the
+corrected tuples.
+
+#### F4.2 — `try_trigger_encounter` missing `active_carrier == 0` gate [NEEDS-FIX]
+**Location**: `src/game/encounter.rs::try_trigger_encounter`;
+`src/game/gameplay_scene.rs` encounter-tick block (≈5105).
+**Reference**: `reference/logic/encounters.md#roll_wilderness_encounter`
+(Phase 14j gate: "not actors_on_screen and not actors_loading and
+active_carrier == 0 and xtype < 50"), `fmain.c:2081`, `RESEARCH.md §9.4`.
+**Issue**: The ref suppresses random encounters while the hero is riding
+any carrier (swan, raft, turtle, dragon). Rust only checked `xtype < 50`
+and the 32-tick / screen / slot-count gates, so the hero could be
+ambushed while on turtle-back or aboard a swan — impossible in the
+original.
+**Resolution**: Added an `active_carrier: i16` parameter to
+`try_trigger_encounter`, gated on `active_carrier != 0 → None`. Threaded
+`self.state.active_carrier` through from the gameplay-scene call site.
+Added `test_try_trigger_encounter_blocks_on_carrier`.
+
+#### F4.3 — Spawned enemies face south (4) instead of north (0) [NEEDS-FIX]
+**Location**: `src/game/encounter.rs::spawn_encounter` (Npc init block).
+**Reference**: `reference/logic/encounters.md#set_encounter`
+(`an.facing = 0`, `fmain.c:2761`).
+**Issue**: Rust hardcoded `facing: 4` ("south (toward hero, roughly)").
+The ref initialises `facing = 0` (north); the actual heading is rewritten
+the first time the AI layer calls `set_course` on the fresh actor. The
+initial facing only matters for the first frame before AI ticks, but it
+was visible on spawn — enemies appearing facing south regardless of
+where the hero was. No ref citation supports facing the hero at spawn.
+**Resolution**: Set `facing: 0` with a comment pointing back to
+`fmain.c:2761` and noting set_course takes over on the first AI tick.
+
+#### F4.4 — `gold: treasure * 5` seeded at spawn [INVENTED]
+**Location**: `src/game/encounter.rs::spawn_encounter` (Npc init block).
+**Reference**: `reference/logic/encounters.md#set_encounter` (no gold
+field written) vs `#roll_treasure` (`fmain.c:3270-3273` — treasure drop
+is a separate pickup-path concern rolled on body search, and resolves to
+an `inv_list[]` slot index, not a currency amount).
+**Issue**: Rust's `spawn_encounter` seeded `npc.gold = treasure_tier * 5`
+so that the kill-reward path in `combat.rs:167` (`state.gold +=
+npc.gold`) would hand out gold per-enemy-type. This is a double-invention:
+(a) the ref never seeds `an->gold` at spawn, and (b) rolled treasure is
+an item drop, not a pile-of-coins reward. Ogres therefore dropped 10
+gold, orcs 5, wraiths 20, etc. — all fabricated amounts.
+**Resolution**: Set `gold: 0` at spawn. The downstream currency reward
+path still reads `npc.gold`, so non-encounter NPCs that legitimately
+carry gold (e.g. shopkeepers, setfig cfile entries with baked gold
+fields in their 16-byte record) are unaffected. Treasure-item drops
+belong to the inventory/pickup audit.
+
+#### F4.5 — `ENCOUNTER_CHART: [u8; 11]` dead zone→monster table [INVENTED]
+**Location**: `src/game/encounter.rs` (top-of-file `pub const`).
+**Reference**: None — the original `encounter_chart[]` (`fmain.c:42-64`)
+is a monster-stats table keyed by race, not a zone-to-monster mapping.
+The authoritative 11-entry stats table is already present as
+`ENCOUNTER_CHART_FULL`.
+**Issue**: A second 11-entry `ENCOUNTER_CHART` table mapped "forest →
+Orc, plains → Orc, mountains → Skeleton, swamp → Ghost, dungeon →
+Wraith, road → Orc, ruins → Skeleton, graveyard → Ghost, dark zone →
+Wraith, beach → Orc, desert → Skeleton". No such table exists in the
+original — zone-level monster selection is handled by `xtype` overrides
+inside `roll_wilderness_encounter` (swamp, spider, xtype-49) plus the
+extent-record `v3` filter for forced encounters. Also: several listed
+zones (road, ruins, graveyard, beach, desert) do not correspond to any
+`xtype` value the ref drives. The table was never referenced anywhere
+in the codebase — pure dead invented data.
+**Resolution**: Removed the constant. `rg` confirms no remaining
+references.
+
+#### F4.6 — Spawn count uses fixed `MAX_GROUP = 4`, not `v1 + rand(v2)` [SPEC-GAP]
+**Location**: `src/game/encounter.rs::spawn_encounter_group` (const
+`MAX_GROUP: usize = 4`).
+**Reference**: `reference/logic/encounters.md#load_actors`
+(`encounter_number = extn.v1 + rand(0, extn.v2 - 1)`, `fmain.c:2725`);
+`RESEARCH.md §9.4 → Monster Count`.
+**Issue**: The ref sets a *pending* `encounter_number` in 14j per the
+current extent's `extn.v1`/`extn.v2` (world-at-large: 1 + rnd(8) → 1–8;
+spider pit: 4; graveyard: 8 + rnd(8) → 8–15), and 14i drains that
+counter into slots 3–6 across multiple 16-tick placement passes,
+recycling dead slots. Rust telescopes 14i+14j into one call that spawns
+exactly 4 enemies per trigger — so small-zone encounters (1–3 orcs
+around the village) are oversized and large-zone encounters (8–15
+skeletons at the graveyard) are undersized.
+**Resolution**: Queued. Requires plumbing the active extent's `v1`/`v2`
+into the spawn path plus a persistent `encounter_number` counter drained
+on a 16-tick cadence. Cross-cuts subsystems 4, 11 (quests/zones), and 6
+(extent model).
+
+#### F4.7 — `mixflag` race-pairing + weapon-reroll logic missing [SPEC-GAP]
+**Location**: `src/game/encounter.rs::spawn_encounter`,
+`::spawn_encounter_group` (no `mixflag` global modelled).
+**Reference**: `reference/logic/encounters.md#place_extent_encounters`
+(`mixflag = rand(0, 0x7fffffff)` with zeroing for `xtype > 49` or
+`(xtype & 3) == 0`); `#set_encounter` (bit 1 pairs races
+`(encounter_type & 0xfffe) + rand(0,1)` except snakes; bit 2 re-rolls
+the weapon column each spawn).
+**Issue**: The ref's Phase 14i rolls `mixflag` once per placement batch.
+Bit 1 enables race mixing (ogre↔orc, wraith↔skeleton); bit 2 enables
+per-enemy weapon-column rerolls. Neither is modelled — Rust spawns a
+single `encounter_type` with its own arms row and per-spawn weapon
+rolls (equivalent to `mixflag & 4` always-on), so groups are always
+racially homogeneous. Biome-uniform zones (`(xtype & 3) == 0`) are
+supposed to force `mixflag = 0` to enforce uniformity; Rust already
+spawns uniform groups, so this happens to match, but the bit-1 pairing
+in non-uniform zones is missing.
+**Resolution**: Queued. Requires a per-placement-batch `mixflag` and a
+race-pairing branch inside `spawn_encounter`.
+
+#### F4.8 — DKnight fixed spawn position (21635, 25762) not honoured [SPEC-GAP]
+**Location**: `src/game/encounter.rs::spawn_encounter` (no race-filter
+branch).
+**Reference**: `reference/logic/encounters.md#set_encounter`
+(`if extn.v3 == 7: xtest = 21635; ytest = 25762`, `fmain.c:2741`);
+`RESEARCH.md §9.5` and the DKnight entry at §8.4.
+**Issue**: The Dark Knight is unique in that its forced-encounter extent
+pins its spawn to a fixed world coordinate, ignoring the ring/spread
+logic. Combined with F3.4 (`stand_guard` out-of-reach) this is what keeps
+the DKnight rooted at the hidden-valley exit. Rust scatters him inside
+the usual 63-pixel box around the `encounter_origin`. The observable
+effect depends on the caller — the `SpawnEncounterRandom` debug action
+never enters the hidden-valley extent, so random-tick spawning can't
+reproduce this; the breakage would show when the forced-encounter
+`find_place` path is ported and routed through the same
+`spawn_encounter`.
+**Resolution**: Queued. Requires `extn.v3` plumbing (same SPEC-GAP as
+F3.10 ai-system). When present, `spawn_encounter` should short-circuit
+to (21635, 25762) for race 7.
+
+#### F4.9 — Astral-plane terrain-code-7 acceptance missing [SPEC-GAP]
+**Location**: `src/game/encounter.rs::spawn_encounter_group` (collision
+retry loop).
+**Reference**: `reference/logic/encounters.md#set_encounter`
+(`if xtype == 52 and px_to_im(xtest, ytest) == 7: placed = True`,
+`fmain.c:2746`).
+**Issue**: On the astral plane (xtype 52) the ref accepts the "void"
+terrain code 7 as a valid spawn target so Loraii can place against an
+otherwise unwalkable backdrop. Rust uses only `actor_collides` for the
+retry check and has no xtype-52 / terrain-7 acceptance branch. Astral
+Loraii spawns will therefore reject every slot and fall through to the
+"no placement" exit more often than the original.
+**Resolution**: Queued. Requires `px_to_im` call at the retry-loop call
+site plus an `xtype == 52` branch.
+
+#### F4.10 — Cluster-origin retry (9 attempts + walkability) not implemented [SPEC-GAP]
+**Location**: `src/game/encounter.rs::spawn_encounter_group`
+(`encounter_origin` is called once).
+**Reference**: `reference/logic/encounters.md#place_extent_encounters`
+(k-loop 1..10: call `set_loc`, bail out of the whole batch if none of 9
+candidate cluster origins lands on terrain code 0).
+**Issue**: The ref tries up to 9 random ring-origins around the hero
+and only fills slots when one of them passes `px_to_im == 0`. If all 9
+fail (player stuck in a walkable pocket surrounded by water/rock) the
+batch is dropped, and `encounter_number` carries to the next 16-tick
+pass. Rust picks a single ring-origin with no walkability check and
+relies on the per-slot `actor_collides` retry; this changes the spawn-
+suppression behaviour around cliff edges, shorelines, and narrow
+passages — enemies can appear where the original would have skipped
+the batch.
+**Resolution**: Queued. Requires an outer origin-retry loop in
+`spawn_encounter_group` plus `px_to_im(enc_x, enc_y) == 0` on each
+candidate.
+
+#### F4.11 — `actors_loading` gate omitted (architectural) [SPEC-GAP]
+**Location**: `src/game/encounter.rs::try_trigger_encounter`.
+**Reference**: `reference/logic/encounters.md#roll_wilderness_encounter`
+and `#prep` (async disk I/O model; 14h polls `CheckDiskIO(8)` and 14j is
+suppressed while `actors_loading == True`).
+**Issue**: The port loads sprite assets synchronously at startup, so
+there is no concept of "actors still streaming in from disk" to gate
+against. The ref's `actors_loading` gate therefore has no analog. This is
+an architectural divergence (SPEC §3 async-I/O replacement), not a
+fidelity bug in practice, but it bears noting because the ref lists it
+as part of the 14j gate tuple.
+**Resolution**: Queued as SPEC documentation (SPEC §19.3 / §3 note that
+async-I/O gates collapse to always-ready).
+
+### CONFORMANT items
+
+- **C4.1 — `pick_encounter_type` xtype overrides**: Swamp (`xtype == 7`
+  rerolls 2→4), spider region (`xtype == 8 → 6`), and `xtype == 49 →
+  wraith (2)` match `encounters.md#roll_wilderness_encounter` lines
+  2087–2090 exactly.
+- **C4.2 — Danger-level formula**: `region_num > 7 → 5+xtype` /
+  else `2+xtype`, gated by `rand(0,63) > danger_level → skip`, matches
+  `encounters.md` lines 2082–2085 verbatim. Spawn probability
+  `(danger_level+1)/64` is preserved.
+- **C4.3 — Ring-distance formula**: `encounter_origin` uses the 8-way
+  direction table × (150 + rand(0, 63)) / 2 per `set_loc`
+  (`fmain2.c:1716-1719`). Actual pixel offsets fall inside the
+  ref's 150–213 px envelope.
+- **C4.4 — Goal selection by weapon bit 4**: `weapon & 4 != 0` routes
+  to ARCHER1/ARCHER2 (plus cleverness offset); else ATTACK1/ATTACK2 —
+  matches `encounters.md` lines 2762–2764.
+- **C4.5 — Scroll-text compliance**: encounter spawning emits no
+  player-facing strings; the two-source rule (SPEC §23.6,
+  R-INTRO-012) is satisfied by construction.
+- **C4.6 — `freeze_timer` suppression**: gameplay-scene gate
+  (`freeze_timer == 0`) before calling `try_trigger_encounter` matches
+  `RESEARCH.md` freeze-timer semantics (encounters suppressed while
+  freeze > 0).
+
+### SPEC/REQ updates queued
+
+- **F4.6 (SPEC-GAP)**: Model `encounter_number` as a persistent counter
+  drained on a 16-tick cadence into slots 3–6; source from the active
+  extent's `extn.v1 + rand(0, extn.v2 - 1)`.
+- **F4.7 (SPEC-GAP)**: Add a per-placement-batch `mixflag` and wire
+  `mixflag & 2` (race pairing) / `mixflag & 4` (weapon-col reroll) into
+  `spawn_encounter`.
+- **F4.8 (SPEC-GAP)**: Once `extn.v3` is plumbed (see F3.10),
+  short-circuit `spawn_encounter` for `extn.v3 == 7` to (21635, 25762).
+- **F4.9 (SPEC-GAP)**: Accept terrain code 7 as a valid spawn surface
+  when `xtype == 52` (astral plane).
+- **F4.10 (SPEC-GAP)**: Add an outer 9-try origin retry around
+  `spawn_encounter_group` with `px_to_im == 0` walkability gating.
+- **F4.11 (SPEC-GAP, doc-only)**: Note in SPEC that the async-I/O
+  `actors_loading` gate collapses to always-false in the port.
+
+### Blockers
+
+None — all NEEDS-FIX and INVENTED items are resolved; SPEC-GAPs are
+queued for later batch updates (extent-model / zones / carrier-transport
+audits) and do not block other subsystem audits.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
