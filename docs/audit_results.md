@@ -281,6 +281,230 @@ does not block other subsystem audits.
 
 ---
 
+## Subsystem 2: magic — ✅ Complete
+
+**Reference**: `reference/logic/magic.md` (+ `messages.md` event 21 / event 34
+/ speech 59, `dialog_system.md` line 339 `"That feels a lot better!"`,
+`combat.md#checkdead` for the Jade Skull brave accounting).
+**Code**: `src/game/magic.rs`, `try_cast_spell` + `GameAction::CastSpell1..7`
+dispatch in `src/game/gameplay_scene.rs` (~645, ~3037).
+**Audit date**: 2025 (current session)
+
+### Summary
+- **10 findings**: 1 CONFORMANT, 3 NEEDS-FIX (all fixed), 1 INVENTED
+  (resolved — spans seven invented scroll-text strings consolidated into one
+  finding), 3 SPEC-GAP (queued), 0 REF-AMBIGUOUS, 2 RESEARCH-REQUIRED
+  (queued; both cosmetic rendering).
+- Fixes applied in **one commit** (`13100609`).
+- Build/tests: ✅ `cargo build` clean (no new warnings); `cargo test` —
+  567 + 12 + 12 tests passing (+4 new magic tests).
+
+### Findings
+
+#### F2.1 — Invented scroll-text for every spell outcome [INVENTED]
+**Location**: `src/game/magic.rs:79-153` (old `use_magic`).
+**Reference**: `reference/logic/magic.md#magic_dispatch` (`fmain.c:3300-3365`);
+`reference/logic/dialog_system.md` (no entries for any of the strings below).
+**Issue**: `use_magic` returned `Result<&'static str, &'static str>`, and
+every branch fabricated a player-facing line. None of these come from
+`faery.toml [narr]` or `dialog_system.md`'s hardcoded-literal list:
+- `"You have none of that."` (should be `event(21)`)
+- `"Not a magic item"` (unreachable in ref)
+- `"You must stand on a stone ring to use this."` (ref is silent)
+- `"Move to the center of the stone ring."` (ref is silent)
+- `"The stone ring transports you!"` (ref is silent)
+- `"The stone ring glows but nothing happens here."` (ref is silent)
+- `"A warm light surrounds you."` (Green Jewel — ref is silent)
+- `"You feel unseen."` (Crystal Orb — ref is silent)
+- `"The bird totem does not work indoors."` (ref is silent)
+- `"The bird totem shows the way."` (ref is silent)
+- `"You cannot use the ring while riding."` (ref is silent)
+- `"Time slows around you."` (Gold Ring — ref is silent)
+- `"Death takes them all!"` / `"No enemies to claim."` (Jade Skull — ref:
+  `event(34)` only on `battleflag`)
+- `"That feels a lot better!"` emitted **unconditionally** after heal
+  (ref: only in the non-capped branch at `fmain.c:3352`)
+
+Violates the two-source scroll-text rule (SPEC §23.6, REQ R-INTRO-012).
+**Resolution**: Replaced `use_magic`'s `Result<&str, &str>` with a
+structured `MagicResult` enum (`NoOwned` / `Suppressed` / `Applied` /
+`Healed { capped }` / `StoneTeleport { capped }` /
+`MassKill { slain, in_battle }`) that carries **no** prose. Caller
+`try_cast_spell` in `gameplay_scene.rs` now emits:
+- `event_msg(21)` on `NoOwned` (ref `fmain.c:3303`);
+- silent on `Suppressed` (ref silent return, charge preserved);
+- silent on `Applied` (ref silent);
+- `"That feels a lot better!"` (dialog_system.md:339 literal) only when
+  `capped == false`, per `fmain.c:3352`;
+- `event_msg(34)` only when Jade Skull kills with `battleflag == true`.
+
+#### F2.2 — Blue Stone missing fall-through heal [NEEDS-FIX]
+**Location**: `src/game/magic.rs:80-105` (old stone-ring branch).
+**Reference**: `reference/logic/magic.md#magic_dispatch` notes
+("Blue Stone fall-through") — `fmain.c:3326` `case 5:` has no `break;`
+before `case 7:` at `fmain.c:3348`, so every successful teleport **also**
+runs `vitality += rand8() + 4` clamped at `15 + brave/4`. Confirmed in
+[RESEARCH §10](../reference/RESEARCH.md#10-inventory--items).
+**Issue**: Rust teleported but never healed. Players lost the intended
+free Glass Vial effect on every stone-circle use.
+**Resolution**: Extracted the Glass Vial heal into a shared
+`apply_vial_heal(state) -> bool` helper (returns `capped`); both the
+stone-ring branch and the vial branch call it. Stone ring now returns
+`MagicResult::StoneTeleport { capped }` and `try_cast_spell` emits the
+heal message when `!capped` — mirroring the original C fall-through.
+Added `test_stone_ring_falls_through_to_heal`.
+
+#### F2.3 — Heal message printed even when vitality was capped [NEEDS-FIX]
+**Location**: `src/game/magic.rs` Glass Vial branch (old ~110-116).
+**Reference**: `reference/logic/magic.md#magic_dispatch` (`fmain.c:3350-3352`):
+```
+if vitality > cap:
+    vitality = cap
+else:
+    print("That feels a lot better!")   # fmain.c:3352 — only in non-capped branch
+```
+**Issue**: Rust pushed the message on every successful heal, including
+when the rolled heal overshot the cap and was clamped. Ref only prints
+when there was room to heal.
+**Resolution**: `apply_vial_heal` returns a `capped` flag; caller only
+emits the string when `!capped`. Added `test_vial_heal_capped_flag`.
+
+#### F2.4 — Jade Skull net-brave decrement is a fidelity bug [NEEDS-FIX]
+**Location**: `src/game/magic.rs` Jade Skull branch (old ~151).
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3357-3359`) and `reference/logic/combat.md#checkdead`
+(`fmain.c:2777` — `brave += 1` on every `i != 0` kill).
+**Issue**: Ref loop body is
+```
+an.vitality = 0
+checkdead(i, 0)      # brave += 1 (i != 0 branch)
+brave = brave - 1    # explicit magic-dispatch penalty
+```
+Net effect: **`brave` unchanged per kill** (the +1 and −1 cancel). Rust
+only did the `-1` and never called `checkdead`, producing a net −N on
+N kills — a hidden cowardice penalty nowhere in the original.
+**Resolution**: Removed the `state.brave -= killed` line. Net brave is
+now 0 per kill, matching the ref. Updated
+`test_jade_skull_no_brave_change` (formerly asserted −3; now asserts
+no change) and added `test_jade_skull_battleflag_reported`,
+`test_jade_skull_skips_race_7_plus`. The full `checkdead`
+STATE_DYING / loot drop consequence for Jade Skull kills is flagged
+below as F2.8 SPEC-GAP — the brave arithmetic is now correct, but the
+death-transition plumbing (drops, `STATE_DYING`, `actor_tick` death
+step) is still missing.
+
+#### F2.5 — `event(21)` / `event(34)` / `speak(59)` ordering [NEEDS-FIX]
+**Location**: `src/game/gameplay_scene.rs` `try_cast_spell` (was ~645-668).
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3303-3304`): not-owned check **precedes** the `extn.v3 == 9`
+arena gate.
+**Issue**: Old Rust checked the arena first (`speak(59)`) and only
+called `use_magic` when outside the arena; inside the arena, an
+attempt to cast an unowned spell would fire `speak(59)` instead of
+`event(21)`. Additionally, `event(21)` and `event(34)` were not wired
+at all — the NoOwned path used an invented string (F2.1) and the mass-
+kill path never fired `event(34)` regardless of `battleflag`.
+**Resolution**: Reordered: (1) not-owned ⇒ `event(21)`, (2) arena ⇒
+`speak(59)`, (3) `use_magic` dispatch. `event(34)` now fires from the
+`MassKill { in_battle: true, .. }` arm via
+`events::event_msg(narr, 34, bname)`. All three strings resolve via
+`faery.toml [narr].event_msg` / `[narr].speeches`.
+
+#### F2.6 — `extn.v3 == 9` gate lives in caller, not magic_dispatch [CONFORMANT]
+**Location**: `src/game/gameplay_scene.rs:650-660` (`try_cast_spell`
+arena check) vs `src/game/magic.rs`.
+**Reference**: `reference/logic/magic.md#magic_dispatch` (`fmain.c:3304`
+— `if extn.v3 == 9: speak(59); return`).
+**Issue**: The gate is inside `magic_dispatch` in the original but is
+split into `try_cast_spell` in Rust because the extent lookup needs
+zone data that lives on `GameplayScene`, not `GameState`. Behavior is
+equivalent: identical `speak(59)` emission, identical no-consume
+semantics, and the ordering relative to the not-owned check now
+matches the ref (see F2.5).
+
+#### F2.7 — Magic Wand fireball dispatches through combat `missile_step` [CONFORMANT]
+**Location**: `src/game/gameplay_scene.rs:3058-3083`
+(`GameAction::Shoot`); `src/game/combat.rs` `fire_missile`.
+**Reference**: `reference/logic/magic.md` Notes ("Magic Wand vs the
+Necromancer/Witch", `fmain.c:1693`); `reference/logic/combat.md#missile_step`.
+**Issue**: None. Wand `weapon == 5` fires a fireball missile (mt=9) at
+no ammo cost — Rust's `Shoot` branch only decrements `stuff[8]` when
+`weapon == 4` (bow). `stuff[4]` is treated as a binary equip flag and
+is never decremented per shot. Immunity bypass (`weapon >= 4` for
+necromancer, `weapon >= 4 && stuff[7] != 0` for masked witch) already
+covered in Subsystem 1 F1.11.
+
+#### F2.8 — Jade Skull skips STATE_DYING / loot / race-drop pipeline [SPEC-GAP]
+**Location**: `src/game/magic.rs` Jade Skull branch.
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3359` `checkdead(i, 0)`); `reference/logic/combat.md#checkdead`;
+`reference/logic/combat.md` Notes on race-specific drops (emitted in
+`actor_tick` STATE_DYING branch).
+**Issue**: Ref Jade Skull routes each kill through `checkdead`, which
+transitions the actor to `STATE_DYING` with `tactic = 7`; the
+subsequent `actor_tick` frames then run race-specific loot drops and
+the dying-animation countdown. Rust Jade Skull only sets `vitality = 0`
+on the matching actors. No loot rolls fire, no dying animation plays,
+and the actors sit inert. Since the `race < 7` filter excludes
+Necromancer (9), masked Witch (`0x89`), Spectre (`0x8a`), and all
+SETFIGs, this is purely about standard-enemy loot / death animation
+— not about quest-critical drops.
+**Resolution**: Queued — requires either (a) extracting Rust's
+apply_hit death-transition block into a shared helper callable from
+`magic::use_magic`, or (b) relocating Jade Skull's per-actor kill into
+`try_cast_spell` where the loot + death-transition machinery is
+already available. Proposed SPEC addition: explicitly document that
+Jade Skull routes each kill through the same `checkdead` / death-
+transition pipeline as a melee kill, including `loot::roll_treasure`
+and the STATE_DYING → STATE_DEAD animation countdown.
+
+#### F2.9 — `colorplay()` 32-frame palette strobe on stone-ring teleport [SPEC-GAP]
+**Location**: `src/game/magic.rs` stone-ring branch.
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3336`: `colorplay()` — 32-frame palette strobe before `xfer`).
+**Issue**: Rust teleports instantly with no palette cue. Not a gameplay
+bug but a visible-feedback fidelity loss.
+**Resolution**: Queued. Proposed SPEC addition under §19.2: stone-ring
+teleport must run a 32-frame palette strobe (documented in
+`reference/logic/visual-effects.md`) before changing `hero_x/y`.
+
+#### F2.10 — Bird Totem "+" marker not rendered on map bitmap [RESEARCH-REQUIRED]
+**Location**: `src/game/magic.rs` totem branch (`state.viewstatus = 1`).
+**Reference**: `reference/logic/magic.md#magic_dispatch`
+(`fmain.c:3311-3325`): `bigdraw` blits the world map, then the block
+computes hero pixel coords `(i, j)` and draws `"+"` at palette pen 31
+with `JAM1` draw-mode; clips to `0 < i < 320` and `0 < j < 143`.
+**Issue**: Rust only sets `viewstatus = 1`. The map overlay path has
+to be wired to the actual map-bitmap surface and a `"+"` glyph plotted
+at the hero's scaled position. No corresponding Rust rendering code
+exists yet.
+**Resolution**: Queued for user review. The marker geometry
+(`(hero_x >> 4) - ((secx + xreg) << 4) - 4`, pen 31, `JAM1`) is well-
+specified in ref; implementation requires map-overlay hooks that are
+not yet present in `src/scenes/map_scene.rs` (or wherever map
+rendering lives).
+
+### SPEC/REQ updates queued
+
+- **F2.8 (SPEC-GAP)**: `SPECIFICATION.md §19.2` should state that Jade
+  Skull routes each killed actor through the standard `checkdead` /
+  STATE_DYING pipeline — including `loot::roll_treasure` and the
+  dying-animation countdown — not just `vitality = 0`.
+- **F2.9 (SPEC-GAP)**: `SPECIFICATION.md §19.2` should add a
+  "32-frame palette strobe (`colorplay()`) runs immediately before the
+  teleport" note for the Blue Stone branch.
+- **F2.10 (RESEARCH-REQUIRED)**: Add Bird Totem map-overlay "+" marker
+  rendering requirement with the exact geometry and pen index (31,
+  JAM1) once the map-overlay rendering path is formalised.
+
+### Blockers
+
+None — all NEEDS-FIX and INVENTED items are resolved; SPEC-GAPs and the
+single RESEARCH-REQUIRED item (F2.10, cosmetic map marker) are queued
+for later batch updates and do not block other subsystem audits.
+
+---
+
 ## Blockers & Open Questions for User Review
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
