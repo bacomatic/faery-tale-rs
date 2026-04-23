@@ -2803,16 +2803,12 @@ impl GameplayScene {
                 if let Some(player) = self.state.actors.first_mut() {
                     player.weapon = slot + 1;
                 }
-                let name = match slot {
-                    0 => "Dirk",
-                    1 => "Mace",
-                    2 => "Sword",
-                    3 => "Bow",
-                    4 => "Wand",
-                    5 => "Lasso",
-                    _ => "Shell",
-                };
-                self.messages.push(format!("{} readied.", name));
+                // inventory.md#use_dispatch (fmain.c:3449-3455): equipping a
+                // weapon sets `anim_list[0].weapon = hit + 1` with no scroll-
+                // area feedback. `"% doesn't have one."` fires only when the
+                // slot is unowned (hitgo == 0) and is routed via the menu
+                // gate elsewhere.
+                let _ = slot;
                 self.menu.gomenu(MenuMode::Items);
             }
             MenuAction::TryKey(idx) => {
@@ -3057,12 +3053,16 @@ impl GameplayScene {
                 }
             }
             GameAction::GetItem => {
-                self.messages.push("Nothing here to take.");
-                self.dlog("GetItem: stub");
+                // fmain2.c:467 (prq case 10) — literal "Take What?" when
+                // TAKE fires with nothing in range. See dialog_system.md:273.
+                self.messages.push("Take What?");
+                self.dlog("GetItem: no nearby item");
             }
             GameAction::DropItem => {
-                self.messages.push("Dropped item.");
-                self.dlog("DropItem: stub");
+                // No DROP command exists in the original game — the ITEMS
+                // submenu labels are "List Take Look Use  Give" (fmain.c:497,
+                // inventory.md §Notes "No DROP command"). Silent no-op.
+                self.dlog("DropItem: no-op (no DROP in original)");
             }
             GameAction::Talk => {
                 // Talk is the same as Ask/Speak: range 50, nearest NPC (fmain.c:4167).
@@ -3102,8 +3102,11 @@ impl GameplayScene {
                 self.input.fight = true;
             }
             GameAction::UseItem => {
-                self.messages.push("Nothing to use.");
-                self.dlog("UseItem: stub");
+                // Top-level USE entry — individual weapon / shell / sun-stone
+                // slots dispatch via MenuAction::SetWeapon etc. Silent no-op
+                // here matches `use_dispatch` fall-through for unhandled hits
+                // (inventory.md §use_dispatch, fmain.c:3466 `gomenu(ITEMS)`).
+                self.dlog("UseItem: no-op (slot-specific handlers dispatch via menu)");
             }
             // MAGIC menu items 5..=11 (stuff[9..=15], MAGICBASE=9 in fmain.c).
             GameAction::CastSpell1 => {
@@ -3166,18 +3169,17 @@ impl GameplayScene {
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             GameAction::Look => {
-                // SPEC §14.19 / RESEARCH §11.7 / menu row 7 (`fmain.c:3290-3296`):
-                // Scan OBJECTS within range 40 of hero in the current region.
-                // Reveal any hidden items (ob_stat=5) by calling change_object(i, 1):
-                //   ob_stat 5 → 1, visible → true (so subsequent Take can pick them up).
-                // Feedback: event(38) "You spy something!" if any object was nearby,
-                // else event(20) "You see nothing unusual."
+                // SPEC §14.19 / inventory.md#look_command (fmain.c:3286-3295):
+                // Scan OBJECTS within range 40. Only *hidden* objects (race==0,
+                // equivalent to ob_stat==5) count toward the "found" latch and
+                // are promoted to ob_stat=1 via change_object(i, 1).
+                // Feedback: event(38) if any reveal this tick, else event(20).
                 use crate::game::collision::calc_dist;
                 const LOOK_RANGE: i32 = 40;
                 let hx = self.state.hero_x as i32;
                 let hy = self.state.hero_y as i32;
                 let region = self.state.region_num;
-                let mut found = false;
+                let mut flag = false;
                 for obj in self.state.world_objects.iter_mut() {
                     if obj.region != region { continue; }
                     if obj.ob_stat == 3 { continue; } // setfigs are not OBJECTS
@@ -3185,27 +3187,42 @@ impl GameplayScene {
                     if calc_dist(hx, hy, obj.x as i32, obj.y as i32) >= LOOK_RANGE {
                         continue;
                     }
-                    found = true;
                     if obj.ob_stat == 5 {
+                        // race==0 case only: promote hidden → visible and latch.
                         obj.ob_stat = 1;
                         obj.visible = true;
+                        flag = true;
                     }
                 }
-                if found {
-                    self.messages.push("You spy something!");
-                } else {
-                    self.messages.push("You see nothing unusual.");
+                let bname = self.brother_name().to_string();
+                let idx = if flag { 38 } else { 20 };
+                let msg = crate::game::events::event_msg(&self.narr, idx, &bname);
+                if !msg.is_empty() {
+                    self.messages.push(msg);
                 }
             }
             GameAction::Take => {
                 // Take: nearest_fig(0, 30) — find nearest item within range 30 (fmain.c:3876-4000).
                 const TAKE_RANGE: i32 = 30;
+                // inventory.md#take_command (fmain.c:3151): stuff[35] (ARROWBASE)
+                // is the per-TAKE quiver accumulator; it must be cleared on
+                // entry, then folded into stuff[8] * 10 at the epilogue.
+                self.state.stuff_mut()[35] = 0;
                 if let Some((idx, ob_id)) = self.state.find_nearest_item(
                     self.state.region_num, self.state.hero_x, self.state.hero_y, TAKE_RANGE,
                 ) {
                     let bname = self.brother_name().to_string();
                     let taken = self.handle_take_item(idx, ob_id, &bname);
                     if taken {
+                        // Epilogue fold-back (fmain.c:3250):
+                        //   stuff[8] = stuff[8] + stuff[35] * 10
+                        let quivers = self.state.stuff()[35] as u16;
+                        if quivers > 0 {
+                            let arrows = (self.state.stuff()[8] as u16)
+                                .saturating_add(quivers.saturating_mul(10));
+                            self.state.stuff_mut()[8] = arrows.min(255) as u8;
+                            self.state.stuff_mut()[35] = 0;
+                        }
                         let wealth = self.state.wealth;
                         self.menu.set_options(self.state.stuff(), wealth);
                         // Win condition — fmain.c:3244-3247:
@@ -3219,7 +3236,9 @@ impl GameplayScene {
                         }
                     }
                 } else {
-                    self.messages.push("Nothing here to take.");
+                    // fmain2.c:467 (prq case 10) — "Take What?" literal.
+                    // See dialog_system.md:273 hardcoded-scroll registry.
+                    self.messages.push("Take What?");
                 }
             }
             GameAction::Give => {
@@ -3347,11 +3366,7 @@ impl GameplayScene {
                     if let Some(player) = self.state.actors.first_mut() {
                         player.weapon = new_weapon;
                     }
-                    let name = match new_weapon {
-                        1 => "Dirk", 2 => "Mace", 3 => "Sword", 4 => "Bow",
-                        5 => "Wand", _ => "?",
-                    };
-                    self.messages.push(format!("{} readied.", name));
+                    // inventory.md#use_dispatch: equip is silent; no scroll text.
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -3363,11 +3378,7 @@ impl GameplayScene {
                     if let Some(player) = self.state.actors.first_mut() {
                         player.weapon = new_weapon;
                     }
-                    let name = match new_weapon {
-                        1 => "Dirk", 2 => "Mace", 3 => "Sword", 4 => "Bow",
-                        5 => "Wand", _ => "?",
-                    };
-                    self.messages.push(format!("{} readied.", name));
+                    // inventory.md#use_dispatch: equip is silent; no scroll text.
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -3477,7 +3488,10 @@ impl GameplayScene {
                         if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
                         let item2 = if item2 == 8 { 35 } else { item2 };
                         if !gold_special && item1 < 31 { self.state.pickup_item(item1); }
-                        if item2 < 35 { self.state.pickup_item(item2); }
+                        // inventory.md#take_command (fmain.c:3229): stuff[k] += 1
+                        // unconditionally — including when k == 35 (ARROWBASE),
+                        // which is folded to stuff[8] * 10 at the epilogue.
+                        self.state.pickup_item(item2);
                         let n1 = if item1 < 31 { stuff_index_name(item1) } else if item1 == 34 { "100 Gold Pieces" } else { "quiver of arrows" };
                         let n2 = if item2 < 31 { stuff_index_name(item2) } else { "quiver of arrows" };
                         self.messages.push(format!("{}{} and a {}.", prefix, n1, n2));
