@@ -304,38 +304,43 @@ impl GameState {
 
     /// Advance the day/night cycle by one tick.
     ///
+    /// Mirrors `tick_daynight` (reference/logic/day-night.md#tick_daynight,
+    /// fmain.c:2014-2045):
+    ///
     /// - Skipped when `freeze_timer > 0`.
     /// - `daynight` wraps at 24000.
-    /// - `lightlevel` is a triangle wave: 0→300 over first 12000 ticks, 300→0 over last 12000.
-    /// - Day-period boundaries are at 0, 6000, 12000, 18000.
-    /// - Returns `true` if a boundary was crossed this tick.
+    /// - `lightlevel = daynight / 40`, folded as `600 - lightlevel` when ≥ 300
+    ///   (triangle wave, 0 = midnight, 300 = noon).
+    /// - `dayperiod = daynight / 2000` (12 buckets per day, 0..=11); updates on
+    ///   every bucket transition (fmain.c:2029).
+    /// - Returns `true` iff this tick crossed one of the four event buckets
+    ///   `{0, 4, 6, 9}` (midnight / morning / midday / evening, fmain.c:2031-2036),
+    ///   which is the gate the caller uses to push event IDs 28..=31.
     pub fn daynight_tick(&mut self) -> bool {
         if self.freeze_timer > 0 {
             return false;
         }
 
-        let prev = self.daynight;
         self.daynight = self.daynight.wrapping_add(1);
         if self.daynight >= 24000 {
             self.daynight = 0;
             self.game_days += 1;
         }
 
-        // Recompute lightlevel as a brightness triangle wave (fmain.c:2372-2374).
-        // 0 = midnight (darkest), 300 = noon (brightest).
-        // lightlevel = daynight / 40; if >= 300: lightlevel = 600 - lightlevel.
+        // Recompute lightlevel as a brightness triangle wave (fmain.c:2025-2026).
         let raw = self.daynight / 40;
         self.lightlevel = if raw >= 300 { 600 - raw } else { raw };
 
-        // Detect period boundary crossing (boundaries at 0, 6000, 12000, 18000).
-        const BOUNDARIES: [u16; 4] = [0, 8000, 12000, 18000];
-        let crossed = BOUNDARIES
-            .iter()
-            .any(|&b| (prev < b && self.daynight >= b) || (prev > self.daynight && b == 0));
-        if crossed {
-            self.dayperiod = dayperiod_from_daynight(self.daynight);
+        // Reclassify dayperiod on every 2000-tick bucket change (fmain.c:2029).
+        // Only buckets 0/4/6/9 fire a narrator announcement; the other bucket
+        // transitions update `dayperiod` silently.
+        let new_bucket = (self.daynight / 2000) as u8;
+        if new_bucket != self.dayperiod {
+            self.dayperiod = new_bucket;
+            matches!(new_bucket, 0 | 4 | 6 | 9)
+        } else {
+            false
         }
-        crossed
     }
 
     /// Derive (day, hour, minute) from the authoritative `daynight` counter.
@@ -347,13 +352,16 @@ impl GameState {
     }
 
     /// Get the current day phase from dayperiod.
+    ///
+    /// Maps the 12-bucket `dayperiod` (0..=11, one per 2000 daynight ticks)
+    /// onto the four named phases whose transitions fire narrator events
+    /// (see `reference/logic/day-night.md#tick_daynight`, fmain.c:2031-2036).
     pub fn get_day_phase(&self) -> DayPhase {
         match self.dayperiod {
-            0 => DayPhase::Midnight,
-            4 => DayPhase::Morning,
-            6 => DayPhase::Midday,
-            9 => DayPhase::Evening,
-            _ => DayPhase::Midnight,
+            0..=3   => DayPhase::Midnight, // buckets 0..3  → 00:00-05:59
+            4..=5   => DayPhase::Morning,  // buckets 4..5  → 06:00-11:59
+            6..=8   => DayPhase::Midday,   // buckets 6..8  → 12:00-17:59
+            _       => DayPhase::Evening,  // buckets 9..11 → 18:00-23:59
         }
     }
 
@@ -426,8 +434,14 @@ impl GameState {
     ///
     /// Also decrements fatigue (clamped at 0) and refreshes lightlevel.
     ///
-    /// Returns `true` when the wake condition is met:
-    ///   `fatigue == 0` OR (`fatigue < 30` AND `daynight ∈ [9000, 10000)`).
+    /// Returns `true` when the wake condition is met (fmain.c:2017-2019,
+    /// see `reference/logic/day-night.md#sleep_tick`):
+    ///   * `fatigue == 0`, or
+    ///   * `fatigue < 30 AND daynight ∈ [9000, 10000)` (dawn wake window), or
+    ///   * `battleflag AND rand64() == 0` (1-in-64 per sleep-tick).
+    ///
+    /// On wake, the hero's `abs_y` is snapped to the nearest tile row
+    /// (`abs_y & 0xffe0`, fmain.c:2021) and mirrored back to `hero_y`.
     pub fn sleep_advance_daynight(&mut self) -> bool {
         let cap = crate::game::magic::heal_cap(self.brave);
         for _ in 0..63 {
@@ -450,7 +464,36 @@ impl GameState {
         self.fatigue = self.fatigue.saturating_sub(1);
 
         let can_wake_time = self.daynight >= 9000 && self.daynight < 10000;
-        self.fatigue == 0 || (self.fatigue < 30 && can_wake_time)
+        let battle_wake = self.battleflag && self.battle_wake_roll();
+        let should_wake = self.fatigue == 0
+            || (self.fatigue < 30 && can_wake_time)
+            || battle_wake;
+
+        if should_wake {
+            // fmain.c:2021 — snap abs_y down to the nearest 32px tile row and
+            // mirror back to hero_y.
+            if let Some(player) = self.actors.first_mut() {
+                player.abs_y &= 0xffe0;
+                self.hero_y = player.abs_y;
+            } else {
+                self.hero_y &= 0xffe0;
+            }
+        }
+
+        should_wake
+    }
+
+    /// 1-in-64 chance per sleep-tick that a battle wakes the hero
+    /// (fmain.c:2019, `rand64() == 0`).  Derived from `tick_counter` +
+    /// `daynight` so each sleep-tick rolls a distinct value; this mirrors
+    /// the tick-driven `rand64()` pattern used elsewhere in the port.
+    fn battle_wake_roll(&self) -> bool {
+        let h = self
+            .tick_counter
+            .wrapping_add(self.daynight as u32)
+            .wrapping_mul(1664525)
+            .wrapping_add(1013904223);
+        ((h >> 10) & 63) == 0
     }
 
     /// Per-128-daynight-tick hunger and fatigue increment, matching fmain.c:2623-2652.

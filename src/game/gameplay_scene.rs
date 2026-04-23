@@ -199,26 +199,6 @@ const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
 const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
 const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
 
-/// Day/night phase derived from lightlevel triangle wave (0–300).
-/// lightlevel is a *brightness* value: 0 = midnight (dark), 300 = noon (bright).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DayNightPhase {
-    Night, // lightlevel 0–59   (darkest)
-    Dawn,  // 60–149  (brightening)
-    Day,   // 150–299 (bright)
-    Dusk,  // unused; reserved for symmetrical dusk transition
-}
-
-impl DayNightPhase {
-    pub fn from_lightlevel(level: u16) -> Self {
-        match level {
-            0..=59  => Self::Night,
-            60..=149 => Self::Dawn,
-            _        => Self::Day,
-        }
-    }
-}
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, Texture};
@@ -319,7 +299,6 @@ pub struct GameplayScene {
     last_indoor: bool,
     pub in_encounter_zone: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
-    day_night_phase: DayNightPhase,
     /// RGBA32 palette for the final indexed→RGBA32 render step.
     current_palette: crate::game::palette::Palette,
     /// Base palette loaded from faery.toml (colors::Palette with RGB4 values).
@@ -464,7 +443,6 @@ impl GameplayScene {
             last_indoor: false,
             in_encounter_zone: false,
             npc_table: None,
-            day_night_phase: DayNightPhase::Day,
             current_palette: [0xFF808080_u32; crate::game::palette::PALETTE_SIZE],
             base_colors_palette: None,
             palette_dirty: true,
@@ -5017,12 +4995,6 @@ impl Scene for GameplayScene {
             }
         }
 
-
-        let new_phase = DayNightPhase::from_lightlevel(self.state.lightlevel);
-        if new_phase != self.day_night_phase {
-            self.dlog(format!("Day/night phase: {:?}", new_phase));
-            self.day_night_phase = new_phase;
-        }
 
         // SPEC §17.5: day_fade() — update palette every 4 ticks (daynight & 3 == 0) or
         // during screen rebuild (viewstatus > 97), or when palette_dirty is set (region change).
