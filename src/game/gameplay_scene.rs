@@ -5111,6 +5111,7 @@ impl Scene for GameplayScene {
                     self.state.hero_y as i16,
                     self.state.xtype,
                     self.state.region_num,
+                    self.state.active_carrier,
                 )
             });
             if let Some(encounter_type) = trigger {

@@ -8,22 +8,6 @@ use crate::game::npc::{
     RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE,
 };
 
-/// encounter_chart[11]: enemy type per region/zone index.
-/// Index 0-10 maps to different region types; values are NPC type codes.
-pub const ENCOUNTER_CHART: [u8; 11] = [
-    NPC_TYPE_ORC,       // 0: forest
-    NPC_TYPE_ORC,       // 1: plains
-    NPC_TYPE_SKELETON,  // 2: mountains
-    NPC_TYPE_GHOST,     // 3: swamp
-    NPC_TYPE_WRAITH,    // 4: dungeon
-    NPC_TYPE_ORC,       // 5: road
-    NPC_TYPE_SKELETON,  // 6: ruins
-    NPC_TYPE_GHOST,     // 7: graveyard
-    NPC_TYPE_WRAITH,    // 8: dark zone
-    NPC_TYPE_ORC,       // 9: beach
-    NPC_TYPE_SKELETON,  // 10: desert
-];
-
 /// Per-enemy-type stats from fmain.c encounter_chart[].
 #[derive(Debug, Clone, Copy)]
 pub struct EnemyTypeStats {
@@ -66,13 +50,14 @@ const ENCOUNTER_TO_NPC_TYPE: [u8; 11] = [
     NPC_TYPE_ORC,          // 10: Woodcutter (placeholder)
 ];
 
-/// Weapon probability table from fmain.c weapon_probs[].
+/// Weapon probability table from fmain.c weapon_probs[] (`fmain2.c:860-868`).
 /// Indexed by arms * 4 + rand4(). Returns weapon index for the NPC.
+/// Weapon codes: 0=none, 1=dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch.
 pub const WEAPON_PROBS: [u8; 32] = [
     0, 0, 0, 0,  // arms=0: no weapon
-    1, 1, 1, 1,  // arms=1: dirk
-    1, 1, 2, 1,  // arms=2: mostly dirk, some mace
-    2, 1, 2, 2,  // arms=3: mostly mace
+    1, 1, 1, 1,  // arms=1: all dirks
+    1, 2, 1, 2,  // arms=2: dirks and maces
+    1, 2, 3, 2,  // arms=3: mostly maces, some swords
     4, 4, 3, 2,  // arms=4: bows and swords
     5, 5, 5, 5,  // arms=5: all magic wands
     8, 8, 8, 8,  // arms=6: touch attack
@@ -129,7 +114,9 @@ pub fn pick_encounter_type(xtype: u16, tick: u32) -> usize {
 }
 
 /// Check if a random encounter should trigger this tick.
-/// Ports fmain.c:2451-2472 gating conditions.
+/// Ports `roll_wilderness_encounter` (fmain.c:2080-2092) Phase 14j gates:
+/// `(daynight & 31) == 0 and not actors_on_screen and not actors_loading
+///  and active_carrier == 0 and xtype < 50`.
 /// Returns Some(encounter_type) if spawn should happen, None otherwise.
 pub fn try_trigger_encounter(
     tick: u32,
@@ -138,6 +125,7 @@ pub fn try_trigger_encounter(
     hero_y: i16,
     xtype: u16,
     region_num: u8,
+    active_carrier: i16,
 ) -> Option<usize> {
     // Gate 1: every 32 ticks only (~1 Hz at 30fps)
     if tick & 31 != 0 {
@@ -147,15 +135,19 @@ pub fn try_trigger_encounter(
     if actors_on_screen(table, hero_x, hero_y) {
         return None;
     }
-    // Gate 3: fewer than 4 active enemies
+    // Gate 3: fewer than 4 active enemies (4-slot cap, fmain.c:2064 anix < 7)
     if active_enemy_count(table) >= 4 {
         return None;
     }
-    // Gate 4: not in forced encounter zone
+    // Gate 4: not in forced encounter zone (fmain.c:2081)
     if xtype >= 50 {
         return None;
     }
-    // Gate 5: danger level check
+    // Gate 5: not riding a carrier (fmain.c:2081 active_carrier == 0)
+    if active_carrier != 0 {
+        return None;
+    }
+    // Gate 6: danger level check (fmain.c:2082-2085)
     let danger = if region_num > 7 {
         5 + xtype as u32
     } else {
@@ -209,13 +201,17 @@ pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick
         x: origin_x,
         y: origin_y,
         vitality: stats.hp,
-        gold: stats.treasure as i16 * 5,
+        // fmain.c:2763 set_encounter does not seed gold; treasure is rolled
+        // separately via roll_treasure on body search (fmain.c:3270-3273).
+        gold: 0,
         speed: 2,
         weapon,
         active: true,
         goal,
         tactic: Tactic::Pursue,
-        facing: 4, // South (toward hero, roughly)
+        // fmain.c:2761 `an->facing = 0` (north). Actual heading is rewritten
+        // the first time the AI picks a tactic (set_course).
+        facing: 0,
         state: NpcState::Walking,
         cleverness: stats.clever,
     }
@@ -351,14 +347,14 @@ mod tests {
     #[test]
     fn test_try_trigger_encounter_respects_tick_gate() {
         let table = crate::game::npc::NpcTable { npcs: Default::default() };
-        assert!(try_trigger_encounter(1, &table, 100, 100, 0, 0).is_none());
+        assert!(try_trigger_encounter(1, &table, 100, 100, 0, 0, 0).is_none());
     }
 
     #[test]
     fn test_try_trigger_encounter_blocks_when_actors_present() {
         let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
         table.npcs[0] = Npc { active: true, x: 100, y: 100, ..Default::default() };
-        assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0).is_none());
+        assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0, 0).is_none());
     }
 
     #[test]
@@ -376,7 +372,16 @@ mod tests {
         for i in 0..4 {
             table.npcs[i] = Npc { active: true, x: 5000, y: 5000, ..Default::default() };
         }
-        assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0).is_none());
+        assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0, 0).is_none());
+    }
+
+    #[test]
+    fn test_try_trigger_encounter_blocks_on_carrier() {
+        // fmain.c:2081 — `active_carrier == 0` is part of the 14j gate.
+        let table = crate::game::npc::NpcTable { npcs: Default::default() };
+        // graveyard-ish xtype=48 would otherwise fire almost every window.
+        assert!(try_trigger_encounter(32, &table, 100, 100, 48, 0, 1).is_none(),
+            "encounters must be suppressed while riding a carrier");
     }
 
     #[test]
@@ -469,6 +474,18 @@ mod tests {
     }
 
     // SPEC §10.6: weapon_probs groups 4-7 exact values.
+    #[test]
+    fn test_weapon_probs_group2() {
+        // fmain2.c:862 — dirks and maces.
+        assert_eq!(&WEAPON_PROBS[8..12], &[1, 2, 1, 2]);
+    }
+
+    #[test]
+    fn test_weapon_probs_group3() {
+        // fmain2.c:863 — mostly maces, some swords.
+        assert_eq!(&WEAPON_PROBS[12..16], &[1, 2, 3, 2]);
+    }
+
     #[test]
     fn test_weapon_probs_group4() {
         assert_eq!(&WEAPON_PROBS[16..20], &[4, 4, 3, 2]);
