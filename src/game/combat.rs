@@ -25,6 +25,9 @@ pub struct Missile {
     pub dy: i32, // velocity y (-2, 0, or 2)
     pub missile_type: MissileType,
     pub is_friendly: bool, // true = fired by hero
+    /// Ticks since fired. Missile expires when this exceeds 40
+    /// (`fmain.c:2274`, `combat.md#missile_step`).
+    pub time_of_flight: u8,
 }
 
 impl Missile {
@@ -88,7 +91,7 @@ pub fn fire_missile(
         _ => (0, -speed),
     };
     let missile_type = if weapon == 5 { MissileType::Fireball } else { MissileType::Arrow };
-    missiles[slot] = Missile { active: true, x, y, dx, dy, missile_type, is_friendly };
+    missiles[slot] = Missile { active: true, x, y, dx, dy, missile_type, is_friendly, time_of_flight: 0 };
     Some(slot)
 }
 
@@ -402,7 +405,7 @@ mod tests {
     fn test_arrow_hit_radius_6px() {
         let mut arrow = Missile {
             active: true, x: 100, y: 100, dx: 2, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true,
+            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
         };
         // Within 6px → hit
         assert!(arrow.tick(105, 100));
@@ -413,7 +416,7 @@ mod tests {
     fn test_arrow_miss_beyond_6px() {
         let mut arrow = Missile {
             active: true, x: 100, y: 100, dx: 2, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true,
+            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
         };
         // After tick, arrow at 102. Target at 109 → distance 7px → miss
         assert!(!arrow.tick(109, 100));
@@ -425,7 +428,7 @@ mod tests {
     fn test_fireball_hit_radius_9px() {
         let mut fireball = Missile {
             active: true, x: 100, y: 100, dx: 0, dy: 2,
-            missile_type: MissileType::Fireball, is_friendly: true,
+            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
         };
         // After tick, fireball at y=102. Target at 110 → distance 8px → hit
         assert!(fireball.tick(100, 110));
@@ -436,7 +439,7 @@ mod tests {
     fn test_fireball_miss_beyond_9px() {
         let mut fireball = Missile {
             active: true, x: 100, y: 100, dx: 0, dy: 2,
-            missile_type: MissileType::Fireball, is_friendly: true,
+            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
         };
         // After tick, fireball at y=102. Target at 112 → distance 10px → miss
         assert!(!fireball.tick(100, 112));
@@ -450,14 +453,14 @@ mod tests {
         for _ in 0..100 {
             let arrow = Missile {
                 active: true, x: 0, y: 0, dx: 0, dy: 0,
-                missile_type: MissileType::Arrow, is_friendly: true,
+                missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
             };
             let dmg = arrow.damage();
             assert!((4..=11).contains(&dmg), "arrow damage {} out of range 4-11", dmg);
 
             let fireball = Missile {
                 active: true, x: 0, y: 0, dx: 0, dy: 0,
-                missile_type: MissileType::Fireball, is_friendly: true,
+                missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
             };
             let dmg = fireball.damage();
             assert!((4..=11).contains(&dmg), "fireball damage {} out of range 4-11", dmg);
@@ -468,13 +471,13 @@ mod tests {
     fn test_attacker_codes() {
         let arrow = Missile {
             active: true, x: 0, y: 0, dx: 0, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true,
+            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
         };
         assert_eq!(arrow.attacker_code(), -1);
 
         let fireball = Missile {
             active: true, x: 0, y: 0, dx: 0, dy: 0,
-            missile_type: MissileType::Fireball, is_friendly: true,
+            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
         };
         assert_eq!(fireball.attacker_code(), -2);
     }
@@ -501,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_missile_ticks() {
-        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, missile_type: MissileType::Arrow, is_friendly: true };
+        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0 };
         let hit = m.tick(50, 100); // too far
         assert!(!hit);
         assert_eq!(m.x, 2);

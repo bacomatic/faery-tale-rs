@@ -761,10 +761,9 @@ impl GameplayScene {
                     );
                     if weapon == 4 {
                         self.state.stuff_mut()[ITEM_ARROWS] -= 1;
-                        self.messages.push("You shoot an arrow!");
-                    } else if weapon == 5 {
-                        self.messages.push("You cast a fireball!");
                     }
+                    // No scroll-area message on fire: original fmain.c emits
+                    // no text for bow/wand release. Ref: combat.md#missile_step.
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -1900,6 +1899,7 @@ impl GameplayScene {
             let mut logs: Vec<String> = Vec::new();
             let mut dead_npc: Option<crate::game::npc::Npc> = None;
             let mut immunity_msg: Option<String> = None;
+            let mut dark_knight_speech: Option<String> = None;
             let mut necro_talisman_pos: Option<(i16, i16)> = None;
             let mut witch_lasso_pos: Option<(i16, i16)> = None;
 
@@ -1909,42 +1909,72 @@ impl GameplayScene {
                 if npc_idx < table.npcs.len() {
                     let npc = &mut table.npcs[npc_idx];
 
-                    // Immunity guard per SPEC §10.2
+                    // Immunity guard per SPEC §10.2 / combat.md#dohit
+                    // (fmain2.c:231-235). Immune targets take zero damage
+                    // AND skip knockback, follow-through, and checkdead —
+                    // the original `dohit` returns immediately before the
+                    // damage/SFX/move_figure block.
                     use crate::game::combat::{check_immunity, ImmunityResult};
                     let has_sun_stone = self.state.stuff()[7] != 0;
                     let immunity = check_immunity(npc.race, attacker_weapon, has_sun_stone);
 
-                    let actual_damage = match immunity {
-                        ImmunityResult::Vulnerable => damage,
-                        ImmunityResult::ImmuneSilent => 0,
+                    let immune = match immunity {
+                        ImmunityResult::Vulnerable => false,
+                        ImmunityResult::ImmuneSilent => true,
                         ImmunityResult::ImmuneWithMessage => {
                             immunity_msg = Some(crate::game::events::speak(&self.narr, 58, &bname));
-                            0
+                            true
                         }
                     };
 
-                    npc.vitality -= actual_damage;
-                    if npc.vitality < 0 { npc.vitality = 0; }
+                    if !immune {
+                        npc.vitality -= damage;
+                        if npc.vitality < 0 { npc.vitality = 0; }
 
-                    // Pushback on target: 2px in attacker facing
-                    let (px, py) = push_offset(facing, 2);
-                    npc.x = (npc.x as i32 + px).clamp(0, 32767) as i16;
-                    npc.y = (npc.y as i32 + py).clamp(0, 32767) as i16;
+                        // Pushback on target: 2px in attacker facing, but
+                        // DRAGON and SETFIG races refuse to move (fmain2.c:243).
+                        let target_pushable = npc.npc_type != crate::game::npc::NPC_TYPE_DRAGON
+                            && (npc.race & 0x80) == 0;
+                        let target_moved = if target_pushable {
+                            let (px, py) = push_offset(facing, 2);
+                            npc.x = (npc.x as i32 + px).clamp(0, 32767) as i16;
+                            npc.y = (npc.y as i32 + py).clamp(0, 32767) as i16;
+                            true
+                        } else {
+                            false
+                        };
 
-                    // If hero is attacker, hero also pushes forward 2px
-                    if attacker_idx == 0 {
-                        let (rx, ry) = push_offset(facing, 2);
-                        self.state.hero_x = (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
-                        self.state.hero_y = (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                        // Attacker follow-through: only if the target moved
+                        // successfully AND attacker is a real melee source
+                        // (i >= 0; arrows/fireballs use i = -1/-2 and don't
+                        // recoil). apply_hit is never called for projectiles
+                        // so the i>=0 guard is implicit here.
+                        if target_moved && attacker_idx == 0 {
+                            let (rx, ry) = push_offset(facing, 2);
+                            self.state.hero_x = (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
+                            self.state.hero_y = (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                        }
+
+                        if damage > 0 {
+                            logs.push(format!("combat hit npc {} for {}", npc_idx, damage));
+                        }
                     }
 
-                    if actual_damage > 0 {
-                        logs.push(format!("combat hit npc {} for {}", npc_idx, actual_damage));
-                    }
-
-                    // checkdead
+                    // checkdead — fmain.c:2769-2784 / combat.md#checkdead.
+                    // Reference: vitality<1 triggers transition; brave+1 for
+                    // any enemy (i!=0); kind-=3 for SETFIG non-witch kills;
+                    // speak(42) on dark-knight race 7.
                     if npc.vitality == 0 {
                         use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, RACE_WITCH, NpcState};
+                        const RACE_DARK_KNIGHT: u8 = 7; // fmain.c:2774
+
+                        if npc.race == RACE_DARK_KNIGHT {
+                            dark_knight_speech = Some(crate::game::events::speak(&self.narr, 42, &bname));
+                        } else if (npc.race & 0x80) != 0 && npc.race != RACE_WITCH {
+                            // SETFIG type (bit 7 set) non-witch: kindness penalty.
+                            self.state.kind -= 3;
+                        }
+
                         if npc.race == RACE_NECROMANCER {
                             // SPEC §15.7: transform in-place → Woodcutter; don't despawn.
                             necro_talisman_pos = Some((npc.x, npc.y));
@@ -1960,7 +1990,10 @@ impl GameplayScene {
                             }
                             npc.active = false;
                         }
-                        self.state.brave = (self.state.brave + 1).min(100);
+                        // fmain.c:2777 — brave += 1 on any enemy kill.
+                        // No cap in original; the .min(100) was invented.
+                        self.state.brave += 1;
+                        if self.state.kind < 0 { self.state.kind = 0; }
                         dead_npc = Some(npc.clone());
                         logs.push(format!("enemy slain, bravery now {}", self.state.brave));
                     }
@@ -1969,6 +2002,9 @@ impl GameplayScene {
 
             // Deferred work outside the npc_table borrow
             if let Some(msg) = immunity_msg {
+                self.messages.push_wrapped(msg);
+            }
+            if let Some(msg) = dark_knight_speech {
                 self.messages.push_wrapped(msg);
             }
             for msg in logs {
@@ -2961,39 +2997,33 @@ impl GameplayScene {
                 self.do_option(GameAction::Speak);
             }
             GameAction::Attack => {
-                // Find nearest active NPC and initiate combat
-                let mut attacked = false;
+                // Legacy menu-driven attack path — real combat runs through
+                // `run_combat_tick` via `input.fight`. This branch predates
+                // the proximity/swing state machine and is retained only so
+                // the menu action doesn't panic. Scroll-area strings here
+                // were invented (not in `faery.toml [narr]` nor
+                // `dialog_system.md`) and have been removed.
                 if let Some(ref mut table) = self.npc_table {
                     for npc in table.npcs.iter_mut().filter(|n| n.active) {
                         let dx = (npc.x - self.state.hero_x as i16).abs();
                         let dy = (npc.y - self.state.hero_y as i16).abs();
                         if dx < 32 && dy < 32 {
+                            #[allow(deprecated)]
                             let result = crate::game::combat::resolve_combat(&mut self.state, npc, 0);
                             if result.enemy_defeated {
                                 crate::game::combat::award_loot(&mut self.state, npc);
                                 let drops = crate::game::loot::roll_loot(npc, self.state.tick_counter);
                                 crate::game::loot::award_drops(&mut self.state, &drops);
-                                if !drops.is_empty() {
-                                    self.messages.push(format!("{} items dropped!", drops.len()));
-                                }
                                 // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
                                 if self.state.check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE) {
-                                    self.messages.push("The turtle rewards you with a Sea Shell!");
                                     self.dlog("check_turtle_eggs: shell awarded for snake kill");
                                 }
-                                self.messages.push("Enemy defeated!");
                                 let wealth = self.state.wealth;
                                 self.menu.set_options(self.state.stuff(), wealth);
-                            } else {
-                                self.messages.push(format!("You hit for {}!", result.enemy_damage));
                             }
-                            attacked = true;
                             break;
                         }
                     }
-                }
-                if !attacked {
-                    self.messages.push("Nothing to attack.");
                 }
             }
             GameAction::Fight => {
@@ -3045,10 +3075,9 @@ impl GameplayScene {
                     );
                     if is_bow {
                         self.state.stuff_mut()[ITEM_ARROWS] -= 1;
-                        self.messages.push("You shoot an arrow!");
-                    } else {
-                        self.messages.push("You cast a fireball!");
                     }
+                    // No scroll-area message: original fmain.c emits no text on
+                    // arrow/fireball fire. Ref: combat.md#missile_step.
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
                 }
@@ -5084,6 +5113,13 @@ impl Scene for GameplayScene {
                 let mut npc_hits: Vec<(usize, i16)> = vec![];
                 for missile in self.missiles.iter_mut() {
                     if !missile.active { continue; }
+                    // Age expiry: original fmain.c:2274 / combat.md#missile_step —
+                    // missile dies after 40 ticks of flight.
+                    if missile.time_of_flight > 40 {
+                        missile.active = false;
+                        continue;
+                    }
+                    missile.time_of_flight = missile.time_of_flight.saturating_add(1);
                     missile.x += missile.dx;
                     missile.y += missile.dy;
                     if missile.x < 0 || missile.x > 32768 || missile.y < 0 || missile.y > 32768 {
@@ -7050,7 +7086,7 @@ mod quest_tests {
             dx: 0,
             dy: 5,
             missile_type: MissileType::Fireball,
-            is_friendly: false,
+            is_friendly: false, time_of_flight: 0,
         };
         
         // Damage should be rand8() + 4 = 4-11 per SPEC §10.4
@@ -7069,7 +7105,7 @@ mod quest_tests {
             dx: 0,
             dy: 5,
             missile_type: MissileType::Fireball,
-            is_friendly: false,
+            is_friendly: false, time_of_flight: 0,
         };
         
         // After tick, fireball at y=105. Target at 113 → distance 8px → should hit (radius 9)
