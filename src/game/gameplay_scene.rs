@@ -2755,25 +2755,28 @@ impl GameplayScene {
                 use crate::game::menu::MenuMode;
                 use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq,
                                          apply_door_tile_replacement};
+                use crate::game::world_objects::stuff_index_name;
                 // idx: 0=GOLD, 1=GREEN, 2=KBLUE, 3=RED, 4=GREY, 5=WHITE → stuff[16+idx]
                 let key_slot_stuff = 16 + idx as usize;
-                if self.state.stuff()[key_slot_stuff] == 0 {
-                    self.messages.push("No such key.".to_string());
-                } else {
-                    // Use the bump-radius search (same 32×64px window as the bump path),
-                    // mirroring fmain.c which probes 9 directional positions × 16px around hero.
+                // fmain.c:3474 — clear "It's locked." suppression latch so a follow-up bump
+                // will re-speak the lock message.
+                self.bumped_door = None;
+                // fmain.c:3475 — silent return to the items menu when the player has zero of
+                // this key. Mirrors `if (stuff[hit+KEYBASE]==0) goto menu0;` with no message.
+                if self.state.stuff()[key_slot_stuff] != 0 {
+                    // fmain.c:3477-3481 — sweep 9 directions (8 compass + self) at 16 px and
+                    // try doorfind on each. The Rust port lacks per-tile open_list lookup;
+                    // the bump-radius search is the architectural equivalent (see F6.4).
                     let region = self.state.region_num;
                     let nearest = doorfind_nearest_by_bump_radius(
                         &self.doors, region, self.state.hero_x, self.state.hero_y);
-                    if let Some((door_idx, door)) = nearest {
+                    let opened = if let Some((door_idx, door)) = nearest {
                         let req = key_req(door.door_type);
                         let key_matches = matches!(req, KeyReq::Key(slot) if slot as usize == idx as usize);
                         if key_matches {
-                            // Consume key, apply tile replacement, open door
-                            // (Phase 1 only — player must walk through).
+                            // fmain.c:3480 — key consumed only on successful match.
                             self.state.stuff_mut()[key_slot_stuff] -= 1;
                             if let Some(ref mut world) = self.map_world {
-                                // Use hero position as probe; key is used while standing at door.
                                 apply_door_tile_replacement(
                                     world, door.door_type,
                                     self.state.hero_x as i32, self.state.hero_y as i32,
@@ -2781,13 +2784,23 @@ impl GameplayScene {
                             }
                             self.messages.push("It opened.".to_string());
                             self.opened_doors.insert(door_idx);
-                            self.bumped_door = None;
                             self.dlog(format!("door: key {} opened door idx={}", idx, door_idx));
+                            true
                         } else {
-                            self.messages.push("Key didn't fit.".to_string());
+                            false
                         }
                     } else {
-                        self.messages.push("Key didn't fit.".to_string());
+                        false
+                    };
+                    if !opened {
+                        // fmain.c:3483-3485 — "% tried a <keyname> but it didn't fit."
+                        // Assembled from extract("% tried a ") + inv_list[KEYBASE+hit].name
+                        // + " but it didn't" + print("fit.") fragments.
+                        let bname = self.brother_name().to_string();
+                        let kname = stuff_index_name(key_slot_stuff);
+                        self.messages.push(format!(
+                            "{} tried a {} but it didn't fit.", bname, kname,
+                        ));
                     }
                 }
                 self.menu.gomenu(MenuMode::Items);
