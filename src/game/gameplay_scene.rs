@@ -2997,11 +2997,12 @@ impl GameplayScene {
                         ) {
                             eprintln!("save transcript failed: {e}");
                         }
-                        self.messages.push("Game saved.");
+                        // Original emits no scroll text on save success (fmain2.c:1531 guard).
                     }
                     Err(e) => {
                         eprintln!("save failed: {e}");
-                        self.messages.push("Save failed!");
+                        // fmain2.c:1532 — "ERROR: Couldn't save game." (dialog_system.md §save/load)
+                        self.messages.push("ERROR: Couldn't save game.");
                     }
                 }
             }
@@ -3014,13 +3015,18 @@ impl GameplayScene {
                         // Restore existing transcript so new messages are appended.
                         let existing = crate::game::persist::load_transcript(slot);
                         self.messages.set_transcript(existing);
-                        self.messages.push("Game loaded.");
+                        // fmain2.c:1546 — three blank print("") calls clear the scroll area.
+                        self.messages.push("");
+                        self.messages.push("");
+                        self.messages.push("");
                         // Post-load: rebuild menu states from inventory (SPEC §24.5)
                         let wealth = self.state.wealth;
                         self.menu.set_options(self.state.stuff(), wealth);
                     }
                     Err(e) => {
-                        self.messages.push(format!("Load failed: {}", e));
+                        eprintln!("load failed: {e}");
+                        // fmain2.c:1533 — "ERROR: Couldn't load game." (dialog_system.md §save/load)
+                        self.messages.push("ERROR: Couldn't load game.");
                     }
                 }
             }

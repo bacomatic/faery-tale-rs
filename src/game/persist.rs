@@ -20,7 +20,9 @@ pub const SAVE_DIR: &str = ".config/faery/saves";
 
 fn state_to_proto(state: &GameState) -> proto::SaveFile {
     let make_stuff = |arr: &[u8; 36]| proto::BrotherStuff {
-        slots: arr.iter().map(|&v| v as u32).collect(),
+        // ARROWBASE = 35: only save indices 0-34; slot 35 is a transient quiver
+        // accumulator cleared at the start of every loot-pickup (fmain.c:3151).
+        slots: arr[0..35].iter().map(|&v| v as u32).collect(),
     };
 
     let world_objects = state.world_objects.iter().map(|wo| proto::SavedWorldObject {
@@ -97,6 +99,7 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
 
         actors: vec![],
         world_objects,
+        cheat1: state.cheat1,
     }
 }
 
@@ -192,17 +195,17 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.new_region = sf.new_region as u8;
 
     if let Some(j) = sf.julstuff {
-        for (i, s) in j.slots.iter().take(36).enumerate() {
+        for (i, s) in j.slots.iter().take(35).enumerate() {
             state.julstuff[i] = *s as u8;
         }
     }
     if let Some(p) = sf.philstuff {
-        for (i, s) in p.slots.iter().take(36).enumerate() {
+        for (i, s) in p.slots.iter().take(35).enumerate() {
             state.philstuff[i] = *s as u8;
         }
     }
     if let Some(k) = sf.kevstuff {
-        for (i, s) in k.slots.iter().take(36).enumerate() {
+        for (i, s) in k.slots.iter().take(35).enumerate() {
             state.kevstuff[i] = *s as u8;
         }
     }
@@ -221,6 +224,9 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.dayperiod = sf.dayperiod as u8;
 
     state.current_mood = sf.current_mood as u8;
+
+    // cheat1 persists across save/load (fmain.c:562, save-load.md §"Cheats persist")
+    state.cheat1 = sf.cheat1;
 
     if !sf.actors.is_empty() {
         state.actors.clear();

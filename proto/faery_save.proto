@@ -1,9 +1,9 @@
 syntax = "proto3";
 package faery;
 
-// Per-brother inventory (35 item slots)
+// Per-brother inventory (35 item slots; ARROWBASE=35 quiver-accumulator is transient, not saved)
 message BrotherStuff {
-    repeated uint32 slots = 1; // 35 entries, values 0-255
+    repeated uint32 slots = 1; // exactly 35 entries (indices 0-34), values 0-255
 }
 
 // Compact actor snapshot for save (only what matters for restore)
@@ -111,4 +111,7 @@ message SaveFile {
 
     // Per-region object tables (SPEC §24.2)
     repeated SavedWorldObject world_objects = 150;
+
+    // cheat1 persists across save/load (fmain.c:562, fmain2.c:1508 block-1 offset 18)
+    bool cheat1 = 160;
 }
