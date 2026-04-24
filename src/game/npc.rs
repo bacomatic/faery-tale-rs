@@ -106,9 +106,8 @@ impl Npc {
     pub fn tick(
         &mut self,
         world: Option<&crate::game::world_data::WorldData>,
-        indoor: bool,
     ) {
-        self.tick_with_actors(world, indoor, &[]);
+        self.tick_with_actors(world, &[]);
     }
 
     /// Execute one frame of movement with both terrain and actor collision.
@@ -123,7 +122,6 @@ impl Npc {
     pub fn tick_with_actors(
         &mut self,
         world: Option<&crate::game::world_data::WorldData>,
-        indoor: bool,
         other_actors: &[(i32, i32)],
     ) {
         use crate::game::collision::{proxcheck, actor_collides, newx, newy, px_to_terrain_type};
@@ -143,7 +141,7 @@ impl Npc {
         let dist = crate::game::combat::npc_speed_for_terrain(terrain_here, race_ignores_terrain) as i32;
 
         let proposed_x = newx(self.x as u16, facing, dist);
-        let proposed_y = newy(self.y as u16, facing, dist, indoor);
+        let proposed_y = newy(self.y as u16, facing, dist);
 
         // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
         let terrain_passable = self.race == RACE_WRAITH
@@ -157,7 +155,7 @@ impl Npc {
             // Wall-sliding: try clockwise then counter-clockwise deviation.
             let dev_cw = (facing + 1) & 7;
             let cw_x = newx(self.x as u16, dev_cw, dist);
-            let cw_y = newy(self.y as u16, dev_cw, dist, indoor);
+            let cw_y = newy(self.y as u16, dev_cw, dist);
             let cw_terrain = self.race == RACE_WRAITH
                 || proxcheck(world, cw_x as i32, cw_y as i32);
             let cw_actor = !actor_collides(cw_x as i32, cw_y as i32, other_actors);
@@ -167,7 +165,7 @@ impl Npc {
             } else {
                 let dev_ccw = (facing.wrapping_sub(1)) & 7;
                 let ccw_x = newx(self.x as u16, dev_ccw, dist);
-                let ccw_y = newy(self.y as u16, dev_ccw, dist, indoor);
+                let ccw_y = newy(self.y as u16, dev_ccw, dist);
                 let ccw_terrain = self.race == RACE_WRAITH
                     || proxcheck(world, ccw_x as i32, ccw_y as i32);
                 let ccw_actor = !actor_collides(ccw_x as i32, ccw_y as i32, other_actors);
@@ -273,7 +271,7 @@ mod tests {
             state: NpcState::Walking,
             ..Default::default()
         };
-        npc.tick(None, false);
+        npc.tick(None);
         assert!(npc.x > 0); // should have moved east
     }
 
@@ -293,7 +291,7 @@ mod tests {
             ..Default::default()
         };
         let old_x = npc.x;
-        npc.tick(None, false);
+        npc.tick(None);
         assert!(npc.x > old_x, "NPC should move east");
     }
 
@@ -329,7 +327,7 @@ mod tests {
             ..Default::default()
         };
         let old_x = npc.x;
-        npc.tick(None, false);
+        npc.tick(None);
         assert!(npc.x > old_x, "Walking east should increase X");
     }
 
@@ -348,7 +346,7 @@ mod tests {
         };
         let old_x = npc.x;
         let old_y = npc.y;
-        npc.tick(None, false);
+        npc.tick(None);
         assert_eq!(npc.x, old_x);
         assert_eq!(npc.y, old_y);
     }
@@ -367,7 +365,7 @@ mod tests {
             ..Default::default()
         };
         // With no WorldData (None), proxcheck always passes → should move.
-        npc.tick(None, false);
+        npc.tick(None);
         assert_eq!(npc.state, NpcState::Walking); // Still walking (not frustrated)
     }
 
@@ -389,7 +387,7 @@ mod tests {
         let others = vec![(1003, 1000), (1002, 1002), (1002, 998)];
         let old_x = npc.x;
         let old_y = npc.y;
-        npc.tick_with_actors(None, false, &others);
+        npc.tick_with_actors(None, &others);
         assert_eq!(npc.x, old_x);
         assert_eq!(npc.y, old_y);
         assert_eq!(npc.state, NpcState::Still);
@@ -411,7 +409,7 @@ mod tests {
         };
         let others = vec![(2000, 2000)];
         let old_x = npc.x;
-        npc.tick_with_actors(None, false, &others);
+        npc.tick_with_actors(None, &others);
         assert!(npc.x > old_x, "NPC should move east — actor is far away");
     }
 
@@ -429,8 +427,8 @@ mod tests {
             ..Default::default()
         };
         let mut npc2 = npc1.clone();
-        npc1.tick(None, false);
-        npc2.tick_with_actors(None, false, &[]);
+        npc1.tick(None);
+        npc2.tick_with_actors(None, &[]);
         assert_eq!(npc1.x, npc2.x);
         assert_eq!(npc1.y, npc2.y);
     }
@@ -461,7 +459,7 @@ mod tests {
         // No visible "frustration" animation exists on NPCs — that behavior
         // is player-only.
         let (mut npc, blockers) = blocked_east_npc();
-        npc.tick_with_actors(None, false, &blockers);
+        npc.tick_with_actors(None, &blockers);
         assert_eq!(npc.state, NpcState::Still);
         assert_eq!(npc.tactic, crate::game::actor::Tactic::Frust);
     }
@@ -482,7 +480,7 @@ mod tests {
             ..Default::default()
         };
         let blockers = vec![(1013i32, 1000i32), (1001i32, 990i32)];
-        npc.tick_with_actors(None, false, &blockers);
+        npc.tick_with_actors(None, &blockers);
         // Deviation succeeded — npc moved, tactic was not re-asserted.
         // (Tactic::Frust may still be set from a previous tick; the important
         // invariant is that a successful move did not set it.)

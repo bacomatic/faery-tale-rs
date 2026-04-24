@@ -125,18 +125,40 @@ const YDIR: [i32; 8] = [-3, -2, 0, 2, 3, 2, 0, -2];
 
 /// Compute new X from current + direction * distance (port of newx from fsubs.asm).
 pub fn newx(x: u16, dir: u8, dist: i32) -> u16 {
-    let dx = XDIR[(dir & 7) as usize] * dist / 2;
-    ((x as i32 + dx).rem_euclid(0x8000)) as u16
+    // Assembly uses lsr.w (logical right shift) on the 16-bit product, not arithmetic
+    // division. Per movement.md fsubs.asm:1293 — wrap_u16(prod) >> 1.
+    let prod = XDIR[(dir & 7) as usize] * dist;
+    let step = (prod as u16) >> 1;
+    x.wrapping_add(step) & 0x7fff
 }
 
 /// Compute new Y from current + direction * distance (port of newy from fsubs.asm).
-pub fn newy(y: u16, dir: u8, dist: i32, indoor: bool) -> u16 {
-    let dy = YDIR[(dir & 7) as usize] * dist / 2;
-    if indoor {
-        (y as i32 + dy) as u16
-    } else {
-        ((y as i32 + dy).rem_euclid(0x8000)) as u16
-    }
+/// Bit 15 of `y` (indoor flag) is preserved in the result per fsubs.asm:1316.
+pub fn newy(y: u16, dir: u8, dist: i32) -> u16 {
+    // Assembly uses lsr.w (logical right shift) on the 16-bit product, not arithmetic
+    // division. Per movement.md fsubs.asm:1316 — wrap_u16(prod) >> 1.
+    // Bit 15 carries the indoor/outdoor flag and must be preserved.
+    let flag = y & 0x8000;
+    let prod = YDIR[(dir & 7) as usize] * dist;
+    let step = (prod as u16) >> 1;
+    (y.wrapping_add(step) & 0x7fff) | flag
+}
+
+/// Hero-specific terrain passability check.
+/// Hero can walk into lava (8) and pit (9) tiles — environ effects applied later by
+/// `update_environ`. Per fmain2.c:282: `if i == 0 and (t == 8 or t == 9): t = 0`.
+/// Pass `has_crystal = stuff[30] != 0` to also bypass terrain-12 (crystal wall) for
+/// the primary-direction probe. Per fmain.c:1611 — crystal bypass is primary-only.
+pub fn hero_proxcheck(world: Option<&WorldData>, x: i32, y: i32, has_crystal: bool) -> bool {
+    let world = match world {
+        Some(w) => w,
+        None => return true,
+    };
+    let mut rt = px_to_terrain_type(world, x + 4, y + 2);
+    let mut lt = px_to_terrain_type(world, x - 4, y + 2);
+    if rt == 8 || rt == 9 || (has_crystal && rt == 12) { rt = 0; }
+    if lt == 8 || lt == 9 || (has_crystal && lt == 12) { lt = 0; }
+    !is_hard_block_right(rt) && !is_hard_block_left(lt)
 }
 
 /// Full terra lookup chain for one probe point — used by the `/terrain` debug command.
@@ -302,24 +324,52 @@ mod newxy_tests {
 
     #[test]
     fn test_newx_cardinal() {
-        // dir=2 (East), dist=2: dx = 3*2/2 = 3
+        // dir=2 (East), dist=2: prod=6, step=3
         assert_eq!(newx(100, 2, 2), 103);
-        // dir=6 (West), dist=2: dx = -3*2/2 = -3
+        // dir=6 (West), dist=2: prod=-6, wrap_u16=0xFFFA, lsr=0x7FFD(32765), 100+32765=32865&0x7FFF=97
         assert_eq!(newx(100, 6, 2), 97);
     }
 
     #[test]
     fn test_newy_cardinal() {
-        // dir=0 (North), dist=2: dy = -3*2/2 = -3
-        assert_eq!(newy(100, 0, 2, false), 97);
-        // dir=4 (South), dist=2: dy = 3*2/2 = 3
-        assert_eq!(newy(100, 4, 2, false), 103);
+        // dir=0 (North), dist=2: prod=-6, step=0x7FFD=32765, 100+32765=32865&0x7FFF=97
+        assert_eq!(newy(100, 0, 2), 97);
+        // dir=4 (South), dist=2: prod=6, step=3
+        assert_eq!(newy(100, 4, 2), 103);
     }
 
     #[test]
     fn test_newx_diagonal() {
-        // dir=1 (NE), dist=2: dx = 2*2/2 = 2
+        // dir=1 (NE), dist=2: prod=4, step=2
         assert_eq!(newx(100, 1, 2), 102);
+    }
+
+    #[test]
+    fn test_newx_odd_negative_logical_shift() {
+        // F15.1: odd dist with negative direction uses lsr.w, not arithmetic /2.
+        // dir=6 (West, XDIR=-3), dist=1: prod=-3, wrap_u16=0xFFFD, lsr=0x7FFE=32766
+        // 100 + 32766 = 32866 & 0x7FFF = 98. (arithmetic /2 would give 99.)
+        assert_eq!(newx(100, 6, 1), 98);
+        // dir=0 (North, YDIR=-3 but via newx still XDIR=0): North XDIR[0]=0, no effect.
+        // dir=6 (West), dist=3: prod=-9, wrap_u16=0xFFF7, lsr=0x7FFB=32763, 100+32763=32863&0x7FFF=95
+        assert_eq!(newx(100, 6, 3), 95);
+    }
+
+    #[test]
+    fn test_newy_odd_negative_logical_shift() {
+        // F15.1: odd dist with negative direction — same lsr.w fix.
+        // dir=0 (North, YDIR=-3), dist=1: prod=-3, step=0x7FFE=32766
+        // 100 + 32766 = 32866 & 0x7FFF = 98. (arithmetic /2 would give 99.)
+        assert_eq!(newy(100, 0, 1), 98);
+    }
+
+    #[test]
+    fn test_newy_indoor_flag_preserved() {
+        // Bit 15 (indoor flag 0x8000) must survive the calculation.
+        // dir=4 (South), dist=2: prod=6, step=3 — indoor base 0x8100
+        assert_eq!(newy(0x8100, 4, 2), 0x8103);
+        // dir=0 (North), dist=2: step=32765, (0x8100+32765)&0x7FFF|0x8000 = 0x80FE
+        assert_eq!(newy(0x8100, 0, 2), 0x80FD);
     }
 }
 

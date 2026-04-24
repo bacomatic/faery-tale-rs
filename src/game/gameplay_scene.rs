@@ -939,9 +939,10 @@ impl GameplayScene {
                 Vec::new()
             };
 
+            let has_crystal = self.state.stuff()[30] != 0;
             let mut can_move = !turtle_blocked
                 && (self.state.flying != 0 || self.state.on_raft
-                    || (collision::proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32)
+                    || (collision::hero_proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32, has_crystal)
                         && !collision::actor_collides(new_x as i32, new_y as i32, &npc_positions)));
 
             // Direction deviation (wall-sliding): fmain.c:1615-1625 walk_step.
@@ -957,12 +958,12 @@ impl GameplayScene {
             if !can_move && !turtle_blocked && !blocked_by_door
                 && self.state.flying == 0 && !self.state.on_raft
             {
-                let indoor = self.state.region_num >= 8;
                 // checkdev1: try (facing + 1) & 7
                 let dev1 = (facing + 1) & 7;
                 let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
-                let dev1_y = collision::newy(self.state.hero_y, dev1, speed, indoor);
-                if collision::proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32)
+                let dev1_y = collision::newy(self.state.hero_y, dev1, speed);
+                // Deviation probes use hero lava/pit bypass but NOT crystal bypass (fmain.c:1615).
+                if collision::hero_proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32, false)
                     && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions) {
                     final_x = dev1_x;
                     final_y = dev1_y;
@@ -972,8 +973,8 @@ impl GameplayScene {
                     // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
                     let dev2 = (dev1.wrapping_sub(2)) & 7;
                     let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
-                    let dev2_y = collision::newy(self.state.hero_y, dev2, speed, indoor);
-                    if collision::proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32)
+                    let dev2_y = collision::newy(self.state.hero_y, dev2, speed);
+                    if collision::hero_proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32, false)
                         && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions) {
                         final_x = dev2_x;
                         final_y = dev2_y;
@@ -1376,9 +1377,9 @@ impl GameplayScene {
 
         match terrain {
             0 => { k = 0; }
-            6 => { k = -1; } // ice
-            7 => { k = -2; } // lava
-            8 => { k = -3; } // special C
+            6 => { k = -1; } // slippery (environ -1)
+            7 => { k = -2; } // ice (environ -2)
+            8 => { k = -3; } // lava (environ -3)
             2 => { k = 2; }  // shallow water/wading
             3 => { k = 5; }  // brush/deep wade
             4 | 5 => {
@@ -2208,7 +2209,6 @@ impl GameplayScene {
         let turtle_x = self.state.actors[slot].abs_x;
         let turtle_y = self.state.actors[slot].abs_y;
         let facing = self.state.actors[slot].facing;
-        let indoor = self.state.region_num >= 8;
 
         const DIR_OFFSETS: [i8; 4] = [0, 1, -1, -2];
         const TURTLE_SPEED: i32 = 3;
@@ -2218,7 +2218,7 @@ impl GameplayScene {
             for &off in &DIR_OFFSETS {
                 let probe_dir = facing.wrapping_add(off as u8) & 7;
                 let nx = newx(turtle_x, probe_dir, TURTLE_SPEED);
-                let ny = newy(turtle_y, probe_dir, TURTLE_SPEED, indoor);
+                let ny = newy(turtle_y, probe_dir, TURTLE_SPEED);
                 // Ref carrier_tick (fmain.c:1525-1537): single-point `px_to_im(xtest, ytest) != 5`
                 // guards each probe — not the 2-foot `prox` test. Turtle may straddle a
                 // water/non-water boundary as long as its centre sits on terrain 5.
@@ -2280,7 +2280,6 @@ impl GameplayScene {
         let hero_y = self.state.hero_y as i32;
         let hero_dead = self.state.vitality <= 0;
         let xtype = self.state.xtype;
-        let indoor = self.state.region_num >= 8;
         let tick = self.state.tick_counter;
         // SPEC §19.3: freeze_timer > 0 → hostile enemies (race < 7) skip all AI.
         let freeze = self.state.freeze_timer > 0;
@@ -2324,7 +2323,7 @@ impl GameplayScene {
                     if other.state == NpcState::Dead { continue; }
                     others.push((other.x as i32, other.y as i32));
                 }
-                table.npcs[i].tick_with_actors(self.map_world.as_ref(), indoor, &others);
+                table.npcs[i].tick_with_actors(self.map_world.as_ref(), &others);
             }
 
             // 3. Battleflag: true if any active NPC within 300px.
