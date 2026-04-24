@@ -4091,3 +4091,105 @@ complete.
 ### Blockers
 None — all NEEDS-FIX findings (F18.1, F18.2, F18.3) are fixed.
 F18.8/F11.9 pending user decision on `GameAction::Give` key binding.
+
+---
+
+## Subsystem 19: input-handling — ✅ Complete
+
+**Reference**: `reference/logic/input-handling.md`, `reference/logic/menu-system.md#key_dispatch`,
+`reference/_discovery/input-handling.md`, `reference/logic/SYMBOLS.md §7`
+**Code**: `src/game/gameplay_scene.rs` (`handle_event`, `keycode_to_menukey`,
+`apply_player_input`, `InputState`), `src/game/menu.rs` (`handle_key`, `LETTER_LIST`)
+**Audit date**: 2025 (current session)
+
+### Summary
+- **10 findings**: 4 CONFORMANT, 1 NEEDS-FIX (fixed), 4 SPEC-GAP, 1 INVENTED
+- Fix applied in **one commit** (SHA `60ea8da`).
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test` — 589 + 12 + 12 tests passing.
+
+### Findings
+
+#### F19.1 — Top-row '0' not bound to fight mode [NEEDS-FIX]
+**Location**: `src/game/gameplay_scene.rs:4860, 4882` (KeyDown/KeyUp fight arms).
+**Reference**: `reference/logic/input-handling.md#handle_rawkey`;
+`reference/_discovery/input-handling.md §4` keytrans table;
+`reference/logic/SYMBOLS.md §7` (`KEY_FIGHT_DOWN = 48`).
+**Issue**: keytrans maps both top-row '0' (Amiga scancode `$0A`) and numpad '0'
+(scancode `$0F`) to ASCII `'0'` (48 = `KEY_FIGHT_DOWN`). `key_dispatch`
+(`fmain.c:1291`) sets `keyfight = True` for code 48. The port handled
+`Keycode::Kp0` (numpad 0) correctly but left `Keycode::Num0` (top-row 0)
+unhandled — pressing the top-row '0' key did nothing.
+**Resolution**: Extended the fight arm in both KeyDown and KeyUp to
+`Keycode::Kp0 | Keycode::Num0`.
+
+#### F19.2 — Arrow-key movement (cursor keys 1–4 were no-ops in original) [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs:4850-4853` (KeyDown arrow arms).
+**Reference**: `reference/_discovery/input-handling.md §4` — Amiga cursor keys
+(scancodes `$4C-$4F`) translate to codes 1–4, which fall through `key_dispatch`
+without matching any handler and are discarded.
+**Issue**: Rust port maps `Keycode::Up/Down/Left/Right` to `input.up/down/left/right`.
+This is a platform adaptation (PC laptops lack numpads); no fix applied.
+The comment `// no WASD — those are commands` correctly documents intent.
+
+#### F19.3 — Kp5 explicit stop missing [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` (no Kp5 handler).
+**Reference**: `reference/_discovery/input-handling.md §4` — Amiga numpad 5
+(scancode `$2E`) → keytrans 29 → `keydir = 29` → `decode_keydir` returns
+`DIR_NONE` (stop). Original latch model required an explicit stop key.
+**Issue**: Port uses hold model (direction active while key held); releasing all
+direction keys achieves the same stop effect. Kp5 as explicit stop is a no-op
+omission only under the hold model. No fix.
+
+#### F19.4 — ALT+F4 quit [INVENTED]
+**Location**: `src/game/gameplay_scene.rs:4829-4833`.
+**Reference**: None — the original Amiga input handler nullified all key events
+before Intuition saw them; no modifier-key handling existed.
+**Issue**: Port adds ALT+F4 as immediate-quit shortcut. This is an OS-convention
+adaptation required for a windowed PC application. No fix; retained as a
+necessary modern addition.
+
+#### F19.5 — Key repeat filtering [CONFORMANT]
+**Reference**: `reference/logic/input-handling.md#handle_rawkey` —
+`IEQUALIFIER_REPEAT` bit 9 checked; auto-repeat events discarded.
+**Port**: `Event::KeyDown { repeat: false, .. }` pattern drops SDL2 auto-repeat
+events. Functionally equivalent.
+
+#### F19.6 — KEYS submenu digit routing [CONFORMANT]
+**Reference**: `reference/logic/menu-system.md#key_dispatch` `fmain.c:1341-1344` —
+digits `'1'–'6'` in CMODE_KEYS → `do_option(digit - '1' + 5)`; any other key →
+`gomenu(CMODE_ITEMS)`.
+**Port**: `menu.rs handle_key` matches exactly: `(b'1'..=b'6').contains(&key)` branch
+then `gomenu(Items)` fallback.
+
+#### F19.7 — Pause guard (Space only fires while paused) [CONFORMANT]
+**Reference**: `reference/logic/menu-system.md#key_dispatch` `fmain.c:1345` —
+`if key != KEY_SPACE and not notpause: return`.
+**Port**: `menu.rs handle_key`: `if self.is_paused() && key != b' ' { return None }`.
+Matches exactly.
+
+#### F19.8 — Dead/dying state input gating [CONFORMANT]
+**Reference**: `reference/logic/menu-system.md#key_dispatch` `fmain.c:1286` —
+`if player.state == STATE_DEAD: return`.
+**Port**: `apply_player_input` is gated on `!self.dying` (`gameplay_scene.rs:5259`),
+blocking movement and fight during the goodfairy countdown (dying sequence).
+After revive, full input resumes. The brief STATE_DEAD window has no Rust
+equivalent since revive or game-over follows immediately.
+
+#### F19.9 — `GameAction::Give` direct hotkey cross-ref [SPEC-GAP]
+Pre-existing open item (F11.9 / F18.8). 'G' key correctly opens Give submenu
+via LETTER_LIST routing. The dead `key_bindings.rs` GameAction::Give binding
+is still pending user decision. No new findings.
+
+#### F19.10 — Key actions can fire through open viewstatus [SPEC-GAP]
+**Reference**: `reference/logic/menu-system.md#key_dispatch` `fmain.c:1283-1285` —
+while `viewstatus != 0` and not paused, any key-down sets `viewstatus = 99` and
+returns immediately (no action dispatch).
+**Port**: Only ESC dismisses viewstatus 4/1 (F18.7 intentional adaptation);
+other letter keys pass through to `menu.handle_key` and fire actions.
+Assessed in F18.7 as "intentional adaptation; no fix needed." No new fix.
+
+### SPEC/REQ updates queued
+None.
+
+### Blockers
+None — F19.1 is fixed. F19.9/F11.9/F18.8 pending user decision on `GameAction::Give`.
