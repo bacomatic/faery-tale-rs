@@ -4856,8 +4856,8 @@ impl Scene for GameplayScene {
                 Keycode::Kp9 => { self.input.up = true; self.input.right = true; true }
                 Keycode::Kp1 => { self.input.down = true; self.input.left = true; true }
                 Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
-                // Fight: numpad 0 (original)
-                Keycode::Kp0 => { self.input.fight = true; true }
+                // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
+                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = true; true }
                 // All letter_list keys → route through MenuState
                 _ => {
                     if let Some(menu_key) = keycode_to_menukey(*kc) {
@@ -4879,7 +4879,7 @@ impl Scene for GameplayScene {
                 Keycode::Kp9 => { self.input.up = false; self.input.right = false; true }
                 Keycode::Kp1 => { self.input.down = false; self.input.left = false; true }
                 Keycode::Kp3 => { self.input.down = false; self.input.right = false; true }
-                Keycode::Kp0 => { self.input.fight = false; true }
+                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = false; true }
                 _ => false,
             },
             // Controller axis motion: map left stick to movement input
