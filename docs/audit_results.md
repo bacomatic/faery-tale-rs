@@ -4193,3 +4193,137 @@ None.
 
 ### Blockers
 None — F19.1 is fixed. F19.9/F11.9/F18.8 pending user decision on `GameAction::Give`.
+
+---
+
+## Subsystem 20: frustration — ✅ Complete
+
+**Reference**: `reference/logic/frustration.md` (primary),
+`reference/logic/ai-system.md` (§advance_goal frust dispatch),
+`reference/logic/SYMBOLS.md §2.5` (tactic values),
+`reference/RESEARCH.md §8.4`.
+**Code**: `src/game/gameplay_scene.rs` (`apply_player_input`,
+`tick_goodfairy_countdown`, `tick_environ`, `update_actors`),
+`src/game/npc_ai.rs` (`select_tactic`), `src/game/npc.rs`
+(`tick_with_actors`), `src/game/actor.rs` (`Tactic` enum).
+**Audit date**: 2025 (current session)
+
+### Summary
+- **7 findings**: 3 CONFORMANT, 2 NEEDS-FIX (both fixed), 1 INVENTED
+  (fixed), 1 SPEC-GAP.
+- Fix applied in **one commit** (SHA `fb18fed`).
+- Resolves queued items F3.14 and F5.6 from subsystems 3 and 5.
+- Build/tests: ✅ `cargo build` clean (zero new warnings);
+  `cargo test` — 589 + 12 + 12 tests passing.
+
+### Findings
+
+#### F20.1 — `enemy_active` gate is INVENTED [INVENTED → FIXED]
+**Location**: `src/game/gameplay_scene.rs` `apply_player_input` (removed
+lines ~998-1005).
+**Reference**: `reference/logic/frustration.md` "Reset asymmetry" note —
+`frustflag = 0` fires from at least five animation paths
+(`fmain.c:1577, 1650, 1707, 1715, 1725`), none guarded by actor index;
+no "enemy is alive" gate exists in the original.
+**Issue**: Port had `let enemy_active = self.npc_table.iter().any(...)` that
+reset frustflag to 0 whenever any active, non-dead enemy NPC existed.
+This prevented frustflag from ever accumulating during combat, even if
+both hero and all NPCs were simultaneously blocked. The original has no
+such mechanism — resets come from successful actions, not from presence.
+**Fix**: Removed `enemy_active` check entirely. NPC-walk success is now
+tracked per-NPC in `update_actors` (see F20.2).
+
+#### F20.2 — Missing frustflag resets at shot/melee/dying/sink [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs` — four sites.
+**Reference**: `reference/logic/frustration.md` — five reset sites:
+`fmain.c:1577` (sink), `fmain.c:1650` (walk), `fmain.c:1707` (shot),
+`fmain.c:1715` (melee), `fmain.c:1725` (dying); all global, none
+guarded by `i == 0`.
+**Issue**: Port only had the walk reset (`can_move → frustflag = 0`).
+Missing resets for shot, melee, dying, and sinking. NPC successful-walk
+reset was approximated by the incorrect `enemy_active` gate (F20.1).
+**Fix**:
+- `fmain.c:1707` (shot): added `self.state.frustflag = 0` after
+  `fire_missile()` in the bow/wand release path.
+- `fmain.c:1715` (melee): added reset at end of melee branch (fires
+  every tick `input.fight` is held with a melee weapon).
+- `fmain.c:1725` (dying): added reset in `tick_goodfairy_countdown`
+  when `self.dying = true` is first set.
+- `fmain.c:1577` (sinking): added reset in `tick_environ` when
+  `ActorState::Sinking` is entered.
+- NPC walk (`fmain.c:1650`, NPC branch): added `old_x/old_y` snapshot
+  in the movement execution pass of `update_actors`; if any NPC's
+  position changed, `frustflag = 0` after the pass.
+  Resolves F3.14 (queued from subsystem 3) and F5.6 (queued from
+  subsystem 5).
+
+#### F20.3 — Idle-tick frustflag reset (dir=None clears counter) [SPEC-GAP]
+**Location**: `src/game/gameplay_scene.rs` `apply_player_input`.
+**Reference**: `reference/logic/frustration.md` — frustflag only
+increments/resets inside `walk_step`, which is only entered when a
+direction is active. Standing still leaves frustflag unchanged.
+**Issue**: Before F20.2 fix, the port called the frustflag update block
+regardless of direction. When `dir = Direction::None`, `dx=dy=0`, so
+`new_x = hero_x`, `hero_proxcheck` passes, `can_move = true`, and
+`frustflag = 0` — silently clearing the counter each idle tick.
+**Fix**: Gated the entire frustflag update block on
+`if dir != Direction::None { … }` so standing still has no effect on
+the counter, matching the original's walk_step semantics. Applied as
+part of the F20.2 fix commit.
+
+#### F20.4 — `select_frust_anim` threshold comparisons [CONFORMANT]
+**Reference**: `frustration.md#select_frust_anim` — thresholds use
+strict `>`: `flag > 40` → sprite 40, `flag > 20` → oscillation sprites.
+**Port**: Uses `frustflag >= 41` and `frustflag >= 21`, which are
+integer-equivalent to `> 40` and `> 20` on u8. Conformant.
+
+#### F20.5 — NPC `resolve_frust_tactic` random range [CONFORMANT]
+**Reference**: `frustration.md#resolve_frust_tactic` — bow: `rand(2,5)`
+= {FOLLOW(2), BUMBLE_SEEK(3), RANDOM(4), BACKUP(5)}; melee: `rand(3,4)`
+= {BUMBLE_SEEK(3), RANDOM(4)}.
+**Port**: `npc_ai.rs select_tactic`: bow path uses `rr & 3 → {Follow,
+BumbleSeek, Random, Backup}` (4 equally-likely values, matching
+SYMBOLS.md tactic values 2–5); melee uses `rr & 1 → {BumbleSeek,
+Random}`. Conformant with `fmain.c:2141-2144`.
+Pre-goal-branch ordering also correct (runs before FLEE/FOLLOWER/etc.
+mode branches per `frustration.md` Notes §Cross-goal reassignment).
+
+#### F20.6 — `TACTIC_SHOOTFRUST` absent from `Tactic` enum [CONFORMANT]
+**Reference**: `frustration.md` Notes — `TACTIC_SHOOTFRUST = 9` is
+unreachable: no code path in fmain.c or fmain2.c ever writes `9` into
+`an.tactic`. `advance_goal` tests both `TACTIC_FRUST` and
+`TACTIC_SHOOTFRUST` identically.
+**Port**: `Tactic` enum has no `ShootFrust` variant; `select_tactic`
+only tests `Tactic::Frust`. Since SHOOTFRUST is never assigned, omitting
+the variant has no observable effect. CONFORMANT.
+
+#### F20.7 — Frust render override has correct priority relative to fight [CONFORMANT]
+**Reference**: `frustration.md` overview — hero path "mutates only the
+sprite index written out later in the same animation pass." In the
+original, `fmain.c:1715` fires (resetting frustflag) in the same tick
+the hero enters melee, so `select_frust_anim` would return -1 during
+any fight tick.
+**Port**: Render code at `gameplay_scene.rs:4612` applies
+`frust_render_frame` before the Fighting branch. With F20.2 fixed,
+melee resets `frustflag = 0` on the same tick fight begins; therefore
+`frust_render_frame = None` and fight animation renders correctly.
+The priority order is technically fight-masked-by-frust, but is self-
+correcting once F20.2 is in place. CONFORMANT post-fix.
+
+### Cross-reference resolution
+- **F3.14 (SPEC-GAP from subsystem 3)**: Resolved — per-actor
+  successful-action resets now wired for walk (NPC path), shot, melee,
+  dying, and sinking.
+- **F5.6 (REF-AMBIGUOUS from subsystem 5)**: Resolved — `enemy_active`
+  gate removed; replaced by genuine per-NPC-move tracking in
+  `update_actors`.
+
+### SPEC/REQ updates queued
+None — frustration subsystem is fully specified in
+`reference/logic/frustration.md`.
+
+### Blockers
+None — all NEEDS-FIX and INVENTED findings fixed. No scroll-area text
+is produced by the frustration path (hero-facing frust animation is
+purely sprite-index selection with no narration). Two-source rule
+(SPEC §23.6, REQ R-INTRO-012) satisfied.
