@@ -4327,3 +4327,34 @@ None — all NEEDS-FIX and INVENTED findings fixed. No scroll-area text
 is produced by the frustration path (hero-facing frust animation is
 purely sprite-index selection with no narration). Two-source rule
 (SPEC §23.6, REQ R-INTRO-012) satisfied.
+
+---
+
+## Subsystem 21: game-loop
+
+**Reference**: `reference/logic/game-loop.md`  
+**Code surface**: `src/game/gameplay_scene.rs` (update() inner loop), `src/game/game_clock.rs`, `src/main.rs`, `src/game/game_state.rs`  
+**Commit SHA**: 28c6957  
+**Tests**: 613 before → 613 after (589 + 12 + 12; no regressions)
+
+### Findings
+
+| ID | Category | Summary | Action |
+|----|----------|---------|--------|
+| GL-01 | NEEDS-FIX | Phase 6 (`update_fiery_death`) ran after Phase 7 (`apply_player_input`), reversing fmain.c:1384-1459 canonical order. `resolve_player_state` reads `fiery_death` to gate swan dismount (fmain.c:1418). | Fixed: moved `update_fiery_death()` before `apply_player_input()`. |
+| GL-02 | NEEDS-FIX | Missile tick (Phase 16, fmain.c:2298-2340) ran before actor loop (Phase 9, fmain.c:1476-1826) and melee hit detection (Phase 15, fmain.c:2262-2296). Canonical order: Phase 9 → Phase 15 → Phase 16. | Fixed: reordered to `update_actors()` → `run_combat_tick()` → missile block. |
+| GL-03 | NEEDS-FIX | Invented scroll string `"The turtle rewards you with {} shell(s)!"` (dead code — `egg_count` always passed as 0). Violates SPEC §23.6 / REQ R-INTRO-012 two-source rule. Turtle reward is speech event 56 in `faery.toml` [narr] speeches per `reference/logic/dialog_system.md`. | Fixed: removed invented string and dead `return_eggs_to_nest(..., 0)` call. |
+| GL-04 | SPEC-GAP | `flasher` (Phase 1, fmain.c:1275) is declared in `GameState` and persisted but never incremented anywhere. `set_flash_color(flasher)` (big-map border flash, viewstatus=1) is not yet ported, so impact is currently zero. | Flag for user: `flasher` should be incremented alongside `cycle` in Phase 1 once the big-map flash path is ported. |
+| GL-05 | CONFORMANT | 30 Hz tick rate (`NANOS_PER_TICK = 33_333_334`) — NTSC-only gameplay clock. Intentional and correct. | No action. |
+| GL-06 | CONFORMANT | `cycle` counter advanced by `delta_ticks` before the inner per-tick loop. Functionally equivalent to per-tick increment for normal 30 Hz operation (delta=0 or 1). | No action. |
+| GL-07 | CONFORMANT | Pause gate (Phase 4): `menu.is_paused()` returns early before all game logic, skipping Phases 5–24. Conforms to `game_paused()` + skip in reference. | No action. |
+| GL-08 | CONFORMANT | Frame pacing: SDL2 `present_vsync` + `GameClock` nano-accumulator with `GameTicker::get_elapsed_ticks()` provide correct 30 Hz rate-limiting without runaway catch-up. | No action. |
+| GL-09 | CONFORMANT | VBL-equivalent: SDL2 vsync replaces Amiga `WaitBOVP(&vp_text)` (Phase 23 page_flip). Behavioral equivalent for frame-rate locking. | No action. |
+| GL-10 | CONFORMANT | Two-source scroll-text rule (SPEC §23.6, REQ R-INTRO-012): after GL-03 fix, no invented narrator strings remain in the game-loop code path. | No action. |
+
+### SPEC-GAP items queued for user review
+
+- **GL-04**: `flasher` Phase 1 increment not yet implemented. Pending user decision: increment `flasher` alongside `cycle` in `gameplay_scene.rs` update loop (before or inside the per-tick `for` block) when big-map flash (viewstatus=1 `set_flash_color` path) is ported.
+
+### Blockers
+None — all NEEDS-FIX and INVENTED findings fixed. Tests pass (613/613).
