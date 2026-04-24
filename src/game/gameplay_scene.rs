@@ -752,6 +752,8 @@ impl GameplayScene {
                     player.moving = false;
                     player.state = ActorState::Fighting(next_state);
                 }
+                // fmain.c:1715 — active melee resets frustflag.
+                self.state.frustflag = 0;
             }
             return;
         }
@@ -791,6 +793,8 @@ impl GameplayScene {
                     // no text for bow/wand release. Ref: combat.md#missile_step.
                     let wealth = self.state.wealth;
                     self.menu.set_options(self.state.stuff(), wealth);
+                    // fmain.c:1707 — successful shot resets frustflag.
+                    self.state.frustflag = 0;
                 }
 
                 if let Some(player) = self.state.actors.first_mut() {
@@ -992,21 +996,17 @@ impl GameplayScene {
                 }
             }
 
-            // Player frustflag update (SPEC §9.8, player-only).
-            // Combat-gated: any active enemy NPC resets frustflag to 0.
-            // Else: successful move → 0; fully blocked (all 3 probes failed) → +1.
-            let enemy_active = self.npc_table.as_ref().map_or(false, |t| {
-                t.npcs.iter().any(|n| n.active
-                    && n.race == crate::game::npc::RACE_ENEMY
-                    && n.state != crate::game::npc::NpcState::Dead
-                    && n.state != crate::game::npc::NpcState::Dying)
-            });
-            if enemy_active {
-                self.state.frustflag = 0;
-            } else if can_move {
-                self.state.frustflag = 0;
-            } else if !turtle_blocked {
-                self.state.frustflag = self.state.frustflag.saturating_add(1);
+            // Frustflag update: only while the player is attempting movement.
+            // Mirrors walk_step, which is only entered when a direction is active.
+            // fmain.c:1650 — successful step resets frustflag (global; no actor-index guard).
+            // fmain.c:1654-1656 — all three probes fail → hero-only increment.
+            // NPC-walk resets are handled in update_actors after the movement pass.
+            if dir != Direction::None {
+                if can_move {
+                    self.state.frustflag = 0;
+                } else if !turtle_blocked {
+                    self.state.frustflag = self.state.frustflag.saturating_add(1);
+                }
             }
 
             if can_move {
@@ -1403,6 +1403,8 @@ impl GameplayScene {
                                 player.state = ActorState::Sinking;
                             }
                         }
+                        // fmain.c:1577 — sinking resets frustflag.
+                        self.state.frustflag = 0;
                     }
                 }
             }
@@ -1443,6 +1445,8 @@ impl GameplayScene {
             self.goodfairy = 255;
             self.luck_gate_fired = false;
             self.last_mood = u8::MAX; // force death music re-evaluation
+            // fmain.c:1725 — dying state resets frustflag.
+            self.state.frustflag = 0;
 
             // SPEC §20.2: every death costs 5 luck (single deduction, any cause).
             // The luck gate below then reads the post-deduction value to decide
@@ -2315,6 +2319,10 @@ impl GameplayScene {
             }
 
             // 2. Movement execution pass (sequential — later NPCs see earlier updates).
+            // Track any successful NPC move to apply the global frustflag reset
+            // (frustration.md "Reset asymmetry": fmain.c:1650 fires for every actor,
+            // not just the hero, so any NPC's successful walk zeroes the hero's counter).
+            let mut any_npc_moved = false;
             for i in 0..table.npcs.len() {
                 if !table.npcs[i].active { continue; }
                 if table.npcs[i].state != NpcState::Walking { continue; }
@@ -2331,7 +2339,17 @@ impl GameplayScene {
                     if other.state == NpcState::Dead { continue; }
                     others.push((other.x as i32, other.y as i32));
                 }
+                let old_x = table.npcs[i].x;
+                let old_y = table.npcs[i].y;
                 table.npcs[i].tick_with_actors(self.map_world.as_ref(), &others);
+                if table.npcs[i].x != old_x || table.npcs[i].y != old_y {
+                    any_npc_moved = true;
+                }
+            }
+            // fmain.c:1650 (NPC branch): any NPC's successful walk step resets
+            // the global frustflag — same code path, no actor-index guard.
+            if any_npc_moved {
+                self.state.frustflag = 0;
             }
 
             // 3. Battleflag: true if any active NPC within 300px.
