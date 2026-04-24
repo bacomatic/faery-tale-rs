@@ -3995,3 +3995,99 @@ but requires a SPEC update to formally note this adaptation. Deferred.
 ### Blockers
 None — all fixable findings are fixed. F17.8 requires user sign-off before
 adding raftprox to the proto.
+
+---
+
+## Subsystem 18: menu-system — ✅ Complete
+
+**Reference**: `reference/logic/menu-system.md`,
+`reference/RESEARCH.md §4.8 + §18.5`, `reference/logic/SYMBOLS.md`.
+**Source**: `src/game/menu.rs`, `src/game/gameplay_scene.rs`
+(keycode_to_menukey, handle_event, dispatch_menu_action),
+`src/game/key_bindings.rs`.
+
+### F18.1 — F1-F7 magic spell shortcuts not wired [FIXED]
+**Location**: `src/game/menu.rs` LETTER_LIST (line 118, comment),
+`src/game/gameplay_scene.rs` keycode_to_menukey.
+**Reference**: `RESEARCH.md §4.8` table: `F1-F7 | MAGIC (1) | 5-11`.
+`fmain.c:537-547` defines F-key entries in `letter_list` with key codes
+10-16, mapping to `MAGIC` menu slots 5-11.
+**Issue**: LETTER_LIST contained only a comment `// Magic function keys
+(10-16) are handled separately in gameplay_scene`. No such separate
+handling existed in `gameplay_scene.rs`. Pressing F1-F7 returned
+`keycode_to_menukey → None`, silently ignoring the keystroke.
+**Fix**: Added entries `(10..=16, MenuMode::Magic, 5..=11)` to
+LETTER_LIST and added `Keycode::F1..=F7 → Some(10..=16)` to
+`keycode_to_menukey`. ALT+F4 quit still takes priority (checked before
+`keycode_to_menukey`); plain F4 now correctly fires Magic slot 8.
+
+### F18.2 — KEYS-mode digit shortcuts incorrectly gated by pause [FIXED]
+**Location**: `src/game/menu.rs` `handle_key` (KEYS digit branch).
+**Reference**: `menu-system.md#key_dispatch` `fmain.c:1340-1348`:
+the KEYS-mode digit path fires **before** the pause check at `fmain.c:1349`.
+**Issue**: Port had `if self.is_paused() { return MenuAction::None; }` inside
+the KEYS digit branch, blocking key-item use while paused. The original
+allows it.
+**Fix**: Removed the `is_paused()` guard from the KEYS digit branch.
+
+### F18.3 — KEYS-mode non-digit key doesn't short-circuit to gomenu(ITEMS) [FIXED]
+**Location**: `src/game/menu.rs` `handle_key` (KEYS branch).
+**Reference**: `menu-system.md#key_dispatch` `fmain.c:1344-1348`:
+when in KEYS mode and a non-digit key is pressed, the original calls
+`gomenu(CMODE_ITEMS)` and returns **without** consulting `letter_list`.
+**Issue**: Non-digit keys while in KEYS mode fell through to the
+`LETTER_LIST` loop, potentially triggering unrelated actions (e.g., 'S'
+would open the Say menu instead of returning to ITEMS).
+**Fix**: Restructured the KEYS block: digit keys dispatch the item
+action; all other keys call `self.gomenu(MenuMode::Items)` and return
+`MenuAction::None` immediately, matching `fmain.c:1344-1348`.
+
+### F18.4 — TYPE_RADIO (12) vs ATYPE_ONESHOT (12) naming [CONFORMANT]
+**Reference**: `SYMBOLS.md` `ATYPE_ONESHOT = 12`. Port uses `TYPE_RADIO`.
+Values and behavior are identical. No fix needed.
+
+### F18.5 — `lastmenu` reset not tracked [SPEC-GAP]
+**Reference**: `menu-system.md` option_handler `fmain.c:1314`:
+`handler_data.lastmenu = 0` reset for non-IMMEDIATE clicks.
+This is part of Amiga mouse-up synthesis logic for the two-click
+selection idiom; not applicable to the SDL single-click port.
+No functional divergence. No fix needed.
+
+### F18.6 — `hitgo` FLAG_DISPLAYED gate absent in LETTER_LIST key path [SPEC-GAP]
+**Reference**: `menu-system.md` `fmain.c:1354`:
+`hitgo = enabled[hit] & MENU_FLAG_VISIBLE` before dispatching.
+Port dispatches without checking FLAG_DISPLAYED. In practice the magic
+subsystem's `try_cast_spell` already guards on item ownership, so no
+observable gameplay bug. No fix needed.
+
+### F18.7 — `viewstatus` any-key dismiss path [SPEC-GAP]
+**Reference**: `menu-system.md#key_dispatch` `fmain.c:1283-1285`:
+any key-down sets `viewstatus = 99` when `viewstatus != 0 && !paused`.
+Port uses ESC-only dismiss for inventory (viewstatus 4) and map (viewstatus 1);
+viewstatus 99 is repurposed as "force palette rebuild" (`should_update_palette`
+checks `> 97`). The victory sequence (viewstatus 2) is correctly non-dismissable.
+Partial intentional adaptation; no fix needed.
+
+### F18.8 — `GameAction::Give` direct hotkey (cross-ref F11.9) [SPEC-GAP]
+**Reference**: `RESEARCH.md §18.5`: `G | ITEMS (0) | 9 | Give submenu`.
+'G' key through `keycode_to_menukey` → `handle_key` → LETTER_LIST correctly
+opens the Give submenu via `gomenu(MenuMode::Give)`. The separate
+`key_bindings.rs:215` binding `GameAction::Give → G` is dead for keyboard
+(`action_for_key` is never called from the KeyDown handler). Previously
+identified as F11.9 SPEC-GAP. Pending user adjudication.
+
+### LETTER_LIST conformance summary
+All 29 LETTER_LIST entries (22 non-F-key + 7 F-key) match
+`RESEARCH.md §4.8` exactly.
+
+### Action type constant conformance
+`TYPE_MASK=0xFC`, `TYPE_TAB=0`, `TYPE_TOGGLE=4`, `TYPE_IMMEDIATE=8`,
+`TYPE_RADIO=12` match `SYMBOLS.md` `ATYPE_NAV/TOGGLE/IMMEDIATE/ONESHOT`.
+
+### SPEC/REQ updates queued
+None — F18.8 is a pre-existing open item (F11.9). Subsystem is otherwise
+complete.
+
+### Blockers
+None — all NEEDS-FIX findings (F18.1, F18.2, F18.3) are fixed.
+F18.8/F11.9 pending user decision on `GameAction::Give` key binding.

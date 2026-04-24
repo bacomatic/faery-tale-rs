@@ -102,6 +102,14 @@ fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
         Keycode::Num6   => Some(b'6'),
         Keycode::Num7   => Some(b'7'),
         Keycode::K      => Some(b'K'),
+        // F1-F7: magic spell shortcuts (fmain.c:537-547, key codes 10-16)
+        Keycode::F1     => Some(10),
+        Keycode::F2     => Some(11),
+        Keycode::F3     => Some(12),
+        Keycode::F4     => Some(13),
+        Keycode::F5     => Some(14),
+        Keycode::F6     => Some(15),
+        Keycode::F7     => Some(16),
         _ => None,
     }
 }

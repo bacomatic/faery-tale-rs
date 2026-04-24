@@ -115,7 +115,11 @@ pub const LETTER_LIST: &[(u8, MenuMode, u8)] = &[
     (b'C', MenuMode::Buy,   8),  (b'W', MenuMode::Buy,   9),
     (b'B', MenuMode::Buy,  10),  (b'E', MenuMode::Buy,  11),
     (b'V', MenuMode::SaveX, 5),  (b'X', MenuMode::SaveX, 6),
-    // Magic function keys (10-16) are handled separately in gameplay_scene
+    // F1-F7 → MAGIC slots 5-11 (fmain.c:537-547, key codes 10-16)
+    (10, MenuMode::Magic,  5),   (11, MenuMode::Magic,  6),
+    (12, MenuMode::Magic,  7),   (13, MenuMode::Magic,  8),
+    (14, MenuMode::Magic,  9),   (15, MenuMode::Magic, 10),
+    (16, MenuMode::Magic, 11),
     (b'1', MenuMode::Use,   0),  (b'2', MenuMode::Use,   1),
     (b'3', MenuMode::Use,   2),  (b'4', MenuMode::Use,   3),
     (b'5', MenuMode::Use,   4),  (b'6', MenuMode::Use,   5),
@@ -305,12 +309,12 @@ impl MenuState {
 
     /// Handle a keyboard shortcut (fmain.c:1499-1520).
     pub fn handle_key(&mut self, key: u8) -> MenuAction {
-        if self.cmode == MenuMode::Keys && (b'1'..=b'6').contains(&key) {
-            if self.is_paused() {
-                return MenuAction::None;
+        if self.cmode == MenuMode::Keys {
+            if (b'1'..=b'6').contains(&key) {
+                return self.dispatch_do_option(key - b'1' + 5);
             }
-            let hit = key - b'1' + 5;
-            return self.dispatch_do_option(hit);
+            self.gomenu(MenuMode::Items);
+            return MenuAction::None;
         }
         for &(letter, menu, slot) in LETTER_LIST {
             if letter != key {
