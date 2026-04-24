@@ -24,9 +24,9 @@ leave `stuff[]` only by consumption (weapons keep their count on display but
 use, `stuff[16..21]` keys decrement per successful unlock, `stuff[24]` fruit
 decrements on eat) or by the three `leave_item` paths documented in
 [quests.md#leave_item](quests.md#leave_item). This logic doc therefore covers
-TAKE, body-search, the `USE` submenu dispatcher, the `MAGIC` submenu dispatcher
-(whose per-item consumable effects are specific enough to deserve a function
-body), and the `LOOK` hidden-object reveal. Weapon equipping is documented
+TAKE, body-search, the `USE` submenu dispatcher, and the `LOOK` hidden-object
+reveal. The `MAGIC` submenu dispatcher and the full magic-item catalog have
+their own logic doc — see [magic.md](magic.md). Weapon equipping is documented
 inside `use_dispatch`; key-on-door unlock is deferred to
 [doors.md#use_key_on_door](doors.md#use_key_on_door); Sea Shell carrier spawn
 is deferred to [quests.md#get_turtle](quests.md#get_turtle); shop purchase is
@@ -308,132 +308,6 @@ per-door key spends (`stuff[16..21]` in `use_key_on_door`). Only the Sea Shell
 path has a consuming effect, and that consumption happens inside `get_turtle`
 (extent move) rather than in `use_dispatch`.
 
-## magic_dispatch
-
-Source: `fmain.c:3300-3365`
-Called by: `option_handler` (via `do_option` `CMODE_MAGIC` branch)
-Calls: `event`, `speak`, `rand8`, `bigdraw`, `SetDrMd`, `SetAPen`, `Move`, `Text`, `stillscreen`, `prq`, `colorplay`, `xfer`, `checkdead`, `set_options`, `print`, `stone_list`, `planes`, `secx`, `secy`, `rp_map`, `JAM1`
-
-```pseudo
-def magic_dispatch(hit: int) -> None:
-    """Consume one magic item and apply its per-slot effect. Decrement stuff[4+hit]; refresh menu when exhausted. Branches that fail their precondition return early without consuming the charge."""
-    # Menu label order at fmain.c:501 is: Stone Jewel Vial Orb Totem Ring Skull (hit 5..11).
-    # Slot mapping: stuff[4+hit] — 5→stuff[9] Blue Stone, 6→Green Jewel, 7→Glass Vial, 8→Crystal Orb,
-    # 9→Bird Totem, 10→Gold Ring, 11→Jade Skull.
-    if hit < 5 or stuff[4 + hit] == 0:                       # fmain.c:3303 — no magic owned
-        event(21)                                            # fmain.c:3303 — 21 = "if only I had some magic!"
-        return
-    if extn.v3 == 9:                                         # fmain.c:3304 — extent dampener on magic (astral zone)
-        speak(59)                                            # fmain.c:3304 — 59 = "magic doesn't work here"
-        return
-    if hit == 5:                                             # fmain.c:3332 — Blue Stone: stone-circle teleport
-        if hero_sector != 144:                               # fmain.c:3332 — 144 = stone-circle sector id
-            return                                           # fmain.c:3348 — not on a circle ⇒ don't consume
-        # 85 and 64 are the stone-tile sub-cell offsets inside the 256-wide sector.
-        if (hero_x & 255) // 85 != 1 or (hero_y & 255) // 64 != 1:  # fmain.c:3333 — off-tile
-            return                                           # fmain.c:3348
-        x = hero_x >> 8                                      # fmain.c:3335 — sector-relative X of the stone
-        y = hero_y >> 8                                      # fmain.c:3335 — sector-relative Y of the stone
-        i = 0
-        found = 0
-        while i < 11:                                        # fmain.c:3336 — 11 = stone_list pair count
-            if stone_list[i + i] == x and stone_list[i + i + 1] == y:  # fmain.c:3337 — match current stone
-                i = i + anim_list[0].facing + 1              # fmain.c:3338 — step `facing+1` stones forward
-                if i > 10:                                   # fmain.c:3338 — wrap 11-entry ring
-                    i = i - 11                               # fmain.c:3338 — 11 stones in ring
-                nx = (stone_list[i + i] << 8) + (hero_x & 255)  # fmain.c:3339 — sibling world X (preserve sub-cell)
-                ny = (stone_list[i + i + 1] << 8) + (hero_y & 255)  # fmain.c:3340 — sibling world Y
-                colorplay()                                  # fmain.c:3341 — 32-frame palette strobe
-                xfer(nx, ny, True)                           # fmain.c:3342 — teleport + reload region
-                if riding != 0:                              # fmain.c:3343 — drag mount along with hero
-                    anim_list[wcarry].abs_x = anim_list[0].abs_x
-                    anim_list[wcarry].abs_y = anim_list[0].abs_y
-                found = 1
-                break
-            i = i + 1
-        if found == 0:                                       # fmain.c:3348 — no sibling found
-            return
-        # Case 5 has no `break` in the C source (fmain.c:3349) — fall through into the Glass Vial heal.
-        anim_list[0].vitality = anim_list[0].vitality + rand8() + 4  # fmain.c:3353 — 4 = min heal bonus
-        cap = 15 + brave // 4                                # fmain.c:3354 — 15 = VIT_BASE, 4 = VIT_BRAVE_DIV
-        if anim_list[0].vitality > cap:                      # fmain.c:3354 — clamp overheal
-            anim_list[0].vitality = cap
-        else:
-            print("That feels a lot better!")                # fmain.c:3354 — only print if cap not hit
-        prq(4)                                               # fmain.c:3355 — HUD vitality refresh
-    elif hit == 6:                                           # fmain.c:3306 — Green Jewel: illumination
-        light_timer = light_timer + 760                      # fmain.c:3306 — 760 = illumination ticks
-    elif hit == 7:                                           # fmain.c:3353 — Glass Vial: heal
-        anim_list[0].vitality = anim_list[0].vitality + rand8() + 4  # fmain.c:3353 — 4 = min heal bonus
-        cap = 15 + brave // 4                                # fmain.c:3354 — 15 = VIT_BASE, 4 = VIT_BRAVE_DIV
-        if anim_list[0].vitality > cap:                      # fmain.c:3354 — clamp overheal
-            anim_list[0].vitality = cap
-        else:
-            print("That feels a lot better!")                # fmain.c:3354
-        prq(4)                                               # fmain.c:3355 — HUD vitality refresh
-    elif hit == 8:                                           # fmain.c:3308 — Crystal Orb: secret reveal
-        secret_timer = secret_timer + 360                    # fmain.c:3308 — 360 = reveal-secrets ticks
-    elif hit == 9:                                           # fmain.c:3311 — Bird Totem: overhead map
-        if cheat1 == 0 and region_num > 7:                   # fmain.c:3311 — regions 8,9 locked without cheat
-            return                                           # fmain.c:3311 — no consume outside permitted region
-        bm_draw = fp_drawing.ri_page.BitMap                  # fmain.c:3313
-        planes = bm_draw.Planes                              # fmain.c:3314
-        bigdraw(map_x, map_y)                                # fmain.c:3315 — blit the map into the drawing page
-        # Convert hero world coord → screen pixel on the map bitmap. 16 = tile size; 4 and 3 = x/y pixel offsets.
-        i = (hero_x >> 4) - ((secx + xreg) << 4) - 4         # fmain.c:3317
-        j = (hero_y >> 4) - ((secy + yreg) << 4) + 3         # fmain.c:3318
-        rp_map.BitMap = bm_draw                              # fmain.c:3319
-        SetDrMd(rp_map, JAM1)                                # fmain.c:3320 — JAM1 = opaque-pen mode
-        SetAPen(rp_map, 31)                                  # fmain.c:3320 — 31 = palette index for the marker
-        if i > 0 and i < 320 and j > 0 and j < 143:          # fmain.c:3321 — 320×143 = map visible area
-            Move(rp_map, i, j)                               # fmain.c:3322
-            Text(rp_map, "+", 1)                             # fmain.c:3322
-        viewstatus = 1                                       # fmain.c:3323 — 1 = VIEWSTATUS_MAP
-        stillscreen()                                        # fmain.c:3324 — freeze playfield
-        prq(5)                                               # fmain.c:3325 — queue options redraw
-    elif hit == 10:                                          # fmain.c:3309 — Gold Ring: time freeze
-        if riding > 1:                                       # fmain.c:3309 — 1 = minimum riding code that still allows freeze
-            return                                           # fmain.c:3309 — while mounted on swan/dragon: no-op, no consume
-        freeze_timer = freeze_timer + 100                    # fmain.c:3309 — 100 = freeze ticks
-    elif hit == 11:                                          # fmain.c:3361 — Jade Skull: mass kill
-        i = 1
-        while i < anix:                                      # fmain.c:3361 — iterate live monster slots
-            an = anim_list[i]
-            if an.vitality != 0 and an.type == ENEMY and an.race < 7:  # fmain.c:3362 — 7 = cut-off excluding Dark Knight / Loraii / Necromancer
-                an.vitality = 0                              # fmain.c:3363
-                checkdead(i, 0)                              # fmain.c:3363 — ENEMY death bookkeeping
-                brave = brave - 1                            # fmain.c:3363 — 1 bravery lost per killed foe
-            i = i + 1
-        if battleflag:                                       # fmain.c:3364 — 34 = "all fall before you" recap
-            event(34)                                        # fmain.c:3364 — event index 34
-    # Consumption epilogue (labelled `fini:` in the C source at fmain.c:3365).
-    if stuff[4 + hit] - 1 == 0:                              # fmain.c:3365 — MAGICBASE=4; decrement slot; 0 ⇒ disable menu row
-        stuff[4 + hit] = 0                                   # fmain.c:3365 — MAGICBASE=4
-        set_options()                                        # fmain.c:3365 — refresh menus[MAGIC].enabled[]
-    else:
-        stuff[4 + hit] = stuff[4 + hit] - 1                  # fmain.c:3365 — decrement count by 1
-```
-
-**Consumption gate.** The decrement epilogue at `fmain.c:3365` runs only for
-branches that fall through to the bottom of the MAGIC switch. Blue Stone
-(wrong sector or off-tile or no sibling stone), Bird Totem (`region_num > 7`
-without `cheat1`), and Gold Ring (`riding > 1`) all short-circuit with
-`return`, preserving the charge so the player is not penalised for a
-precondition miss.
-
-**Blue Stone fall-through.** The C `case 5:` at `fmain.c:3332` has no
-`break` before `case 7:` at `fmain.c:3353`, so every successful stone
-teleport also runs the Glass Vial heal — a single Blue Stone use both
-teleports *and* heals. This is documented in
-[RESEARCH §10](../RESEARCH.md#10-inventory--items) and verified by the lack of
-`break;` between the `xfer()` call and the `vitality += rand8()+4` block.
-
-**Kill-spell race gate.** The `race < 7` test at `fmain.c:3362` means the
-Jade Skull spares race codes 7 (Dark Knight), 8 (Loraii), 9 (Necromancer),
-and every SETFIG (race bit 7 set). `checkdead(i, 0)` runs the standard
-ENEMY death path documented in [combat.md#checkdead](combat.md#checkdead),
-including `treasure_probs` drops and `brave`/`kind` bookkeeping.
-
 ## look_command
 
 Source: `fmain.c:3286-3295`
@@ -480,6 +354,7 @@ def look_command() -> None:
 - **Menu refresh.** `take_command`, `search_body`, `look_command`, and
   `use_dispatch` all rely on the outer `set_options()` call at
   `fmain.c:3514` to recompute `menus[*].enabled[]` after any `stuff[]`
-  mutation. `magic_dispatch` calls `set_options()` directly at
-  `fmain.c:3365` only on the transition to zero, because the displayed row
+  mutation. The `MAGIC` submenu dispatcher
+  ([magic.md#magic_dispatch](magic.md#magic_dispatch)) calls `set_options()`
+  directly only on the transition to zero, because the displayed row
   changes from selectable to greyed out at that moment.

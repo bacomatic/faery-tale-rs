@@ -88,7 +88,7 @@ SPEED_NORMAL        = 2     # fmain.c:1602 — default walking speed
 SPEED_SLOW          = 1     # fmain.c:1602 — wading/deep-water speed
 SPEED_FAST          = 4     # fmain.c:1601 — slippery-terrain speed
 SPEED_BACKWARDS     = -2    # fmain.c:1600 — lava walk-backward speed
-SPEED_RAFT          = 3     # fmain.c:1599 — hero on turtle/raft
+SPEED_TURTLE        = 3     # fmain.c:1599 — hero riding turtle (also turtle autonomous swim speed)
 VEL_DISPL_MUL       = 4     # fmain.c:1646-1647 — vel stored as displacement*4
 WORLD_COORD_MASK    = 0x7fff # fsubs.asm:1295 — 15-bit world coordinate mask
 COORD_FLAG_BIT      = 0x8000 # fsubs.asm:1316 — bit 15 of abs_y preserved (semantics unresolved, see PROBLEMS)
@@ -100,9 +100,10 @@ COLLIDE_ACTOR       = 16    # fmain2.c:289 — proxcheck return code for actor-a
 ICE_VEL_ACCUM_BASE  = 20    # fmain.c:1583 — ice velocity accumulator base (newx(20,d,2)-20 == xdir[d])
 
 # Riding modes (global `riding`)
-RIDING_NONE = 0
-RIDING_RAFT = 5             # fmain.c:1599 — hero on turtle/raft
-RIDING_SWAN = 11            # fmain.c:1582 — hero on swan (ice physics)
+RIDING_NONE   = 0
+RIDING_RAFT   = 1           # fmain.c:1572 — hero on raft (anim_list[1])
+RIDING_TURTLE = 5           # fmain.c:1516 — hero on turtle carrier
+RIDING_SWAN   = 11          # fmain.c:1502 — hero on swan (ice physics)
 
 # set_course mode constants
 COURSE_MODE_DIRECT     = 0

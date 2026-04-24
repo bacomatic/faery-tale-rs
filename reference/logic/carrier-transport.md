@@ -1,7 +1,7 @@
 # Carrier Transport — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §11](../RESEARCH.md#96-special-extents), [_discovery/carrier-transport-system.md](../_discovery/carrier-transport-system.md), [_discovery/carriers.md](../_discovery/carriers.md), [logic/movement.md](movement.md), [logic/quests.md#get_turtle](quests.md#get_turtle), [logic/game-loop.md](game-loop.md)
+> Cross-refs: [RESEARCH §9.6](../RESEARCH.md#96-special-extents), [_discovery/carrier-transport-system.md](../_discovery/carrier-transport-system.md), [_discovery/carriers.md](../_discovery/carriers.md), [logic/movement.md](movement.md), [logic/quests.md#get_turtle](quests.md#get_turtle), [logic/game-loop.md](game-loop.md)
 
 ## Overview
 
@@ -197,7 +197,7 @@ def carrier_tick(i: int, an: Shape, d: int) -> None:
             d = anim_list[0].facing                       # fmain.c:1515
             xtest = anim_list[0].abs_x                    # fmain.c:1516
             ytest = anim_list[0].abs_y                    # fmain.c:1516
-            riding = RIDING_RAFT                          # fmain.c:1517, riding=5 (turtle) reuses RIDING_RAFT slot
+            riding = RIDING_TURTLE                         # fmain.c:1517, 5 = turtle riding value
             dex = d + d                                   # fmain.c:1518 — 2 frames per facing (16 total)
             if anim_list[0].state == STATE_WALKING:
                 dex = dex + (cycle & 1)                   # fmain.c:1519 — alternate walk frame
@@ -269,7 +269,7 @@ def raft_tick(an: Shape) -> None:
         return
     an.abs_x = xtest                                      # fmain.c:1570
     an.abs_y = ytest                                      # fmain.c:1571
-    riding = 1                                            # fmain.c:1572 — latch raft ride
+    riding = RIDING_RAFT                                      # fmain.c:1572 — latch raft ride
 ```
 
 Notes:

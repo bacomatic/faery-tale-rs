@@ -233,7 +233,7 @@ def get_turtle() -> None:
         return
     # fmain.c:3515-3516 — move the turtle extent (index 1) and async-load the turtle carrier (race code 5).
     move_extent(1, encounter_x, encounter_y)                 # fmain.c:3515 — extent 1 = turtle-eggs / turtle extent
-    load_carrier(5)                                          # fmain.c:3516 — 5 = RIDING_RAFT / turtle carrier
+    load_carrier(5)                                          # fmain.c:3516 — 5 = RIDING_TURTLE / turtle carrier
 ```
 
 **Exclusion rectangle.** The USE handler at `fmain.c:3459` short-circuits
