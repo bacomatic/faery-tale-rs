@@ -5274,15 +5274,28 @@ impl Scene for GameplayScene {
 
         // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
         for _ in 0..delta_ticks {
+            // Phase 6 — fiery-death zone flag (fmain.c:1384-1385); must precede Phase 7
+            // so that resolve_player_state can read the correct fiery_death value when
+            // deciding whether the swan can be dismounted (fmain.c:1418).
+            self.update_fiery_death();
+            // Phase 7 — player state resolution (fmain.c:1387-1459)
             if !self.dying {
                 self.apply_player_input();
             }
 
-            self.update_fiery_death();
             self.update_environ();
             self.apply_environ_damage();
 
-            // Tick missiles (npc-105): advance each active missile, check hits.
+            // Phase 9 — actor processing loop (fmain.c:1476-1826)
+            self.update_actors(1);
+            self.update_turtle_autonomous();
+            self.update_proximity_speech();
+
+            // Phase 15 — melee hit detection (fmain.c:2262-2296)
+            self.run_combat_tick();
+
+            // Phase 16 — missile tick (fmain.c:2298-2340): runs after Phase 9 actors have
+            // moved so hit-detection uses up-to-date NPC positions, and after Phase 15 melee.
             {
                 let hero_x = self.state.hero_x as i32;
                 let hero_y = self.state.hero_y as i32;
@@ -5338,14 +5351,6 @@ impl Scene for GameplayScene {
                 }
                 self.state.vitality -= hero_missile_damage;
             }
-            let shells = self.state.return_eggs_to_nest(self.state.hero_x, self.state.hero_y, 0);
-            if shells > 0 {
-                self.messages.push(format!("The turtle rewards you with {} shell(s)!", shells));
-            }
-            self.update_actors(1);
-            self.update_turtle_autonomous();
-            self.update_proximity_speech();
-            self.run_combat_tick();
 
             let (new_map_x, new_map_y) = Self::map_adjust(
                 self.state.hero_x, self.state.hero_y,
