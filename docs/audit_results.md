@@ -3581,7 +3581,130 @@ boundary semantics, F14.3 is the citation.
 
 ---
 
-## Blockers & Open Questions for User Review
+## Subsystem 15: terrain-collision
+
+**Reference:** `reference/logic/terrain-collision.md`, `reference/logic/movement.md#proxcheck`, `reference/logic/movement.md#walk_step`
+**Implementation:** `src/game/collision.rs`, `src/game/gameplay_scene.rs`, `src/game/npc.rs`
+**Commit:** `138ffb0`
+
+### Summary
+
+5 findings: 3 NEEDS-FIX (fixed), 1 comment-only fix (applied), 1 SPEC-GAP. An additional SPEC-GAP deferred to the movement subsystem (F15.6).
+
+| ID | Finding | Classification | Status |
+|----|---------|---------------|--------|
+| F15.1 | `newx`/`newy`: arithmetic division instead of logical right shift | NEEDS-FIX | Fixed |
+| F15.2 | Hero lava/pit (terrain 8/9) incorrectly blocked by proxcheck | NEEDS-FIX | Fixed |
+| F15.3 | Crystal shard (stuff[30]) bypass of terrain-12 missing | NEEDS-FIX | Fixed |
+| F15.4 | `update_environ` terrain type comments wrong (code correct) | Comment fix | Applied |
+| F15.5 | `px_to_terrain_type` missing secy row clamp and column-wrap fixup | SPEC-GAP | Noted |
+| F15.6 | Sector-181 drain-sink suppression of water ramp-out missing | SPEC-GAP | Deferred to movement audit |
+
+---
+
+### F15.1 — `newx`/`newy` arithmetic division instead of `wrap_u16 >> 1` [FIXED]
+
+**Reference:** `movement.md` fsubs.asm:1293/1316 — "Porters reproducing pixel-exact behaviour must use `wrap_u16(prod) >> 1`, not arithmetic shift."
+
+**Prior audit note:** Subsystem 5 movement audit declared `newx`/`newy` CONFORMANT (C5.1). That was incorrect — the analysis only verified even-speed values where both methods agree.
+
+**Root cause:** Rust integer division rounds toward zero. The assembly uses `lsr.w` (logical right shift), which on a two's-complement negative value gives a different result. For odd negative products (e.g. West direction, speed 1: prod = -3), `lsr.w` gives step = 32766 (= -2 in signed 15-bit wrap), while Rust `/2` gives -1.
+
+**Affected cases:** West (XDIR[6]=-3) and North (YDIR[0]=-3) at odd speeds: wading (e=1) and raft/turtle speed (e=3). Cardinal East and South, and all diagonals, use XDIR/YDIR ±2 — always even products, unaffected.
+
+**Concrete example:** dir=6 (West), dist=1. Assembly: prod=0xFFFD, lsr.w → step=0x7FFE=32766, x+32766 wraps to x-2. Rust: prod=-3, -3/2=-1, x-1. Hero moves 1 pixel instead of 2 per step when wading West.
+
+**Fix:** Changed `XDIR[dir] * dist / 2` to `(prod as u16) >> 1` in both `newx` and `newy`. Also removed the `indoor: bool` parameter from `newy` — bit-15 preservation is now handled from the `y` value itself (`flag = y & 0x8000`), exactly as the assembly does. Updated all 6 call sites.
+
+---
+
+### F15.2 — Hero lava/pit passthrough missing [FIXED]
+
+**Reference:** `movement.md` fmain2.c:282: `if i == 0 and (t == 8 or t == 9): t = 0` — inside `proxcheck`, hero (actor slot 0) treats terrain 8 (lava) and 9 (pit) as passable at the proxcheck layer.
+
+**Root cause:** Rust `proxcheck` used `is_hard_block_left(terrain)` which returns `true` for terrain ≥ 8, blocking both NPCs AND the hero. The asymmetric ≥8 threshold on the left probe was intentional for NPCs (see terrain-collision.md §prox notes), but the hero lava/pit exception was never implemented.
+
+**Correct behaviour:** The hero CAN walk into lava/pit. Effects are applied later:
+- Lava (type 8): `update_environ` sets `k = -3`, `walk_step` uses speed `e = -2` (backwards walk).
+- Pit (type 9): `update_environ` triggers `STATE_FALL` (not yet implemented, SPEC-GAP).
+NPC behaviour is correct (NPCs remain blocked by lava/pit). Wraith bypass unchanged.
+
+**Fix:** Added `hero_proxcheck(world, x, y, has_crystal)` in `collision.rs`. Hero primary-direction calls now use this instead of `proxcheck`. Deviation probes also use `hero_proxcheck(…, false)` (same lava/pit bypass, no crystal bypass per walk_step structure).
+
+---
+
+### F15.3 — Crystal shard (stuff[30]) terrain-12 bypass missing [FIXED]
+
+**Reference:** `movement.md` fmain.c:1611: `if stuff[30] != 0 and j == 12: j = 0` — applied to the return value of `proxcheck` in `walk_step`, for the primary direction only. Crystal shard bypass is hero-only (NPCs always blocked by terrain ≥ 10).
+
+**Item:** Crystal Shard (`stuff[30]`). Obtained by giving the King's Bone to the Spectre. Required to navigate terrain-12 spirit barriers in the underground passages leading to the Necromancer. Passive item; never consumed.
+
+**Root cause:** No such bypass existed. Terrain 12 always blocked via `is_hard_block_right(12) = true` (≥10). Not covered in prior movement audit (Subsystem 5).
+
+**Fix:** `hero_proxcheck(…, has_crystal)` incorporates the bypass when `has_crystal = stuff()[30] != 0`. Applied only at the primary-direction probe; deviation probes pass `has_crystal = false`, matching the reference structure where crystal bypass precedes the deviation attempt.
+
+---
+
+### F15.4 — `update_environ` terrain type comments wrong [APPLIED]
+
+**File:** `src/game/gameplay_scene.rs` (update_environ match arms)
+
+The code values were correct; only the inline comments were wrong:
+
+| Terrain | Old comment | Correct comment |
+|---------|-------------|-----------------|
+| 6 | `// ice` | `// slippery (environ -1)` |
+| 7 | `// lava` | `// ice (environ -2)` |
+| 8 | `// special C` | `// lava (environ -3)` |
+
+Source: `reference/logic/SYMBOLS.md` terrain type table. Fixed in same commit.
+
+---
+
+### F15.5 — `px_to_terrain_type` missing secy row clamp and column-wrap fixup [SPEC-GAP]
+
+**Reference:** `terrain-collision.md §px_to_im` fsubs.asm:567-579: column-wrap fixup (bit-6 test on secx) and secy row clamp to [0, 31].
+
+**Rust code:** `src/game/collision.rs px_to_terrain_type` skips both checks.
+
+**Impact:** None in practice. Valid outdoor y coordinates are in [0, 0x1FFF] (8192 pixels), giving secy in [0, 31] — the clamp never fires. The column-wrap fixup handles xreg-relative overflow; with xreg=0 and valid outdoor x in [0, 0x1FFF], secx is always in [0, 63] — the bit-6 test never fires. No behavioral difference for any reachable game coordinate.
+
+**Classification:** SPEC-GAP — implementation omits reference guards that never fire for valid inputs. Low priority.
+
+---
+
+### F15.6 — Sector-181 drain-sink suppression of water ramp-out missing [SPEC-GAP / Deferred]
+
+**Reference:** `movement.md` fmain.c:1643: `if hero_sector != 181: k = k - 1` — the astral drain sector (sector 181) suppresses the water-ramp-out decrement each tick. The entire water ramp-out block (`if k > 2:` branch of `update_environ`) appears absent from the current implementation.
+
+**Deferred:** This is a movement-subsystem feature (`walk_step` / `update_environ`) that happens to reference sector 181 (astral drain). The ramp-out logic itself was not found in `gameplay_scene.rs update_environ`. Proper fix requires the full water-ramp-out branch to be implemented (Subsystem 5 follow-up). Sector-181 condition is a trivial addition once the branch exists.
+
+---
+
+### Cross-subsystem note — C5.1 correction
+
+The prior movement audit (Subsystem 5) declared `newx`/`newy` CONFORMANT (C5.1). F15.1 above shows this was incorrect — the logical-shift vs arithmetic-division discrepancy was missed because the analysis only tested even-speed values. C5.1 should be reclassified NEEDS-FIX (fixed in commit `138ffb0`).
+
+---
+
+### CONFORMANT items
+
+| Item | Reference | Notes |
+|------|-----------|-------|
+| `px_to_terrain_type` core decode | terrain-collision.md §px_to_im | All 4 stages correct (sub-tile bit selection, pixel→sector, sector lookup, terrain attribute). |
+| `proxcheck` NPC path | movement.md §proxcheck | Correctly blocks terrain 1 and ≥8/≥10 for non-wraith NPCs. |
+| Wraith bypass | npc.rs line 149 | `self.race == RACE_WRAITH \|\| proxcheck(…)` correctly bypasses terrain for wraith-race NPCs. |
+| `is_hard_block_right` / `is_hard_block_left` | terrain-collision.md §prox | Asymmetric ≥10 / ≥8 thresholds match assembly exactly. |
+| `actor_collides` bounding box | movement.md §proxcheck | 22×18 px box (|dx|<11, |dy|<9) matches fmain2.c:289. |
+| `calc_dist` octagonal approximation | collision.rs | x>2y→x; y>2x→y; else (x+y)*5/7 matches fmain2.c:446-463. |
+| `set_tile_at_image` (mapxy) | terrain-collision.md §mapxy | Correctly writes tile id at sector_mem offset. |
+| Door check (terrain 15) | movement.md §walk_step | `blocked_by_door` check at lines 952-956 correctly gates deviation for door tiles. |
+| Indoor y adjustment | terrain-collision.md | `if region_num >= 8: y -= 0x8000` correctly strips the indoor flag before decode. |
+
+
+---
+
+
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
 SPEC-GAP items that need user adjudication before proceeding._
