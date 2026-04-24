@@ -712,6 +712,48 @@ impl GameplayScene {
         if self.sleeping { return; }
         let dir = self.current_direction();
 
+        // Swan dismount — fire button while flying.
+        // Ref: reference/logic/carrier-transport.md#swan_dismount
+        // (fmain.c:1417-1428). Takes precedence over the fight branch
+        // because on the swan the fire button means "dismount", not
+        // "attack". `fiery_death` vetos landing over lava (event 32);
+        // ±15 velocity gate vetos mid-flight dismount (event 33).
+        if self.input.fight && self.state.flying != 0 {
+            let bname = self.brother_name().to_string();
+            if self.fiery_death {
+                // fmain.c:1418 — event(32) "Ground is too hot for swan to land."
+                self.messages.push(crate::game::events::event_msg(&self.narr, 32, &bname));
+            } else if !self.state.can_dismount_swan() {
+                // fmain.c:1427 — event(33) "Flying too fast to dismount."
+                self.messages.push(crate::game::events::event_msg(&self.narr, 33, &bname));
+            } else {
+                // fmain.c:1420-1424 — proxcheck both head (y-14) and feet
+                // (y-4) to verify landing spot is clear.
+                let hx = self.state.hero_x as i32;
+                let hy = self.state.hero_y as i32;
+                let land_y = hy - 14;
+                let head_clear =
+                    collision::proxcheck(self.map_world.as_ref(), hx, land_y);
+                let feet_clear =
+                    collision::proxcheck(self.map_world.as_ref(), hx, land_y + 10);
+                if head_clear && feet_clear {
+                    // Commit dismount: clear flight state and land the hero
+                    // 14 px above current position. active_carrier stays set
+                    // to CARRIER_SWAN so the swan itself remains spawned in
+                    // slot 3 (fmain.c: swan "stays at its last position"
+                    // after dismount — the extent-driven loader handles
+                    // despawn on zone change, not dismount).
+                    self.state.stop_swan_flight();
+                    self.state.hero_y = land_y as u16;
+                    if let Some(player) = self.state.actors.first_mut() {
+                        player.abs_y = land_y as u16;
+                    }
+                }
+            }
+            self.input.fight = false;
+            return;
+        }
+
         // Exclusive fight branch — matches fmain.c where fighting is a separate
         // branch above walking. Movement is suppressed; only facing updates.
         if self.input.fight {
@@ -1190,20 +1232,43 @@ impl GameplayScene {
             }
         }
 
-        // Raft proximity detection (player-107).
-        // Mirrors fmain.c: raftprox=1 within 16px, raftprox=2 within 9px of raft actor.
-        // Auto-boards when hero is adjacent to a raft NPC; auto-disembarks on dry land.
+        // Carrier proximity detection (raft + swan — player-107).
+        // Ref: reference/logic/carrier-transport.md#compute_raftprox
+        // (fmain.c:1455-1464). The original runs a single proxcheck against
+        // `anim_list[wcarry]` with `wcarry = 3` when `active_carrier != 0`
+        // else `1`, producing raftprox=2 within 9 px, 1 within 16 px, 0
+        // otherwise. In the port, raft lives in the NPC table with
+        // NPC_TYPE_RAFT and swan lives in the NPC table with NPC_TYPE_SWAN;
+        // only one carrier is "active" at a time, so we pick the actor type
+        // by active_carrier (or by flying==1 swan latch). Turtle is summoned
+        // directly via summon_turtle() and bypasses this block.
         {
+            use crate::game::npc::{NPC_TYPE_RAFT, NPC_TYPE_SWAN};
             let hx = self.state.hero_x as i32;
             let hy = self.state.hero_y as i32;
-            let raft_close = self.npc_table.as_ref().map_or(false, |t| {
-                t.npcs.iter().any(|n| {
-                    n.active
-                        && n.npc_type == crate::game::npc::NPC_TYPE_RAFT
-                        && (n.x as i32 - hx).abs() < 16
-                        && (n.y as i32 - hy).abs() < 16
+
+            let find_nearest = |kind: u8, range: i32| -> bool {
+                self.npc_table.as_ref().map_or(false, |t| {
+                    t.npcs.iter().any(|n| {
+                        n.active
+                            && n.npc_type == kind
+                            && (n.x as i32 - hx).abs() < range
+                            && (n.y as i32 - hy).abs() < range
+                    })
                 })
-            });
+            };
+
+            // While flying or already latched to the swan extent, keep the
+            // swan as the active probe target so dismount (F14.4) isn't
+            // stolen by a raft that happens to be nearby.
+            let swan_latched = self.state.flying != 0
+                || self.state.active_carrier == crate::game::game_state::CARRIER_SWAN;
+            // Otherwise, if a swan NPC is within range, prefer swan over
+            // raft — this is what the ref's `wcarry = 3 when active_carrier
+            // != 0` choice achieves once the carrier-extent loader (F14.5)
+            // latches `active_carrier` on zone entry.
+            let swan_nearby = find_nearest(NPC_TYPE_SWAN, 16);
+            let use_swan = swan_latched || swan_nearby;
 
             // Get current terrain for raft gating (SPEC §21.2).
             let terrain = self.map_world.as_ref().map_or(0, |world| {
@@ -1214,31 +1279,56 @@ impl GameplayScene {
                 )
             });
 
-            let raft_aboard = self.npc_table.as_ref().map_or(false, |t| {
-                t.npcs.iter().any(|n| {
-                    n.active
-                        && n.npc_type == crate::game::npc::NPC_TYPE_RAFT
-                        && (n.x as i32 - hx).abs() < 9
-                        && (n.y as i32 - hy).abs() < 9
-                })
-            }) && self.state.can_board_raft(terrain);
+            if use_swan {
+                // Swan branch — ref carrier-transport.md#carrier_tick
+                // (fmain.c:1497-1509): mount when raftprox != 0 && wcarry
+                // == 3 && stuff[5] != 0 (Golden Lasso). Swan mount is
+                // eligible at "close" (16 px), not just "adjacent" (9 px).
+                let within_16 = find_nearest(NPC_TYPE_SWAN, 16);
+                let within_9 = find_nearest(NPC_TYPE_SWAN, 9);
 
-            if raft_aboard {
-                self.state.raftprox = 2;
-                self.state.active_carrier = crate::game::game_state::CARRIER_RAFT;
-                self.state.on_raft = true;
-                self.state.wcarry = 1;  // SPEC §21.2: raft is in actor slot 1
-            } else if raft_close {
-                self.state.raftprox = 1;
+                if within_16 {
+                    self.state.raftprox = if within_9 { 2 } else { 1 };
+                    self.state.active_carrier = crate::game::game_state::CARRIER_SWAN;
+                    self.state.wcarry = 3;
+                    // Auto-mount when lasso is carried and hero is close
+                    // enough (fmain.c:1498). Idempotent — already-flying
+                    // swans re-latch per-frame in the original.
+                    if self.state.flying == 0 && self.state.has_lasso() {
+                        let _ = self.state.start_swan_flight();
+                    }
+                } else {
+                    self.state.raftprox = 0;
+                    // Out of range and not flying — release the swan latch
+                    // so the raft branch can engage next frame if needed.
+                    if self.state.flying == 0 {
+                        self.state.active_carrier = 0;
+                        self.state.wcarry = 0;
+                    }
+                }
             } else {
-                self.state.raftprox = 0;
-                // Auto-disembark from raft when hero reaches dry land (player-107).
-                if self.state.on_raft
-                    && self.state.active_carrier == crate::game::game_state::CARRIER_RAFT
-                {
-                    let on_land = terrain < 2;
-                    if on_land {
-                        self.state.leave_raft();
+                // Raft branch — unchanged behaviour from prior F14.1 fix.
+                let within_16 = find_nearest(NPC_TYPE_RAFT, 16);
+                let within_9 = find_nearest(NPC_TYPE_RAFT, 9);
+                let raft_aboard = within_9 && self.state.can_board_raft(terrain);
+
+                if raft_aboard {
+                    self.state.raftprox = 2;
+                    self.state.active_carrier = crate::game::game_state::CARRIER_RAFT;
+                    self.state.on_raft = true;
+                    self.state.wcarry = 1;  // SPEC §21.2: raft is in actor slot 1
+                } else if within_16 {
+                    self.state.raftprox = 1;
+                } else {
+                    self.state.raftprox = 0;
+                    // Auto-disembark from raft when hero reaches dry land (player-107).
+                    if self.state.on_raft
+                        && self.state.active_carrier == crate::game::game_state::CARRIER_RAFT
+                    {
+                        let on_land = terrain < 2;
+                        if on_land {
+                            self.state.leave_raft();
+                        }
                     }
                 }
             }
@@ -8369,5 +8459,150 @@ mod swan_grounded_tests {
             .expect("SummonSwan must activate a swan slot");
         assert_eq!(swan.state, NpcState::Still, "spawned swan must be stationary");
         assert_eq!(swan.x as i32, 1000 + 48, "spawned swan is offset from hero");
+    }
+}
+
+/// F14.4 / F14.6 — Swan mount via proximity + lasso and fire-button
+/// dismount through apply_player_input.
+#[cfg(test)]
+mod swan_mount_dismount_tests {
+    use super::*;
+    use crate::game::game_state::{CARRIER_SWAN, ITEM_LASSO};
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, MAX_NPCS, RACE_NORMAL};
+
+    /// Build a scene with a single swan NPC placed at (npc_x, npc_y).
+    fn scene_with_swan(npc_x: i16, npc_y: i16) -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        let mut npcs: [Npc; MAX_NPCS] = std::array::from_fn(|_| Npc::default());
+        npcs[0] = Npc {
+            active: true,
+            npc_type: NPC_TYPE_SWAN,
+            race: RACE_NORMAL,
+            x: npc_x,
+            y: npc_y,
+            ..Default::default()
+        };
+        scene.npc_table = Some(NpcTable { npcs });
+        scene
+    }
+
+    #[test]
+    fn swan_proximity_sets_active_carrier_and_wcarry() {
+        // Hero within 16 px of swan, no lasso — raftprox latches but no mount.
+        let mut scene = scene_with_swan(1000, 1000);
+        scene.state.hero_x = 1010;
+        scene.state.hero_y = 1010;
+        scene.state.stuff_mut()[ITEM_LASSO] = 0;
+
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.active_carrier, CARRIER_SWAN,
+            "close swan must latch active_carrier = CARRIER_SWAN");
+        assert_eq!(scene.state.wcarry, 3, "swan lives in slot 3 (wcarry = 3)");
+        assert!(scene.state.raftprox > 0, "swan within 16 px → raftprox != 0");
+        assert_eq!(scene.state.flying, 0, "no lasso → no mount");
+    }
+
+    #[test]
+    fn swan_auto_mounts_when_lasso_and_close() {
+        let mut scene = scene_with_swan(1000, 1000);
+        scene.state.hero_x = 1005;
+        scene.state.hero_y = 1005;
+        scene.state.stuff_mut()[ITEM_LASSO] = 1;
+
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.flying, 1, "lasso + close swan → auto-mount");
+        assert_eq!(scene.state.riding, 11, "riding = RIDING_SWAN (11)");
+    }
+
+    #[test]
+    fn swan_releases_latch_when_hero_walks_away() {
+        let mut scene = scene_with_swan(1000, 1000);
+        // First, latch the swan by standing next to it.
+        scene.state.hero_x = 1005;
+        scene.state.hero_y = 1005;
+        scene.apply_player_input();
+        assert_eq!(scene.state.active_carrier, CARRIER_SWAN);
+
+        // Walk far away — latch should release (flying == 0 precondition met).
+        scene.state.hero_x = 5000;
+        scene.state.hero_y = 5000;
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.active_carrier, 0,
+            "out-of-range swan releases active_carrier when not flying");
+        assert_eq!(scene.state.raftprox, 0);
+        assert_eq!(scene.state.wcarry, 0);
+    }
+
+    #[test]
+    fn fire_button_dismount_vetoed_by_fiery_death() {
+        let mut scene = scene_with_swan(1000, 1000);
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 1000;
+        scene.state.stuff_mut()[ITEM_LASSO] = 1;
+        // Mount
+        scene.apply_player_input();
+        assert_eq!(scene.state.flying, 1);
+
+        // Force the lava-box latch.
+        scene.fiery_death = true;
+        scene.state.swan_vx = 0;
+        scene.state.swan_vy = 0;
+        scene.input.fight = true;
+
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.flying, 1,
+            "fiery_death vetoes dismount — hero stays in flight");
+        assert!(!scene.input.fight, "fight input must be consumed");
+    }
+
+    #[test]
+    fn fire_button_dismount_vetoed_by_velocity() {
+        let mut scene = scene_with_swan(1000, 1000);
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 1000;
+        scene.state.stuff_mut()[ITEM_LASSO] = 1;
+        scene.apply_player_input();
+        assert_eq!(scene.state.flying, 1);
+
+        // Exceed the |vel| < 15 gate.
+        scene.fiery_death = false;
+        scene.state.swan_vx = 20;
+        scene.state.swan_vy = 0;
+        scene.input.fight = true;
+
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.flying, 1,
+            "high velocity vetoes dismount — hero stays in flight");
+    }
+
+    #[test]
+    fn fire_button_dismount_lands_hero_when_clear() {
+        let mut scene = scene_with_swan(1000, 1000);
+        scene.state.hero_x = 1000;
+        scene.state.hero_y = 1000;
+        scene.state.stuff_mut()[ITEM_LASSO] = 1;
+        scene.apply_player_input();
+        assert_eq!(scene.state.flying, 1);
+
+        // Low velocity, no lava, no world → proxcheck(None) == true (clear).
+        scene.fiery_death = false;
+        scene.state.swan_vx = 0;
+        scene.state.swan_vy = 0;
+        scene.input.fight = true;
+
+        let y_before = scene.state.hero_y;
+        scene.apply_player_input();
+
+        assert_eq!(scene.state.flying, 0, "dismount commits on clear terrain");
+        assert_eq!(scene.state.riding, 0, "riding cleared on dismount");
+        assert_eq!(scene.state.hero_y, y_before - 14,
+            "hero lands 14 px above flight position (fmain.c:1420)");
+        assert_eq!(scene.state.active_carrier, CARRIER_SWAN,
+            "swan stays spawned in slot 3 after dismount");
     }
 }

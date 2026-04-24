@@ -3419,10 +3419,10 @@ those edges are now outside the veto box and added "just inside"
 probes at (11195, 10206) / (21372, 16207) to pin the new
 boundary. No new test file; test count unchanged.
 
-#### F14.4 — Swan mount / dismount UI not wired [SPEC-GAP]
-**Location**: `src/game/gameplay_scene.rs` (no caller of
-`start_swan_flight` / `can_dismount_swan` / `stop_swan_flight`
-outside `#[cfg(test)]`).
+#### F14.4 — Swan mount / dismount UI not wired [RESOLVED]
+**Location**: `src/game/gameplay_scene.rs` `apply_player_input`
+(fire-button dismount branch) and the unified carrier-proximity
+block (swan auto-mount).
 **Reference**: `reference/logic/carrier-transport.md#carrier_tick`
 (`fmain.c:1497-1509`, swan-mount via `raftprox != 0 && wcarry == 3
 && stuff[5] != 0`, Golden-Lasso-gated, auto-mount on proximity);
@@ -3430,27 +3430,18 @@ outside `#[cfg(test)]`).
 (`fmain.c:1417-1428`, fire-button dismount with `fiery_death`
 veto → `event(32)`, velocity gate `|vel| < 15` → `event(33)`,
 double `proxcheck` at hero_y − 14 / hero_y − 4).
-**Issue**: `start_swan_flight` / `stop_swan_flight` /
-`can_dismount_swan` exist in `game_state.rs` with correct semantics
-(velocity gate, lasso precondition) but no input path ever calls
-them outside unit tests. The reference's swan-proximity auto-mount
-(analogous to the raft-auto-board block at
-`gameplay_scene.rs:1184-1236` but for `wcarry == 3` + lasso) and
-the `pia` fire-button dismount branch are both absent. `fiery_death`
-is computed (`gameplay_scene.rs:1563-1566`) but never consulted by a
-dismount path (`event(32)` / `event(33)` narr strings 32 and 33 in
-`faery.toml` are dead-code on the event side). Consequence: swan is
-currently reachable only by tests and the `SummonSwan` debug NPC
-spawn (`gameplay_scene.rs:8304`), never by the published gameplay
-action surface.
-**Resolution**: Queued — not fixed this pass. Plumbing swan mount
-needs the carrier-slot proximity block (twin of raft-auto-board at
-9/16 px), the `active_carrier == CARRIER_SWAN` gate, and a
-fire-button-driven dismount that invokes `can_dismount_swan()`,
-routes the two vetos through `events::event_msg(&narr, 32, name)`
-/ `event_msg(&narr, 33, name)`, and lands only when both
-`proxcheck` probes clear. Cross-refs F5.8 (swan velocity
-representation).
+**Resolution**: Fire-button branch added to `apply_player_input`
+ahead of the fight branch: when `flying != 0`, `fiery_death` routes
+to `event_msg(&narr, 32, bname)`; `!can_dismount_swan()` routes to
+`event_msg(&narr, 33, bname)`; otherwise two `collision::proxcheck`
+probes at `hero_y - 14` / `hero_y - 4` gate the dismount commit,
+which calls `stop_swan_flight` and repositions the hero 14 px up
+(`hero_y = hero_y - 14`, actor.abs_y likewise). The carrier-proximity
+block was extended to treat `NPC_TYPE_SWAN` the same way the raft
+block treats `NPC_TYPE_RAFT` (F14.6). Lasso-gated auto-mount commits
+when `has_lasso() && flying == 0 && within 16 px`. Cross-refs F5.8
+(swan velocity representation). **Commit**: pending this audit
+batch.
 
 #### F14.5 — Carrier extent auto-spawn / despawn not implemented [SPEC-GAP]
 **Location**: `src/game/gameplay_scene.rs` (zone-change block at
@@ -3479,25 +3470,23 @@ block, and (c) adding the `xtype == 70 && (active_carrier == 0 ||
 the slot-3 actor to `(v3-extent.x1 + 250, y1 + 200)` — the same
 center-snap as the original's `load_carrier`. Cross-ref F4.2.
 
-#### F14.6 — Raft-proximity block does not also cover swan carrier [SPEC-GAP]
-**Location**: `src/game/gameplay_scene.rs:1184-1236`
-("Raft proximity detection").
+#### F14.6 — Raft-proximity block does not also cover swan carrier [RESOLVED]
+**Location**: `src/game/gameplay_scene.rs` unified carrier-proximity
+block.
 **Reference**: `reference/logic/carrier-transport.md#compute_raftprox`
 (`fmain.c:1455-1464`) — `raftprox` / `wcarry` are computed once per
 frame against `anim_list[wcarry]` where `wcarry = 3` when
 `active_carrier != 0` else `1`. One unified block; all three
 carrier modes (raft, turtle, swan) share the same 16/9 px
 thresholds against slot 1 or slot 3.
-**Issue**: The port's proximity block only scans for
-`NPC_TYPE_RAFT` and never considers the swan/turtle carriers in
-slot 3. Coupled with F14.4, this means the swan can never
-auto-mount via proximity even when lasso + nearby swan is set up
-by debug spawn. Turtle auto-mount does work because
-`summon_turtle()` directly sets `on_raft = true` instead of
-going through `raftprox`.
-**Resolution**: Queued. Fold slot-3 proximity into the same block,
-selecting actor index via `wcarry` exactly as the reference's
-`compute_raftprox` does. Dependent on F14.4.
+**Resolution**: Folded `NPC_TYPE_SWAN` into the same proximity block
+as `NPC_TYPE_RAFT`. When a swan is the active carrier (or flying),
+the block probes the swan first; raft probing falls through. Swan
+auto-mount requires `has_lasso() && flying == 0 && within 16 px`;
+out-of-range clears `active_carrier` / `wcarry` so a nearby raft can
+latch next frame. Turtle auto-mount remains on the
+`summon_turtle()` fast-path per prior F14.2. **Commit**: pending
+this audit batch.
 
 #### F14.7 — Carrier-encounter suppression path (F4.2) relies on `active_carrier` only, confirmed CONFORMANT
 Cross-referencing `gameplay_scene.rs:5198-5211` (the `try_trigger_
@@ -3567,16 +3556,13 @@ uses strict inequality. If a future SPEC pass formalises the
 boundary semantics, F14.3 is the citation.
 
 ### Blockers
-- **Swan mount/dismount input plumbing** (F14.4) — gameplay can
-  reach swan flight only via debug today. Unblocking requires
-  proximity detection for slot-3 carriers (F14.6), a fire-button
-  branch that threads `fiery_death` and the velocity gate into
-  `event(32)` / `event(33)` narr calls, and a `proxcheck`-based
-  landing commit. None of these are scroll-text fidelity risks;
-  all player-facing strings (`"Ground is too hot for swan to
-  land."`, `"Flying too fast to dismount."`) already exist at
-  `faery.toml [narr].event_msg[32..=33]`, so the two-source rule
-  is pre-satisfied.
+- ~~**Swan mount/dismount input plumbing** (F14.4)~~ — **RESOLVED**
+  this pass. Auto-mount via unified proximity block (F14.6) and
+  fire-button dismount with `fiery_death` / velocity / `proxcheck`
+  vetos now live in `apply_player_input`. All player-facing strings
+  use `faery.toml [narr].event_msg[32..=33]`; six new unit tests
+  cover the mount, out-of-range release, fiery veto, velocity veto,
+  and clean-landing paths.
 
 
 ---
@@ -4556,7 +4542,7 @@ Grouped by theme for implementation planning:
 - F2.x (3 items) — Spell cost formula, stone-throw arc, teleport destination gate
 
 **Carrier / astral gaps**
-- F14.4 — Swan mount/dismount input (`event(32/33)`) not plumbed — **BLOCKER**
+- ~~F14.4 — Swan mount/dismount input (`event(32/33)`) not plumbed — **BLOCKER**~~ **RESOLVED**
 - F14.x (2 more) — Dragon flight speed, carrier-tile replacement
 - F12.1–F12.6 — Six astral-plane SPEC-GAPs (all deferred; no fixes applied in Sub 12)
 
@@ -4613,9 +4599,10 @@ Grouped by theme for implementation planning:
 1. **F11.8 — Princess-rescue placard cinematic**: `placard_text(8+i)`,
    `move_extent`, and `ob_list8[2]` cast swap are not plumbed; the
    end-of-rescue narrative sequence does not fire.
-2. **F14.4 — Swan mount/dismount input**: `event(32/33)` narr strings exist in
-   `faery.toml` but the input-side plumbing (mount hotkey, dismount hotkey)
-   is not wired from `apply_player_input`. Hero cannot board the swan.
+2. ~~**F14.4 — Swan mount/dismount input**~~: **RESOLVED** — fire-button
+   dismount (with `fiery_death` / velocity / `proxcheck` vetos routed
+   through `event(32)` / `event(33)`) and lasso-gated proximity
+   auto-mount (F14.6) are now wired in `apply_player_input`.
 3. **F9.11 — `search_body`**: TAKE action on a defeated NPC does not compose
    the `"% searched the body and found …"` string from `dialog_system.md:3251–3283`
    and does not transfer weapon/treasure loot from the defeated actor's
