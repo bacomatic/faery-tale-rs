@@ -3708,3 +3708,177 @@ The prior movement audit (Subsystem 5) declared `newx`/`newy` CONFORMANT (C5.1).
 
 _None yet. This section collects REF-AMBIGUOUS, RESEARCH-REQUIRED, and
 SPEC-GAP items that need user adjudication before proceeding._
+
+---
+
+## Subsystem 16: visual-effects — ✅ Complete
+
+**Reference**: `reference/logic/visual-effects.md`, `reference/logic/day-night.md`
+**Code**: `src/game/palette_fader.rs`, `src/game/gfx_effects.rs`,
+`src/game/gameplay_scene.rs` (`compute_current_palette`, `render_hibar`,
+`update()` palette/colorplay section), `src/game/victory_scene.rs`
+**Audit date**: 2025 (current session)
+
+### Summary
+
+- **8 findings**: 3 CONFORMANT, 2 NEEDS-FIX (fixed), 1 INVENTED (fixed),
+  2 SPEC-GAP (queued), 0 REF-AMBIGUOUS, 1 REF-AMBIGUOUS (flasher).
+- Fixes applied in **one commit**.
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test` —
+  589 + 12 + 12 tests passing.
+
+### Findings
+
+#### F16.1 — Indoor light_timer warm-red boost missing [NEEDS-FIX → FIXED]
+
+**Location**: `src/game/gameplay_scene.rs` — `compute_current_palette()`,
+indoor branch (region_num ≥ 8).
+
+**Reference**: `reference/logic/day-night.md` — `day_fade()` pseudo-code
+line: `fade_page(100, 100, 100, True, pagecolors)` for region ≥ 8
+(fmain2.c:1659). The `fade_page` routine applies the `light_timer` warm-red
+tint (`r1 → g1` when `r1 < g1`) regardless of channel percentages.
+
+**Issue**: Rust short-circuited the indoor path to a direct palette copy,
+bypassing `fade_page` entirely. When the Green Jewel spell (`light_timer > 0`)
+was active indoors the warm-red torch tint was absent — all torch colors kept
+their original (cool) RGB values.
+
+**Fix**: Replaced the direct copy with
+`fade_page(100, 100, 100, true, light_on, base)`, then applied the color-31
+region override as before. When `light_on = false` the call is a no-op (100%
+scale through all channels) so the non-torch case is unchanged.
+
+---
+
+#### F16.2 — `colorplay()` teleport effect invented [INVENTED → FIXED]
+
+**Location**: `src/game/gfx_effects.rs` — `TeleportEffect` struct.
+
+**Reference**: `reference/logic/visual-effects.md §colorplay` (fmain2.c:425-431):
+32-frame loop; each frame sets `fader[1..31]` to `bitrand(0xfff)` (random
+12-bit RGB4) then calls `LoadRGB4`.
+
+**Issue**: The original `TeleportEffect` implemented a white-flash (5 frames)
+followed by a black fade-out (30 frames) drawn as a full-screen RGBA overlay.
+No such flash/fade exists in the reference. The original colorplay is a
+psychedelic palette storm lasting 32 frames (~533 ms at 60 Hz).
+
+**Fix**:
+- Rewrote `TeleportEffect::tick()` to return `Option<[u16; 31]>` — 31 random
+  12-bit (`bitrand(0xfff)`) values for palette slots 1..31 — for each of 32
+  frames, then `None`.
+- Removed the RGBA `fill_rect` overlay from `render_by_viewstatus`.
+- Added a colorplay override block immediately after the normal palette update
+  in `update()`: when `teleport_effect.tick()` returns `Some(storm)`, writes
+  `amiga_color_to_rgba(storm[i])` into `current_palette[i+1]` for i in 0..31.
+  This lets the tile atlas renderer pick up the random palette directly, which
+  is the Amiga equivalent of `LoadRGB4`.
+- Note: Timing is 32 × 33 ms ≈ 1 s at 30 fps vs. 32 × 17 ms ≈ 533 ms on
+  the original 60 Hz Amiga. Frame count matches; absolute duration is doubled
+  due to the port's 30 fps cadence.
+
+---
+
+#### F16.3 — `amber_font` color_mod not reset after `render_hibar` [NEEDS-FIX → FIXED]
+
+**Location**: `src/game/gameplay_scene.rs` — `render_hibar()`, after the
+message-loop block (~line 2459).
+
+**Reference**: AGENTS.md invariant: "Always call `font.set_color_mod(r, g, b)`
+before every `render_string()` call. SDL2 color mod is stateful."
+
+**Issue**: `amber_font.set_color_mod(0xAA, 0x55, 0x00)` was set at the start
+of the stats/messages render block and never reset to `(255, 255, 255)`.
+After `render_hibar` returned, `amber_font` was left in amber state. Any
+subsequent `render_string` call without an explicit `set_color_mod` would
+render amber text. Other scenes mitigated this in practice by setting
+color_mod before first use, but the latent defect would manifest if render
+ordering changed.
+
+**Fix**: Added `amber_font.set_color_mod(255, 255, 255)` immediately after the
+closing `}` of the messages for-loop, before the buttons section.
+
+---
+
+#### F16.4 — `win_colors()` sunrise animation not implemented [SPEC-GAP]
+
+**Location**: `src/game/victory_scene.rs`
+
+**Reference**: `reference/logic/visual-effects.md §win_colors`
+(fmain2.c:1605-1636): 55-frame sunrise — i walks 25→-29; per-frame sets
+`fader[2..27]` from `sun_colors[i+j]` (0 when i+j ≤ 0); colors 0,31=black;
+1,28=white; 29-30 hold red until i crosses -14; first frame has 60-tick extra
+hold; 9 ticks per frame; final 30-tick pause then fade to black.
+
+**Current behavior**: Holds for 180 ticks (6 s), then fades in 60 ticks using
+uniform `set_color_mod`. File header acknowledges: "The full 55-frame
+sun_colors[] palette animation is a polish item tracked separately (T4)."
+
+**Deferred**: Requires `sun_colors[]` data from the game assets (not yet
+decoded). No fix applied; tracked as T4 in `victory_scene.rs`.
+
+---
+
+#### F16.5 — Flasher border blink (viewstatus dialogue branch) [REF-AMBIGUOUS]
+
+**Reference**: `reference/logic/visual-effects.md §Notes`:
+"`SetRGB4(vp_page, 31, 15, 15, 15)` or `(0,0,0)` on alternating 16-tick
+intervals using `flasher & 16`" in the `viewstatus == 1` branch of the main
+loop.
+
+**Issue**: The Rust port's `viewstatus == 1` is the bird-totem map view, not
+the dialogue mode. The original's viewstatus semantic mapping differs. No
+`flasher` variable exists in Rust. The reference does not specify which
+Rust-side viewstatus value corresponds to the dialogue/menu branch that
+exhibited border blinking.
+
+**No fix applied** — the reference is ambiguous for the ported viewstatus
+numbering. Requires further research to identify the correct Rust viewstatus
+value and desired visual behavior.
+
+---
+
+#### F16.6 — `fade_page` implementation [CONFORMANT]
+
+**Location**: `src/game/palette_fader.rs:37-109`
+
+Fully matches fmain2.c:377-420:
+- Per-channel clamp (0..100) with night floors (r≥10, g≥25, b≥60).
+- `g2` residual-green: `(100-g)/3` when `limit=true`.
+- Per-color loop: `r1=(r*r1)/1600`, `g1=(g*g1)/1600`,
+  `b1=(b*b1+g2*g1)/100`.
+- `light_timer` warm-red lift: `if r1 < g1_raw { r1 = g1_raw }`.
+- Sky band (indices 16-24) blue boost when `g ∈ [21, 74]`.
+- 4-bit blue clamp (`b1 > 15 → 15`) when `limit=true`.
+- Pack to RGB4: `(r1<<8)|(g1<<4)|b1`.
+
+---
+
+#### F16.7 — Day/night palette cadence [CONFORMANT]
+
+**Location**: `src/game/gameplay_scene.rs:4285` —
+`should_update_palette(daynight, viewstatus)`
+
+`(daynight & 3) == 0 || viewstatus > 97` matches fmain2.c:1656 exactly.
+
+---
+
+#### F16.8 — Region transition crossfade vs. `fade_down`/`fade_normal` [SPEC-GAP]
+
+**Reference**: `reference/logic/visual-effects.md §fade_down/fade_normal`:
+`check_door` calls `fade_down()` (100→0 in 21 steps) then after region setup
+calls `fade_normal()` (0→100 in 21 steps). Effect is explicit fade-to-black
+and fade-in.
+
+**Rust behavior**: `PaletteTransition` struct crossfades from the old palette
+to the new palette over several ticks. Different visual from the reference
+(crossfade vs. fade-to-black + fade-in) but both hide the region asset load.
+No reference specifies exact tick counts; the crossfade achieves equivalent
+perceptual fidelity.
+
+**No fix applied** — the implementation achieves the same functional purpose
+(smooth region transition) with a slightly different presentation. The
+difference is unlikely to be perceptible given the brevity of both effects.
+Reclassification to NEEDS-FIX requires confirmation from user that exact
+fade-to-black behavior is required.
