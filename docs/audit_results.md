@@ -3882,3 +3882,116 @@ perceptual fidelity.
 difference is unlikely to be perceptible given the brevity of both effects.
 Reclassification to NEEDS-FIX requires confirmation from user that exact
 fade-to-black behavior is required.
+
+---
+
+## Subsystem 17: save-load — ✅ Complete
+
+**Reference**: `reference/logic/save-load.md` (primary),
+`reference/logic/dialog_system.md` §save/load,
+`reference/logic/inventory.md` (ARROWBASE=35),
+`reference/RESEARCH.md §19`
+
+**Code surface audited**:
+- `src/game/persist.rs` (serialise/deserialise, `save_game`, `load_game`,
+  `save_to_path`, `load_from_path`, transcript helpers)
+- `src/game/gameplay_scene.rs` (`MenuAction::SaveGame` / `LoadGame` handlers)
+- `proto/faery_save.proto` (wire schema)
+- `src/game/menu.rs` (`save_pending` flag, `MenuMode::SaveX`, `MenuMode::File`)
+
+### Summary
+- **8 findings**: 4 NEEDS-FIX/INVENTED (all fixed), 2 CONFORMANT,
+  1 SPEC-GAP, 1 RESEARCH-REQUIRED.
+- Fixes applied in **one commit** (SHA `34d5874`).
+- Build/tests: ✅ `cargo build` clean (zero new warnings); `cargo test` —
+  589 + 12 + 12 tests passing.
+
+### Findings
+
+#### F17.1 — "Game saved." scroll text on success [INVENTED → REMOVED]
+**Location**: `src/game/gameplay_scene.rs` `MenuAction::SaveGame` arm.
+**Reference**: `reference/logic/save-load.md` `savegame` pseudo-code
+(`fmain2.c:1531`): `if sverr != 0: print("ERROR: …")`. The original
+emits **no** scroll text on save success; the success path is silent.
+The string `"Game saved."` is in neither `faery.toml [narr]` nor the
+`dialog_system.md` hardcoded-scroll registry.
+**Fix**: Removed the `messages.push("Game saved.")` call. Success path
+is now silent as in the original.
+
+#### F17.2 — "Game loaded." scroll text on load success [INVENTED → REPLACED]
+**Location**: `src/game/gameplay_scene.rs` `MenuAction::LoadGame` arm.
+**Reference**: `save-load.md` post-load block (`fmain2.c:1546`):
+`print(""); print(""); print("")` — three blank-line prints clear the
+scroll area. There is no "Game loaded." banner in the original; the
+authorised load-success text is three blank lines.
+**Fix**: Replaced `messages.push("Game loaded.")` with three
+`messages.push("")` calls matching `fmain2.c:1546`.
+
+#### F17.3 — Save error message: "Save failed!" [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs` `MenuAction::SaveGame` error arm.
+**Reference**: `dialog_system.md:370`; `save-load.md:1532`:
+`"ERROR: Couldn't save game."` is the only authorised save-failure literal.
+**Fix**: Replaced `"Save failed!"` with `"ERROR: Couldn't save game."`.
+
+#### F17.4 — Load error message: format!("Load failed: {}", e) [NEEDS-FIX → FIXED]
+**Location**: `src/game/gameplay_scene.rs` `MenuAction::LoadGame` error arm.
+**Reference**: `dialog_system.md:370`; `save-load.md:1533`:
+`"ERROR: Couldn't load game."` is the only authorised load-failure literal.
+**Fix**: Replaced `format!("Load failed: {}", e)` with
+`"ERROR: Couldn't load game."`. The raw error is still emitted to `eprintln!`
+for diagnostics.
+
+#### F17.5 — julstuff/philstuff/kevstuff serialised 36 slots instead of 35 [NEEDS-FIX → FIXED]
+**Location**: `src/game/persist.rs` `make_stuff` closure (save) and
+`load_from_path` (three `take(36)` calls).
+**Reference**: `save-load.md` `mod1save` (`fmain.c:3623-3625`):
+`saveload_block(julstuff, 35)` — `ARROWBASE = 35` (`fmain.c:429`).
+Each brother's inventory is exactly 35 bytes; slot 35 (index 35) is the
+quiver-accumulator scratch slot, cleared at the top of every loot pickup
+(`inventory.md fmain.c:3151`) and must not be persisted.
+**Fix**: `make_stuff` now uses `arr[0..35].iter()`; load side uses
+`take(35)` for all three brothers. Proto comment updated to "exactly 35
+entries". Existing save files remain loadable — proto3 just stops at the
+35th element on decode, leaving slot 35 at its default zero.
+
+#### F17.6 — cheat1 not persisted [NEEDS-FIX → FIXED]
+**Location**: `src/game/persist.rs`; `proto/faery_save.proto`.
+**Reference**: `save-load.md §"Cheats persist"` (`fmain.c:562`,
+`fmain2.c:1508` block-1 offset 18): `cheat1` is saved in the 80-byte
+misc-variable window and restored verbatim on load. A player who enables
+cheats, saves, and reloads must still have cheats enabled.
+**Fix**: Added `bool cheat1 = 160` to `faery_save.proto`; `state_to_proto`
+now sets `cheat1: state.cheat1`; `load_from_path` restores
+`state.cheat1 = sf.cheat1`.
+
+#### F17.7 — Save-slot filename / format is a port adaptation [CONFORMANT]
+The original uses `A.faery`..`H.faery` on AmigaDOS floppy/hard drive.
+The port uses `~/.config/faery/saves/save{NN:02}.sav` with a protobuf
+payload prefixed by `FERY` magic and a `u32` version. This is a necessary
+PC-port adaptation (no floppy disk, no AmigaDOS paths). Eight slots (0-7,
+presented as A-H in the menu) match the original count (`fmain.c:540`).
+The magic/version header is a porter addition; the original has no
+signature at all (`save-load.md §"No signature, no versioning"`).
+**Status**: Adaptation is correct and intentional; no fix needed.
+
+#### F17.8 — raftprox not persisted [SPEC-GAP]
+**Location**: `src/game/persist.rs` — `state.raftprox` is not in the proto.
+**Reference**: `save-load.md` block-1 offset 28 (`fmain.c:564`):
+`raftprox` (raft-proximity tick) is saved in the misc-var window.
+**Issue**: The port does not persist `raftprox`. However, `raftprox` is
+recomputed on the very next movement tick from hero-to-raft distance (it
+is set to 0, 1, or 2 based on proximity; `gameplay_scene.rs:1186-1226`),
+so the loaded value is stale within one frame anyway. The mismatch causes
+at most a one-tick window where the board/leave prompt may be absent.
+**Classification**: SPEC-GAP — the reference saves it; the port does not;
+the functional impact is one-tick. Adding it to the proto is straightforward
+but requires a SPEC update to formally note this adaptation. Deferred.
+
+### SPEC/REQ updates queued
+- **F17.8 (SPEC-GAP)**: Add `raftprox` to the proto schema and persist it
+  to close the one-tick window. Requires a SPEC §24 note that the field is
+  restored verbatim (matching `save-load.md` block-1 offset 28).
+
+### Blockers
+None — all fixable findings are fixed. F17.8 requires user sign-off before
+adding raftprox to the proto.
