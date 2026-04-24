@@ -2457,6 +2457,7 @@ impl GameplayScene {
                     let y = 42 - line_from_bottom * 10;
                     amber_font.render_string(msg, hc, 16, y);
                 }
+                amber_font.set_color_mod(255, 255, 255);
 
                 for btn in &buttons {
                     let col = btn.display_slot & 1;
@@ -2556,12 +2557,8 @@ impl GameplayScene {
 
                 self.render_hibar(canvas, resources);
 
-                // Tick visual effects and composite them over the map.
+                // Tick witch visual effect (scanline warp, applied to map texture).
                 self.witch_effect.tick();
-                if let Some((r, g, b, a)) = self.teleport_effect.tick() {
-                    canvas.set_draw_color(sdl2::pixels::Color::RGBA(r, g, b, a));
-                    canvas.fill_rect(None).ok();
-                }
             }
             // Map view (bird totem)
             1 => {
@@ -4238,10 +4235,13 @@ impl GameplayScene {
     ) -> crate::game::palette::Palette {
         use crate::game::palette::{amiga_color_to_rgba, PALETTE_SIZE};
 
-        // Indoors: full brightness, no fade.
+        // Indoors: full brightness; still route through fade_page so that an
+        // active light_timer (Green Jewel) applies the warm-red torch tint.
+        // Reference: fmain2.c:1659 — `fade_page(100,100,100,True,pagecolors)` for region>=8.
         if region_num >= 8 {
+            let faded = crate::game::palette_fader::fade_page(100, 100, 100, true, light_on, base);
             let mut pal = [0xFF808080_u32; PALETTE_SIZE];
-            for (i, entry) in base.colors.iter().enumerate().take(PALETTE_SIZE) {
+            for (i, entry) in faded.colors.iter().enumerate().take(PALETTE_SIZE) {
                 pal[i] = amiga_color_to_rgba(entry.color);
             }
             // SPEC §17.6: color 31 (sky) override for all indoor cases.
@@ -5119,6 +5119,17 @@ impl Scene for GameplayScene {
                     light_on,
                     secret_active,
                 );
+            }
+        }
+
+        // colorplay() — Reference: fmain2.c:425-431.
+        // When active (triggered by TriggerTeleportEffect), override palette entries 1..31
+        // with random 12-bit RGB4 values every tick for 32 frames.  This runs after the
+        // normal palette update so that the storm always takes precedence.
+        if let Some(storm) = self.teleport_effect.tick() {
+            use crate::game::palette::amiga_color_to_rgba;
+            for (i, &c) in storm.iter().enumerate() {
+                self.current_palette[i + 1] = amiga_color_to_rgba(c);
             }
         }
 

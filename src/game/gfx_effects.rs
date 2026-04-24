@@ -32,39 +32,38 @@ impl WitchEffect {
 
 impl Default for WitchEffect { fn default() -> Self { Self::new() } }
 
-/// State for the teleport flash-and-fade effect.
-/// Frame 0-4: flash white; frame 5-34: fade from black.
+/// State for the teleport colorplay effect.
+///
+/// Ports `colorplay()` from fmain2.c:425-431: a 32-frame palette storm where
+/// palette entries 1..31 are set to random 12-bit RGB4 values each frame via
+/// `bitrand(0xfff)`.  Callers apply the returned colors directly to
+/// `current_palette[1..32]` using `amiga_color_to_rgba`.
 pub struct TeleportEffect {
     pub active: bool,
     frame: u32,
 }
 
-const TELEPORT_FLASH_FRAMES: u32 = 5;
-const TELEPORT_FADE_FRAMES: u32 = 30;
-const TELEPORT_TOTAL_FRAMES: u32 = TELEPORT_FLASH_FRAMES + TELEPORT_FADE_FRAMES;
+const COLORPLAY_FRAMES: u32 = 32;
 
 impl TeleportEffect {
     pub fn new() -> Self { TeleportEffect { active: false, frame: 0 } }
 
     pub fn start(&mut self) { self.active = true; self.frame = 0; }
 
-    /// Returns (overlay_color, overlay_alpha) for this frame.
-    /// Caller should draw a filled rect over the play texture with this color+alpha.
-    /// Returns None when the effect is complete.
-    pub fn tick(&mut self) -> Option<(u8, u8, u8, u8)> {
+    /// Returns 31 random 12-bit RGB4 values (palette slots 1..31) for this frame.
+    /// Returns None when the 32-frame effect is complete.
+    pub fn tick(&mut self) -> Option<[u16; 31]> {
         if !self.active { return None; }
-        let result = if self.frame < TELEPORT_FLASH_FRAMES {
-            Some((255u8, 255u8, 255u8, 220u8)) // white flash
-        } else if self.frame < TELEPORT_TOTAL_FRAMES {
-            let fade_progress = (self.frame - TELEPORT_FLASH_FRAMES) as f32 / TELEPORT_FADE_FRAMES as f32;
-            let alpha = ((1.0 - fade_progress) * 255.0) as u8;
-            Some((0u8, 0u8, 0u8, alpha)) // fade from black
-        } else {
+        if self.frame >= COLORPLAY_FRAMES {
             self.active = false;
-            None
-        };
+            return None;
+        }
+        let mut colors = [0u16; 31];
+        for c in colors.iter_mut() {
+            *c = (crate::game::combat::bitrand(0xfff)) as u16;
+        }
         self.frame += 1;
-        result
+        Some(colors)
     }
 }
 
@@ -83,20 +82,19 @@ mod tests {
     }
 
     #[test]
-    fn test_teleport_effect_phases() {
+    fn test_teleport_effect_colorplay() {
         let mut t = TeleportEffect::new();
         t.start();
-        // First 5 frames: white flash
-        for _ in 0..5 {
-            let (r, g, b, _) = t.tick().expect("active");
-            assert_eq!((r, g, b), (255, 255, 255));
+        // 32 frames of random palette values (12-bit each, ≤ 0x0fff).
+        for _ in 0..32 {
+            let colors = t.tick().expect("active during colorplay");
+            assert_eq!(colors.len(), 31);
+            for &c in &colors {
+                assert!(c <= 0x0fff, "palette value {c:#06x} exceeds 12 bits");
+            }
         }
-        // Frames 5-34: black fade
-        for _ in 0..30 {
-            let (r, g, b, _) = t.tick().expect("active");
-            assert_eq!((r, g, b), (0, 0, 0));
-        }
-        // After 35 frames: done
+        // After 32 frames: effect ends.
         assert!(t.tick().is_none());
+        assert!(!t.active);
     }
 }
