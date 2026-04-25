@@ -582,15 +582,13 @@ impl GameplayScene {
                 if hold_ticks > 0 {
                     return;
                 }
-                if game_lib.find_placard(&key).is_none() {
-                    self.dlog(format!("fidelity error: missing placard key {}", key));
-                } else {
-                    if let Some(placard) = game_lib.find_placard(&key) {
-                        for line in placard.text_lines_with_substitution(substitution.as_deref()) {
-                            self.messages.push_wrapped(line);
-                        }
+                if let Some(placard) = game_lib.find_placard(&key) {
+                    for line in placard.text_lines_with_substitution(substitution.as_deref()) {
+                        self.messages.push_wrapped(line);
                     }
                     self.dlog(format!("narrative: show_placard {}", key));
+                } else {
+                    self.dlog(format!("fidelity error: missing placard key {}", key));
                 }
                 self.narrative_queue.advance_active_step();
             }
@@ -7914,6 +7912,39 @@ mod death_tests {
                     && line.contains("new_id=4")
             }),
             "Missing swap_object_id target should be logged as a fidelity blocker"
+        );
+    }
+
+    #[test]
+    fn t_f118_move_extent_failure_logs_fidelity_blocker_and_continue() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+
+        scene.debug_enqueue_sequence_for_test(vec![
+            NarrativeStep::MoveExtent {
+                index: 0,
+                x: -1,
+                y: 21231,
+            },
+            NarrativeStep::WaitTicks { remaining: 1 },
+        ]);
+
+        scene.debug_run_sequence_to_completion(&lib);
+
+        assert_eq!(
+            scene.debug_active_step_index(),
+            None,
+            "Sequence should continue and complete even when move_extent fails"
+        );
+
+        let logs = scene.debug_drain_logs_for_test();
+        assert!(
+            logs.iter().any(|line| {
+                line.contains("fidelity blocker: move_extent missing target")
+                    && line.contains("index=0")
+                    && line.contains("x=-1")
+            }),
+            "MoveExtent failure should be logged as a fidelity blocker"
         );
     }
 }
