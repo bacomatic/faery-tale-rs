@@ -151,7 +151,10 @@ pub fn resolve_combat(state: &mut GameState, npc: &mut Npc, hero_weapon_slot: us
     let hero_defeated = state.vitality <= 0;
 
     if enemy_defeated {
-        npc.active = false;
+        // F9.11: legacy combat path now uses the searchable-body lifecycle.
+        // `mark_dead` keeps `active=true` and flips `state=Dead` so the
+        // body persists for `search_body` (`fmain.c:3251-3283`).
+        npc.mark_dead();
     }
 
     CombatResult {
@@ -387,7 +390,13 @@ mod tests {
         orc.vitality = 1; // near death
         let result = resolve_combat(&mut state, &mut orc, 5); // mace
         assert!(result.enemy_defeated);
-        assert!(!orc.active);
+        // F9.11: defeated NPC is now flagged Dead (looted=false) but
+        // remains active so TAKE → search_body can consume the body
+        // (`fmain.c:3251-3283`).
+        assert!(orc.active, "body must stay active for TAKE/search_body");
+        assert_eq!(orc.state, crate::game::npc::NpcState::Dead);
+        assert_eq!(orc.vitality, 0);
+        assert!(!orc.looted);
     }
 
     #[test]

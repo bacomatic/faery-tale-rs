@@ -214,6 +214,7 @@ pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick
         facing: 0,
         state: NpcState::Walking,
         cleverness: stats.clever,
+        looted: false,
     }
 }
 

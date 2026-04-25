@@ -74,6 +74,10 @@ pub struct Npc {
     pub facing: u8,
     pub state: NpcState,
     pub cleverness: u8,
+    /// True after `search_body` consumes the body. Mirrors original
+    /// `weapon = -1` sentinel (`fmain.c:3265`). Once set, repeated TAKE
+    /// on the same body is a silent no-op (`fmain.c:3251`).
+    pub looted: bool,
 }
 
 impl Npc {
@@ -98,6 +102,7 @@ impl Npc {
             facing: 0,
             state: NpcState::Still,
             cleverness: 0,
+            looted: false,
         }
     }
 
@@ -190,6 +195,26 @@ impl Npc {
         let loot = (self.gold, self.vitality);
         self.vitality = 0;
         loot
+    }
+
+    /// Transition the NPC into the searchable-body state (`fmain.c:2772-2784`
+    /// + `inventory.md#search_body`). Keeps `active=true` so `nearest_fig`
+    /// still returns the corpse for TAKE, but flips `state=Dead` so AI,
+    /// combat, missiles and proximity speech skip it. `looted` starts
+    /// false; `search_body` flips it after consuming the body.
+    pub fn mark_dead(&mut self) {
+        self.vitality = 0;
+        self.state = NpcState::Dead;
+        self.looted = false;
+        // active stays true — body is still on the map until ClearEncounters.
+    }
+
+    /// True when this NPC slot is reusable by a future spawn — either it
+    /// was never populated (`!active`) or it is a Dead body still occupying
+    /// the slot. Dead bodies are despawned by ClearEncounters; until then
+    /// AI tactic loops should treat them like inactive slots.
+    pub fn slot_free(&self) -> bool {
+        !self.active || self.state == NpcState::Dead
     }
 }
 

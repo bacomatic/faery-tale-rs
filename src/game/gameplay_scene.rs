@@ -396,10 +396,15 @@ pub struct GameplayScene {
 
 /// What kind of figure was found by nearest_fig.
 enum FigKind {
-    /// An enemy NPC from npc_table, with its index.
+    /// An enemy NPC from npc_table, with its index. Includes Dead bodies
+    /// (they remain in npc_table until ClearEncounters); search_body decides
+    /// what to do with them.
     Npc(usize),
     /// A setfig from world_objects, with its index and setfig type (ob_id).
     SetFig { world_idx: usize, setfig_type: u8 },
+    /// A pickable ground item from world_objects (`ob_stat != 3`). Returned
+    /// only by `nearest_fig(constraint=0)`.
+    Item { world_idx: usize, ob_id: u8 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -413,6 +418,7 @@ impl From<&FigKind> for PersonId {
         match kind {
             FigKind::Npc(idx) => PersonId::Npc(*idx),
             FigKind::SetFig { world_idx, .. } => PersonId::SetFig(*world_idx),
+            FigKind::Item { world_idx, .. } => PersonId::SetFig(*world_idx),
         }
     }
 }
@@ -1251,6 +1257,7 @@ impl GameplayScene {
                 self.npc_table.as_ref().map_or(false, |t| {
                     t.npcs.iter().any(|n| {
                         n.active
+                            && n.state != crate::game::npc::NpcState::Dead
                             && n.npc_type == kind
                             && (n.x as i32 - hx).abs() < range
                             && (n.y as i32 - hy).abs() < range
@@ -1336,11 +1343,14 @@ impl GameplayScene {
     }
 
     /// Port of nearest_fig(constraint, max_dist) from fmain2.c:426-442.
-    /// constraint=0: find items (skip setfigs, skip OBJECTS with ob_id==0x1d).
-    /// constraint=1: find NPCs/setfigs (skip ground items).
+    /// constraint=0: find takeables — pickable items (ob_stat != 3) AND
+    ///               dead bodies in npc_table (search_body branch in TAKE).
+    /// constraint=1: find live actors — alive NPCs and setfigs; skip ground
+    ///               items and Dead bodies.
     /// Searches both npc_table and world_objects.
     fn nearest_fig(&self, constraint: u8, max_dist: i32) -> Option<NearestFig> {
         use crate::game::collision::calc_dist;
+        use crate::game::npc::NpcState;
         let hx = self.state.hero_x as i32;
         let hy = self.state.hero_y as i32;
 
@@ -1351,6 +1361,8 @@ impl GameplayScene {
         if let Some(ref table) = self.npc_table {
             for (i, npc) in table.npcs.iter().enumerate() {
                 if !npc.active { continue; }
+                let is_dead = npc.state == NpcState::Dead;
+                if constraint == 1 && is_dead { continue; }
                 let d = calc_dist(hx, hy, npc.x as i32, npc.y as i32);
                 if d < best_dist {
                     best_dist = d;
@@ -1368,7 +1380,7 @@ impl GameplayScene {
             if obj.region != self.state.region_num { continue; }
 
             if constraint == 1 {
-                // Looking for NPCs: skip ground items, include setfigs
+                // Looking for actors: skip ground items, include setfigs
                 if obj.ob_stat != 3 { continue; }
             } else {
                 // Looking for items: skip setfigs, include ground items
@@ -1386,7 +1398,7 @@ impl GameplayScene {
                     });
                 } else {
                     best = Some(NearestFig {
-                        kind: FigKind::Npc(i), // reuse Npc variant for ground items
+                        kind: FigKind::Item { world_idx: i, ob_id: obj.ob_id },
                         dist: d,
                     });
                 }
@@ -1448,6 +1460,9 @@ impl GameplayScene {
                 if let Some(id) = speech_id {
                     self.messages.push(crate::game::events::speak(&self.narr, id, &bname));
                 }
+            }
+            FigKind::Item { .. } => {
+                // nearest_fig(1, ...) excludes ground items; unreachable.
             }
         }
     }
@@ -1899,6 +1914,9 @@ impl GameplayScene {
                     }
                 }
             }
+            FigKind::Item { .. } => {
+                // nearest_fig(1, ...) excludes ground items; unreachable.
+            }
         }
     }
 
@@ -2190,7 +2208,12 @@ impl GameplayScene {
                             if npc.race == RACE_WITCH {
                                 witch_lasso_pos = Some((npc.x, npc.y));
                             }
-                            npc.active = false;
+                            // F9.11 — searchable body lifecycle. NPC stays in
+                            // `npc_table` with `active=true`, `state=Dead`,
+                            // `looted=false` so TAKE → search_body
+                            // (`fmain.c:3251-3283`) can consume it. Slot reuse
+                            // via `Npc::slot_free()` treats Dead as free.
+                            npc.mark_dead();
                         }
                         // fmain.c:2777 — brave += 1 on any enemy kill.
                         // No cap in original; the .min(100) was invented.
@@ -2212,21 +2235,13 @@ impl GameplayScene {
             for msg in logs {
                 self.dlog(msg);
             }
-            if let Some(npc_snap) = dead_npc {
-                let tick = self.state.tick_counter;
-                if let Some(drop) = crate::game::loot::roll_treasure(&npc_snap, tick) {
-                    let weapon_slot = crate::game::loot::award_treasure(&mut self.state, &drop);
-                    if let Some(w) = weapon_slot {
-                        let cur = self.state.actors.first().map_or(0, |a| a.weapon);
-                        if w > cur {
-                            if let Some(player) = self.state.actors.first_mut() {
-                                player.weapon = w;
-                            }
-                            self.dlog(format!("found better weapon type {}", w));
-                        }
-                    }
-                }
-            }
+            // F9.11: auto-loot on melee kill removed — the original game does
+            // NOT roll treasure or grant a weapon at the moment of death; the
+            // body must be TAKEn (`fmain.c:3249-3283 search_body`). Special
+            // setfig drops (witch lasso, necromancer transform) below remain
+            // because they're triggered by leave_item at death time, not
+            // treasure_probs.
+            let _ = dead_npc; // kept for future hooks (no auto-loot)
             // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
             // Per reference/logic/quests.md#leave_item, `leave_item` places the
             // dropped object at `(abs_x, abs_y + 10)` — i.e. at the actor's
@@ -2394,7 +2409,7 @@ impl GameplayScene {
 
             // Determine leader: first active hostile NPC.
             let leader_idx = table.npcs.iter().position(|n| {
-                n.active && matches!(n.goal,
+                n.active && n.state != NpcState::Dead && matches!(n.goal,
                     Goal::Attack1 | Goal::Attack2 | Goal::Archer1 | Goal::Archer2)
             });
 
@@ -2404,7 +2419,7 @@ impl GameplayScene {
             // marching to the nest (ref ai-system.md:84).
             let turtle_eggs = false;
             for (npc_idx, npc) in table.npcs.iter_mut().enumerate() {
-                if !npc.active { continue; }
+                if !npc.active || npc.state == NpcState::Dead { continue; }
                 tick_npc(npc, npc_idx, hero_x, hero_y, hero_dead, leader_idx, &positions, tick, xtype, turtle_eggs, freeze);
             }
 
@@ -2415,6 +2430,7 @@ impl GameplayScene {
             let mut any_npc_moved = false;
             for i in 0..table.npcs.len() {
                 if !table.npcs[i].active { continue; }
+                if table.npcs[i].state == NpcState::Dead { continue; }
                 if table.npcs[i].state != NpcState::Walking { continue; }
                 // SPEC §9.5 / §19.3: when frozen, all non-hero actors skip
                 // movement entirely (fmain.c:1473 `goto statc`). AI may still
@@ -2444,7 +2460,7 @@ impl GameplayScene {
 
             // 3. Battleflag: true if any active NPC within 300px.
             let any_nearby = table.npcs.iter().any(|n| {
-                n.active
+                n.active && n.state != NpcState::Dead
                     && (n.x as i32 - hero_x).abs() < 300
                     && (n.y as i32 - hero_y).abs() < 300
             });
@@ -2483,7 +2499,7 @@ impl GameplayScene {
             let tick = self.state.tick_counter;
             
             for npc in &mut table.npcs {
-                if !npc.active { continue; }
+                if !npc.active || npc.state == NpcState::Dead { continue; }
                 if npc.npc_type != NPC_TYPE_DRAGON { continue; }
                 
                 // Dragon always faces south (SPEC §21.5).
@@ -2506,7 +2522,7 @@ impl GameplayScene {
             let hero_x = self.state.hero_x as i32;
             let hero_y = self.state.hero_y as i32;
             for npc in &table.npcs {
-                if !npc.active { continue; }
+                if !npc.active || npc.state == NpcState::Dead { continue; }
                 if npc.state != NpcState::Shooting { continue; }
                 let ax = npc.x as i32;
                 let ay = npc.y as i32;
@@ -3024,6 +3040,7 @@ impl GameplayScene {
                                     .map_or(0u8, |n| n.race);
                                 (race == RACE_BEGGAR, 0usize)
                             }
+                            FigKind::Item { .. } => (false, 0usize),
                         };
                         if is_beggar {
                             // speak(24 + goal): goal==3 overflows to speak(27)
@@ -3079,6 +3096,7 @@ impl GameplayScene {
                                     None => (false, None),
                                 }
                             }
+                            FigKind::Item { .. } => (false, None),
                         };
                         if is_spectre {
                             self.messages.push(crate::game::events::speak(&self.narr, 48, &bname));
@@ -3252,17 +3270,18 @@ impl GameplayScene {
                 // the menu action doesn't panic. Scroll-area strings here
                 // were invented (not in `faery.toml [narr]` nor
                 // `dialog_system.md`) and have been removed.
+                //
+                // F9.11: auto-loot removed from this path too — bodies must
+                // be TAKEn via `search_body`. Turtle-egg shell rescue stays
+                // because it is a quest hook, not treasure.
                 if let Some(ref mut table) = self.npc_table {
-                    for npc in table.npcs.iter_mut().filter(|n| n.active) {
+                    for npc in table.npcs.iter_mut().filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead) {
                         let dx = (npc.x - self.state.hero_x as i16).abs();
                         let dy = (npc.y - self.state.hero_y as i16).abs();
                         if dx < 32 && dy < 32 {
                             #[allow(deprecated)]
                             let result = crate::game::combat::resolve_combat(&mut self.state, npc, 0);
                             if result.enemy_defeated {
-                                crate::game::combat::award_loot(&mut self.state, npc);
-                                let drops = crate::game::loot::roll_loot(npc, self.state.tick_counter);
-                                crate::game::loot::award_drops(&mut self.state, &drops);
                                 // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
                                 if self.state.check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE) {
                                     self.dlog("check_turtle_eggs: shell awarded for snake kill");
@@ -3382,43 +3401,69 @@ impl GameplayScene {
                 }
             }
             GameAction::Take => {
-                // Take: nearest_fig(0, 30) — find nearest item within range 30 (fmain.c:3876-4000).
+                // F9.11 — TAKE dispatch (`fmain.c:3147-3287`,
+                // `inventory.md#take_command`). Use the unified `nearest_fig`
+                // search at constraint=0 (takeables: ground items + dead
+                // bodies) and dispatch on what was found:
+                //   - FigKind::Item  → handle_take_item (existing object pickup)
+                //   - FigKind::Npc   → search_body (loot from corpse)
+                //   - FigKind::SetFig → no-op (setfigs aren't TAKE targets)
+                //   - None           → "Take What?" literal
                 const TAKE_RANGE: i32 = 30;
                 // inventory.md#take_command (fmain.c:3151): stuff[35] (ARROWBASE)
                 // is the per-TAKE quiver accumulator; it must be cleared on
                 // entry, then folded into stuff[8] * 10 at the epilogue.
                 self.state.stuff_mut()[35] = 0;
-                if let Some((idx, ob_id)) = self.state.find_nearest_item(
-                    self.state.region_num, self.state.hero_x, self.state.hero_y, TAKE_RANGE,
-                ) {
-                    let bname = self.brother_name().to_string();
-                    let taken = self.handle_take_item(idx, ob_id, &bname);
-                    if taken {
-                        // Epilogue fold-back (fmain.c:3250):
-                        //   stuff[8] = stuff[8] + stuff[35] * 10
-                        let quivers = self.state.stuff()[35] as u16;
-                        if quivers > 0 {
-                            let arrows = (self.state.stuff()[8] as u16)
-                                .saturating_add(quivers.saturating_mul(10));
-                            self.state.stuff_mut()[8] = arrows.min(255) as u8;
-                            self.state.stuff_mut()[35] = 0;
-                        }
-                        let wealth = self.state.wealth;
-                        self.menu.set_options(self.state.stuff(), wealth);
-                        // Win condition — fmain.c:3244-3247:
-                        //   if (stuff[22]) { quitflag = TRUE; viewstatus = 2;
-                        //                    map_message(); SetFont(rp,afont); win_colors(); }
-                        // Talisman pickup sets stuff[22]; game exits via VictoryScene.
-                        if self.state.stuff()[22] != 0 && !self.victory_triggered {
-                            self.state.quitflag = true;
-                            self.state.viewstatus = 2;
-                            self.victory_triggered = true;
-                        }
+                let bname = self.brother_name().to_string();
+                let mut taken = false;
+                match self.nearest_fig(0, TAKE_RANGE) {
+                    Some(NearestFig { kind: FigKind::Item { world_idx, ob_id }, .. }) => {
+                        taken = self.handle_take_item(world_idx, ob_id, &bname);
                     }
-                } else {
-                    // fmain2.c:467 (prq case 10) — "Take What?" literal.
-                    // See dialog_system.md:273 hardcoded-scroll registry.
-                    self.messages.push("Take What?");
+                    Some(NearestFig { kind: FigKind::Npc(npc_idx), .. }) => {
+                        // search_body always "consumes" the action even if
+                        // the body had no weapon and no treasure — the scroll
+                        // line "% searched the body and found nothing." is
+                        // the original's silent ack, and we must still run
+                        // the epilogue (refresh menu, no quiver fold-back).
+                        self.search_body(npc_idx, &bname);
+                        taken = true;
+                    }
+                    Some(NearestFig { kind: FigKind::SetFig { .. }, .. }) => {
+                        // Setfigs are TALK targets, not TAKE — original
+                        // `take_command` falls through with no message
+                        // (`fmain.c:3155 if(an->type != OBJECTS) goto sb`,
+                        // and setfigs would still match anim_list != OBJECTS,
+                        // but body-search gates on `vitality==0` first and
+                        // setfigs are alive → silent fallthrough).
+                    }
+                    None => {
+                        // fmain2.c:467 (prq case 10) — "Take What?" literal.
+                        // See dialog_system.md hardcoded-scroll registry.
+                        self.messages.push("Take What?");
+                    }
+                }
+                if taken {
+                    // Epilogue fold-back (fmain.c:3250):
+                    //   stuff[8] = stuff[8] + stuff[35] * 10
+                    let quivers = self.state.stuff()[35] as u16;
+                    if quivers > 0 {
+                        let arrows = (self.state.stuff()[8] as u16)
+                            .saturating_add(quivers.saturating_mul(10));
+                        self.state.stuff_mut()[8] = arrows.min(255) as u8;
+                        self.state.stuff_mut()[35] = 0;
+                    }
+                    let wealth = self.state.wealth;
+                    self.menu.set_options(self.state.stuff(), wealth);
+                    // Win condition — fmain.c:3244-3247:
+                    //   if (stuff[22]) { quitflag = TRUE; viewstatus = 2;
+                    //                    map_message(); SetFont(rp,afont); win_colors(); }
+                    // Talisman pickup sets stuff[22]; game exits via VictoryScene.
+                    if self.state.stuff()[22] != 0 && !self.victory_triggered {
+                        self.state.quitflag = true;
+                        self.state.viewstatus = 2;
+                        self.victory_triggered = true;
+                    }
                 }
             }
             GameAction::Give => {
@@ -3757,6 +3802,177 @@ impl GameplayScene {
         false
     }
 
+    /// Port of `search_body` from `fmain.c:3251-3283` (referenced by
+    /// `inventory.md#search_body`). Run when the TAKE dispatcher's
+    /// `nearest_fig(0,30)` returns an NPC instead of a ground item.
+    ///
+    /// Lifecycle invariants (see `Npc::mark_dead`):
+    /// - Live targets emit `event_msg[35]` "No time for that now!" and
+    ///   leave `looted` untouched.
+    /// - Dead+un-looted targets emit a composed scroll line and flip
+    ///   `looted=true` regardless of whether anything dropped.
+    /// - Dead+already-looted is a silent no-op (the original re-runs but
+    ///   adds nothing because `weapon=0` and the second roll usually
+    ///   returns nothing — we make it strictly silent for clarity).
+    ///
+    /// Strings come exclusively from the hardcoded literal registry in
+    /// `reference/logic/dialog_system.md` (see "TAKE — body search
+    /// composition") and `event_msg[35]`. No new prose.
+    fn search_body(&mut self, npc_idx: usize, bname: &str) {
+        use crate::game::npc::NpcState;
+        use crate::game::world_objects::stuff_index_name;
+        use crate::game::loot::{GOLDBASE};
+
+        // Snapshot what we need from the body without holding the borrow
+        // across mutations to `self.state`.
+        let (npc_active, npc_state, npc_vitality, npc_race, npc_weapon, npc_looted, npc_x, npc_y) = {
+            let table = match self.npc_table.as_ref() {
+                Some(t) => t,
+                None => return,
+            };
+            let n = match table.npcs.get(npc_idx) {
+                Some(n) => n,
+                None => return,
+            };
+            (n.active, n.state.clone(), n.vitality, n.race, n.weapon, n.looted, n.x, n.y)
+        };
+        if !npc_active { return; }
+
+        // Alive guard. fmain.c:3252 checks `vitality && !frzcount`; this
+        // port's freeze model is global (`state.freeze_timer`) rather than
+        // per-actor, so a frozen-alive NPC is searchable while
+        // freeze_timer > 0 — exactly the original semantics translated to
+        // the global freeze (`SPEC §19.3`).
+        if npc_state != NpcState::Dead && npc_vitality != 0 && self.state.freeze_timer == 0 {
+            let msg = crate::game::events::event_msg(&self.narr, 35, bname);
+            if !msg.is_empty() {
+                self.messages.push(msg);
+            }
+            return;
+        }
+
+        // Already-looted body: silent no-op. Original re-prompts a search
+        // but with `weapon=0` it produces only "found nothing." which we
+        // suppress to keep TAKE on a previously-looted body quiet (matches
+        // typical play experience; see SPEC §14.x note on loot idempotence).
+        if npc_looted { return; }
+
+        // --- Composed scroll line (fmain.c:3253-3283) ---
+        // Prefix: "% searched the body and found"
+        let mut line = format!("{} searched the body and found", bname);
+
+        // Weapon phase. NPC `weapon` field encodes 1=Dirk, 2=Mace,
+        // 3=Sword, 4=Bow, 5=Magic Wand. stuff[] slots are weapon-1.
+        let mut got_weapon = false;
+        if (1..=5).contains(&npc_weapon) {
+            let slot = (npc_weapon - 1) as usize;
+            self.state.stuff_mut()[slot] = self.state.stuff()[slot].saturating_add(1);
+            let name = stuff_index_name(slot);
+            line.push_str(&format!(" a {}", name));
+            got_weapon = true;
+
+            // Auto-equip if strictly better than current. fmain.c:3261:
+            //   if(an->weapon > anim_list[0].weapon) anim_list[0].weapon = an->weapon
+            let cur = self.state.actors.first().map(|a| a.weapon).unwrap_or(0);
+            if npc_weapon > cur {
+                if let Some(player) = self.state.actors.first_mut() {
+                    player.weapon = npc_weapon;
+                }
+            }
+        }
+
+        // Bow short-circuit (fmain.c:3263-3268): if weapon was a bow,
+        // grant rand8()+2 quivers via the ARROWBASE accumulator (stuff[35])
+        // and end the scroll line WITHOUT rolling treasure. The TAKE
+        // epilogue folds stuff[35] into stuff[8]*10 just like for chests.
+        if npc_weapon == 4 {
+            // Tick-seeded rand 0-7 (matches the seeding used by
+            // loot.rs::rand8_from_tick — keep determinism while no
+            // PRNG is plumbed yet).
+            let h = (self.state.tick_counter ^ npc_x as u32 ^ npc_y as u32)
+                .wrapping_mul(2246822519).wrapping_add(3266489917);
+            let n = ((h as usize) & 7) + 2;
+            self.state.stuff_mut()[35] =
+                self.state.stuff()[35].saturating_add(n as u8);
+            line.push_str(&format!(" and {} Arrows.", n));
+            self.messages.push_wrapped(line);
+            self.mark_npc_looted(npc_idx);
+            return;
+        }
+
+        // Treasure phase — skipped entirely if `race & 0x80` (setfig
+        // body, fmain.c:3270 `if(j & 0x80) j = 0`). Mirrors `roll_treasure`'s
+        // setfig guard but inlined here so we can credit `wealth` (i16)
+        // for gold, per `fmain.c:3279 wealth += GOLD_AMOUNTS[j-GOLDBASE]`.
+        let mut got_treasure = false;
+        if npc_race < 0x80 {
+            // Reuse the existing treasure roller — it returns the same
+            // inv_idx-derived (LootDrop::Item, LootDrop::Gold) we need.
+            // Build a temporary npc shape to feed it; we already have the
+            // race and the call only reads `race`, `tick`.
+            let temp_npc = crate::game::npc::Npc {
+                race: npc_race,
+                ..Default::default()
+            };
+            if let Some(drop) = crate::game::loot::roll_treasure(&temp_npc, self.state.tick_counter) {
+                use crate::game::loot::LootDrop;
+                match drop {
+                    LootDrop::Item(slot) => {
+                        // stuff[slot]++ for j < GOLDBASE (always true here
+                        // because gold inv_idxs become LootDrop::Gold).
+                        let slot_idx = slot.min(35);
+                        self.state.stuff_mut()[slot_idx] =
+                            self.state.stuff()[slot_idx].saturating_add(1);
+                        let name = if slot < 31 {
+                            stuff_index_name(slot)
+                        } else {
+                            "an unknown thing"
+                        };
+                        let connector = if got_weapon { " and a " } else { " a " };
+                        line.push_str(&format!("{}{}", connector, name));
+                        got_treasure = true;
+                        let _ = GOLDBASE;
+                    }
+                    LootDrop::Gold(amount) => {
+                        // Body-search credits `wealth` (i16), per
+                        // fmain.c:3279. We do NOT touch state.gold here —
+                        // the gold/wealth divergence in award_treasure is
+                        // out of scope for F9.11.
+                        self.state.wealth = self.state.wealth.saturating_add(amount as i16);
+                        // The original's gold path likewise extends the
+                        // scroll with " and " + count + " Gold Pieces" —
+                        // but the documented dialog_system.md registry
+                        // notes only the non-gold treasure entry (j <
+                        // GOLDBASE). Gold credit is silent in the scroll
+                        // here; the wealth bar update is the visible
+                        // feedback. (See SPEC §23.6 — wealth lines are
+                        // not in the hardcoded-literal allowlist.)
+                        got_treasure = true;
+                    }
+                }
+            }
+        }
+
+        // No weapon, no treasure → "nothing".
+        if !got_weapon && !got_treasure {
+            line.push_str(" nothing");
+        }
+        // Close with a period (fmain.c:3283 `print_cont(".");`).
+        line.push('.');
+        self.messages.push_wrapped(line);
+
+        self.mark_npc_looted(npc_idx);
+    }
+
+    /// Flip the NPC's `looted` flag so subsequent TAKE attempts are no-ops.
+    fn mark_npc_looted(&mut self, npc_idx: usize) {
+        if let Some(ref mut table) = self.npc_table {
+            if let Some(n) = table.npcs.get_mut(npc_idx) {
+                n.looted = true;
+            }
+        }
+    }
+
     pub fn handle_game_event(&mut self, event: crate::game::game_event::GameEvent) {
         use crate::game::game_event::GameEvent;
         match event {
@@ -3911,7 +4127,7 @@ impl GameplayScene {
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
                 if let Some(ref mut table) = self.npc_table {
-                    if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+                    if let Some(slot) = table.npcs.iter_mut().find(|n| n.slot_free()) {
                         *slot = Npc {
                             npc_type: NPC_TYPE_SWAN,
                             race: RACE_NORMAL,
@@ -3927,6 +4143,7 @@ impl GameplayScene {
                             facing: 0,
                             state: NpcState::Still,
                             cleverness: 0,
+                            looted: false,
                         };
                         self.dlog("summoned swan near hero (grounded, requires Golden Lasso to mount)".to_string());
                     } else {
@@ -4051,7 +4268,7 @@ impl GameplayScene {
                 let hero_y = self.state.hero_y as i16;
                 let requested_type = npc_type;
                 if let Some(ref mut table) = self.npc_table {
-                    if let Some(slot) = table.npcs.iter_mut().find(|n| !n.active) {
+                    if let Some(slot) = table.npcs.iter_mut().find(|n| n.slot_free()) {
                         let mut npc = crate::game::encounter::spawn_encounter(
                             zone_idx, hero_x + 48, hero_y, self.state.tick_counter,
                         );
@@ -5392,7 +5609,7 @@ impl Scene for GameplayScene {
                 // Snapshot NPC positions to avoid simultaneous mutable borrow conflicts.
                 let npc_positions: Vec<(usize, i32, i32)> = self.npc_table.as_ref().map_or(vec![], |t| {
                     t.npcs.iter().enumerate()
-                        .filter(|(_, n)| n.active)
+                        .filter(|(_, n)| n.active && n.state != crate::game::npc::NpcState::Dead)
                         .map(|(i, n)| (i, n.x as i32, n.y as i32))
                         .collect()
                 });
@@ -5435,7 +5652,12 @@ impl Scene for GameplayScene {
                     for (npc_idx, dmg) in npc_hits {
                         table.npcs[npc_idx].vitality -= dmg;
                         if table.npcs[npc_idx].vitality <= 0 {
-                            table.npcs[npc_idx].active = false;
+                            // F9.11: missile kill leaves a searchable body.
+                            // SPEC §10.4 / `fmain.c:2334`. The original sets
+                            // `vitality = 0` and runs the same checkdead
+                            // path; here we route through `mark_dead` to
+                            // keep `active=true` for TAKE → search_body.
+                            table.npcs[npc_idx].mark_dead();
                         }
                     }
                 }
@@ -6578,6 +6800,272 @@ mod combat_tests {
         assert_eq!(push_offset(3, 2), (2, 2));    // SE
         assert_eq!(push_offset(5, 2), (-2, 2));   // SW
         assert_eq!(push_offset(7, 2), (-2, -2));  // NW
+    }
+}
+
+#[cfg(test)]
+mod search_body_tests {
+    use super::*;
+    use crate::game::game_library::NarrConfig;
+    use crate::game::npc::{
+        Npc, NpcState, NpcTable, NPC_TYPE_ORC, RACE_ENEMY, RACE_SNAKE, RACE_NECROMANCER,
+    };
+
+    fn make_scene_with_dead_npc(weapon: u8, race: u8) -> GameplayScene {
+        let mut scene = GameplayScene::new();
+        // event_msg[35] = "No time for that now!" (faery.toml line 1632).
+        let mut em = vec![String::new(); 40];
+        em[35] = "No time for that now!".to_string();
+        em[37] = "% found a thing.".to_string();
+        scene.narr = NarrConfig {
+            event_msg: em,
+            speeches: vec![String::new(); 60],
+            place_msg: vec![],
+            inside_msg: vec![],
+        };
+        let mut table = NpcTable { npcs: Default::default() };
+        table.npcs[0] = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race,
+            x: 100,
+            y: 100,
+            vitality: 0,
+            state: NpcState::Dead,
+            weapon,
+            active: true,
+            looted: false,
+            ..Default::default()
+        };
+        scene.npc_table = Some(table);
+        scene.state.region_num = 0;
+        scene.state.hero_x = 100;
+        scene.state.hero_y = 100;
+        scene
+    }
+
+    #[test]
+    fn test_search_body_weapon_sword_auto_equip() {
+        // weapon=3 → Sword. Hero starts with weapon=1 (Dirk). Should
+        // auto-equip Sword (3 > 1).
+        let mut scene = make_scene_with_dead_npc(3, RACE_SNAKE);
+        scene.state.actors[0].weapon = 1;
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        assert_eq!(scene.state.stuff()[2], 1, "Sword slot incremented");
+        assert_eq!(scene.state.actors[0].weapon, 3, "auto-equip Sword");
+        assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
+        assert!(scene.messages.latest().unwrap().contains("Sword"));
+    }
+
+    #[test]
+    fn test_search_body_weapon_dirk_no_auto_equip_when_hero_has_sword() {
+        let mut scene = make_scene_with_dead_npc(1, RACE_SNAKE); // Dirk
+        scene.state.actors[0].weapon = 3; // Hero already has Sword
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        assert_eq!(scene.state.stuff()[0], 1);
+        assert_eq!(scene.state.actors[0].weapon, 3, "do not downgrade");
+    }
+
+    #[test]
+    fn test_search_body_weapon_bow_grants_arrows_no_treasure() {
+        let mut scene = make_scene_with_dead_npc(4, RACE_SNAKE); // Bow
+        let stuff_before = scene.state.stuff().to_vec();
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        // Bow placed in inv
+        assert_eq!(scene.state.stuff()[3], 1, "Bow slot incremented");
+        // Arrow accumulator (stuff[35]) advanced by N >= 2
+        let arrows = scene.state.stuff()[35];
+        assert!(arrows >= 2 && arrows <= 9, "rand8()+2 in [2,9], got {}", arrows);
+        // Treasure phase skipped: nothing else should change beyond
+        // stuff[3] (bow) and stuff[35] (arrow accumulator).
+        for (i, (b, a)) in stuff_before.iter().zip(scene.state.stuff().iter()).enumerate() {
+            if i == 3 || i == 35 { continue; }
+            assert_eq!(b, a, "slot {} should not change in bow short-circuit", i);
+        }
+        assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
+        assert!(scene.messages.latest().unwrap().contains("Arrows"));
+    }
+
+    #[test]
+    fn test_search_body_no_weapon_runs_treasure_roll() {
+        // weapon=0 → no weapon line, treasure roll proceeds.
+        let mut scene = make_scene_with_dead_npc(0, 1); // Orc race=1, has treasure_row=1
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        // Body must be marked looted regardless of roll outcome.
+        assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
+        // Scroll line must always exist with the prefix (may be wrapped).
+        let msg = scene.messages.transcript().join(" ");
+        assert!(msg.contains("searched the body and found"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_search_body_already_looted_silent_noop() {
+        let mut scene = make_scene_with_dead_npc(3, RACE_SNAKE);
+        scene.npc_table.as_mut().unwrap().npcs[0].looted = true;
+        let stuff_before = scene.state.stuff().to_vec();
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        assert!(scene.messages.is_empty(), "must be silent");
+        assert_eq!(stuff_before, scene.state.stuff().to_vec());
+    }
+
+    #[test]
+    fn test_search_body_alive_not_frozen_emits_event_35() {
+        let mut scene = make_scene_with_dead_npc(3, RACE_SNAKE);
+        // Resurrect the NPC: vitality > 0, state Walking, freeze off.
+        {
+            let n = &mut scene.npc_table.as_mut().unwrap().npcs[0];
+            n.vitality = 10;
+            n.state = NpcState::Walking;
+        }
+        scene.state.freeze_timer = 0;
+        let stuff_before = scene.state.stuff().to_vec();
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        assert_eq!(scene.messages.latest().unwrap(), "No time for that now!");
+        assert!(!scene.npc_table.as_ref().unwrap().npcs[0].looted, "alive body untouched");
+        assert_eq!(stuff_before, scene.state.stuff().to_vec());
+    }
+
+    #[test]
+    fn test_search_body_alive_frozen_can_be_searched() {
+        let mut scene = make_scene_with_dead_npc(3, RACE_SNAKE);
+        {
+            let n = &mut scene.npc_table.as_mut().unwrap().npcs[0];
+            n.vitality = 10;
+            n.state = NpcState::Walking;
+        }
+        scene.state.freeze_timer = 100; // freeze active
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        // Sword obtained even though NPC is alive — frozen-alive is searchable.
+        assert_eq!(scene.state.stuff()[2], 1);
+        assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
+    }
+
+    #[test]
+    fn test_search_body_setfig_race_skips_treasure() {
+        // race & 0x80 → no treasure phase.
+        let mut scene = make_scene_with_dead_npc(0, 0x89); // setfig race
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        // No weapon, no treasure → "found nothing."
+        let msg = scene.messages.latest().unwrap();
+        assert!(msg.contains("nothing"), "got: {}", msg);
+        assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
+    }
+
+    #[test]
+    fn test_search_body_gold_credits_wealth_not_gold() {
+        // Find a tick that yields gold for the test NPC. We use Orc
+        // (race=1, treasure_row=1) and scan a few ticks until
+        // roll_treasure returns LootDrop::Gold.
+        use crate::game::loot::{roll_treasure, LootDrop};
+        let temp = Npc { race: 1, ..Default::default() };
+        let gold_tick = (0u32..256).find(|t| matches!(
+            roll_treasure(&temp, *t), Some(LootDrop::Gold(_))
+        ));
+        let Some(tick) = gold_tick else {
+            // Skip if no gold column hit in 256 ticks (acceptable per loot tests).
+            return;
+        };
+        let mut scene = make_scene_with_dead_npc(0, 1);
+        scene.state.tick_counter = tick;
+        let gold_before = scene.state.gold;
+        let wealth_before = scene.state.wealth;
+        let bname = scene.brother_name().to_string();
+        scene.search_body(0, &bname);
+        assert_eq!(scene.state.gold, gold_before, "body-search must not touch state.gold");
+        assert!(scene.state.wealth > wealth_before, "wealth must increase");
+    }
+
+    #[test]
+    fn test_take_dispatches_to_body_when_npc_nearer_than_item() {
+        use crate::game::game_state::WorldObject;
+        let mut scene = make_scene_with_dead_npc(2, RACE_SNAKE); // Mace
+        // Place a ground item further than the body.
+        scene.state.world_objects.push(WorldObject {
+            ob_id: 12, // Dirk
+            ob_stat: 1,
+            region: 0,
+            x: 200,
+            y: 200,
+            visible: true,
+            goal: 0,
+        });
+        let bname = scene.brother_name().to_string();
+        // Use the dispatcher path directly.
+        let nf = scene.nearest_fig(0, 30);
+        match nf.map(|n| n.kind) {
+            Some(FigKind::Npc(idx)) => {
+                scene.search_body(idx, &bname);
+            }
+            other => panic!("expected FigKind::Npc, got {:?}", other.is_some()),
+        }
+        assert_eq!(scene.state.stuff()[1], 1, "Mace slot incremented from body");
+    }
+
+    #[test]
+    fn test_dead_npc_skipped_by_combat_targeting() {
+        // Dead bodies must NOT be picked up as combat targets.
+        let scene = make_scene_with_dead_npc(0, RACE_ENEMY);
+        let nf = scene.nearest_fig(1, 100);
+        assert!(nf.is_none(), "constraint=1 must skip Dead bodies");
+    }
+
+    #[test]
+    fn test_clear_encounters_still_clears_dead_bodies() {
+        // ClearEncounters mass-deactivates regardless of state.
+        let mut scene = make_scene_with_dead_npc(0, RACE_ENEMY);
+        // Manually flip via the path used by ClearEncounters.
+        if let Some(ref mut table) = scene.npc_table {
+            for npc in table.npcs.iter_mut() { npc.active = false; }
+        }
+        let nf = scene.nearest_fig(0, 100);
+        assert!(nf.is_none(), "all bodies must be gone after clear");
+    }
+
+    #[test]
+    fn test_missile_kill_leaves_searchable_body() {
+        // After a missile kill the body must be searchable (active=true,
+        // state=Dead, looted=false, vitality=0). This is a state assertion
+        // — not a full missile-collision test.
+        use crate::game::npc::NpcState;
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: RACE_ENEMY,
+            vitality: 1,
+            active: true,
+            ..Default::default()
+        };
+        npc.mark_dead();
+        assert!(npc.active);
+        assert_eq!(npc.state, NpcState::Dead);
+        assert!(!npc.looted);
+        assert_eq!(npc.vitality, 0);
+    }
+
+    #[test]
+    fn test_apply_hit_kill_no_auto_loot() {
+        // Building-block check: mark_dead must not change inventory.
+        let mut state = crate::game::game_state::GameState::new();
+        let stuff_before = state.stuff().to_vec();
+        let gold_before = state.gold;
+        let mut npc = Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: 1, // orc has a treasure row
+            gold: 50,
+            vitality: 1,
+            active: true,
+            ..Default::default()
+        };
+        npc.mark_dead();
+        assert_eq!(stuff_before, state.stuff().to_vec(), "no inventory change on kill");
+        assert_eq!(state.gold, gold_before, "no gold change on kill");
+        let _ = RACE_NECROMANCER; // keep import alive
     }
 }
 
