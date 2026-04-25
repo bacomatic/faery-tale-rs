@@ -93,7 +93,7 @@ Usable without declaration:
 | `bit(n)` | `1 << n` — for flag bit positions |
 | `wrap_u8(x)`, `wrap_i16(x)`, `wrap_u16(x)` | Explicit wrap; use only when observable |
 | `now_ticks()` | Monotonic game tick counter |
-| `speak(N)` | Display narr.asm message N |
+| `speak(N)`, `event(N)`, `msg(tbl, N)`, `placard_text(N)`, `question(N)` | Display narr.asm message N — string content in [messages.md](messages.md) |
 | `play_sound(id)`, `play_music(id)` | Audio triggers |
 
 ## 6. Data types & naming
