@@ -1804,50 +1804,52 @@ an->weapon = weapon_probs[w];
 
 Carrier extent position: set to a 500×400 box centered on a point via `move_extent()` at `fmain2.c:1560-1566`.
 
-##### Swan State / Sprite Model (`fmain.c:1497-1510`, `fmain.c:1581-1596`, `fmain.c:2463-2464`)
+##### Swan — Mount, Dismount, and Flight (`fmain.c:1417-1428`, `fmain.c:1497-1510`, `fmain.c:1581-1596`, `fmain.c:2463-2464`)
 
-The swan is **not** driven by the global motion-state enum in the way a reader might expect:
+**Mount** (`fmain.c:1498`): Three conditions must all hold simultaneously — (1) hero is within 16 px of the swan (`raftprox >= 1`), (2) the carrier slot is active (`wcarry == 3`), (3) the Golden Lasso is owned (`stuff[5] != 0`). When all three hold, `riding = 11`, the swan position is snapped to the hero, and the hero's `environ` is set to −2 each frame to engage inertial flight.
 
-- `FLYING` (21) is never assigned anywhere.
-- `load_carrier(11)` initializes the carrier slot to `state = STILL` (`fmain.c:2798`).
-- The carrier update branch ignores `an->state` for the swan and uses `actor_file == 11` as the discriminator (`fmain.c:1497`).
-- When mounted, the code sets `riding = 11`, snaps the swan position to the hero, and selects the swan image with `dex = d`, where `d` is facing 0-7 (`fmain.c:1498-1507`). This gives exactly 8 directional swan frames, with no walk/fly cycle.
-- When not mounted, the swan simply holds position (`xtest = an->abs_x; ytest = an->abs_y`, `fmain.c:1504-1506`).
-- While mounted, the **hero** uses WALKING-state inertial movement with `environ = -2`; this is the actual flight implementation (`fmain.c:1464`, `fmain.c:1581-1596`).
-- When grounded and not ridden, rendering special-cases the swan to use the RAFT sheet with `inum = 1` instead of the carrier sheet (`fmain.c:2463-2464`).
+**Flight** (`fmain.c:1581-1596`): The hero actor stays in WALKING state with `environ = -2`. The `walk_step` ice branch accumulates velocity from directional input (max ±32 horizontal, ±40 vertical) and divides by 4 for position updates — giving smooth momentum. No terrain collision check runs; the swan flies over all terrain. Facing is derived from velocity direction, not input.
 
-Implementation consequence: the swan's visible "states" are really a carrier-type special case, not entries in the actor state machine. For implementation purposes, model it as:
+**Dismount** (`fmain.c:1417-1427`): Triggered by the fire button while `riding == 11`. Three gates are checked in order:
+
+1. *Lava veto*: If `fiery_death` is set (map inside `x: 8802–13562, y: 24744–29544`), dismount is blocked — `event(32)`: *"Ground is too hot for swan to land."*
+2. *Velocity gate*: Both `vel_x` and `vel_y` must be in (−15, 15). If either exceeds this, dismount is blocked — `event(33)`: *"Flying too fast to dismount."*
+3. *Terrain check*: `proxcheck` at hero `y − 14` and `y − 4` must both return 0. If blocked, dismount silently fails.
+
+On success: `riding = 0` and hero y-position shifts up 14 pixels (landing offset).
+
+**Grounded idle**: When not ridden, the swan holds its last position — no autonomous wandering. Rendering special-cases it to use RAFT sheet frame 1 instead of the carrier sheet (`fmain.c:2463-2464`), giving a small ground sprite. Every 16 game ticks, the carrier AI turns the swan toward the hero via `set_course` (`fmain.c:2114-2117`).
+
+**Sprite model**: 8 frames, one per facing direction. No walk/fly animation cycle — the frame index equals the facing value. `FLYING` (state 21) is never used; flight is entirely implemented through `environ = -2` on the hero.
 
 | Swan Situation | Governing Flags / State | Sprite Selection |
 |----------------|-------------------------|------------------|
-| Grounded, idle | `type=CARRIER`, `actor_file=11`, `riding=0`, slot state typically `STILL` | Rendered as RAFT image 1 (`fmain.c:2463-2464`) |
-| Mounted / flying | `type=CARRIER`, `actor_file=11`, `riding=11`; hero uses WALKING + `environ=-2` | Carrier image index = facing 0-7 (`fmain.c:1507`) |
-| Dismount attempt | `riding==11` plus velocity / landing checks | No separate swan state; either stay mounted or drop to grounded case (`fmain.c:1417-1427`) |
+| Grounded, idle | `type=CARRIER`, `actor_file=11`, `riding=0` | RAFT image 1 (`fmain.c:2463-2464`) |
+| Mounted / flying | `type=CARRIER`, `actor_file=11`, `riding=11`; hero `environ=-2` | Carrier image index = facing 0–7 (`fmain.c:1507`) |
+| Dismount attempt | fire button while `riding==11` | stay mounted unless all three gates pass (`fmain.c:1417-1427`) |
 
-##### Raft State / Sprite Model (`fmain.c:1562-1574`, `fmain2.c:643-648`)
+##### Raft — Mount and Dismount (`fmain.c:1562-1574`, `fmain2.c:643-648`)
 
-The raft is a purely passive sprite that never animates:
+**Mount** (`fmain.c:1562-1574`): No item required. Three conditions must all hold: (1) no active carrier (`wcarry == 1`), (2) hero is within 9 px of the raft (`raftprox == 2`), (3) current terrain is 3–5 (brush/shore/water). When all three hold, the raft snaps to the hero position and `riding = 1`.
 
-- `cfiles[4]`: width=2, height=32, **count=2**, `seq_num=RAFT`, file\_id=1348 — only 2 images in the sheet.
-- The RAFT handler (`fmain.c:1562`) does `goto statc`, skipping the `an->index = dex` write at raise. `an->index` stays at 0 (set by `load_carrier` init at `fmain.c:2797`) forever. **Frame 0 is the only raft image used.**
-- Frame 1 in the same RAFT sheet is the grounded-swan image; it is only accessed via the render override `atype = RAFT; inum = 1` (`fmain.c:2463-2464`). The raft itself has no use for frame 1.
-- Mount condition (`fmain.c:1562-1574`): `wcarry==1` (no active\_carrier), `raftprox==2` (within 9px of hero), and destination terrain is 3–5 (water/shore). When all three hold, raft snaps to hero position and `riding = 1`.
-- Screen offset: −16/−16 (as established at `fmain.c:1857`).
+**Dismount** (`fmain.c:1563`): Implicit per-frame — `riding` is reset to `FALSE` at the start of every RAFT tick. It is only re-latched to 1 if the three mount conditions still hold that frame. Walking off the water edge, or having an active carrier loaded (which sets `wcarry = 3`), immediately ends the ride with no input required.
+
+**Sprite model**: `cfiles[4]`: width=2, height=32, count=2, `seq_num=RAFT`, file\_id=1348. The RAFT handler jumps to `statc` without writing `an->index`, so frame 0 is the only raft image ever displayed. Frame 1 in the same sheet is the grounded-swan sprite, accessed only via the swan rendering override.
 
 | Raft Situation | Governing Flags | Sprite Selection |
 |----------------|-----------------|------------------|
-| On water near hero | `type=RAFT`, `wcarry==1`, `raftprox==2`, terrain 3–5 | RAFT image 0 — static, no animation (`fmain.c:2797`) |
-| Out of range / wrong terrain | same `type=RAFT`, conditions false | `goto statc`, `riding=0`; sprite still image 0 but not drawn over hero |
+| On water near hero | `wcarry==1`, `raftprox==2`, terrain 3–5 | RAFT image 0 — static (`fmain.c:2797`) |
+| Out of range / wrong terrain | conditions false | `riding=0`; sprite not drawn over hero |
 
-##### Turtle State / Sprite Model (`fmain.c:1511-1545`)
+##### Turtle — Mount, Dismount, and Summoning (`fmain.c:1511-1545`)
 
-The turtle has 16 frames (8 directions × 2-frame walk cycle): `cfiles[5]`: width=2, height=32, count=16, `seq_num=CARRIER`, file\_id=1351.
+**Summoning via Sea Shell** (`fmain.c:3457-3461`): The turtle does not have a fixed world position — it must be summoned. Using the Sea Shell (inventory slot 6) calls `get_turtle()`, which tries up to 25 random nearby locations for terrain type 5 (very deep water). If found, the turtle extent is repositioned there via `move_extent(1, x, y)` and the turtle is loaded. Silently fails if no water is within range. Blocked inside the swamp rectangle (x: 11194–21373, y: 10205–16208). The Sea Shell is obtained by talking to the turtle — first encounter triggers `speak(56)` and sets `stuff[6]` (`fmain.c:3419-3420`).
 
-Unlike the raft, the turtle handler exits via `goto raise` → `an->index = dex` is written every tick.
+**Mount** (`fmain.c:1512-1516`): Hero within 16 px (`raftprox >= 1`) and carrier slot active (`wcarry == 3`). No item required — proximity alone is sufficient once the turtle is present. Sets `riding = 5`.
 
-- **Mounted** (`fmain.c:1511-1519`): Conditions: `raftprox && wcarry==3`. Sets `dex = d*2`; adds `cycle&1` only if the hero is in WALKING state (`fmain.c:1518`). So when the hero stands still, the turtle holds the first frame of its current direction; when the hero walks, the two-frame cycle runs.
-- **Autonomous** (`fmain.c:1520-1542`): `dex = d+d+(cycle&1)` — always animates 2-frame cycle regardless of movement.
-- Screen offset: −16/−16, same as the raft (`fmain.c:1857`).
+**Dismount** (`fmain.c:1538`): Implicit when proximity is lost. Each tick, if `raftprox && wcarry == 3` fails, the autonomous swim branch runs and sets `riding = FALSE`. Walking away or leaving the water area ends the ride.
+
+**Sprite model**: `cfiles[5]`: width=2, height=32, count=16, `seq_num=CARRIER`, file\_id=1351 — 16 frames (8 directions × 2-frame walk cycle). The turtle handler exits via `goto raise`, so `an->index = dex` is written every tick.
 
 | Turtle Situation | Governing Flags | Sprite Selection |
 |------------------|-----------------|------------------|
@@ -1864,6 +1866,8 @@ Each tick, 4 directions are probed in priority order from the current facing `d`
 `load_carrier()` does not initialize `an->facing` (`fmain.c:2784-2801`), and the carrier handler exits via `goto raise` (`fmain.c:1545`), bypassing the `an->facing = d` write at `newloc:` (`fmain.c:1633`). The turtle's facing is therefore never persisted — it retries the same directional probe sequence every tick.
 
 **Bug — extent drift**: When no valid direction exists, `xtest`/`ytest` retain the last failed probe's coordinates. `move_extent(1, xtest, ytest)` still executes (`fmain.c:1545`), repositioning the extent to a non-water location while `abs_x`/`abs_y` stay fixed. See [PROBLEMS.md §P22](PROBLEMS.md).
+
+> **Normative logic:** [reference/logic/carrier-transport.md](logic/carrier-transport.md)
 
 #### Spider Pit (etype 53, index 3)
 

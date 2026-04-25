@@ -97,7 +97,7 @@ def talk_dispatch(hit: int) -> None:
             case 13:                                     # fmain.c:3415 — beggar
                 speak(23)                                # narr.asm — "Alms! Alms for the poor!"
         return
-    if an.type == CARRIER and active_carrier == 5:       # fmain.c:3418 — 5 = RIDING_RAFT / turtle
+    if an.type == CARRIER and active_carrier == 5:       # fmain.c:3418 — 5 = RIDING_TURTLE / turtle carrier
         if stuff[6] != 0:                                # fmain.c:3419 — 6 = Sea Shell slot
             speak(57)                                    # narr.asm — "Just hop on my back..."
         else:
