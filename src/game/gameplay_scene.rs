@@ -337,6 +337,9 @@ pub struct GameplayScene {
     victory_triggered: bool,
     /// Deterministic gameplay-owned scripted sequence runner.
     narrative_queue: NarrativeQueue,
+    #[cfg(test)]
+    /// Test-only snapshot of placard keys enqueued by narrative producers.
+    debug_enqueued_placard_keys: Vec<String>,
     /// Game is paused (Space key toggles).
     paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
@@ -473,6 +476,8 @@ impl GameplayScene {
             quit_requested: false,
             victory_triggered: false,
             narrative_queue: NarrativeQueue::default(),
+            #[cfg(test)]
+            debug_enqueued_placard_keys: Vec::new(),
             paused: false,
             compass_regions: Vec::new(),
             menu: crate::game::menu::MenuState::new(),
@@ -571,6 +576,27 @@ impl GameplayScene {
         self.narrative_queue.tick_one();
     }
 
+    fn enqueue_succession_placards(&mut self, dead_key: &str, start_key: &str) {
+        let sub = Some(self.brother_name().to_string());
+        self.narrative_queue.reset(vec![
+            NarrativeStep::ShowPlacard {
+                key: dead_key.to_string(),
+                substitution: sub.clone(),
+                hold_ticks: 72,
+            },
+            NarrativeStep::ShowPlacard {
+                key: start_key.to_string(),
+                substitution: sub,
+                hold_ticks: 72,
+            },
+        ]);
+
+        #[cfg(test)]
+        {
+            self.debug_enqueued_placard_keys = vec![dead_key.to_string(), start_key.to_string()];
+        }
+    }
+
     #[cfg(test)]
     fn debug_enqueue_sequence_for_test(&mut self, steps: Vec<NarrativeStep>) {
         self.narrative_queue.reset(steps);
@@ -591,6 +617,14 @@ impl GameplayScene {
     #[cfg(test)]
     fn debug_advance_active_sequence_step_for_test(&mut self) {
         self.narrative_queue.advance_active_step();
+    }
+
+    #[cfg(test)]
+    fn debug_sequence_placard_keys(&self) -> Vec<&str> {
+        self.debug_enqueued_placard_keys
+            .iter()
+            .map(|k| k.as_str())
+            .collect()
     }
 
     /// Returns true when it is daytime (lightlevel >= 40).
@@ -1650,7 +1684,18 @@ impl GameplayScene {
                         } else {
                             self.state.activate_brother(next);
                         }
+                        let previous_brother = dying as u8;
+
                         self.update_brother_substitution();
+                        let succession_keys = match (previous_brother, self.state.brother) {
+                            (1, 2) => Some(("julian_dead", "phillip_start")),
+                            (2, 3) => Some(("phillip_dead", "kevin_start")),
+                            _ => None,
+                        };
+                        if let Some((dead_key, start_key)) = succession_keys {
+                            self.enqueue_succession_placards(dead_key, start_key);
+                        }
+
                         let bname = self.brother_name().to_string();
                         // Original: event(9) + event(10) for Phillip,
                         //           event(9) + event(11) for Kevin.
@@ -7374,6 +7419,44 @@ mod death_tests {
         let transcript = scene.messages.transcript().join(" ");
         assert!(!transcript.contains("faery saved"),
             "fairy rescue message must NOT appear when luck < 1");
+    }
+
+    #[test]
+    fn t_f118_succession_enqueues_julian_dead_then_phillip_start() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.dying = true;
+        scene.goodfairy = 200; // one tick away from triggering luck gate
+        scene.state.luck = 0;  // force brother succession path
+        scene.state.brother = 1;
+        scene.state.active_brother = 0;
+        scene.state.brother_alive = [true, true, true];
+
+        scene.tick_goodfairy_countdown(&lib, 1);
+
+        assert_eq!(
+            scene.debug_sequence_placard_keys(),
+            vec!["julian_dead", "phillip_start"]
+        );
+    }
+
+    #[test]
+    fn t_f118_succession_enqueues_phillip_dead_then_kevin_start() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.dying = true;
+        scene.goodfairy = 200; // one tick away from triggering luck gate
+        scene.state.luck = 0;  // force brother succession path
+        scene.state.brother = 2;
+        scene.state.active_brother = 1;
+        scene.state.brother_alive = [true, true, true];
+
+        scene.tick_goodfairy_countdown(&lib, 1);
+
+        assert_eq!(
+            scene.debug_sequence_placard_keys(),
+            vec!["phillip_dead", "kevin_start"]
+        );
     }
 }
 
