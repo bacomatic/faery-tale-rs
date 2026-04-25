@@ -118,7 +118,8 @@ Every documented function appears here with a link to its canonical definition. 
 | `take_command` | [inventory.md#take_command](inventory.md#take_command) | fmain.c:3149-3248 — ITEMS→Take dispatch: gold/scrap/fruit/bones/container/itrans pickup + Talisman win latch |
 | `search_body` | [inventory.md#search_body](inventory.md#search_body) | fmain.c:3249-3282 — Take against an actor: loot weapon + arrows (Bow), treasure_probs drop |
 | `use_dispatch` | [inventory.md#use_dispatch](inventory.md#use_dispatch) | fmain.c:3444-3467 — USE submenu: weapon equip, Keys submenu, Sea Shell turtle, Sun Stone witch unmask |
-| `magic_dispatch` | [inventory.md#magic_dispatch](inventory.md#magic_dispatch) | fmain.c:3300-3365 — MAGIC submenu: 7 magic-item effects with precondition guards + charge decrement |
+| `magic_dispatch` | [magic.md#magic_dispatch](magic.md#magic_dispatch) | fmain.c:3300-3365 — MAGIC submenu: 7 magic-item effects with precondition guards + charge decrement |
+| `decrement_timers` | [magic.md#decrement_timers](magic.md#decrement_timers) | fmain.c:1380-1382 — Phase 5: tick down light_timer / secret_timer / freeze_timer |
 | `look_command` | [inventory.md#look_command](inventory.md#look_command) | fmain.c:3286-3295 — ITEMS→Look: reveal hidden objects (race==0) within 40 px |
 | `select_frust_anim` | [frustration.md#select_frust_anim](frustration.md#select_frust_anim) | fmain.c:1655-1659 — Hero sprite override from frustflag thresholds (20 / 40) |
 | `trigger_frust` | [frustration.md#trigger_frust](frustration.md#trigger_frust) | fmain.c:1654-1661 — Blocked dispatch: hero frustflag++ vs NPC `tactic = TACTIC_FRUST` |

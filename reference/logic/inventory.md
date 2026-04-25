@@ -8,12 +8,12 @@
 The player inventory is the `stuff[]` byte array: slots `0..GOLDBASE-1` are real
 carryables, gold slots sit at `GOLDBASE..ARROWBASE-1` as display-only rows, and
 the scratch slot `stuff[ARROWBASE]` accumulates quiver-of-arrows pickups inside
-a single TAKE action (`fmain.c:3151,3243`). All item acquisition flows through
-one dispatcher — the `TAKE` case of `do_option` at `fmain.c:3149-3248` — which
+a single TAKE action (`fmain.c:3150,3243`). All item acquisition flows through
+one dispatcher — the `TAKE` case of `do_option` at `fmain.c:3147-3287` — which
 decides per-object whether to consume gold, eat a fruit, swallow a scrap-of-paper
 quest trigger, open a container, recover a dead brother's stash, or run the
 generic `itrans[]` world-object-to-slot lookup. The companion branch at
-`fmain.c:3249-3282` runs when the nearest figure is an actor rather than a loose
+`fmain.c:3249-3285` runs when the nearest figure is an actor rather than a loose
 object: it pulls the victim's weapon into `stuff[0..4]` and rolls a treasure
 drop from `TABLE:treasure_probs` into either `stuff[]` or `wealth`.
 
@@ -24,9 +24,9 @@ leave `stuff[]` only by consumption (weapons keep their count on display but
 use, `stuff[16..21]` keys decrement per successful unlock, `stuff[24]` fruit
 decrements on eat) or by the three `leave_item` paths documented in
 [quests.md#leave_item](quests.md#leave_item). This logic doc therefore covers
-TAKE, body-search, the `USE` submenu dispatcher, the `MAGIC` submenu dispatcher
-(whose per-item consumable effects are specific enough to deserve a function
-body), and the `LOOK` hidden-object reveal. Weapon equipping is documented
+TAKE, body-search, the `USE` submenu dispatcher, and the `LOOK` hidden-object
+reveal. The `MAGIC` submenu dispatcher and the full magic-item catalog have
+their own logic doc — see [magic.md](magic.md). Weapon equipping is documented
 inside `use_dispatch`; key-on-door unlock is deferred to
 [doors.md#use_key_on_door](doors.md#use_key_on_door); Sea Shell carrier spawn
 is deferred to [quests.md#get_turtle](quests.md#get_turtle); shop purchase is
@@ -46,147 +46,150 @@ wave report.
 
 ## take_command
 
-Source: `fmain.c:3149-3248`
-Called by: `option_handler` (via `do_option` `CMODE_ITEMS` branch on `hit == 6`)
+Source: `fmain.c:3147-3287` (full `hit == 6` switch-case body; OBJECT-pickup branch is `3148-3247`, body-search siblings extend through `3285`)
+Called by: `option_handler` (via `do_option` `CMODE_ITEMS` branch on `hit == 6`; `hit` is consumed by the dispatcher and is not a parameter of the body)
 Calls: `prq`, `nearest_fig`, `announce_treasure`, `announce_container`, `print`, `print_cont`, `event`, `eat`, `rand4`, `rand8`, `change_object`, `map_message`, `SetFont`, `end_game_sequence`, `search_body`, `itrans`, `inv_list`
+Reads: `nearest`, `anim_list`, `region_num`, `hunger`, `julstuff`, `philstuff`, `itrans`, `inv_list`, `stuff[22]`, `rp`, `afont`
+Writes: `stuff[]` (all carryable + gold + ARROWBASE rows), `wealth`, `ob_listg[3].ob_stat`, `ob_listg[4].ob_stat`, `quitflag`, `viewstatus`
 
 ```pseudo
-def take_command(hit: int) -> None:
+def take_command() -> None:
     """Resolve nearest object, apply per-type pickup or container roll, retire the world object, then check the win condition."""
-    prq(7)                                                   # fmain.c:3151 — 7 = HUD stats refresh code
-    nearest_fig(0, 30)                                       # fmain.c:3152 — 30 = scan radius in pixels
-    stuff[35] = 0                                            # fmain.c:3151 — 35 = ARROWBASE; clear quiver accumulator
-    if nearest == 0:                                         # fmain.c:3154 — nothing in range
-        prq(10)                                              # fmain.c:3285 — 10 = "Take What?" prompt
+    prq(7)                                                   # fmain.c:3148 — 7 = HUD stats refresh code
+    nearest_fig(0, 30)                                       # fmain.c:3149 — 30 = scan radius in pixels
+    stuff[ARROWBASE] = 0                                     # fmain.c:3150 — clear per-action quiver accumulator
+    if nearest == 0:                                         # fmain.c:3151 — `if (nearest)` falsy branch
+        prq(10)                                              # fmain.c:3287 — 10 = "Take What?" prompt
         return
-    if anim_list[nearest].type != OBJECTS:                   # fmain.c:3155 — OBJECTS=1; actor, not loose object
-        search_body(nearest)                                 # fmain.c:3249-3282 — delegate to body-search branch
+    if anim_list[nearest].type != OBJECTS:                   # fmain.c:3152 — OBJECTS=1; actor, not loose object
+        search_body(nearest)                                 # fmain.c:3249-3285 — delegate to body-search branch
         return
-    j = anim_list[nearest].index                             # fmain.c:3158 — world object id (low byte of index)
-    x = anim_list[nearest].vitality                          # fmain.c:3159 — bones owner id (1=Julian, 2=Phillip)
-    taken = 0                                                # set to 1 by every branch that reaches the pickup epilogue
-    if j == 13:                                              # fmain.c:3160 — 13 = MONEY object id
-        announce_treasure("50 gold pieces")                  # fmain.c:3161
-        wealth = wealth + 50                                 # fmain.c:3162 — 50 = gold per money pile
+    j = anim_list[nearest].index                             # fmain.c:3154 — world object id (low byte of index)
+    x = anim_list[nearest].vitality & VITALITY_OWNER_MASK    # fmain.c:3155 — bones owner id; mask required, see SYMBOLS §4.1 Shape.vitality
+    taken = 0                                                # taken=1 means this branch handled pickup itself; the rand4 container-loot block is skipped. The pickup epilogue runs unconditionally.
+    if j == 13:                                              # fmain.c:3156 — 13 = MONEY object id (0x0d)
+        announce_treasure("50 gold pieces")                  # fmain.c:3157
+        wealth = wealth + 50                                 # fmain.c:3158 — 50 = gold per money pile
         taken = 1
-    elif j == 20:                                            # fmain.c:3164 — 20 = SCRAP of paper
-        event(17)                                            # fmain.c:3166 — 17 = scrap-found event
-        if region_num > 7:                                   # fmain.c:3167 — 7 = boundary between early / late regions
-            event(19)                                        # fmain.c:3167 — 19 = late-game scrap text
+    elif j == 20:                                            # fmain.c:3160 — 20 = SCRAP of paper (0x14)
+        event(17)                                            # fmain.c:3161 — 17 = "% picked up a scrap of paper."
+        if region_num > LATE_GAME_REGION_THRESHOLD:          # fmain.c:3162 — see SYMBOLS LATE_GAME_REGION_THRESHOLD
+            event(19)                                        # fmain.c:3162 — 19 = Wraith Lord crypt rendezvous hint (late-game)
         else:
-            event(18)                                        # fmain.c:3167 — 18 = early-game scrap text
+            event(18)                                        # fmain.c:3162 — 18 = "Find the turtle!" hint (early-game)
+        taken = 1                                            # fmain.c:3163 — goto pickup
+    elif j == 148:                                           # fmain.c:3165 — 148 = FRUIT object id
+        if hunger < 15:                                      # fmain.c:3166 — 15 = satiation floor for stashing
+            stuff[24] = stuff[24] + 1                        # fmain.c:3166 — 24 = STUFF_FOOD slot
+            event(36)                                        # fmain.c:3166 — 36 = "% put an apple away for later."
+        else:
+            eat(30)                                          # fmain.c:3167 — 30 = hunger reduction per fruit
         taken = 1                                            # fmain.c:3168 — goto pickup
-    elif j == 148:                                           # fmain.c:3170 — 148 = FRUIT object id
-        if hunger < 15:                                      # fmain.c:3171 — 15 = satiation floor for stashing
-            stuff[24] = stuff[24] + 1                        # fmain.c:3171 — 24 = STUFF_FOOD slot
-            event(36)                                        # fmain.c:3171 — 36 = "picked up some fruit"
-        else:
-            eat(30)                                          # fmain.c:3172 — 30 = hunger reduction per fruit
-        taken = 1                                            # fmain.c:3173 — goto pickup
-    elif j == 102:                                           # fmain.c:3175 — 102 = TURTLE (turtle egg)
-        return                                               # fmain.c:3175 — break: cannot be taken
-    elif j == 28:                                            # fmain.c:3177 — 28 = bones world object id
-        announce_treasure("his brother's bones.")            # fmain.c:3178
-        ob_listg[3].ob_stat = 0                              # fmain.c:3179 — 3 = Julian's ghost setfig slot
-        ob_listg[4].ob_stat = 0                              # fmain.c:3179 — 4 = Phillip's ghost setfig slot
-        k = 0                                                # fmain.c:3180 — loop over real-inventory slots
-        while k < 31:                                        # fmain.c:3180 — 31 = GOLDBASE (real stuff stops here)
-            if x == 1:                                       # fmain.c:3181 — 1 = Julian
-                stuff[k] = stuff[k] + julstuff[k]            # fmain.c:3181 — merge Julian's stash
-            else:
-                stuff[k] = stuff[k] + philstuff[k]           # fmain.c:3182 — merge Phillip's stash
+    elif j == 102:                                           # fmain.c:3171 — 102 = TURTLE (turtle egg)
+        return                                               # fmain.c:3171 — break: cannot be taken
+    elif j == BONES_OBJ_ID:                                  # fmain.c:3172 — 28
+        announce_treasure("his brother's bones.")            # fmain.c:3173
+        # Both ghost setfigs retire on either pickup — observable in-game; not a typo. See Notes.
+        ob_listg[3].ob_stat = 0                              # fmain.c:3174 — 3 = Julian's ghost setfig slot
+        ob_listg[4].ob_stat = 0                              # fmain.c:3174 — 4 = Phillip's ghost setfig slot
+        k = 0                                                # fmain.c:3175 — loop over real-inventory slots
+        while k < GOLDBASE:                                  # fmain.c:3175 — real stuff stops at gold rows
+            if x == BONES_OWNER_JULIAN:                      # fmain.c:3176
+                stuff[k] = stuff[k] + julstuff[k]            # fmain.c:3176 — merge Julian's stash
+            else:                                            # default branch covers BONES_OWNER_PHILLIP
+                stuff[k] = stuff[k] + philstuff[k]           # fmain.c:3177 — merge Phillip's stash
             k = k + 1
         taken = 1
-    elif j == 15:                                            # fmain.c:3186 — 15 = CHEST
+    elif j == 15:                                            # fmain.c:3181 — 15 = CHEST (0x0f)
         announce_container("a chest")
-    elif j == 14:                                            # fmain.c:3187 — 14 = URN
+    elif j == 14:                                            # fmain.c:3182 — 14 = URN (0x0e)
         announce_container("a brass urn")
-    elif j == 16:                                            # fmain.c:3188 — 16 = SACKS
+    elif j == 16:                                            # fmain.c:3183 — 16 = SACKS (0x10)
         announce_container("some sacks")
-    elif j == 29:                                            # fmain.c:3189 — 29 = empty chest
-        return                                               # fmain.c:3189 — already-opened chest: bail
-    elif j == 31:                                            # fmain.c:3192 — 31 = FOOTSTOOL
-        return                                               # fmain.c:3192 — cannot be taken
+    elif j == 29:                                            # fmain.c:3184 — 29 = empty chest (0x1d)
+        return                                               # fmain.c:3184 — already-opened chest: bail
+    elif j == 31:                                            # fmain.c:3186 — 31 = FOOTSTOOL
+        return                                               # fmain.c:3186 — cannot be taken
     else:
-        k = 0                                                # fmain.c:3193 — itrans[] pair-walk index
+        k = 0                                                # fmain.c:3187 — itrans[] pair-walk index
         matched = 0
-        while itrans[k] != 0:                                # fmain.c:3193 — 0,0 sentinel ends the table
-            if j == itrans[k]:                               # fmain.c:3194 — world id match
-                i = itrans[k + 1]                            # fmain.c:3195 — resolved stuff[] index
-                stuff[i] = stuff[i] + 1                      # fmain.c:3196
-                announce_treasure("a ")                      # fmain.c:3197
-                print_cont(inv_list[i].name)                 # fmain.c:3198
-                print_cont(".")                              # fmain.c:3199
-                matched = 1                                  # fmain.c:3200 — goto pickup
+        while itrans[k] != 0:                                # fmain.c:3187 — 0,0 sentinel ends the table
+            if j == itrans[k]:                               # fmain.c:3188 — world id match
+                i = itrans[k + 1]                            # fmain.c:3189 — resolved stuff[] index
+                stuff[i] = stuff[i] + 1                      # fmain.c:3190
+                announce_treasure("a ")                      # fmain.c:3191
+                print_cont(inv_list[i].name)                 # fmain.c:3192
+                print_cont(".")                              # fmain.c:3193
+                matched = 1                                  # fmain.c:3194 — goto pickup
                 break
-            k = k + 2                                        # fmain.c:3193 — itrans walks pairs
-        if matched == 0:                                     # fmain.c:3204 — unknown object id: silent bail
+            k = k + 2                                        # fmain.c:3187 — itrans walks pairs
+        if matched == 0:                                     # fmain.c:3197 — unknown object id: silent bail
             return
-        taken = 1                                            # fmain.c:3200 — goto pickup
+        taken = 1                                            # fmain.c:3194 — goto pickup
     # Container contents roll — entered only via the CHEST / URN / SACKS branches above, which left taken=0.
     if taken == 0:
-        k = rand4()                                          # fmain.c:3208 — 0..3 selects loot branch
-        if k == 0:                                           # fmain.c:3209 — empty container
+        k = rand4()                                          # fmain.c:3201 — 0..3 selects loot branch
+        if k == 0:                                           # fmain.c:3202 — empty container
             print("nothing.")
-        elif k == 1:                                         # fmain.c:3211 — single item
-            i = rand8() + 8                                  # fmain.c:3213 — 8 = base index; rand8 ∈ 0..7 ⇒ 8..15
-            if i == 8:                                       # fmain.c:3214 — 8 = arrows row ⇒ promote to quiver
-                i = 35                                       # fmain.c:3214 — 35 = ARROWBASE (quiver alias)
+        elif k == 1:                                         # fmain.c:3204 — single item
+            i = rand8() + 8                                  # fmain.c:3205 — 8 = base index; rand8 ∈ 0..7 ⇒ 8..15
+            if i == 8:                                       # fmain.c:3206 — 8 = arrows row ⇒ promote to quiver
+                i = ARROWBASE                                # fmain.c:3206 — quiver alias slot
             print("a ")
             print_cont(inv_list[i].name)
             print_cont(".")
-            stuff[i] = stuff[i] + 1                          # fmain.c:3217
-        elif k == 2:                                         # fmain.c:3218 — paired loot
-            i = rand8() + 8                                  # fmain.c:3220 — first item 8..15
-            if i == 8:                                       # fmain.c:3221 — arrows row ⇒ gold instead
-                i = 34                                       # fmain.c:3221 — 34 = GOLDBASE+3 (100-gold row)
-                wealth = wealth + 100                        # fmain.c:3221 — 100 = gold grant
+            stuff[i] = stuff[i] + 1                          # fmain.c:3209
+        elif k == 2:                                         # fmain.c:3211 — paired loot
+            i = rand8() + 8                                  # fmain.c:3212 — first item 8..15
+            if i == 8:                                       # fmain.c:3213 — arrows row ⇒ gold instead
+                i = GOLDBASE + 3                             # fmain.c:3213 — 100-gold row
+                wealth = wealth + 100                        # fmain.c:3213 — 100 = gold grant
             else:
-                print_cont(" a")
-            print(inv_list[i].name)
-            print_cont(" and a ")
-            k = rand8() + 8                                  # fmain.c:3225 — second item 8..15, distinct
+                print_cont(" a")                             # fmain.c:3214
+            print(inv_list[i].name)                          # fmain.c:3215
+            print_cont(" and a ")                            # fmain.c:3216
+            k = rand8() + 8                                  # fmain.c:3217 — second item 8..15, distinct
             while k == i:
-                k = rand8() + 8                              # fmain.c:3225 — reroll on collision
-            if k == 8:                                       # fmain.c:3226 — arrows row ⇒ quiver alias
-                k = 35                                       # fmain.c:3226 — 35 = ARROWBASE
-            print_cont(inv_list[k].name)
-            if i < 31:                                       # fmain.c:3228 — 31 = GOLDBASE; skip gold accumulator
+                k = rand8() + 8                              # fmain.c:3217 — reroll on collision
+            if k == 8:                                       # fmain.c:3218 — arrows row ⇒ quiver alias
+                k = ARROWBASE                                # fmain.c:3218 — quiver alias slot
+            print_cont(inv_list[k].name)                     # fmain.c:3219
+            if i < GOLDBASE:                                 # fmain.c:3220 — skip gold accumulator
                 stuff[i] = stuff[i] + 1
-            stuff[k] = stuff[k] + 1                          # fmain.c:3229
-        elif k == 3:                                         # fmain.c:3230 — triple-of-a-kind
-            i = rand8() + 8                                  # fmain.c:3232 — base roll
-            if i == 8:                                       # fmain.c:3233 — arrows row ⇒ 3 random keys
-                print("3 keys.")
+            stuff[k] = stuff[k] + 1                          # fmain.c:3221
+        elif k == 3:                                         # fmain.c:3223 — triple-of-a-kind
+            i = rand8() + 8                                  # fmain.c:3224 — base roll
+            if i == 8:                                       # fmain.c:3225 — arrows row ⇒ 3 random keys
+                print("3 keys.")                             # fmain.c:3226
                 n = 0
-                while n < 3:                                 # fmain.c:3235 — 3 = key-count grant
-                    i = rand8() + 16                         # fmain.c:3236 — 16 = KEYBASE
-                    if i == 22:                              # fmain.c:3237 — 22 outside key range ⇒ Gold Key
-                        i = 16                               # fmain.c:3237 — 16 = KEYBASE
-                    if i == 23:                              # fmain.c:3238 — 23 outside range ⇒ Grey Key
-                        i = 20                               # fmain.c:3238 — 20 = Grey Key slot
-                    stuff[i] = stuff[i] + 1
+                while n < 3:                                 # fmain.c:3227 — 3 = key-count grant
+                    i = rand8() + KEYBASE                    # fmain.c:3228
+                    if i == 22:                              # fmain.c:3229 — 22 outside key range ⇒ Gold Key
+                        i = 16                               # fmain.c:3229 — 16 = KEYBASE
+                    if i == 23:                              # fmain.c:3230 — 23 outside range ⇒ Grey Key
+                        i = 20                               # fmain.c:3230 — 20 = Grey Key slot
+                    stuff[i] = stuff[i] + 1                  # fmain.c:3231
                     n = n + 1
             else:
-                print("3 ")
-                print_cont(inv_list[i].name)
-                print_cont("s.")
-                stuff[i] = stuff[i] + 3                      # fmain.c:3244 — 3 = triple-stack grant
-    # Common epilogue (labelled `pickup:` in the C source) — retire the world object, bank quiver arrows, test win.
-    change_object(nearest, 2)                                # fmain.c:3249 — 2 = OB_STAT_TAKEN
-    stuff[8] = stuff[8] + stuff[35] * 10                     # fmain.c:3250 — 8 = arrows slot, 35 = ARROWBASE, 10 = arrows-per-quiver
-    if stuff[22] != 0:                                       # fmain.c:3251 — 22 = Talisman slot; try_win_condition
-        quitflag = True                                      # fmain.c:3252
-        viewstatus = 2                                       # fmain.c:3252 — 2 = VIEWSTATUS_PLACARD
-        map_message()                                        # fmain.c:3253
-        SetFont(rp, afont)                                   # fmain.c:3253
-        end_game_sequence()                                  # fmain.c:3253 — win_colors()
+                print("3 ")                                  # fmain.c:3235
+                print_cont(inv_list[i].name)                 # fmain.c:3236
+                print_cont("s.")                             # fmain.c:3236
+                stuff[i] = stuff[i] + 3                      # fmain.c:3237 — 3 = triple-stack grant
+    # Common epilogue (labelled `pickup:` at fmain.c:3241) — retire the world object, bank quiver arrows, test win.
+    change_object(nearest, 2)                                # fmain.c:3242 — 2 = OB_STAT_TAKEN
+    stuff[8] = stuff[8] + stuff[ARROWBASE] * 10              # fmain.c:3243 — 8 = arrows slot, 10 = arrows-per-quiver
+    if stuff[22] != 0:                                       # fmain.c:3244 — 22 = Talisman slot; try_win_condition
+        quitflag = True                                      # fmain.c:3245
+        viewstatus = 2                                       # fmain.c:3245 — 2 = VIEWSTATUS_PLACARD
+        map_message()                                        # fmain.c:3246
+        SetFont(rp, afont)                                   # fmain.c:3246
+        end_game_sequence()                                  # fmain.c:3246 — win_colors()
 ```
 
 **Dispatch ordering.** Five type-specific branches (`MONEY`, `SCRAP`, `FRUIT`,
 turtle eggs, bones) run before the container / `itrans[]` walk. The SCRAP and
 FRUIT branches skip the `itrans[]` walk by setting `taken=1` and falling
-through to the epilogue (labelled `pickup:` in the C source at `fmain.c:3240`).
+through to the epilogue (labelled `pickup:` in the C source at `fmain.c:3241`).
 The bones branch transfers by copying `julstuff[]` or `philstuff[]` wholesale
 and reaches the epilogue the same way. The container branches (`CHEST`,
 `URN`, `SACKS`) set an announcement string but leave `taken=0`, so the
@@ -203,62 +206,64 @@ the two over-limit rolls back into range without re-rolling.
 **Talisman latch.** Any pickup path reaching the epilogue — including
 container rolls, `itrans[]` matches, and the brother-bones merge (which can
 transfer a Talisman in slot 22 from a dead brother to the current one) —
-re-tests `stuff[22] != 0` and triggers the win sequence at `fmain.c:3245-3247`.
+re-tests `stuff[22] != 0` and triggers the win sequence at `fmain.c:3244-3247`.
 
 ## search_body
 
-Source: `fmain.c:3249-3282`
+Source: `fmain.c:3249-3285` (the `else if (... weapon < 0)` / `else if (... vitality == 0 || freeze_timer)` / `else event(35)` sibling chain of the OBJECT-pickup branch)
 Called by: `take_command`
 Calls: `extract`, `print`, `print_cont`, `prdec`, `rand8`, `event`, `inv_list`, `treasure_probs`, `encounter_chart`
+Reads: `anim_list`, `freeze_timer` (set by the Gold Ring time-stop spell — see [magic.md#magic_dispatch](magic.md#magic_dispatch)), `inv_list`, `treasure_probs`, `encounter_chart`
+Writes: `anim_list[target].weapon` (sets `-1` to mark looted), `anim_list[0].weapon` (auto-equip on upgrade), `stuff[]`, `wealth`
 
 ```pseudo
 def search_body(target: int) -> None:
     """TAKE against a live-but-frozen or dead actor: loot weapon, then roll treasure drop."""
-    an = anim_list[target]                                   # fmain.c:3249
+    an = anim_list[target]                                   # fmain.c:3249 — alias for the rest of the body
     if an.weapon < 0:                                        # fmain.c:3249 — -1 means already looted
         return
     if an.vitality != 0 and freeze_timer == 0:               # fmain.c:3250 — not dead and not frozen
-        event(35)                                            # fmain.c:3283 — 35 = "it is still alive!" message
+        event(35)                                            # fmain.c:3285 — 35 = "it is still alive!" message
         return
-    extract("% searched the body and found")                 # fmain.c:3253 — % = current brother's name
-    print("")                                                # fmain.c:3254 — newline
-    i = an.weapon                                            # fmain.c:3255 — 1..5 or 0
-    if i > 5:                                                # fmain.c:3255 — out-of-range defensive clamp
+    extract("% searched the body and found")                 # fmain.c:3251 — % = current brother's name
+    print("")                                                # fmain.c:3252 — newline
+    i = an.weapon                                            # fmain.c:3253 — 1..5 or 0
+    if i > 5:                                                # fmain.c:3253 — out-of-range defensive clamp
         i = 0
-    if i != 0:                                               # fmain.c:3256 — victim had a weapon
-        print_cont("a ")
-        print_cont(inv_list[i - 1].name)                     # fmain.c:3258 — inv_list row i-1 (Dirk..Wand)
-        stuff[i - 1] = stuff[i - 1] + 1                      # fmain.c:3259 — add weapon to hero inventory
-        if i > anim_list[0].weapon:                          # fmain.c:3260 — auto-equip if better than current
-            anim_list[0].weapon = i
-        if i == 4:                                           # fmain.c:3261 — 4 = Bow: grant ammo and short-circuit
-            print_cont(" and ")
-            j = rand8() + 2                                  # fmain.c:3263 — 2..9 extra arrows
-            prdec(j, 1)                                      # fmain.c:3264 — print decimal
-            print_cont(" Arrows.")
-            stuff[8] = stuff[8] + j                          # fmain.c:3266 — 8 = arrows slot
-            an.weapon = -1                                   # fmain.c:3267 — mark body as looted
+    if i != 0:                                               # fmain.c:3254 — victim had a weapon
+        print_cont("a ")                                     # fmain.c:3255
+        print_cont(inv_list[i - 1].name)                     # fmain.c:3256 — inv_list row i-1 (Dirk..Wand)
+        stuff[i - 1] = stuff[i - 1] + 1                      # fmain.c:3257 — add weapon to hero inventory
+        if i > anim_list[0].weapon:                          # fmain.c:3258 — auto-equip if better than current
+            anim_list[0].weapon = i                          # fmain.c:3258
+        if i == 4:                                           # fmain.c:3259 — 4 = Bow: grant ammo and short-circuit
+            print_cont(" and ")                              # fmain.c:3260
+            j = rand8() + 2                                  # fmain.c:3261 — 2..9 extra arrows
+            prdec(j, 1)                                      # fmain.c:3261 — print decimal
+            print_cont(" Arrows.")                           # fmain.c:3262
+            stuff[8] = stuff[8] + j                          # fmain.c:3263 — 8 = arrows slot
+            an.weapon = -1                                   # fmain.c:3264 — mark body as looted
             return
-    an.weapon = -1                                           # fmain.c:3270 — mark body as looted
-    j = an.race                                              # fmain.c:3271
-    if j & 0x80:                                             # fmain.c:3272 — 0x80 = SETFIG_RACE_BIT; setfigs never drop treasure
+    an.weapon = -1                                           # fmain.c:3268 — mark body as looted
+    j = an.race                                              # fmain.c:3269
+    if j & 0x80:                                             # fmain.c:3270 — 0x80 = SETFIG_RACE_BIT; setfigs never drop treasure
         j = 0
     else:
-        j = encounter_chart[j].treasure * 8 + rand8()        # fmain.c:3274 — 8 = TREASURE_PROBS_COLUMNS
-        j = treasure_probs[j]                                # fmain.c:3275 — inv_list row or 0
-    if j != 0:                                               # fmain.c:3276 — non-zero slot means loot
-        if i != 0:                                           # fmain.c:3277 — chain onto weapon line
+        j = encounter_chart[j].treasure * 8 + rand8()        # fmain.c:3272 — 8 = TREASURE_PROBS_COLUMNS
+        j = treasure_probs[j]                                # fmain.c:3273 — inv_list row or 0
+    if j != 0:                                               # fmain.c:3275 — non-zero slot means loot
+        if i != 0:                                           # fmain.c:3276 — chain onto weapon line
             print_cont(" and ")
-        if j < 31:                                           # fmain.c:3278 — 31 = GOLDBASE
+        if j < GOLDBASE:                                     # fmain.c:3277 — gold rows skip the article
             print_cont("a ")
-        print_cont(inv_list[j].name)
-        if j >= 31:                                          # fmain.c:3280 — gold row
-            wealth = wealth + inv_list[j].maxshown           # fmain.c:3280 — maxshown doubles as gold value
+        print_cont(inv_list[j].name)                         # fmain.c:3278
+        if j >= GOLDBASE:                                    # fmain.c:3279 — gold row
+            wealth = wealth + inv_list[j].maxshown           # fmain.c:3279 — maxshown doubles as gold value
         else:
-            stuff[j] = stuff[j] + 1                          # fmain.c:3281
+            stuff[j] = stuff[j] + 1                          # fmain.c:3280
     elif i == 0:                                             # fmain.c:3282 — no weapon + no treasure
         print_cont("nothing")
-    print_cont(".")
+    print_cont(".")                                          # fmain.c:3283
 ```
 
 ## use_dispatch
@@ -308,155 +313,29 @@ per-door key spends (`stuff[16..21]` in `use_key_on_door`). Only the Sea Shell
 path has a consuming effect, and that consumption happens inside `get_turtle`
 (extent move) rather than in `use_dispatch`.
 
-## magic_dispatch
-
-Source: `fmain.c:3300-3365`
-Called by: `option_handler` (via `do_option` `CMODE_MAGIC` branch)
-Calls: `event`, `speak`, `rand8`, `bigdraw`, `SetDrMd`, `SetAPen`, `Move`, `Text`, `stillscreen`, `prq`, `colorplay`, `xfer`, `checkdead`, `set_options`, `print`, `stone_list`, `planes`, `secx`, `secy`, `rp_map`, `JAM1`
-
-```pseudo
-def magic_dispatch(hit: int) -> None:
-    """Consume one magic item and apply its per-slot effect. Decrement stuff[4+hit]; refresh menu when exhausted. Branches that fail their precondition return early without consuming the charge."""
-    # Menu label order at fmain.c:501 is: Stone Jewel Vial Orb Totem Ring Skull (hit 5..11).
-    # Slot mapping: stuff[4+hit] — 5→stuff[9] Blue Stone, 6→Green Jewel, 7→Glass Vial, 8→Crystal Orb,
-    # 9→Bird Totem, 10→Gold Ring, 11→Jade Skull.
-    if hit < 5 or stuff[4 + hit] == 0:                       # fmain.c:3303 — no magic owned
-        event(21)                                            # fmain.c:3303 — 21 = "if only I had some magic!"
-        return
-    if extn.v3 == 9:                                         # fmain.c:3304 — extent dampener on magic (astral zone)
-        speak(59)                                            # fmain.c:3304 — 59 = "magic doesn't work here"
-        return
-    if hit == 5:                                             # fmain.c:3332 — Blue Stone: stone-circle teleport
-        if hero_sector != 144:                               # fmain.c:3332 — 144 = stone-circle sector id
-            return                                           # fmain.c:3348 — not on a circle ⇒ don't consume
-        # 85 and 64 are the stone-tile sub-cell offsets inside the 256-wide sector.
-        if (hero_x & 255) // 85 != 1 or (hero_y & 255) // 64 != 1:  # fmain.c:3333 — off-tile
-            return                                           # fmain.c:3348
-        x = hero_x >> 8                                      # fmain.c:3335 — sector-relative X of the stone
-        y = hero_y >> 8                                      # fmain.c:3335 — sector-relative Y of the stone
-        i = 0
-        found = 0
-        while i < 11:                                        # fmain.c:3336 — 11 = stone_list pair count
-            if stone_list[i + i] == x and stone_list[i + i + 1] == y:  # fmain.c:3337 — match current stone
-                i = i + anim_list[0].facing + 1              # fmain.c:3338 — step `facing+1` stones forward
-                if i > 10:                                   # fmain.c:3338 — wrap 11-entry ring
-                    i = i - 11                               # fmain.c:3338 — 11 stones in ring
-                nx = (stone_list[i + i] << 8) + (hero_x & 255)  # fmain.c:3339 — sibling world X (preserve sub-cell)
-                ny = (stone_list[i + i + 1] << 8) + (hero_y & 255)  # fmain.c:3340 — sibling world Y
-                colorplay()                                  # fmain.c:3341 — 32-frame palette strobe
-                xfer(nx, ny, True)                           # fmain.c:3342 — teleport + reload region
-                if riding != 0:                              # fmain.c:3343 — drag mount along with hero
-                    anim_list[wcarry].abs_x = anim_list[0].abs_x
-                    anim_list[wcarry].abs_y = anim_list[0].abs_y
-                found = 1
-                break
-            i = i + 1
-        if found == 0:                                       # fmain.c:3348 — no sibling found
-            return
-        # Case 5 has no `break` in the C source (fmain.c:3349) — fall through into the Glass Vial heal.
-        anim_list[0].vitality = anim_list[0].vitality + rand8() + 4  # fmain.c:3353 — 4 = min heal bonus
-        cap = 15 + brave // 4                                # fmain.c:3354 — 15 = VIT_BASE, 4 = VIT_BRAVE_DIV
-        if anim_list[0].vitality > cap:                      # fmain.c:3354 — clamp overheal
-            anim_list[0].vitality = cap
-        else:
-            print("That feels a lot better!")                # fmain.c:3354 — only print if cap not hit
-        prq(4)                                               # fmain.c:3355 — HUD vitality refresh
-    elif hit == 6:                                           # fmain.c:3306 — Green Jewel: illumination
-        light_timer = light_timer + 760                      # fmain.c:3306 — 760 = illumination ticks
-    elif hit == 7:                                           # fmain.c:3353 — Glass Vial: heal
-        anim_list[0].vitality = anim_list[0].vitality + rand8() + 4  # fmain.c:3353 — 4 = min heal bonus
-        cap = 15 + brave // 4                                # fmain.c:3354 — 15 = VIT_BASE, 4 = VIT_BRAVE_DIV
-        if anim_list[0].vitality > cap:                      # fmain.c:3354 — clamp overheal
-            anim_list[0].vitality = cap
-        else:
-            print("That feels a lot better!")                # fmain.c:3354
-        prq(4)                                               # fmain.c:3355 — HUD vitality refresh
-    elif hit == 8:                                           # fmain.c:3308 — Crystal Orb: secret reveal
-        secret_timer = secret_timer + 360                    # fmain.c:3308 — 360 = reveal-secrets ticks
-    elif hit == 9:                                           # fmain.c:3311 — Bird Totem: overhead map
-        if cheat1 == 0 and region_num > 7:                   # fmain.c:3311 — regions 8,9 locked without cheat
-            return                                           # fmain.c:3311 — no consume outside permitted region
-        bm_draw = fp_drawing.ri_page.BitMap                  # fmain.c:3313
-        planes = bm_draw.Planes                              # fmain.c:3314
-        bigdraw(map_x, map_y)                                # fmain.c:3315 — blit the map into the drawing page
-        # Convert hero world coord → screen pixel on the map bitmap. 16 = tile size; 4 and 3 = x/y pixel offsets.
-        i = (hero_x >> 4) - ((secx + xreg) << 4) - 4         # fmain.c:3317
-        j = (hero_y >> 4) - ((secy + yreg) << 4) + 3         # fmain.c:3318
-        rp_map.BitMap = bm_draw                              # fmain.c:3319
-        SetDrMd(rp_map, JAM1)                                # fmain.c:3320 — JAM1 = opaque-pen mode
-        SetAPen(rp_map, 31)                                  # fmain.c:3320 — 31 = palette index for the marker
-        if i > 0 and i < 320 and j > 0 and j < 143:          # fmain.c:3321 — 320×143 = map visible area
-            Move(rp_map, i, j)                               # fmain.c:3322
-            Text(rp_map, "+", 1)                             # fmain.c:3322
-        viewstatus = 1                                       # fmain.c:3323 — 1 = VIEWSTATUS_MAP
-        stillscreen()                                        # fmain.c:3324 — freeze playfield
-        prq(5)                                               # fmain.c:3325 — queue options redraw
-    elif hit == 10:                                          # fmain.c:3309 — Gold Ring: time freeze
-        if riding > 1:                                       # fmain.c:3309 — 1 = minimum riding code that still allows freeze
-            return                                           # fmain.c:3309 — while mounted on swan/dragon: no-op, no consume
-        freeze_timer = freeze_timer + 100                    # fmain.c:3309 — 100 = freeze ticks
-    elif hit == 11:                                          # fmain.c:3361 — Jade Skull: mass kill
-        i = 1
-        while i < anix:                                      # fmain.c:3361 — iterate live monster slots
-            an = anim_list[i]
-            if an.vitality != 0 and an.type == ENEMY and an.race < 7:  # fmain.c:3362 — 7 = cut-off excluding Dark Knight / Loraii / Necromancer
-                an.vitality = 0                              # fmain.c:3363
-                checkdead(i, 0)                              # fmain.c:3363 — ENEMY death bookkeeping
-                brave = brave - 1                            # fmain.c:3363 — 1 bravery lost per killed foe
-            i = i + 1
-        if battleflag:                                       # fmain.c:3364 — 34 = "all fall before you" recap
-            event(34)                                        # fmain.c:3364 — event index 34
-    # Consumption epilogue (labelled `fini:` in the C source at fmain.c:3365).
-    if stuff[4 + hit] - 1 == 0:                              # fmain.c:3365 — MAGICBASE=4; decrement slot; 0 ⇒ disable menu row
-        stuff[4 + hit] = 0                                   # fmain.c:3365 — MAGICBASE=4
-        set_options()                                        # fmain.c:3365 — refresh menus[MAGIC].enabled[]
-    else:
-        stuff[4 + hit] = stuff[4 + hit] - 1                  # fmain.c:3365 — decrement count by 1
-```
-
-**Consumption gate.** The decrement epilogue at `fmain.c:3365` runs only for
-branches that fall through to the bottom of the MAGIC switch. Blue Stone
-(wrong sector or off-tile or no sibling stone), Bird Totem (`region_num > 7`
-without `cheat1`), and Gold Ring (`riding > 1`) all short-circuit with
-`return`, preserving the charge so the player is not penalised for a
-precondition miss.
-
-**Blue Stone fall-through.** The C `case 5:` at `fmain.c:3332` has no
-`break` before `case 7:` at `fmain.c:3353`, so every successful stone
-teleport also runs the Glass Vial heal — a single Blue Stone use both
-teleports *and* heals. This is documented in
-[RESEARCH §10](../RESEARCH.md#10-inventory--items) and verified by the lack of
-`break;` between the `xfer()` call and the `vitality += rand8()+4` block.
-
-**Kill-spell race gate.** The `race < 7` test at `fmain.c:3362` means the
-Jade Skull spares race codes 7 (Dark Knight), 8 (Loraii), 9 (Necromancer),
-and every SETFIG (race bit 7 set). `checkdead(i, 0)` runs the standard
-ENEMY death path documented in [combat.md#checkdead](combat.md#checkdead),
-including `treasure_probs` drops and `brave`/`kind` bookkeeping.
-
 ## look_command
 
-Source: `fmain.c:3286-3295`
+Source: `fmain.c:3289-3298`
 Called by: `option_handler` (via `do_option` `CMODE_ITEMS` branch on `hit == 7`)
 Calls: `calc_dist`, `change_object`, `event`, `anix2`
 
 ```pseudo
 def look_command() -> None:
     """LOOK: reveal every hidden-state object (race==0) within 40 px of the hero."""
-    flag = 0                                                 # fmain.c:3286 — "any reveal this tick?" latch
+    flag = 0                                                 # fmain.c:3290 — "any reveal this tick?" latch
     i = 0
-    while i < anix2:                                         # fmain.c:3288 — iterate actor+object table
+    while i < anix2:                                         # fmain.c:3292 — iterate actor+object table
         an = anim_list[i]
         # race==0 on an OBJECTS entry marks a hidden object (ob_stat==5 in the world-object backing row).
         # change_object(i, 1) promotes it to ob_stat=1 (visible, pickable).
-        if an.type == OBJECTS and an.race == 0 and calc_dist(i, 0) < 40:  # fmain.c:3289 — 40 = reveal radius
+        if an.type == OBJECTS and an.race == 0 and calc_dist(i, 0) < 40:  # fmain.c:3293 — 40 = reveal radius
             flag = 1
-            change_object(i, 1)                              # fmain.c:3290 — 1 = OB_STAT_VISIBLE
+            change_object(i, 1)                              # fmain.c:3294 — 1 = OB_STAT_VISIBLE
         i = i + 1
-    if flag != 0:                                            # fmain.c:3294 — at least one reveal
-        event(38)                                            # fmain.c:3294 — 38 = "you find something hidden"
+    if flag != 0:                                            # fmain.c:3297 — at least one reveal
+        event(38)                                            # fmain.c:3297 — 38 = "you find something hidden"
     else:
-        event(20)                                            # fmain.c:3294 — 20 = "you find nothing"
+        event(20)                                            # fmain.c:3297 — 20 = "you find nothing"
 ```
 
 ## Notes
@@ -472,14 +351,23 @@ def look_command() -> None:
   (`fmain.c:3503`), and the princess-rescue object re-seating
   (`fmain2.c:1596-1601`) — all route through
   [quests.md#leave_item](quests.md#leave_item) or direct `ob_list*[]` writes.
+- **Bones retire both ghosts.** Picking up *either* brother's bones zeros
+  both `ob_listg[3].ob_stat` and `ob_listg[4].ob_stat` in a single chained
+  assignment (`fmain.c:3174`),
+  retiring both ghost setfigs at once. This is observable in-game (find
+  Julian's bones → Phillip's ghost also stops appearing) and is intentional;
+  the live brother's identity for the *stash merge* is still selected by
+  `vitality & VITALITY_OWNER_MASK` per the Shape contract in
+  [SYMBOLS.md §4.1](SYMBOLS.md#41-shape--actor-record-ftaleh56-67-ftalei5-22).
 - **Quiver accumulator.** `stuff[35]` (`ARROWBASE`) is set to 0 at the top of
-  TAKE (`fmain.c:3151`) and folded into `stuff[8]` in the epilogue
-  (`fmain.c:3250` reads `stuff[ARROWBASE] * 10`). The only writer that
+  TAKE (`fmain.c:3150`) and folded into `stuff[8]` in the epilogue
+  (`fmain.c:3243` reads `stuff[ARROWBASE] * 10`). The only writer that
   targets `stuff[35]` is the `itrans[]` match for world object `QUIVER = 11`
   (`fmain2.c:981`) — pairing arrows as quivers of ten.
 - **Menu refresh.** `take_command`, `search_body`, `look_command`, and
   `use_dispatch` all rely on the outer `set_options()` call at
   `fmain.c:3514` to recompute `menus[*].enabled[]` after any `stuff[]`
-  mutation. `magic_dispatch` calls `set_options()` directly at
-  `fmain.c:3365` only on the transition to zero, because the displayed row
+  mutation. The `MAGIC` submenu dispatcher
+  ([magic.md#magic_dispatch](magic.md#magic_dispatch)) calls `set_options()`
+  directly only on the transition to zero, because the displayed row
   changes from selectable to greyed out at that moment.
