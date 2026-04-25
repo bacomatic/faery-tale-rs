@@ -60,6 +60,7 @@ pub mod events;
 pub mod shop;
 pub mod loot;
 pub mod menu;
+pub mod narrative_sequence;
 pub mod sprite_mask;
 
 #[cfg(test)]

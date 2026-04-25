@@ -2619,8 +2619,8 @@ Fixed:
 - Added `speak(18)` — sourced from `faery.toml [narr].speeches[18]`
   ("Here is a writ designating you as my official agent…").
 
-The remaining rescue-function behaviour that the port does not yet
-reproduce is captured as F11.8 below (RESEARCH-REQUIRED).
+The remaining rescue-function behaviour from the earlier audit has now
+been implemented under F11.8 below.
 
 #### F11.5 — Talisman drop missing `leave_item` y+10 offset (NEEDS-FIX, fixed)
 `reference/logic/quests.md#leave_item` (fmain2.c:1192-1195) places
@@ -2653,27 +2653,23 @@ drops `ob_id 27` (Golden Lasso). Both match
 `reference/logic/quests.md#necromancer_death_drop` (fmain.c:1749-1757).
 After F11.5 the Y offsets match too.
 
-#### F11.8 — Princess-rescue cinematic (placards + extent / cast swap) (RESEARCH-REQUIRED)
-The reference `rescue()` function runs a three-placard narrative
-(`placard_text(8+i)` / `(9+i)` / `(10+i)` with `name()` interpolation,
-where `i = princess * 3`), holds 380 ticks, clears the inner rect,
-renders `placard_text(17)` + `name()` + `placard_text(18)`, then
-executes `move_extent(0, 22205, 21231)` and `ob_list8[2].ob_id = 4`
-(cast swap: noble → princess) along with the stat mutations. The port
-performs only the stat mutations and the hero teleport. Placing
-this as RESEARCH-REQUIRED rather than fixing in-audit because:
-- The `rescue_katra` / `rescue_karla` / `rescue_kandy` /
-  `princess_home` placard tables already exist in `faery.toml`
-  (lines 1519-1571), but there is no `placard_scene`-style dispatcher
-  for mid-game placards; plumbing the cinematic requires a new scene
-  bridge or scroll-area reflow that is outside the quests subsystem.
-- `ob_list8[2].ob_id = 4` is the noble → princess cast swap inside
-  the Marheim throne-room scene — `move_extent` for extent 0 (the
-  bird extent) relocates the next-phase trigger. Neither `move_extent`
-  nor the `ob_list8[2]` cast-swap primitive is plumbed into the port's
-  world-object model today.
+#### F11.8 — Princess-rescue cinematic (placards + extent / cast swap) (NEEDS-FIX, fixed)
+Implemented gameplay-owned rescue sequencing with deterministic step order:
 
-Flagged for user adjudication (see Blockers below).
+- Princess-count mapped rescue placard stage using `faery.toml`
+  placards (`rescue_katra` / `rescue_karla` / `rescue_kandy`) with
+  `%` name substitution.
+- 380-tick hold, then inner-rect clear stage.
+- Post-rescue home-text stage sourced from `placards.princess_home`.
+- Ordered world mutations: teleport (`5511,33780, region 0`),
+  `move_extent(0, 22205, 21231)` equivalent hook, and cast swap
+  (`world_objects[2].ob_id = 4`) before reward/final flag application.
+- Error-path behavior: missing placard keys log fidelity errors and
+  continue; missing mutation targets log fidelity blockers and continue.
+
+Added/updated tests under `src/game/gameplay_scene.rs` covering mapping,
+timing, concrete stage execution, ordered mutation steps, and missing-key /
+missing-target continuation behavior.
 
 #### F11.9 — `GameAction::Give` hotkey (`G` key) is a Rust convenience (SPEC-GAP)
 The `G` key bound to `GameAction::Give` (key_bindings.rs:215) invokes a
@@ -2719,10 +2715,9 @@ only speeches sourced from `faery.toml [narr].speeches` (indices 18,
 ### Summary
 - **13 findings**: 4 NEEDS-FIX+INVENTED fixed (F11.1 GiveGold, F11.2
   GiveWrit, F11.3 GiveBone, F11.4 princess-rescue text + speak(18)),
-  1 NEEDS-FIX fixed (F11.5 talisman y+10 offset), 5 CONFORMANT
-  (F11.6, F11.7, F11.10 partial, F11.11, F11.12, F11.13), 1
-  RESEARCH-REQUIRED (F11.8 rescue cinematic), 1 SPEC-GAP (F11.9 `G`
-  hotkey).
+  2 NEEDS-FIX fixed (F11.5 talisman y+10 offset, F11.8 rescue cinematic),
+  5 CONFORMANT (F11.6, F11.7, F11.10 partial, F11.11, F11.12, F11.13),
+  1 SPEC-GAP (F11.9 `G` hotkey).
 - Build: ✅ `cargo build` clean, zero new warnings (the 6 pre-existing
   `let mut dragon` warnings are unchanged).
 - Tests: ✅ 586 + 12 + 12 passing.
@@ -2731,10 +2726,6 @@ only speeches sourced from `faery.toml [narr].speeches` (indices 18,
 None from this subsystem.
 
 ### Blockers
-- **F11.8** — Princess-rescue placard cinematic (`placard_text` 8+i /
-  9+i / 10+i, 17, 18) and the `move_extent(0, 22205, 21231)` /
-  `ob_list8[2].ob_id = 4` cast swap are not plumbed. User to decide
-  whether to add mid-game placard scene plumbing now or defer.
 - **F11.9** — `GameAction::Give` / `G` hotkey is not in the reference.
   User to decide whether to keep the convenience binding or remove it
   to match the original's menu-only GIVE flow.
@@ -3224,10 +3215,10 @@ matching `reference/logic/brother-succession.md` §revive fmain.c:2884-
 `reference/logic/dialog_system.md#announce_treasure`. No invented
 scroll strings remain on this subsystem's paths.
 
-The full placard cinematic (`placard_text(0..6)` "Julian set out
-.." / "So Phillip ...") is not plumbed in the port — see F11.8 for
-the parallel placard-plumbing gap on princess rescue. RESEARCH-
-REQUIRED, same blocker.
+The full end-of-tale placard cinematic (`placard_text(0..6)`
+"Julian set out .." / "So Phillip ...") remains unplumbed in the port.
+Princess-rescue placard sequencing was addressed under F11.8; this
+brother-succession/tale placard gap is now tracked independently.
 
 #### F13.10 — Inventory reset vs inherit on fairy rescue (CONFORMANT)
 `revive(FALSE)` does not touch `stuff` (reference §"Inventory carry-
@@ -3289,7 +3280,7 @@ location `tambry`). Fallback constants `(19036, 15755, 3)` match
   fairy-rescue carryover, F13.11 quest flags, F13.12 wealth, F13.13
   voluntary swap, F13.14 save/load, F13.15 home position), 1
   RESEARCH-REQUIRED partial (F13.8/F13.9 end-of-tale + succession
-  placards — rolls up to the F11.8 placard-plumbing blocker).
+  placards — separate placard-plumbing gap from F11.8).
 - Build: ✅ `cargo build` clean, zero new warnings (the 6 pre-
   existing warnings are unchanged).
 - Tests: ✅ 586 + 12 + 12 passing.
@@ -3300,9 +3291,8 @@ None from this subsystem.
 ### Blockers
 - **End-of-tale + succession placards** — The original draws
   `placard_text(0..6)` and holds 500 ticks on the third death. Not
-  plumbed in the port. This is the same placard-dispatcher gap
-  identified under F11.8 (princess rescue). No separate blocker
-  raised; will be resolved together when placard plumbing lands.
+  plumbed in the port. This is no longer coupled to F11.8 (princess
+  rescue) and remains a standalone blocker.
 
 
 ---
@@ -4547,7 +4537,7 @@ Grouped by theme for implementation planning:
 - F12.1–F12.6 — Six astral-plane SPEC-GAPs (all deferred; no fixes applied in Sub 12)
 
 **Quests / rescue**
-- F11.8 — Princess-rescue placard cinematic (`placard_text(8+i)`, `ob_list8[2]` swap) — **BLOCKER**
+- ~~F11.8 — Princess-rescue placard cinematic (`placard_text(8+i)`, `ob_list8[2]` swap) — **BLOCKER**~~ **RESOLVED**
 - F11.x (other) — Quest-flag edge cases
 
 **Persistence**
@@ -4586,7 +4576,7 @@ Grouped by theme for implementation planning:
 | F2.2 | magic | Blue Stone healing spell exact vitality formula |
 | F2.3 | magic | `magic` stat role in spell outcome probability |
 | F9.12 | inventory | Give-item gold/writ formula (`fmain2.c:give_item`) |
-| F11.5 | quests | Rescue cinematic timing and `ob_list8[2]` cast swap |
+| F13.8/F13.9 | brother-succession | End-of-tale placard cinematic plumbing (`placard_text(0..6)` on third death) |
 | F13.4 | brother-succession | Brother resurrection trigger sequence |
 | F17.8 | save-load | `raftprox` serialization semantics (one-tick vs. persistent) |
 
@@ -4596,14 +4586,11 @@ Grouped by theme for implementation planning:
 
 #### Blockers (prevent full gameplay completion)
 
-1. **F11.8 — Princess-rescue placard cinematic**: `placard_text(8+i)`,
-   `move_extent`, and `ob_list8[2]` cast swap are not plumbed; the
-   end-of-rescue narrative sequence does not fire.
-2. ~~**F14.4 — Swan mount/dismount input**~~: **RESOLVED** — fire-button
+1. ~~**F14.4 — Swan mount/dismount input**~~: **RESOLVED** — fire-button
    dismount (with `fiery_death` / velocity / `proxcheck` vetos routed
    through `event(32)` / `event(33)`) and lasso-gated proximity
    auto-mount (F14.6) are now wired in `apply_player_input`.
-3. **F9.11 — `search_body`**: TAKE action on a defeated NPC does not compose
+2. **F9.11 — `search_body`**: TAKE action on a defeated NPC does not compose
    the `"% searched the body and found …"` string from `dialog_system.md:3251–3283`
    and does not transfer weapon/treasure loot from the defeated actor's
    `stuff[]` slot.

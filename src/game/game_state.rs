@@ -181,6 +181,8 @@ pub struct GameState {
 
     // Items dropped on the ground
     pub world_objects: Vec<WorldObject>,
+    /// Scripted extent anchor positions written by narrative steps.
+    scripted_extent_positions: Vec<Option<(u16, u16)>>,
 }
 
 impl GameState {
@@ -281,6 +283,7 @@ impl GameState {
             tick_counter: 0,
             brother_alive: [true, true, true],
             world_objects: Vec::new(),
+            scripted_extent_positions: Vec::new(),
         }
     }
 
@@ -299,6 +302,35 @@ impl GameState {
             0 => &mut self.julstuff,
             1 => &mut self.philstuff,
             _ => &mut self.kevstuff,
+        }
+    }
+
+    /// Script helper for `move_extent(index, x, y)` style mutations.
+    pub fn move_extent_for_script(&mut self, index: usize, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || x > u16::MAX as i32 || y > u16::MAX as i32 {
+            return false;
+        }
+        if self.scripted_extent_positions.len() <= index {
+            self.scripted_extent_positions.resize(index + 1, None);
+        }
+        self.scripted_extent_positions[index] = Some((x as u16, y as u16));
+        true
+    }
+
+    pub fn scripted_extent_position(&self, index: usize) -> Option<(i32, i32)> {
+        self.scripted_extent_positions
+            .get(index)
+            .and_then(|p| *p)
+            .map(|(x, y)| (x as i32, y as i32))
+    }
+
+    /// Script helper for cast/object-id swaps.
+    pub fn swap_world_object_id_for_script(&mut self, index: usize, new_id: u8) -> bool {
+        if let Some(obj) = self.world_objects.get_mut(index) {
+            obj.ob_id = new_id;
+            true
+        } else {
+            false
         }
     }
 
