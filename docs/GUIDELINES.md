@@ -12,7 +12,7 @@ All coding agents working in this repository **must follow these guidelines** wh
 When guidance conflicts, use this precedence order:
 
 1. `AGENTS.md`
-2. The project reference docs in `reference/`
+2. The project reference docs on the `research` branch (see `AGENTS.md`)
 3. This file
 4. General upstream Rust defaults
 

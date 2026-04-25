@@ -4,7 +4,7 @@
 > **Target fidelity:** Faithful reproduction of the original 1987 Amiga game by MicroIllusions
 > **Timing basis:** NTSC-only, 30 fps gameplay tick (60 Hz audio VBL)
 
-This document synthesizes the authoritative reference material ([RESEARCH.md](../reference/RESEARCH.md), [ARCHITECTURE.md](../reference/ARCHITECTURE.md), [STORYLINE.md](../reference/STORYLINE.md)) into a single implementation-ready specification. It defines the systems, data structures, algorithms, and behaviors required to reproduce the original game.
+This document synthesizes the authoritative reference material ([RESEARCH.md](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/RESEARCH.md), [ARCHITECTURE.md](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/ARCHITECTURE.md), [STORYLINE.md](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/STORYLINE.md) — all on the `research` branch) into a single implementation-ready specification. It defines the systems, data structures, algorithms, and behaviors required to reproduce the original game.
 
 ---
 
@@ -3452,11 +3452,11 @@ Common handler `msg1`: skips `n` null-terminated strings to find target, then ca
 Every string that reaches the HI scroll area shall originate from exactly one of two authoritative sources — no other source is permitted:
 
 1. **`narr.asm` tables**, shipped in this project as the `[narr]` section of `faery.toml` (`event_msg`, `place_msg`, `inside_msg`, `speeches`) and dispatched through `event(n)`, `speak(n)`, `msg(table, n)`. These are indexed null-terminated strings, printed via `extract()` with `%` → brother-name substitution.
-2. **Hardcoded string literals from `fmain.c` / `fmain2.c`**, enumerated exhaustively in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md) under "Hardcoded scroll messages — complete reference". These are composed via `print`, `print_cont`, `prdec`, `extract` and cover door/key feedback, bow/arrow prompts, TAKE-treasure composition, TAKE-body-search composition, USE-menu responses, battle aftermath, eating, and floppy-only save/load prompts.
+2. **Hardcoded string literals from `fmain.c` / `fmain2.c`**, enumerated exhaustively in [`reference/logic/dialog_system.md`](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/logic/dialog_system.md) under "Hardcoded scroll messages — complete reference". These are composed via `print`, `print_cont`, `prdec`, `extract` and cover door/key feedback, bow/arrow prompts, TAKE-treasure composition, TAKE-body-search composition, USE-menu responses, battle aftermath, eating, and floppy-only save/load prompts.
 
 The complete set of valid scroll-area text is therefore exactly the union of these two inventories. Any string emitted to the scroll area that is not traceable to a `[narr]` index **or** to a specific row in `dialog_system.md`'s hardcoded-message tables is a fidelity violation. Implementors porting these literals should either keep them as the hardcoded composition strings documented in `dialog_system.md` (preserving `extract()` wrapping, `%` substitution, and `prdec` zero-padding semantics) or lift them verbatim into `faery.toml` under a non-`[narr]` table; either way, no new player-facing prose may be invented in Rust code.
 
-Primitives (`print`, `print_cont`, `prdec`, `extract`) and the print-queue dispatcher (`ppick`) are specified behaviorally in [`reference/logic/dialog_system.md`](../reference/logic/dialog_system.md) §§"print"–"ppick".
+Primitives (`print`, `print_cont`, `prdec`, `extract`) and the print-queue dispatcher (`ppick`) are specified behaviorally in [`reference/logic/dialog_system.md`](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/logic/dialog_system.md) §§"print"–"ppick".
 
 ### 23.7 Placard Text Messages
 

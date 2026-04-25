@@ -344,7 +344,7 @@ structured `MagicResult` enum (`NoOwned` / `Suppressed` / `Applied` /
 ("Blue Stone fall-through") — `fmain.c:3326` `case 5:` has no `break;`
 before `case 7:` at `fmain.c:3348`, so every successful teleport **also**
 runs `vitality += rand8() + 4` clamped at `15 + brave/4`. Confirmed in
-[RESEARCH §10](../reference/RESEARCH.md#10-inventory--items).
+[RESEARCH §10](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/RESEARCH.md#10-inventory--items).
 **Issue**: Rust teleported but never healed. Players lost the intended
 free Glass Vial effect on every stone-circle use.
 **Resolution**: Extracted the Glass Vial heal into a shared
