@@ -655,6 +655,10 @@ impl GameplayScene {
     }
 
     fn enqueue_princess_rescue_sequence(&mut self) {
+        if !self.narrative_queue.is_idle() {
+            self.dlog("narrative: rescue enqueue deferred behind active sequence");
+        }
+
         let hero_name = self.brother_name().to_string();
         let rescue_key = self
             .rescue_placard_key_for_princess_count(self.state.princess)
@@ -677,12 +681,16 @@ impl GameplayScene {
         steps.push(NarrativeStep::SwapObjectId { object_index: 2, new_id: 4 });
         steps.push(NarrativeStep::ApplyRescueRewardsAndFlags);
 
-        self.narrative_queue.reset(steps);
+        self.narrative_queue.enqueue(steps);
     }
 
     fn enqueue_succession_placards(&mut self, dead_key: &str, start_key: &str) {
+        if !self.narrative_queue.is_idle() {
+            self.dlog("narrative: succession enqueue deferred behind active sequence");
+        }
+
         let sub = Some(self.brother_name().to_string());
-        self.narrative_queue.reset(vec![
+        self.narrative_queue.enqueue(vec![
             NarrativeStep::ShowPlacard {
                 key: dead_key.to_string(),
                 substitution: sub.clone(),
@@ -6983,6 +6991,37 @@ mod tests {
         assert!(scene.messages.is_empty(), "ClearInnerRect must clear visible queue");
         assert_eq!(scene.debug_active_step_index(), None);
     }
+
+    #[test]
+    fn t_f118_active_sequence_is_not_preempted_by_new_enqueue() {
+        let mut scene = GameplayScene::new();
+        scene.debug_enqueue_sequence_for_test(vec![
+            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 5 },
+            crate::game::narrative_sequence::NarrativeStep::ApplyRescueRewardsAndFlags,
+        ]);
+
+        scene.enqueue_succession_placards("julian_dead", "phillip_start");
+        let after = scene.debug_narrative_steps();
+
+        assert_eq!(
+            after,
+            vec![
+                crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 5 },
+                crate::game::narrative_sequence::NarrativeStep::ApplyRescueRewardsAndFlags,
+                crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+                    key: "julian_dead".to_string(),
+                    substitution: Some("Julian".to_string()),
+                    hold_ticks: 72,
+                },
+                crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+                    key: "phillip_start".to_string(),
+                    substitution: Some("Julian".to_string()),
+                    hold_ticks: 72,
+                },
+            ],
+            "new sequence should defer behind active steps, not preempt or drop"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -7713,23 +7752,25 @@ mod death_tests {
 
     #[test]
     fn t_f118_rescue_placard_mapping_variants() {
-        let mut scene = GameplayScene::new();
+        let mut scene0 = GameplayScene::new();
+        scene0.state.princess = 0;
+        scene0.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene0.debug_sequence_placard_keys(), vec!["rescue_katra".to_string()]);
 
-        scene.state.princess = 0;
-        scene.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_katra".to_string()]);
+        let mut scene1 = GameplayScene::new();
+        scene1.state.princess = 1;
+        scene1.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene1.debug_sequence_placard_keys(), vec!["rescue_karla".to_string()]);
 
-        scene.state.princess = 1;
-        scene.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_karla".to_string()]);
+        let mut scene2 = GameplayScene::new();
+        scene2.state.princess = 2;
+        scene2.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene2.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
 
-        scene.state.princess = 2;
-        scene.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
-
-        scene.state.princess = 5;
-        scene.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
+        let mut scene5 = GameplayScene::new();
+        scene5.state.princess = 5;
+        scene5.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene5.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
     }
 
     #[test]

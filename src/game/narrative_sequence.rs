@@ -65,12 +65,25 @@ impl NarrativeQueue {
         self.activate_next_step();
     }
 
+    pub fn enqueue(&mut self, steps: Vec<NarrativeStep>) {
+        for step in steps {
+            self.steps.push_back(step);
+        }
+        if self.active_step.is_none() {
+            self.activate_next_step();
+        }
+    }
+
     pub fn active_step_index(&self) -> Option<usize> {
         self.active_step_index
     }
 
     pub fn active_step(&self) -> Option<&NarrativeStep> {
         self.active_step.as_ref()
+    }
+
+    pub fn is_idle(&self) -> bool {
+        self.active_step.is_none() && self.steps.is_empty()
     }
 
     fn activate_next_step(&mut self) {
