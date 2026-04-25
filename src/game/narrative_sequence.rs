@@ -42,6 +42,12 @@ impl NarrativeQueue {
                     true
                 }
             }
+            Some(NarrativeStep::ShowPlacard { hold_ticks, .. }) => {
+                if *hold_ticks > 0 {
+                    *hold_ticks -= 1;
+                }
+                false
+            }
             // Non-wait steps must stay active until their explicit execution hook
             // completes and advances the queue.
             Some(_) => false,
@@ -61,6 +67,10 @@ impl NarrativeQueue {
 
     pub fn active_step_index(&self) -> Option<usize> {
         self.active_step_index
+    }
+
+    pub fn active_step(&self) -> Option<&NarrativeStep> {
+        self.active_step.as_ref()
     }
 
     fn activate_next_step(&mut self) {

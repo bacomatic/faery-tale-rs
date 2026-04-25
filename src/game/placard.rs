@@ -78,6 +78,16 @@ impl Placard {
         }
     }
 
+    pub fn text_lines_with_substitution(&self, substitution: Option<&str>) -> Vec<String> {
+        self.lines
+            .iter()
+            .map(|line| match substitution {
+                Some(sub) => line.text.replace('%', sub),
+                None => line.text.clone(),
+            })
+            .collect()
+    }
+
     pub fn draw<'a, T: RenderTarget>(&self, font: &FontTexture<'a>, canvas: &mut Canvas<T>) {
         for line in &self.lines {
             font.render_string(&line.text, canvas, line.x as i32, line.y as i32);

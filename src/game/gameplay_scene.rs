@@ -571,6 +571,117 @@ impl GameplayScene {
         self.narrative_queue.tick_one();
     }
 
+    fn execute_active_narrative_step(&mut self, game_lib: &GameLibrary) {
+        let Some(step) = self.narrative_queue.active_step().cloned() else {
+            return;
+        };
+
+        match step {
+            NarrativeStep::WaitTicks { .. } => {}
+            NarrativeStep::ShowPlacard { key, substitution, hold_ticks } => {
+                if hold_ticks > 0 {
+                    return;
+                }
+                if game_lib.find_placard(&key).is_none() {
+                    self.dlog(format!("fidelity: missing placard key {}", key));
+                } else {
+                    if let Some(placard) = game_lib.find_placard(&key) {
+                        for line in placard.text_lines_with_substitution(substitution.as_deref()) {
+                            self.messages.push_wrapped(line);
+                        }
+                    }
+                    self.dlog(format!("narrative: show_placard {}", key));
+                }
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::ClearInnerRect => {
+                self.messages.clear();
+                self.dlog("narrative: clear_inner_rect");
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::ShowRescueHomeText { line17, hero_name, line18 } => {
+                for key in [line17.as_str(), line18.as_str()] {
+                    if key.is_empty() {
+                        continue;
+                    }
+                    if let Some(placard) = game_lib.find_placard(key) {
+                        for line in placard.text_lines_with_substitution(Some(&hero_name)) {
+                            self.messages.push_wrapped(line);
+                        }
+                    } else {
+                        self.dlog(format!("fidelity: missing placard key {}", key));
+                    }
+                }
+                self.dlog("narrative: rescue_home_text");
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::TeleportHero { x, y, region } => {
+                if x >= 0 && y >= 0 && x <= u16::MAX as i32 && y <= u16::MAX as i32 {
+                    self.state.hero_x = x as u16;
+                    self.state.hero_y = y as u16;
+                    self.state.region_num = region;
+                }
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::MoveExtent { index, x, y } => {
+                if !self.state.move_extent_for_script(index, x, y) {
+                    self.dlog(format!(
+                        "fidelity: move_extent missing target index={} x={} y={}",
+                        index, x, y,
+                    ));
+                }
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::SwapObjectId { object_index, new_id } => {
+                if !self.state.swap_world_object_id_for_script(object_index, new_id) {
+                    self.dlog(format!(
+                        "fidelity: swap_object_id missing target index={} new_id={}",
+                        object_index, new_id,
+                    ));
+                }
+                self.narrative_queue.advance_active_step();
+            }
+            NarrativeStep::ApplyRescueRewardsAndFlags => {
+                self.execute_princess_rescue();
+                self.narrative_queue.advance_active_step();
+            }
+        }
+    }
+
+    fn rescue_placard_key_for_princess_count(&self, princess_count: u8) -> &'static str {
+        match princess_count {
+            0 => "rescue_katra",
+            1 => "rescue_karla",
+            _ => "rescue_kandy",
+        }
+    }
+
+    fn enqueue_princess_rescue_sequence(&mut self) {
+        let hero_name = self.brother_name().to_string();
+        let rescue_key = self
+            .rescue_placard_key_for_princess_count(self.state.princess)
+            .to_string();
+        let mut steps: Vec<NarrativeStep> = vec![NarrativeStep::ShowPlacard {
+            key: rescue_key,
+            substitution: Some(hero_name.clone()),
+            hold_ticks: 72,
+        }];
+
+        steps.push(NarrativeStep::WaitTicks { remaining: 380 });
+        steps.push(NarrativeStep::ClearInnerRect);
+        steps.push(NarrativeStep::ShowRescueHomeText {
+            line17: "princess_home".to_string(),
+            hero_name,
+            line18: String::new(),
+        });
+        steps.push(NarrativeStep::TeleportHero { x: 5511, y: 33780, region: 0 });
+        steps.push(NarrativeStep::MoveExtent { index: 0, x: 22205, y: 21231 });
+        steps.push(NarrativeStep::SwapObjectId { object_index: 2, new_id: 4 });
+        steps.push(NarrativeStep::ApplyRescueRewardsAndFlags);
+
+        self.narrative_queue.reset(steps);
+    }
+
     fn enqueue_succession_placards(&mut self, dead_key: &str, start_key: &str) {
         let sub = Some(self.brother_name().to_string());
         self.narrative_queue.reset(vec![
@@ -600,6 +711,14 @@ impl GameplayScene {
     }
 
     #[cfg(test)]
+    fn debug_tick_and_execute_sequence_only(&mut self, ticks: u32, game_lib: &GameLibrary) {
+        for _ in 0..ticks {
+            self.tick_narrative_sequence();
+            self.execute_active_narrative_step(game_lib);
+        }
+    }
+
+    #[cfg(test)]
     fn debug_active_step_index(&self) -> Option<usize> {
         self.narrative_queue.active_step_index()
     }
@@ -612,6 +731,48 @@ impl GameplayScene {
     #[cfg(test)]
     fn debug_narrative_steps(&self) -> Vec<NarrativeStep> {
         self.narrative_queue.debug_snapshot_steps()
+    }
+
+    #[cfg(test)]
+    fn debug_trigger_princess_rescue_for_test(&mut self) {
+        self.enqueue_princess_rescue_sequence();
+    }
+
+    #[cfg(test)]
+    fn debug_sequence_placard_keys(&self) -> Vec<String> {
+        self.narrative_queue
+            .debug_snapshot_steps()
+            .iter()
+            .filter_map(|step| {
+                if let NarrativeStep::ShowPlacard { key, .. } = step {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn debug_run_sequence_to_completion(&mut self, game_lib: &GameLibrary) {
+        for _ in 0..10_000 {
+            self.tick_narrative_sequence();
+            self.execute_active_narrative_step(game_lib);
+            if self.narrative_queue.debug_snapshot_steps().is_empty() {
+                return;
+            }
+        }
+        panic!("sequence did not complete in test helper");
+    }
+
+    #[cfg(test)]
+    fn debug_extent_position(&self, index: usize) -> Option<(i32, i32)> {
+        self.state.scripted_extent_position(index)
+    }
+
+    #[cfg(test)]
+    fn debug_drain_logs_for_test(&mut self) -> Vec<String> {
+        self.drain_logs()
     }
 
     /// Returns true when it is daytime (lightlevel >= 40).
@@ -1780,7 +1941,7 @@ impl GameplayScene {
         }
     }
 
-    /// Execute princess rescue sequence (SPEC §15.6 / reference/logic/quests.md#rescue).
+    /// Apply princess-rescue rewards and flags (SPEC §15.6).
     ///
     /// Ports the post-cinematic state mutations from `rescue()` in
     /// `fmain2.c:1584-1603`:
@@ -1790,13 +1951,7 @@ impl GameplayScene {
     ///   - `stuff[16..22] += 3` — +3 of each of the six key types.
     ///   - `ob_list8[9].ob_stat = 0` — clear princess captive flag.
     ///   - `princess += 1` — advance the rescued-princess counter.
-    ///   - `xfer(5511, 33780, 0)` — teleport hero to Marheim castle drop.
-    ///
-    /// The placard cinematic (placard_text 8+i/9+i/10+i with name
-    /// interpolation, then 17/18 post-rescue placards) and the
-    /// `move_extent(0, 22205, 21231)` / `ob_list8[2].ob_id = 4` cast swap
-    /// are not yet plumbed through this port — see the Subsystem 11 audit
-    /// (RESEARCH-REQUIRED) for plumbing requirements.
+    /// Teleport/extent/cast-swap are driven by the narrative queue steps.
     fn execute_princess_rescue(&mut self) {
         const ITEM_WRIT: usize = 28;  // stuff[28] = Writ
 
@@ -1821,14 +1976,6 @@ impl GameplayScene {
         if self.state.world_objects.len() > PRINCESS_OB_INDEX {
             self.state.world_objects[PRINCESS_OB_INDEX].ob_stat = 0;
             self.state.world_objects[PRINCESS_OB_INDEX].visible = false;
-        }
-
-        // Teleport hero to near King's castle (5511, 33780, region 0)
-        self.state.hero_x = 5511;
-        self.state.hero_y = 33780;
-        if self.state.region_num != 0 {
-            self.state.region_num = 0;
-            // Region change will be processed on next frame
         }
 
         // King's post-rescue line (fmain2.c:1599, `speak(18)`): the writ
@@ -5608,7 +5755,7 @@ impl Scene for GameplayScene {
         // SPEC §15.6: Princess rescue sequence
         if self.trigger_princess_rescue {
             self.trigger_princess_rescue = false;
-            self.execute_princess_rescue();
+            self.enqueue_princess_rescue_sequence();
         }
 
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
@@ -5644,6 +5791,7 @@ impl Scene for GameplayScene {
         // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
         for _ in 0..delta_ticks {
             self.tick_narrative_sequence();
+            self.execute_active_narrative_step(game_lib);
 
             // Phase 6 — fiery-death zone flag (fmain.c:1384-1385); must precede Phase 7
             // so that resolve_player_state can read the correct fiery_death value when
@@ -6787,6 +6935,56 @@ mod tests {
         scene.debug_tick_sequence_only(1);
         assert_eq!(scene.debug_active_step_index(), None);
     }
+
+    #[test]
+    fn t_f118_show_placard_honors_hold_ticks_before_advancing() {
+        let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
+        let lib: crate::game::game_library::GameLibrary =
+            toml::from_str(&cfg).expect("faery.toml must parse");
+
+        let mut scene = GameplayScene::new();
+        scene.debug_enqueue_sequence_for_test(vec![
+            crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+                key: "rescue_katra".to_string(),
+                substitution: Some("Julian".to_string()),
+                hold_ticks: 3,
+            },
+            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+        ]);
+
+        scene.debug_tick_and_execute_sequence_only(2, &lib);
+        assert_eq!(
+            scene.debug_active_step_index(),
+            Some(0),
+            "placard step must still be active before hold_ticks reaches zero"
+        );
+
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+        assert_eq!(
+            scene.debug_active_step_index(),
+            Some(1),
+            "placard step should advance only after hold_ticks are consumed"
+        );
+    }
+
+    #[test]
+    fn t_f118_clear_inner_rect_clears_visible_message_queue() {
+        let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
+        let lib: crate::game::game_library::GameLibrary =
+            toml::from_str(&cfg).expect("faery.toml must parse");
+        let mut scene = GameplayScene::new();
+        scene.messages.push("seed message");
+        assert!(!scene.messages.is_empty(), "precondition: queue must be non-empty");
+
+        scene.debug_enqueue_sequence_for_test(vec![
+            crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
+        ]);
+
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+
+        assert!(scene.messages.is_empty(), "ClearInnerRect must clear visible queue");
+        assert_eq!(scene.debug_active_step_index(), None);
+    }
 }
 
 #[cfg(test)]
@@ -7465,6 +7663,186 @@ mod death_tests {
                     hold_ticks: 72,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn t_f118_rescue_sequence_order_and_end_state() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.state.princess = 0;
+
+        while scene.state.world_objects.len() <= 9 {
+            scene.state.world_objects.push(crate::game::game_state::WorldObject {
+                ob_id: 0,
+                ob_stat: 0,
+                region: 0,
+                x: 0,
+                y: 0,
+                visible: false,
+                goal: 0,
+            });
+        }
+        scene.state.world_objects[9].ob_stat = 3;
+
+        scene.debug_trigger_princess_rescue_for_test();
+
+        let keys = scene.debug_sequence_placard_keys();
+        assert_eq!(
+            keys,
+            vec!["rescue_katra".to_string()]
+        );
+
+        scene.debug_run_sequence_to_completion(&lib);
+
+        assert_eq!(scene.state.hero_x, 5511);
+        assert_eq!(scene.state.hero_y, 33780);
+        assert_eq!(scene.state.region_num, 0);
+        assert_eq!(scene.state.princess, 1);
+        assert_eq!(scene.state.world_objects[2].ob_id, 4);
+        assert_eq!(scene.debug_extent_position(0), Some((22205, 21231)));
+
+        let logs = scene.debug_drain_logs_for_test();
+        assert!(
+            logs.iter().any(|line| line.contains("narrative: clear_inner_rect")),
+            "clear-inner-rect stage should execute and log"
+        );
+        assert!(
+            logs.iter().any(|line| line.contains("narrative: rescue_home_text")),
+            "rescue-home stage should execute and log"
+        );
+    }
+
+    #[test]
+    fn t_f118_rescue_placard_mapping_variants() {
+        let mut scene = GameplayScene::new();
+
+        scene.state.princess = 0;
+        scene.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_katra".to_string()]);
+
+        scene.state.princess = 1;
+        scene.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_karla".to_string()]);
+
+        scene.state.princess = 2;
+        scene.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
+
+        scene.state.princess = 5;
+        scene.debug_trigger_princess_rescue_for_test();
+        assert_eq!(scene.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
+    }
+
+    #[test]
+    fn t_f118_rescue_sequence_step_order_includes_world_mutations() {
+        let mut scene = GameplayScene::new();
+        scene.state.princess = 0;
+        scene.debug_trigger_princess_rescue_for_test();
+
+        assert_eq!(
+            scene.debug_narrative_steps(),
+            vec![
+                NarrativeStep::ShowPlacard {
+                    key: "rescue_katra".to_string(),
+                    substitution: Some("Julian".to_string()),
+                    hold_ticks: 72,
+                },
+                NarrativeStep::WaitTicks { remaining: 380 },
+                NarrativeStep::ClearInnerRect,
+                NarrativeStep::ShowRescueHomeText {
+                    line17: "princess_home".to_string(),
+                    hero_name: "Julian".to_string(),
+                    line18: String::new(),
+                },
+                NarrativeStep::TeleportHero {
+                    x: 5511,
+                    y: 33780,
+                    region: 0,
+                },
+                NarrativeStep::MoveExtent {
+                    index: 0,
+                    x: 22205,
+                    y: 21231,
+                },
+                NarrativeStep::SwapObjectId {
+                    object_index: 2,
+                    new_id: 4,
+                },
+                NarrativeStep::ApplyRescueRewardsAndFlags,
+            ]
+        );
+    }
+
+    #[test]
+    fn t_f118_show_placard_step_emits_authoritative_output() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+        scene.debug_enqueue_sequence_for_test(vec![NarrativeStep::ShowPlacard {
+            key: "rescue_katra".to_string(),
+            substitution: Some("Julian".to_string()),
+            hold_ticks: 1,
+        }]);
+
+        let before = scene.messages.transcript().len();
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+        let transcript = scene.messages.transcript();
+
+        assert_eq!(scene.debug_active_step_index(), None);
+        assert!(transcript.len() > before, "ShowPlacard should emit placard text");
+        assert!(
+            transcript.iter().any(|line| line.contains("Julian had rescued Katra,")),
+            "ShowPlacard output should come from authoritative placard text with substitution"
+        );
+    }
+
+    #[test]
+    fn t_f118_rescue_home_text_step_emits_authoritative_output() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+
+        scene.debug_enqueue_sequence_for_test(vec![NarrativeStep::ShowRescueHomeText {
+            line17: "princess_home".to_string(),
+            hero_name: "Julian".to_string(),
+            line18: String::new(),
+        }]);
+
+        let before = scene.messages.transcript().len();
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+
+        assert_eq!(scene.debug_active_step_index(), None);
+        assert!(
+            scene.messages.transcript().len() > before,
+            "ShowRescueHomeText should push authoritative output"
+        );
+        assert!(
+            scene.messages
+                .transcript()
+                .iter()
+                .any(|line| line.contains("After seeing the") || line.contains("Julian once more set")),
+            "Home-text output should come from princess_home placard lines"
+        );
+    }
+
+    #[test]
+    fn t_f118_rescue_home_text_missing_key_logs_fidelity_error() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+
+        scene.debug_enqueue_sequence_for_test(vec![NarrativeStep::ShowRescueHomeText {
+            line17: "missing_rescue_home_key".to_string(),
+            hero_name: "Julian".to_string(),
+            line18: String::new(),
+        }]);
+
+        let before = scene.messages.transcript().len();
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+        let logs = scene.debug_drain_logs_for_test();
+
+        assert_eq!(scene.messages.transcript().len(), before);
+        assert!(
+            logs.iter().any(|line| line.contains("fidelity: missing placard key missing_rescue_home_key")),
+            "Missing home-text placard key should be logged as a fidelity error"
         );
     }
 }
