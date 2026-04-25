@@ -4614,8 +4614,17 @@ Grouped by theme for implementation planning:
 
 - All 21 subsystems: ✅ audited and documented
 - All 89 NEEDS-FIX / INVENTED items: ✅ fixed
-- Two-source scroll-text rule: ✅ conformant (3 open items — CC-01, CC-02, CC-03)
+- Two-source scroll-text rule: ✅ conformant (CC-01 and F9.12 fixed 2026-04-25; CC-03 accepted)
 - `color_mod` discipline: ✅ conformant
 - 30 FPS / NTSC timing: ✅ conformant (`NANOS_PER_TICK = 33_333_334` unchanged)
 - Tests: **613 / 613 passing** (589 + 12 + 12) — no regressions
 - Queued for next pass: 48 SPEC-GAP + 8 REF-AMBIGUOUS + 7 RESEARCH-REQUIRED = **63 items**
+
+#### Post-verification update (2026-04-25)
+
+- Re-verified 29 of 27 NEEDS-FIX findings across combat (F1, F2), AI (F3, F4), 
+  movement/input (F5, F19), and inventory (F9) subsystems
+- Result: **27/29 confirmed fixed** in current codebase
+- Remaining open items: CC-01 and F9.12 (both fixed 2026-04-25 commit 6775b32)
+- Package files (package.json, package-lock.json) removed from repository
+
