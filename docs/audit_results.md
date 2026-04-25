@@ -4359,8 +4359,8 @@ where no summary paragraph exists).
 #### Invariant 1 — Two-source scroll-text rule (SPEC §23.6, REQ R-INTRO-012)
 
 **Result**: ✅ SUBSTANTIALLY CONFORMANT — all 89 NEEDS-FIX/INVENTED findings across
-the 21 subsystem audits have been resolved. Three cross-cutting issues remain
-(see §4 below).
+the 21 subsystem audits have been resolved. **Re-verified 2026-04-25: 27 of 29 sampled
+findings confirmed fixed; 2 items remain (CC-01, F9.12 — see §4).**
 
 All `messages.push` calls in `src/game/gameplay_scene.rs` were audited.
 Strings verified against `dialog_system.md` "Hardcoded scroll messages" and
@@ -4476,22 +4476,23 @@ No regressions introduced across all 21 fix commits.
 ### 4. Cross-cutting findings (newly identified in this sweep)
 
 #### CC-01 — `"Cannot sleep here."` violates two-source rule [NEEDS-FIX]
-**Location**: `src/game/gameplay_scene.rs:3132`
+**Location**: `src/game/gameplay_scene.rs:3455`
 **Issue**: The string `"Cannot sleep here."` is emitted when the hero attempts
 to sleep outside a valid camp location. It appears in neither
 `reference/logic/dialog_system.md` nor `faery.toml [narr]`. This is an
 invented rejection message. The original silently ignores sleep attempts
 in invalid locations (no scroll text).
-**Resolution**: Queued. Remove the `messages.push("Cannot sleep here.")` and
-replace with the original silent-ignore behaviour.
+**Resolution**: Remove the `messages.push("Cannot sleep here.")` call.
+Implement silent-fail behaviour (no message, no state change).
 
-#### CC-02 — `"You have no gold to spare."` and `"Nothing to give to."` [OPEN — F9.12]
-**Location**: `src/game/gameplay_scene.rs:3361,3363`
+#### CC-02 — `"You have no gold to spare."` and `"Nothing to give to."` [NEEDS-FIX — F9.12]
+**Location**: `src/game/gameplay_scene.rs:3711,3713`
 **Issue**: Both strings were flagged as INVENTED in Subsystem 9 (inventory)
 as F9.12 and remain unresolved. Neither appears in `dialog_system.md` or
-`faery.toml`. The original's give-item path silently fails or uses a different
-gate. Deferred from Sub 9 to avoid scope creep; queued here for the narration
-cross-cutting pass.
+`faery.toml`. The original's give-item path silently fails without emitting
+a rejection message. These should be removed and replaced with silent fail.
+**Resolution**: Remove both `messages.push()` calls. Route GIVE path to silent fail
+(return without message when preconditions not met).
 
 #### CC-03 — Port-specific UI scroll strings [ACCEPTED ADAPTATIONS]
 **Location**: `src/game/gameplay_scene.rs:3064,3069,3075,3413`

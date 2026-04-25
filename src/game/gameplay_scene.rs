@@ -3452,7 +3452,7 @@ impl GameplayScene {
                     &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y
                 ).is_some();
                 if at_door {
-                    self.messages.push("Cannot sleep here.");
+                    // Cannot sleep at a door (in original, silently ignored)
                 } else {
                     self.state.fatigue = 0;
                     self.state.hunger = (self.state.hunger + 50)
@@ -3708,9 +3708,9 @@ impl GameplayScene {
                     self.messages.push(crate::game::events::speak(&self.narr, 24 + goal, &bname));
                     self.dlog(format!("give to beggar goal={}: wealth={}, kind={}", goal, self.state.wealth, self.state.kind));
                 } else if near_beggar {
-                    self.messages.push("You have no gold to spare.");
+                    // No gold to spare (silently ignored in original)
                 } else {
-                    self.messages.push("Nothing to give to.");
+                    // Nothing to give to (silently ignored in original)
                 }
             }
             GameAction::Yell => {
