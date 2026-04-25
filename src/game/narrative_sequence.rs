@@ -1,0 +1,73 @@
+use std::collections::VecDeque;
+
+#[derive(Clone, Debug)]
+pub enum NarrativeStep {
+    WaitTicks { remaining: u32 },
+    ShowPlacard { key: String, substitution: Option<String>, hold_ticks: u32 },
+    ClearInnerRect,
+    ShowRescueHomeText { line17: String, hero_name: String, line18: String },
+    TeleportHero { x: i32, y: i32, region: u8 },
+    MoveExtent { index: usize, x: i32, y: i32 },
+    SwapObjectId { object_index: usize, new_id: u8 },
+    ApplyRescueRewardsAndFlags,
+}
+
+#[derive(Default)]
+pub struct NarrativeQueue {
+    steps: VecDeque<NarrativeStep>,
+    active_step: Option<NarrativeStep>,
+    active_step_index: Option<usize>,
+    next_step_index: usize,
+}
+
+impl NarrativeQueue {
+    pub fn reset(&mut self, steps: Vec<NarrativeStep>) {
+        self.steps = steps.into();
+        self.active_step = None;
+        self.active_step_index = None;
+        self.next_step_index = 0;
+    }
+
+    pub fn tick_one(&mut self) {
+        if self.active_step.is_none() {
+            self.activate_next_step();
+        }
+
+        let should_advance = match self.active_step.as_mut() {
+            Some(NarrativeStep::WaitTicks { remaining }) => {
+                if *remaining > 1 {
+                    *remaining -= 1;
+                    false
+                } else {
+                    true
+                }
+            }
+            // Non-wait steps must stay active until their explicit execution hook
+            // completes and advances the queue.
+            Some(_) => false,
+            None => false,
+        };
+
+        if should_advance {
+            self.advance_active_step();
+        }
+    }
+
+    pub fn advance_active_step(&mut self) {
+        self.active_step = None;
+        self.active_step_index = None;
+        self.activate_next_step();
+    }
+
+    pub fn active_step_index(&self) -> Option<usize> {
+        self.active_step_index
+    }
+
+    fn activate_next_step(&mut self) {
+        if let Some(next) = self.steps.pop_front() {
+            self.active_step = Some(next);
+            self.active_step_index = Some(self.next_step_index);
+            self.next_step_index += 1;
+        }
+    }
+}

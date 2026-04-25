@@ -219,6 +219,7 @@ use crate::game::gfx_effects::{TeleportEffect, WitchEffect};
 use crate::game::game_library::GameLibrary;
 use crate::game::game_state::GameState;
 use crate::game::key_bindings::{ControllerBindings, ControllerMode, GameAction, KeyBindings};
+use crate::game::narrative_sequence::{NarrativeQueue, NarrativeStep};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 
 /// State for the key rebinding mode (F2 to enter, Escape to exit).
@@ -334,6 +335,8 @@ pub struct GameplayScene {
     /// in `main.rs`. Mirrors `quitflag = TRUE; viewstatus = 2` from
     /// `fmain.c:3244-3247`.
     victory_triggered: bool,
+    /// Deterministic gameplay-owned scripted sequence runner.
+    narrative_queue: NarrativeQueue,
     /// Game is paused (Space key toggles).
     paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
@@ -469,6 +472,7 @@ impl GameplayScene {
             pending_log: Vec::new(),
             quit_requested: false,
             victory_triggered: false,
+            narrative_queue: NarrativeQueue::default(),
             paused: false,
             compass_regions: Vec::new(),
             menu: crate::game::menu::MenuState::new(),
@@ -561,6 +565,32 @@ impl GameplayScene {
         let stuff = self.state.stuff().clone();
         let wealth = self.state.wealth;
         self.menu.set_options(&stuff, wealth);
+    }
+
+    fn tick_narrative_sequence(&mut self) {
+        self.narrative_queue.tick_one();
+    }
+
+    #[cfg(test)]
+    fn debug_enqueue_sequence_for_test(&mut self, steps: Vec<NarrativeStep>) {
+        self.narrative_queue.reset(steps);
+    }
+
+    #[cfg(test)]
+    fn debug_tick_sequence_only(&mut self, ticks: u32) {
+        for _ in 0..ticks {
+            self.tick_narrative_sequence();
+        }
+    }
+
+    #[cfg(test)]
+    fn debug_active_step_index(&self) -> Option<usize> {
+        self.narrative_queue.active_step_index()
+    }
+
+    #[cfg(test)]
+    fn debug_advance_active_sequence_step_for_test(&mut self) {
+        self.narrative_queue.advance_active_step();
     }
 
     /// Returns true when it is daytime (lightlevel >= 40).
@@ -5581,6 +5611,8 @@ impl Scene for GameplayScene {
 
         // Run one simulation step per 30 Hz tick (NTSC interlaced frame rate).
         for _ in 0..delta_ticks {
+            self.tick_narrative_sequence();
+
             // Phase 6 — fiery-death zone flag (fmain.c:1384-1385); must precede Phase 7
             // so that resolve_player_state can read the correct fiery_death value when
             // deciding whether the swan can be dismounted (fmain.c:1418).
@@ -6683,6 +6715,45 @@ mod tests {
         };
         assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
         assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 0);
+    }
+
+    #[test]
+    fn t_f118_sequence_runner_advances_one_step_at_a_time() {
+        let mut scene = GameplayScene::new();
+        scene.debug_enqueue_sequence_for_test(vec![
+            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 2 },
+            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+        ]);
+
+        scene.debug_tick_sequence_only(1);
+        assert_eq!(scene.debug_active_step_index(), Some(0));
+
+        scene.debug_tick_sequence_only(1);
+        assert_eq!(scene.debug_active_step_index(), Some(1));
+
+        scene.debug_tick_sequence_only(1);
+        assert_eq!(scene.debug_active_step_index(), None);
+    }
+
+    #[test]
+    fn t_f118_non_wait_step_requires_explicit_advance() {
+        let mut scene = GameplayScene::new();
+        scene.debug_enqueue_sequence_for_test(vec![
+            crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
+            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+        ]);
+
+        scene.debug_tick_sequence_only(1);
+        assert_eq!(scene.debug_active_step_index(), Some(0));
+
+        scene.debug_tick_sequence_only(3);
+        assert_eq!(scene.debug_active_step_index(), Some(0));
+
+        scene.debug_advance_active_sequence_step_for_test();
+        assert_eq!(scene.debug_active_step_index(), Some(1));
+
+        scene.debug_tick_sequence_only(1);
+        assert_eq!(scene.debug_active_step_index(), None);
     }
 }
 
