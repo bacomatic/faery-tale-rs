@@ -583,7 +583,7 @@ impl GameplayScene {
                     return;
                 }
                 if game_lib.find_placard(&key).is_none() {
-                    self.dlog(format!("fidelity: missing placard key {}", key));
+                    self.dlog(format!("fidelity error: missing placard key {}", key));
                 } else {
                     if let Some(placard) = game_lib.find_placard(&key) {
                         for line in placard.text_lines_with_substitution(substitution.as_deref()) {
@@ -609,7 +609,7 @@ impl GameplayScene {
                             self.messages.push_wrapped(line);
                         }
                     } else {
-                        self.dlog(format!("fidelity: missing placard key {}", key));
+                        self.dlog(format!("fidelity error: missing placard key {}", key));
                     }
                 }
                 self.dlog("narrative: rescue_home_text");
@@ -626,7 +626,7 @@ impl GameplayScene {
             NarrativeStep::MoveExtent { index, x, y } => {
                 if !self.state.move_extent_for_script(index, x, y) {
                     self.dlog(format!(
-                        "fidelity: move_extent missing target index={} x={} y={}",
+                        "fidelity blocker: move_extent missing target index={} x={} y={}",
                         index, x, y,
                     ));
                 }
@@ -635,7 +635,7 @@ impl GameplayScene {
             NarrativeStep::SwapObjectId { object_index, new_id } => {
                 if !self.state.swap_world_object_id_for_script(object_index, new_id) {
                     self.dlog(format!(
-                        "fidelity: swap_object_id missing target index={} new_id={}",
+                        "fidelity blocker: swap_object_id missing target index={} new_id={}",
                         object_index, new_id,
                     ));
                 }
@@ -7841,8 +7841,79 @@ mod death_tests {
 
         assert_eq!(scene.messages.transcript().len(), before);
         assert!(
-            logs.iter().any(|line| line.contains("fidelity: missing placard key missing_rescue_home_key")),
+            logs.iter().any(|line| line.contains("fidelity error: missing placard key missing_rescue_home_key")),
             "Missing home-text placard key should be logged as a fidelity error"
+        );
+    }
+
+    #[test]
+    fn t_f118_show_placard_missing_key_logs_fidelity_error_and_continues() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+
+        scene.debug_enqueue_sequence_for_test(vec![
+            NarrativeStep::ShowPlacard {
+                key: "missing_rescue_key".to_string(),
+                substitution: Some("Julian".to_string()),
+                hold_ticks: 1,
+            },
+            NarrativeStep::ClearInnerRect,
+        ]);
+
+        let before = scene.messages.transcript().len();
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+
+        assert_eq!(scene.debug_active_step_index(), Some(1));
+        assert_eq!(
+            scene.messages.transcript().len(),
+            before,
+            "Missing placard key must not invent fallback narrative text"
+        );
+
+        scene.debug_tick_and_execute_sequence_only(1, &lib);
+        assert_eq!(scene.debug_active_step_index(), None);
+
+        let logs = scene.debug_drain_logs_for_test();
+        assert!(
+            logs.iter().any(|line| {
+                line.contains("fidelity error: missing placard key missing_rescue_key")
+            }),
+            "Missing placard key should be logged as a fidelity error"
+        );
+        assert!(
+            logs.iter().any(|line| line.contains("narrative: clear_inner_rect")),
+            "Sequence should continue to subsequent steps after missing placard key"
+        );
+    }
+
+    #[test]
+    fn t_f118_missing_mutation_targets_log_fidelity_blocker_and_continue() {
+        let lib = make_lib();
+        let mut scene = GameplayScene::new();
+
+        scene.debug_enqueue_sequence_for_test(vec![
+            NarrativeStep::SwapObjectId {
+                object_index: 9999,
+                new_id: 4,
+            },
+            NarrativeStep::WaitTicks { remaining: 1 },
+        ]);
+
+        scene.debug_run_sequence_to_completion(&lib);
+
+        assert_eq!(
+            scene.debug_active_step_index(),
+            None,
+            "Sequence should continue and complete even when mutation targets are missing"
+        );
+
+        let logs = scene.debug_drain_logs_for_test();
+        assert!(
+            logs.iter().any(|line| {
+                line.contains("fidelity blocker: swap_object_id missing target")
+                    && line.contains("new_id=4")
+            }),
+            "Missing swap_object_id target should be logged as a fidelity blocker"
         );
     }
 }
