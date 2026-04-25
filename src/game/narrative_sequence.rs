@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NarrativeStep {
     WaitTicks { remaining: u32 },
     ShowPlacard { key: String, substitution: Option<String>, hold_ticks: u32 },
@@ -69,5 +69,15 @@ impl NarrativeQueue {
             self.active_step_index = Some(self.next_step_index);
             self.next_step_index += 1;
         }
+    }
+
+    #[cfg(test)]
+    pub fn debug_snapshot_steps(&self) -> Vec<NarrativeStep> {
+        let mut out = Vec::with_capacity(self.steps.len() + usize::from(self.active_step.is_some()));
+        if let Some(step) = self.active_step.as_ref() {
+            out.push(step.clone());
+        }
+        out.extend(self.steps.iter().cloned());
+        out
     }
 }

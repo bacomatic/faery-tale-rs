@@ -337,9 +337,6 @@ pub struct GameplayScene {
     victory_triggered: bool,
     /// Deterministic gameplay-owned scripted sequence runner.
     narrative_queue: NarrativeQueue,
-    #[cfg(test)]
-    /// Test-only snapshot of placard keys enqueued by narrative producers.
-    debug_enqueued_placard_keys: Vec<String>,
     /// Game is paused (Space key toggles).
     paused: bool,
     /// Compass direction sub-regions from comptable (for highlight overlay).
@@ -476,8 +473,6 @@ impl GameplayScene {
             quit_requested: false,
             victory_triggered: false,
             narrative_queue: NarrativeQueue::default(),
-            #[cfg(test)]
-            debug_enqueued_placard_keys: Vec::new(),
             paused: false,
             compass_regions: Vec::new(),
             menu: crate::game::menu::MenuState::new(),
@@ -590,11 +585,6 @@ impl GameplayScene {
                 hold_ticks: 72,
             },
         ]);
-
-        #[cfg(test)]
-        {
-            self.debug_enqueued_placard_keys = vec![dead_key.to_string(), start_key.to_string()];
-        }
     }
 
     #[cfg(test)]
@@ -620,11 +610,8 @@ impl GameplayScene {
     }
 
     #[cfg(test)]
-    fn debug_sequence_placard_keys(&self) -> Vec<&str> {
-        self.debug_enqueued_placard_keys
-            .iter()
-            .map(|k| k.as_str())
-            .collect()
+    fn debug_narrative_steps(&self) -> Vec<NarrativeStep> {
+        self.narrative_queue.debug_snapshot_steps()
     }
 
     /// Returns true when it is daytime (lightlevel >= 40).
@@ -7435,8 +7422,19 @@ mod death_tests {
         scene.tick_goodfairy_countdown(&lib, 1);
 
         assert_eq!(
-            scene.debug_sequence_placard_keys(),
-            vec!["julian_dead", "phillip_start"]
+            scene.debug_narrative_steps(),
+            vec![
+                NarrativeStep::ShowPlacard {
+                    key: "julian_dead".to_string(),
+                    substitution: Some("Phillip".to_string()),
+                    hold_ticks: 72,
+                },
+                NarrativeStep::ShowPlacard {
+                    key: "phillip_start".to_string(),
+                    substitution: Some("Phillip".to_string()),
+                    hold_ticks: 72,
+                },
+            ]
         );
     }
 
@@ -7454,8 +7452,19 @@ mod death_tests {
         scene.tick_goodfairy_countdown(&lib, 1);
 
         assert_eq!(
-            scene.debug_sequence_placard_keys(),
-            vec!["phillip_dead", "kevin_start"]
+            scene.debug_narrative_steps(),
+            vec![
+                NarrativeStep::ShowPlacard {
+                    key: "phillip_dead".to_string(),
+                    substitution: Some("Kevin".to_string()),
+                    hold_ticks: 72,
+                },
+                NarrativeStep::ShowPlacard {
+                    key: "kevin_start".to_string(),
+                    substitution: Some("Kevin".to_string()),
+                    hold_ticks: 72,
+                },
+            ]
         );
     }
 }
