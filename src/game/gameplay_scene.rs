@@ -1138,12 +1138,12 @@ impl GameplayScene {
                     Direction::None => ( 0,  0),
                 };
                 self.state.apply_swan_velocity_impulse(xdir, ydir);
-                
+
                 // Position is determined by velocity, not input direction.
                 let (new_x, new_y) = self.state.compute_swan_position();
                 let dx = (new_x as i32 - self.state.hero_x as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
                 let dy = (new_y as i32 - self.state.hero_y as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
-                
+
                 // Facing is derived from velocity per SPEC §21.4: set_course(0, -nvx, -nvy, 6).
                 // This means facing toward the direction of motion (reversed velocity vector).
                 let face_dir = if self.state.swan_vx == 0 && self.state.swan_vy == 0 {
@@ -2712,15 +2712,15 @@ impl GameplayScene {
             let hero_x = self.state.hero_x as i32;
             let hero_y = self.state.hero_y as i32;
             let tick = self.state.tick_counter;
-            
+
             for npc in &mut table.npcs {
                 if !npc.active || npc.state == NpcState::Dead { continue; }
                 if npc.npc_type != NPC_TYPE_DRAGON { continue; }
-                
+
                 // Dragon always faces south (SPEC §21.5).
                 npc.facing = 4;
                 npc.state = NpcState::Still;
-                
+
                 // 25% per-frame firing chance (SPEC §21.5: rand4() == 0).
                 let r = (tick.wrapping_mul(2654435761).wrapping_add(npc.x as u32)) & 3;
                 if r == 0 {
@@ -3545,7 +3545,7 @@ impl GameplayScene {
                 use crate::game::game_state::ITEM_ARROWS;
                 let weapon = self.state.actors.first().map_or(4, |a| a.weapon);
                 let is_bow = weapon == 4;
-                
+
                 if is_bow && self.state.stuff()[ITEM_ARROWS] == 0 {
                     self.messages.push("No Arrows!");
                 } else {
@@ -7419,7 +7419,7 @@ mod death_tests {
         scene.state.vitality = 0;
         scene.dying = true;
         scene.goodfairy = -1; // trigger rescue check
-        
+
         // With luck = 1, should qualify for fairy rescue
         assert!(scene.state.luck >= 1, "luck=1 should pass the fairy rescue threshold");
     }
@@ -7429,7 +7429,7 @@ mod death_tests {
         // T1-DEATH-LUCK-GATE: luck < 1 should fail the gate
         let mut scene = GameplayScene::new();
         scene.state.luck = 0;
-        
+
         assert!(scene.state.luck < 1, "luck=0 should fail the fairy rescue threshold");
     }
 
@@ -7453,13 +7453,13 @@ mod death_tests {
         // T1-DEATH-MESSAGE: combat death should set death_type = 5
         use std::fs;
         let config = fs::read_to_string("faery.toml").expect("faery.toml should exist");
-        let lib: crate::game::game_library::GameLibrary = 
+        let lib: crate::game::game_library::GameLibrary =
             toml::from_str(&config).expect("faery.toml should parse");
-        
+
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 5, bname);
         assert!(!msg.is_empty(), "death event message 5 (combat) should exist");
-        assert!(msg.contains("killed") || msg.contains("hit"), 
+        assert!(msg.contains("killed") || msg.contains("hit"),
                 "combat death message should mention being hit/killed, got: {}", msg);
     }
 
@@ -7468,13 +7468,13 @@ mod death_tests {
         // T1-DEATH-MESSAGE: drowning should set death_type = 6
         use std::fs;
         let config = fs::read_to_string("faery.toml").expect("faery.toml should exist");
-        let lib: crate::game::game_library::GameLibrary = 
+        let lib: crate::game::game_library::GameLibrary =
             toml::from_str(&config).expect("faery.toml should parse");
-        
+
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 6, bname);
         assert!(!msg.is_empty(), "death event message 6 (drowning) should exist");
-        assert!(msg.contains("drown") || msg.contains("water"), 
+        assert!(msg.contains("drown") || msg.contains("water"),
                 "drowning death message should mention drowning/water, got: {}", msg);
     }
 
@@ -7483,14 +7483,14 @@ mod death_tests {
         // T1-DEATH-MESSAGE: lava death should set death_type = 27
         use std::fs;
         let config = fs::read_to_string("faery.toml").expect("faery.toml should exist");
-        let lib: crate::game::game_library::GameLibrary = 
+        let lib: crate::game::game_library::GameLibrary =
             toml::from_str(&config).expect("faery.toml should parse");
-        
+
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 27, bname);
         // Event 27 should be lava death per SPEC §20.1
         assert!(!msg.is_empty(), "death event message 27 (lava) should exist");
-        assert!(msg.contains("lava") || msg.contains("perished"), 
+        assert!(msg.contains("lava") || msg.contains("perished"),
                 "lava death message should mention lava/perished, got: {}", msg);
     }
 
@@ -7506,7 +7506,7 @@ mod death_tests {
         state.safe_x = 1000;
         state.safe_y = 2000;
         state.safe_r = 5;
-        
+
         // The reset happens in gameplay_scene, but we can test that try_respawn
         // at least restores position and vitality
         assert!(state.try_respawn());
@@ -8017,7 +8017,7 @@ mod t1_arena_spectre_tests {
     fn test_magic_blocked_in_necromancer_arena() {
         // SPEC §19.1: Magic blocked when extn->v3 == 9 (Necromancer arena).
         let mut scene = test_scene();
-        
+
         // Create zone with v3 == 9 (Necromancer arena)
         scene.zones = vec![
             ZoneConfig {
@@ -8028,22 +8028,22 @@ mod t1_arena_spectre_tests {
                 v1: 0, v2: 0, v3: 9,
             }
         ];
-        
+
         // Place hero in the arena
         scene.state.hero_x = 1500;
         scene.state.hero_y = 1500;
-        
+
         // Give hero a magic item
         scene.state.stuff_mut()[ITEM_LANTERN] = 1;
-        
+
         // Try to cast spell
         scene.try_cast_spell(ITEM_LANTERN);
-        
+
         // Should receive speak(59) message
         let msgs: Vec<&str> = scene.messages.iter().collect();
         assert_eq!(msgs.len(), 1);
         assert!(msgs[0].contains("Your magic won't work here"));
-        
+
         // Item should NOT be consumed
         assert_eq!(scene.state.stuff()[ITEM_LANTERN], 1);
     }
@@ -8086,26 +8086,26 @@ mod t1_arena_spectre_tests {
     fn test_magic_allowed_when_no_zone() {
         // Magic should work when hero is not in any specific zone.
         let mut scene = test_scene();
-        
+
         // No zones defined
         scene.zones = vec![];
-        
+
         // Place hero anywhere
         scene.state.hero_x = 5000;
         scene.state.hero_y = 5000;
-        
+
         // Give hero a magic item
         scene.state.stuff_mut()[ITEM_VIAL] = 1;
         scene.state.vitality = 10;
-        
+
         // Try to cast spell
         scene.try_cast_spell(ITEM_VIAL);
-        
+
         // Should receive success message
         let msgs: Vec<&str> = scene.messages.iter().collect();
         assert_eq!(msgs.len(), 1);
         assert!(!msgs[0].contains("won't work here"));
-        
+
         // Item should be consumed
         assert_eq!(scene.state.stuff()[ITEM_VIAL], 0);
     }
@@ -8114,7 +8114,7 @@ mod t1_arena_spectre_tests {
     fn test_spectre_visible_at_night() {
         // SPEC §17.4: Spectre visible when lightlevel < 40.
         let mut scene = test_scene();
-        
+
         // Add spectre to world_objects (region=255, ob_id=10, ob_stat=3)
         scene.state.world_objects.push(WorldObject {
             ob_id: 10,
@@ -8125,13 +8125,13 @@ mod t1_arena_spectre_tests {
             visible: false,
             goal: 0,
         });
-        
+
         // Set lightlevel to deep night (< 40)
         scene.state.lightlevel = 30;
-        
+
         // Update spectre visibility
         scene.update_spectre_visibility();
-        
+
         // Spectre should be visible
         assert_eq!(scene.state.world_objects[0].visible, true);
     }
@@ -8140,7 +8140,7 @@ mod t1_arena_spectre_tests {
     fn test_spectre_hidden_by_day() {
         // SPEC §17.4: Spectre hidden when lightlevel >= 40.
         let mut scene = test_scene();
-        
+
         // Add spectre to world_objects
         scene.state.world_objects.push(WorldObject {
             ob_id: 10,
@@ -8151,13 +8151,13 @@ mod t1_arena_spectre_tests {
             visible: true,
             goal: 0,
         });
-        
+
         // Set lightlevel to day (>= 40)
         scene.state.lightlevel = 100;
-        
+
         // Update spectre visibility
         scene.update_spectre_visibility();
-        
+
         // Spectre should be hidden
         assert_eq!(scene.state.world_objects[0].visible, false);
     }
@@ -8166,7 +8166,7 @@ mod t1_arena_spectre_tests {
     fn test_spectre_visibility_threshold() {
         // Test the exact threshold (lightlevel < 40).
         let mut scene = test_scene();
-        
+
         scene.state.world_objects.push(WorldObject {
             ob_id: 10,
             ob_stat: 3,
@@ -8176,12 +8176,12 @@ mod t1_arena_spectre_tests {
             visible: false,
             goal: 0,
         });
-        
+
         // Test just below threshold (should be visible)
         scene.state.lightlevel = 39;
         scene.update_spectre_visibility();
         assert_eq!(scene.state.world_objects[0].visible, true);
-        
+
         // Test at threshold (should be hidden)
         scene.state.lightlevel = 40;
         scene.update_spectre_visibility();
@@ -8192,7 +8192,7 @@ mod t1_arena_spectre_tests {
     fn test_spectre_visibility_does_not_affect_other_objects() {
         // Ensure the visibility toggle only affects spectres.
         let mut scene = test_scene();
-        
+
         // Add spectre and other objects
         scene.state.world_objects.push(WorldObject {
             ob_id: 10,  // Spectre
@@ -8221,10 +8221,10 @@ mod t1_arena_spectre_tests {
             visible: true,
             goal: 0,
         });
-        
+
         scene.state.lightlevel = 30;  // Night
         scene.update_spectre_visibility();
-        
+
         // Spectre should be visible
         assert_eq!(scene.state.world_objects[0].visible, true);
         // Other objects should be unchanged
@@ -8357,7 +8357,7 @@ mod quest_tests {
     fn test_azal_city_gate_logic() {
         // Test that the statue check logic is correct
         const ITEM_STATUE: usize = 25;
-        
+
         let mut stuff_blocked = [0u8; 31];
         stuff_blocked[ITEM_STATUE] = 2;
         assert!(stuff_blocked[ITEM_STATUE] < 5, "With 2 statues, gate should be blocked");
@@ -8370,7 +8370,7 @@ mod quest_tests {
     #[test]
     fn test_xtype_updates_from_zone_etype() {
         let mut gs = GameplayScene::new();
-        
+
         // Setup a zone with etype 83 (princess zone)
         gs.zones.push(crate::game::game_library::ZoneConfig {
             label: "princess".to_string(),
@@ -8408,19 +8408,19 @@ mod quest_tests {
         // SPEC §21.7: "All riding values block door entry"
         // This tests the guard condition logic.
         let gs = GameplayScene::new();
-        
+
         // riding = 0 (on foot): should allow
         let not_riding_0 = 0 == 0;
         assert!(not_riding_0, "riding=0 should allow door entry");
-        
+
         // riding = 1 (raft): should block
         let not_riding_1 = 1 == 0;
         assert!(!not_riding_1, "riding=1 should block door entry");
-        
+
         // riding = 5 (turtle): should block
         let not_riding_5 = 5 == 0;
         assert!(!not_riding_5, "riding=5 should block door entry");
-        
+
         // riding = 11 (swan): should block
         let not_riding_11 = 11 == 0;
         assert!(!not_riding_11, "riding=11 should block door entry");
@@ -8433,11 +8433,11 @@ mod quest_tests {
         let mut gs = GameplayScene::new();
         gs.state.region_num = 8; // Indoor
         gs.state.riding = 5; // Turtle
-        
+
         // When riding != 0, the doorfind_exit branch should be skipped
         let should_check_exit = gs.state.riding == 0;
         assert!(!should_check_exit, "Exit check should be skipped when riding");
-        
+
         gs.state.riding = 0; // On foot
         let should_check_exit = gs.state.riding == 0;
         assert!(should_check_exit, "Exit check should run when on foot");
@@ -8447,7 +8447,7 @@ mod quest_tests {
     fn test_dragon_stationary() {
         use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
         use crate::game::npc::NpcTable;
-        
+
         let mut dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
             race: RACE_ENEMY,
@@ -8459,14 +8459,14 @@ mod quest_tests {
             facing: 0,
             ..Default::default()
         };
-        
+
         let initial_x = dragon.x;
         let initial_y = dragon.y;
-        
+
         // Dragon should never move (stationary per SPEC §21.5)
         let mut table = NpcTable { npcs: std::array::from_fn(|_| Npc::default()) };
         table.npcs[0] = dragon;
-        
+
         // Simulate AI tick - dragon should remain stationary
         assert_eq!(table.npcs[0].x, initial_x);
         assert_eq!(table.npcs[0].y, initial_y);
@@ -8476,7 +8476,7 @@ mod quest_tests {
     #[test]
     fn test_dragon_always_faces_south() {
         use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
-        
+
         let mut dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
             race: RACE_ENEMY,
@@ -8487,7 +8487,7 @@ mod quest_tests {
             facing: 0, // Start facing north
             ..Default::default()
         };
-        
+
         // After dragon AI logic, facing should be south (4)
         // This is tested in the actual update_actors implementation
         assert_eq!(dragon.npc_type, NPC_TYPE_DRAGON);
@@ -8496,7 +8496,7 @@ mod quest_tests {
     #[test]
     fn test_dragon_hp_50() {
         use crate::game::npc::{Npc, NPC_TYPE_DRAGON, RACE_ENEMY};
-        
+
         // Dragon should spawn with HP=50 per SPEC §21.5
         let dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
@@ -8505,21 +8505,21 @@ mod quest_tests {
             active: true,
             ..Default::default()
         };
-        
+
         assert_eq!(dragon.vitality, 50);
     }
 
     #[test]
     fn test_dragon_fires_fireballs() {
         use crate::game::combat::{Missile, MissileType, MAX_MISSILES};
-        
+
         // Test that dragon fires fireballs (weapon 5 / type 2)
         let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
-        
+
         // Simulate dragon fireball
         use crate::game::combat::fire_missile;
         fire_missile(&mut missiles, 1000, 2000, 4, 5, false, 5); // weapon 5=fireball, speed 5
-        
+
         assert!(missiles[0].active);
         assert_eq!(missiles[0].missile_type, MissileType::Fireball);
         assert!(!missiles[0].is_friendly); // Dragon is hostile
@@ -8530,7 +8530,7 @@ mod quest_tests {
     #[test]
     fn test_dragon_fireball_damage() {
         use crate::game::combat::{Missile, MissileType};
-        
+
         let fireball = Missile {
             active: true,
             x: 0,
@@ -8540,7 +8540,7 @@ mod quest_tests {
             missile_type: MissileType::Fireball,
             is_friendly: false, time_of_flight: 0,
         };
-        
+
         // Damage should be rand8() + 4 = 4-11 per SPEC §10.4
         let damage = fireball.damage();
         assert!(damage >= 4 && damage <= 11, "Fireball damage should be 4-11, got {}", damage);
@@ -8549,7 +8549,7 @@ mod quest_tests {
     #[test]
     fn test_dragon_fireball_radius_9px() {
         use crate::game::combat::{Missile, MissileType};
-        
+
         let mut fireball = Missile {
             active: true,
             x: 100,
@@ -8559,14 +8559,14 @@ mod quest_tests {
             missile_type: MissileType::Fireball,
             is_friendly: false, time_of_flight: 0,
         };
-        
+
         // After tick, fireball at y=105. Target at 113 → distance 8px → should hit (radius 9)
         assert!(fireball.tick(100, 113));
         assert!(!fireball.active); // Deactivated on hit
     }
 
     // T2-AUDIO-MOOD: Mood priority tests (SPEC §22.6)
-    
+
     #[test]
     fn test_setmood_death_highest_priority() {
         let mut gs = GameplayScene::new();
