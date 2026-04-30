@@ -30,6 +30,7 @@ pub use crate::game::debug_log::{DebugLogEntry, LogCategory};
 #[derive(Debug, Clone, Default)]
 pub struct DebugSnapshot {
     pub fps: f64,
+    pub tps: f64,
     pub game_day: u32,
     pub game_hour: u32,
     pub game_minute: u32,

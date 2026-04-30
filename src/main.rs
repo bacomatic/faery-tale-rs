@@ -119,8 +119,9 @@ pub fn main() -> Result<(), String> {
     let mut window_builder = video_subsystem.window("The Faery Tale Adventure", width, height);
     window_builder.resizable();
 
-    // TODO: full screen mode, use window size for screen resolution
-    if settings.window_position.is_some() {
+    if settings.fullscreen {
+        window_builder.fullscreen_desktop();
+    } else if settings.window_position.is_some() {
         let (x, y) = settings.window_position.unwrap();
         window_builder.position(x, y);
     } else {
@@ -228,6 +229,8 @@ pub fn main() -> Result<(), String> {
     let mut game_frame_count: u64 = 0;
     let mut game_fps_time = std::time::Instant::now();
     let mut game_fps: f64 = 0.0;
+    let mut game_tick_count: u64 = 0;
+    let mut game_tps: f64 = 0.0;
     // Debug step budget: when the console queues /step, this many frames get
     // the real delta while clock.paused remains true. See DEBUG_SPEC §Flow.
     let mut debug_step_budget: u32 = 0;
@@ -245,10 +248,13 @@ pub fn main() -> Result<(), String> {
 
         // Update game FPS counter
         game_frame_count += 1;
+        game_tick_count += delta_ticks as u64;
         let fps_elapsed = game_fps_time.elapsed().as_secs_f64();
         if fps_elapsed >= 1.0 {
             game_fps = game_frame_count as f64 / fps_elapsed;
+            game_tps = game_tick_count as f64 / fps_elapsed;
             game_frame_count = 0;
+            game_tick_count = 0;
             game_fps_time = std::time::Instant::now();
         }
 
@@ -318,6 +324,17 @@ pub fn main() -> Result<(), String> {
                             } else {
                                 clock.pause();
                             }
+                        }
+
+                        Scancode::F11 => {
+                            let ft = if settings.fullscreen {
+                                settings.set_fullscreen(false);
+                                sdl2::video::FullscreenType::Off
+                            } else {
+                                settings.set_fullscreen(true);
+                                sdl2::video::FullscreenType::Desktop
+                            };
+                            let _ = canvas.window_mut().set_fullscreen(ft);
                         }
 
                         _ => {}
@@ -516,6 +533,7 @@ pub fn main() -> Result<(), String> {
                 let (gday, ghour, gminute) = gs.state.daynight_to_wall_clock();
                 let status = DebugSnapshot {
                     fps: game_fps,
+                    tps: game_tps,
                     game_day: gday,
                     game_hour: ghour,
                     game_minute: gminute,
@@ -638,6 +656,7 @@ pub fn main() -> Result<(), String> {
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
                 let status = DebugSnapshot {
                     fps: game_fps,
+                    tps: game_tps,
                     game_day: 0,
                     game_hour: 0,
                     game_minute: 0,
@@ -703,6 +722,7 @@ pub fn main() -> Result<(), String> {
             let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
             let status = DebugSnapshot {
                 fps: game_fps,
+                tps: game_tps,
                 game_day: 0,
                 game_hour: 0,
                 game_minute: 0,

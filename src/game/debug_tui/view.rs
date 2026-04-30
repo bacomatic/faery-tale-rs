@@ -479,6 +479,12 @@ impl DebugConsole {
                     styled_label("Carrier: "),
                     Span::raw(status.active_carrier_name.clone()),
                 ]),
+                Line::from(vec![
+                    styled_label("FPS:"),
+                    Span::raw(format!("{:.1}  ", status.fps)),
+                    styled_label("TPS:"),
+                    Span::raw(format!("{:.1}", status.tps)),
+                ]),
             ];
             let geo_widget = Paragraph::new(geo_text)
                 .block(Block::default().borders(Borders::ALL).title(" Geography "));
