@@ -12,6 +12,7 @@
 
 use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
 use crate::game::game_state::DayPhase;
+use crate::game::npc::{Npc, NpcState};
 
 // Re-export the command / log types the spec places in bridge.rs. They
 // actually live in sibling modules for history reasons; the re-export is
@@ -167,6 +168,24 @@ impl ActorSnapshot {
             visible: true,
         }
     }
+
+    pub fn from_npc(idx: usize, n: &Npc) -> Self {
+        Self {
+            slot: idx as u8,
+            actor_type: 7, // NPC (npc_table entry, distinct from combat Actor kinds 0-6)
+            state: npc_state_u8(&n.state),
+            facing: n.facing,
+            abs_x: n.x as u16,
+            abs_y: n.y as u16,
+            vitality: n.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            weapon: n.weapon,
+            race: n.race,
+            goal: goal_u8(&n.goal),
+            tactic: tactic_u8(&n.tactic),
+            environ: 0,
+            visible: n.active,
+        }
+    }
 }
 
 fn actor_kind_u8(k: &ActorKind) -> u8 {
@@ -192,6 +211,18 @@ pub fn actor_state_u8(s: &ActorState) -> u8 {
         ActorState::Sinking => 6,
         ActorState::Falling => 7,
         ActorState::Sleeping => 8,
+    }
+}
+
+fn npc_state_u8(s: &NpcState) -> u8 {
+    match s {
+        NpcState::Still => 0,
+        NpcState::Walking => 1,
+        NpcState::Fighting => 2,
+        NpcState::Dying => 3,
+        NpcState::Dead => 4,
+        NpcState::Shooting => 5,
+        NpcState::Sinking => 6,
     }
 }
 
@@ -317,6 +348,7 @@ pub fn actor_kind_name(kind: u8) -> &'static str {
         4 => "SETFIG",
         5 => "CARRIER",
         6 => "DRAGON",
+        7 => "NPC",
         _ => "?",
     }
 }

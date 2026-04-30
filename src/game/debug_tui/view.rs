@@ -394,13 +394,14 @@ impl DebugConsole {
                 ])
                 .split(area);
 
-            // Top row: three equal panels per DEBUG_SPEC §Top Row Panel Contents.
+            // Top row: four panels per DEBUG_SPEC §Top Row Panel Contents.
             let status_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(34),
-                    Constraint::Percentage(33),
-                    Constraint::Percentage(33),
+                    Constraint::Percentage(26),
+                    Constraint::Percentage(26),
+                    Constraint::Percentage(24),
+                    Constraint::Percentage(24),
                 ])
                 .split(chunks[0]);
 
@@ -479,19 +480,60 @@ impl DebugConsole {
                     styled_label("Carrier: "),
                     Span::raw(status.active_carrier_name.clone()),
                 ]),
-                Line::from(vec![
-                    styled_label("FPS:"),
-                    Span::raw(format!("{:.1}  ", status.fps)),
-                    styled_label("TPS:"),
-                    Span::raw(format!("{:.1}", status.tps)),
-                ]),
             ];
             let geo_widget = Paragraph::new(geo_text)
                 .block(Block::default().borders(Borders::ALL).title(" Geography "));
             f.render_widget(geo_widget, status_chunks[1]);
 
-            // ── Visual Effects (right) ─────────────────────────────────────
+            // ── Flags (right-center) ──────────────────────────────────────
             let vfx_text = vec![
+                Line::from(vec![
+                    if status.is_paused {
+                        Span::styled("[PAUSED]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    } else {
+                        Span::raw("")
+                    },
+                    if status.vfx_witch_active {
+                        Span::styled(" Witch", Style::default().fg(Color::Magenta))
+                    } else { Span::raw("") },
+                    if status.vfx_teleport_active {
+                        Span::styled(" TP", Style::default().fg(Color::Green))
+                    } else { Span::raw("") },
+                    if status.vfx_secret_active {
+                        Span::styled(" Secret", Style::default().fg(Color::Green))
+                    } else { Span::raw("") },
+                ]),
+                Line::from(vec![
+                    styled_label("Cave:"),
+                    Span::raw(if status.cave_mode { "on" } else { "off" }),
+                    Span::raw("  "),
+                    styled_label("Princess:"),
+                    Span::raw(if status.princess_captive { "captive" } else { "freed" }),
+                ]),
+                Line::from(vec![
+                    styled_label("Writ:"),
+                    Span::raw(if status.has_writ { "✓" } else { "—" }),
+                    Span::raw("  "),
+                    styled_label("Talisman:"),
+                    Span::raw(if status.has_talisman { "✓" } else { "—" }),
+                    Span::raw("  "),
+                    styled_label("Statues:"),
+                    Span::raw(format!("{}", status.statues_collected)),
+                ]),
+                Line::from(vec![
+                    styled_label("Palette:"),
+                    Span::raw(if status.vfx_palette_xfade { "xfade" } else { "—" }),
+                    Span::raw("  "),
+                    styled_label("Jewel:"),
+                    Span::raw(if status.vfx_jewel_active { "on" } else { "—" }),
+                ]),
+            ];
+            let vfx_widget = Paragraph::new(vfx_text)
+                .block(Block::default().borders(Borders::ALL).title(" Flags "));
+            f.render_widget(vfx_widget, status_chunks[2]);
+
+            // ── Time & Performance (rightmost) ────────────────────────────────
+            let time_text = vec![
                 Line::from(vec![
                     styled_label("Time: "),
                     Span::raw(format!("{}  ", status.daynight)),
@@ -518,34 +560,15 @@ impl DebugConsole {
                     Span::raw(format!("{}", status.freeze_timer)),
                 ]),
                 Line::from(vec![
-                    if status.is_paused {
-                        Span::styled(
-                            "[PAUSED]",
-                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                        )
-                    } else {
-                        Span::raw("")
-                    },
-                    if status.vfx_witch_active {
-                        Span::styled(" Witch", Style::default().fg(Color::Magenta))
-                    } else {
-                        Span::raw("")
-                    },
-                    if status.vfx_teleport_active {
-                        Span::styled(" TP", Style::default().fg(Color::Green))
-                    } else {
-                        Span::raw("")
-                    },
-                    if status.vfx_secret_active {
-                        Span::styled(" Secret", Style::default().fg(Color::Green))
-                    } else {
-                        Span::raw("")
-                    },
+                    styled_label("FPS:"),
+                    Span::raw(format!("{:.1}  ", status.fps)),
+                    styled_label("TPS:"),
+                    Span::raw(format!("{:.1}", status.tps)),
                 ]),
             ];
-            let vfx_widget = Paragraph::new(vfx_text)
-                .block(Block::default().borders(Borders::ALL).title(" Visual Effects "));
-            f.render_widget(vfx_widget, status_chunks[2]);
+            let time_widget = Paragraph::new(time_text)
+                .block(Block::default().borders(Borders::ALL).title(" Time "));
+            f.render_widget(time_widget, status_chunks[3]);
 
             // ── Actor Watch (DBG-LAYOUT-06 collapsed / DBG-LAYOUT-07 expanded) ─
             let raft_str = match status.raft_xy {
@@ -558,37 +581,37 @@ impl DebugConsole {
                 indicator, raft_str, status.missile_count, status.item_count,
             );
             if self.watch_expanded {
-                // One row per slot 2..=6 (always rendered; empty slots show `#N —`).
                 let mut rows: Vec<Line> = Vec::with_capacity(5);
-                for slot in 2u8..=6 {
-                    let entry = status.actors.iter().find(|a| a.slot == slot);
-                    let line = match entry {
-                        Some(a) if a.visible && a.actor_type != 0 => {
-                            let kind = actor_kind_name(a.actor_type);
-                            let race = race_label(a.race);
-                            let state = actor_state_name(a.state);
-                            if a.actor_type == 4 {
-                                // SETFIG: no goal/tactic
-                                format!(
-                                    "#{} {} {} {} HP:{} ({},{})",
-                                    slot, kind, race, state, a.vitality, a.abs_x, a.abs_y,
-                                )
-                            } else {
-                                format!(
-                                    "#{} {} {} {} HP:{} goal:{} tac:{} ({},{})",
-                                    slot,
-                                    kind,
-                                    race,
-                                    state,
-                                    a.vitality,
-                                    goal_name(a.goal),
-                                    tactic_name(a.tactic),
-                                    a.abs_x,
-                                    a.abs_y,
-                                )
-                            }
+                let non_player: Vec<_> = status.actors.iter()
+                    .filter(|a| a.actor_type != 0)
+                    .collect();
+                for i in 0..5 {
+                    let line = if let Some(a) = non_player.get(i) {
+                        let kind = actor_kind_name(a.actor_type);
+                        let race = race_label(a.race);
+                        let state = actor_state_name(a.state);
+                        if a.actor_type == 4 {
+                            // SETFIG: no goal/tactic
+                            format!(
+                                "#{} {} {} {} HP:{}  ({},{})",
+                                a.slot, kind, race, state, a.vitality, a.abs_x, a.abs_y,
+                            )
+                        } else {
+                            format!(
+                                "#{} {} {} {} HP:{} goal:{} tac:{}  ({},{})",
+                                a.slot,
+                                kind,
+                                race,
+                                state,
+                                a.vitality,
+                                goal_name(a.goal),
+                                tactic_name(a.tactic),
+                                a.abs_x,
+                                a.abs_y,
+                            )
                         }
-                        _ => format!("#{} —", slot),
+                    } else {
+                        format!("— ({})", i + 1)
                     };
                     rows.push(Line::raw(line));
                 }

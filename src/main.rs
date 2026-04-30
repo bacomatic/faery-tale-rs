@@ -583,11 +583,22 @@ pub fn main() -> Result<(), String> {
                     cheat1: gs.state.cheat1,
                     wealth: gs.state.wealth as u16,
                     brave: gs.state.brave as u16,
-                    actors: gs.state.actors.iter().enumerate()
-                        .filter(|(_, a)| a.is_active())
-                        .take(20)
-                        .map(|(slot, a)| crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a))
-                        .collect(),
+                    actors: {
+                        use crate::game::npc::NPC_TYPE_NONE;
+                        let mut v: Vec<crate::game::debug_tui::ActorSnapshot> = gs.state.actors.iter().enumerate()
+                            .filter(|(_, a)| a.is_active())
+                            .take(20)
+                            .map(|(slot, a)| crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a))
+                            .collect();
+                        if let Some(ref table) = gs.npc_table {
+                            for (i, npc) in table.npcs.iter().enumerate() {
+                                if npc.npc_type != NPC_TYPE_NONE {
+                                    v.push(crate::game::debug_tui::ActorSnapshot::from_npc(i, npc));
+                                }
+                            }
+                        }
+                        v
+                    },
                     // Hero top-row extras (DBG-LAYOUT-01)
                     max_vitality: 15 + (gs.state.brave / 4),
                     luck: gs.state.luck,

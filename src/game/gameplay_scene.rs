@@ -4425,6 +4425,24 @@ impl GameplayScene {
                 for line in lines {
                     self.dlog(line);
                 }
+                let npc_lines: Vec<String> = if let Some(ref table) = self.npc_table {
+                    let mut v = vec![format!("NpcTable ({} slots):", table.npcs.len())];
+                    for (i, npc) in table.npcs.iter().enumerate() {
+                        if npc.npc_type != crate::game::npc::NPC_TYPE_NONE {
+                            v.push(format!(
+                                "  [npc{:2}] type={} race={} vit={} @({},{}) {:?} goal:{:?} tac:{:?}",
+                                i, npc.npc_type, npc.race, npc.vitality,
+                                npc.x, npc.y, npc.state, npc.goal, npc.tactic
+                            ));
+                        }
+                    }
+                    v
+                } else {
+                    vec![]
+                };
+                for line in npc_lines {
+                    self.dlog(line);
+                }
             }
             QuerySongs => {
                 self.dlog("QuerySongs: song library info is in main loop; use /songs".to_string());
