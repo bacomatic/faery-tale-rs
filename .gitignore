@@ -54,3 +54,7 @@ Cargo.lock
 
 ############################################################################################
 .worktrees
+
+# Local tooling session data
+.memsearch/
+.github/context-mode/
