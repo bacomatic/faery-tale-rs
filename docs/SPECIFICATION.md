@@ -1353,6 +1353,8 @@ Melee engagement: `thresh = 14 − mode`. DKnight overrides to 16. Within thresh
 Clever enemies: Orcs, Wraith, Snake, Spider, DKnight, Loraii.
 Stupid enemies: Ogre, Skeleton, Salamander, Necromancer, Woodcutter.
 
+**P23 — ARCHER2 re-plan paradox (original behavior, preserve):** The bit test that determines reconsider frequency is `(mode & 2) == 0` → 25%. ATTACK1 = 1 and ARCHER2 = 4; both satisfy `& 2 == 0` and get 25%. ATTACK2 = 2 and ARCHER1 = 3; both have `& 2 != 0` and keep base 6.25%. So "clever" archers (ARCHER2) re-plan four times as often as "stupid" archers (ARCHER1), while "clever" melee (ATTACK2) re-plan four times less often than "stupid" melee (ATTACK1). The "clever" label inverts its meaning for bow-wielders. The port MUST reproduce this cadence exactly — it is the original behavior, not a bug to fix. See PROBLEMS.md P23.
+
 ### 11.8 DKnight Special Behavior
 
 - Fixed position at (21635, 25762); does not pursue, does not call `do_tactic()`
@@ -3528,6 +3530,8 @@ Contiguous from `map_x`:
 - `pad1–pad7` (14 bytes)
 
 `cheat1` persists at byte offset 18 — only way to enable is hex-editing a save file.
+
+**Note — P21 BSS mismatch (repo `fmain` binary only):** The original shipped game writes this block correctly in declaration order. The `fmain` binary included in the research repository was compiled with a later Aztec C toolchain that scattered these BSS globals across memory, so `saveload(&map_x, 80)` in that binary captures `map_x` at offset 0 followed by 78 bytes of unrelated variables — `hero_x`, `hero_y`, `daynight`, `riding`, and the stats globals are never saved or restored. This is a bug in the repo executable only; it does **not** reflect the original game's behavior. The port **must** implement the correct, declared-order layout documented above. Save files produced by the repo `fmain` binary are incompatible with original-game saves. See PROBLEMS.md P21.
 
 ### 24.4 Disk Detection
 

@@ -18,6 +18,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Agent working rules
 
+- **At session start, invoke the `context-mode:context-mode` skill if context-mode is installed.** This activates context-mode tool routing for all large-output commands. If the skill is unavailable, proceed without it.
 - **Always start by indexing `reference/README.md` from the research branch** (see "Reference docs (remote)" below). It is the entry point for all reference documentation.
 - **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, follow `AGENTS.md` and the project reference docs first.
 - Make minimal, surgical changes consistent with existing code style.
