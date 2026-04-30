@@ -3925,7 +3925,7 @@ impl GameplayScene {
                 let roll = (self.state.tick_counter & 3) as u8;
                 match roll {
                     0 => {
-                        self.messages.push(format!("{}nothing.", prefix));
+                        self.messages.push_wrapped(format!("{}nothing.", prefix));
                     }
                     1 => {
                         // One random item from inv_list[rand8()+8]
@@ -3935,7 +3935,7 @@ impl GameplayScene {
                             self.state.pickup_item(item_idx);
                         }
                         let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
-                        self.messages.push(format!("{}a {}.", prefix, name));
+                        self.messages.push_wrapped(format!("{}a {}.", prefix, name));
                     }
                     2 => {
                         // Two different random items
@@ -3959,14 +3959,14 @@ impl GameplayScene {
                         self.state.pickup_item(item2);
                         let n1 = if item1 < 31 { stuff_index_name(item1) } else if item1 == 34 { "100 Gold Pieces" } else { "quiver of arrows" };
                         let n2 = if item2 < 31 { stuff_index_name(item2) } else { "quiver of arrows" };
-                        self.messages.push(format!("{}{} and a {}.", prefix, n1, n2));
+                        self.messages.push_wrapped(format!("{}{} and a {}.", prefix, n1, n2));
                     }
                     3 | _ => {
                         // Three of the same item
                         let item = ((self.state.tick_counter >> 2) & 7) as usize + 8;
                         if item == 8 {
                             // Special: 3 random keys
-                            self.messages.push(format!("{}3 keys.", prefix));
+                            self.messages.push_wrapped(format!("{}3 keys.", prefix));
                             for shift in [4, 7, 10] {
                                 let mut key_idx = ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
                                 if key_idx == 22 { key_idx = 16; }
@@ -3975,7 +3975,7 @@ impl GameplayScene {
                             }
                         } else {
                             let name = if item < 31 { stuff_index_name(item) } else { "quiver of arrows" };
-                            self.messages.push(format!("{}3 {}s.", prefix, name));
+                            self.messages.push_wrapped(format!("{}3 {}s.", prefix, name));
                             if item < 35 {
                                 self.state.pickup_item(item);
                                 self.state.pickup_item(item);
@@ -5996,8 +5996,30 @@ impl Scene for GameplayScene {
                                 //   environ>29:  fully submerged (splash sprite)
                                 //   environ>2:   ystart += environ (shift down, clip bottom)
                                 let body_rows: usize = if environ > 29 {
-                                    // Fully submerged — skip rendering body
-                                    // TODO: render splash sprite (ob_id 97/98)
+                                    // Fully submerged — render splash sprite instead of body.
+                                    // fmain.c:3026-3029: ob_id 97 (still) / 98 (moving), from cfiles[3].
+                                    use crate::game::sprites::OBJ_SPRITE_H;
+                                    if let Some(ref obj_sheet) = self.object_sprites {
+                                        let frame = 97 + (self.state.cycle & 1) as usize;
+                                        if let Some(pix) = obj_sheet.frame_pixels(frame) {
+                                            let splash_y = rel_y + (SPRITE_H as i32 - OBJ_SPRITE_H as i32);
+                                            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
+                                                && splash_y > -(OBJ_SPRITE_H as i32) && splash_y < fb_h
+                                            {
+                                                let sprite_info = BlittedSprite {
+                                                    screen_x: rel_x,
+                                                    screen_y: splash_y,
+                                                    width: SPRITE_W,
+                                                    height: OBJ_SPRITE_H,
+                                                    ground: splash_y + OBJ_SPRITE_H as i32,
+                                                    is_falling: false,
+                                                };
+                                                Self::blit_obj_to_framebuf(pix, rel_x, splash_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                                blitted.push(sprite_info);
+                                            }
+                                        }
+                                    }
                                     continue;
                                 } else if environ == 2 {
                                     // Shallow water: clip bottom 10 rows, no Y shift

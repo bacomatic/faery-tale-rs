@@ -334,7 +334,6 @@ pub fn load_game_library(lib_path: &Path) -> Result<GameLibrary, Box<dyn Error>>
     let mut game_lib = toml::from_str::<GameLibrary>(&config)?;
 
     // preload all file based assets
-    // FIXME: implement file cache to avoid reloading same file multiple times
     for font_asset in game_lib.fonts.values_mut() {
         font_asset.load()?;
     }

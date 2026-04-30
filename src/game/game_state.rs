@@ -1045,7 +1045,7 @@ impl GameState {
         // Non-pickable objects.
         match ob_id {
             31 | 102 => return None,     // FOOTSTOOL, TURTLE
-            14 | 15 | 16 => return None, // URN, CHEST, SACKS (containers — TODO)
+            14 | 15 | 16 => return None, // URN, CHEST, SACKS — handled by handle_take_item in gameplay_scene
             _ => {}
         }
 
