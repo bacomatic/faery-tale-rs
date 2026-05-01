@@ -586,7 +586,7 @@ bumped: i8                          # fmain.c:1609 — hero door-nudge latch
 hero_sector: u8                     # fmain.c — current sector index under hero
 new_region: i16                     # fmain.c:614 — pending region-transfer target
 brother: i8                         # fmain.c — hero identity (0 Julian / 1 Phillip / 2 Kevin)
-fallstates: list                    # fmain.c — fall-animation frames per brother
+fallstates: list                    # fmain.c — TABLE:fallstates; fall-animation frames per brother (also at fmain2.c:871)
 encounter_x: u16                    # fmain.c — cluster-origin x for current spawn batch
 encounter_y: u16                    # fmain.c — cluster-origin y for current spawn batch
 encounter_type: i16                 # fmain.c — pending race code for load_actors
@@ -596,14 +596,15 @@ danger_level: i16                   # fmain.c:2082-2083 — scratch var for 14j 
 actor_file: i8                      # fmain.c — currently loaded enemy shape file id
 nextshape: object                   # fmain.c — destination chip-RAM pointer for next read_shapes()
 seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .maskloc .width .height .count .bytes
-statelist: list                     # fmain.c:154 — state[87]; .figure .wpn_no .wpn_x .wpn_y per animation frame
+statelist: list                     # fmain.c:154 — TABLE:statelist; state[87] per animation frame
+diroffs: list[i8]                   # fmain.c:1010 — TABLE:diroffs; 16-entry direction → walk/fight base-frame map
 inv_list: list                      # fmain.c:380-424 — inv_item[36]; per-slot inventory icon metadata
-bow_x: list[i8]                     # fmain2.c:877 — 32-entry bow-overlay X offset per frame
-bow_y: list[i8]                     # fmain2.c:880 — 32-entry bow-overlay Y offset per frame
-bowshotx: list[i8]                  # fmain2.c:884 — 8-entry per-facing arrow spawn X velocity
-bowshoty: list[i8]                  # fmain2.c:885 — 8-entry per-facing arrow spawn Y velocity
-gunshoty: list[i8]                  # fmain2.c:886 — 8-entry per-facing fireball spawn Y offset
-fallstates: list                    # fmain2.c:872 — per-brother fall-animation frame indices
+bow_x: list[i8]                     # fmain2.c:877 — TABLE:bow_x; 32-entry bow-overlay X offset per walk-cycle frame
+bow_y: list[i8]                     # fmain2.c:880 — TABLE:bow_y; 32-entry bow-overlay Y offset per walk-cycle frame
+bowshotx: list[i8]                  # fmain2.c:885 — TABLE:bowshotx; 8-entry per-facing arrow/fireball spawn X delta
+bowshoty: list[i8]                  # fmain2.c:886 — TABLE:bowshoty; 8-entry per-facing arrow spawn Y delta
+gunshoty: list[i8]                  # fmain2.c:887 — TABLE:gunshoty; 8-entry per-facing fireball spawn Y delta
+# (fallstates already declared above; values at fmain2.c:871-874)
 terra_mem: list[u8]                 # fmain.c:658 — 1024-byte terrain table; 4-byte stride per tile
 minimap: list[i16]                  # fmain.c — 114-entry per-screen-tile remap into terra_mem
 bmask_mem: object                   # fmain.c:877 — single-plane compositing-mask buffer (max 96×5 words)
@@ -693,6 +694,14 @@ Every `TABLE:name` used in any pseudo-code block must appear here with a concret
 | `TABLE:mst`  | `narr.asm:237` | 20-entry pc-relative placard message offset table; indexed by `placard_text(N)` |
 | `TABLE:xmod` | `fsubs.asm:384` | 16-entry signed x-delta table: `[-4,-4,-4,0,0,0,4,4,0,-4,0,4,4,0,0,0]` |
 | `TABLE:ymod` | `fsubs.asm:385` | 16-entry signed y-delta table: `[0,0,0,4,4,4,0,0,-4,0,-4,0,0,4,4,4]` |
+| `TABLE:bow_x` | `fmain2.c:877` | 32-entry bow-overlay X offset (px) per walk-cycle frame; values in [sprite-rendering.md §Lookup-table data](sprite-rendering.md#lookup-table-data-verbatim-from-source) |
+| `TABLE:bow_y` | `fmain2.c:880` | 32-entry bow-overlay Y offset (px) per walk-cycle frame; values in [sprite-rendering.md §Lookup-table data](sprite-rendering.md#lookup-table-data-verbatim-from-source) |
+| `TABLE:bowshotx` | `fmain2.c:885` | 8-entry per-facing arrow/fireball spawn X delta: `[0,0,3,6,-3,-3,-3,-6]` |
+| `TABLE:bowshoty` | `fmain2.c:886` | 8-entry per-facing arrow spawn Y delta: `[-6,-6,-1,0,6,8,0,-1]` |
+| `TABLE:gunshoty` | `fmain2.c:887` | 8-entry per-facing fireball spawn Y delta: `[2,0,4,7,9,4,7,8]` |
+| `TABLE:diroffs` | `fmain.c:1010` | 16-entry direction → walk/fight base-frame: `[16,16,24,24,0,0,8,8,56,56,68,68,32,32,44,44]`; first 8 = walk bases, last 8 = fight/shoot bases |
+| `TABLE:fallstates` | `fmain2.c:871` | 24-entry per-brother fall-frame indices: `brother*6 + (tactic/5)`; values in [sprite-rendering.md §Lookup-table data](sprite-rendering.md#lookup-table-data-verbatim-from-source) |
+| `TABLE:statelist` | `fmain.c:154` | 87-entry `(figure, wpn_no, wpn_x, wpn_y)` animation-state lookup; values in [sprite-rendering.md §Lookup-table data](sprite-rendering.md#lookup-table-data-verbatim-from-source) |
 
 *(Additional entries appended as new logic reference docs are authored.)*
 

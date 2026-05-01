@@ -731,3 +731,189 @@ def render_inventory_items_page(bm: object) -> None:
   another graphics layer will replace those primitives wholesale; the
   helpers in this file are the *behavioral* contract that determines
   what gets drawn and where.
+
+### Lookup-table data (verbatim from source)
+
+These tables drive the weapon-render and missile-spawn pipelines. The 1987
+implementation hardcodes every entry; any port must reproduce them
+verbatim or the weapon-overlay positioning, missile spawn velocities, and
+walk/fight base-frame selection will diverge from the original.
+
+#### `bow_x[32]` — `fmain2.c:877-879`
+
+Per-frame X pixel offset added to `xstart` on the bow weapon-overlay pass
+when `inum < 32`. Indexed by the body-pass `inum` (= 0..31, the actor's
+walk-cycle frame). Used at `fmain.c:2423`.
+
+```c
+char bow_x[32] = {
+     1, 2, 3, 4, 3, 2, 1, 0,    // 0..7   south-walk cycle
+     3, 2, 0,-2,-3,-2, 0, 2,    // 8..15  west-walk cycle
+    -3,-3,-3,-3,-3,-3,-3,-2,    // 16..23 north-walk cycle
+     0, 1, 1, 1, 0,-2,-3,-2     // 24..31 east-walk cycle
+};
+```
+
+#### `bow_y[32]` — `fmain2.c:880-882`
+
+Per-frame Y pixel offset added to `ystart` on the bow weapon-overlay pass
+when `inum < 32`. Same indexing as `bow_x`. Used at `fmain.c:2423`.
+
+```c
+char bow_y[32] = {
+     8, 8, 8, 7, 8, 8, 8, 8,    // 0..7   south-walk
+    11,12,13,13,13,13,13,12,    // 8..15  west-walk
+     8, 7, 6, 5, 6, 7, 8, 9,    // 16..23 north-walk
+    12,12,12,12,12,12,11,12     // 24..31 east-walk
+};
+```
+
+#### `bowshotx[8]` — `fmain2.c:885`
+
+Per-facing arrow / fireball spawn X delta added to `an.abs_x` when a
+missile is launched. Indexed by `Shape.facing` (DIR_NW=0..DIR_W=7).
+Used at `fmain.c:1699` (inside `shoot_step`).
+
+```c
+char bowshotx[8] = {  0, 0, 3, 6, -3, -3, -3, -6 };
+//                   NW  N  NE  E   SE   S   SW   W
+```
+
+#### `bowshoty[8]` — `fmain2.c:886`
+
+Per-facing arrow spawn Y delta added to `an.abs_y` when an arrow is
+launched (`an.weapon == WEAPON_BOW`). Used at `fmain.c:1701`.
+
+```c
+char bowshoty[8] = { -6, -6, -1, 0, 6, 8, 0, -1 };
+//                    NW   N  NE  E SE  S SW  W
+```
+
+#### `gunshoty[8]` — `fmain2.c:887`
+
+Per-facing fireball spawn Y delta added to `an.abs_y` when a fireball is
+launched (`an.weapon != WEAPON_BOW`, e.g. wand or dragon). Used at
+`fmain.c:1702`.
+
+```c
+char gunshoty[8] = { 2, 0, 4, 7, 9, 4, 7, 8 };
+//                  NW  N NE  E SE  S SW  W
+```
+
+#### `diroffs[16]` — `fmain.c:1010`
+
+Direction-to-base-frame map. Indices 0..7 select walk-cycle base frames
+(8-frame blocks); indices 8..15 select fight/shoot base frames (12-frame
+blocks). Indexed as `diroffs[d]` for walk and `diroffs[d+8]` for
+fight/shoot, where `d` is 0..7 = `Shape.facing`. Used at `fmain.c:1478,
+1630, 1672, 1675, 1683-1684, 1689, 1711, 1804-1805`.
+
+```c
+char diroffs[16] = {
+    16, 16, 24, 24,  0,  0,  8,  8,    //  0..7   walk:  N=16, NE=16, E=24, SE=24, S=0, SW=0, W=8, NW=8
+    56, 56, 68, 68, 32, 32, 44, 44     //  8..15  fight: N=56, NE=56, E=68, SE=68, S=32, SW=32, W=44, NW=44
+};
+```
+
+This is also captured in [RESEARCH.md §2.4](../RESEARCH.md#24-statelist--animation-frame-lookup).
+
+#### `fallstates[24]` — `fmain2.c:871-874`
+
+Per-brother fall-animation frame indices. Indexed as
+`fallstates[brother*6 + (tactic/5)]`; row 0 (all zeros) is the pre-game
+brother slot, rows 1..3 are Julian, Phillip, Kevin. Used at `fmain.c:1735,
+1768`.
+
+```c
+UBYTE fallstates[] = {
+    0,0,0,0,0,0,                                // 0..5   brother 0 (pre-game; all zeros)
+    0x20,0x22,0x3a,0x6f,0x70,0x71,              // 6..11  Julian
+    0x24,0x27,0x3c,0x6f,0x70,0x71,              // 12..17 Phillip
+    0x37,0x38,0x3d,0x6f,0x70,0x71               // 18..23 Kevin
+};
+```
+
+#### `statelist[87]` — `fmain.c:154-204`
+
+Animation state lookup. 87 entries of `struct state { figure, wpn_no,
+wpn_x, wpn_y }`. Indexed by an actor's frame `inum`. Field semantics:
+
+- `figure` — the body sprite frame within the actor's sheet (PHIL or
+  ENEMY).
+- `wpn_no` — the OBJECTS frame index that becomes the weapon-overlay
+  source. Combined with the per-class `k` offset
+  (`WPN_K_BOW=0, WPN_K_MACE=32, WPN_K_SWORD=48, WPN_K_DIRK=64`) at
+  `fmain.c:2444` to pick the actual frame. Values ≥ 80 carry the bit-7
+  half-height flag — see [PROBLEMS.md P4](../PROBLEMS.md).
+- `wpn_x`, `wpn_y` — pixel-offset added to `(xstart, ystart)` on the
+  weapon-overlay pass for hand weapons (mace, sword, Dirk). Used at
+  `fmain.c:2425-2426`.
+
+```c
+struct state { char figure, wpn_no, wpn_x, wpn_y; } statelist[87] = {
+    // 0..7 — south-walk sequence
+    {  0,11, -2,11 },{  1,11, -3,11 },{  2,11, -3,10 },{  3,11, -3, 9 },
+    {  4,11, -3,10 },{  5,11, -3,11 },{  6,11, -2,11 },{  7,11, -1,11 },
+
+    // 8..15 — west-walk sequence
+    {  8, 9,-12,11 },{  9, 9,-11,12 },{ 10, 9, -8,13 },{ 11, 9, -4,13 },
+    { 12, 9,  0,13 },{ 13, 9, -4,13 },{ 14, 9, -8,13 },{ 15, 9,-11,12 },
+
+    // 16..23 — north-walk sequence
+    { 16,14, -1, 1 },{ 17,14, -1, 2 },{ 18,14, -1, 3 },{ 19,14, -1, 4 },
+    { 20,14, -1, 3 },{ 21,14, -1, 2 },{ 22,14, -1, 1 },{ 23,14, -1, 1 },
+
+    // 24..31 — east-walk sequence
+    { 24,10,  5,12 },{ 25,10,  3,12 },{ 26,10,  2,12 },{ 27,10,  3,12 },
+    { 28,10,  5,12 },{ 29,10,  6,12 },{ 30,10,  6,11 },{ 31,10,  6,12 },
+
+    // 32..43 — south-fight sequence (12 fight states)
+    { 32,11, -2,12 },{ 32,10,  0,12 },{ 33, 0,  2,10 },
+    { 34, 1,  4, 6 },{ 34, 2,  1, 4 },{ 34, 3,  0, 4 },
+    { 36, 4, -5, 0 },{ 36, 5,-10, 1 },{ 35,12, -5, 5 },
+    { 36, 0,  0, 6 },{ 38,85, -6, 5 },{ 37,81, -6, 5 },
+
+    // 44..55 — west-fight sequence
+    { 40, 9, -7,12 },{ 40, 8, -9, 9 },{ 41, 7,-10, 5 },
+    { 42, 7,-12, 4 },{ 42, 6,-12, 3 },{ 42, 5,-12, 3 },
+    { 44, 5, -8, 3 },{ 44,14, -7, 6 },{ 43,13, -7, 8 },
+    { 42, 5,-12, 3 },{ 46,86, -3, 0 },{ 45,82, -3, 0 },
+
+    // 56..67 — north-fight sequence
+    { 48,14, -3, 0 },{ 48, 6, -3,-1 },{ 49, 5, -2,-3 },
+    { 50, 5, -3,-4 },{ 50, 4,  0, 0 },{ 50, 3,  3, 0 },
+    { 52, 4,  6, 1 },{ 52,15,  7, 3 },{ 51,14,  1, 6 },
+    { 50, 4,  0, 0 },{ 54,87,  3, 0 },{ 53,83,  3, 0 },
+
+    // 68..79 — east-fight sequence
+    { 56,10,  5,11 },{ 56, 0,  6, 9 },{ 57, 1, 10, 6 },
+    { 58, 1, 10, 5 },{ 58, 2,  7, 3 },{ 58, 3,  6, 3 },
+    { 60, 4,  1, 0 },{ 60, 3,  3, 2 },{ 59,15,  4, 1 },
+    { 58, 4,  5, 1 },{ 62,84,  3, 0 },{ 61,80,  3, 0 },
+
+    // 80..82 — death sequence
+    { 47, 0,  5,11 },{ 63, 0,  6, 9 },{ 39, 0,  6, 9 },
+
+    // 83 — sinking
+    { 55,10,  5,11 },
+
+    // 84..85 — frustration / sword-at-side oscillation
+    { 64,10,  5,11 },{ 65,10,  5,11 },
+
+    // 86 — asleep
+    { 66,10,  5,11 }
+};
+```
+
+Notes on `statelist`:
+
+- The 12-entry fight blocks (32..43, 44..55, 56..67, 68..79) cover fight
+  states 0..11. States 0..8 are weapon swing positions, state 9
+  duplicates a swing position, and states 10..11 are the ranged-attack
+  frames whose `wpn_no` values are ≥ 80 (bit-7 flag set; see
+  [PROBLEMS.md P4](../PROBLEMS.md)).
+- Frame 35 (south-fight state 8) is the weapon-raised pose used by the
+  hero frustration animation at `fmain.c:1657` — see
+  [frustration.md](frustration.md).
+- See [RESEARCH.md §2.4](../RESEARCH.md#24-statelist--animation-frame-lookup)
+  for the structural overview and `diroffs[]` direction selection.
