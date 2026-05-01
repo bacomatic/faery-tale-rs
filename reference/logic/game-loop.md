@@ -766,7 +766,19 @@ def sort_sprites() -> None:
 
 Source: `fmain.c:2412-2609`
 Called by: `game_tick`
-Calls: `OwnBlitter`, `DisownBlitter`, `WaitBlit`, `clear_blit`, `save_blit`, `mask_blit`, `shape_blit`, `resolve_pass_params`, `compute_shape_clip`, `compute_terrain_mask`, `should_apply_terrain_mask`, `reserve_save_slot`, `fp_drawing`, `bmask_mem`, `CBK_SIZE`, `anim_index`, `anix2`
+Calls: `OwnBlitter`, `DisownBlitter`, `WaitBlit`, `clear_blit`, `save_blit`, `mask_blit`, `shape_blit`, `resolve_pass_params`, `needs_weapon_pass`, `select_atype_inum`, `compute_shape_clip`, `compute_terrain_mask`, `should_apply_terrain_mask`, `reserve_save_slot`, `fp_drawing`, `bmask_mem`, `CBK_SIZE`, `anim_index`, `anix2`
+
+Helpers spec'd in [sprite-rendering.md](sprite-rendering.md):
+[`resolve_pass_params`](sprite-rendering.md#resolve_pass_params),
+[`needs_weapon_pass`](sprite-rendering.md#needs_weapon_pass),
+[`select_atype_inum`](sprite-rendering.md#select_atype_inum),
+[`compute_shape_clip`](sprite-rendering.md#compute_shape_clip) (which calls
+[`compute_sprite_size`](sprite-rendering.md#compute_sprite_size) and applies the
+OBJECTS half-height inum-list at `fmain.c:2477-2480`),
+[`reserve_save_slot`](sprite-rendering.md#reserve_save_slot),
+[`should_apply_terrain_mask`](sprite-rendering.md#should_apply_terrain_mask),
+[`compute_terrain_mask`](sprite-rendering.md#compute_terrain_mask) (which
+contains the `blithigh = 32` override at `fmain.c:2570`).
 
 ```pseudo
 def render_sprites() -> None:

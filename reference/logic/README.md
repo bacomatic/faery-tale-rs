@@ -44,6 +44,15 @@ Every documented function appears here with a link to its canonical definition. 
 | `missile_tick` | [game-loop.md#missile_tick](game-loop.md#missile_tick) | Phase 16: age + advance in-flight missiles |
 | `sort_sprites` | [game-loop.md#sort_sprites](game-loop.md#sort_sprites) | Phase 19: bubble-sort anim_index by Y + nearest-person |
 | `render_sprites` | [game-loop.md#render_sprites](game-loop.md#render_sprites) | Phase 22: body + weapon blits with terrain mask |
+| `resolve_pass_params` | [sprite-rendering.md#resolve_pass_params](sprite-rendering.md#resolve_pass_params) | fmain.c:2400-2409 — passmode (body/weapon) for current pass given facing + weapon class |
+| `needs_weapon_pass` | [sprite-rendering.md#needs_weapon_pass](sprite-rendering.md#needs_weapon_pass) | fmain.c:2400-2401 — gate the second sprite pass for armed actors |
+| `select_atype_inum` | [sprite-rendering.md#select_atype_inum](sprite-rendering.md#select_atype_inum) | fmain.c:2420-2466 — pick (atype, inum) and apply weapon-pixel offsets per pass |
+| `compute_sprite_size` | [sprite-rendering.md#compute_sprite_size](sprite-rendering.md#compute_sprite_size) | fmain.c:2472-2480 — (xsize, ysize) incl. OBJECTS half-height inum list + bit-7 flag |
+| `compute_shape_clip` | [sprite-rendering.md#compute_shape_clip](sprite-rendering.md#compute_shape_clip) | fmain.c:2468-2528 — environ Y-shifts, playfield clip, bit-7 yoff nudge |
+| `reserve_save_slot` | [sprite-rendering.md#reserve_save_slot](sprite-rendering.md#reserve_save_slot) | fmain.c:2535-2558 — backsave allocation + blitter pointer/mod/shift state |
+| `should_apply_terrain_mask` | [sprite-rendering.md#should_apply_terrain_mask](sprite-rendering.md#should_apply_terrain_mask) | fmain.c:2563-2569 — four nomask early-exit gates (CARRIER, fiery-death, etc.) |
+| `compute_terrain_mask` | [sprite-rendering.md#compute_terrain_mask](sprite-rendering.md#compute_terrain_mask) | fmain.c:2570-2598 — per-tile terrain occlusion stamp; vestigial blithigh=32 override |
+| `render_inventory_items_page` | [sprite-rendering.md#render_inventory_items_page](sprite-rendering.md#render_inventory_items_page) | fmain.c:3120-3145 — items-page render: literal 16-px width, 5-plane reframe of OBJECTS |
 | `dohit` | [combat.md#dohit](combat.md#dohit) | Apply damage with immunity / SFX / knockback / death roll |
 | `melee_swing` | [combat.md#melee_swing](combat.md#melee_swing) | Per-attacker body: reach, Chebyshev target match, near-miss |
 | `missile_step` | [combat.md#missile_step](combat.md#missile_step) | Per-missile body: age, terrain, victim scan, advance |

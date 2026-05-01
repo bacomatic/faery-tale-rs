@@ -262,6 +262,57 @@ ENEMY_ACTOR_START = 3  # fmain2.c:1263 — actors 0=hero, 1=swan, 2=raft; enemie
 
 # extract() message buffer (fmain2.c:507 — static char mesbuf[200])
 mesbuf = 0             # fmain2.c:507 — 200-byte static buffer used by extract() for row assembly
+
+# Sprite rendering (fmain.c:2380-2614 render loop, fmain.c:3120-3145 inventory page)
+CBK_SIZE                  = 6149   # fmain.c:680 — (96<<6)+5; clear_blit max compositing-mask extent
+BACKSAVE_LIMIT_BYTES      = 5920   # fmain.c:2548 — 74*80; per-page backsave budget cap
+SMALL_SHAPE_THRESHOLD     = 64     # fmain.c:2542 — savesize < this uses the bitplane-tail fast path
+SMALL_SHAPE_SLOT_MAX      = 5      # fmain.c:2542 — at most 5 small shapes per page reuse bitplane-tail
+PLANE_TAIL_OFFSET         = 7680   # fmain.c:2543 — 192*40; byte offset into a bitplane past visible 192 scanlines
+PLAYFIELD_X_MAX           = 319    # fmain.c:2513 — rightmost visible column
+PLAYFIELD_Y_MAX           = 173    # fmain.c:2513 — bottommost visible scanline
+GROUND_OFFSET             = 32     # fmain.c:2413 — actor rel_y → feet-Y delta
+WPN_K_BOW                 = 0      # fmain.c:2443 — base-frame offset for bow overlay
+WPN_K_MACE                = 32     # fmain.c:2440 — base-frame offset for mace overlay
+WPN_K_SWORD               = 48     # fmain.c:2441 — base-frame offset for sword overlay
+WPN_K_DIRK                = 64     # fmain.c:2442 — base-frame offset for Dirk overlay
+WPN_WAND_INUM_BASE        = 103    # fmain.c:2436 — wand inum = facing + 103
+WPN_FIERY_DEATH_INUM      = 0x58   # fmain.c:2454 — OBJECTS frame for fiery-death overlay
+INUM_BIT7_HALF_HEIGHT     = 0x80   # fmain.c:2479,2524 — high bit marks half-height + Y+8 nudge
+OBJECTS_FRAME_NOMASK_LO   = 100    # fmain.c:2568 — OBJECTS frames 100..101 skip terrain mask
+OBJECTS_FRAME_NOMASK_HI   = 102    # fmain.c:2568 — exclusive upper bound
+RACE_NOMASK_A             = 0x85   # fmain.c:2569 — transparent setfig race
+RACE_NOMASK_B             = 0x87   # fmain.c:2569 — transparent setfig race
+FIERY_DEATH_RECT_X1       = 22833  # fmain.c:2565 — island-of-no-return west edge (world X)
+FIERY_DEATH_RECT_X2       = 26428  # fmain.c:2565 — east edge
+FIERY_DEATH_RECT_Y1       = 26425  # fmain.c:2566 — north edge
+FIERY_DEATH_RECT_Y2       = 26527  # fmain.c:2566 — south edge
+XTYPE_FIERY_DEATH         = 84     # fmain.c:2564 — extent encounter type for fiery-death
+XTYPE_BOW_OVERRIDE        = 80     # fmain.c:2401 — extents > 80 force a weapon-overlay pass
+MASK_FORCE_HEIGHT         = 32     # fmain.c:2570 — blithigh override for terrain-mask stamp loop
+OCC_NEVER                 = 0      # fmain.c:2585 — terrain occlusion code
+OCC_NOT_LEFT              = 1      # fmain.c:2586
+OCC_TOP_HALF              = 2      # fmain.c:2587
+OCC_BRIDGE                = 3      # fmain.c:2588
+OCC_NOT_LEFT_TOP          = 4      # fmain.c:2590
+OCC_LEFT_TOP_AND          = 5      # fmain.c:2591
+OCC_FULL_IF_ABOVE         = 6      # fmain.c:2592
+OCC_TOP_QUARTER           = 7      # fmain.c:2593
+BRIDGE_SECTOR             = 48     # fmain.c:2588 — sector id of bridge tile
+OCC_GROUND_THRESH_HALF    = 35     # fmain.c:2587,2590 — feet-Y boundary for top-half occlusion gate
+OCC_GROUND_THRESH_QUARTER = 20     # fmain.c:2593 — feet-Y boundary for top-quarter occlusion gate
+OCC_FULL_TILE_ID          = 64     # fmain.c:2592 — terra_mem tile id used for full coverage
+OCC_FALL_TILE_THRESH      = 220    # fmain.c:2581 — STATE_FALL: terra_mem index threshold to skip masking
+INV_ICON_WIDTH            = 16     # fmain.c:3136 — fixed inventory-icon blit width (px)
+INV_ICON_X_OFFSET         = 20     # fmain.c:3131 — left-margin shift added to inv_list[].xoff
+OBJ_PLANE_STRIDE          = 32     # fmain.c:3122-3125 — bytes per plane in OBJECTS sheet (16-px-wide × 16-scanline)
+OBJ_FRAME_STRIDE          = 80     # fmain.c:3133 — bytes per logical frame slot (16 wide × 5 planes)
+INV_PAGE_HEIGHT           = 8000   # fmain.c:3119 — InitBitMap height for items page
+INV_PAGE_WIDTH_BYTES      = 16     # fmain.c:3119 — InitBitMap bytewidth for items page
+INV_BLIT_MINTERM          = 0xC0   # fmain.c:3136 — BltBitMap minterm: D = A
+INV_BLIT_MASK             = 0xff   # fmain.c:3136 — BltBitMap plane mask: all 5 planes
+PASSMODE_BODY             = 0      # fmain.c:2389 — body-sprite pass
+PASSMODE_WEAPON           = 1      # fmain.c:2389 — weapon-overlay pass
 ```
 
 ## 2. Enums
@@ -439,6 +490,49 @@ struct Menu:
     color: u8
 ```
 
+### 4.3 `ShapeClip` — sprite-render scratch (sprite-rendering.md)
+
+```pseudo
+struct ShapeClip:
+    atype: i8                   # sequence type (PHIL/OBJECTS/ENEMY/RAFT/SETFIG/CARRIER/DRAGON)
+    inum: i16                   # frame index within the sequence
+    passmode: i8                # 0 = body, 1 = weapon overlay
+    xsize: u8                   # sprite width in pixels (multiple of 16)
+    ysize: u8                   # sprite height in scanlines (after the OBJECTS half-height list)
+    cwide: u8                   # source modulus in bytes (xsize / 8)
+    xstart: i16                 # pre-clip screen X (after map-scroll bias and weapon offset)
+    ystart: i16
+    xstop: i16
+    ystop: i16
+    xstart1: i16                # post-clip screen rect (clamped to playfield)
+    ystart1: i16
+    xstop1: i16
+    ystop1: i16
+    xoff: i16                   # clip delta from xstart to xstart1
+    yoff: i16
+    xbw: i16                    # left word index (16-px units) of clipped rect
+    xew: i16                    # right word index
+    blitwide: u8                # clipped width in 16-px source words
+    blithigh: u8                # clipped height in scanlines
+    ground: i16                 # feet-Y in screen pixels (post-clip)
+    savesize: i16               # bytes per plane of backsave
+    blitsize: i16               # Amiga BLTSIZE register value (blithigh<<6 | blitwide)
+    shapedata_offset: i32       # byte offset into seq_list[atype].location for this frame
+    maskdata_offset: i32        # byte offset into seq_list[atype].maskloc for this frame
+    backsave_slot: i8           # small-shape fast-path slot (0..4); -1 if not used
+    backsave_addr: object       # large-shape backsave bump-pointer; null if small
+    aoff: i16                   # mask-buffer Y offset
+    boff: i16                   # source-data offset for sub-word/sub-row alignment
+    coff: i16                   # screen-bitplane byte offset
+    cmod: i16                   # screen modulus (40 - blitwide*2)
+    bmod: i16                   # source modulus (cwide - blitwide*2)
+    shift: i8                   # sub-word pixel shift (0..15)
+    wmask: i16                  # first/last word mask: 0 or -1
+    crack_after: i8             # caller-state writeback: updated small-shape slot index
+    backalloc_after: object     # caller-state writeback: updated bump pointer
+    offscreen: bool             # True when the sprite is fully clipped or otherwise vetoed
+```
+
 ## 5. Globals
 
 ```pseudo
@@ -501,7 +595,22 @@ wt: i8                              # fmain.c — weapon_probs[] column index fo
 danger_level: i16                   # fmain.c:2082-2083 — scratch var for 14j roll
 actor_file: i8                      # fmain.c — currently loaded enemy shape file id
 nextshape: object                   # fmain.c — destination chip-RAM pointer for next read_shapes()
-seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .maskloc .width .height .count
+seq_list: list                      # fmain2.c:43 — seq_info[7]; .location .maskloc .width .height .count .bytes
+statelist: list                     # fmain.c:154 — state[87]; .figure .wpn_no .wpn_x .wpn_y per animation frame
+inv_list: list                      # fmain.c:380-424 — inv_item[36]; per-slot inventory icon metadata
+bow_x: list[i8]                     # fmain2.c:877 — 32-entry bow-overlay X offset per frame
+bow_y: list[i8]                     # fmain2.c:880 — 32-entry bow-overlay Y offset per frame
+bowshotx: list[i8]                  # fmain2.c:884 — 8-entry per-facing arrow spawn X velocity
+bowshoty: list[i8]                  # fmain2.c:885 — 8-entry per-facing arrow spawn Y velocity
+gunshoty: list[i8]                  # fmain2.c:886 — 8-entry per-facing fireball spawn Y offset
+fallstates: list                    # fmain2.c:872 — per-brother fall-animation frame indices
+terra_mem: list[u8]                 # fmain.c:658 — 1024-byte terrain table; 4-byte stride per tile
+minimap: list[i16]                  # fmain.c — 114-entry per-screen-tile remap into terra_mem
+bmask_mem: object                   # fmain.c:877 — single-plane compositing-mask buffer (max 96×5 words)
+shadow_mem: object                  # fmain.c — 12 KB terrain occlusion-tile pool (disk block 896)
+pagea: object                       # fmain2.c:779 — off-screen scratch BitMap (5-plane, 320×200)
+pageb: object                       # fmain2.c:779 — off-screen scratch BitMap
+pagecolors: list                    # fmain2.c:369-374 — 32-entry active-region palette
 princess: i16                       # fmain.c:568 — princess rescue counter (0..3)
 wealth: i32                         # fmain.c — hero gold
 quitflag: bool                      # fmain.c:590 — main-loop termination latch

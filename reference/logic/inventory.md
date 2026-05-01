@@ -1,7 +1,7 @@
 # Inventory — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §10](../RESEARCH.md#10-inventory--items), [_discovery/inventory.md](../_discovery/inventory.md), [quests.md](quests.md), [shops.md](shops.md), [carrier-transport.md](carrier-transport.md), [doors.md](doors.md), [menu-system.md](menu-system.md)
+> Cross-refs: [RESEARCH §10](../RESEARCH.md#10-inventory--items), [_discovery/inventory.md](../_discovery/inventory.md), [quests.md](quests.md), [shops.md](shops.md), [carrier-transport.md](carrier-transport.md), [doors.md](doors.md), [menu-system.md](menu-system.md), [sprite-rendering.md#render_inventory_items_page](sprite-rendering.md#render_inventory_items_page)
 
 ## Overview
 
@@ -31,7 +31,11 @@ inside `use_dispatch`; key-on-door unlock is deferred to
 [doors.md#use_key_on_door](doors.md#use_key_on_door); Sea Shell carrier spawn
 is deferred to [quests.md#get_turtle](quests.md#get_turtle); shop purchase is
 deferred to [shops.md#buy_dispatch](shops.md#buy_dispatch); GIVE is deferred to
-[quests.md#give_item_to_npc](quests.md#give_item_to_npc).
+[quests.md#give_item_to_npc](quests.md#give_item_to_npc). The full-screen
+items-page render that fires on `ITEMS->List` (`hit == 5`) is documented in
+[sprite-rendering.md#render_inventory_items_page](sprite-rendering.md#render_inventory_items_page);
+it blits each populated `inv_list[]` row as a 16-pixel-wide icon repeated
+`stuff[j]` times.
 
 ## Symbols
 
