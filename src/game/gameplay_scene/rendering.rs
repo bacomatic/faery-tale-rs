@@ -4,6 +4,9 @@
 use super::*;
 
 impl GameplayScene {
+    /// Render the HI bar (stats, messages, buttons, compass) to the canvas.
+    /// Constructs a texture target and blits the hiscreen background, stats text,
+    /// message queue, menu buttons, and compass overlay.
     pub(super) fn render_hibar(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
         let brave    = self.state.brave;
         let luck     = self.state.luck;
@@ -300,6 +303,8 @@ impl GameplayScene {
         }
     }
 
+    /// Blit a sprite frame (16×max_rows) into the framebuf, skipping transparent pixels (index 31).
+    /// Clips to framebuf bounds (fb_w, fb_h); out-of-bounds pixels are silently skipped.
     pub(super) fn blit_sprite_to_framebuf(
         frame_pixels: &[u8],
         rel_x: i32,
