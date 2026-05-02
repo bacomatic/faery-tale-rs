@@ -250,6 +250,7 @@ SET_FILE_TAMBRY          = 13         # fmain.c:2889 — Tambry setfig file id
 ANIX_DEFAULT             = 3          # fmain.c:2904 — default anim-index for brother
 GAME_OVER_THRESHOLD      = 3          # fmain.c:2871 — brother>=3 → quit
 GOLDBASE                 = 31         # fmain.c:429 — #define GOLDBASE 31 (first gold-counter slot in stuff[])
+KEYBASE                  = 16         # fmain.c:427 — stuff[] slot of first (Gold) key; keys live at stuff[KEYBASE+0..5]
 
 # Scroll-area (HI text region) geometry (fmain2.c:486-489)
 TXMIN = 16    # fmain2.c:486 — left clip edge of scroll raster

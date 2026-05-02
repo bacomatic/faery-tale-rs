@@ -155,5 +155,14 @@ Every documented function appears here with a link to its canonical definition. 
 | `px_to_im` | [terrain-collision.md#px_to_im](terrain-collision.md#px_to_im) | fsubs.asm:542-620 — pixel → terrain type via sub-tile mask + image/sector/terra chain |
 | `prox` | [terrain-collision.md#prox](terrain-collision.md#prox) | fsubs.asm:1590-1614 — two-probe collision: right ≥10 / left ≥8 thresholds |
 | `mapxy` | [terrain-collision.md#mapxy](terrain-collision.md#mapxy) | fsubs.asm:1085-1130 — image-tile coord → sector_mem byte offset (doorfind uses for tile rewrite) |
+| `print` | [dialog_system.md#print](dialog_system.md#print) | Scroll-area write with 10-px upward scroll |
+| `print_cont` | [dialog_system.md#print_cont](dialog_system.md#print_cont) | Append text in-place without scrolling |
+| `prdec` | [dialog_system.md#prdec](dialog_system.md#prdec) | Append a zero-padded decimal via `print_cont` |
+| `extract` | [dialog_system.md#extract](dialog_system.md#extract) | `%` → brother-name substitution + word-wrap to 37 columns |
+| `announce_treasure` | [dialog_system.md#announce_treasure](dialog_system.md#announce_treasure) | Scroll-area treasure-drop announcement |
+| `announce_container` | [dialog_system.md#announce_container](dialog_system.md#announce_container) | Scroll-area container-discovery announcement |
+| `ssp` | [placard.md#ssp](placard.md#ssp) | Walk encoded byte string emitting `Move` / `Text` calls |
+| `placard_text` | [placard.md#placard_text](placard.md#placard_text) | Render slot N from `mst` table to full-screen RastPort |
+| `placard` | [placard.md#placard](placard.md#placard) | Draw the animated Greek-key border around a placard |
 
 *(Rows are appended as new logic reference docs are authored. Orphan entries and orphan function definitions both fail `lint_logic.py`.)*

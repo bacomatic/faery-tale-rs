@@ -185,45 +185,6 @@ def announce_container(s: str) -> None:
     print_cont(" containing ")
 ```
 
-## aftermath
-
-Source: `fmain2.c:1259-1278`
-Called by: main combat completion path (`fmain.c:2187`)
-Calls: `print`, `print_cont`, `prdec`, `get_turtle`
-
-```pseudo
-def aftermath() -> None:
-    """Summarise battle outcome to the scroll area after combat ends."""
-    dead = 0
-    flee = 0
-    i = ENEMY_ACTOR_START                                     # fmain2.c:1263 — actors 0=hero, 1=swan, 2=raft; enemies start at 3
-    while i < anix:
-        if anim_list[i].type != ENEMY:
-            pass
-        elif anim_list[i].state == STATE_DEAD:
-            dead += 1
-        elif anim_list[i].goal == GOAL_FLEE:
-            flee += 1
-        i = i + 1
-
-    if anim_list[0].vitality < 1:                            # fmain2.c:1268 — hero is dead; no message
-        pass
-    elif anim_list[0].vitality < 5 and dead > 0:             # fmain2.c:1269 — barely survived
-        print("Bravely done!")
-    elif xtype < 50:                                          # fmain2.c:1271 — 50 = outdoor encounter threshold
-        if dead > 0:
-            print("")
-            prdec(dead, 1)
-            print_cont("foes were defeated in battle.")
-        if flee > 0:
-            print("")
-            prdec(flee, 1)
-            print_cont("foes fled in retreat.")
-
-    if turtle_eggs:
-        get_turtle()
-```
-
 ## ppick (print queue dispatcher)
 
 Source: `fmain2.c:437-471`

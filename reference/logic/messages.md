@@ -1,5 +1,8 @@
 # Complete Message String Reference
 
+> Fidelity: behavioral  |  Source files: narr.asm
+> Cross-refs: [RESEARCH §20](../RESEARCH.md#20-text--message-display), [dialog_system.md](dialog_system.md), [placard.md](placard.md), [npc-dialogue.md](npc-dialogue.md)
+
 All text strings defined in `narr.asm`. This document is the authoritative
 source for implementors who do not have access to the 1987 assembler source.
 It covers every indexed table (`_event_msg`, `_speeches`, `_place_msg`,
