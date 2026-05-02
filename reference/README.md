@@ -21,6 +21,7 @@ This file is the entry point for all project documentation. Copy this file to an
 | [RESEARCH.md](RESEARCH.md) | Ground-truth mechanics reference with citations to original 1987 source lines. |
 | [STORYLINE.md](STORYLINE.md) | Narrative progression, quest sequencing, NPC interactions, and story flow diagrams. |
 | [PROBLEMS.md](PROBLEMS.md) | Open and resolved research questions that cannot be settled by straightforward source tracing. |
+| [porting/README.md](porting/README.md) | Porting guidance hub for implementation-facing instructions and subsystem checklists. |
 | [world_db.json](world_db.json) | Spatial database of objects, doors, encounter extents, terrain summaries, and region grids. |
 | [quest_db.json](quest_db.json) | Machine-readable quest and progression data extracted from source analysis. |
 

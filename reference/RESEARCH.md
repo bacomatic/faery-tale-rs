@@ -1525,7 +1525,7 @@ The AI loop processes actors 2 through `anix-1` (skipping player and raft). Proc
 3. **SETFIG type** (`fmain.c:2119`): Skipped entirely — SETFIGs use special dialogue/rendering, not real-time AI.
 4. **Distance & battle detection** (`fmain.c:2123-2131`): Within 300×300 pixels sets `actors_on_screen = TRUE` and `battleflag = TRUE`.
 5. **Random reconsider** (`fmain.c:2132`): `r = !bitrand(15)` → 1/16 (6.25%) base probability of reconsidering tactics.
-6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health → FLEE; unarmed → CONFUSED.
+6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health (`vitality < 2`) → FLEE; in special encounters (`xtype > 59`), any actor whose race does not match `extn->v3` → FLEE (regardless of vitality); unarmed → CONFUSED.
 7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random escape tactic; see [§8.4](#84-frustration-cycle) for details. Note: SHOOTFRUST is dead code (defined but never assigned — see [§8.4](#84-frustration-cycle)).
 8. **SHOOT1 advance** (`fmain.c:2145`): If the actor's animation state is SHOOT1 (arrow mid-release), it advances to SHOOT3. This `else if` branch **bypasses all remaining steps** — the Hostile AI block and every goal-mode handler (FLEE, FOLLOWER, STAND, etc.) do not run that tick. A FLEE-mode archer in SHOOT1 state will complete its shot transition before fleeing.
 9. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
@@ -1691,7 +1691,7 @@ The `etype` field determines zone behavior (`fmain.c:2674-2720`):
 | etype Range | Category | Behavior |
 |-------------|----------|----------|
 | 0–49 | Regular encounter zone | Sets `xtype`; random encounters per danger timer |
-| 50–59 | Forced group encounter | Monsters spawn immediately on entry; `v1` = count, `v3` = monster type |
+| 50–59 | Forced group encounter | Monsters spawn immediately on entry **only when `find_place` is called with `flag == 1`**; `v1` = count, `v3` = monster type |
 | 52 | Astral plane (special) | Forces `encounter_type = 8` (Loraii); synchronous load (`fmain.c:2696`) |
 | 60–61 | Special figure | Unique NPC spawned at extent center if not already present |
 | 70 | Carrier | Loads bird/turtle/dragon via `load_carrier(v3)` (`fmain.c:2716-2719`) |
@@ -1719,7 +1719,7 @@ Priority ordering ensures specific zones override general ones: the graveyard (i
 | 83 (princess) | Call `rescue()` if `ob_list8[9].ob_stat`, then re-scan via `goto findagain` | `fmain.c:2684-2685` |
 | 60 or 61 | If `anim_list[3].race != extn->v3` or `anix < 4`: set encounter origin to extent center, fall through to `force:` | `fmain.c:2687-2693` |
 | 52 (astral) | Hardcode `encounter_type = 8` (Loraii); call `load_actors()` + `prep(ENEMY)` synchronously | `fmain.c:2695-2698` |
-| 50–59 (other forced) | Set encounter origin to hero position; fall through to `force:` | `fmain.c:2699-2700` |
+| 50–59 (other forced) | If `flag == 1`: set encounter origin to hero position; fall through to `force:`. If `flag != 1`, this branch is skipped. | `fmain.c:2699-2700` |
 
 The shared `force:` block (`fmain.c:2702-2713`) sets `encounter_type = extn->v3`, clears `mixflag = wt = 0`, calls `load_actors()` + `prep(ENEMY)` (blocking disk read), sets `encounter_number = extn->v1` (overwriting the random `v1 + rnd(v2)` from `load_actors`), and immediately fills slots 3–6 via `set_encounter(anix, 63)`.
 
@@ -1730,6 +1730,42 @@ Finally (`fmain.c:2716-2719`):
 Because this path runs only when `xtype` changes, leaving and re-entering an etype 60 zone re-spawns the unique NPC (e.g. the DKnight, Necromancer).
 
 > **Normative logic:** [reference/logic/astral-plane.md#find_place](logic/astral-plane.md#find_place) (full `find_place` pseudo-code, covering all dispatch branches).
+
+#### 9.3.2 `find_place(flag)` Call Modes (`fmain.c:1789, 1928, 1951, 2050`)
+
+`flag` controls two independent behaviors in `find_place()`:
+
+1. **Place-name message display**: `if (flag) msg(...)` (`fmain.c:2672-2673`)
+2. **Generic forced-extent activation** for `etype 50–59` (excluding astral 52): only when `flag == 1` (`fmain.c:2700`)
+
+Current callsites:
+
+| Callsite | Value | Place-name messages | Generic 50–59 force branch |
+|----------|-------|---------------------|------------------------------|
+| Main loop tick (`find_place(2)`) | 2 | Enabled | Disabled |
+| Outdoor→indoor door transition (`find_place(2)`) | 2 | Enabled | Disabled |
+| Indoor→outdoor door transition (`find_place(FALSE)`) | 0 | Disabled | Disabled |
+| Whirlpool/sink transfer to region 9 (`find_place(1)`) | 1 | Enabled | Enabled |
+
+Implication for implementation: `etype 60/61`, `etype 52`, `etype 70`, and `etype 83` logic is independent of this gate, but the generic `etype 50–59` branch requires a caller-controlled mode equivalent to `flag == 1`. In the current source, that path is only reached from the `find_place(1)` transfer at `fmain.c:1789`.
+
+#### 9.3.3 Extent State Contract (Required for Ports)
+
+`find_place()` produces two distinct pieces of state each tick:
+
+1. **Current extent row pointer** (`extn`) from the linear rectangle scan (`fmain.c:2675-2680`)
+2. **Current extent type** (`xtype = extn->etype`) only when the etype changes (`fmain.c:2682-2683`)
+
+This distinction is required for correctness. Several systems read `extn->v3` directly outside the `xtype`-change block:
+
+| Consumer | Condition | Why full `extn` row is needed |
+|----------|-----------|--------------------------------|
+| AI flee override | `xtype > 59 && race != extn->v3` | Determines which race is the "protected" special-encounter race (`fmain.c:2138-2140`) |
+| Magic-use block | `if (extn->v3 == 9) speak(59)` | Disables magic in the necromancer arena (`fmain.c:3304-3305`) |
+| Carrier load target | `load_carrier(extn->v3)` | Chooses bird/turtle/dragon asset ID (`fmain.c:2717-2719`) |
+| Forced encounter race | `encounter_type = extn->v3` | Selects spawned race in `force:` block (`fmain.c:2704`) |
+
+Implementation guidance: do not model extents as `xtype` alone. Preserve per-tick rectangle resolution to a concrete extent record (`x1,y1,x2,y2,etype,v1,v2,v3`), then derive `xtype` and transition side-effects from that record.
 
 ### 9.4 Danger Level & Spawn Logic
 
@@ -1901,7 +1937,7 @@ Each tick, 4 directions are probed in priority order from the current facing `d`
 
 #### Spider Pit (etype 53, index 3)
 
-Forced encounter: spawns `v1=4` spiders (`v3=6`) immediately on entry. `mixflag=0, wt=0` — no mixing, all spiders get the same touch attack weapon.
+Forced encounter: spawns `v1=4` spiders (`v3=6`) when entered via a `find_place(1)` call path (`fmain.c:2700`). `mixflag=0, wt=0` — no mixing, all spiders get the same touch attack weapon.
 
 #### Necromancer / DKnight (etype 60)
 

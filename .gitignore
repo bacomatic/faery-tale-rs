@@ -1,5 +1,6 @@
 .superpowers/
 .toolenv/
+.memsearch/
 tools/results/
 
 **/.__pycache__/

@@ -63,7 +63,7 @@ def advance_goal(actor: Shape) -> None:
         else:
             mode = GOAL_FOLLOWER
     elif actor.vitality < 2 or (xtype > 59 and actor.race != extn.v3):   # fmain.c:2138-2139, 59 = last normal xtype
-        # fmain.c:2140 — low-HP flee; in special encounters (xtype > 59) only off-target races flee
+        # fmain.c:2140 — low-HP flee, plus unconditional flee for off-target races in special encounters
         mode = GOAL_FLEE
 
     # --- Tactic-dispatch body ------------------------------------------------
