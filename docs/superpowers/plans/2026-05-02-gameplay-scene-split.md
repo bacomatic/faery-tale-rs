@@ -620,7 +620,7 @@ git commit -m "refactor: extract update_actors into gameplay_scene/actors.rs (~1
 
 ---
 
-## Task 13: Extract input.rs (high coupling)
+## Task 13: Extract input.rs (high coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/input.rs`
@@ -633,7 +633,7 @@ Methods to extract:
 - `apply_compass_input_from_canvas` (~5346–5389)
 - `handle_cheat1_key` (~5390–5456)
 
-- [ ] **Step 1: Create input.rs**
+- [x] **Step 1: Create input.rs**
 
 ```rust
 //! Player input processing, direction mapping, spell casting, cheat key handling.
@@ -646,9 +646,9 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod input;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod input;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -20
@@ -656,13 +656,13 @@ cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -20
 
 Input handling has the most tests — expect several test failures if method visibility isn't correct.
 
-- [ ] **Step 4: Fix any visibility issues and re-run tests**
+- [x] **Step 4: Fix any visibility issues and re-run tests**
 
 ```bash
 cargo test 2>&1 | tail -20
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
