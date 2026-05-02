@@ -1,15 +1,13 @@
 //! One-off: dump rows-with-content for objects-sheet frames (cfile 3).
 use std::path::Path;
 
+#[path = "../game"]
 mod game {
     #[allow(dead_code, unused_imports)]
-    #[path = "/home/ddehaven/projects/faery-tale-rs/src/game/byteops.rs"]
     pub mod byteops;
     #[allow(dead_code, unused_imports)]
-    #[path = "/home/ddehaven/projects/faery-tale-rs/src/game/adf.rs"]
     pub mod adf;
     #[allow(dead_code, unused_imports)]
-    #[path = "/home/ddehaven/projects/faery-tale-rs/src/game/sprites.rs"]
     pub mod sprites;
 }
 
