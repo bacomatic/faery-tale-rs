@@ -755,7 +755,7 @@ git commit -m "refactor: extract apply_command into gameplay_scene/debug_command
 
 ---
 
-## Task 16: Extract scene_impl.rs (the orchestrator)
+## Task 16: Extract scene_impl.rs (the orchestrator) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/scene_impl.rs`
@@ -764,7 +764,7 @@ git commit -m "refactor: extract apply_command into gameplay_scene/debug_command
 Content to extract:
 - `impl Scene for GameplayScene` block (~5457–6450): `handle_event`, `update`, `as_any`, `as_any_mut`
 
-- [ ] **Step 1: Create scene_impl.rs**
+- [x] **Step 1: Create scene_impl.rs**
 
 ```rust
 //! Scene trait implementation — event handling and per-frame update loop.
@@ -776,15 +776,15 @@ impl Scene for GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod scene_impl;` to mod.rs, remove the impl block**
+- [x] **Step 2: Add `mod scene_impl;` to mod.rs, remove the impl block**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
