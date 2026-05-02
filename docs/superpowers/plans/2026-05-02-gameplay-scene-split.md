@@ -716,7 +716,7 @@ Extracts dispatch_menu_action, do_option, toggle_menu_mode. ~740 lines."
 
 ---
 
-## Task 15: Extract debug_commands.rs
+## Task 15: Extract debug_commands.rs ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/debug_commands.rs`
@@ -725,7 +725,7 @@ Extracts dispatch_menu_action, do_option, toggle_menu_mode. ~740 lines."
 Methods to extract:
 - `apply_command` (~4276–4764)
 
-- [ ] **Step 1: Create debug_commands.rs**
+- [x] **Step 1: Create debug_commands.rs**
 
 ```rust
 //! Debug command dispatch (DebugCommand handler).
@@ -738,15 +738,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod debug_commands;` to mod.rs, remove method**
+- [x] **Step 2: Add `mod debug_commands;` to mod.rs, remove method**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
