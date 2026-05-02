@@ -581,7 +581,7 @@ Extracts handle_setfig_talk and do_buy_slot. ~225 lines."
 
 ---
 
-## Task 12: Extract actors.rs (high coupling)
+## Task 12: Extract actors.rs (high coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/actors.rs`
@@ -590,7 +590,7 @@ Extracts handle_setfig_talk and do_buy_slot. ~225 lines."
 Methods to extract:
 - `update_actors` (~2624–2779)
 
-- [ ] **Step 1: Create actors.rs**
+- [x] **Step 1: Create actors.rs**
 
 ```rust
 //! Per-frame actor update loop — NPC AI ticks, animation, position.
@@ -603,15 +603,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod actors;` to mod.rs, remove method**
+- [x] **Step 2: Add `mod actors;` to mod.rs, remove method**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
