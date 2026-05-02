@@ -4,9 +4,6 @@
 use super::*;
 
 impl GameplayScene {
-    ///   - `ob_list8[9].ob_stat = 0` — clear princess captive flag.
-    ///   - `princess += 1` — advance the rescued-princess counter.
-    /// Teleport/extent/cast-swap are driven by the narrative queue steps.
     /// Handle dialogue with the nearest NPC/setfig. Ports fmain.c:4188-4261.
     pub(crate) fn handle_setfig_talk(&mut self, fig: &NearestFig, bname: &str) {
         match &fig.kind {
