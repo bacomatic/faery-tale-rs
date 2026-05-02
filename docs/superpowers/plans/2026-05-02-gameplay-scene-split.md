@@ -793,7 +793,7 @@ git commit -m "refactor: extract Scene impl into gameplay_scene/scene_impl.rs (~
 
 ---
 
-## Task 17: Extract tests.rs
+## Task 17: Extract tests.rs ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/tests.rs`
@@ -802,7 +802,7 @@ git commit -m "refactor: extract Scene impl into gameplay_scene/scene_impl.rs (~
 Content to extract:
 - All `#[cfg(test)]` modules (~6451–10015)
 
-- [ ] **Step 1: Create tests.rs**
+- [x] **Step 1: Create tests.rs**
 
 ```rust
 // Tests for GameplayScene — extracted from mod.rs for readability.
@@ -812,7 +812,7 @@ use super::*;
 // [paste all #[cfg(test)] content here]
 ```
 
-- [ ] **Step 2: Add to mod.rs**
+- [x] **Step 2: Add to mod.rs**
 
 ```rust
 #[cfg(test)]
@@ -821,7 +821,7 @@ mod tests;
 
 Remove all `#[cfg(test)]` blocks from `mod.rs`.
 
-- [ ] **Step 3: cargo test**
+- [x] **Step 3: cargo test**
 
 ```bash
 cargo test 2>&1 | tail -20
@@ -829,7 +829,7 @@ cargo test 2>&1 | tail -20
 
 Expected: all tests pass (same count as before).
 
-- [ ] **Step 4: Check mod.rs final size**
+- [x] **Step 4: Check mod.rs final size**
 
 ```bash
 wc -l src/game/gameplay_scene/mod.rs
@@ -837,7 +837,7 @@ wc -l src/game/gameplay_scene/mod.rs
 
 Expected: ~600–800 lines (struct definition, field declarations, `new()`, `init_from_library()`, small public accessors, and module declarations).
 
-- [ ] **Step 5: Final commit**
+- [x] **Step 5: Final commit**
 
 ```bash
 git add src/game/gameplay_scene/
