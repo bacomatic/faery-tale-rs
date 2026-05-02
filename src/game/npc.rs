@@ -43,6 +43,9 @@ pub const RACE_WOODCUTTER: u8 = 10;
 pub const RACE_WITCH: u8 = 0x89;
 pub const RACE_SPECTRE: u8 = 0x8a;
 pub const RACE_GHOST: u8 = 0x8b;
+/// Transparent setfig races — terrain masking is bypassed (fmain.c:2569).
+pub const RACE_NOMASK_A: u8 = 0x85;
+pub const RACE_NOMASK_B: u8 = 0x87;
 
 /// Lightweight NPC state for AI decisions (distinct from ActorState which carries animation data).
 #[derive(Debug, Clone, PartialEq, Default)]

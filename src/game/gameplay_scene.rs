@@ -4986,13 +4986,13 @@ impl GameplayScene {
             (entry.wpn_x as i32, wy, (hero_facing as u8).wrapping_add(103))
         } else if weapon_type == 4 && frame < 32 {
             // Bow walking pose: per-frame BOW_X/BOW_Y offsets and direction-dependent
-            // bow inum derived from walk-cycle group (frame / 8):
-            //   0 = south(0..7)→0x53, 1 = west(8..15)→30,
-            //   2 = north(16..23)→0x51, 3 = east(24..31)→30.
+            // bow inum derived from walk-cycle group (frame / 8) — fmain.c:2429-2433:
+            //   group & 1 → 30 (east-west bow); group & 2 → 0x53 (north bow); else → 0x51 (south bow).
+            //   0 = south(0..7)→0x51, 1 = west(8..15)→30, 2 = north(16..23)→0x53, 3 = east(24..31)→30.
             let bow_inum: u8 = match frame / 8 {
-                0 => 0x53,
+                0 => 0x51,
                 1 => 30,
-                2 => 0x51,
+                2 => 0x53,
                 _ => 30,
             };
             (BOW_X[frame] as i32, BOW_Y[frame] as i32, bow_inum)
@@ -5078,6 +5078,9 @@ impl GameplayScene {
     /// Mirrors the diroffs[] group mapping from fmain.c:
     ///   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31.
     fn facing_to_frame_base(facing: u8) -> usize {
+        // diroffs[0..7] from fmain.c:1010 with original facing DIR_NW=0..DIR_W=7:
+        //   [16,16,24,24,0,0,8,8] → NW=16,N=16,NE=24,E=24,SE=0,S=0,SW=8,W=8.
+        // Mapped to Rust facing (0=N..7=NW): NE→east, SE→south, SW→west, NW→north.
         match facing {
             0 => 16, // N  → northwalk
             1 => 24, // NE → eastwalk
@@ -5091,9 +5094,9 @@ impl GameplayScene {
     }
 
     /// Map facing direction to fighting sprite frame base.
-    /// Based on diroffs[d+8] from fmain.c:1099, with diagonal directions
-    /// following the Rust convention from facing_to_frame_base() (NE→east,
-    /// SE→south, SW→west, NW→north).
+    /// diroffs[d+8] from fmain.c:1010 with original facing DIR_NW=0..DIR_W=7:
+    ///   [56,56,68,68,32,32,44,44] → NW=56,N=56,NE=68,E=68,SE=32,S=32,SW=44,W=44.
+    /// Mapped to Rust facing (0=N..7=NW): NE→east, SE→south, SW→west, NW→north.
     /// Frame ranges: southfight=32-43, westfight=44-55, northfight=56-67, eastfight=68-79.
     fn facing_to_fight_frame_base(facing: u8) -> usize {
         match facing {
@@ -5221,7 +5224,7 @@ impl GameplayScene {
         _hero_submerged: bool,
     ) {
         use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-        use crate::game::sprites::{SPRITE_H, SPRITE_W};
+        use crate::game::sprites::{SPRITE_H, SPRITE_W, STATELIST};
         let fb_w = MAP_DST_W as i32;
         let fb_h = MAP_DST_H as i32;
 
@@ -5271,6 +5274,12 @@ impl GameplayScene {
                     let frame_base = Self::facing_to_frame_base(hero_facing);
                     if is_moving { frame_base + (state.cycle as usize) % 8 } else { frame_base + 1 }
                 };
+                // Body sprite frame: for fighting, use STATELIST figure field; for walking/still, frame is already correct
+                let body_frame = if let Some(ActorState::Fighting(_)) = hero_state {
+                    STATELIST[frame].figure as usize
+                } else {
+                    frame
+                };
                 // Weapon overlay (fmain.c passmode weapon blit).
                 // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
@@ -5285,7 +5294,7 @@ impl GameplayScene {
                         Self::blit_obj_to_framebuf(wfp, wx, wy, oh, framebuf, fb_w, fb_h);
                     }
                 }
-                if let Some(fp) = sheet.frame_pixels(frame) {
+                if let Some(fp) = sheet.frame_pixels(body_frame) {
                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
                 }
                 if !weapon_behind {
@@ -6024,7 +6033,7 @@ impl Scene for GameplayScene {
                 // Build render list for ALL visible entities, sort by Y, render in order.
                 use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
                 use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
-                use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H, SETFIG_TABLE};
+                use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H, SETFIG_TABLE, STATELIST};
 
                 let fb_w = MAP_DST_W as i32;
                 let fb_h = MAP_DST_H as i32;
@@ -6038,20 +6047,41 @@ impl Scene for GameplayScene {
                 }
                 struct RenderEntry {
                     abs_y: u16,
+                    /// abs_y with render-order biases from fmain.c:2378-2391:
+                    ///   dead actor or raft slot → -32 (draw before live actors at same Y)
+                    ///   environ > 25 (sinking)  → +32 (draw after others at same Y)
+                    ///   carrier while hero riding → -32 (carrier behind mounted hero)
+                    sort_y: i32,
                     kind: RenderKind,
                 }
 
                 let mut entries: Vec<RenderEntry> = Vec::new();
 
                 // Hero
-                entries.push(RenderEntry { abs_y: self.state.hero_y, kind: RenderKind::Hero });
+                {
+                    let hero_actor = self.state.actors.first();
+                    let dead = hero_actor.map_or(false, |a| matches!(a.state, crate::game::actor::ActorState::Dead));
+                    let environ = hero_actor.map_or(0i8, |a| a.environ);
+                    let sort_y = self.state.hero_y as i32
+                        + if dead { -32 } else { 0 }
+                        + if environ > 25 { 32 } else { 0 };
+                    entries.push(RenderEntry { abs_y: self.state.hero_y, sort_y, kind: RenderKind::Hero });
+                }
 
                 // Enemy NPCs (skip setfig-type entries from NpcTable)
                 if let Some(ref table) = self.npc_table {
+                    use crate::game::npc::{NpcState, NPC_TYPE_RAFT, NPC_TYPE_SWAN, NPC_TYPE_HORSE, NPC_TYPE_DRAGON};
+                    let hero_riding = self.state.riding != 0;
                     for (i, npc) in table.npcs.iter().enumerate() {
                         if !npc.active { continue; }
                         if Self::npc_to_setfig_idx(npc.npc_type, npc.race).is_some() { continue; }
-                        entries.push(RenderEntry { abs_y: npc.y as u16, kind: RenderKind::Enemy(i) });
+                        let dead = npc.state == NpcState::Dead;
+                        let is_raft = npc.npc_type == NPC_TYPE_RAFT;
+                        let is_carrier = matches!(npc.npc_type, NPC_TYPE_SWAN | NPC_TYPE_HORSE | NPC_TYPE_DRAGON | NPC_TYPE_RAFT);
+                        let sort_y = npc.y as i32
+                            + if dead || is_raft { -32 } else { 0 }
+                            + if is_carrier && hero_riding { -32 } else { 0 };
+                        entries.push(RenderEntry { abs_y: npc.y as u16, sort_y, kind: RenderKind::Enemy(i) });
                     }
                 }
 
@@ -6059,14 +6089,14 @@ impl Scene for GameplayScene {
                 for (i, obj) in self.state.world_objects.iter().enumerate() {
                     if !obj.visible || obj.region != self.state.region_num { continue; }
                     if obj.ob_stat == 3 {
-                        entries.push(RenderEntry { abs_y: obj.y, kind: RenderKind::SetFig(i) });
+                        entries.push(RenderEntry { abs_y: obj.y, sort_y: obj.y as i32, kind: RenderKind::SetFig(i) });
                     } else {
-                        entries.push(RenderEntry { abs_y: obj.y, kind: RenderKind::WorldObj(i) });
+                        entries.push(RenderEntry { abs_y: obj.y, sort_y: obj.y as i32, kind: RenderKind::WorldObj(i) });
                     }
                 }
 
-                // Sort ascending by Y (higher on screen drawn first, lower overwrites)
-                entries.sort_by_key(|e| e.abs_y);
+                // Sort ascending by adjusted Y (fmain.c:2378-2391)
+                entries.sort_by_key(|e| e.sort_y);
 
                 // Collect BlittedSprite info for masking pass
                 let mut blitted: Vec<BlittedSprite> = Vec::new();
@@ -6133,6 +6163,12 @@ impl Scene for GameplayScene {
                                         let frame_base = Self::facing_to_frame_base(hero_facing);
                                         if is_moving { frame_base + (self.state.cycle as usize) % 8 } else { frame_base + 1 }
                                     };
+                                    // Body sprite frame: for fighting, use STATELIST figure field; for walking/still, frame is already correct
+                                    let body_frame = if let Some(ActorState::Fighting(_)) = hero_state {
+                                        STATELIST[frame].figure as usize
+                                    } else {
+                                        frame
+                                    };
 
                                     // Weapon draw order (fmain.c:2907-2916 passmode):
                                     // Original facing: 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
@@ -6164,7 +6200,7 @@ impl Scene for GameplayScene {
                                         }
                                     }
 
-                                    if let Some(fp) = sheet.frame_pixels(frame) {
+                                    if let Some(fp) = sheet.frame_pixels(body_frame) {
                                         Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
                                     }
 
@@ -6175,22 +6211,29 @@ impl Scene for GameplayScene {
                                         }
                                     }
 
-                                    // Mask AFTER blit: restore foreground terrain over the body
-                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                    // Mask AFTER blit: restore foreground terrain over the body.
+                                    // should_apply_terrain_mask bypasses (fmain.c:2563-2566):
+                                    //   hero on swan (riding==11) and hero in fiery_death zone skip masking.
+                                    let hero_skip_mask = self.state.riding == 11 || self.fiery_death;
+                                    if !hero_skip_mask {
+                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                    }
 
                                     // Mask the weapon separately (original uses two-pass masking:
                                     // one for body, one for weapon, each with its own bounding box
                                     // but sharing the body's ground line — fmain.c:2921-3184).
-                                    if let Some((_, wx, wy, wh)) = wpn_blit {
-                                        let wpn_info = BlittedSprite {
-                                            screen_x: wx,
-                                            screen_y: wy,
-                                            width: SPRITE_W,
-                                            height: wh,
-                                            ground: sprite_info.ground,
-                                            is_falling: false,
-                                        };
-                                        apply_sprite_mask(mr, &wpn_info, self.state.hero_sector, 0);
+                                    if !hero_skip_mask {
+                                        if let Some((_, wx, wy, wh)) = wpn_blit {
+                                            let wpn_info = BlittedSprite {
+                                                screen_x: wx,
+                                                screen_y: wy,
+                                                width: SPRITE_W,
+                                                height: wh,
+                                                ground: sprite_info.ground,
+                                                is_falling: false,
+                                            };
+                                            apply_sprite_mask(mr, &wpn_info, self.state.hero_sector, 0);
+                                        }
                                     }
 
                                     blitted.push(sprite_info);
@@ -6215,7 +6258,6 @@ impl Scene for GameplayScene {
                                     .map(|f| f.min(sheet.num_frames.saturating_sub(1)))
                                     .unwrap_or_else(|| Self::npc_animation_frame(npc, idx, self.state.cycle, sheet.num_frames));
 
-                                // Mask BEFORE blit
                                 let sprite_info = BlittedSprite {
                                     screen_x: rel_x,
                                     screen_y: rel_y,
@@ -6224,12 +6266,38 @@ impl Scene for GameplayScene {
                                     ground: rel_y + SPRITE_H as i32,
                                     is_falling: false,
                                 };
+
+                                // Weapon draw order: same (facing - 2) & 4 rule as hero.
+                                let weapon_behind = matches!(npc.facing, 0 | 5 | 6 | 7);
+                                let wpn_blit = if npc.weapon > 0 && npc.weapon < 8 {
+                                    if let Some(ref obj_sheet) = self.object_sprites {
+                                        Self::compute_weapon_blit(frame, npc.facing, npc.weapon, obj_sheet, rel_x, rel_y)
+                                    } else { None }
+                                } else { None };
+
+                                if weapon_behind {
+                                    if let Some((wfp, wx, wy, wh)) = wpn_blit {
+                                        Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                    }
+                                }
                                 if let Some(fp) = sheet.frame_pixels(frame) {
                                     Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
                                 }
+                                if !weapon_behind {
+                                    if let Some((wfp, wx, wy, wh)) = wpn_blit {
+                                        Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                    }
+                                }
 
-                                // Mask AFTER blit: restore foreground terrain over the sprite
-                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                // should_apply_terrain_mask bypasses (fmain.c:2563-2569):
+                                //   CARRIER types never occlude; race 0x85/0x87 are transparent setfigs.
+                                use crate::game::npc::{NPC_TYPE_SWAN, NPC_TYPE_HORSE, NPC_TYPE_DRAGON, NPC_TYPE_RAFT,
+                                                       RACE_NOMASK_A, RACE_NOMASK_B};
+                                let skip_mask = matches!(npc.npc_type, NPC_TYPE_SWAN | NPC_TYPE_HORSE | NPC_TYPE_DRAGON | NPC_TYPE_RAFT)
+                                    || npc.race == RACE_NOMASK_A || npc.race == RACE_NOMASK_B;
+                                if !skip_mask {
+                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                }
 
                                 blitted.push(sprite_info);
                             }
@@ -6284,8 +6352,11 @@ impl Scene for GameplayScene {
                                     };
                                     Self::blit_obj_to_framebuf(pix_clip, rel_x, rel_y, img_height, &mut mr.framebuf, fb_w, fb_h);
 
-                                    // Mask AFTER blit: restore foreground terrain over the sprite
-                                    apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                    // should_apply_terrain_mask bypass: OBJECTS frames 100-101
+                                    // are bubble/spell-effect sprites (fmain.c:2568).
+                                    if frame < 100 || frame > 101 {
+                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                    }
 
                                     blitted.push(sprite_info);
                                 }
@@ -6629,7 +6700,8 @@ mod tests {
 
     #[test]
     fn test_facing_to_frame_base() {
-        // Rust facing: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
+        // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by original DIR_NW=0..DIR_W=7.
+        // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
         assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
         assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
         assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
@@ -6642,6 +6714,8 @@ mod tests {
 
     #[test]
     fn test_facing_to_fight_frame_base() {
+        // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by original DIR_NW=0..DIR_W=7.
+        // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
         assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // N  → northfight
         assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 68); // NE → eastfight
         assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // E  → eastfight
