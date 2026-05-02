@@ -479,7 +479,7 @@ Extracts spectre visibility, environ tick, goodfairy countdown, fiery death. ~30
 
 ---
 
-## Task 10: Extract rendering.rs (medium-high coupling)
+## Task 10: Extract rendering.rs (medium-high coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/rendering.rs`
@@ -499,7 +499,7 @@ Methods to extract:
 - `facing_to_frame_base` (~5090–5110)
 - `facing_to_fight_frame_base` (~5111–5126)
 
-- [ ] **Step 1: Create rendering.rs**
+- [x] **Step 1: Create rendering.rs**
 
 ```rust
 //! Sprite blitting, actor rendering, and animation frame computation.
@@ -512,9 +512,9 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod rendering;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod rendering;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check — pay attention to visibility**
+- [x] **Step 3: cargo check — pay attention to visibility**
 
 ```bash
 cargo check 2>&1 | head -40
@@ -522,13 +522,13 @@ cargo check 2>&1 | head -40
 
 These are all `fn` (not `pub fn`), so they should be accessible within the same module tree. Fix any `pub(super)` needed.
 
-- [ ] **Step 4: cargo test**
+- [x] **Step 4: cargo test**
 
 ```bash
 cargo test 2>&1 | tail -20
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
