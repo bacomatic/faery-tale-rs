@@ -359,7 +359,7 @@ Methods to extract:
 - `carrier_rel_pos` (~5074–5077)
 - `actor_rel_pos_offset` (~5078–5089)
 
-- [ ] **Step 1: Create region.rs**
+- [x] **Step 1: Create region.rs**
 
 ```rust
 //! Region transitions, map coordinate math, and palette computation.
@@ -372,15 +372,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod region;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod region;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -402,7 +402,7 @@ Methods to extract:
 - `search_body` (~4076–4222)
 - `mark_npc_looted` (~4223–4230)
 
-- [ ] **Step 1: Create items.rs**
+- [x] **Step 1: Create items.rs**
 
 ```rust
 //! Item pickup, body searching, and loot tracking.
@@ -415,15 +415,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod items;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod items;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -434,7 +434,7 @@ Extracts handle_take_item, search_body, mark_npc_looted. ~355 lines."
 
 ---
 
-## Task 9: Extract environ.rs (medium coupling)
+## Task 9: Extract environ.rs (medium coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/environ.rs`
@@ -447,7 +447,7 @@ Methods to extract:
 - `update_fiery_death` (~1914–1921)
 - `apply_environ_damage` (~1922–1964)
 
-- [ ] **Step 1: Create environ.rs**
+- [x] **Step 1: Create environ.rs**
 
 ```rust
 //! Environmental state updates — spectre visibility, terrain damage, goodfairy countdown.
@@ -460,15 +460,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod environ;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod environ;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
