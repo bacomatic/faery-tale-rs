@@ -54,14 +54,14 @@ Task 13: Tests
 - Create: `src/game/gameplay_scene/` (directory)
 - Rename: `src/game/gameplay_scene.rs` → `src/game/gameplay_scene/mod.rs`
 
-- [ ] **Step 1: Create directory and move file**
+- [x] **Step 1: Create directory and move file**
 
 ```bash
 mkdir -p src/game/gameplay_scene
 cp src/game/gameplay_scene.rs src/game/gameplay_scene/mod.rs
 ```
 
-- [ ] **Step 2: Verify it builds**
+- [x] **Step 2: Verify it builds**
 
 ```bash
 cargo check 2>&1 | head -30
@@ -69,13 +69,13 @@ cargo check 2>&1 | head -30
 
 Expected: compiles cleanly. Rust resolves `mod gameplay_scene` to either `gameplay_scene.rs` OR `gameplay_scene/mod.rs` — after the copy both exist, so we must remove the original.
 
-- [ ] **Step 3: Remove the original file**
+- [x] **Step 3: Remove the original file**
 
 ```bash
 rm src/game/gameplay_scene.rs
 ```
 
-- [ ] **Step 4: Verify again**
+- [x] **Step 4: Verify again**
 
 ```bash
 cargo check 2>&1 | head -30
@@ -83,7 +83,7 @@ cargo check 2>&1 | head -30
 
 Expected: zero errors.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 cargo test 2>&1 | tail -20
@@ -91,7 +91,7 @@ cargo test 2>&1 | tail -20
 
 Expected: all tests pass (no behavior change, just file moved).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/game/gameplay_scene/ src/game/gameplay_scene.rs
@@ -117,7 +117,7 @@ Methods to extract from `mod.rs`:
 - `execute_princess_rescue` (~1965–1998)
 - All `debug_*` narrative helpers (~708–785)
 
-- [ ] **Step 1: Create narrative.rs with the impl block**
+- [x] **Step 1: Create narrative.rs with the impl block**
 
 In `narrative.rs`, write:
 
@@ -132,7 +132,7 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add module declaration to mod.rs**
+- [x] **Step 2: Add module declaration to mod.rs**
 
 Add near the top of `mod.rs` (after `use` statements, before `impl GameplayScene`):
 
@@ -140,11 +140,11 @@ Add near the top of `mod.rs` (after `use` statements, before `impl GameplayScene
 mod narrative;
 ```
 
-- [ ] **Step 3: Remove extracted methods from mod.rs**
+- [x] **Step 3: Remove extracted methods from mod.rs**
 
 Delete the method bodies for the methods listed above from `mod.rs`. Keep only the `mod narrative;` declaration.
 
-- [ ] **Step 4: cargo check**
+- [x] **Step 4: cargo check**
 
 ```bash
 cargo check 2>&1 | head -30
@@ -152,7 +152,7 @@ cargo check 2>&1 | head -30
 
 Fix any visibility errors (methods called from other modules may need `pub(crate)` or `pub(super)`).
 
-- [ ] **Step 5: cargo test**
+- [x] **Step 5: cargo test**
 
 ```bash
 cargo test 2>&1 | tail -20
@@ -160,7 +160,7 @@ cargo test 2>&1 | tail -20
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -182,7 +182,7 @@ Methods to extract:
 - `nearest_fig` (~1569–1633)
 - `update_proximity_speech` (~1634–1693)
 
-- [ ] **Step 1: Create proximity.rs**
+- [x] **Step 1: Create proximity.rs**
 
 ```rust
 //! NPC proximity detection and auto-speech triggering.
@@ -195,15 +195,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod proximity;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod proximity;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -224,7 +224,7 @@ Methods to extract:
 - `update_turtle_autonomous` (~2536–2607)
 - `facing_toward` (~2608–2623)
 
-- [ ] **Step 1: Create carriers.rs**
+- [x] **Step 1: Create carriers.rs**
 
 ```rust
 //! Carrier vehicle AI — turtle autonomous movement, facing helpers.
@@ -237,15 +237,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod carriers;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod carriers;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -267,7 +267,7 @@ Methods to extract:
 - `setmood` (~4250–4275)
 - `stat_field_mut` (~4904–4919)
 
-- [ ] **Step 1: Create game_event.rs**
+- [x] **Step 1: Create game_event.rs**
 
 ```rust
 //! Game event dispatch, mood calculation, and stat field helpers.
@@ -279,15 +279,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod game_event;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod game_event;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
@@ -308,7 +308,7 @@ Methods to extract:
 - `run_combat_tick` (~2225–2323)
 - `apply_hit` (~2324–2535)
 
-- [ ] **Step 1: Create combat_logic.rs**
+- [x] **Step 1: Create combat_logic.rs**
 
 ```rust
 //! Combat tick processing and hit application.
@@ -321,15 +321,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod combat_logic;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod combat_logic;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
