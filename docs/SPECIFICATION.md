@@ -390,6 +390,84 @@ Up to 6 simultaneous missiles tracked via `missile_list[6]`:
 
 Active missiles are added to `anim_list` as OBJECTS type during Phase 18. Hit detection: arrows use `dohit(-1,...)`, fireballs use `dohit(-2,...)`.
 
+### 5.5 OBJECTS Sheet Half-Height Set & Bit-7 Flag
+
+The OBJECTS sprite sheet is laid out as 16-scanline rows, but a fixed list of frame indices (`inum`) renders as **8-scanline strips packed two-per-row**. Both the size derivation (`compute_sprite_size`, fmain.c:2477–2479) and the source-data Y-offset (`compute_shape_clip`, fmain.c:2524) consult the same `inum`:
+
+| `inum` | Effective height | Source Y offset |
+|--------|------------------|-----------------|
+| `0x1b` | 8 | 0 |
+| `8..=12` | 8 | 0 |
+| `25`, `26` | 8 | 0 |
+| `0x11..=0x17` | 8 | 0 |
+| `inum & 0x80 != 0` | 8 | +8 (lower-half row) |
+| Anything else | 16 | 0 |
+
+Bit 7 (`INUM_BIT7_HALF_HEIGHT = 0x80`) has a **dual role**: it forces 8-scanline height *and* shifts the source-data Y-offset by +8 inside the addressed frame, allowing two thin sprites to share one 16-row record. The flag must be stripped (`inum & !0x80`) before indexing the sheet.
+
+### 5.6 Weapon Overlay (passmode = 1)
+
+When the hero is rendered with a weapon equipped, a second pass blits a weapon sprite from the OBJECTS sheet on top of (or behind, depending on facing) the body sprite. The current body animation `frame` (0..86, the `statelist` index) selects an entry whose `wpn_no`, `wpn_x`, `wpn_y` describe the base weapon sprite and its body-relative pixel offset. Per-weapon-class **k offsets** add to `wpn_no`:
+
+| Weapon | k | OBJECTS frame |
+|--------|----|---------------|
+| Bow (4) | 0 | `wpn_no + 0` *(see special-case below)* |
+| Mace (2) | 32 | `wpn_no + 32` |
+| Sword (3) | 48 | `wpn_no + 48` |
+| Dirk (1) | 64 | `wpn_no + 64` |
+| Wand (5) | — | `facing + 103` (DIR_NE shifts Y by −6) |
+
+**Bow special-case** (fmain.c:2412–2425, fmain2.c:877–882). On walk-cycle frames (`frame < 32`) the bow uses two 32-entry per-frame offset tables instead of `wpn_x`/`wpn_y`:
+
+```
+bow_x[32] = [ 1, 2, 3, 4, 3, 2, 1, 0,    //  0..7   south-walk
+              3, 2, 0,-2,-3,-2, 0, 2,    //  8..15  west-walk
+             -3,-3,-3,-3,-3,-3,-3,-2,    // 16..23  north-walk
+              0, 1, 1, 1, 0,-2,-3,-2 ]   // 24..31  east-walk
+bow_y[32] = [ 8, 8, 8, 7, 8, 8, 8, 8,
+             11,12,13,13,13,13,13,12,
+              8, 7, 6, 5, 6, 7, 8, 9,
+             12,12,12,12,12,12,11,12 ]
+```
+
+The bow's overlay `inum` is also derived directionally from the walk-cycle group `frame / 8`:
+
+| Walk group | `inum` |
+|------------|--------|
+| 0 (south) | `0x53` |
+| 1 (west) | `30` |
+| 2 (north) | `0x51` |
+| 3 (east) | `30` |
+
+**Two-pass body/weapon ordering** (`resolve_pass_params`, fmain.c:2402,2405). The compositor draws each character in two passes; whether the weapon goes behind or in front of the body is determined by XOR-ing the pass index with a facing-derived bit. In the current Rust facing scheme (0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW) the weapon is drawn **behind** the body for facings `{0, 5, 6, 7}` and **in front** for the rest.
+
+The arrow/fireball spawn offsets per facing (used at shot-release time) are:
+
+```
+bowshotx[8] = [ 0, 0, 3, 6,-3,-3,-3,-6 ]   // NW,N,NE,E,SE,S,SW,W
+bowshoty[8] = [-6,-6,-1, 0, 6, 8, 0,-1 ]
+```
+
+### 5.7 Inventory Items-Page Render
+
+The character/inventory items page (`render_inventory_items_page`) treats the OBJECTS sheet as a 5-plane bitmap and blits per-icon strips at fixed positions. For each carried stack `j`:
+
+```
+n = inv_list[j].image_number * 80 + inv_list[j].img_off
+BltBitMap( OBJECTS, src=(0, n), dst=( xoff + 20, yoff ),
+           size=(16, inv_list[j].img_height) )
+```
+
+Constants (matching fmain.c originals):
+
+- `OBJ_FRAME_STRIDE = 80` (5 planes × 16 scanlines).
+- `OBJ_PLANE_STRIDE = 32` (16 px × 2 bytes = 32, packed planar stride).
+- `INV_ICON_X_OFFSET = 20`, `INV_ICON_WIDTH = 16`.
+- Each `inv_list[]` entry carries `img_off` (per-icon Y-skip in scanlines) and `img_height` (per-icon scanline count).
+- Stacks repeat down a single column spaced by `ydelta`, capped at `maxshown` rows; only items in rows `0..GOLDBASE` are eligible for stacking.
+
+This path uses neither the half-height set nor bit 7 — it always reads `img_height` rows starting at `img_off` from a frame whose stride is `OBJ_FRAME_STRIDE`.
+
 ---
 
 
@@ -449,6 +527,27 @@ For each word-column and tile-row that a sprite overlaps:
 5. Combine with sprite transparency mask during `mask_blit`
 
 Sprites that **skip masking entirely**: carriers, arrows, fairy sprites (object indices 100–101), certain NPC races.
+
+### 6.4 Mask Early-Exit Gates
+
+`should_apply_terrain_mask` short-circuits the per-tile mask loop entirely for a fixed list of cases (fmain.c, mask gate ladder). Any *one* of these conditions skips terrain masking for the current sprite:
+
+| # | Condition | Reason |
+|---|-----------|--------|
+| 1 | `atype == CARRIER` (turtle / bird) | Carriers are flying / swimming and never occluded by ground tiles. |
+| 2 | Hero is on the swan boat | Riding a carrier inherits the same exemption. |
+| 3 | Sprite is the active fiery-death rectangle | Full-screen wipe overlay is always on top. |
+| 4 | `inum ∈ {100, 101}` (fairy/sparkle) | Tiny FX sprites render flat. |
+| 5 | NPC race ∈ `{0x85, 0x87}` | Race-specific render exemption. |
+
+When any gate fires the compositor still runs `save_blit` / `shape_blit`, but stages 2–3 (`maskit` / `mask_blit`) are skipped — the sprite renders as a flat cookie-cut without terrain occlusion.
+
+### 6.5 Vestigial `blithigh = 32` Override
+
+Small objects and weapon overlays use a clipped bounding box where `blithigh` (the per-mask scan height) is forced to 32 even for 8- or 16-scanline sprites (`compute_terrain_mask`, fmain.c). This is a vestige of an earlier 32-tall sprite layout; the override is preserved verbatim for fidelity. Notes:
+
+- The sinking-ramp Y-shift (`an.environ > 2`, "sinking" actors) clips the *body* to ground but the weapon-overlay mask still uses the unshifted ground line — the original two-pass mask shares the body's `ground` value across both passes.
+- The drowning-bubble override (frames 97/98) draws *without* applying any mask, even when no other early-exit gate fires.
 
 ---
 

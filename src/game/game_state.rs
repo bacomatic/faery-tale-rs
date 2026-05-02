@@ -1013,9 +1013,11 @@ impl GameState {
         best_idx
     }
 
-    /// Mark a world object as picked up (ob_stat → hidden).
+    /// Mark a world object as picked up: hide it and clear hidden-item status
+    /// so it cannot be found again by Take.
     pub fn mark_object_taken(&mut self, world_idx: usize) {
         if let Some(obj) = self.world_objects.get_mut(world_idx) {
+            obj.ob_stat = 0; // 0 = taken/removed; nearest_fig skips ob_stat==0
             obj.visible = false;
         }
     }
@@ -1066,39 +1068,37 @@ impl GameState {
         None
     }
 
-    /// Load static world objects for the given region from the game library.
-    /// Only ground items (ob_stat 1) and hidden items (ob_stat 5) are loaded.
-    /// SetFig NPCs (ob_stat 3/4) are handled by the NPC system.
-    pub fn populate_region_objects(&mut self, region: u8, game_lib: &crate::game::game_library::GameLibrary) {
-        self.world_objects.clear();
+    /// Load static world objects for ALL regions from the game library.
+    /// The original game keeps `ob_listg` and `ob_listX` in memory for the
+    /// duration of a session — pickups, hidden→visible promotions, and other
+    /// per-object state must persist across region transitions. We therefore
+    /// populate every region (and globals) in a single pass, exactly once.
+    /// Subsequent calls are no-ops, preserving any in-memory state mutations.
+    /// Save/load handles persistence directly via `world_objects`.
+    pub fn populate_world_objects(&mut self, game_lib: &crate::game::game_library::GameLibrary) {
+        if !self.world_objects.is_empty() {
+            return; // already initialized — preserve runtime state
+        }
 
-        // Track per-list indices separately (mirrors original ob_listX vs ob_listg).
-        let mut region_goal: u8 = 0;
-        let mut global_goal: u8 = 0;
+        // Per-region goal counters (region 255 = global slot in index 10).
+        let mut goal_counters: [u8; 11] = [0; 11];
 
         for obj_cfg in &game_lib.objects {
-            // Include objects for this region + global objects (region 255)
-            if obj_cfg.region != region && obj_cfg.region != 255 {
-                continue;
+            let is_global = obj_cfg.region == 255;
+            let counter_idx = if is_global { 10 } else { obj_cfg.region as usize };
+            if counter_idx >= goal_counters.len() {
+                continue; // unexpected region tag
             }
             // goal = index in the respective ob_listX, counting all entries (SPEC §13.1).
-            let is_global = obj_cfg.region == 255;
-            let goal = if is_global {
-                let g = global_goal;
-                global_goal = global_goal.wrapping_add(1);
-                g
-            } else {
-                let g = region_goal;
-                region_goal = region_goal.wrapping_add(1);
-                g
-            };
+            let goal = goal_counters[counter_idx];
+            goal_counters[counter_idx] = goal_counters[counter_idx].wrapping_add(1);
 
             // Ground items (1), setfig NPCs (3), and hidden items (5)
             if obj_cfg.ob_stat == 1 || obj_cfg.ob_stat == 3 || obj_cfg.ob_stat == 5 {
                 self.world_objects.push(WorldObject {
                     ob_id: obj_cfg.ob_id,
                     ob_stat: obj_cfg.ob_stat,
-                    region,  // tag with current region so render filter passes
+                    region: obj_cfg.region,
                     x: obj_cfg.x,
                     y: obj_cfg.y,
                     visible: obj_cfg.ob_stat != 5, // ob_stat 1 and 3 are visible
@@ -1106,6 +1106,12 @@ impl GameState {
                 });
             }
         }
+    }
+
+    /// Backwards-compatible shim used by tests. Region argument is ignored
+    /// (kept for the existing test signature) — population is global.
+    pub fn populate_region_objects(&mut self, _region: u8, game_lib: &crate::game::game_library::GameLibrary) {
+        self.populate_world_objects(game_lib);
     }
 
     /// Returns a string description of the inventory for display.

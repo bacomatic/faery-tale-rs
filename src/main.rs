@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
+use crate::game::debug_command::DebugCommand;
 use crate::game::game_clock::GameClock;
 use crate::game::game_state::DayPhase;
 use crate::game::settings::{self, GameSettings};
@@ -234,6 +235,8 @@ pub fn main() -> Result<(), String> {
     // Debug step budget: when the console queues /step, this many frames get
     // the real delta while clock.paused remains true. See DEBUG_SPEC §Flow.
     let mut debug_step_budget: u32 = 0;
+    let mut debug_tick_hz: u32 = 30;
+    let mut debug_tick_accum: f64 = 0.0;
 
     'running: loop {
         let raw_delta = clock.update();
@@ -245,6 +248,13 @@ pub fn main() -> Result<(), String> {
             if debug_step_budget > 0 { debug_step_budget -= 1; }
             raw_delta
         };
+
+        // Apply debug tick rate override (30 = normal; set via /rate).
+        // Accumulate fractional ticks so rates like 15 Hz work correctly
+        // even though raw_delta is discrete (0 or 1 per frame at 60 fps).
+        debug_tick_accum += delta_ticks as f64 * (debug_tick_hz as f64 / 30.0);
+        let delta_ticks = debug_tick_accum as u32;
+        debug_tick_accum -= delta_ticks as f64;
 
         // Update game FPS counter
         game_frame_count += 1;
@@ -515,7 +525,12 @@ pub fn main() -> Result<(), String> {
             let cmds = dc.drain_commands();
             if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
                 for cmd in cmds {
-                    gs.apply_command(cmd);
+                    if let DebugCommand::SetTickRate { hz } = cmd {
+                        debug_tick_hz = hz;
+                        dc.log(format!("Tick rate: {} Hz  ({:.2}x speed)", hz, hz as f64 / 30.0));
+                    } else {
+                        gs.apply_command(cmd);
+                    }
                 }
                 for msg in gs.drain_logs() {
                     dc.log(msg);

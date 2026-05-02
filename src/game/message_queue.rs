@@ -47,10 +47,10 @@ impl MessageQueue {
         self.transcript = saved;
     }
 
-    /// Push a new message; oldest is dropped when queue is full.
-    /// The message is always appended to the transcript.
+    /// Push a new message, word-wrapping if it exceeds [`MSG_LINE_MAX`].
+    /// Oldest message is dropped when queue is full.
     pub fn push(&mut self, msg: impl Into<String>) {
-        self.print(msg.into());
+        self.push_wrapped(msg.into());
     }
 
     /// Push a message, word-wrapping across multiple lines if it exceeds

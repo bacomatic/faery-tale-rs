@@ -499,3 +499,127 @@ pub const STATELIST: [StatEntry; 87] = [
     // 86: asleep
     StatEntry { figure: 66, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
 ];
+
+// ---------------------------------------------------------------------------
+// Bow-overlay offset tables — fmain2.c:877-882, indexed by the body-pass
+// `inum` (= 0..31, the actor's walk-cycle frame). Used only on the bow
+// weapon-overlay pass when `inum < 32` (`fmain.c:2422-2423`).
+// See reference/logic/sprite-rendering.md "select_atype_inum" and "bow_x[32]".
+// ---------------------------------------------------------------------------
+
+/// `bow_x[32]` — per-frame X pixel offset added to `xstart` on the bow
+/// weapon-overlay pass when `inum < 32`.
+pub const BOW_X: [i8; 32] = [
+     1,  2,  3,  4,  3,  2,  1,  0,   //  0..7   south-walk
+     3,  2,  0, -2, -3, -2,  0,  2,   //  8..15  west-walk
+    -3, -3, -3, -3, -3, -3, -3, -2,   // 16..23  north-walk
+     0,  1,  1,  1,  0, -2, -3, -2,   // 24..31  east-walk
+];
+
+/// `bow_y[32]` — per-frame Y pixel offset added to `ystart` on the bow
+/// weapon-overlay pass when `inum < 32`.
+pub const BOW_Y: [i8; 32] = [
+     8,  8,  8,  7,  8,  8,  8,  8,   //  0..7   south-walk
+    11, 12, 13, 13, 13, 13, 13, 12,   //  8..15  west-walk
+     8,  7,  6,  5,  6,  7,  8,  9,   // 16..23  north-walk
+    12, 12, 12, 12, 12, 12, 11, 12,   // 24..31  east-walk
+];
+
+// ---------------------------------------------------------------------------
+// Per-frame OBJECTS half-height set — fmain.c:2477-2479.
+// The OBJECTS sheet stores all frames as 16-scanline rows, but a fixed list
+// of `inum` values render as 8-scanline strips packed two-per-row. The high
+// bit (`inum & 0x80`) also forces 8-scanline height *and* shifts the source
+// data Y-offset by +8 (bit-7 dual role, fmain.c:2479,2524). The bit must be
+// stripped from the effective `inum` before addressing the sheet.
+// See reference/logic/sprite-rendering.md "compute_sprite_size".
+// ---------------------------------------------------------------------------
+
+/// Half-height bit-7 flag for OBJECTS frames (`fmain.c:2479,2524`).
+pub const INUM_BIT7_HALF_HEIGHT: u8 = 0x80;
+
+/// Return the effective scanline height of an OBJECTS-sheet frame.
+///
+/// 8 scanlines for the half-height set (`{0x1b, 8..=12, 25, 26, 0x11..=0x17}`)
+/// or any frame with bit 7 set; 16 scanlines otherwise. Mirrors
+/// `compute_sprite_size` (`fmain.c:2477-2479`).
+pub const fn obj_frame_height(inum: u8) -> u8 {
+    if inum & INUM_BIT7_HALF_HEIGHT != 0 {
+        return 8;
+    }
+    let bare = inum;
+    match bare {
+        0x1b => 8,
+        8..=12 => 8,
+        25 | 26 => 8,
+        // 0x11..=0x17  (note: spec says `inum > 0x10 && inum < 0x18`)
+        0x11..=0x17 => 8,
+        _ => 16,
+    }
+}
+
+/// Return the source-data Y-offset (in scanlines) into the addressed
+/// OBJECTS frame. For bit-7 frames this is +8 (the lower-half row); for
+/// all other frames it is 0. Mirrors `compute_shape_clip` (`fmain.c:2524`).
+pub const fn obj_frame_y_offset(inum: u8) -> u8 {
+    if inum & INUM_BIT7_HALF_HEIGHT != 0 { 8 } else { 0 }
+}
+
+/// Strip the bit-7 half-height flag from an `inum`, returning the
+/// effective frame index used to address the OBJECTS sheet.
+pub const fn obj_frame_index(inum: u8) -> u8 {
+    inum & !INUM_BIT7_HALF_HEIGHT
+}
+
+#[cfg(test)]
+mod sprite_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn bow_tables_are_32_entries() {
+        assert_eq!(BOW_X.len(), 32);
+        assert_eq!(BOW_Y.len(), 32);
+    }
+
+    #[test]
+    fn obj_frame_height_full_height_default() {
+        // A representative frame outside the half-height set.
+        assert_eq!(obj_frame_height(0), 16);
+        assert_eq!(obj_frame_height(7), 16);
+        assert_eq!(obj_frame_height(13), 16);
+        assert_eq!(obj_frame_height(24), 16);
+        assert_eq!(obj_frame_height(0x1c), 16);
+        assert_eq!(obj_frame_height(0x18), 16);
+    }
+
+    #[test]
+    fn obj_frame_height_half_height_inum_list() {
+        // {0x1b, 8..=12, 25, 26, 0x11..=0x17}
+        assert_eq!(obj_frame_height(0x1b), 8);
+        for f in 8u8..=12 { assert_eq!(obj_frame_height(f), 8, "inum={}", f); }
+        assert_eq!(obj_frame_height(25), 8);
+        assert_eq!(obj_frame_height(26), 8);
+        for f in 0x11u8..=0x17 { assert_eq!(obj_frame_height(f), 8, "inum={:#x}", f); }
+    }
+
+    #[test]
+    fn obj_frame_height_bit7_forces_half_height() {
+        assert_eq!(obj_frame_height(0x80), 8);
+        assert_eq!(obj_frame_height(0x80 | 30), 8);
+        assert_eq!(obj_frame_height(0x80 | 0x53), 8);
+    }
+
+    #[test]
+    fn obj_frame_y_offset_only_when_bit7_set() {
+        assert_eq!(obj_frame_y_offset(0), 0);
+        assert_eq!(obj_frame_y_offset(0x1b), 0);
+        assert_eq!(obj_frame_y_offset(0x80), 8);
+        assert_eq!(obj_frame_y_offset(0xff), 8);
+    }
+
+    #[test]
+    fn obj_frame_index_strips_bit7() {
+        assert_eq!(obj_frame_index(0x80 | 30), 30);
+        assert_eq!(obj_frame_index(0x53), 0x53);
+    }
+}

@@ -64,6 +64,13 @@ impl DebugConsole {
                 self.pause_request = Some(true);
                 self.log(format!("Stepping {} tick(s).", n));
             }
+            "/rate" => {
+                let hz: u32 = args.first()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30)
+                    .clamp(1, 240);
+                self.push_cmd(DebugCommand::SetTickRate { hz });
+            }
             "/watch" => {
                 self.watch_expanded = !self.watch_expanded;
                 self.log(format!(
@@ -97,7 +104,7 @@ impl DebugConsole {
                 "/quest"            => "/quest — quest progress (princess, statues, writ, talisman).",
                 "/inventory"        => "/inventory — full stuff[] dump grouped by category.",
                 "/inv"  | "inv"      => "/inv <slot 0-34> [+|-]<value>  e.g. /inv 0 1 or /inv 8 +99",
-                "/give" | "give"     => "/give <item>  add 1 x item by name or stuff index (see /items).",
+                "/give" | "give"     => "/give <item> | gold [N]   add 1 x item by name/index, or N gold (default 100).",
                 "/take" | "take"     => "/take <item>  remove 1 x item by name or stuff index.",
                 "/cheat"| "cheat"    => "/cheat          toggle cheat1 debug-key mode\n  /cheat on|off  set explicitly.",
                 "/tp"   | "teleport" => "/tp safe | ring <N> | <x> <y> | <location>\n  e.g. /tp 200 150   /tp tavern   /tp ring 0",
@@ -142,7 +149,7 @@ impl DebugConsole {
             "  /quest         dump quest progress",
             "  /inventory     dump full stuff[] array",
             "  /inv <s> <v>   set/adjust inventory slot 0-34",
-            "  /give <item>   add 1 x item (name or index)",
+            "  /give <item>   add 1 x item (name or index); /give gold [N] adds wealth",
             "  /take <item>   remove 1 x item (name or index)",
             "  /cheat [on|off] toggle / set cheat1 mode",
             "  /tp <x> <y>    teleport (also: /tp safe | ring <N> | <location>)",
@@ -265,9 +272,22 @@ impl DebugConsole {
 
     fn cmd_give(&mut self, args: &[&str]) {
         let Some(raw) = args.first() else {
-            self.log("Usage: /give <item>  (name or stuff index)");
+            self.log("Usage: /give <item>  (name or stuff index; 'gold [N]' for wealth)");
             return;
         };
+        // Special case: gold/wealth is not a stuff[] slot — it lives in
+        // `state.wealth`. Accept an optional amount (default 100).
+        if raw.eq_ignore_ascii_case("gold") || raw.eq_ignore_ascii_case("wealth") {
+            let amount: i16 = args.get(1)
+                .and_then(|s| s.parse::<i16>().ok())
+                .unwrap_or(100);
+            self.push_cmd(DebugCommand::AdjustStat {
+                stat: crate::game::debug_command::StatId::Wealth,
+                delta: amount,
+            });
+            self.log(format!("Gave {} gold (wealth).", amount));
+            return;
+        }
         match crate::game::debug_items::lookup_by_name(raw)
             .or_else(|| raw.parse::<u8>().ok().and_then(crate::game::debug_items::lookup_by_id))
         {

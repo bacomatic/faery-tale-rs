@@ -643,6 +643,7 @@ impl DebugConsole {
                 .collect();
             let log_widget = Paragraph::new(log_text)
                 .block(Block::default().borders(Borders::ALL).title(" Log  [PgUp/PgDn/Home/End to scroll] "))
+                .wrap(Wrap { trim: false })
                 .scroll((top_offset as u16, 0));
             f.render_widget(log_widget, chunks[2]);
 

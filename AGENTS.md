@@ -19,7 +19,7 @@ This file is the compact agent contract for this repository. Keep it stable and 
 ## Agent working rules
 
 - **At session start, invoke the `context-mode:context-mode` skill if context-mode is installed.** This activates context-mode tool routing for all large-output commands. If the skill is unavailable, proceed without it.
-- **Always start by indexing `reference/README.md` from the research branch** (see "Reference docs (remote)" below). It is the entry point for all reference documentation.
+- **Reference docs on the `research` branch are pre-indexed in context-mode — use `ctx_search` first.** Only fall back to `ctx_fetch_and_index` for content not yet in the index. `reference/README.md` on that branch is the entry point for the full inventory.
 - **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, follow `AGENTS.md` and the project reference docs first.
 - Make minimal, surgical changes consistent with existing code style.
 - Prefer root-cause fixes over surface patches.
@@ -52,7 +52,14 @@ Reference material lives on the `research` branch of this same repo. Agents fetc
 - Browse (for human-readable links in markdown):
   `https://github.com/bacomatic/faery-tale-rs/blob/research/reference/`
 
-**Standard fetch recipe (markdown / JSON):**
+**Search-first workflow:**
+
+The `research` branch is pre-indexed in context-mode. Always search first:
+```
+ctx_search(queries: ["<topic>"], source: "research:reference/<path-prefix>")
+```
+
+**Fallback fetch recipe (markdown / JSON)** — use only when `ctx_search` returns no relevant results:
 
 ```
 ctx_fetch_and_index(
@@ -60,7 +67,7 @@ ctx_fetch_and_index(
   source: "research:reference/<path>"
 )
 ```
-Then use `ctx_search` against the indexed content. For follow-ups across many docs, reuse the same `source:` label so results can be filtered cleanly.
+Then use `ctx_search` against the newly indexed content. Reuse the same `source:` label for follow-ups across many docs so results can be filtered cleanly.
 
 **Binary assets (PNG region maps, `overworld.png`):** cannot be FTS-indexed. Fetch with `web_fetch` (raw URL) or `gh api` only when an image is genuinely needed.
 
@@ -83,8 +90,8 @@ When this list drifts (research branch adds/removes files), update it here in th
 ## Game mechanics research order
 
 When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
-1. **First**: index `reference/RESEARCH.md` from the research branch — it is the authoritative source of truth for verified mechanics.
-2. Index `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
+1. **First**: search via `ctx_search` — the research branch is pre-indexed. `reference/RESEARCH.md` is the authoritative source of truth for verified mechanics.
+2. Search `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
 3. Use `docs/SPECIFICATION.md` (local) to resolve implementation details and keep the port internally consistent.
 4. Do not create competing source-of-truth documents unless the user explicitly requests it.
 

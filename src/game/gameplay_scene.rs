@@ -1592,18 +1592,22 @@ impl GameplayScene {
             }
         }
 
-        // Search world_objects for setfigs (ob_stat=3) and ground items (ob_stat=1)
+        // Search world_objects for setfigs (ob_stat=3) and ground items (ob_stat=1/5)
         for (i, obj) in self.state.world_objects.iter().enumerate() {
-            if !obj.visible { continue; }
             if obj.region != self.state.region_num { continue; }
 
             if constraint == 1 {
-                // Looking for actors: skip ground items, include setfigs
+                // Looking for actors: must be visible setfigs only
+                if !obj.visible { continue; }
                 if obj.ob_stat != 3 { continue; }
             } else {
-                // Looking for items: skip setfigs, include ground items
-                if obj.ob_stat == 3 { continue; }
-                if obj.ob_id == 0x1d { continue; } // empty chest
+                // Looking for items: visible ground items (ob_stat=1) OR hidden items
+                // (ob_stat=5) — original Take picks up hidden items without Look first.
+                if obj.ob_stat == 3 { continue; }           // skip setfigs
+                if obj.ob_stat == 0 { continue; }           // skip already-taken items
+                if obj.ob_stat != 1 && obj.ob_stat != 5 { continue; }
+                if !obj.visible && obj.ob_stat != 5 { continue; } // skip invisible non-hidden
+                if obj.ob_id == 0x1d { continue; }          // empty chest
             }
 
             let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
@@ -2144,14 +2148,24 @@ impl GameplayScene {
     /// (`fmain.c:3440`, dialog_system.md:341), and the three per-branch
     /// side-effects / narrations at `fmain.c:3433-3437`.
     fn do_buy_slot(&mut self, slot: usize) {
-        use crate::game::shop::{buy_slot, has_shopkeeper_nearby, BuyOutcome, BuyResult};
+        use crate::game::shop::{buy_slot, BuyOutcome, BuyResult};
+        use crate::game::npc::RACE_SHOPKEEPER;
 
-        let hero_x = self.state.hero_x as i16;
-        let hero_y = self.state.hero_y as i16;
-        let near_shop = self.npc_table.as_ref().map_or(false, |t| {
-            has_shopkeeper_nearby(&t.npcs, hero_x, hero_y)
-        });
-        // fmain.c:3425-3426 — silent break on no nearest bartender.
+        // fmain.c:3425-3426 — silent break unless `nearest_person` is a
+        // bartender (race 0x88).  In Tambry the bartender is loaded from
+        // faery.toml as a SetFig (world_object, ob_stat=3, ob_id=8 =
+        // SETFIG_TABLE bartender index), NOT from the per-region NPC
+        // table — `nearest_fig` already searches both, so use it here
+        // to match the original's `nearest_person` semantics.
+        let near_shop = match self.nearest_fig(1, 50) {
+            Some(NearestFig { kind: FigKind::SetFig { setfig_type, .. }, .. }) => setfig_type == 8,
+            Some(NearestFig { kind: FigKind::Npc(idx), .. }) => self
+                .npc_table
+                .as_ref()
+                .and_then(|t| t.npcs.get(idx))
+                .map_or(false, |n| n.race == RACE_SHOPKEEPER),
+            _ => false,
+        };
         if !near_shop {
             return;
         }
@@ -3057,8 +3071,10 @@ impl GameplayScene {
         self.opened_doors.clear();
         self.bumped_door = None;
         self.last_person = None;
-        self.state.populate_region_objects(region, game_lib);
-        self.log_buffer.push(format!("on_region_changed: loaded {} world objects", self.state.world_objects.len()));
+        // Idempotent — populates all regions on first call, preserves
+        // pickup/visibility state on subsequent transitions.
+        self.state.populate_world_objects(game_lib);
+        self.log_buffer.push(format!("on_region_changed: {} world objects loaded", self.state.world_objects.len()));
         if let Some(ref adf) = self.adf {
             let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
                 let map_blocks: Vec<u32> = if region < 8 {
@@ -3147,15 +3163,23 @@ impl GameplayScene {
             }
             MenuAction::SetWeapon(slot) => {
                 use crate::game::menu::MenuMode;
-                if let Some(player) = self.state.actors.first_mut() {
-                    player.weapon = slot + 1;
+                // inventory.md#use_dispatch (fmain.c:3449-3455): hitgo gates
+                // the equip — when the player owns the weapon (`stuff[slot] > 0`),
+                // `anim_list[0].weapon = hit + 1` runs silently. When unowned,
+                // `extract("% doesn't have one.")` fires and the equip is
+                // skipped. The hardcoded literal is enumerated in
+                // dialog_system.md "Hardcoded scroll messages — complete
+                // reference" (fmain.c:3451).
+                let owned = (slot as usize) < 5
+                    && self.state.stuff()[slot as usize] > 0;
+                if owned {
+                    if let Some(player) = self.state.actors.first_mut() {
+                        player.weapon = slot + 1;
+                    }
+                } else {
+                    let bname = self.brother_name().to_string();
+                    self.messages.push(format!("{} doesn't have one.", bname));
                 }
-                // inventory.md#use_dispatch (fmain.c:3449-3455): equipping a
-                // weapon sets `anim_list[0].weapon = hit + 1` with no scroll-
-                // area feedback. `"% doesn't have one."` fires only when the
-                // slot is unowned (hitgo == 0) and is routed via the menu
-                // gate elsewhere.
-                let _ = slot;
                 self.menu.gomenu(MenuMode::Items);
             }
             MenuAction::TryKey(idx) => {
@@ -3624,7 +3648,7 @@ impl GameplayScene {
                 //   - FigKind::Npc   → search_body (loot from corpse)
                 //   - FigKind::SetFig → no-op (setfigs aren't TAKE targets)
                 //   - None           → "Take What?" literal
-                const TAKE_RANGE: i32 = 30;
+                const TAKE_RANGE: i32 = 30; // fmain2.c nearest_fig(0, 30) — see SPECIFICATION.md §menu-table
                 // inventory.md#take_command (fmain.c:3151): stuff[35] (ARROWBASE)
                 // is the per-TAKE quiver accumulator; it must be cleared on
                 // entry, then folded into stuff[8] * 10 at the epilogue.
@@ -4002,13 +4026,19 @@ impl GameplayScene {
         // Standard itrans pickup
         if let Some(stuff_idx) = ob_id_to_stuff_index(ob_id) {
             if self.state.pickup_item(stuff_idx) {
-                let name = stuff_index_name(stuff_idx);
-                let msg = crate::game::events::event_msg(&self.narr, 37, bname);
-                if !msg.is_empty() {
-                    self.messages.push(msg);
+                // stuff[] indices >= 31 are gold/arrow accumulators — they
+                // have no entry in NAMES. The only itrans target in that
+                // range is QUIVER (ob_id 11 → stuff[35] = ARROWBASE), which
+                // the container loot path also names "quiver of arrows".
+                let name = if stuff_idx < 31 {
+                    stuff_index_name(stuff_idx)
                 } else {
-                    self.messages.push(format!("{} found a {}.", bname, name));
-                }
+                    "quiver of arrows"
+                };
+                // Original `announce_treasure(name)` composes "% found a <name>."
+                // event_msg[37] is the apple-eaten message, NOT a generic pickup
+                // string — using it here was a copy/paste error.
+                self.messages.push(format!("{} found a {}.", bname, name));
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
@@ -4714,6 +4744,9 @@ impl GameplayScene {
                     }
                 }
             }
+            SetTickRate { .. } => {
+                // Intercepted in main.rs before reaching here.
+            }
         }
     }
 
@@ -4920,6 +4953,66 @@ impl GameplayScene {
                 framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
             }
         }
+    }
+
+    /// Compute the hero's weapon-overlay blit parameters for the current body
+    /// `frame` and `hero_facing`. Mirrors `select_atype_inum` and the bow
+    /// special-case in `reference/logic/sprite-rendering.md` (`fmain.c:2412-2425`).
+    ///
+    /// Returns `(frame_pixels_slice, wx, wy, height)` where the slice has been
+    /// pre-trimmed to the correct OBJECTS half/full-height row band and bit-7
+    /// has been stripped from the source `inum`.
+    fn compute_weapon_blit<'a>(
+        frame: usize,
+        hero_facing: u8,
+        weapon_type: u8,
+        obj_sheet: &'a crate::game::sprites::SpriteSheet,
+        rel_x: i32,
+        rel_y: i32,
+    ) -> Option<(&'a [u8], i32, i32, usize)> {
+        use crate::game::sprites::{
+            STATELIST, SPRITE_W, BOW_X, BOW_Y,
+            obj_frame_height, obj_frame_y_offset, obj_frame_index,
+        };
+        if !(weapon_type > 0 && weapon_type <= 5) { return None; }
+        let entry = STATELIST.get(frame)?;
+
+        // Resolve (x_off, y_off, raw_inum) per weapon class.
+        // Weapon-class k offsets (fmain.c:2412-2418):
+        //   bow=0 (special-cased), mace=32, sword=48, dirk=64.
+        let (x_off, y_off, raw_inum): (i32, i32, u8) = if weapon_type == 5 {
+            // Wand: inum = facing + 103; DIR_NE (=2) shifts Y by -6 (fmain.c:2418).
+            let wy = if hero_facing == 2 { entry.wpn_y as i32 - 6 } else { entry.wpn_y as i32 };
+            (entry.wpn_x as i32, wy, (hero_facing as u8).wrapping_add(103))
+        } else if weapon_type == 4 && frame < 32 {
+            // Bow walking pose: per-frame BOW_X/BOW_Y offsets and direction-dependent
+            // bow inum derived from walk-cycle group (frame / 8):
+            //   0 = south(0..7)→0x53, 1 = west(8..15)→30,
+            //   2 = north(16..23)→0x51, 3 = east(24..31)→30.
+            let bow_inum: u8 = match frame / 8 {
+                0 => 0x53,
+                1 => 30,
+                2 => 0x51,
+                _ => 30,
+            };
+            (BOW_X[frame] as i32, BOW_Y[frame] as i32, bow_inum)
+        } else {
+            // Hand weapons (and bow on non-walking frames): wpn_no + k.
+            let k: u8 = match weapon_type { 1 => 64, 2 => 32, 3 => 48, _ => 0 };
+            (entry.wpn_x as i32, entry.wpn_y as i32, entry.wpn_no.wrapping_add(k))
+        };
+
+        // Bit-7 dual role + half-height set: pick the right row band of the
+        // OBJECTS frame (`compute_sprite_size` + `compute_shape_clip`).
+        let h = obj_frame_height(raw_inum) as usize;
+        let y_skip = obj_frame_y_offset(raw_inum) as usize;
+        let frame_idx = obj_frame_index(raw_inum) as usize;
+        let fp_full = obj_sheet.frame_pixels(frame_idx)?;
+        let row_bytes = SPRITE_W;
+        let start = y_skip * row_bytes;
+        let end = start + h * row_bytes;
+        if end > fp_full.len() { return None; }
+        Some((&fp_full[start..end], rel_x + x_off, rel_y + y_off, h))
     }
 
     /// Compute rel_x/rel_y for an actor at (abs_x, abs_y) given viewport origin (map_x, map_y).
@@ -5181,29 +5274,8 @@ impl GameplayScene {
                 // Weapon overlay (fmain.c passmode weapon blit).
                 // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
-                let wpn_blit = if weapon_type > 0 && weapon_type <= 5 {
-                    if let Some(ref obj_sheet) = obj_sprites {
-                        use crate::game::sprites::{STATELIST, OBJ_SPRITE_H};
-                        if let Some(entry) = STATELIST.get(frame) {
-                            let (wpn_x, wpn_y, wpn_frame) = if weapon_type == 5 {
-                                // Wand: facing + 103
-                                let wand_y = if hero_facing == 2 { entry.wpn_y - 6 } else { entry.wpn_y };
-                                (entry.wpn_x, wand_y, hero_facing as usize + 103)
-                            } else {
-                                // Hand weapons: dirk(1)=+64, mace(2)=+32, sword(3)=+48, bow(4)=+0
-                                let k: usize = match weapon_type {
-                                    1 => 64,
-                                    2 => 32,
-                                    3 => 48,
-                                    _ => 0,
-                                };
-                                (entry.wpn_x, entry.wpn_y, entry.wpn_no as usize + k)
-                            };
-                            let wx = rel_x + wpn_x as i32;
-                            let wy = rel_y + wpn_y as i32;
-                            obj_sheet.frame_pixels(wpn_frame).map(|wfp| (wfp, wx, wy, OBJ_SPRITE_H))
-                        } else { None }
-                    } else { None }
+                let wpn_blit = if let Some(ref obj_sheet) = obj_sprites {
+                    Self::compute_weapon_blit(frame, hero_facing, weapon_type, obj_sheet, rel_x, rel_y)
                 } else { None };
 
                 // Weapon behind body for N(0), SW(5), W(6), NW(7)
@@ -5646,7 +5718,7 @@ impl Scene for GameplayScene {
                             let renderer = MapRenderer::new(&world, self.shadow_mem.clone());
                             // npc-101: load NPC table for the starting region
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
-                            self.state.populate_region_objects(region, game_lib);
+                            self.state.populate_world_objects(game_lib);
                             // sprite-101: load player (cfile 0-2), enemies (cfile 4-12), and setfig (cfile 13-17) sprites
                             for cfile_idx in [0u8, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] {
                                 if let Some(sheet) = crate::game::sprites::SpriteSheet::load(
@@ -6081,33 +6153,14 @@ impl Scene for GameplayScene {
 
                                     // Prepare weapon blit parameters
                                     let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
-                                    let wpn_blit = if weapon_type > 0 && weapon_type <= 5 {
-                                        if let Some(ref obj_sheet) = self.object_sprites {
-                                            use crate::game::sprites::STATELIST;
-                                            if let Some(stat_entry) = STATELIST.get(frame) {
-                                                let (wpn_x, wpn_y, wpn_frame) = if weapon_type == 5 {
-                                                    let wand_y = if hero_facing == 2 { stat_entry.wpn_y - 6 } else { stat_entry.wpn_y };
-                                                    (stat_entry.wpn_x, wand_y, hero_facing as usize + 103)
-                                                } else {
-                                                    let k: usize = match weapon_type {
-                                                        1 => 64,
-                                                        2 => 32,
-                                                        3 => 48,
-                                                        _ => 0,
-                                                    };
-                                                    (stat_entry.wpn_x, stat_entry.wpn_y, stat_entry.wpn_no as usize + k)
-                                                };
-                                                let wx = rel_x + wpn_x as i32;
-                                                let wy = rel_y + wpn_y as i32;
-                                                obj_sheet.frame_pixels(wpn_frame).map(|wfp| (wfp, wx, wy))
-                                            } else { None }
-                                        } else { None }
+                                    let wpn_blit = if let Some(ref obj_sheet) = self.object_sprites {
+                                        Self::compute_weapon_blit(frame, hero_facing, weapon_type, obj_sheet, rel_x, rel_y)
                                     } else { None };
 
                                     // Draw weapon BEHIND body when facing N/SW/W/NW
                                     if weapon_behind {
-                                        if let Some((wfp, wx, wy)) = wpn_blit {
-                                            Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                        if let Some((wfp, wx, wy, wh)) = wpn_blit {
+                                            Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
                                         }
                                     }
 
@@ -6117,8 +6170,8 @@ impl Scene for GameplayScene {
 
                                     // Draw weapon IN FRONT when facing NE/E/SE/S
                                     if !weapon_behind {
-                                        if let Some((wfp, wx, wy)) = wpn_blit {
-                                            Self::blit_obj_to_framebuf(wfp, wx, wy, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                        if let Some((wfp, wx, wy, wh)) = wpn_blit {
+                                            Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
                                         }
                                     }
 
@@ -6128,12 +6181,12 @@ impl Scene for GameplayScene {
                                     // Mask the weapon separately (original uses two-pass masking:
                                     // one for body, one for weapon, each with its own bounding box
                                     // but sharing the body's ground line — fmain.c:2921-3184).
-                                    if let Some((_, wx, wy)) = wpn_blit {
+                                    if let Some((_, wx, wy, wh)) = wpn_blit {
                                         let wpn_info = BlittedSprite {
                                             screen_x: wx,
                                             screen_y: wy,
                                             width: SPRITE_W,
-                                            height: OBJ_SPRITE_H,
+                                            height: wh,
                                             ground: sprite_info.ground,
                                             is_falling: false,
                                         };
@@ -6184,21 +6237,52 @@ impl Scene for GameplayScene {
                         RenderKind::WorldObj(idx) => {
                             let obj = &self.state.world_objects[idx];
                             if let Some(ref obj_sheet) = self.object_sprites {
-                                let frame = obj.ob_id as usize;
+                                // Resolve sprite display attrs from ob_id.
+                                // Many cfile-3 frames are shared between two items
+                                // (top half rows 0..7, bottom half rows 8..15) — INV_LIST
+                                // describes each item's exact (frame, img_off, img_height)
+                                // sub-rectangle. Items lacking an INV_LIST entry
+                                // (containers, money, fruit, etc.) use the full 16-row
+                                // frame at ob_id.
+                                use crate::game::sprites::INV_LIST;
+                                use crate::game::world_objects::ob_id_to_stuff_index;
+                                let (frame, img_off, img_height) = ob_id_to_stuff_index(obj.ob_id)
+                                    .and_then(|s| INV_LIST.get(s))
+                                    .map(|it| (
+                                        it.image_number as usize,
+                                        it.img_off as usize,
+                                        it.img_height as usize,
+                                    ))
+                                    .unwrap_or((obj.ob_id as usize, 0, OBJ_SPRITE_H));
                                 if let Some(pix) = obj_sheet.frame_pixels(frame) {
-                                    let rel_x = obj.x as i32 - map_x as i32 - (SPRITE_W as i32 / 2);
-                                    let rel_y = obj.y as i32 - map_y as i32 - (OBJ_SPRITE_H as i32 / 2);
+                                    // Use actor_rel_pos_offset so indoor coords (bit 15 set)
+                                    // wrap correctly against the indoor map_y origin.
+                                    let (rel_x, rel_y) = Self::actor_rel_pos_offset(
+                                        obj.x, obj.y, map_x, map_y,
+                                        -(SPRITE_W as i32 / 2),
+                                        -(img_height as i32 / 2),
+                                    );
+
+                                    // Slice into the frame at img_off so blit_obj
+                                    // reads only the item's sub-rectangle.
+                                    let row_start = img_off * SPRITE_W;
+                                    let row_end = row_start + img_height * SPRITE_W;
+                                    let pix_clip = if row_end <= pix.len() {
+                                        &pix[row_start..row_end]
+                                    } else {
+                                        pix
+                                    };
 
                                     // Mask BEFORE blit
                                     let sprite_info = BlittedSprite {
                                         screen_x: rel_x,
                                         screen_y: rel_y,
                                         width: SPRITE_W,
-                                        height: OBJ_SPRITE_H,
-                                        ground: rel_y + OBJ_SPRITE_H as i32,
+                                        height: img_height,
+                                        ground: rel_y + img_height as i32,
                                         is_falling: false,
                                     };
-                                    Self::blit_obj_to_framebuf(pix, rel_x, rel_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                    Self::blit_obj_to_framebuf(pix_clip, rel_x, rel_y, img_height, &mut mr.framebuf, fb_w, fb_h);
 
                                     // Mask AFTER blit: restore foreground terrain over the sprite
                                     apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
@@ -6284,6 +6368,28 @@ mod tests {
     use crate::game::game_library::NarrConfig;
     use crate::game::game_state::WorldObject;
     use crate::game::npc::{Npc, NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+
+    /// Indoor world objects (y with bit 15 set, e.g. region-8 hidden items at
+    /// y ~= 0x82xx) must wrap modulo 0x8000 against the indoor map_y origin
+    /// (low range), exactly like actors and setfigs. Without the wrap, the
+    /// raw subtraction places sprites ~32k pixels below the framebuffer and
+    /// they are clipped — visible symptom: Look reveals a hidden item but it
+    /// never appears on screen.
+    #[test]
+    fn world_obj_rel_pos_handles_indoor_wrap() {
+        // Tambry-interior hidden item coords from faery.toml.
+        let obj_x: u16 = 3872;
+        let obj_y: u16 = 33546; // 0x830A — indoor flag set
+        // Plausible indoor viewport origin: low Y range with bit 15 clear.
+        let map_x: u16 = 3800;
+        let map_y: u16 = 0x82E0; // hero stands near the item indoors
+        let (rel_x, rel_y) = GameplayScene::actor_rel_pos_offset(
+            obj_x, obj_y, map_x, map_y, -8, -8,
+        );
+        // Expect on-screen-ish offsets, not ~33k.
+        assert!(rel_x.abs() < 1024, "rel_x out of range: {rel_x}");
+        assert!(rel_y.abs() < 1024, "rel_y out of range: {rel_y}");
+    }
 
     fn scene_with_speeches() -> GameplayScene {
         let mut scene = GameplayScene::new();

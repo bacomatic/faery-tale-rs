@@ -68,4 +68,6 @@ pub enum DebugCommand {
     QueryDoors,
     /// Dump the extent zone under the hero's feet to the debug log.
     QueryExtent,
+    /// Set the game tick rate in Hz. 30 = normal, 15 = half speed, 60 = double.
+    SetTickRate { hz: u32 },
 }
