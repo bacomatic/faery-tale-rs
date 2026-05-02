@@ -539,7 +539,7 @@ Extracts render_hibar, render_by_viewstatus, blit_* helpers, animation frame fns
 
 ---
 
-## Task 11: Extract npc_interaction.rs (medium-high coupling)
+## Task 11: Extract npc_interaction.rs (medium-high coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/npc_interaction.rs`
@@ -549,7 +549,7 @@ Methods to extract:
 - `handle_setfig_talk` (~1999–2149)
 - `do_buy_slot` (~2150–2224)
 
-- [ ] **Step 1: Create npc_interaction.rs**
+- [x] **Step 1: Create npc_interaction.rs**
 
 ```rust
 //! NPC conversation dispatch and shop purchase handling.
@@ -562,15 +562,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod npc_interaction;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod npc_interaction;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -10
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
