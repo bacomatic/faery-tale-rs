@@ -384,8 +384,8 @@ struct encounter {
 **Field semantics:**
 
 - **`hitpoints`** — Base vitality assigned at spawn.
-- **`agressive`** — TRUE = hostile on sight; 0 = passive. Only the Woodcutter (index 10) is non-aggressive.
-- **`arms`** — Indexes into `weapon_probs[]` (`fmain2.c:860-868`): `weapon_probs[arms*4 + rnd(4)]` selects the weapon type at spawn (`fmain.c:2758`).
+- **`agressive`** *(sic)* — Set to `TRUE` for all races except the Woodcutter (index 10), but **never read** anywhere in the codebase. Vestigial metadata; aggression is governed entirely by goal/tactic state and the extent system. See [§9.7](#97-peace-zones).
+- **`arms`** — Indexes into `weapon_probs[]` (`fmain2.c:860-868`): `weapon_probs[arms*4 + wt]` selects the weapon type at spawn (`fmain.c:2757-2758`), where `wt` is a per-batch (or per-spawn, see [§9.5](#95-set_encounter--actor-placement-fmainc2736-2770)) column index 0–3.
 - **`cleverness`** — 0 = goal ATTACK1 (stupid pursuit), 1 = goal ATTACK2 (clever pursuit with more frequent re-evaluation).
 - **`treasure`** — Indexes into `treasure_probs[]` (`fmain2.c:852-858`): `treasure_probs[treasure*8 + rnd(8)]` selects loot on body search (`fmain.c:3273`).
 - **`file_id`** — Image file index for loading monster sprites.
@@ -1481,7 +1481,7 @@ Ranged weapon → ARCHER1 (cleverness=0) or ARCHER2 (cleverness=1). Melee → AT
 | Hero dead/falling, leader exists | FOLLOWER | `fmain.c:2135-2136` |
 | Vitality < 2 | FLEE | `fmain.c:2138` |
 | Special encounter mismatch (`xtype > 59`, race ≠ extent v3) | FLEE | `fmain.c:2139-2140` |
-| Weapon < 1 (unarmed) | CONFUSED | `fmain.c:2151-2152` |
+| Weapon < 1 (unarmed) | CONFUSED | `fmain.c:2151-2152`; **only evaluated on hostile-mode reconsider ticks** (`r == TRUE`, inside the `mode ≤ ARCHER2` block — unarmed FLEE/STAND/WAIT/FOLLOWER actors are unaffected) |
 | Vitality < 1 | DEATH (via `checkdead`) | `fmain.c:2774` |
 
 ### 8.2 `do_tactic()` Dispatch (`fmain2.c:1664-1699`)
@@ -1508,9 +1508,11 @@ When `r` is 0, the actor continues its previous trajectory unchanged.
 
 SHOOT is the only tactic that fires every tick — it checks axis alignment with the hero and transitions between approaching (mode 0) and aiming/shooting (mode 5).
 
-**RANDOM note** (`fmain2.c:1684`): `an->state = WALKING` is intentionally unconditional — the actor must always be walking. Only the facing direction changes when `r` is non-zero.
+**RANDOM note** (`fmain2.c:1685`): The line `{ if (r) an->facing = rand()&7; an->state = WALKING; }` lacks braces around the `if`, but this is intentional. The `if (r)` gate deliberately rate-limits *direction changes* (~12.5%/tick, or 25% for ATTACK2) — without it, a RANDOM-tactic actor would pick a new heading every tick and walk in place. `an->state = WALKING` runs every tick because the actor must always be moving while RANDOM is active.
 
 **EVADE** (`fmain2.c:1693`): `f = i+i` doubles the actor index instead of incrementing. With at most 4 active enemies, `i` maxes around 5, so `f` stays within `anim_list[20]` bounds in practice. The dead-code branch `if (i == anix) f = i-1` can never execute since the calling loop uses `i < anix`.
+
+**FOLLOW self-targeting bug** (`fmain2.c:1689-1691`): The leader index `f` is loaded from the global `leader` variable. If the actor is itself the current leader (`f == i`), the code sets `an->tactic = RANDOM` but then falls through — with no early return — to `if (r) set_course(i, anim_list[i].abs_x, anim_list[i].abs_y+20, 0)`, targeting the actor's own position plus 20 pixels south. The RANDOM tactic is immediately overridden back to FOLLOW on the next tick when FOLLOWER-mode dispatch calls `do_tactic(i, FOLLOW)` again.
 
 **Unused tactics**: HIDE (7) was planned but never implemented. DOOR_SEEK (11) and DOOR_LET (12) were replaced by hardcoded DKnight logic (`fmain.c:2162-2169`). None have a case in `do_tactic()`.
 
@@ -1525,12 +1527,13 @@ The AI loop processes actors 2 through `anix-1` (skipping player and raft). Proc
 5. **Random reconsider** (`fmain.c:2132`): `r = !bitrand(15)` → 1/16 (6.25%) base probability of reconsidering tactics.
 6. **Goal overrides** (`fmain.c:2133-2152`): Hero dead → FLEE/FOLLOWER; low health → FLEE; unarmed → CONFUSED.
 7. **Frustration handling** (`fmain.c:2141-2143`): FRUST or SHOOTFRUST → random escape tactic; see [§8.4](#84-frustration-cycle) for details. Note: SHOOTFRUST is dead code (defined but never assigned — see [§8.4](#84-frustration-cycle)).
-8. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
-9. **FLEE** (`fmain.c:2172`): `do_tactic(i, BACKUP)`.
-10. **FOLLOWER** (`fmain.c:2173`): `do_tactic(i, FOLLOW)`.
-11. **STAND** (`fmain.c:2174-2176`): Face hero, force STILL state.
-12. **WAIT** (`fmain.c:2178`): Force STILL state, no facing change.
-13. **CONFUSED** and others: No processing — actor continues last trajectory.
+8. **SHOOT1 advance** (`fmain.c:2145`): If the actor's animation state is SHOOT1 (arrow mid-release), it advances to SHOOT3. This `else if` branch **bypasses all remaining steps** — the Hostile AI block and every goal-mode handler (FLEE, FOLLOWER, STAND, etc.) do not run that tick. A FLEE-mode archer in SHOOT1 state will complete its shot transition before fleeing.
+9. **Hostile AI** (`fmain.c:2146-2171`): ATTACK1–ARCHER2 modes; detailed below.
+10. **FLEE** (`fmain.c:2172`): `do_tactic(i, BACKUP)`.
+11. **FOLLOWER** (`fmain.c:2173`): `do_tactic(i, FOLLOW)`.
+12. **STAND** (`fmain.c:2174-2176`): Face hero, force STILL state.
+13. **WAIT** (`fmain.c:2178`): Force STILL state, no facing change.
+14. **CONFUSED** and others: No processing — actor continues last trajectory.
 
 At loop end, `leader` is set to the first living active enemy (`fmain.c:2183`).
 
@@ -1637,7 +1640,9 @@ Clever enemies (cleverness=1): Orcs, Wraith, Snake, Spider, DKnight, Loraii. Stu
 
 ### 8.6 CONFUSED Mode
 
-Assigned when a hostile actor loses its weapon (`weapon < 1`, `fmain.c:2151-2152`). On the first tick, `do_tactic(i, RANDOM)` runs. On subsequent ticks, CONFUSED (value 10) fails all goal-mode checks in the dispatch chain (none match), so **no AI processing occurs** — the actor continues walking in its last random direction until blocked.
+Assigned when a hostile actor loses its weapon (`weapon < 1`, `fmain.c:2151-2152`). On the first tick, `do_tactic(i, RANDOM)` runs. On subsequent ticks, CONFUSED (value 10) fails all goal-mode checks in the dispatch chain (none match), so **no mode-specific processing occurs** — the actor continues walking in its last random direction until blocked.
+
+A CONFUSED actor can still exit via the shared goal-override block (`fmain.c:2133-2140`), which runs every tick before mode dispatch: low vitality (`< 2`) or encounter mismatch transitions to FLEE; hero death transitions to FLEE (no leader) or FOLLOWER (leader exists). These escape paths are modelled in the [normative state diagram](logic/ai-system.md).
 
 > **Normative logic:** [reference/logic/ai-system.md](logic/ai-system.md).
 
@@ -1705,13 +1710,38 @@ Called every frame as `find_place(2)` (`fmain.c:2049`). Two phases:
 
 Priority ordering ensures specific zones override general ones: the graveyard (idx 7, etype 48) takes priority over the surrounding city peace zone (idx 8, etype 80); the spider pit (idx 3, etype 53) overrides overlapping peace zones (idx 12–14).
 
+#### 9.3.1 Forced-Encounter Trigger Path (`fmain.c:2682-2720`)
+
+`find_place()` itself dispatches forced encounters whenever `xtype` changes (i.e. the hero crosses an extent boundary). This is a separate, **synchronous** code path — distinct from the periodic checks in [§9.4](#94-danger-level--spawn-logic) — and runs only on the entry tick:
+
+| New `xtype` | Action | Code |
+|-------------|--------|------|
+| 83 (princess) | Call `rescue()` if `ob_list8[9].ob_stat`, then re-scan via `goto findagain` | `fmain.c:2684-2685` |
+| 60 or 61 | If `anim_list[3].race != extn->v3` or `anix < 4`: set encounter origin to extent center, fall through to `force:` | `fmain.c:2687-2693` |
+| 52 (astral) | Hardcode `encounter_type = 8` (Loraii); call `load_actors()` + `prep(ENEMY)` synchronously | `fmain.c:2695-2698` |
+| 50–59 (other forced) | Set encounter origin to hero position; fall through to `force:` | `fmain.c:2699-2700` |
+
+The shared `force:` block (`fmain.c:2702-2713`) sets `encounter_type = extn->v3`, clears `mixflag = wt = 0`, calls `load_actors()` + `prep(ENEMY)` (blocking disk read), sets `encounter_number = extn->v1` (overwriting the random `v1 + rnd(v2)` from `load_actors`), and immediately fills slots 3–6 via `set_encounter(anix, 63)`.
+
+Finally (`fmain.c:2716-2719`):
+- If `xtype < 70`: `active_carrier = 0` — any active carrier is dropped on leaving the carrier extent.
+- If `xtype == 70` and either no carrier is active, or the loaded shape file doesn't match `extn->v3` while not riding: `load_carrier(extn->v3)` is called.
+
+Because this path runs only when `xtype` changes, leaving and re-entering an etype 60 zone re-spawns the unique NPC (e.g. the DKnight, Necromancer).
+
+> **Normative logic:** [reference/logic/astral-plane.md#find_place](logic/astral-plane.md#find_place) (full `find_place` pseudo-code, covering all dispatch branches).
+
 ### 9.4 Danger Level & Spawn Logic
 
 Two periodic checks drive random encounters (`fmain.c:2058-2091`):
 
 #### Placement Check — Every 16 Frames (`fmain.c:2058-2078`)
 
-Places already-loaded monsters into anim_list slots 3–6. Up to 10 random locations are tried via `set_loc()` (`fmain2.c:1714-1720`), which picks a random point 150–213 pixels from the hero. Each location must have terrain type 0 (walkable) per `px_to_im()` (`fmain.c:2063`). Dead enemy slots are recycled when all 4 slots are full.
+Places already-loaded monsters into anim_list slots 3–6. Up to 10 random cluster origins are tried via `set_loc()` (`fmain2.c:1714-1720`), which picks a random point 150–213 pixels from the hero in a random compass direction. Each origin must have terrain type 0 (walkable) per `px_to_im()` (`fmain.c:2063`). Once a valid origin is found, the loop fills empty slots 3–6 first, then recycles `DEAD` enemies in the same range (wraith corpses, race=2, are recyclable even while still visible — `fmain.c:2071`).
+
+At the start of each placement pass, `mixflag = rand()` (a 31-bit value) and `wt = rand4()` (`fmain.c:2059-2060`). `mixflag` is forced to 0 when `xtype > 49` (special extents) or when `xtype` is divisible by 4. The two consumed bits are bit 1 (race pairing, see [§9.5](#95-set_encounter--actor-placement-fmainc2736-2770)) and bit 2 (per-spawn weapon-column re-roll).
+
+**Note — failed placements consume queue slots**: `encounter_number--` runs unconditionally inside the slot-fill loop (`fmain.c:2065-2067`), so a `set_encounter()` failure (15 collision retries exhausted) still decrements the queued count. A heavily obstructed cluster origin can therefore "eat" pending spawns silently. The dead-slot recycling loop (`fmain.c:2068-2074`) only decrements when the slot is actually recyclable, so it does not have this issue.
 
 #### Danger Check — Every 32 Frames (`fmain.c:2080-2091`)
 
@@ -1794,7 +1824,7 @@ an->weapon = weapon_probs[w];
 
 #### Carriers — Bird, Turtle, Dragon (etype 70)
 
-`load_carrier(n)` at `fmain.c:2784-2804` places the carrier in anim_list[3]:
+Carrier loading is triggered from `find_place()` (`fmain.c:2716-2719`, see [§9.3.1](#931-forced-encounter-trigger-path-fmainc2682-2720)) when the hero enters a carrier extent without an active matching carrier. `load_carrier(n)` at `fmain.c:2784-2804` places the carrier in anim_list[3]:
 
 | v3 | Carrier | Type Set | Notes |
 |----|---------|----------|-------|
