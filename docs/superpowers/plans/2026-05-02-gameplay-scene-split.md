@@ -673,7 +673,7 @@ Extracts apply_player_input, try_cast_spell, compass and cheat key handlers. ~75
 
 ---
 
-## Task 14: Extract menu_actions.rs (high coupling)
+## Task 14: Extract menu_actions.rs (high coupling) ✅
 
 **Files:**
 - Create: `src/game/gameplay_scene/menu_actions.rs`
@@ -684,7 +684,7 @@ Methods to extract:
 - `do_option` (~3445–3865)
 - `toggle_menu_mode` (~3866–3876)
 
-- [ ] **Step 1: Create menu_actions.rs**
+- [x] **Step 1: Create menu_actions.rs**
 
 ```rust
 //! Menu action dispatch and option execution.
@@ -697,15 +697,15 @@ impl GameplayScene {
 }
 ```
 
-- [ ] **Step 2: Add `mod menu_actions;` to mod.rs, remove methods**
+- [x] **Step 2: Add `mod menu_actions;` to mod.rs, remove methods**
 
-- [ ] **Step 3: cargo check && cargo test**
+- [x] **Step 3: cargo check && cargo test**
 
 ```bash
 cargo check 2>&1 | head -20 && cargo test 2>&1 | tail -20
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/gameplay_scene/
