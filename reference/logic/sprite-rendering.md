@@ -810,10 +810,21 @@ fight/shoot, where `d` is 0..7 = `Shape.facing`. Used at `fmain.c:1478,
 
 ```c
 char diroffs[16] = {
-    16, 16, 24, 24,  0,  0,  8,  8,    //  0..7   walk:  N=16, NE=16, E=24, SE=24, S=0, SW=0, W=8, NW=8
-    56, 56, 68, 68, 32, 32, 44, 44     //  8..15  fight: N=56, NE=56, E=68, SE=68, S=32, SW=32, W=44, NW=44
+    16, 16, 24, 24,  0,  0,  8,  8,    //  0..7   walk:  NW=16, N=16, NE=24, E=24, SE=0, S=0, SW=8, W=8
+    56, 56, 68, 68, 32, 32, 44, 44     //  8..15  fight: NW=56, N=56, NE=68, E=68, SE=32, S=32, SW=44, W=44
 };
 ```
+
+The actor sheet stores walk-cycle base frames at offsets 0 (south-walk), 8
+(west-walk), 16 (north-walk), 24 (east-walk); fight-cycle base frames are
+at 32 (south-fight), 44 (west-fight), 56 (north-fight), 68 (east-fight).
+The diroffs table maps each of the 8 facings (per `DIR_*` in
+[SYMBOLS.md §2.1](SYMBOLS.md#21-directions-fsubsasm-see-research-51) where
+`DIR_NW = 0`) to the base offset of the **sprite quadrant that best
+represents that facing**: the four cardinal facings (N, E, S, W) use the
+matching cardinal sprites, and each diagonal facing reuses its
+clockwise-adjacent cardinal sprite (NE→east, SE→south, SW→west, NW→north).
+This is why pairs of consecutive entries share a value.
 
 This is also captured in [RESEARCH.md §2.4](../RESEARCH.md#24-statelist--animation-frame-lookup).
 
