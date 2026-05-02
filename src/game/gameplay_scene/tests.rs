@@ -2,815 +2,811 @@
 // All test helpers and test functions live here.
 
 use super::*;
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::game::game_library::NarrConfig;
-    use crate::game::game_state::WorldObject;
-    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+use crate::game::game_library::NarrConfig;
+use crate::game::game_state::WorldObject;
+use crate::game::npc::{Npc, NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
 
-    /// Indoor world objects (y with bit 15 set, e.g. region-8 hidden items at
-    /// y ~= 0x82xx) must wrap modulo 0x8000 against the indoor map_y origin
-    /// (low range), exactly like actors and setfigs. Without the wrap, the
-    /// raw subtraction places sprites ~32k pixels below the framebuffer and
-    /// they are clipped — visible symptom: Look reveals a hidden item but it
-    /// never appears on screen.
-    #[test]
-    fn world_obj_rel_pos_handles_indoor_wrap() {
-        // Tambry-interior hidden item coords from faery.toml.
-        let obj_x: u16 = 3872;
-        let obj_y: u16 = 33546; // 0x830A — indoor flag set
-        // Plausible indoor viewport origin: low Y range with bit 15 clear.
-        let map_x: u16 = 3800;
-        let map_y: u16 = 0x82E0; // hero stands near the item indoors
-        let (rel_x, rel_y) = GameplayScene::actor_rel_pos_offset(
-            obj_x, obj_y, map_x, map_y, -8, -8,
-        );
-        // Expect on-screen-ish offsets, not ~33k.
-        assert!(rel_x.abs() < 1024, "rel_x out of range: {rel_x}");
-        assert!(rel_y.abs() < 1024, "rel_y out of range: {rel_y}");
+/// Indoor world objects (y with bit 15 set, e.g. region-8 hidden items at
+/// y ~= 0x82xx) must wrap modulo 0x8000 against the indoor map_y origin
+/// (low range), exactly like actors and setfigs. Without the wrap, the
+/// raw subtraction places sprites ~32k pixels below the framebuffer and
+/// they are clipped — visible symptom: Look reveals a hidden item but it
+/// never appears on screen.
+#[test]
+fn world_obj_rel_pos_handles_indoor_wrap() {
+    // Tambry-interior hidden item coords from faery.toml.
+    let obj_x: u16 = 3872;
+    let obj_y: u16 = 33546; // 0x830A — indoor flag set
+    // Plausible indoor viewport origin: low Y range with bit 15 clear.
+    let map_x: u16 = 3800;
+    let map_y: u16 = 0x82E0; // hero stands near the item indoors
+    let (rel_x, rel_y) = GameplayScene::actor_rel_pos_offset(
+        obj_x, obj_y, map_x, map_y, -8, -8,
+    );
+    // Expect on-screen-ish offsets, not ~33k.
+    assert!(rel_x.abs() < 1024, "rel_x out of range: {rel_x}");
+    assert!(rel_y.abs() < 1024, "rel_y out of range: {rel_y}");
+}
+
+fn scene_with_speeches() -> GameplayScene {
+    let mut scene = GameplayScene::new();
+    scene.narr = NarrConfig {
+        event_msg: vec![],
+        speeches: vec![String::new(); 60],
+        place_msg: vec![],
+        inside_msg: vec![],
+    };
+    scene.narr.speeches[16] = "Princess auto-speech.".to_string();
+    scene.narr.speeches[23] = "Beggar auto-speech.".to_string();
+    scene.narr.speeches[41] = "DreamKnight auto-speech.".to_string();
+    scene.narr.speeches[43] = "Necromancer auto-speech.".to_string();
+    scene.narr.speeches[46] = "Witch auto-speech.".to_string();
+    scene
+}
+
+fn add_setfig(scene: &mut GameplayScene, setfig_type: u8, x: u16, y: u16) {
+    scene.state.world_objects.push(WorldObject {
+        ob_id: setfig_type,
+        ob_stat: 3,
+        region: scene.state.region_num,
+        x,
+        y,
+        visible: true,
+        goal: 0,
+    });
+}
+
+#[test]
+fn test_proximity_auto_speech_triggers_on_approach() {
+    let mut scene = scene_with_speeches();
+    add_setfig(&mut scene, 13, 100, 100); // Beggar
+    scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
+    scene.state.hero_y = 100;
+
+    scene.update_proximity_speech();
+    assert!(scene.messages.is_empty(), "no speech when out of range");
+
+    scene.state.hero_x = 100 + (PROXIMITY_SPEECH_RANGE as u16 / 2);
+    scene.update_proximity_speech();
+    assert_eq!(scene.messages.len(), 1);
+    assert!(scene.messages.latest().unwrap().contains("Beggar"));
+}
+
+#[test]
+fn test_proximity_auto_speech_no_repeat_for_same_person() {
+    let mut scene = scene_with_speeches();
+    add_setfig(&mut scene, 13, 100, 100); // Beggar
+    scene.state.hero_x = 100;
+    scene.state.hero_y = 100;
+
+    scene.update_proximity_speech();
+    scene.update_proximity_speech();
+    assert_eq!(scene.messages.len(), 1, "speech should not repeat for same person");
+}
+
+#[test]
+fn test_proximity_auto_speech_resets_after_leaving_range() {
+    let mut scene = scene_with_speeches();
+    add_setfig(&mut scene, 13, 100, 100); // Beggar
+    scene.state.hero_x = 100;
+    scene.state.hero_y = 100;
+
+    scene.update_proximity_speech();
+    assert_eq!(scene.messages.len(), 1);
+
+    scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
+    scene.update_proximity_speech();
+    assert_eq!(scene.messages.len(), 1, "leaving range should not emit speech");
+
+    scene.state.hero_x = 100;
+    scene.update_proximity_speech();
+    assert_eq!(scene.messages.len(), 2, "re-approach should emit speech again");
+}
+
+#[test]
+fn test_proximity_auto_speech_switches_to_new_person() {
+    let mut scene = scene_with_speeches();
+    add_setfig(&mut scene, 13, 100, 100); // Beggar
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_NECROMANCER,
+        race: RACE_NECROMANCER,
+        x: 220,
+        y: 100,
+        vitality: 10,
+        active: true,
+        ..Default::default()
+    };
+    scene.npc_table = Some(table);
+
+    scene.state.hero_x = 100;
+    scene.state.hero_y = 100;
+    scene.update_proximity_speech();
+    assert!(scene.messages.latest().unwrap().contains("Beggar"));
+
+    scene.state.hero_x = 220;
+    scene.state.hero_y = 100;
+    scene.update_proximity_speech();
+    assert!(scene.messages.latest().unwrap().contains("Necromancer"));
+}
+
+#[test]
+fn test_necromancer_death_transforms_to_woodcutter() {
+    // SPEC §15.7: on death, necromancer → race 10 (Woodcutter), vitality 10,
+    // state Still, weapon 0.  NPC must remain active (not despawned).
+    use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+    let mut scene = GameplayScene::new();
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_NECROMANCER,
+        race: RACE_NECROMANCER,
+        x: 500,
+        y: 600,
+        vitality: 0, // pre-killed so checkdead fires with damage=0
+        active: true,
+        weapon: 5,
+        ..Default::default()
+    };
+    scene.npc_table = Some(table);
+    // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
+    scene.apply_hit(0, 2, 0, 0);
+    let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
+    assert_eq!(npc.race, RACE_WOODCUTTER, "necromancer must transform to Woodcutter (race 10)");
+    assert_eq!(npc.vitality, 10, "transformed woodcutter must have vitality 10");
+    assert_eq!(npc.state, NpcState::Still, "state must be Still after transform");
+    assert_eq!(npc.weapon, 0, "weapon must be cleared after transform");
+    assert!(npc.active, "NPC must remain active after necromancer transform");
+}
+
+#[test]
+fn test_necromancer_death_drops_talisman_at_death_location() {
+    // SPEC §15.7: leave_item(i, 139) → WorldObject {ob_id:139, ob_stat:1} at death coords.
+    use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
+    let nx: i16 = 500;
+    let ny: i16 = 600;
+    let mut scene = GameplayScene::new();
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_NECROMANCER,
+        race: RACE_NECROMANCER,
+        x: nx,
+        y: ny,
+        vitality: 0,
+        active: true,
+        weapon: 5,
+        ..Default::default()
+    };
+    scene.npc_table = Some(table);
+    scene.apply_hit(0, 2, 0, 0);
+    // Capture the NPC's position after pushback (that is where the talisman is dropped).
+    let (expected_x, expected_y) = {
+        let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
+        (npc.x as u16, npc.y as u16)
+    };
+    let talisman = scene.state.world_objects.iter()
+        .find(|o| o.ob_id == 139)
+        .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
+    assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
+    assert_eq!(talisman.x, expected_x, "talisman x must match death location");
+    // leave_item places the drop at y+10 (reference/logic/quests.md#leave_item,
+    // fmain2.c:1193).
+    assert_eq!(talisman.y, expected_y + 10, "talisman y must equal death y + 10 (leave_item offset)");
+    assert!(talisman.visible, "talisman must be visible");
+    assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
+}
+
+#[test]
+fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
+    // Killing a non-necromancer must not spawn a talisman.
+    use crate::game::npc::{NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+    let mut scene = GameplayScene::new();
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        x: 100,
+        y: 100,
+        vitality: 0,
+        active: true,
+        ..Default::default()
+    };
+    scene.npc_table = Some(table);
+    scene.apply_hit(0, 2, 0, 0);
+    assert!(
+        scene.state.world_objects.iter().all(|o| o.ob_id != 139),
+        "talisman must NOT drop when a non-necromancer dies"
+    );
+}
+
+#[test]
+fn test_talisman_pickup_triggers_victory() {
+    // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
+    // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
+    let mut gs = GameplayScene::new();
+    assert!(!gs.is_victory(), "fresh scene should not be in victory state");
+    assert!(!gs.state.quitflag);
+
+    // Place the Necromancer's Talisman (world object 139) on the ground at
+    // the hero's position, then invoke Take via do_option.
+    gs.state.world_objects.push(crate::game::game_state::WorldObject {
+        ob_id: 139,
+        ob_stat: 1,
+        region: gs.state.region_num,
+        x: gs.state.hero_x,
+        y: gs.state.hero_y,
+        visible: true,
+        goal: 0,
+    });
+    gs.do_option(GameAction::Take);
+
+    assert!(gs.is_victory(), "picking up Talisman must trigger victory");
+    assert!(gs.state.quitflag, "quitflag must be set per spec §15.8");
+    assert_eq!(gs.state.viewstatus, 2, "viewstatus must be 2 per spec §15.8");
+    assert_eq!(gs.state.stuff()[22], 1, "stuff[22] must record the Talisman");
+}
+
+#[test]
+fn test_non_talisman_pickup_does_not_trigger_victory() {
+    let mut gs = GameplayScene::new();
+    // Rose (world obj 141 → stuff[23]) or any non-Talisman item.
+    gs.state.world_objects.push(crate::game::game_state::WorldObject {
+        ob_id: 141,
+        ob_stat: 1,
+        region: gs.state.region_num,
+        x: gs.state.hero_x,
+        y: gs.state.hero_y,
+        visible: true,
+        goal: 0,
+    });
+    gs.do_option(GameAction::Take);
+
+    assert!(!gs.is_victory(), "non-Talisman pickups must not trigger victory");
+    assert!(!gs.state.quitflag);
+}
+
+#[test]
+fn test_facing_to_frame_base() {
+    // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by original DIR_NW=0..DIR_W=7.
+    // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
+    assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(3), 0);  // SE → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(4), 0);  // S  → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
+}
+
+#[test]
+fn test_facing_to_fight_frame_base() {
+    // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by original DIR_NW=0..DIR_W=7.
+    // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // N  → northfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 68); // NE → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // E  → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 32); // SE → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // S  → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 44); // SW → westfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // W  → westfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 56); // NW → northfight
+}
+
+#[test]
+fn test_compass_dir_for_input_idle_clears_highlight() {
+    // Spec §25.7: no input this tick → direction 9 (no highlight).
+    assert_eq!(compass_dir_for_input(Direction::None), 9);
+}
+
+#[test]
+fn test_compass_dir_for_input_maps_all_directions() {
+    // RESEARCH §4.5: input direction drives the highlight wedge.
+    let cases = [
+        (Direction::NW, 0usize),
+        (Direction::N,  1),
+        (Direction::NE, 2),
+        (Direction::E,  3),
+        (Direction::SE, 4),
+        (Direction::S,  5),
+        (Direction::SW, 6),
+        (Direction::W,  7),
+    ];
+    for (dir, expected) in cases {
+        assert_eq!(compass_dir_for_input(dir), expected, "direction {:?}", dir);
     }
+}
 
-    fn scene_with_speeches() -> GameplayScene {
-        let mut scene = GameplayScene::new();
-        scene.narr = NarrConfig {
-            event_msg: vec![],
-            speeches: vec![String::new(); 60],
-            place_msg: vec![],
-            inside_msg: vec![],
-        };
-        scene.narr.speeches[16] = "Princess auto-speech.".to_string();
-        scene.narr.speeches[23] = "Beggar auto-speech.".to_string();
-        scene.narr.speeches[41] = "DreamKnight auto-speech.".to_string();
-        scene.narr.speeches[43] = "Necromancer auto-speech.".to_string();
-        scene.narr.speeches[46] = "Witch auto-speech.".to_string();
-        scene
-    }
+#[test]
+fn test_compass_dir_for_input_regression_after_release() {
+    // After an input pulse ends, the next tick must clear the highlight
+    // even if persistent facing is still set. This is the #162 regression.
+    let _facing_retained: u8 = 2; // facing persists — the helper ignores it
+    assert_eq!(compass_dir_for_input(Direction::None), 9);
+}
 
-    fn add_setfig(scene: &mut GameplayScene, setfig_type: u8, x: u16, y: u16) {
-        scene.state.world_objects.push(WorldObject {
-            ob_id: setfig_type,
-            ob_stat: 3,
-            region: scene.state.region_num,
-            x,
-            y,
-            visible: true,
-            goal: 0,
-        });
-    }
+#[test]
+fn test_npc_type_to_cfile() {
+    use crate::game::npc::*;
+    // Enemy humans → ogre sheet
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_ENEMY), Some(6));
+    // Named humans → None (SetFig pass)
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_NORMAL), None);
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_SHOPKEEPER), None);
+    // Enemy types
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_ORC,      RACE_ENEMY),  Some(6));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_GHOST,    RACE_UNDEAD), Some(7));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SKELETON, RACE_UNDEAD), Some(7));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_WRAITH,   RACE_WRAITH), Some(7));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_DRAGON,   RACE_ENEMY),  Some(10));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SWAN,     RACE_NORMAL), Some(11));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HORSE,    RACE_NORMAL), Some(5));
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_RAFT,     RACE_NORMAL), Some(4));
+    // Inactive / container → None
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE,      RACE_NORMAL), None);
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL), None);
+    // Unknown type → default ogre sheet
+    assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
+    // Beggar → SetFig pass (not enemy)
+    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
+}
 
-    #[test]
-    fn test_proximity_auto_speech_triggers_on_approach() {
-        let mut scene = scene_with_speeches();
-        add_setfig(&mut scene, 13, 100, 100); // Beggar
-        scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
-        scene.state.hero_y = 100;
+#[test]
+fn test_enemy_npc_render_pass_writes_pixels() {
+    use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+    use crate::game::game_state::GameState;
+    use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
 
-        scene.update_proximity_speech();
-        assert!(scene.messages.is_empty(), "no speech when out of range");
+    // Build a minimal mock sprite sheet for cfile 6 (ogre).
+    // Pixel value 0 is non-transparent (only 31 is transparent).
+    let frames = 64;
+    let mock_sheet = SpriteSheet {
+        cfile_idx: 6,
+        pixels: vec![0u8; SPRITE_W * SPRITE_H * frames],
+        num_frames: frames,
+        frame_h: SPRITE_H,
+    };
 
-        scene.state.hero_x = 100 + (PROXIMITY_SPEECH_RANGE as u16 / 2);
-        scene.update_proximity_speech();
-        assert_eq!(scene.messages.len(), 1);
-        assert!(scene.messages.latest().unwrap().contains("Beggar"));
-    }
+    // 18-element vec; only slot 6 is Some.
+    let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+    sheets[6] = Some(mock_sheet);
 
-    #[test]
-    fn test_proximity_auto_speech_no_repeat_for_same_person() {
-        let mut scene = scene_with_speeches();
-        add_setfig(&mut scene, 13, 100, 100); // Beggar
-        scene.state.hero_x = 100;
-        scene.state.hero_y = 100;
+    let mut state = GameState::new();
+    // Hero at viewport center (map_x=0, map_y=0), hero at (8, 26) so rel=(0,0)
+    state.hero_x = 8;
+    state.hero_y = 26;
 
-        scene.update_proximity_speech();
-        scene.update_proximity_speech();
-        assert_eq!(scene.messages.len(), 1, "speech should not repeat for same person");
-    }
+    // Place an ORC near the hero but offset so it appears in viewport
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        x: 80,  // rel_x = 80 - 0 - 8 = 72, well within 304px viewport
+        y: 80,  // rel_y = 80 - 0 - 26 = 54
+        vitality: 10,
+        gold: 5,
+        speed: 2,
+        active: true,
+        ..Default::default()
+    };
 
-    #[test]
-    fn test_proximity_auto_speech_resets_after_leaving_range() {
-        let mut scene = scene_with_speeches();
-        add_setfig(&mut scene, 13, 100, 100); // Beggar
-        scene.state.hero_x = 100;
-        scene.state.hero_y = 100;
+    let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize]; // all transparent
+    GameplayScene::blit_actors_to_framebuf(
+        &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+    );
 
-        scene.update_proximity_speech();
-        assert_eq!(scene.messages.len(), 1);
+    // At least some pixels in the ORC's blit area should have been overwritten to 0
+    let orc_area_start = (54 * MAP_DST_W as usize) + 72;
+    let has_written = framebuf[orc_area_start..orc_area_start + SPRITE_W]
+        .iter()
+        .any(|&p| p == 0);
+    assert!(has_written, "expected ORC pixels to be written to framebuf");
+}
 
-        scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
-        scene.update_proximity_speech();
-        assert_eq!(scene.messages.len(), 1, "leaving range should not emit speech");
+#[test]
+fn test_setfig_render_pass_writes_pixels() {
+    // SetFigs are now rendered from world_objects (ob_stat 3) in the unified
+    // Y-sorted pass, not from NpcTable. This test verifies that
+    // blit_actors_to_framebuf still handles the enemy pass correctly and does
+    // not crash when a HUMAN/SHOPKEEPER NPC (setfig) is present in the table
+    // (it should be silently skipped since npc_type_to_cfile returns None for
+    // non-enemy humans).
+    use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
+    use crate::game::game_state::GameState;
+    use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
 
-        scene.state.hero_x = 100;
-        scene.update_proximity_speech();
-        assert_eq!(scene.messages.len(), 2, "re-approach should emit speech again");
-    }
+    let mock_sheet = SpriteSheet {
+        cfile_idx: 15,
+        pixels: vec![0u8; SPRITE_W * SPRITE_H * 8],
+        num_frames: 8,
+        frame_h: SPRITE_H,
+    };
+    let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
+    sheets[15] = Some(mock_sheet);
 
-    #[test]
-    fn test_proximity_auto_speech_switches_to_new_person() {
-        let mut scene = scene_with_speeches();
-        add_setfig(&mut scene, 13, 100, 100); // Beggar
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_NECROMANCER,
-            race: RACE_NECROMANCER,
-            x: 220,
-            y: 100,
-            vitality: 10,
-            active: true,
-            ..Default::default()
-        };
-        scene.npc_table = Some(table);
+    let mut state = GameState::new();
+    state.hero_x = 8;
+    state.hero_y = 26;
 
-        scene.state.hero_x = 100;
-        scene.state.hero_y = 100;
-        scene.update_proximity_speech();
-        assert!(scene.messages.latest().unwrap().contains("Beggar"));
+    let mut table = NpcTable { npcs: Default::default() };
+    table.npcs[0] = Npc {
+        npc_type: NPC_TYPE_HUMAN,
+        race: RACE_SHOPKEEPER,
+        x: 80, y: 80,
+        vitality: 10, gold: 0, speed: 0,
+        active: true,
+        ..Default::default()
+    };
 
-        scene.state.hero_x = 220;
-        scene.state.hero_y = 100;
-        scene.update_proximity_speech();
-        assert!(scene.messages.latest().unwrap().contains("Necromancer"));
-    }
+    let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize];
+    // blit_actors_to_framebuf should skip the human/shopkeeper NPC (setfig)
+    // without crashing.
+    GameplayScene::blit_actors_to_framebuf(
+        &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+    );
 
-    #[test]
-    fn test_necromancer_death_transforms_to_woodcutter() {
-        // SPEC §15.7: on death, necromancer → race 10 (Woodcutter), vitality 10,
-        // state Still, weapon 0.  NPC must remain active (not despawned).
-        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
-        let mut scene = GameplayScene::new();
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_NECROMANCER,
-            race: RACE_NECROMANCER,
-            x: 500,
-            y: 600,
-            vitality: 0, // pre-killed so checkdead fires with damage=0
-            active: true,
-            weapon: 5,
-            ..Default::default()
-        };
-        scene.npc_table = Some(table);
-        // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
-        scene.apply_hit(0, 2, 0, 0);
-        let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
-        assert_eq!(npc.race, RACE_WOODCUTTER, "necromancer must transform to Woodcutter (race 10)");
-        assert_eq!(npc.vitality, 10, "transformed woodcutter must have vitality 10");
-        assert_eq!(npc.state, NpcState::Still, "state must be Still after transform");
-        assert_eq!(npc.weapon, 0, "weapon must be cleared after transform");
-        assert!(npc.active, "NPC must remain active after necromancer transform");
-    }
+    // The setfig NPC should NOT have been rendered by blit_actors_to_framebuf
+    // (setfigs are rendered from world_objects in the unified pass instead).
+    let setfig_area_start = (54 * MAP_DST_W as usize) + 72;
+    let has_written = framebuf[setfig_area_start..setfig_area_start + SPRITE_W]
+        .iter()
+        .any(|&p| p == 0);
+    assert!(!has_written, "setfig NPC should not be rendered by blit_actors_to_framebuf");
+}
 
-    #[test]
-    fn test_necromancer_death_drops_talisman_at_death_location() {
-        // SPEC §15.7: leave_item(i, 139) → WorldObject {ob_id:139, ob_stat:1} at death coords.
-        use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER};
-        let nx: i16 = 500;
-        let ny: i16 = 600;
-        let mut scene = GameplayScene::new();
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_NECROMANCER,
-            race: RACE_NECROMANCER,
-            x: nx,
-            y: ny,
-            vitality: 0,
-            active: true,
-            weapon: 5,
-            ..Default::default()
-        };
-        scene.npc_table = Some(table);
-        scene.apply_hit(0, 2, 0, 0);
-        // Capture the NPC's position after pushback (that is where the talisman is dropped).
-        let (expected_x, expected_y) = {
-            let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
-            (npc.x as u16, npc.y as u16)
-        };
-        let talisman = scene.state.world_objects.iter()
-            .find(|o| o.ob_id == 139)
-            .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
-        assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
-        assert_eq!(talisman.x, expected_x, "talisman x must match death location");
-        // leave_item places the drop at y+10 (reference/logic/quests.md#leave_item,
-        // fmain2.c:1193).
-        assert_eq!(talisman.y, expected_y + 10, "talisman y must equal death y + 10 (leave_item offset)");
-        assert!(talisman.visible, "talisman must be visible");
-        assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
-    }
+#[test]
+fn test_scatter_items_adds_world_objects() {
+    use crate::game::game_state::{GameState, WorldObject};
+    use crate::game::sprites::INV_LIST;
 
-    #[test]
-    fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
-        // Killing a non-necromancer must not spawn a talisman.
-        use crate::game::npc::{NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
-        let mut scene = GameplayScene::new();
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_ORC,
-            race: RACE_ENEMY,
-            x: 100,
-            y: 100,
-            vitality: 0,
-            active: true,
-            ..Default::default()
-        };
-        scene.npc_table = Some(table);
-        scene.apply_hit(0, 2, 0, 0);
-        assert!(
-            scene.state.world_objects.iter().all(|o| o.ob_id != 139),
-            "talisman must NOT drop when a non-necromancer dies"
-        );
-    }
+    let mut state = GameState::new();
+    state.hero_x = 1000;
+    state.hero_y = 1000;
+    state.region_num = 3;
 
-    #[test]
-    fn test_talisman_pickup_triggers_victory() {
-        // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
-        // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
-        let mut gs = GameplayScene::new();
-        assert!(!gs.is_victory(), "fresh scene should not be in victory state");
-        assert!(!gs.state.quitflag);
-
-        // Place the Necromancer's Talisman (world object 139) on the ground at
-        // the hero's position, then invoke Take via do_option.
-        gs.state.world_objects.push(crate::game::game_state::WorldObject {
-            ob_id: 139,
+    const TALISMAN_IDX: usize = 22;
+    let count = 5usize;
+    let safe_pool: Vec<usize> = (0..INV_LIST.len()).filter(|&i| i != TALISMAN_IDX).collect();
+    let n = count.min(safe_pool.len());
+    for i in 0..n {
+        let item_id = safe_pool[i % safe_pool.len()];
+        let angle = 2.0f32 * std::f32::consts::PI * (i as f32) / (n as f32);
+        let x = (state.hero_x as i32 + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
+        let y = (state.hero_y as i32 + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
+        state.world_objects.push(WorldObject {
+            ob_id: item_id as u8,
             ob_stat: 1,
-            region: gs.state.region_num,
-            x: gs.state.hero_x,
-            y: gs.state.hero_y,
+            region: state.region_num,
+            x, y,
             visible: true,
             goal: 0,
         });
-        gs.do_option(GameAction::Take);
-
-        assert!(gs.is_victory(), "picking up Talisman must trigger victory");
-        assert!(gs.state.quitflag, "quitflag must be set per spec §15.8");
-        assert_eq!(gs.state.viewstatus, 2, "viewstatus must be 2 per spec §15.8");
-        assert_eq!(gs.state.stuff()[22], 1, "stuff[22] must record the Talisman");
     }
+    assert_eq!(state.world_objects.len(), 5);
+    assert!(state.world_objects.iter().all(|o| o.ob_id != TALISMAN_IDX as u8));
+}
 
-    #[test]
-    fn test_non_talisman_pickup_does_not_trigger_victory() {
-        let mut gs = GameplayScene::new();
-        // Rose (world obj 141 → stuff[23]) or any non-Talisman item.
-        gs.state.world_objects.push(crate::game::game_state::WorldObject {
-            ob_id: 141,
-            ob_stat: 1,
-            region: gs.state.region_num,
-            x: gs.state.hero_x,
-            y: gs.state.hero_y,
-            visible: true,
-            goal: 0,
-        });
-        gs.do_option(GameAction::Take);
+#[test]
+fn test_fight_state_advances() {
+    let next = advance_fight_state(0, 42);
+    assert!(next <= 8, "fight state {next} out of range 0-8");
+}
 
-        assert!(!gs.is_victory(), "non-Talisman pickups must not trigger victory");
-        assert!(!gs.state.quitflag);
+#[test]
+fn test_fight_state_varies_with_tick() {
+    let mut seen = std::collections::HashSet::new();
+    for tick in 0..100u32 {
+        seen.insert(advance_fight_state(0, tick));
     }
-
-    #[test]
-    fn test_facing_to_frame_base() {
-        // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by original DIR_NW=0..DIR_W=7.
-        // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
-        assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(3), 0);  // SE → southwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(4), 0);  // S  → southwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
-        assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
-    }
-
-    #[test]
-    fn test_facing_to_fight_frame_base() {
-        // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by original DIR_NW=0..DIR_W=7.
-        // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // N  → northfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 68); // NE → eastfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // E  → eastfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 32); // SE → southfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // S  → southfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 44); // SW → westfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // W  → westfight
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 56); // NW → northfight
-    }
-
-    #[test]
-    fn test_compass_dir_for_input_idle_clears_highlight() {
-        // Spec §25.7: no input this tick → direction 9 (no highlight).
-        assert_eq!(compass_dir_for_input(Direction::None), 9);
-    }
-
-    #[test]
-    fn test_compass_dir_for_input_maps_all_directions() {
-        // RESEARCH §4.5: input direction drives the highlight wedge.
-        let cases = [
-            (Direction::NW, 0usize),
-            (Direction::N,  1),
-            (Direction::NE, 2),
-            (Direction::E,  3),
-            (Direction::SE, 4),
-            (Direction::S,  5),
-            (Direction::SW, 6),
-            (Direction::W,  7),
-        ];
-        for (dir, expected) in cases {
-            assert_eq!(compass_dir_for_input(dir), expected, "direction {:?}", dir);
-        }
-    }
-
-    #[test]
-    fn test_compass_dir_for_input_regression_after_release() {
-        // After an input pulse ends, the next tick must clear the highlight
-        // even if persistent facing is still set. This is the #162 regression.
-        let _facing_retained: u8 = 2; // facing persists — the helper ignores it
-        assert_eq!(compass_dir_for_input(Direction::None), 9);
-    }
-
-    #[test]
-    fn test_npc_type_to_cfile() {
-        use crate::game::npc::*;
-        // Enemy humans → ogre sheet
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_ENEMY), Some(6));
-        // Named humans → None (SetFig pass)
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_NORMAL), None);
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_SHOPKEEPER), None);
-        // Enemy types
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_ORC,      RACE_ENEMY),  Some(6));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_GHOST,    RACE_UNDEAD), Some(7));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SKELETON, RACE_UNDEAD), Some(7));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_WRAITH,   RACE_WRAITH), Some(7));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_DRAGON,   RACE_ENEMY),  Some(10));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SWAN,     RACE_NORMAL), Some(11));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HORSE,    RACE_NORMAL), Some(5));
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_RAFT,     RACE_NORMAL), Some(4));
-        // Inactive / container → None
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE,      RACE_NORMAL), None);
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL), None);
-        // Unknown type → default ogre sheet
-        assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
-        // Beggar → SetFig pass (not enemy)
-        assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
-    }
-
-    #[test]
-    fn test_enemy_npc_render_pass_writes_pixels() {
-        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
-        use crate::game::game_state::GameState;
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-
-        // Build a minimal mock sprite sheet for cfile 6 (ogre).
-        // Pixel value 0 is non-transparent (only 31 is transparent).
-        let frames = 64;
-        let mock_sheet = SpriteSheet {
-            cfile_idx: 6,
-            pixels: vec![0u8; SPRITE_W * SPRITE_H * frames],
-            num_frames: frames,
-            frame_h: SPRITE_H,
-        };
-
-        // 18-element vec; only slot 6 is Some.
-        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
-        sheets[6] = Some(mock_sheet);
-
-        let mut state = GameState::new();
-        // Hero at viewport center (map_x=0, map_y=0), hero at (8, 26) so rel=(0,0)
-        state.hero_x = 8;
-        state.hero_y = 26;
-
-        // Place an ORC near the hero but offset so it appears in viewport
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_ORC,
-            race: RACE_ENEMY,
-            x: 80,  // rel_x = 80 - 0 - 8 = 72, well within 304px viewport
-            y: 80,  // rel_y = 80 - 0 - 26 = 54
-            vitality: 10,
-            gold: 5,
-            speed: 2,
-            active: true,
-            ..Default::default()
-        };
-
-        let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize]; // all transparent
-        GameplayScene::blit_actors_to_framebuf(
-            &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
-        );
-
-        // At least some pixels in the ORC's blit area should have been overwritten to 0
-        let orc_area_start = (54 * MAP_DST_W as usize) + 72;
-        let has_written = framebuf[orc_area_start..orc_area_start + SPRITE_W]
-            .iter()
-            .any(|&p| p == 0);
-        assert!(has_written, "expected ORC pixels to be written to framebuf");
-    }
-
-    #[test]
-    fn test_setfig_render_pass_writes_pixels() {
-        // SetFigs are now rendered from world_objects (ob_stat 3) in the unified
-        // Y-sorted pass, not from NpcTable. This test verifies that
-        // blit_actors_to_framebuf still handles the enemy pass correctly and does
-        // not crash when a HUMAN/SHOPKEEPER NPC (setfig) is present in the table
-        // (it should be silently skipped since npc_type_to_cfile returns None for
-        // non-enemy humans).
-        use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-        use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
-        use crate::game::game_state::GameState;
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
-
-        let mock_sheet = SpriteSheet {
-            cfile_idx: 15,
-            pixels: vec![0u8; SPRITE_W * SPRITE_H * 8],
-            num_frames: 8,
-            frame_h: SPRITE_H,
-        };
-        let mut sheets: Vec<Option<SpriteSheet>> = (0..18).map(|_| None).collect();
-        sheets[15] = Some(mock_sheet);
-
-        let mut state = GameState::new();
-        state.hero_x = 8;
-        state.hero_y = 26;
-
-        let mut table = NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc {
-            npc_type: NPC_TYPE_HUMAN,
-            race: RACE_SHOPKEEPER,
-            x: 80, y: 80,
-            vitality: 10, gold: 0, speed: 0,
-            active: true,
-            ..Default::default()
-        };
-
-        let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize];
-        // blit_actors_to_framebuf should skip the human/shopkeeper NPC (setfig)
-        // without crashing.
-        GameplayScene::blit_actors_to_framebuf(
-            &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
-        );
-
-        // The setfig NPC should NOT have been rendered by blit_actors_to_framebuf
-        // (setfigs are rendered from world_objects in the unified pass instead).
-        let setfig_area_start = (54 * MAP_DST_W as usize) + 72;
-        let has_written = framebuf[setfig_area_start..setfig_area_start + SPRITE_W]
-            .iter()
-            .any(|&p| p == 0);
-        assert!(!has_written, "setfig NPC should not be rendered by blit_actors_to_framebuf");
-    }
-
-    #[test]
-    fn test_scatter_items_adds_world_objects() {
-        use crate::game::game_state::{GameState, WorldObject};
-        use crate::game::sprites::INV_LIST;
-
-        let mut state = GameState::new();
-        state.hero_x = 1000;
-        state.hero_y = 1000;
-        state.region_num = 3;
-
-        const TALISMAN_IDX: usize = 22;
-        let count = 5usize;
-        let safe_pool: Vec<usize> = (0..INV_LIST.len()).filter(|&i| i != TALISMAN_IDX).collect();
-        let n = count.min(safe_pool.len());
-        for i in 0..n {
-            let item_id = safe_pool[i % safe_pool.len()];
-            let angle = 2.0f32 * std::f32::consts::PI * (i as f32) / (n as f32);
-            let x = (state.hero_x as i32 + (80.0f32 * angle.cos()) as i32).clamp(0, 0x7FFF) as u16;
-            let y = (state.hero_y as i32 + (80.0f32 * angle.sin()) as i32).clamp(0, 0x7FFF) as u16;
-            state.world_objects.push(WorldObject {
-                ob_id: item_id as u8,
-                ob_stat: 1,
-                region: state.region_num,
-                x, y,
-                visible: true,
-                goal: 0,
-            });
-        }
-        assert_eq!(state.world_objects.len(), 5);
-        assert!(state.world_objects.iter().all(|o| o.ob_id != TALISMAN_IDX as u8));
-    }
-
-    #[test]
-    fn test_fight_state_advances() {
-        let next = advance_fight_state(0, 42);
-        assert!(next <= 8, "fight state {next} out of range 0-8");
-    }
-
-    #[test]
-    fn test_fight_state_varies_with_tick() {
-        let mut seen = std::collections::HashSet::new();
-        for tick in 0..100u32 {
-            seen.insert(advance_fight_state(0, tick));
-        }
-        assert!(seen.len() > 1, "trans_list should produce varied states");
-    }
-
-    #[test]
-    fn test_cycle_weapon_next() {
-        let mut stuff = [0u8; 36];
-        stuff[0] = 1; // Dirk (weapon 1)
-        stuff[2] = 1; // Sword (weapon 3)
-        stuff[4] = 1; // Wand (weapon 5)
-        // From Dirk (1), next should be Sword (3)
-        assert_eq!(cycle_weapon_slot(1, 1, &stuff), Some(3));
-        // From Sword (3), next should be Wand (5)
-        assert_eq!(cycle_weapon_slot(3, 1, &stuff), Some(5));
-        // From Wand (5), next should wrap to Dirk (1)
-        assert_eq!(cycle_weapon_slot(5, 1, &stuff), Some(1));
-    }
-
-    #[test]
-    fn test_cycle_weapon_prev() {
-        let mut stuff = [0u8; 36];
-        stuff[0] = 1; // Dirk (weapon 1)
-        stuff[2] = 1; // Sword (weapon 3)
-        stuff[4] = 1; // Wand (weapon 5)
-        // From Dirk (1), prev should wrap to Wand (5)
-        assert_eq!(cycle_weapon_slot(1, -1, &stuff), Some(5));
-        // From Sword (3), prev should be Dirk (1)
-        assert_eq!(cycle_weapon_slot(3, -1, &stuff), Some(1));
-    }
-
-    #[test]
-    fn test_cycle_weapon_single_owned() {
-        let mut stuff = [0u8; 36];
-        stuff[0] = 1; // Only Dirk (weapon 1)
-        assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
-        assert_eq!(cycle_weapon_slot(1, -1, &stuff), None);
-    }
-
-    #[test]
-    fn test_cycle_weapon_none_owned() {
-        let stuff = [0u8; 36];
-        assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
-    }
-
-    #[test]
-    fn test_menu_cursor_navigation_wraps() {
-        let mut c = MenuCursor::default();
-        assert_eq!(c.row, 0);
-        assert_eq!(c.col, 0);
-
-        // Up from row 0 wraps to row 5
-        c.navigate_up();
-        assert_eq!(c.row, 5);
-
-        // Down from row 5 wraps to row 0
-        c.navigate_down();
-        assert_eq!(c.row, 0);
-
-        // Down increments normally
-        c.navigate_down();
-        assert_eq!(c.row, 1);
-
-        // Left from col 0 wraps to col 1
-        c.navigate_left();
-        assert_eq!(c.col, 1);
-
-        // Right from col 1 wraps to col 0
-        c.navigate_right();
-        assert_eq!(c.col, 0);
-    }
-
-    #[test]
-    fn test_menu_cursor_slot_calculation() {
-        let mut c = MenuCursor::default();
-        assert_eq!(c.slot(), 0); // (0,0) → slot 0
-
-        c.col = 1;
-        assert_eq!(c.slot(), 1); // (0,1) → slot 1
-
-        c.row = 2;
-        c.col = 0;
-        assert_eq!(c.slot(), 4); // (2,0) → slot 4
-
-        c.row = 5;
-        c.col = 1;
-        assert_eq!(c.slot(), 11); // (5,1) → slot 11
-    }
-
-    #[test]
-    fn test_menu_cursor_position_persists() {
-        let mut c = MenuCursor::default();
-        c.navigate_down();
-        c.navigate_down();
-        c.navigate_right();
-        assert_eq!(c.row, 2);
-        assert_eq!(c.col, 1);
-
-        // Deactivate and reactivate — position should persist
-        c.active = false;
-        c.active = true;
-        assert_eq!(c.row, 2);
-        assert_eq!(c.col, 1);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_walking_default() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
-        let npc = Npc {
-            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-            facing: 4, state: NpcState::Walking, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 2, 3, 64), 5);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 3, 6, 64), 1);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_still_default() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
-        let npc = Npc {
-            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-            facing: 4, state: NpcState::Still, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 1);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 1);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_wraith_no_cycle() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_WRAITH, RACE_WRAITH};
-        let npc = Npc {
-            npc_type: NPC_TYPE_WRAITH, race: RACE_WRAITH,
-            facing: 4, state: NpcState::Walking, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 50, 64), 0);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_snake_walking() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
-        let npc = Npc {
-            npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
-            facing: 4, state: NpcState::Walking, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 2, 64), 1);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 3, 64), 1);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_snake_still() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
-        let npc = Npc {
-            npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
-            facing: 4, state: NpcState::Still, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 1);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_wraps_short_sheet() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
-        let npc = Npc {
-            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-            facing: 4, state: NpcState::Walking, active: true,
-            ..Default::default()
-        };
-        let frame = GameplayScene::npc_animation_frame(&npc, 0, 6, 5);
-        assert!(frame < 5, "frame {} must be < num_frames 5", frame);
-    }
-
-    #[test]
-    fn test_npc_animation_frame_dying() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
-        let npc = Npc {
-            npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-            facing: 4, state: NpcState::Dying, active: true,
-            ..Default::default()
-        };
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
-        assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 0);
-    }
-
-    #[test]
-    fn t_f118_sequence_runner_advances_one_step_at_a_time() {
-        let mut scene = GameplayScene::new();
-        scene.debug_enqueue_sequence_for_test(vec![
-            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 2 },
-            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
-        ]);
-
-        scene.debug_tick_sequence_only(1);
-        assert_eq!(scene.debug_active_step_index(), Some(0));
-
-        scene.debug_tick_sequence_only(1);
-        assert_eq!(scene.debug_active_step_index(), Some(1));
-
-        scene.debug_tick_sequence_only(1);
-        assert_eq!(scene.debug_active_step_index(), None);
-    }
-
-    #[test]
-    fn t_f118_non_wait_step_requires_explicit_advance() {
-        let mut scene = GameplayScene::new();
-        scene.debug_enqueue_sequence_for_test(vec![
-            crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
-            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
-        ]);
-
-        scene.debug_tick_sequence_only(1);
-        assert_eq!(scene.debug_active_step_index(), Some(0));
-
-        scene.debug_tick_sequence_only(3);
-        assert_eq!(scene.debug_active_step_index(), Some(0));
-
-        scene.debug_advance_active_sequence_step_for_test();
-        assert_eq!(scene.debug_active_step_index(), Some(1));
-
-        scene.debug_tick_sequence_only(1);
-        assert_eq!(scene.debug_active_step_index(), None);
-    }
-
-    #[test]
-    fn t_f118_show_placard_honors_hold_ticks_before_advancing() {
-        let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
-        let lib: crate::game::game_library::GameLibrary =
-            toml::from_str(&cfg).expect("faery.toml must parse");
-
-        let mut scene = GameplayScene::new();
-        scene.debug_enqueue_sequence_for_test(vec![
-            crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
-                key: "rescue_katra".to_string(),
-                substitution: Some("Julian".to_string()),
-                hold_ticks: 3,
-            },
-            crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
-        ]);
-
-        scene.debug_tick_and_execute_sequence_only(2, &lib);
-        assert_eq!(
-            scene.debug_active_step_index(),
-            Some(0),
-            "placard step must still be active before hold_ticks reaches zero"
-        );
-
-        scene.debug_tick_and_execute_sequence_only(1, &lib);
-        assert_eq!(
-            scene.debug_active_step_index(),
-            Some(1),
-            "placard step should advance only after hold_ticks are consumed"
-        );
-    }
-
-    #[test]
-    fn t_f118_clear_inner_rect_clears_visible_message_queue() {
-        let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
-        let lib: crate::game::game_library::GameLibrary =
-            toml::from_str(&cfg).expect("faery.toml must parse");
-        let mut scene = GameplayScene::new();
-        scene.messages.push("seed message");
-        assert!(!scene.messages.is_empty(), "precondition: queue must be non-empty");
-
-        scene.debug_enqueue_sequence_for_test(vec![
-            crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
-        ]);
-
-        scene.debug_tick_and_execute_sequence_only(1, &lib);
-
-        assert!(scene.messages.is_empty(), "ClearInnerRect must clear visible queue");
-        assert_eq!(scene.debug_active_step_index(), None);
-    }
-
-    #[test]
-    fn t_f118_active_sequence_is_not_preempted_by_new_enqueue() {
-        let mut scene = GameplayScene::new();
-        scene.debug_enqueue_sequence_for_test(vec![
+    assert!(seen.len() > 1, "trans_list should produce varied states");
+}
+
+#[test]
+fn test_cycle_weapon_next() {
+    let mut stuff = [0u8; 36];
+    stuff[0] = 1; // Dirk (weapon 1)
+    stuff[2] = 1; // Sword (weapon 3)
+    stuff[4] = 1; // Wand (weapon 5)
+    // From Dirk (1), next should be Sword (3)
+    assert_eq!(cycle_weapon_slot(1, 1, &stuff), Some(3));
+    // From Sword (3), next should be Wand (5)
+    assert_eq!(cycle_weapon_slot(3, 1, &stuff), Some(5));
+    // From Wand (5), next should wrap to Dirk (1)
+    assert_eq!(cycle_weapon_slot(5, 1, &stuff), Some(1));
+}
+
+#[test]
+fn test_cycle_weapon_prev() {
+    let mut stuff = [0u8; 36];
+    stuff[0] = 1; // Dirk (weapon 1)
+    stuff[2] = 1; // Sword (weapon 3)
+    stuff[4] = 1; // Wand (weapon 5)
+    // From Dirk (1), prev should wrap to Wand (5)
+    assert_eq!(cycle_weapon_slot(1, -1, &stuff), Some(5));
+    // From Sword (3), prev should be Dirk (1)
+    assert_eq!(cycle_weapon_slot(3, -1, &stuff), Some(1));
+}
+
+#[test]
+fn test_cycle_weapon_single_owned() {
+    let mut stuff = [0u8; 36];
+    stuff[0] = 1; // Only Dirk (weapon 1)
+    assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
+    assert_eq!(cycle_weapon_slot(1, -1, &stuff), None);
+}
+
+#[test]
+fn test_cycle_weapon_none_owned() {
+    let stuff = [0u8; 36];
+    assert_eq!(cycle_weapon_slot(1, 1, &stuff), None);
+}
+
+#[test]
+fn test_menu_cursor_navigation_wraps() {
+    let mut c = MenuCursor::default();
+    assert_eq!(c.row, 0);
+    assert_eq!(c.col, 0);
+
+    // Up from row 0 wraps to row 5
+    c.navigate_up();
+    assert_eq!(c.row, 5);
+
+    // Down from row 5 wraps to row 0
+    c.navigate_down();
+    assert_eq!(c.row, 0);
+
+    // Down increments normally
+    c.navigate_down();
+    assert_eq!(c.row, 1);
+
+    // Left from col 0 wraps to col 1
+    c.navigate_left();
+    assert_eq!(c.col, 1);
+
+    // Right from col 1 wraps to col 0
+    c.navigate_right();
+    assert_eq!(c.col, 0);
+}
+
+#[test]
+fn test_menu_cursor_slot_calculation() {
+    let mut c = MenuCursor::default();
+    assert_eq!(c.slot(), 0); // (0,0) → slot 0
+
+    c.col = 1;
+    assert_eq!(c.slot(), 1); // (0,1) → slot 1
+
+    c.row = 2;
+    c.col = 0;
+    assert_eq!(c.slot(), 4); // (2,0) → slot 4
+
+    c.row = 5;
+    c.col = 1;
+    assert_eq!(c.slot(), 11); // (5,1) → slot 11
+}
+
+#[test]
+fn test_menu_cursor_position_persists() {
+    let mut c = MenuCursor::default();
+    c.navigate_down();
+    c.navigate_down();
+    c.navigate_right();
+    assert_eq!(c.row, 2);
+    assert_eq!(c.col, 1);
+
+    // Deactivate and reactivate — position should persist
+    c.active = false;
+    c.active = true;
+    assert_eq!(c.row, 2);
+    assert_eq!(c.col, 1);
+}
+
+#[test]
+fn test_npc_animation_frame_walking_default() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+    let npc = Npc {
+        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+        facing: 4, state: NpcState::Walking, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 2, 3, 64), 5);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 3, 6, 64), 1);
+}
+
+#[test]
+fn test_npc_animation_frame_still_default() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+    let npc = Npc {
+        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+        facing: 4, state: NpcState::Still, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 1);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 1);
+}
+
+#[test]
+fn test_npc_animation_frame_wraith_no_cycle() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_WRAITH, RACE_WRAITH};
+    let npc = Npc {
+        npc_type: NPC_TYPE_WRAITH, race: RACE_WRAITH,
+        facing: 4, state: NpcState::Walking, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 50, 64), 0);
+}
+
+#[test]
+fn test_npc_animation_frame_snake_walking() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
+    let npc = Npc {
+        npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
+        facing: 4, state: NpcState::Walking, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 2, 64), 1);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 3, 64), 1);
+}
+
+#[test]
+fn test_npc_animation_frame_snake_still() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
+    let npc = Npc {
+        npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
+        facing: 4, state: NpcState::Still, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 1, 64), 1);
+}
+
+#[test]
+fn test_npc_animation_frame_wraps_short_sheet() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+    let npc = Npc {
+        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+        facing: 4, state: NpcState::Walking, active: true,
+        ..Default::default()
+    };
+    let frame = GameplayScene::npc_animation_frame(&npc, 0, 6, 5);
+    assert!(frame < 5, "frame {} must be < num_frames 5", frame);
+}
+
+#[test]
+fn test_npc_animation_frame_dying() {
+    use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
+    let npc = Npc {
+        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
+        facing: 4, state: NpcState::Dying, active: true,
+        ..Default::default()
+    };
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
+    assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 99, 64), 0);
+}
+
+#[test]
+fn t_f118_sequence_runner_advances_one_step_at_a_time() {
+    let mut scene = GameplayScene::new();
+    scene.debug_enqueue_sequence_for_test(vec![
+        crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 2 },
+        crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+    ]);
+
+    scene.debug_tick_sequence_only(1);
+    assert_eq!(scene.debug_active_step_index(), Some(0));
+
+    scene.debug_tick_sequence_only(1);
+    assert_eq!(scene.debug_active_step_index(), Some(1));
+
+    scene.debug_tick_sequence_only(1);
+    assert_eq!(scene.debug_active_step_index(), None);
+}
+
+#[test]
+fn t_f118_non_wait_step_requires_explicit_advance() {
+    let mut scene = GameplayScene::new();
+    scene.debug_enqueue_sequence_for_test(vec![
+        crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
+        crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+    ]);
+
+    scene.debug_tick_sequence_only(1);
+    assert_eq!(scene.debug_active_step_index(), Some(0));
+
+    scene.debug_tick_sequence_only(3);
+    assert_eq!(scene.debug_active_step_index(), Some(0));
+
+    scene.debug_advance_active_sequence_step_for_test();
+    assert_eq!(scene.debug_active_step_index(), Some(1));
+
+    scene.debug_tick_sequence_only(1);
+    assert_eq!(scene.debug_active_step_index(), None);
+}
+
+#[test]
+fn t_f118_show_placard_honors_hold_ticks_before_advancing() {
+    let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
+    let lib: crate::game::game_library::GameLibrary =
+        toml::from_str(&cfg).expect("faery.toml must parse");
+
+    let mut scene = GameplayScene::new();
+    scene.debug_enqueue_sequence_for_test(vec![
+        crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+            key: "rescue_katra".to_string(),
+            substitution: Some("Julian".to_string()),
+            hold_ticks: 3,
+        },
+        crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 1 },
+    ]);
+
+    scene.debug_tick_and_execute_sequence_only(2, &lib);
+    assert_eq!(
+        scene.debug_active_step_index(),
+        Some(0),
+        "placard step must still be active before hold_ticks reaches zero"
+    );
+
+    scene.debug_tick_and_execute_sequence_only(1, &lib);
+    assert_eq!(
+        scene.debug_active_step_index(),
+        Some(1),
+        "placard step should advance only after hold_ticks are consumed"
+    );
+}
+
+#[test]
+fn t_f118_clear_inner_rect_clears_visible_message_queue() {
+    let cfg = std::fs::read_to_string("faery.toml").expect("faery.toml must exist");
+    let lib: crate::game::game_library::GameLibrary =
+        toml::from_str(&cfg).expect("faery.toml must parse");
+    let mut scene = GameplayScene::new();
+    scene.messages.push("seed message");
+    assert!(!scene.messages.is_empty(), "precondition: queue must be non-empty");
+
+    scene.debug_enqueue_sequence_for_test(vec![
+        crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
+    ]);
+
+    scene.debug_tick_and_execute_sequence_only(1, &lib);
+
+    assert!(scene.messages.is_empty(), "ClearInnerRect must clear visible queue");
+    assert_eq!(scene.debug_active_step_index(), None);
+}
+
+#[test]
+fn t_f118_active_sequence_is_not_preempted_by_new_enqueue() {
+    let mut scene = GameplayScene::new();
+    scene.debug_enqueue_sequence_for_test(vec![
+        crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 5 },
+        crate::game::narrative_sequence::NarrativeStep::ApplyRescueRewardsAndFlags,
+    ]);
+
+    scene.enqueue_succession_placards("julian_dead", "phillip_start");
+    let after = scene.debug_narrative_steps();
+
+    assert_eq!(
+        after,
+        vec![
             crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 5 },
             crate::game::narrative_sequence::NarrativeStep::ApplyRescueRewardsAndFlags,
-        ]);
-
-        scene.enqueue_succession_placards("julian_dead", "phillip_start");
-        let after = scene.debug_narrative_steps();
-
-        assert_eq!(
-            after,
-            vec![
-                crate::game::narrative_sequence::NarrativeStep::WaitTicks { remaining: 5 },
-                crate::game::narrative_sequence::NarrativeStep::ApplyRescueRewardsAndFlags,
-                crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
-                    key: "julian_dead".to_string(),
-                    substitution: Some("Julian".to_string()),
-                    hold_ticks: 72,
-                },
-                crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
-                    key: "phillip_start".to_string(),
-                    substitution: Some("Julian".to_string()),
-                    hold_ticks: 72,
-                },
-            ],
-            "new sequence should defer behind active steps, not preempt or drop"
-        );
-    }
+            crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+                key: "julian_dead".to_string(),
+                substitution: Some("Julian".to_string()),
+                hold_ticks: 72,
+            },
+            crate::game::narrative_sequence::NarrativeStep::ShowPlacard {
+                key: "phillip_start".to_string(),
+                substitution: Some("Julian".to_string()),
+                hold_ticks: 72,
+            },
+        ],
+        "new sequence should defer behind active steps, not preempt or drop"
+    );
 }
 
 #[cfg(test)]
