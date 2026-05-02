@@ -13,12 +13,12 @@ really. Especially do not expect updates in a timely manner.
 - Build/run commands and developer setup: this file (`README.md`)
 - Agent constraints and working contract: `AGENTS.md`
 - Reference/source-of-truth docs (on the `research` branch — fetch on demand): [`reference/RESEARCH.md`](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/RESEARCH.md), [`reference/ARCHITECTURE.md`](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/ARCHITECTURE.md), [`reference/STORYLINE.md`](https://github.com/bacomatic/faery-tale-rs/blob/research/reference/STORYLINE.md). See `AGENTS.md` § "Reference docs (remote)" for the full inventory and fetch recipe.
-- Implementation contract: `docs/SPECIFICATION.md`
-- Requirements and user stories: `docs/REQUIREMENTS.md`
+- Implementation contract: `docs/spec/` (see `docs/spec/README.md` for subsystem index)
+- Requirements and user stories: `docs/reqs/` (see `docs/reqs/README.md` for subsystem index)
 
 # Build
 
-This repository is now developed **from the reference documents on the `research` branch** (see `AGENTS.md`) plus the local `docs/SPECIFICATION.md`. To build locally, clone the repository and run Cargo from the project root.
+This repository is now developed **from the reference documents on the `research` branch** (see `AGENTS.md`) plus the local `docs/spec/` subsystem files. To build locally, clone the repository and run Cargo from the project root.
 
 There will be no releases, nor special efforts to ensure compatibility with every platform. Primary development is done on Linux, but Cargo and SDL2 should make other platforms workable as well.
 
@@ -61,7 +61,7 @@ Project goals:
 
 This project is released under the MIT open source license. You are free to do whatever you want with it.
 
-Historical reverse-engineering work informed the reference documents, but the repository now proceeds from the documentation/specification (reference docs on the `research` branch and `docs/SPECIFICATION.md`) rather than from a checked-in copy of the old source tree.
+Historical reverse-engineering work informed the reference documents, but the repository now proceeds from the documentation/specification (reference docs on the `research` branch and `docs/spec/`) rather than from a checked-in copy of the old source tree.
 
 # Note to developers
 
