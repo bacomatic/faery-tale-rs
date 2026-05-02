@@ -287,6 +287,446 @@ def actor_tick(i: int) -> None:
     compute_rel_coords(actor, i)
 ```
 
+## actor_type_dispatch
+
+Source: `fmain.c:1480-1574`
+Called by: `actor_tick`
+Calls: `set_course`, `carrier_tick`, `raft_tick`, `effect`, `rand`, `setfig_table`, `missile_list`, `mdex`, `bowshotx`, `gunshoty`, `frustflag`, `witchflag`, `hero_x`, `hero_y`, `OBJECTS`, `DRAGON`, `CARRIER`, `SETFIG`, `RAFT`, `STATE_DYING`, `STATE_DEAD`, `STATE_TALKING`, `STATE_STILL`
+
+```pseudo
+def actor_type_dispatch(i: i16, an: Shape, d: i8, s: i8, k: i8) -> i8:
+    """fmain.c:1480-1574 — actor-type early branches inside actor_tick.
+    Returns the post-dispatch routing code:
+      0 = fall through to the state dispatcher (run walk/still/shoot/fight/death step)
+      1 = goto `raise`  (skip state dispatch; still run update_environ + update_actor_index)
+      2 = goto `statc`  (skip both update_environ and update_actor_index)
+    Mutates an.index, an.facing, an.state, an.abs_x/y, an.tactic, plus
+    the global mount/missile state, in place."""
+
+    if an.type == OBJECTS:                                # fmain.c:1480
+        return 1                                          # → raise (no state step; OBJECTS animate via update_actor_index path only)
+
+    if an.type == DRAGON:                                 # fmain.c:1481-1494
+        an.index = 0                                      # fmain.c:1482 — idle frame
+        if s == STATE_DYING:                              # fmain.c:1483
+            an.index = 3                                  # 3 = dragon DYING frame
+        elif s == STATE_DEAD:                             # fmain.c:1484
+            an.index = 4                                  # 4 = dragon DEAD frame
+        elif rand(0, 3) == 0:                             # fmain.c:1485 — 4-in-N fire-breath gate (within hostile extent)
+            ms = missile_list[mdex]
+            ms.speed = 5                                  # fmain.c:1486, 5 = dragon-fire missile speed
+            mdex = mdex + 1
+            an.index = rand(1, 2)                         # fmain.c:1487, 1..2 = breath-anim frames
+            effect(5, 1800 + rand(0, 255))                # fmain.c:1488, 5 = dragon-fire SFX, 1800 = base pitch
+            an.facing = 5                                 # fmain.c:1489, 5 = DIR_S (fixed-south spit)
+            ms.missile_type = 2                           # fmain.c:1490, 2 = dragon-fire missile type
+            # Spawn the missile inline at the dragshoot label (fmain.c:1698-1707).
+            ms.abs_x = an.abs_x + bowshotx[an.facing]     # fmain.c:1699
+            ms.abs_y = an.abs_y + gunshoty[an.facing]     # fmain.c:1702 — fireball uses gunshoty
+            ms.time_of_flight = 0
+            ms.direction = an.facing
+            ms.archer = i
+            if mdex > 5:                                  # fmain.c:1706, 5 = missile-list cap-1
+                mdex = 0
+            frustflag = 0
+            return 1                                      # → raise (skip state dispatcher)
+        an.index = 0                                      # fmain.c:1493 — idle frame
+        return 1                                          # → raise
+
+    if an.type == CARRIER:                                # fmain.c:1495-1547 — see carrier_tick
+        # See [carrier-transport.md#carrier_tick](carrier-transport.md#carrier_tick) for the full
+        # swan/turtle body. The branch ends with `goto raise` at fmain.c:1546,
+        # so the caller still runs update_environ + update_actor_index.
+        carrier_tick(i)
+        return 1                                          # → raise
+
+    if an.type == SETFIG:                                 # fmain.c:1548-1561
+        sid = an.race & 0x7f                              # fmain.c:1549, 0x7f = setfig id mask (high bit reserved)
+        an.index = setfig_table[sid].image_base           # fmain.c:1550
+        if s == STATE_DYING:                              # fmain.c:1551
+            an.index = an.index + 2                       # 2 = setfig DYING frame offset
+            if sid == 9:                                  # 9 = SETFIG_WITCH (bigger sprite sheet)
+                an.index = an.index + 2
+        elif s == STATE_DEAD:                             # fmain.c:1552
+            an.index = an.index + 3                       # 3 = setfig DEAD frame offset
+            if sid == 9:                                  # 9 = SETFIG_WITCH
+                an.index = an.index + 2
+        elif sid == 9:                                    # fmain.c:1553 — 9 = SETFIG_WITCH (faces hero each tick)
+            set_course(i, hero_x, hero_y, 0)              # fmain.c:1554, 0 = face-toward target mode
+            an.index = an.facing / 2                      # fmain.c:1554, 2 = frames per facing pair
+            witchflag = True                              # fmain.c:1554 — witch present this frame
+        elif s == STATE_TALKING:                          # fmain.c:1555
+            an.index = an.index + rand(0, 1)              # fmain.c:1556 — talk-anim 2-frame jitter
+            an.tactic = an.tactic - 1                     # fmain.c:1557 — talk countdown
+            if an.tactic == 0:
+                an.state = STATE_STILL                    # fmain.c:1557 — talk timed out
+        else:
+            return 2                                      # fmain.c:1559 — `goto statc` (skip env + index update)
+        return 1                                          # → raise
+
+    if an.type == RAFT:                                   # fmain.c:1562-1574 — see raft_tick
+        # See [carrier-transport.md#raft_tick](carrier-transport.md#raft_tick); the branch always
+        # exits via `goto statc` at fmain.c:1573 (no env / index update).
+        raft_tick(i)
+        return 2                                          # → statc
+
+    return 0                                              # fall through to state dispatcher
+```
+
+Notes:
+- The dragon's missile-spawn happens inline at the `dragshoot` label
+  (`fmain.c:1698-1707`) which is shared with `shoot_step`. Both paths
+  emit the same `bowshotx`/`gunshoty` deltas and increment `mdex`; only
+  the entry conditions differ. The shoot_step pseudocode below repeats
+  the spawn block for clarity.
+- The CARRIER and RAFT branches are flattened into one-line calls to
+  the existing `carrier_tick` / `raft_tick` specs in
+  [carrier-transport.md](carrier-transport.md). Inlining the bodies here
+  would duplicate ~70 lines of mount/dismount logic; the routing-code
+  return faithfully captures the `goto raise` vs `goto statc` exit
+  choice each branch makes.
+
+## shoot_step
+
+Source: `fmain.c:1667-1717`
+Called by: `actor_tick` (Phase 9, `STATE_SHOOT1` / `STATE_SHOOT3` branch)
+Calls: `effect`, `print`, `rand`, `diroffs`, `bowshotx`, `bowshoty`, `gunshoty`, `missile_list`, `mdex`, `stuff`, `xtype`, `ENEMY`, `WEAPON_BOW`, `WEAPON_WAND`, `STATE_STILL`, `STATE_SHOOT1`, `STATE_SHOOT3`
+
+```pseudo
+def shoot_step(i: i16, an: Shape, d: i8, s: i8) -> None:
+    """fmain.c:1667-1717 — bow/wand attack body. Picks the shoot-pose
+    frame from diroffs[d+8] + offset, releases the missile on
+    SHOOT3 (bow) or immediately on SHOOT1 (wand), and transitions
+    the actor's state. Mutates an.index, an.state, missile_list, and
+    mdex; falls into the `cpx` tail (no position commit)."""
+    # fmain.c:1669 — ranged attacks gated: deep water (k>15) or pax extents (xtype>80) suppress.
+    if an.environ > 15 or xtype > 80:                     # fmain.c:1669, 15 = SINK threshold, 80 = pax-extent floor
+        return                                            # → cpx tail (no missile, no anim change)
+
+    ms = missile_list[mdex]
+
+    if s == STATE_SHOOT3:                                 # fmain.c:1670 — release frame
+        if an.weapon == 5:                                # fmain.c:1671, 5 = WEAPON_WAND (no SHOOT3 anim)
+            an.index = diroffs[d + 8]                     # fmain.c:1672 — fight-base frame for facing
+            return                                        # → cpx
+        an.index = diroffs[d + 8] + 11                    # fmain.c:1675, 11 = bow-shoot-release frame offset
+        an.state = STATE_STILL                            # fmain.c:1676 — bow snaps back to STILL after release
+        if i == 0:                                        # fmain.c:1677 — hero arrow inventory check
+            if stuff[8] == 0:                             # fmain.c:1677, 8 = ARROW slot in stuff[]
+                return                                    # → cpx (no arrows, no spawn)
+            stuff[8] = stuff[8] - 1                       # fmain.c:1677 — consume one arrow
+        ms.speed = 3                                      # fmain.c:1678, 3 = arrow speed
+        mdex = mdex + 1
+        effect(4, 400 + rand(0, 255))                     # fmain.c:1680, 4 = bowstring SFX, 400 = base pitch
+    elif s == STATE_SHOOT1:                               # fmain.c:1682 — draw frame
+        if an.type == ENEMY:                              # fmain.c:1683
+            an.index = diroffs[d + 8] + 11                # fmain.c:1683, 11 = ENEMY draw frame
+        else:
+            an.index = diroffs[d + 8] + 10                # fmain.c:1684, 10 = PHIL draw frame
+        if an.weapon == 5:                                # fmain.c:1685, 5 = WEAPON_WAND (single-frame fire)
+            ms.speed = 5                                  # fmain.c:1686, 5 = fireball speed
+            mdex = mdex + 1
+            an.state = STATE_SHOOT3                       # fmain.c:1688 — wand fires on SHOOT1 entry
+            an.index = diroffs[d + 8]                     # fmain.c:1689 — wand-cast pose
+            effect(5, 1800 + rand(0, 255))                # fmain.c:1690, 5 = wand-fire SFX, 1800 = base pitch
+        elif i == 0 and stuff[8] == 0:                    # fmain.c:1693 — hero with no arrows
+            print("No Arrows!")                           # fmain.c:1694 — narration (see [messages.md](messages.md))
+            return                                        # → cpx (no draw-anim, no spawn)
+        else:
+            ms.speed = 0                                  # fmain.c:1695 — bow draw: missile not yet in flight
+
+    # fmain.c:1697 — common missile-spawn tail (also entered from DRAGON via dragshoot label).
+    ms.missile_type = an.weapon - 3                       # fmain.c:1697, 3 = WEAPON_BOW-1 (bow→1, wand→2)
+    ms.abs_x = an.abs_x + bowshotx[d]                     # fmain.c:1699
+    ms.abs_y = an.abs_y                                   # fmain.c:1700
+    if an.weapon == 4:                                    # fmain.c:1701, 4 = WEAPON_BOW
+        ms.abs_y = ms.abs_y + bowshoty[d]                 # fmain.c:1701
+    else:
+        ms.abs_y = ms.abs_y + gunshoty[d]                 # fmain.c:1702 — wand fireball / dragon
+    ms.time_of_flight = 0                                 # fmain.c:1703
+    ms.direction = an.facing                              # fmain.c:1704
+    ms.archer = i                                         # fmain.c:1705
+    if mdex > 5:                                          # fmain.c:1706, 5 = missile-slot cap-1
+        mdex = 0                                          # fmain.c:1706 — wrap
+    frustflag = 0                                         # fmain.c:1707 — successful action clears frustration
+    # → cpx tail: no position commit, falls through to update_environ.
+```
+
+Notes:
+- The `ms.speed = 0` path on a SHOOT1 bow draw means the missile slot
+  is reserved but the missile is not yet airborne; the next tick's
+  SHOOT3 release writes the real speed (3) and increments `mdex` for
+  the next slot. The rendering side keeps the same `bow_x[]`/`bow_y[]`
+  weapon-overlay offset across both ticks.
+- `STATE_SHOOT1 → STATE_SHOOT3` happens inside `resolve_player_state`
+  for the hero (release on fire-button up, see `fmain.c:1440`), and
+  inside `advance_goal` for NPCs. `shoot_step` only handles the frame
+  selection and missile spawn — it does not advance the state itself
+  except for the wand single-frame collapse at `fmain.c:1688`.
+
+## fighting_step
+
+Source: `fmain.c:1710-1716`
+Called by: `actor_tick` (Phase 9, melee state branch — `s` strictly less than `STATE_SHOOT1` and ≥ 9)
+Calls: `diroffs`, `trans_list`, `rand`
+
+```pseudo
+def fighting_step(i: i16, an: Shape, d: i8, s: i8) -> None:
+    """fmain.c:1710-1716 — melee swing animation step. Picks the next
+    fight-state via trans_list[s].newstate[rand4()]; writes the
+    corresponding diroffs[d+8] + s-derived frame to an.index. Falls
+    into `cpx` (no position commit). The actual hit detection is in
+    melee_hit_detection (Phase 15), not here — this step only animates
+    the swing."""
+    inum = diroffs[d + 8]                                 # fmain.c:1711 — fight-base frame for facing
+    s = trans_list[s].newstate[rand(0, 3)]                # fmain.c:1712 — pick next fight-substate (0..3)
+    an.state = s                                          # fmain.c:1712
+    if i > 2 and (s == 6 or s == 7):                      # fmain.c:1713, 2 = leader+brothers slot count, 6/7 = NPC-restricted fight substates
+        s = 8                                             # fmain.c:1713 — collapse 6/7 to 8 for actors beyond the brothers
+    an.index = s + inum                                   # fmain.c:1714
+    frustflag = 0                                         # fmain.c:1715 — successful swing clears frust
+    # → cpx tail (no position commit).
+```
+
+Notes:
+- `trans_list` is the per-state transition table that picks one of four
+  successor fight-substates each tick, producing the wind-up → swing →
+  recovery cycle. The four-entry rolls give a non-deterministic but
+  bounded animation.
+- The `i > 2` guard reserves fight substates 6 and 7 (the leader/brother
+  block) for the hero and brothers (anim_list[0..2]); enemy NPCs collapse
+  to substate 8 to share a smaller fight-frame block.
+- This step does not consult `an.weapon` — the weapon overlay is chosen
+  at render time by `select_atype_inum` from the current `an.index`.
+
+## death_step
+
+Source: `fmain.c:1573-1576, 1718-1746`
+Called by: `actor_tick` (Phase 9, `STATE_SINK` / `STATE_DYING` / `STATE_DEAD` / `STATE_FROZEN` / `STATE_OSCIL` / `STATE_OSCIL+1` / `STATE_SLEEP` / `STATE_FALL` branches)
+Calls: `fallstates`, `cycle`, `brother`
+
+```pseudo
+def death_step(i: i16, an: Shape, d: i8, s: i8) -> None:
+    """fmain.c:1573-1576, 1718-1746 — pose selection for non-motile
+    states. Each state pins an.index to a specific frame (or alternates
+    between two via `cycle`); FALL also advances tactic and decays
+    velocity. Falls into `cpx` (no position commit, but ice momentum
+    still slides through cpx)."""
+    if s == STATE_SINK:                                   # fmain.c:1575-1578
+        if an.vitality > 0:
+            an.index = 83                                 # fmain.c:1576, 83 = sinking pose (statelist[83])
+        # fmain.c:1577 — vitality<=0 leaves an.index untouched; corpse stays in last pose.
+        frustflag = 0                                     # fmain.c:1577
+        return                                            # → cpx
+
+    if s == STATE_DYING:                                  # fmain.c:1719-1726
+        if an.tactic > 4:                                 # fmain.c:1720, 4 = death-anim midpoint
+            if d == 0 or d > 4:                           # fmain.c:1721, facings 0/5/6/7 = north half
+                an.index = 80                             # fmain.c:1721, 80 = death frame A
+            else:
+                an.index = 81                             # fmain.c:1721, 81 = death frame B
+        elif an.tactic > 0:                               # fmain.c:1722
+            if d == 0 or d > 4:                           # fmain.c:1723, 4 = facing-half boundary
+                an.index = 81                             # fmain.c:1723 — second-half flips A/B
+            else:
+                an.index = 80                             # fmain.c:1723, 80 = death frame A
+        else:                                             # fmain.c:1724 — countdown expired
+            an.state = STATE_DEAD
+            an.index = 82                                 # fmain.c:1724, 82 = corpse frame
+        frustflag = 0                                     # fmain.c:1725
+        return                                            # → cpx
+
+    if s == STATE_DEAD:                                   # fmain.c:1727
+        an.index = 82                                     # 82 = corpse frame
+        return                                            # → cpx
+
+    if s == STATE_FROZEN:                                 # fmain.c:1728
+        an.index = 82                                     # 82 = same as DEAD pose (ice statue)
+        return                                            # → cpx
+
+    if s == STATE_OSCIL:                                  # fmain.c:1729 — sword-at-side oscillation
+        an.index = 84 + (cycle & 1)                       # fmain.c:1729, 84/85 = OSCIL frames
+        return                                            # → cpx
+
+    if s == STATE_OSCIL + 1:                              # fmain.c:1730
+        an.index = 84                                     # fmain.c:1730 — held A pose
+        return                                            # → cpx
+
+    if s == STATE_SLEEP:                                  # fmain.c:1731
+        an.index = 86                                     # fmain.c:1731, 86 = sleeping (statelist[86])
+        return                                            # → cpx
+
+    if s == STATE_FALL:                                   # fmain.c:1732-1738
+        if an.tactic >= 30:                               # fmain.c:1733, 30 = fall-frame counter cap
+            return                                        # → cpx (frozen at last fall frame)
+        j = (an.tactic / 5) + (brother * 6)               # fmain.c:1734, 5 = ticks-per-frame, 6 = entries-per-brother
+        an.index = fallstates[j]                          # fmain.c:1735
+        an.tactic = an.tactic + 1                         # fmain.c:1736 — advance fall counter
+        an.vel_x = (an.vel_x * 3) / 4                     # fmain.c:1737, 3/4 = velocity decay per fall tick
+        an.vel_y = (an.vel_y * 3) / 4                     # fmain.c:1738
+        return                                            # → cpx (cpx tail still applies vel/4 if k==-2)
+
+    # No match: leave an.index untouched (defensive — original falls through to cpx).
+    return
+```
+
+Notes:
+- `STATE_DYING` reuses `an.tactic` as the death-anim countdown (4
+  ticks each at the high frame, 4 ticks at the low frame, then DEAD).
+  The transition from DYING to DEAD also runs the post-step decrement
+  at `fmain.c:1747-1757` which fires `checkdead` for race-specific
+  loot drops; that is shown in the actor_tick spec above and not
+  duplicated here.
+- `STATE_FALL` uses `an.tactic` as a fall-frame counter (0..29). The
+  `fallstates[brother*6 + tactic/5]` lookup means each of the six fall
+  frames per brother lasts five ticks; the 30-tick cap freezes the
+  last frame indefinitely until the caller transitions out of FALL
+  (typically via `update_environ`'s pit/water handling).
+- `STATE_OSCIL+1` is a hold-pose convention: the actor pauses on
+  frame 84 indefinitely until a state transition takes them out of
+  OSCIL+1.
+
+## update_actor_index
+
+Source: `fmain.c:1799-1824`
+Called by: `actor_tick` (after `update_environ`, before `compute_rel_coords`)
+Calls: `diroffs`, `cycle`
+
+```pseudo
+def update_actor_index(i: i16, an: Shape, d: i8, dex: i16) -> None:
+    """fmain.c:1799-1824 — race-specific frame overrides applied after
+    the state-step has set `dex`. Some races animate at their own
+    cadence regardless of state (the swarming bug, the rabbit's hop,
+    the dead dark knight). The final value is written through
+    an.index so render_sprites and select_atype_inum read the
+    overridden frame."""
+    k = an.race                                           # fmain.c:1802
+    if an.type == ENEMY:                                  # fmain.c:1803
+        if k == 4 and an.state < STATE_WALKING:           # fmain.c:1804, 4 = RACE_SNAKE; pre-walk pose
+            dex = (cycle & 1) + diroffs[d]                # fmain.c:1804 — snake idle: 2-frame body wiggle on walk-base
+        elif k == 4 and an.state < STATE_DYING:           # fmain.c:1805 — snake while alive
+            dex = ((cycle / 2) & 1) + diroffs[d]          # fmain.c:1805 — half-rate wiggle
+        elif k == 8:                                      # fmain.c:1806, 8 = RACE_BUG_SWARM
+            if an.state == STATE_DEAD:                    # fmain.c:1807
+                an.abs_x = 0                              # fmain.c:1807 — kill swarm: park off-screen
+            elif an.state == STATE_DYING:                 # fmain.c:1808
+                dex = 0x3f                                # fmain.c:1808, 0x3f = swarm-dying frame
+            else:
+                dex = (cycle & 3) * 2                     # fmain.c:1810 — 4-phase swarm cycle, doubled
+                if dex > 4:                               # fmain.c:1811
+                    dex = dex - 1                         # fmain.c:1811 — collapse 6 → 5
+                slot = i % 3                              # fmain.c:1812 — three swarm-instances per cluster
+                if slot == 0:                             # fmain.c:1813
+                    dex = 0x25                            # fmain.c:1813, 0x25 = swarm body A (static)
+                elif slot == 1:                           # fmain.c:1814
+                    dex = dex + 0x28                      # fmain.c:1814, 0x28 = swarm body B base
+                else:
+                    dex = dex + 0x30                      # fmain.c:1815, 0x30 = swarm body C base
+        elif k == 7 and an.vitality == 0:                 # fmain.c:1819, 7 = RACE_DARK_KNIGHT (zero-HP undead)
+            an.state = STATE_STILL                        # fmain.c:1820 — note: source has bug `an->state == STILL` (no-op compare); spec follows the *intended* assignment
+            dex = 1                                       # fmain.c:1821, 1 = dark-knight reanimation pose
+    an.index = dex                                        # fmain.c:1824 — final frame written for renderer
+```
+
+Notes:
+- Source bug at `fmain.c:1820`: the original is `an->state == STILL;`
+  (an equality test discarded as an expression statement) where
+  `an->state = STILL;` was clearly intended. The spec writes the
+  assignment because that is the observable behavior in playtesting
+  (race-7 zero-HP knights stop moving). A faithful port can choose to
+  reproduce the no-op or write the assignment; the difference is only
+  observable on the rare frame where a race-7 actor has just hit
+  vitality 0 but is still in WALKING/FIGHTING. See [PROBLEMS.md](../PROBLEMS.md).
+- The bug-swarm logic at `fmain.c:1812-1816` is the only animation
+  path that uses `i % 3` — it lets three sequential anim_list slots
+  (i, i+1, i+2) display three different swarm body frames, producing
+  the appearance of a milling cluster from three independent actors.
+- Race overrides run *after* update_environ, which means a race-4
+  snake that just stepped onto water still gets the snake-idle frame
+  override applied this same tick; the environ-driven render shifts
+  in `compute_shape_clip` then pull the snake into the wading pose
+  visually.
+
+## compute_rel_coords
+
+Source: `fmain.c:1852-1864`
+Called by: `actor_tick` (statc label — the unconditional tail of every per-actor tick)
+Calls: `wrap`, `map_x`, `map_y`
+
+```pseudo
+def compute_rel_coords(an: Shape, i: i16) -> None:
+    """fmain.c:1852-1864 — write the per-actor screen-relative anchor
+    (rel_x, rel_y) used by render_sprites. Three anchor offsets are
+    selected by actor type / mount mode, all computed modulo the
+    map-wrap window via `wrap`."""
+    if an.type == CARRIER and riding == 11:               # fmain.c:1853, 11 = RIDING_SWAN
+        an.rel_x = wrap(an.abs_x - map_x - 32)            # fmain.c:1854, 32 = swan-mount X anchor (wider sprite)
+        an.rel_y = wrap(an.abs_y - map_y - 40)            # fmain.c:1855, 40 = swan-mount Y anchor
+    elif an.type == RAFT or an.type == CARRIER or an.type == DRAGON:   # fmain.c:1857
+        an.rel_x = wrap(an.abs_x - map_x - 16)            # fmain.c:1858, 16 = mount/large-sprite X anchor
+        an.rel_y = wrap(an.abs_y - map_y - 16)            # fmain.c:1859, 16 = mount Y anchor
+    else:
+        an.rel_x = wrap(an.abs_x - map_x - 8)             # fmain.c:1862, 8 = standard actor X anchor (16-wide sprite, centered)
+        an.rel_y = wrap(an.abs_y - map_y - 26)            # fmain.c:1863, 26 = standard Y anchor (sprite top from feet-Y)
+```
+
+Notes:
+- The three anchor sets correspond to the three sprite-sheet sizes:
+  swan-mount (64×80, anchor 32/40), other carriers/raft/dragon
+  (32×32 large, anchor 16/16), and standard actors (16×32, anchor
+  8/26 — the 26 places the sprite's feet at the actor's `abs_y`,
+  matching `GROUND_OFFSET = 32` minus the 6-pixel feet-to-bottom
+  margin in the standard PHIL/ENEMY sheets).
+- `wrap` (see [SYMBOLS.md](SYMBOLS.md)) collapses negative and
+  oversized values into the 16-bit world-coordinate window so a
+  sprite straddling the world wrap renders at the correct screen
+  column.
+
+## wrap_player_coords
+
+Source: `fmain.c:1826-1841`
+Called by: `actor_tick` (i == 0 only, after update_actor_index)
+Calls: `map_adjust`, `anim_list`
+
+```pseudo
+def wrap_player_coords(an: Shape, j: i8) -> None:
+    """fmain.c:1826-1841 — hero-only world-edge wrap. When the hero
+    walks past one of the four region boundaries (region_num<8 only),
+    snap them to the opposite edge; if mounted on a carrier, drag
+    anim_list[3] (the swan/turtle slot) along. Always writes
+    hero_x/hero_y and refreshes map_adjust for terrain-tile lookups."""
+    if region_num < 8:                                    # fmain.c:1827, 8 = inside-buildings region id
+        wrapped = True                                    # tracks whether we hit any edge
+        if an.abs_x < 300:                                # fmain.c:1828, 300 = west-edge wrap threshold
+            an.abs_x = 32565                              # fmain.c:1828, 32565 = east-edge spawn X
+        elif an.abs_x > 32565:                            # fmain.c:1829
+            an.abs_x = 300                                # fmain.c:1829, 300 = west-edge spawn X
+        elif an.abs_y < 300:                              # fmain.c:1830
+            an.abs_y = 32565                              # fmain.c:1830, 32565 = south-edge spawn Y
+        elif an.abs_y > 32565:                            # fmain.c:1831
+            an.abs_y = 300                                # fmain.c:1831, 300 = north-edge spawn Y
+        else:
+            wrapped = False                               # fmain.c:1832 — `goto jkl` skip
+        if wrapped and riding > 1:                        # fmain.c:1833, 1 = ride-on-raft (no carrier slot to drag)
+            anim_list[3].abs_x = an.abs_x                 # fmain.c:1834 — drag swan/turtle to wrapped position
+            anim_list[3].abs_y = an.abs_y                 # fmain.c:1835
+    map_adjust(an.abs_x, an.abs_y)                        # fmain.c:1839 — refresh hero_x/hero_y + sector caches
+    safe_flag = j                                         # fmain.c:1840 — capture last-sampled terrain code for sleep/eat checks (j is the local terrain code computed in actor_tick before this tail; see [actor_tick](#actor_tick))
+```
+
+Notes:
+- The wrap thresholds 300 / 32565 are world-pixel coordinates: 300
+  is one in-game tile inside the western edge, 32565 is the symmetric
+  inset on the east. The 32-pixel margin prevents the hero from
+  spawning inside the regional border tiles.
+- The `if (riding > 1)` test excludes ride-on-raft (`riding == 1`)
+  because the raft is `anim_list[1]` and is dragged by a separate
+  path; it includes turtle (5) and swan (11) which both occupy
+  `anim_list[3]`.
+- Inside-buildings regions (`region_num >= 8`) skip the wrap entirely:
+  building interiors are room-shaped with door tiles as the only
+  exit, so out-of-bounds positions cannot occur in normal play.
+
 ## check_door
 
 Source: `fmain.c:1853-1955`

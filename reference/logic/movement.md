@@ -285,7 +285,9 @@ Notes:
   (k == -2) goto cpx` transition at `fmain.c:1663`. The pseudo-code
   collapses both paths into one body.
 - Idle animation-frame bookkeeping (`dex = inum + 1` at `fmain.c:1662`)
-  lives in `actor_tick` alongside the state dispatch, not here.
+  is the responsibility of `actor_tick`'s state dispatcher; the
+  race-specific frame overrides applied afterwards live in
+  [`update_actor_index`](game-loop.md#update_actor_index).
 
 ## update_environ
 
