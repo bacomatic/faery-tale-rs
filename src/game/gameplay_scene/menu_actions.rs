@@ -4,7 +4,6 @@
 use super::*;
 
 impl GameplayScene {
-    ///
     /// Dispatch a MenuAction returned by MenuState::handle_key / handle_click.
     pub(crate) fn dispatch_menu_action(&mut self, action: crate::game::menu::MenuAction) {
         use crate::game::menu::MenuAction;
@@ -339,6 +338,7 @@ impl GameplayScene {
     }
 
     /// Dispatch a game menu/command action.
+    /// Always refreshes menu options at the end via `set_options`.
     pub(crate) fn do_option(&mut self, action: GameAction) {
         self.dlog(format!("do_option: {:?}", action));
         match action {
@@ -760,6 +760,7 @@ impl GameplayScene {
         self.menu.set_options(self.state.stuff(), wealth);
     }
 
+    /// Toggle between Menu and Gameplay controller modes.
     pub(crate) fn toggle_menu_mode(&mut self) {
         self.menu_cursor.active = !self.menu_cursor.active;
         self.controller_mode = if self.menu_cursor.active {
