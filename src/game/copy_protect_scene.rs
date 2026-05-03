@@ -444,8 +444,6 @@ impl Scene for CopyProtectScene {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_answer_comparison_case_sensitive() {
         // SPEC §23.2: Copy protection riddle answer comparison is case-sensitive (uppercase required).

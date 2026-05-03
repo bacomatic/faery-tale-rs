@@ -1174,7 +1174,7 @@ mod search_body_tests {
     #[test]
     fn test_apply_hit_kill_no_auto_loot() {
         // Building-block check: mark_dead must not change inventory.
-        let mut state = crate::game::game_state::GameState::new();
+        let state = crate::game::game_state::GameState::new();
         let stuff_before = state.stuff().to_vec();
         let gold_before = state.gold;
         let mut npc = Npc {
@@ -2192,7 +2192,7 @@ mod quest_tests {
     fn test_door_entry_guard_riding_values() {
         // SPEC §21.7: "All riding values block door entry"
         // This tests the guard condition logic.
-        let gs = GameplayScene::new();
+        let _gs = GameplayScene::new();
 
         // riding = 0 (on foot): should allow
         let not_riding_0 = 0 == 0;
@@ -2233,7 +2233,7 @@ mod quest_tests {
         use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
         use crate::game::npc::NpcTable;
 
-        let mut dragon = Npc {
+        let dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
             race: RACE_ENEMY,
             x: 1000,
@@ -2260,9 +2260,9 @@ mod quest_tests {
 
     #[test]
     fn test_dragon_always_faces_south() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
+        use crate::game::npc::{Npc, NPC_TYPE_DRAGON, RACE_ENEMY};
 
-        let mut dragon = Npc {
+        let dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
             race: RACE_ENEMY,
             x: 1000,

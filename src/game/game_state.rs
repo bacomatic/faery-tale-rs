@@ -1391,7 +1391,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_can_board_raft_gating() {
         let mut s = GameState::new();
         // Not allowed when wcarry != 1.

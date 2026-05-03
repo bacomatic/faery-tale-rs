@@ -446,7 +446,7 @@ impl From<&FigKind> for PersonId {
 }
 
 /// Result of nearest_fig search.
-struct NearestFig {
+pub(crate) struct NearestFig {
     kind: FigKind,
     dist: i32,
 }
