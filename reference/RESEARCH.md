@@ -32,6 +32,7 @@ This document was split into focused sub-documents for readability. The section 
 | 18 | Menu System | [RESEARCH-systems.md](RESEARCH-systems.md) |
 | 19 | Day/Night Cycle | [RESEARCH-systems.md](RESEARCH-systems.md) |
 | 20 | Text & Message Display | [RESEARCH-systems.md](RESEARCH-systems.md) |
+| 21 | Save/Load System | [RESEARCH-systems.md](RESEARCH-systems.md) |
 
 ---
 
@@ -154,3 +155,7 @@ See [RESEARCH-systems.md](RESEARCH-systems.md#19-daynight-cycle).
 ### [20. Text & Message Display](RESEARCH-systems.md#20-text--message-display)
 
 See [RESEARCH-systems.md](RESEARCH-systems.md#20-text--message-display).
+
+### [21. Save/Load System](RESEARCH-systems.md#21-saveload-system)
+
+See [RESEARCH-systems.md §21](RESEARCH-systems.md#21-saveload-system).

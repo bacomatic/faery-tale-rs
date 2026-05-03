@@ -1,7 +1,7 @@
 # Save / Load — Logic Spec
 
 > Fidelity: behavioral  |  Source files: fmain.c, fmain2.c
-> Cross-refs: [RESEARCH §19](../RESEARCH.md#119-saveload-of-object-state), [_discovery/save-load.md](../_discovery/save-load.md), [_discovery/disk-io.md](../_discovery/disk-io.md)
+> Cross-refs: [RESEARCH §11.9](../RESEARCH-items-world.md#119-saveload-of-object-state), [RESEARCH §21](../RESEARCH-systems.md#21-saveload-system), [_discovery/save-load.md](../_discovery/save-load.md), [_discovery/disk-io.md](../_discovery/disk-io.md)
 
 ## Overview
 
@@ -279,7 +279,10 @@ def savegame(hit: int) -> None:
     if svflag == 0:                                          # fmain2.c:1541 — load branch
         wt = 0                                               # fmain2.c:1542 — clear wait-timer
         encounter_number = 0                                 # fmain2.c:1542 — clear pending encounters
-        shape_read()                                         # fmain2.c:1544 — reload hero sprites for current brother
+        # NOTE: the line "actor_file = encounter_chart[encounter_type].file_id;"
+        # is present in the source as a comment (fmain2.c:1543) and is NOT executed.
+        # It was disabled before release; actor_file is preserved from the loaded save record.
+        shape_read()                                         # fmain2.c:1544 — reload all sprites: objects, active brother, raft, encounter actors, setfig; also sets new_region = region_num and calls load_all() for a full region reload
         set_options()                                        # fmain2.c:1544 — rebuild menu-enable state from stuff[]
         viewstatus = 99                                      # fmain2.c:1544 — 99 = "corrupt" sentinel forcing redraw (fmain.c:583)
         prq(4)                                               # fmain2.c:1545 — 4 = status-bar redraw queue id
@@ -361,6 +364,11 @@ the whole file up front must still honor this parse order.
 Source: `fmain2.c:1553-1558`
 Called by: `serialize_save_record`, `deserialize_save_record`, `mod1save`
 Calls: `Write`, `Read`, `IoErr`, `svflag`, `svfile`, `sverr`
+
+**Name note.** The source function is named `saveload` (not `saveload_block`). This
+spec renames it `saveload_block` throughout to avoid confusion with the higher-level
+`savegame` function and to make the call-site block labels clearer. Any porter should
+map `saveload_block` directly to the source `saveload()` call.
 
 ```pseudo
 def saveload_block(buffer: bytes, length: int) -> None:
@@ -453,9 +461,18 @@ before post-load fixup resets them) or recomputed from scratch.
 - `pad4..pad7` — declared on the same line as `pad1..pad3` but beyond the 80-byte window (`fmain.c:581`).
 - All `viewstatus`-through-`wt` transients (`fmain.c:583-604`); `viewstatus`, `wt`, `encounter_number`, `encounter_type`, and `actors_loading` are explicitly clobbered in the post-load fixup (`fmain2.c:1542-1548`).
 - `extent_list[2..21]` — static world extents rebuilt from executable constants on every launch (`fmain.c:339-372`).
-- `new_region`, `lregion`, `current_loads` — disk-load cache state (`fmain.c:617-618`).
+- `new_region`, `lregion`, `current_loads` — disk-load cache state (`fmain.c:617-618`); `shape_read()` resets `new_region = region_num` immediately after loading, triggering `load_all()` to repopulate the disk cache.
 - Music state, text scroll contents, menu-enabled states (`set_options` rebuilds them at `fmain2.c:1544`), display double-buffer state, input-handler state.
 - The `stuff` pointer itself — re-derived in `mod1save` (`fmain.c:3627`).
+
+### Disabled post-load assignment
+
+The line `actor_file = encounter_chart[encounter_type].file_id;` appears commented
+out at `fmain2.c:1543` and is never executed. The intent was evidently to reload
+the encounter-actor sprite file to match the encounter_type that was just reset to
+0 — but since `encounter_type` is zeroed two lines later (`fmain2.c:1548`) and
+`actor_file` is already in the saved record, the assignment was made redundant and
+disabled. Porters should **not** implement it.
 
 ### Saved but overwritten
 

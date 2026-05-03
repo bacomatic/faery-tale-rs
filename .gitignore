@@ -1,9 +1,12 @@
 .superpowers/
 .toolenv/
 .memsearch/
+.devin/
+.windsurf/
+
 tools/results/
 
 **/.__pycache__/
 **/__pycache__/
 **/.mypy_cache/
-**/.pytest_cache/
+**/.pytest_cache/.devin

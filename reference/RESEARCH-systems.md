@@ -656,3 +656,149 @@ Rendering: blits full normal compass to `bm_text` at (567,15), then overlays the
 
 Called from `_decode_mouse` in `fsubs.asm:1582`.
 
+## 21. Save/Load System
+
+> Normative logic spec: [reference/logic/save-load.md](logic/save-load.md)
+> Discovery notes: [reference/_discovery/save-load.md](../_discovery/save-load.md), [reference/_discovery/disk-io.md](../_discovery/disk-io.md)
+
+### 21.1 Overview
+
+Save and load share a single entry point, `savegame(hit)` at `fmain2.c:1474`. The
+global byte `svflag` (`fmain2.c:1390`) selects the direction: nonzero = save,
+zero = load. The player reaches `savegame` via two menu paths:
+
+- **Save**: `GAME → Quit (hit=8) → SAVEX → Save (hit=5)` sets `svflag = TRUE;
+  gomenu(FILE)` (`fmain.c:3467`).
+- **Load**: `GAME → Load (hit=9)` sets `svflag = FALSE; gomenu(FILE)` (`fmain.c:3446`).
+
+The FILE menu (`fmain.c:540`, label `"  A    B    C    D    E    F    G    H  "`)
+exposes eight slots (hit 0–7). The `do_option` FILE case (`fmain.c:3469-3471`)
+calls `savegame(hit)` then returns to GAME.
+
+### 21.2 Save Slots and File Names
+
+Eight independent files per game installation: `A.faery` through `H.faery`. The
+slot letter is assigned at `fmain2.c:1502`: `savename[4] = 'A' + hit`. There is
+no per-slot metadata or preview; all eight slots are always selectable regardless
+of whether a file exists (loading a missing slot fails at `Open` and prints an error).
+
+**File locations (priority order):**
+
+| Priority | Detection | Path | Notes |
+|----------|-----------|------|-------|
+| 1 | `locktest("image", ACCESS_READ)` succeeds | `A.faery`…`H.faery` (current directory) | Hard drive; strips `df1:` prefix |
+| 2 | `locktest("df1:", ACCESS_WRITE)` succeeds | `df1:A.faery`…`df1:H.faery` | Data floppy in drive 1 |
+| 3 | `locktest("df0:", ACCESS_WRITE)` and no `winpic` on df0 | `df0:A.faery`…`df0:H.faery` | Blank floppy in drive 0 |
+| 4 | Fallback | — | Prompts "Insert a writable disk", retries; timeout aborts |
+
+After a save/load on floppy, the game prompts to re-insert the game disk and polls
+for `df0:winpic` (`fmain2.c:1535-1540`).
+
+### 21.3 Save File Format
+
+The file is a raw, sequential, big-endian memory dump with no header, no magic
+bytes, no checksum, and no version stamp. Block boundaries are implicit; a reader
+must parse in order.
+
+**Block table:**
+
+| # | Offset | Bytes | Content | Source |
+|---|-------:|------:|---------|--------|
+| 1 | 0 | 80 | Misc variables: `map_x` through `pad3` (40 × 2-byte fields) | `fmain2.c:1507` |
+| 2 | 80 | 2 | `region_num` | `fmain2.c:1510` |
+| 3 | 82 | 6 | `anix`, `anix2`, `mdex` (3 × `short`) | `fmain2.c:1513` |
+| 4 | 88 | `anix × 22` | `anim_list[0..anix-1]` (`struct shape`, 22 bytes each) | `fmain2.c:1514` |
+| 5 | 88+anix×22 | 35 | `julstuff[35]` — Julian's inventory | `fmain.c:3623` |
+| 6 | +35 | 35 | `philstuff[35]` — Phillip's inventory | `fmain.c:3624` |
+| 7 | +35 | 35 | `kevstuff[35]` — Kevin's inventory | `fmain.c:3625` |
+| 8 | +35 | 60 | `missile_list[6]` (`struct missile`, 10 bytes each) | `fmain.c:3630` |
+| 9 | +60 | 24 | `extent_list[0..1]` (`struct extent`, 12 bytes each) | `fmain2.c:1519` |
+| 10 | +24 | 66 | `ob_listg[11]` (`struct object`, 6 bytes each) | `fmain2.c:1522` |
+| 11 | +66 | 20 | `mapobs[10]` — per-region object counts (10 × `USHORT`) | `fmain2.c:1523` |
+| 12 | +20 | 20 | `dstobs[10]` — per-region distribution flags (10 × `USHORT`) | `fmain2.c:1524` |
+| 13 | +20 | Σ `mapobs[i]×6` | `ob_table[i][0..mapobs[i]-1]` for i=0..9 | `fmain2.c:1525-1526` |
+
+Fixed overhead: 80 + 2 + 6 + 35×3 + 60 + 24 + 66 + 20 + 20 = 383 bytes. Variable
+tail: `anix × 22 + Σ mapobs[i] × 6`. Typical save is 1200–1500 bytes.
+
+**Parse-order dependency:** block 4 is sized by `anix` (read in block 3); block 13
+is sized by `mapobs` (read in block 11). Both variables must be read before the
+variable-length blocks can be parsed or buffered.
+
+### 21.4 What Is Saved
+
+**Player state:** position (`hero_x`, `hero_y`, `map_x`, `map_y`, `hero_sector`,
+`hero_place`), stats (`brave`, `luck`, `kind`, `wealth`, `hunger`, `fatigue`),
+active brother, safe zone, all three brothers' full inventories (35 bytes each),
+mount/flight state (`riding`, `flying`, `wcarry`, `active_carrier`).
+
+**World state:** all global objects (`ob_listg[11]`), all per-region object tables
+(`ob_table[0..9]` with current counts), both carrier extents (bird/turtle position
+in `extent_list[0..1]`).
+
+**Time/spell state:** `daynight`, `lightlevel`, `secret_timer`, `light_timer`,
+`freeze_timer`, `xtype`.
+
+**Combat snapshot:** full actor list (`anim_list[0..anix-1]`), actor count indices
+(`anix`, `anix2`, `mdex`), all six missiles, `leader`, `encounter_type`.
+
+**Asset handles:** `actor_file`, `set_file` (which sprite files are loaded), `region_num`.
+
+**Cheat flag:** `cheat1` at block-1 offset 18 — persists through save/load cycles.
+
+### 21.5 What Is NOT Saved
+
+**Display/rendering state:** double-buffer pointers, copper lists, bitplane setup,
+palette, `viewstatus` (reset to 99 on load to force full redraw).
+
+**Transient flags** (`fmain.c:583-604`): `flasher`, `actors_on_screen`, `battleflag`,
+`frustflag`, `quitflag`, `witchflag`, `wdir`, `goodfairy`, proximity vars, `dayperiod`,
+`sleepwait`, `danger_level`, `encounter_x/y`, `mixflag`.
+
+**Reset-on-load vars:** `wt`, `encounter_number`, `encounter_type`, `actors_loading`
+(all zeroed in the post-load fixup, `fmain2.c:1542-1548`).
+
+**Static world data:** `extent_list[2..21]` (static terrain extents, only entries
+0–1 for bird/turtle are saved); sector tile data (reloaded from disk by `shape_read`).
+
+**Derived/rebuilt state:** `new_region`, `lregion`, `current_loads` (disk-cache
+bookkeeping, reset by `shape_read`); `stuff` pointer (re-derived from `blist[brother-1].stuff`
+in `mod1save`); menu-enabled states (rebuilt by `set_options`).
+
+### 21.6 Post-Load Restoration
+
+Immediately after deserializing the record (`fmain2.c:1541-1548`):
+
+1. `wt = encounter_number = 0` — clears wait-timer and pending encounters.
+2. `shape_read()` (`fmain2.c:673`) — reloads all sprite graphics (objects, active
+   brother, raft, encounter actor set, setfig), sets `new_region = region_num`,
+   calls `load_all()` for a blocking full region reload from disk.
+3. `set_options()` (`fmain.c:3527`) — refreshes all menu enable states from `stuff[]`.
+4. `viewstatus = 99` — "corrupt" sentinel triggers full status-bar repaint.
+5. `prq(4)`, `prq(7)` — queue vitality and wealth display updates.
+6. Three `print("")` calls — clear the text scroll area.
+7. `encounter_type = actors_loading = 0` — clear encounter residue.
+
+Note: the line `actor_file = encounter_chart[encounter_type].file_id;` is present
+as a comment at `fmain2.c:1543` and is **not** executed. It was disabled before
+release; `actor_file` is preserved intact from the save record.
+
+### 21.7 Low-Level I/O
+
+`saveload()` at `fmain2.c:1553-1558` (called `saveload_block` in the logic spec to
+distinguish it from the higher-level `savegame`):
+
+```c
+saveload(buffer, length) char *buffer; long length;
+{   short err;
+    if (svflag) err = Write(svfile, buffer, length);
+    else        err = Read(svfile, buffer, length);
+    if (err < 0) sverr = IoErr();
+}
+```
+
+Uses AmigaDOS `Write()`/`Read()` — standard file I/O, not raw disk. No marshalling,
+no endianness conversion. All multi-byte values are native 68000 big-endian. The
+`short err` truncation is safe because no single block exceeds ~440 bytes (bounded
+by `MAX_ACTORS = 20` and per-region object caps), well within the `short` range.
+
