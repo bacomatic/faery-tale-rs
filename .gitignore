@@ -58,3 +58,7 @@ Cargo.lock
 # Local tooling session data
 .memsearch/
 .github/context-mode/
+.github/hooks
+.windsurf/
+bacon-lcm.config.json
+
