@@ -127,9 +127,9 @@ fn tick_countdown(remaining: &mut u32, delta: u32) -> bool {
 /// 22 steps × 7 ticks/step ≈ 154 ticks ≈ 5.1s.
 const FLIP_MIN_STEP_TICKS: u32 = 7;
 
-/// Title text Y offset in play_tex coordinates (320×200).
-/// Original 320×200 NTSC display; play_tex is drawn at native resolution and
-/// blitted 2× to the 640×400 window slot. Title text sits at y=20 in play_tex.
+/// Title text Y pixel offset applied to all line positions on the canvas.
+/// Adds a small top margin when rendering the 640×200 title text at 2× height
+/// on the 640×480 logical canvas.
 const TITLE_Y_OFFSET: i32 = 20;
 
 pub struct IntroScene {
@@ -263,37 +263,34 @@ impl Scene for IntroScene {
     ) -> SceneResult {
         let delta = delta_ticks;
 
-        // Skip requested — jump to done
+        // Skip requested — jump to done and stop music
         if self.skip_requested {
             self.phase = IntroPhase::Done;
+            // Stop intro music when skipping - it should not continue into copy protection
+            if let Some(audio) = resources.audio {
+                audio.stop_score();
+            }
         }
 
         match &mut self.phase {
             IntroPhase::TitleText { ticks_remaining } => {
-                // Draw black background + white title text into play_tex at 320×200.
-                // Then blit play_tex to canvas via the Cinematic-config sub-rect
-                // (src=(4,3,312,194), dst=(8,46,624,388)) per SPEC §1.1: a 4-px
-                // horizontal / 3-px vertical black inset border surrounds the
-                // 312×194 playfield region.
-                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
-                    play_canvas.set_draw_color(Color::BLACK);
-                    play_canvas.clear();
-                    resources.amber_font.set_color_mod(255, 255, 255);
-                    if let Some(placard) = game_lib.find_placard("titletext") {
-                        placard.draw_offset(
-                            resources.amber_font,
-                            play_canvas,
-                            0,
-                            TITLE_Y_OFFSET,
-                        );
-                    }
-                });
-
+                // The titletext placard is from the Amiga's 640×200 hires mode.
+                // X coordinates are in 640-wide space; Y coordinates are in 200-line
+                // space.  Draw directly onto the 640×480 logical canvas using
+                // draw_line_doubled, which calls render_string_hires: glyphs are
+                // rendered at 1× width and 2× height, and Y positions are doubled,
+                // so 200-line coords map correctly to the 400-line play area.
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                let src = Rect::new(4, 3, 312, 194);
-                let dst = Rect::new(8, 46, 624, 388);
-                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
+                resources.amber_font.set_color_mod(255, 255, 255);
+                if let Some(placard) = game_lib.find_placard("titletext") {
+                    placard.draw_line_doubled(
+                        resources.amber_font,
+                        canvas,
+                        0,
+                        TITLE_Y_OFFSET,
+                    );
+                }
 
                 if tick_countdown(ticks_remaining, delta) {
                     self.advance(game_lib);
@@ -317,30 +314,19 @@ impl Scene for IntroScene {
                     _ => (255, 255, 255),
                 };
 
-                // Render full-brightness title text into play_tex each frame; apply
-                // the fade via play_tex.set_color_mod, then blit through the
-                // Cinematic 312×194 aperture per SPEC §1.1.
-                let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
-                    play_canvas.set_draw_color(Color::BLACK);
-                    play_canvas.clear();
-                    resources.amber_font.set_color_mod(255, 255, 255);
-                    if let Some(placard) = game_lib.find_placard("titletext") {
-                        placard.draw_offset(
-                            resources.amber_font,
-                            play_canvas,
-                            0,
-                            TITLE_Y_OFFSET,
-                        );
-                    }
-                });
-
+                // Same as TitleText but with fade applied via font color mod.
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
-                play_tex.set_color_mod(r, g, b);
-                let src = Rect::new(4, 3, 312, 194);
-                let dst = Rect::new(8, 46, 624, 388);
-                canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
-                play_tex.set_color_mod(255, 255, 255);
+                resources.amber_font.set_color_mod(r, g, b);
+                if let Some(placard) = game_lib.find_placard("titletext") {
+                    placard.draw_line_doubled(
+                        resources.amber_font,
+                        canvas,
+                        0,
+                        TITLE_Y_OFFSET,
+                    );
+                }
+                resources.amber_font.set_color_mod(255, 255, 255);
 
                 if fader.is_done() {
                     self.advance(game_lib);
@@ -523,7 +509,13 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
-            IntroPhase::Done => SceneResult::Done,
+            IntroPhase::Done => {
+            // Stop intro music when intro completes normally
+            if let Some(audio) = resources.audio {
+                audio.stop_score();
+            }
+            SceneResult::Done
+        },
         }
     }
 }
