@@ -18,12 +18,32 @@ This file is the entry point for all project documentation. Copy this file to an
 | Document | Purpose |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | High-level subsystem architecture, data flow, game-loop structure, display and memory model. |
-| [RESEARCH.md](RESEARCH.md) | Ground-truth mechanics reference with citations to original 1987 source lines. |
-| [STORYLINE.md](STORYLINE.md) | Narrative progression, quest sequencing, NPC interactions, and story flow diagrams. |
+| [RESEARCH.md](RESEARCH.md) | Ground-truth mechanics reference — **hub/index** linking to the sub-documents below. |
+| [STORYLINE.md](STORYLINE.md) | Narrative progression — **hub/index** linking to the sub-documents below. |
 | [PROBLEMS.md](PROBLEMS.md) | Open and resolved research questions that cannot be settled by straightforward source tracing. |
 | [porting/README.md](porting/README.md) | Porting guidance hub for implementation-facing instructions and subsystem checklists. |
 | [world_db.json](world_db.json) | Spatial database of objects, doors, encounter extents, terrain summaries, and region grids. |
 | [quest_db.json](quest_db.json) | Machine-readable quest and progression data extracted from source analysis. |
+
+### RESEARCH.md Sub-Documents
+
+| Document | Sections | Purpose |
+|---|---|---|
+| [RESEARCH-data-structures.md](RESEARCH-data-structures.md) | §1–3 | Core data structures, actor state machine, RNG. |
+| [RESEARCH-input-movement.md](RESEARCH-input-movement.md) | §4–5 | Input system architecture, movement & direction. |
+| [RESEARCH-terrain-combat.md](RESEARCH-terrain-combat.md) | §6–7 | Terrain/collision systems, combat system. |
+| [RESEARCH-ai-encounters.md](RESEARCH-ai-encounters.md) | §8–9 | AI behavior, encounter & spawning mechanics. |
+| [RESEARCH-items-world.md](RESEARCH-items-world.md) | §10–12 | Inventory, world objects, door system. |
+| [RESEARCH-npcs-quests.md](RESEARCH-npcs-quests.md) | §13–16 | NPC dialogue/quests, stats, brother succession, win condition. |
+| [RESEARCH-systems.md](RESEARCH-systems.md) | §17–20 | Game loop, menu system, day/night cycle, text display. |
+
+### STORYLINE.md Sub-Documents
+
+| Document | Sections | Purpose |
+|---|---|---|
+| [STORYLINE-quests.md](STORYLINE-quests.md) | §1–2 | Story overview, quest progression. |
+| [STORYLINE-npcs.md](STORYLINE-npcs.md) | §3–5 | NPC dialogue trees, brother succession, NPC interactions. |
+| [STORYLINE-world-events.md](STORYLINE-world-events.md) | §6–7 | Location map, event sequences, cross-references. |
 
 ## Logic Specifications (Normative Behavior)
 
@@ -132,8 +152,8 @@ These are working research notes produced by exploration waves. They are useful 
 
 ## Trust Model
 
-- Final authority for mechanics: RESEARCH.md + reference/logic/*.md
+- Final authority for mechanics: RESEARCH.md (hub) + RESEARCH-*.md sub-documents + reference/logic/*.md
 - Final authority for architecture: ARCHITECTURE.md
-- Final authority for narrative progression: STORYLINE.md
+- Final authority for narrative progression: STORYLINE.md (hub) + STORYLINE-*.md sub-documents
 - Open uncertainties and unresolved edge cases: PROBLEMS.md
 - Supporting trace context only: reference/_discovery/*

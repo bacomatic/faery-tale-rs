@@ -12,17 +12,18 @@ applyTo: "reference/**"
 
 ## Section Numbering
 
-- RESEARCH.md: `## N. Title` for top-level sections, `### N.M Subtitle` for subsections
+- RESEARCH sub-documents: `## N. Title` for top-level sections, `### N.M Subtitle` for subsections
+- Section numbers are preserved across the split (e.g., §17 is always "Main Game Loop" in RESEARCH-systems.md)
 
 ## Cross-References
 
 - Between reference docs: `[STORYLINE.md §5](STORYLINE.md#5-npc-dialogue-trees)`
-- To sections within RESEARCH.md: `[§6 Inventory](RESEARCH.md#6-inventory--items)`
+- To RESEARCH sections: `[§6 Terrain](RESEARCH.md#6-terrain--collision)` — the hub RESEARCH.md has anchor stubs that redirect to sub-documents. Direct links to sub-documents (e.g., `RESEARCH-terrain-combat.md#6-terrain--collision`) also work.
 - Diagrams use Mermaid syntax (flowcharts, state diagrams, sequence diagrams)
 
 ## Single Source of Truth
 
-RESEARCH.md is the single source of truth for game mechanics documentation. Edit it directly. There is no secondary file to keep in sync.
+The RESEARCH-*.md sub-documents are the single source of truth for game mechanics. RESEARCH.md is their hub/index with anchor stubs for backward compatibility. STORYLINE-*.md sub-documents are the single source of truth for narrative content, with STORYLINE.md as the hub.
 
 ## Open Problems
 
