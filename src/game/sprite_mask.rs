@@ -1,9 +1,9 @@
 //! Sprite-depth masking: per-tile, per-sprite-column ground-line masking
 //! ported from fmain.c lines 3134-3184 and fsubs.asm maskit().
 
-use crate::game::map_renderer::{MapRenderer, MAP_DST_W, MAP_DST_H};
-use crate::game::map_view::{SCROLL_TILES_W, SCROLL_TILES_H};
-use crate::game::tile_atlas::{TILE_W, TILE_H, TOTAL_TILES};
+use crate::game::map_renderer::{MapRenderer, MAP_DST_H, MAP_DST_W};
+use crate::game::map_view::{SCROLL_TILES_H, SCROLL_TILES_W};
+use crate::game::tile_atlas::{TILE_H, TILE_W, TOTAL_TILES};
 
 /// Check whether a tile with masking type `k` should mask a sprite at the given position.
 ///
@@ -107,36 +107,62 @@ pub fn apply_sprite_mask(
     let top_in_world = sprite_top + oy;
     let bottom_in_world = sprite_bottom + oy;
 
-    if right_in_world < 0 || bottom_in_world < 0 { return; }
+    if right_in_world < 0 || bottom_in_world < 0 {
+        return;
+    }
 
-    let tx_start = if left_in_world < 0 { 0 } else { left_in_world as usize / TILE_W };
+    let tx_start = if left_in_world < 0 {
+        0
+    } else {
+        left_in_world as usize / TILE_W
+    };
     let tx_end = (right_in_world.max(0) as usize) / TILE_W;
-    let ty_start = if top_in_world < 0 { 0 } else { top_in_world as usize / TILE_H };
+    let ty_start = if top_in_world < 0 {
+        0
+    } else {
+        top_in_world as usize / TILE_H
+    };
     let ty_end = (bottom_in_world.max(0) as usize) / TILE_H;
 
     // Convert ground to world/tile coords (ym_base uses +oy, so ground must too).
     let ground = sprite.ground + oy;
-    let ym_base = if top_in_world < 0 { 0u8 } else { (top_in_world >> 5) as u8 };
+    let ym_base = if top_in_world < 0 {
+        0u8
+    } else {
+        (top_in_world >> 5) as u8
+    };
 
     for tx in tx_start..=tx_end {
-        if tx >= SCROLL_TILES_W { continue; }
+        if tx >= SCROLL_TILES_W {
+            continue;
+        }
         let xm = (tx as i32 - (left_in_world.max(0) as i32 / TILE_W as i32)).max(0) as u8;
 
         for ty in ty_start..=ty_end {
-            if ty >= SCROLL_TILES_H { continue; }
+            if ty >= SCROLL_TILES_H {
+                continue;
+            }
 
             let tile_idx = mr.last_minimap[ty * SCROLL_TILES_W + tx] as usize;
-            if tile_idx >= TOTAL_TILES { continue; }
+            if tile_idx >= TOTAL_TILES {
+                continue;
+            }
 
             let k = mr.atlas.mask_type[tile_idx];
-            if k == 0 { continue; }
+            if k == 0 {
+                continue;
+            }
 
             let ym = ty as u8 - ym_base.min(ty as u8);
             let ystop = ground - ((ym as i32 + ym_base as i32) << 5);
 
             // FALL state handling
             let k = if sprite.is_falling {
-                if tile_idx <= 220 { continue; } else { 3u8 }
+                if tile_idx <= 220 {
+                    continue;
+                } else {
+                    3u8
+                }
             } else {
                 k
             };
@@ -155,7 +181,9 @@ pub fn apply_sprite_mask(
 
             // Apply shadow_mem bitmask: re-stamp tile pixels where mask bit is set.
             let shadow_offset = maptag as usize * 64;
-            if shadow_offset + 63 >= mr.shadow_mem.len() { continue; }
+            if shadow_offset + 63 >= mr.shadow_mem.len() {
+                continue;
+            }
             let shadow_tile = &mr.shadow_mem[shadow_offset..shadow_offset + 64];
             let tile_pixels = mr.atlas.tile_pixels(tile_idx);
 
@@ -164,13 +192,21 @@ pub fn apply_sprite_mask(
 
             for row in 0..TILE_H {
                 let py = tile_screen_y + row as i32;
-                if py < 0 || py >= fb_h { continue; }
-                if py < sprite_top || py > sprite_bottom { continue; }
+                if py < 0 || py >= fb_h {
+                    continue;
+                }
+                if py < sprite_top || py > sprite_bottom {
+                    continue;
+                }
 
                 for col in 0..TILE_W {
                     let px = tile_screen_x + col as i32;
-                    if px < 0 || px >= fb_w { continue; }
-                    if px < sprite_left || px > sprite_right { continue; }
+                    if px < 0 || px >= fb_w {
+                        continue;
+                    }
+                    if px < sprite_left || px > sprite_right {
+                        continue;
+                    }
 
                     if shadow_bit_at(shadow_tile, row, col) {
                         let fb_idx = (py * fb_w + px) as usize;
@@ -229,7 +265,7 @@ mod tests {
         assert!(!should_mask_tile(4, 0, 0, 0, false, false)); // xm==0
         assert!(!should_mask_tile(4, 1, 36, 0, false, false)); // ystop>35
         assert!(!should_mask_tile(4, 0, 50, 0, false, false)); // both
-        // xm > 0 AND ystop <= 35 → mask
+                                                               // xm > 0 AND ystop <= 35 → mask
         assert!(should_mask_tile(4, 1, 35, 0, false, false));
         assert!(should_mask_tile(4, 2, 0, 0, false, false));
     }
@@ -261,7 +297,7 @@ mod tests {
         // Row 0: set bit 15 (pixel 0) and bit 0 (pixel 15)
         shadow[0] = 0x80; // bit 15 set → pixel 0
         shadow[1] = 0x01; // bit 0 set → pixel 15
-        // Row 1: all bits set
+                          // Row 1: all bits set
         shadow[2] = 0xFF;
         shadow[3] = 0xFF;
 

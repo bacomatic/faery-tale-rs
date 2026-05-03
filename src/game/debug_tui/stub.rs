@@ -30,13 +30,29 @@ impl DebugConsole {
     pub fn log_entry(&mut self, _entry: DebugLogEntry) {}
     pub fn ingest(&mut self, _entry: DebugLogEntry) {}
     pub fn log(&mut self, _msg: impl Into<String>) {}
-    pub fn drain_commands(&mut self) -> Vec<DebugCommand> { Vec::new() }
-    pub fn take_pause_request(&mut self) -> Option<bool> { None }
-    pub fn take_step_request(&mut self) -> u32 { 0 }
-    pub fn take_song_request(&mut self) -> Option<usize> { None }
-    pub fn take_stop_request(&mut self) -> bool { false }
-    pub fn take_cave_mode_request(&mut self) -> Option<bool> { None }
-    pub fn take_quit_request(&mut self) -> bool { false }
-    pub fn poll_input(&mut self) -> bool { false }
+    pub fn drain_commands(&mut self) -> Vec<DebugCommand> {
+        Vec::new()
+    }
+    pub fn take_pause_request(&mut self) -> Option<bool> {
+        None
+    }
+    pub fn take_step_request(&mut self) -> u32 {
+        0
+    }
+    pub fn take_song_request(&mut self) -> Option<usize> {
+        None
+    }
+    pub fn take_stop_request(&mut self) -> bool {
+        false
+    }
+    pub fn take_cave_mode_request(&mut self) -> Option<bool> {
+        None
+    }
+    pub fn take_quit_request(&mut self) -> bool {
+        false
+    }
+    pub fn poll_input(&mut self) -> bool {
+        false
+    }
     pub fn render(&mut self) {}
 }

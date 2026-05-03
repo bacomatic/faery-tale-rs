@@ -44,7 +44,9 @@ pub struct VictoryScene {
 impl VictoryScene {
     pub fn new() -> Self {
         VictoryScene {
-            phase: Phase::Hold { ticks_remaining: HOLD_TICKS },
+            phase: Phase::Hold {
+                ticks_remaining: HOLD_TICKS,
+            },
             skip_requested: false,
         }
     }
@@ -57,13 +59,23 @@ impl Default for VictoryScene {
 }
 
 impl Scene for VictoryScene {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn handle_event(&mut self, event: &Event) -> bool {
         match event {
-            Event::KeyDown { keycode: Some(Keycode::Space), .. }
-            | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+            Event::KeyDown {
+                keycode: Some(Keycode::Space),
+                ..
+            }
+            | Event::KeyDown {
+                keycode: Some(Keycode::Escape),
+                ..
+            } => {
                 self.skip_requested = true;
                 true
             }
@@ -81,7 +93,9 @@ impl Scene for VictoryScene {
     ) -> SceneResult {
         if self.skip_requested {
             if !matches!(self.phase, Phase::Fade { .. } | Phase::Done) {
-                self.phase = Phase::Fade { ticks_remaining: FADE_TICKS };
+                self.phase = Phase::Fade {
+                    ticks_remaining: FADE_TICKS,
+                };
             }
             self.skip_requested = false;
         }
@@ -120,7 +134,9 @@ impl Scene for VictoryScene {
         match &mut self.phase {
             Phase::Hold { ticks_remaining } => {
                 if delta_ticks >= *ticks_remaining {
-                    self.phase = Phase::Fade { ticks_remaining: FADE_TICKS };
+                    self.phase = Phase::Fade {
+                        ticks_remaining: FADE_TICKS,
+                    };
                 } else {
                     *ticks_remaining -= delta_ticks;
                 }

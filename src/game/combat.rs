@@ -1,8 +1,10 @@
 //! Combat system: melee combat resolution between hero and NPCs.
 //! Ports the battle loop from original fmain.c.
 
-use crate::game::npc::{Npc, RACE_UNDEAD, RACE_WRAITH, RACE_NECROMANCER, RACE_WITCH, RACE_SPECTRE, RACE_GHOST};
 use crate::game::game_state::GameState;
+use crate::game::npc::{
+    Npc, RACE_GHOST, RACE_NECROMANCER, RACE_SPECTRE, RACE_UNDEAD, RACE_WITCH, RACE_WRAITH,
+};
 
 /// Maximum concurrent projectiles (missile_list[6] from fmain.c).
 pub const MAX_MISSILES: usize = 6;
@@ -11,7 +13,7 @@ pub const MAX_MISSILES: usize = 6;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MissileType {
     #[default]
-    Arrow,    // weapon 4: hit radius 6px, attacker code -1
+    Arrow, // weapon 4: hit radius 6px, attacker code -1
     Fireball, // weapon 5: hit radius 9px, attacker code -2
 }
 
@@ -34,7 +36,9 @@ impl Missile {
     /// Advance one frame; returns true if this missile hit its target.
     /// Hit radius per SPEC §10.4: arrows 6px, fireballs 9px.
     pub fn tick(&mut self, target_x: i32, target_y: i32) -> bool {
-        if !self.active { return false; }
+        if !self.active {
+            return false;
+        }
         self.x += self.dx;
         self.y += self.dy;
         // Out of bounds check (world size ~32768)
@@ -47,7 +51,9 @@ impl Missile {
             MissileType::Fireball => 9,
         };
         let hit = (self.x - target_x).abs() < radius && (self.y - target_y).abs() < radius;
-        if hit { self.active = false; }
+        if hit {
+            self.active = false;
+        }
         hit
     }
 
@@ -72,7 +78,8 @@ impl Missile {
 /// Returns the index of the missile slot used, or None if full.
 pub fn fire_missile(
     missiles: &mut [Missile; MAX_MISSILES],
-    x: i32, y: i32,
+    x: i32,
+    y: i32,
     dir: u8,
     weapon: u8,
     is_friendly: bool,
@@ -90,8 +97,21 @@ pub fn fire_missile(
         7 => (-speed, -speed), // NW
         _ => (0, -speed),
     };
-    let missile_type = if weapon == 5 { MissileType::Fireball } else { MissileType::Arrow };
-    missiles[slot] = Missile { active: true, x, y, dx, dy, missile_type, is_friendly, time_of_flight: 0 };
+    let missile_type = if weapon == 5 {
+        MissileType::Fireball
+    } else {
+        MissileType::Arrow
+    };
+    missiles[slot] = Missile {
+        active: true,
+        x,
+        y,
+        dx,
+        dy,
+        missile_type,
+        is_friendly,
+        time_of_flight: 0,
+    };
     Some(slot)
 }
 
@@ -134,7 +154,11 @@ pub struct CombatResult {
 /// **Deprecated:** Use `GameplayScene::run_combat_tick()` instead.
 #[deprecated(note = "Use GameplayScene::run_combat_tick() instead")]
 #[allow(deprecated)]
-pub fn resolve_combat(state: &mut GameState, npc: &mut Npc, hero_weapon_slot: usize) -> CombatResult {
+pub fn resolve_combat(
+    state: &mut GameState,
+    npc: &mut Npc,
+    hero_weapon_slot: usize,
+) -> CombatResult {
     // Hero attacks enemy
     let weapon_factor = WEAPON_DAMAGE.get(hero_weapon_slot).copied().unwrap_or(1) as i16;
     let hero_attack = (state.vitality * weapon_factor / 8).max(1);
@@ -181,30 +205,38 @@ pub fn melee_reach(brave: i16, weapon: u8, insane_reach: bool) -> i16 {
     let base = ((brave / 20) + 5).min(15).max(4) as i16;
     // Weapon adds 2px per level, mirroring wt+wt offset in newx/newy.
     let reach = base + (weapon as i16) * 2;
-    if insane_reach { reach * 4 } else { reach }
+    if insane_reach {
+        reach * 4
+    } else {
+        reach
+    }
 }
 
 /// Direction-sensitive melee proximity check (ports fmain.c sword proximity loop).
 /// Returns true if the target is within reach of the hero's weapon tip.
 /// Uses Chebyshev distance (max(|dx|,|dy|) < reach) matching original `yd < bv`.
 pub fn in_melee_range(
-    hero_x: i16, hero_y: i16,
-    facing: u8, weapon: u8, brave: i16,
-    target_x: i16, target_y: i16,
+    hero_x: i16,
+    hero_y: i16,
+    facing: u8,
+    weapon: u8,
+    brave: i16,
+    target_x: i16,
+    target_y: i16,
     insane_reach: bool,
 ) -> bool {
     let reach = melee_reach(brave, weapon, insane_reach);
     // Project weapon tip ahead in facing direction (mirrors newx/newy offset by wt+wt).
     let offset = reach;
     let (ox, oy): (i16, i16) = match facing & 7 {
-        0 => (0, -offset),        // N
-        1 => (offset, -offset),   // NE
-        2 => (offset, 0),         // E
-        3 => (offset, offset),    // SE
-        4 => (0, offset),         // S
-        5 => (-offset, offset),   // SW
-        6 => (-offset, 0),        // W
-        7 => (-offset, -offset),  // NW
+        0 => (0, -offset),       // N
+        1 => (offset, -offset),  // NE
+        2 => (offset, 0),        // E
+        3 => (offset, offset),   // SE
+        4 => (0, offset),        // S
+        5 => (-offset, offset),  // SW
+        6 => (-offset, 0),       // W
+        7 => (-offset, -offset), // NW
         _ => (0, -offset),
     };
     let tip_x = hero_x as i32 + ox as i32;
@@ -223,7 +255,9 @@ pub fn rand4(tick: u32) -> usize {
 
 /// Simple pseudo-random number for damage rolls (no external crate dependency).
 pub fn melee_rand(max: u32) -> u32 {
-    if max == 0 { return 0; }
+    if max == 0 {
+        return 0;
+    }
     use std::time::SystemTime;
     let nanos = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -296,10 +330,10 @@ pub fn npc_speed_for_terrain(terrain: u8, race_ignores_terrain: bool) -> i8 {
         return 2;
     }
     match terrain {
-        6 => 4,            // slippery (ice / smooth) → fast
-        2 | 3 => 1,        // shallow/deep water → slow
-        t if t > 6 => 1,   // any deeper water bands → slow
-        _ => 2,            // default walking speed
+        6 => 4,          // slippery (ice / smooth) → fast
+        2 | 3 => 1,      // shallow/deep water → slow
+        t if t > 6 => 1, // any deeper water bands → slow
+        _ => 2,          // default walking speed
     }
 }
 
@@ -311,11 +345,11 @@ pub fn hero_speed_for_env(environ: i8, riding_raft: bool) -> i8 {
         return 3;
     }
     match environ {
-        -3 => -2,  // reversal tile (backward movement)
-        -1 => 4,   // slippery (fast)
-        2 => 1,    // wading (slow)
+        -3 => -2,        // reversal tile (backward movement)
+        -1 => 4,         // slippery (fast)
+        2 => 1,          // wading (slow)
         e if e > 6 => 1, // deep water (slow)
-        _ => 2,    // default walking speed
+        _ => 2,          // default walking speed
     }
 }
 
@@ -353,7 +387,8 @@ mod tests {
         Npc {
             npc_type: NPC_TYPE_ORC,
             race: RACE_ENEMY,
-            x: 0, y: 0,
+            x: 0,
+            y: 0,
             vitality: 10,
             gold: 5,
             speed: 2,
@@ -413,8 +448,14 @@ mod tests {
     #[test]
     fn test_arrow_hit_radius_6px() {
         let mut arrow = Missile {
-            active: true, x: 100, y: 100, dx: 2, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 100,
+            y: 100,
+            dx: 2,
+            dy: 0,
+            missile_type: MissileType::Arrow,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         // Within 6px → hit
         assert!(arrow.tick(105, 100));
@@ -424,8 +465,14 @@ mod tests {
     #[test]
     fn test_arrow_miss_beyond_6px() {
         let mut arrow = Missile {
-            active: true, x: 100, y: 100, dx: 2, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 100,
+            y: 100,
+            dx: 2,
+            dy: 0,
+            missile_type: MissileType::Arrow,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         // After tick, arrow at 102. Target at 109 → distance 7px → miss
         assert!(!arrow.tick(109, 100));
@@ -436,8 +483,14 @@ mod tests {
     #[test]
     fn test_fireball_hit_radius_9px() {
         let mut fireball = Missile {
-            active: true, x: 100, y: 100, dx: 0, dy: 2,
-            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 100,
+            y: 100,
+            dx: 0,
+            dy: 2,
+            missile_type: MissileType::Fireball,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         // After tick, fireball at y=102. Target at 110 → distance 8px → hit
         assert!(fireball.tick(100, 110));
@@ -447,8 +500,14 @@ mod tests {
     #[test]
     fn test_fireball_miss_beyond_9px() {
         let mut fireball = Missile {
-            active: true, x: 100, y: 100, dx: 0, dy: 2,
-            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 100,
+            y: 100,
+            dx: 0,
+            dy: 2,
+            missile_type: MissileType::Fireball,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         // After tick, fireball at y=102. Target at 112 → distance 10px → miss
         assert!(!fireball.tick(100, 112));
@@ -461,32 +520,64 @@ mod tests {
         // SPEC §10.4: rand8() + 4 = 4–11 for both types
         for _ in 0..100 {
             let arrow = Missile {
-                active: true, x: 0, y: 0, dx: 0, dy: 0,
-                missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
+                active: true,
+                x: 0,
+                y: 0,
+                dx: 0,
+                dy: 0,
+                missile_type: MissileType::Arrow,
+                is_friendly: true,
+                time_of_flight: 0,
             };
             let dmg = arrow.damage();
-            assert!((4..=11).contains(&dmg), "arrow damage {} out of range 4-11", dmg);
+            assert!(
+                (4..=11).contains(&dmg),
+                "arrow damage {} out of range 4-11",
+                dmg
+            );
 
             let fireball = Missile {
-                active: true, x: 0, y: 0, dx: 0, dy: 0,
-                missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
+                active: true,
+                x: 0,
+                y: 0,
+                dx: 0,
+                dy: 0,
+                missile_type: MissileType::Fireball,
+                is_friendly: true,
+                time_of_flight: 0,
             };
             let dmg = fireball.damage();
-            assert!((4..=11).contains(&dmg), "fireball damage {} out of range 4-11", dmg);
+            assert!(
+                (4..=11).contains(&dmg),
+                "fireball damage {} out of range 4-11",
+                dmg
+            );
         }
     }
 
     #[test]
     fn test_attacker_codes() {
         let arrow = Missile {
-            active: true, x: 0, y: 0, dx: 0, dy: 0,
-            missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 0,
+            y: 0,
+            dx: 0,
+            dy: 0,
+            missile_type: MissileType::Arrow,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         assert_eq!(arrow.attacker_code(), -1);
 
         let fireball = Missile {
-            active: true, x: 0, y: 0, dx: 0, dy: 0,
-            missile_type: MissileType::Fireball, is_friendly: true, time_of_flight: 0,
+            active: true,
+            x: 0,
+            y: 0,
+            dx: 0,
+            dy: 0,
+            missile_type: MissileType::Fireball,
+            is_friendly: true,
+            time_of_flight: 0,
         };
         assert_eq!(fireball.attacker_code(), -2);
     }
@@ -513,7 +604,16 @@ mod tests {
 
     #[test]
     fn test_missile_ticks() {
-        let mut m = Missile { active: true, x: 0, y: 100, dx: 2, dy: 0, missile_type: MissileType::Arrow, is_friendly: true, time_of_flight: 0 };
+        let mut m = Missile {
+            active: true,
+            x: 0,
+            y: 100,
+            dx: 2,
+            dy: 0,
+            missile_type: MissileType::Arrow,
+            is_friendly: true,
+            time_of_flight: 0,
+        };
         let hit = m.tick(50, 100); // too far
         assert!(!hit);
         assert_eq!(m.x, 2);
@@ -639,7 +739,12 @@ mod tests {
     fn test_combat_reach_npc_range() {
         for tick in 0..100u32 {
             let r = combat_reach(false, 0, tick);
-            assert!((2..=5).contains(&r), "npc reach {} out of range at tick {}", r, tick);
+            assert!(
+                (2..=5).contains(&r),
+                "npc reach {} out of range at tick {}",
+                r,
+                tick
+            );
         }
     }
 
@@ -658,12 +763,14 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_SPECTRE, weapon, false),
                 ImmunityResult::ImmuneSilent,
-                "Spectre should be immune to weapon {}", weapon
+                "Spectre should be immune to weapon {}",
+                weapon
             );
             assert_eq!(
                 check_immunity(RACE_SPECTRE, weapon, true),
                 ImmunityResult::ImmuneSilent,
-                "Spectre should be immune to weapon {} even with Sun Stone", weapon
+                "Spectre should be immune to weapon {} even with Sun Stone",
+                weapon
             );
         }
     }
@@ -675,12 +782,14 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_GHOST, weapon, false),
                 ImmunityResult::ImmuneSilent,
-                "Ghost should be immune to weapon {}", weapon
+                "Ghost should be immune to weapon {}",
+                weapon
             );
             assert_eq!(
                 check_immunity(RACE_GHOST, weapon, true),
                 ImmunityResult::ImmuneSilent,
-                "Ghost should be immune to weapon {} even with Sun Stone", weapon
+                "Ghost should be immune to weapon {} even with Sun Stone",
+                weapon
             );
         }
     }
@@ -692,12 +801,14 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_NECROMANCER, weapon, false),
                 ImmunityResult::ImmuneWithMessage,
-                "Necromancer should be immune to weapon {}", weapon
+                "Necromancer should be immune to weapon {}",
+                weapon
             );
             assert_eq!(
                 check_immunity(RACE_NECROMANCER, weapon, true),
                 ImmunityResult::ImmuneWithMessage,
-                "Necromancer should be immune to weapon {} even with Sun Stone", weapon
+                "Necromancer should be immune to weapon {} even with Sun Stone",
+                weapon
             );
         }
     }
@@ -709,7 +820,8 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_NECROMANCER, weapon, false),
                 ImmunityResult::Vulnerable,
-                "Necromancer should be vulnerable to weapon {}", weapon
+                "Necromancer should be vulnerable to weapon {}",
+                weapon
             );
         }
     }
@@ -721,7 +833,8 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_WITCH, weapon, false),
                 ImmunityResult::ImmuneWithMessage,
-                "Witch should be immune to weapon {} without Sun Stone", weapon
+                "Witch should be immune to weapon {} without Sun Stone",
+                weapon
             );
         }
     }
@@ -733,7 +846,8 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_WITCH, weapon, true),
                 ImmunityResult::Vulnerable,
-                "Witch should be vulnerable to weapon {} with Sun Stone", weapon
+                "Witch should be vulnerable to weapon {} with Sun Stone",
+                weapon
             );
         }
     }
@@ -745,12 +859,14 @@ mod tests {
             assert_eq!(
                 check_immunity(RACE_WITCH, weapon, false),
                 ImmunityResult::Vulnerable,
-                "Witch should be vulnerable to weapon {} without Sun Stone", weapon
+                "Witch should be vulnerable to weapon {} without Sun Stone",
+                weapon
             );
             assert_eq!(
                 check_immunity(RACE_WITCH, weapon, true),
                 ImmunityResult::Vulnerable,
-                "Witch should be vulnerable to weapon {} with Sun Stone", weapon
+                "Witch should be vulnerable to weapon {} with Sun Stone",
+                weapon
             );
         }
     }
@@ -763,7 +879,9 @@ mod tests {
                 assert_eq!(
                     check_immunity(race, weapon, false),
                     ImmunityResult::Vulnerable,
-                    "Race {} should be vulnerable to weapon {}", race, weapon
+                    "Race {} should be vulnerable to weapon {}",
+                    race,
+                    weapon
                 );
             }
         }

@@ -5,8 +5,8 @@ use super::*;
 
 impl GameplayScene {
     pub(crate) fn run_combat_tick(&mut self) {
-        use crate::game::combat::{weapon_tip, combat_reach, rand256, bitrand};
         use crate::game::actor::ActorState;
+        use crate::game::combat::{bitrand, combat_reach, rand256, weapon_tip};
         use crate::game::debug_command::GodModeFlags;
 
         let freeze = self.state.freeze_timer > 0;
@@ -31,7 +31,11 @@ impl GameplayScene {
                 x: actor.abs_x as i32,
                 y: actor.abs_y as i32,
                 facing: actor.facing,
-                weapon: if i == 0 { actor.weapon.max(1) } else { actor.weapon },
+                weapon: if i == 0 {
+                    actor.weapon.max(1)
+                } else {
+                    actor.weapon
+                },
                 fighting,
                 active: !matches!(actor.state, ActorState::Dead | ActorState::Dying),
             });
@@ -46,13 +50,23 @@ impl GameplayScene {
         let mut hits: Vec<HitRecord> = Vec::new();
 
         for (i, attacker) in combatants.iter().enumerate() {
-            if i == 1 { continue; } // skip raft slot
-            if !attacker.active || !attacker.fighting { continue; }
-            if i > 0 && freeze { continue; } // NPCs frozen
+            if i == 1 {
+                continue;
+            } // skip raft slot
+            if !attacker.active || !attacker.fighting {
+                continue;
+            }
+            if i > 0 && freeze {
+                continue;
+            } // NPCs frozen
 
             let mut wt = attacker.weapon;
-            if wt & 4 != 0 { continue; } // bow/wand — handled by shoot state machine
-            if wt >= 8 { wt = 5; } // cap touch attack
+            if wt & 4 != 0 {
+                continue;
+            } // bow/wand — handled by shoot state machine
+            if wt >= 8 {
+                wt = 5;
+            } // cap touch attack
             let wt_dmg = wt as i16 + bitrand(2) as i16;
 
             let reach = if insane_reach && i == 0 {
@@ -64,8 +78,12 @@ impl GameplayScene {
             let (tip_x, tip_y) = weapon_tip(attacker.x, attacker.y, attacker.facing, wt as i16);
 
             for (j, target) in combatants.iter().enumerate() {
-                if j == 1 || j == i { continue; } // skip raft, self
-                if !target.active { continue; }
+                if j == 1 || j == i {
+                    continue;
+                } // skip raft, self
+                if !target.active {
+                    continue;
+                }
 
                 let xd = (target.x - tip_x).abs();
                 let yd = (target.y - tip_y).abs();
@@ -74,11 +92,7 @@ impl GameplayScene {
                 // Hit check: hero always hits, NPCs must pass brave dodge
                 let hit_roll = i == 0 || rand256() > brave;
                 if hit_roll && dist < reach as i32 {
-                    let damage = if one_hit_kill && i == 0 {
-                        999
-                    } else {
-                        wt_dmg
-                    };
+                    let damage = if one_hit_kill && i == 0 { 999 } else { wt_dmg };
                     hits.push(HitRecord {
                         attacker: i,
                         target: j,
@@ -96,7 +110,13 @@ impl GameplayScene {
         }
     }
 
-    pub(crate) fn apply_hit(&mut self, attacker_idx: usize, target_idx: usize, facing: u8, damage: i16) {
+    pub(crate) fn apply_hit(
+        &mut self,
+        attacker_idx: usize,
+        target_idx: usize,
+        facing: u8,
+        damage: i16,
+    ) {
         if target_idx == 0 {
             // NPC hitting hero
             self.state.vitality = (self.state.vitality - damage).max(0);
@@ -158,7 +178,9 @@ impl GameplayScene {
 
                     if !immune {
                         npc.vitality -= damage;
-                        if npc.vitality < 0 { npc.vitality = 0; }
+                        if npc.vitality < 0 {
+                            npc.vitality = 0;
+                        }
 
                         // Pushback on target: 2px in attacker facing, but
                         // DRAGON and SETFIG races refuse to move (fmain2.c:243).
@@ -180,8 +202,10 @@ impl GameplayScene {
                         // so the i>=0 guard is implicit here.
                         if target_moved && attacker_idx == 0 {
                             let (rx, ry) = push_offset(facing, 2);
-                            self.state.hero_x = (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
-                            self.state.hero_y = (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                            self.state.hero_x =
+                                (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
+                            self.state.hero_y =
+                                (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
                         }
 
                         if damage > 0 {
@@ -194,11 +218,14 @@ impl GameplayScene {
                     // any enemy (i!=0); kind-=3 for SETFIG non-witch kills;
                     // speak(42) on dark-knight race 7.
                     if npc.vitality == 0 {
-                        use crate::game::npc::{RACE_NECROMANCER, RACE_WOODCUTTER, RACE_WITCH, NpcState};
+                        use crate::game::npc::{
+                            NpcState, RACE_NECROMANCER, RACE_WITCH, RACE_WOODCUTTER,
+                        };
                         const RACE_DARK_KNIGHT: u8 = 7; // fmain.c:2774
 
                         if npc.race == RACE_DARK_KNIGHT {
-                            dark_knight_speech = Some(crate::game::events::speak(&self.narr, 42, &bname));
+                            dark_knight_speech =
+                                Some(crate::game::events::speak(&self.narr, 42, &bname));
                         } else if (npc.race & 0x80) != 0 && npc.race != RACE_WITCH {
                             // SETFIG type (bit 7 set) non-witch: kindness penalty.
                             self.state.kind -= 3;
@@ -211,7 +238,10 @@ impl GameplayScene {
                             npc.vitality = 10;
                             npc.state = NpcState::Still;
                             npc.weapon = 0;
-                            logs.push("necromancer slain: transformed to woodcutter, talisman drops".to_string());
+                            logs.push(
+                                "necromancer slain: transformed to woodcutter, talisman drops"
+                                    .to_string(),
+                            );
                         } else {
                             // SPEC §14.20: Witch drops Golden Lasso on death.
                             if npc.race == RACE_WITCH {
@@ -227,7 +257,9 @@ impl GameplayScene {
                         // fmain.c:2777 — brave += 1 on any enemy kill.
                         // No cap in original; the .min(100) was invented.
                         self.state.brave += 1;
-                        if self.state.kind < 0 { self.state.kind = 0; }
+                        if self.state.kind < 0 {
+                            self.state.kind = 0;
+                        }
                         dead_npc = Some(npc.clone());
                         logs.push(format!("enemy slain, bravery now {}", self.state.brave));
                     }
@@ -251,10 +283,10 @@ impl GameplayScene {
             // because they're triggered by leave_item at death time, not
             // treasure_probs.
             let _ = dead_npc; // kept for future hooks (no auto-loot)
-            // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
-            // Per reference/logic/quests.md#leave_item, `leave_item` places the
-            // dropped object at `(abs_x, abs_y + 10)` — i.e. at the actor's
-            // feet. Apply the same +10 Y offset the witch-lasso drop below uses.
+                              // SPEC §15.7: drop Talisman (ob_id 139) at necromancer's death coords.
+                              // Per reference/logic/quests.md#leave_item, `leave_item` places the
+                              // dropped object at `(abs_x, abs_y + 10)` — i.e. at the actor's
+                              // feet. Apply the same +10 Y offset the witch-lasso drop below uses.
             if let Some((tx, ty)) = necro_talisman_pos {
                 use crate::game::game_state::WorldObject;
                 let drop_y = (ty as i32 + 10).clamp(0, u16::MAX as i32) as u16;
@@ -282,7 +314,9 @@ impl GameplayScene {
                     visible: true,
                     goal: 0,
                 });
-                self.dlog("witch slain: golden lasso (ob_id 27) placed at death coords".to_string());
+                self.dlog(
+                    "witch slain: golden lasso (ob_id 27) placed at death coords".to_string(),
+                );
             }
         }
     }

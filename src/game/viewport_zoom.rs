@@ -1,4 +1,3 @@
-
 use sdl2::rect::Rect;
 
 /**
@@ -23,7 +22,13 @@ const ZOOM_MAX: i32 = 160;
 
 /// Reduce a fraction n/d to lowest terms using Euclid's algorithm.
 fn reduce_fraction(n: u32, d: u32) -> (u32, u32) {
-    fn gcd(a: u32, b: u32) -> u32 { if b == 0 { a } else { gcd(b, a % b) } }
+    fn gcd(a: u32, b: u32) -> u32 {
+        if b == 0 {
+            a
+        } else {
+            gcd(b, a % b)
+        }
+    }
     let g = gcd(n, d);
     (n / g, d / g)
 }

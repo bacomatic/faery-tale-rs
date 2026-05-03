@@ -8,15 +8,15 @@ impl GameplayScene {
     pub(crate) fn dispatch_menu_action(&mut self, action: crate::game::menu::MenuAction) {
         use crate::game::menu::MenuAction;
         match action {
-            MenuAction::Inventory    => self.do_option(GameAction::Inventory),
+            MenuAction::Inventory => self.do_option(GameAction::Inventory),
             // EXPLOIT GUARD: original bug allows repeated Take while paused (T key).
             // handle_key() already blocks non-Space keys when paused, but verify any
             // direct GameAction::Take path (key_bindings) also checks paused state.
-            MenuAction::Take         => self.do_option(GameAction::Take),
-            MenuAction::Look         => self.do_option(GameAction::Look),
-            MenuAction::Yell         => self.do_option(GameAction::Yell),
-            MenuAction::Say          => self.do_option(GameAction::Speak),
-            MenuAction::Ask          => self.do_option(GameAction::Ask),
+            MenuAction::Take => self.do_option(GameAction::Take),
+            MenuAction::Look => self.do_option(GameAction::Look),
+            MenuAction::Yell => self.do_option(GameAction::Yell),
+            MenuAction::Say => self.do_option(GameAction::Speak),
+            MenuAction::Ask => self.do_option(GameAction::Ask),
             MenuAction::CastSpell(n) => {
                 let a = match n {
                     0 => GameAction::CastSpell1,
@@ -50,8 +50,7 @@ impl GameplayScene {
                 // skipped. The hardcoded literal is enumerated in
                 // dialog_system.md "Hardcoded scroll messages — complete
                 // reference" (fmain.c:3451).
-                let owned = (slot as usize) < 5
-                    && self.state.stuff()[slot as usize] > 0;
+                let owned = (slot as usize) < 5 && self.state.stuff()[slot as usize] > 0;
                 if owned {
                     if let Some(player) = self.state.actors.first_mut() {
                         player.weapon = slot + 1;
@@ -63,9 +62,10 @@ impl GameplayScene {
                 self.menu.gomenu(MenuMode::Items);
             }
             MenuAction::TryKey(idx) => {
+                use crate::game::doors::{
+                    apply_door_tile_replacement, doorfind_nearest_by_bump_radius, key_req, KeyReq,
+                };
                 use crate::game::menu::MenuMode;
-                use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq,
-                                         apply_door_tile_replacement};
                 use crate::game::world_objects::stuff_index_name;
                 // idx: 0=GOLD, 1=GREEN, 2=KBLUE, 3=RED, 4=GREY, 5=WHITE → stuff[16+idx]
                 let key_slot_stuff = 16 + idx as usize;
@@ -80,17 +80,24 @@ impl GameplayScene {
                     // the bump-radius search is the architectural equivalent (see F6.4).
                     let region = self.state.region_num;
                     let nearest = doorfind_nearest_by_bump_radius(
-                        &self.doors, region, self.state.hero_x, self.state.hero_y);
+                        &self.doors,
+                        region,
+                        self.state.hero_x,
+                        self.state.hero_y,
+                    );
                     let opened = if let Some((door_idx, door)) = nearest {
                         let req = key_req(door.door_type);
-                        let key_matches = matches!(req, KeyReq::Key(slot) if slot as usize == idx as usize);
+                        let key_matches =
+                            matches!(req, KeyReq::Key(slot) if slot as usize == idx as usize);
                         if key_matches {
                             // fmain.c:3480 — key consumed only on successful match.
                             self.state.stuff_mut()[key_slot_stuff] -= 1;
                             if let Some(ref mut world) = self.map_world {
                                 apply_door_tile_replacement(
-                                    world, door.door_type,
-                                    self.state.hero_x as i32, self.state.hero_y as i32,
+                                    world,
+                                    door.door_type,
+                                    self.state.hero_x as i32,
+                                    self.state.hero_y as i32,
                                 );
                             }
                             self.messages.push("It opened.".to_string());
@@ -109,9 +116,8 @@ impl GameplayScene {
                         // + " but it didn't" + print("fit.") fragments.
                         let bname = self.brother_name().to_string();
                         let kname = stuff_index_name(key_slot_stuff);
-                        self.messages.push(format!(
-                            "{} tried a {} but it didn't fit.", bname, kname,
-                        ));
+                        self.messages
+                            .push(format!("{} tried a {} but it didn't fit.", bname, kname,));
                     }
                 }
                 self.menu.gomenu(MenuMode::Items);
@@ -147,14 +153,22 @@ impl GameplayScene {
                         }
                         // Dispatch on target race / setfig_type.
                         let (is_beggar, sf_goal) = match &fig.kind {
-                            FigKind::SetFig { world_idx, setfig_type } => {
-                                let goal = self.state.world_objects
+                            FigKind::SetFig {
+                                world_idx,
+                                setfig_type,
+                            } => {
+                                let goal = self
+                                    .state
+                                    .world_objects
                                     .get(*world_idx)
-                                    .map_or(0u8, |o| o.goal) as usize;
+                                    .map_or(0u8, |o| o.goal)
+                                    as usize;
                                 (*setfig_type == 13, goal)
                             }
                             FigKind::Npc(idx) => {
-                                let race = self.npc_table.as_ref()
+                                let race = self
+                                    .npc_table
+                                    .as_ref()
                                     .and_then(|t| t.npcs.get(*idx))
                                     .map_or(0u8, |n| n.race);
                                 (race == RACE_BEGGAR, 0usize)
@@ -164,9 +178,14 @@ impl GameplayScene {
                         if is_beggar {
                             // speak(24 + goal): goal==3 overflows to speak(27)
                             // per the original bug (reference/logic/quests.md).
-                            self.messages.push(crate::game::events::speak(&self.narr, 24 + sf_goal, &bname));
+                            self.messages.push(crate::game::events::speak(
+                                &self.narr,
+                                24 + sf_goal,
+                                &bname,
+                            ));
                         } else {
-                            self.messages.push(crate::game::events::speak(&self.narr, 50, &bname));
+                            self.messages
+                                .push(crate::game::events::speak(&self.narr, 50, &bname));
                         }
                     }
                 }
@@ -200,14 +219,18 @@ impl GameplayScene {
                 if self.state.stuff()[29] != 0 {
                     if let Some(fig) = self.nearest_fig(1, 50) {
                         let (is_spectre, drop_pos) = match &fig.kind {
-                            FigKind::SetFig { world_idx, setfig_type } => {
-                                let pos = self.state.world_objects
-                                    .get(*world_idx)
-                                    .map(|o| (o.x, o.y));
+                            FigKind::SetFig {
+                                world_idx,
+                                setfig_type,
+                            } => {
+                                let pos =
+                                    self.state.world_objects.get(*world_idx).map(|o| (o.x, o.y));
                                 (*setfig_type == 10, pos)
                             }
                             FigKind::Npc(idx) => {
-                                let info = self.npc_table.as_ref()
+                                let info = self
+                                    .npc_table
+                                    .as_ref()
                                     .and_then(|t| t.npcs.get(*idx))
                                     .map(|n| (n.race, n.x as u16, n.y as u16));
                                 match info {
@@ -218,7 +241,8 @@ impl GameplayScene {
                             FigKind::Item { .. } => (false, None),
                         };
                         if is_spectre {
-                            self.messages.push(crate::game::events::speak(&self.narr, 48, &bname));
+                            self.messages
+                                .push(crate::game::events::speak(&self.narr, 48, &bname));
                             self.state.stuff_mut()[29] = 0;
                             if let Some((sx, sy)) = drop_pos {
                                 use crate::game::game_state::WorldObject;
@@ -234,7 +258,8 @@ impl GameplayScene {
                                 });
                             }
                         } else {
-                            self.messages.push(crate::game::events::speak(&self.narr, 21, &bname));
+                            self.messages
+                                .push(crate::game::events::speak(&self.narr, 21, &bname));
                         }
                     }
                 }
@@ -245,9 +270,9 @@ impl GameplayScene {
             MenuAction::SaveGame(slot) => {
                 match crate::game::persist::save_game(&self.state, slot) {
                     Ok(()) => {
-                        if let Err(e) = crate::game::persist::save_transcript(
-                            self.messages.transcript(), slot,
-                        ) {
+                        if let Err(e) =
+                            crate::game::persist::save_transcript(self.messages.transcript(), slot)
+                        {
                             eprintln!("save transcript failed: {e}");
                         }
                         // Original emits no scroll text on save success (fmain2.c:1531 guard).
@@ -294,7 +319,8 @@ impl GameplayScene {
                         // Clear any in-flight visual effects and missiles.
                         self.witch_effect = WitchEffect::new();
                         self.teleport_effect = TeleportEffect::new();
-                        self.missiles = std::array::from_fn(|_| crate::game::combat::Missile::default());
+                        self.missiles =
+                            std::array::from_fn(|_| crate::game::combat::Missile::default());
                         // Un-pause the MenuState if it was paused (gomenu(GAME) equivalent,
                         // fmain.c:3471 — cmode is overwritten after savegame returns).
                         if self.menu.is_paused() {
@@ -309,7 +335,7 @@ impl GameplayScene {
                     }
                 }
             }
-            MenuAction::Quit     => self.do_option(GameAction::Quit),
+            MenuAction::Quit => self.do_option(GameAction::Quit),
             MenuAction::TogglePause => {
                 // MenuState already toggled the bit; sync paused field.
                 self.paused = self.menu.is_paused();
@@ -319,21 +345,23 @@ impl GameplayScene {
             }
             MenuAction::ToggleMusic => {
                 let on = self.menu.is_music_on();
-                self.messages.push(if on { "Music on." } else { "Music off." });
+                self.messages
+                    .push(if on { "Music on." } else { "Music off." });
                 self.last_mood = u8::MAX; // force re-evaluation next tick
                 self.pending_music_toggle = Some(on);
             }
             MenuAction::ToggleSound => {
                 let on = self.menu.is_sound_on();
-                self.messages.push(if on { "Sound on." } else { "Sound off." });
+                self.messages
+                    .push(if on { "Sound on." } else { "Sound off." });
                 self.pending_sound_toggle = Some(on);
             }
-            MenuAction::RefreshMusic  => {}
-            MenuAction::SummonTurtle  => self.do_option(GameAction::SummonTurtle),
-            MenuAction::UseSunstone   => self.do_option(GameAction::UseSpecial),
+            MenuAction::RefreshMusic => {}
+            MenuAction::SummonTurtle => self.do_option(GameAction::SummonTurtle),
+            MenuAction::UseSunstone => self.do_option(GameAction::UseSpecial),
             MenuAction::SwitchMode(_) => {}
             MenuAction::UseMenu | MenuAction::GiveMenu => {}
-            MenuAction::None          => {}
+            MenuAction::None => {}
         }
     }
 
@@ -353,13 +381,41 @@ impl GameplayScene {
             //   4 Sword → stuff[2]++
             //   5 Bow   → stuff[3]++
             //   6 Totem → stuff[13]++
-            GameAction::BuyFood  => { self.do_buy_slot(0); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuyArrow => { self.do_buy_slot(1); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuyVial  => { self.do_buy_slot(2); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuyMace  => { self.do_buy_slot(3); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuySword => { self.do_buy_slot(4); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuyBow   => { self.do_buy_slot(5); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
-            GameAction::BuyTotem => { self.do_buy_slot(6); let w = self.state.wealth; self.menu.set_options(self.state.stuff(), w); }
+            GameAction::BuyFood => {
+                self.do_buy_slot(0);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuyArrow => {
+                self.do_buy_slot(1);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuyVial => {
+                self.do_buy_slot(2);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuyMace => {
+                self.do_buy_slot(3);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuySword => {
+                self.do_buy_slot(4);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuyBow => {
+                self.do_buy_slot(5);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
+            GameAction::BuyTotem => {
+                self.do_buy_slot(6);
+                let w = self.state.wealth;
+                self.menu.set_options(self.state.stuff(), w);
+            }
             GameAction::Inventory => {
                 self.dlog(format!("Inventory: {}", self.state.inventory_summary()));
                 self.state.viewstatus = 4;
@@ -380,16 +436,21 @@ impl GameplayScene {
             }
             GameAction::Sleep => {
                 let at_door = crate::game::doors::doorfind(
-                    &self.doors, self.state.region_num, self.state.hero_x, self.state.hero_y
-                ).is_some();
+                    &self.doors,
+                    self.state.region_num,
+                    self.state.hero_x,
+                    self.state.hero_y,
+                )
+                .is_some();
                 if at_door {
                     // Cannot sleep at a door (in original, silently ignored)
                 } else {
                     self.state.fatigue = 0;
-                    self.state.hunger = (self.state.hunger + 50)
-                        .min(crate::game::game_state::MAX_HUNGER);
+                    self.state.hunger =
+                        (self.state.hunger + 50).min(crate::game::game_state::MAX_HUNGER);
                     let bname = self.brother_name().to_string();
-                    self.messages.push(crate::game::events::event_msg(&self.narr, 26, &bname));
+                    self.messages
+                        .push(crate::game::events::event_msg(&self.narr, 26, &bname));
                     self.dlog("Player slept: fatigue reset");
                 }
             }
@@ -421,15 +482,23 @@ impl GameplayScene {
                 // be TAKEn via `search_body`. Turtle-egg shell rescue stays
                 // because it is a quest hook, not treasure.
                 if let Some(ref mut table) = self.npc_table {
-                    for npc in table.npcs.iter_mut().filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead) {
+                    for npc in table
+                        .npcs
+                        .iter_mut()
+                        .filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead)
+                    {
                         let dx = (npc.x - self.state.hero_x as i16).abs();
                         let dy = (npc.y - self.state.hero_y as i16).abs();
                         if dx < 32 && dy < 32 {
                             #[allow(deprecated)]
-                            let result = crate::game::combat::resolve_combat(&mut self.state, npc, 0);
+                            let result =
+                                crate::game::combat::resolve_combat(&mut self.state, npc, 0);
                             if result.enemy_defeated {
                                 // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
-                                if self.state.check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE) {
+                                if self
+                                    .state
+                                    .check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE)
+                                {
                                     self.dlog("check_turtle_eggs: shell awarded for snake kill");
                                 }
                                 let wealth = self.state.wealth;
@@ -526,9 +595,15 @@ impl GameplayScene {
                 let region = self.state.region_num;
                 let mut flag = false;
                 for obj in self.state.world_objects.iter_mut() {
-                    if obj.region != region { continue; }
-                    if obj.ob_stat == 3 { continue; } // setfigs are not OBJECTS
-                    if obj.ob_id == 0x1d { continue; } // empty chest
+                    if obj.region != region {
+                        continue;
+                    }
+                    if obj.ob_stat == 3 {
+                        continue;
+                    } // setfigs are not OBJECTS
+                    if obj.ob_id == 0x1d {
+                        continue;
+                    } // empty chest
                     if calc_dist(hx, hy, obj.x as i32, obj.y as i32) >= LOOK_RANGE {
                         continue;
                     }
@@ -556,17 +631,23 @@ impl GameplayScene {
                 //   - FigKind::SetFig → no-op (setfigs aren't TAKE targets)
                 //   - None           → "Take What?" literal
                 const TAKE_RANGE: i32 = 30; // fmain2.c nearest_fig(0, 30) — see SPECIFICATION.md §menu-table
-                // inventory.md#take_command (fmain.c:3151): stuff[35] (ARROWBASE)
-                // is the per-TAKE quiver accumulator; it must be cleared on
-                // entry, then folded into stuff[8] * 10 at the epilogue.
+                                            // inventory.md#take_command (fmain.c:3151): stuff[35] (ARROWBASE)
+                                            // is the per-TAKE quiver accumulator; it must be cleared on
+                                            // entry, then folded into stuff[8] * 10 at the epilogue.
                 self.state.stuff_mut()[35] = 0;
                 let bname = self.brother_name().to_string();
                 let mut taken = false;
                 match self.nearest_fig(0, TAKE_RANGE) {
-                    Some(NearestFig { kind: FigKind::Item { world_idx, ob_id }, .. }) => {
+                    Some(NearestFig {
+                        kind: FigKind::Item { world_idx, ob_id },
+                        ..
+                    }) => {
                         taken = self.handle_take_item(world_idx, ob_id, &bname);
                     }
-                    Some(NearestFig { kind: FigKind::Npc(npc_idx), .. }) => {
+                    Some(NearestFig {
+                        kind: FigKind::Npc(npc_idx),
+                        ..
+                    }) => {
                         // search_body always "consumes" the action even if
                         // the body had no weapon and no treasure — the scroll
                         // line "% searched the body and found nothing." is
@@ -575,7 +656,10 @@ impl GameplayScene {
                         self.search_body(npc_idx, &bname);
                         taken = true;
                     }
-                    Some(NearestFig { kind: FigKind::SetFig { .. }, .. }) => {
+                    Some(NearestFig {
+                        kind: FigKind::SetFig { .. },
+                        ..
+                    }) => {
                         // Setfigs are TALK targets, not TAKE — original
                         // `take_command` falls through with no message
                         // (`fmain.c:3155 if(an->type != OBJECTS) goto sb`,
@@ -619,12 +703,20 @@ impl GameplayScene {
                 let bname = self.brother_name().to_string();
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
-                let beggar_world_idx = self.state.world_objects.iter().enumerate().find(|(_, o)| {
-                    o.ob_stat == 3 && o.ob_id == 13 && o.visible
-                        && o.region == self.state.region_num
-                        && ((o.x as i16 - hero_x).abs() < 50)
-                        && ((o.y as i16 - hero_y).abs() < 50)
-                }).map(|(i, _)| i);
+                let beggar_world_idx = self
+                    .state
+                    .world_objects
+                    .iter()
+                    .enumerate()
+                    .find(|(_, o)| {
+                        o.ob_stat == 3
+                            && o.ob_id == 13
+                            && o.visible
+                            && o.region == self.state.region_num
+                            && ((o.x as i16 - hero_x).abs() < 50)
+                            && ((o.y as i16 - hero_y).abs() < 50)
+                    })
+                    .map(|(i, _)| i);
                 let near_beggar = beggar_world_idx.is_some();
                 if near_beggar && self.state.wealth > 2 {
                     self.state.wealth -= 2;
@@ -636,8 +728,12 @@ impl GameplayScene {
                         .and_then(|i| self.state.world_objects.get(i))
                         .map_or(0usize, |o| o.goal as usize);
                     // speak(24 + goal): goal==3 overflows to speak(27) per original bug.
-                    self.messages.push(crate::game::events::speak(&self.narr, 24 + goal, &bname));
-                    self.dlog(format!("give to beggar goal={}: wealth={}, kind={}", goal, self.state.wealth, self.state.kind));
+                    self.messages
+                        .push(crate::game::events::speak(&self.narr, 24 + goal, &bname));
+                    self.dlog(format!(
+                        "give to beggar goal={}: wealth={}, kind={}",
+                        goal, self.state.wealth, self.state.kind
+                    ));
                 } else if near_beggar {
                     // No gold to spare (silently ignored in original)
                 } else {
@@ -652,7 +748,8 @@ impl GameplayScene {
                 let bname = self.brother_name().to_string();
                 if let Some(fig) = self.nearest_fig(1, 100) {
                     if fig.dist < 35 {
-                        self.messages.push(crate::game::events::speak(&self.narr, 8, &bname));
+                        self.messages
+                            .push(crate::game::events::speak(&self.narr, 8, &bname));
                     } else {
                         self.handle_setfig_talk(&fig, &bname);
                     }
@@ -679,7 +776,8 @@ impl GameplayScene {
                     } else {
                         57
                     };
-                    self.messages.push(crate::game::events::speak(&self.narr, speech, &bname));
+                    self.messages
+                        .push(crate::game::events::speak(&self.narr, speech, &bname));
                 }
                 // Else: no target within 50 px and no turtle carrier — the
                 // original `talk_dispatch` silently returns (`fmain.c:3369`).
@@ -731,9 +829,9 @@ impl GameplayScene {
                 self.do_option(GameAction::CastSpell7); // ITEM_SKULL = stuff[15], spell slot 7
             }
             GameAction::WeaponPrev => {
-                let current_weapon = self.state.actors.first()
-                    .map(|a| a.weapon).unwrap_or(1);
-                if let Some(new_weapon) = cycle_weapon_slot(current_weapon, -1, self.state.stuff()) {
+                let current_weapon = self.state.actors.first().map(|a| a.weapon).unwrap_or(1);
+                if let Some(new_weapon) = cycle_weapon_slot(current_weapon, -1, self.state.stuff())
+                {
                     if let Some(player) = self.state.actors.first_mut() {
                         player.weapon = new_weapon;
                     }
@@ -743,8 +841,7 @@ impl GameplayScene {
                 }
             }
             GameAction::WeaponNext => {
-                let current_weapon = self.state.actors.first()
-                    .map(|a| a.weapon).unwrap_or(1);
+                let current_weapon = self.state.actors.first().map(|a| a.weapon).unwrap_or(1);
                 if let Some(new_weapon) = cycle_weapon_slot(current_weapon, 1, self.state.stuff()) {
                     if let Some(player) = self.state.actors.first_mut() {
                         player.weapon = new_weapon;

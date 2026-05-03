@@ -10,7 +10,9 @@ use super::view::DebugConsole;
 impl DebugConsole {
     pub(super) fn execute_command(&mut self, raw: &str) {
         let parts: Vec<&str> = raw.split_whitespace().collect();
-        if parts.is_empty() { return; }
+        if parts.is_empty() {
+            return;
+        }
         let cmd = parts[0].to_ascii_lowercase();
         let args = &parts[1..];
 
@@ -18,7 +20,10 @@ impl DebugConsole {
             "/help" | "/h" | "/?" => self.cmd_help(args),
             "/kill" => self.cmd_kill(args),
             "/die" => {
-                self.push_cmd(DebugCommand::AdjustStat { stat: StatId::Vitality, delta: -9999 });
+                self.push_cmd(DebugCommand::AdjustStat {
+                    stat: StatId::Vitality,
+                    delta: -9999,
+                });
                 self.log("Player vitality set to zero.");
             }
             "/pack" => self.push_cmd(DebugCommand::HeroPack),
@@ -65,9 +70,10 @@ impl DebugConsole {
                 self.log(format!("Stepping {} tick(s).", n));
             }
             "/rate" => {
-                let hz: u32 = args.first()
+                let hz: u32 = args
+                    .first()
                     .and_then(|s| s.parse().ok())
-                    .unwrap_or(30)
+                    .unwrap_or(DEFAULT_TICK_RATE_HZ)
                     .clamp(1, 240);
                 self.push_cmd(DebugCommand::SetTickRate { hz });
             }
@@ -75,7 +81,11 @@ impl DebugConsole {
                 self.watch_expanded = !self.watch_expanded;
                 self.log(format!(
                     "Actor watch {}.",
-                    if self.watch_expanded { "expanded" } else { "collapsed" }
+                    if self.watch_expanded {
+                        "expanded"
+                    } else {
+                        "collapsed"
+                    }
                 ));
             }
             "/filter" => self.cmd_filter(args),
@@ -178,26 +188,48 @@ impl DebugConsole {
             "——————————————————————————————————————",
             "PgUp/PgDn/Home/End — scroll log   Up/Down — command history",
         ];
-        for l in &lines { self.log(*l); }
+        for l in &lines {
+            self.log(*l);
+        }
     }
 
     fn cmd_max_stats(&mut self) {
         use StatId::*;
         for (s, v) in &[
-            (Vitality, 999i16), (Brave, 255), (Luck, 255),
-            (Kind, 255), (Wealth, 9999), (Hunger, 0), (Fatigue, 0),
+            (Vitality, 999i16),
+            (Brave, 255),
+            (Luck, 255),
+            (Kind, 255),
+            (Wealth, 9999),
+            (Hunger, 0),
+            (Fatigue, 0),
         ] {
-            self.push_cmd(DebugCommand::SetStat { stat: *s, value: *v });
+            self.push_cmd(DebugCommand::SetStat {
+                stat: *s,
+                value: *v,
+            });
         }
         self.log("Max stats applied.");
     }
 
     fn cmd_heal(&mut self) {
         let cap = 15i16.saturating_add((self.status.brave as i16) / 4);
-        self.push_cmd(DebugCommand::SetStat { stat: StatId::Vitality, value: cap });
-        self.push_cmd(DebugCommand::SetStat { stat: StatId::Hunger, value: 0 });
-        self.push_cmd(DebugCommand::SetStat { stat: StatId::Fatigue, value: 0 });
-        self.log(format!("Healed: vitality={} (cap 15 + brave/4), hunger=0, fatigue=0.", cap));
+        self.push_cmd(DebugCommand::SetStat {
+            stat: StatId::Vitality,
+            value: cap,
+        });
+        self.push_cmd(DebugCommand::SetStat {
+            stat: StatId::Hunger,
+            value: 0,
+        });
+        self.push_cmd(DebugCommand::SetStat {
+            stat: StatId::Fatigue,
+            value: 0,
+        });
+        self.log(format!(
+            "Healed: vitality={} (cap 15 + brave/4), hunger=0, fatigue=0.",
+            cap
+        ));
     }
 
     fn cmd_stats(&mut self) {
@@ -205,16 +237,26 @@ impl DebugConsole {
         let heal_cap = 15i16.saturating_add((s.brave as i16) / 4);
         let lines = [
             format!("── Hero Stats ──"),
-            format!("  Vitality: {} / {}   Brave: {}   Luck: —   Kind: —",
-                s.vitality, heal_cap, s.brave),
-            format!("  Wealth: {}g   Hunger: {}   Fatigue: {}",
-                s.wealth, s.hunger, s.fatigue),
-            format!("  Position: ({}, {})   Region: {}   Brother: {}",
-                s.hero_x, s.hero_y, s.region_num, s.brother),
-            format!("  God mode: {:#06b}   Cheat1: {}   Paused: {}",
-                s.god_mode_flags, s.cheat1, s.is_paused),
+            format!(
+                "  Vitality: {} / {}   Brave: {}   Luck: —   Kind: —",
+                s.vitality, heal_cap, s.brave
+            ),
+            format!(
+                "  Wealth: {}g   Hunger: {}   Fatigue: {}",
+                s.wealth, s.hunger, s.fatigue
+            ),
+            format!(
+                "  Position: ({}, {})   Region: {}   Brother: {}",
+                s.hero_x, s.hero_y, s.region_num, s.brother
+            ),
+            format!(
+                "  God mode: {:#06b}   Cheat1: {}   Paused: {}",
+                s.god_mode_flags, s.cheat1, s.is_paused
+            ),
         ];
-        for l in &lines { self.log(l.clone()); }
+        for l in &lines {
+            self.log(l.clone());
+        }
     }
 
     fn cmd_quest(&mut self) {
@@ -222,14 +264,28 @@ impl DebugConsole {
         let key_count: u16 = s.stuff.iter().skip(16).take(6).map(|&v| v as u16).sum();
         let lines = [
             format!("── Quest Progress ──"),
-            format!("  Princess captive: {}   Rescues: {}",
-                s.princess_captive, s.princess_rescues),
-            format!("  Gold statues: {} / 5   Writ of Safe Conduct: {}",
-                s.statues_collected, if s.has_writ { "yes" } else { "no" }),
-            format!("  TALISMAN: {}   Keys held (16-21): {}",
-                if s.has_talisman { "YES (win condition!)" } else { "no" }, key_count),
+            format!(
+                "  Princess captive: {}   Rescues: {}",
+                s.princess_captive, s.princess_rescues
+            ),
+            format!(
+                "  Gold statues: {} / 5   Writ of Safe Conduct: {}",
+                s.statues_collected,
+                if s.has_writ { "yes" } else { "no" }
+            ),
+            format!(
+                "  TALISMAN: {}   Keys held (16-21): {}",
+                if s.has_talisman {
+                    "YES (win condition!)"
+                } else {
+                    "no"
+                },
+                key_count
+            ),
         ];
-        for l in &lines { self.log(l.clone()); }
+        for l in &lines {
+            self.log(l.clone());
+        }
     }
 
     fn cmd_inventory(&mut self) {
@@ -241,19 +297,49 @@ impl DebugConsole {
         let get = |i: usize| -> u8 { s.get(i).copied().unwrap_or(0) };
         let lines = [
             format!("── Inventory (stuff[{}]) ──", s.len()),
-            format!("  Weapons : dirk={} mace={} sword={} bow={} wand={} lasso={} shell={} [7]={}",
-                get(0), get(1), get(2), get(3), get(4), get(5), get(6), get(7)),
+            format!(
+                "  Weapons : dirk={} mace={} sword={} bow={} wand={} lasso={} shell={} [7]={}",
+                get(0),
+                get(1),
+                get(2),
+                get(3),
+                get(4),
+                get(5),
+                get(6),
+                get(7)
+            ),
             format!("  Arrows  : {}", get(8)),
-            format!("  Magic   : vial={} jewel={} totem={} flute={} ring={} skull={} staff={}",
-                get(9), get(10), get(11), get(12), get(13), get(14), get(15)),
-            format!("  Keys    : gold={} silver={} ruby={} skull={} iron={} crystal={}",
-                get(16), get(17), get(18), get(19), get(20), get(21)),
-            format!("  Quest   : talisman={} writ={} statues={}",
-                get(22), get(28), get(25)),
+            format!(
+                "  Magic   : vial={} jewel={} totem={} flute={} ring={} skull={} staff={}",
+                get(9),
+                get(10),
+                get(11),
+                get(12),
+                get(13),
+                get(14),
+                get(15)
+            ),
+            format!(
+                "  Keys    : gold={} silver={} ruby={} skull={} iron={} crystal={}",
+                get(16),
+                get(17),
+                get(18),
+                get(19),
+                get(20),
+                get(21)
+            ),
+            format!(
+                "  Quest   : talisman={} writ={} statues={}",
+                get(22),
+                get(28),
+                get(25)
+            ),
             format!("  Consume : food={} fruit={}", get(23), get(24)),
             format!("  Gold    : {}", self.status.wealth),
         ];
-        for l in &lines { self.log(l.clone()); }
+        for l in &lines {
+            self.log(l.clone());
+        }
     }
 
     fn cmd_kill(&mut self, args: &[&str]) {
@@ -278,7 +364,8 @@ impl DebugConsole {
         // Special case: gold/wealth is not a stuff[] slot — it lives in
         // `state.wealth`. Accept an optional amount (default 100).
         if raw.eq_ignore_ascii_case("gold") || raw.eq_ignore_ascii_case("wealth") {
-            let amount: i16 = args.get(1)
+            let amount: i16 = args
+                .get(1)
                 .and_then(|s| s.parse::<i16>().ok())
                 .unwrap_or(100);
             self.push_cmd(DebugCommand::AdjustStat {
@@ -288,14 +375,20 @@ impl DebugConsole {
             self.log(format!("Gave {} gold (wealth).", amount));
             return;
         }
-        match crate::game::debug_items::lookup_by_name(raw)
-            .or_else(|| raw.parse::<u8>().ok().and_then(crate::game::debug_items::lookup_by_id))
-        {
+        match crate::game::debug_items::lookup_by_name(raw).or_else(|| {
+            raw.parse::<u8>()
+                .ok()
+                .and_then(crate::game::debug_items::lookup_by_id)
+        }) {
             Some(entry) => {
                 self.push_cmd(DebugCommand::AdjustInventory {
-                    index: entry.stuff_index as u8, delta: 1,
+                    index: entry.stuff_index as u8,
+                    delta: 1,
                 });
-                self.log(format!("Gave 1 x {} (stuff[{}]).", entry.name, entry.stuff_index));
+                self.log(format!(
+                    "Gave 1 x {} (stuff[{}]).",
+                    entry.name, entry.stuff_index
+                ));
             }
             None => self.log(format!("/give: unknown item '{}'", raw)),
         }
@@ -306,14 +399,20 @@ impl DebugConsole {
             self.log("Usage: /take <item>  (name or stuff index)");
             return;
         };
-        match crate::game::debug_items::lookup_by_name(raw)
-            .or_else(|| raw.parse::<u8>().ok().and_then(crate::game::debug_items::lookup_by_id))
-        {
+        match crate::game::debug_items::lookup_by_name(raw).or_else(|| {
+            raw.parse::<u8>()
+                .ok()
+                .and_then(crate::game::debug_items::lookup_by_id)
+        }) {
             Some(entry) => {
                 self.push_cmd(DebugCommand::AdjustInventory {
-                    index: entry.stuff_index as u8, delta: -1,
+                    index: entry.stuff_index as u8,
+                    delta: -1,
                 });
-                self.log(format!("Took 1 x {} (stuff[{}]).", entry.name, entry.stuff_index));
+                self.log(format!(
+                    "Took 1 x {} (stuff[{}]).",
+                    entry.name, entry.stuff_index
+                ));
             }
             None => self.log(format!("/take: unknown item '{}'", raw)),
         }
@@ -322,10 +421,13 @@ impl DebugConsole {
     fn cmd_cheat(&mut self, args: &[&str]) {
         let enabled = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
             None | Some("") => !self.status.cheat1,
-            Some("on")      => true,
-            Some("off")     => false,
+            Some("on") => true,
+            Some("off") => false,
             Some(other) => {
-                self.log(format!("/cheat: unknown arg '{}' (use on/off or no arg to toggle)", other));
+                self.log(format!(
+                    "/cheat: unknown arg '{}' (use on/off or no arg to toggle)",
+                    other
+                ));
                 return;
             }
         };
@@ -339,15 +441,18 @@ impl DebugConsole {
             return;
         }
         let stat = match args[0].to_ascii_lowercase().as_str() {
-            "vit" | "vitality"  => StatId::Vitality,
-            "brv" | "brave"     => StatId::Brave,
-            "lck" | "luck"      => StatId::Luck,
-            "knd" | "kind"      => StatId::Kind,
-            "wlt" | "wealth"    => StatId::Wealth,
-            "hgr" | "hunger"    => StatId::Hunger,
-            "ftg" | "fatigue"   => StatId::Fatigue,
+            "vit" | "vitality" => StatId::Vitality,
+            "brv" | "brave" => StatId::Brave,
+            "lck" | "luck" => StatId::Luck,
+            "knd" | "kind" => StatId::Kind,
+            "wlt" | "wealth" => StatId::Wealth,
+            "hgr" | "hunger" => StatId::Hunger,
+            "ftg" | "fatigue" => StatId::Fatigue,
             other => {
-                self.log(format!("Unknown stat: {}  (use vit brv lck knd wlt hgr ftg)", other));
+                self.log(format!(
+                    "Unknown stat: {}  (use vit brv lck knd wlt hgr ftg)",
+                    other
+                ));
                 return;
             }
         };
@@ -373,7 +478,10 @@ impl DebugConsole {
         }
         let slot: u8 = match args[0].parse() {
             Ok(s) if s < 35 => s,
-            _ => { self.log("Slot must be 0-34."); return; }
+            _ => {
+                self.log("Slot must be 0-34.");
+                return;
+            }
         };
         let raw_val = args[1];
         let is_delta = raw_val.starts_with('+') || raw_val.starts_with('-');
@@ -384,7 +492,10 @@ impl DebugConsole {
             }
         } else {
             match raw_val.parse::<u8>() {
-                Ok(val) => self.push_cmd(DebugCommand::SetInventory { index: slot, value: val }),
+                Ok(val) => self.push_cmd(DebugCommand::SetInventory {
+                    index: slot,
+                    value: val,
+                }),
                 Err(_) => self.log(format!("Bad value: {}", raw_val)),
             }
         }
@@ -394,14 +505,14 @@ impl DebugConsole {
         match args {
             [] => self.log("Usage: /tp safe | ring <N> | <x> <y> | <location>"),
             ["safe"] | ["Safe"] => self.push_cmd(DebugCommand::TeleportSafe),
-            ["ring", n] => {
-                match n.parse::<u8>() {
-                    Ok(idx) => self.push_cmd(DebugCommand::TeleportStoneRing { index: idx }),
-                    Err(_) => self.log(format!("Bad ring index: {}", n)),
-                }
-            }
-            [xs, ys] if xs.chars().next().map_or(false, |c| c.is_ascii_digit())
-                     && ys.chars().next().map_or(false, |c| c.is_ascii_digit()) => {
+            ["ring", n] => match n.parse::<u8>() {
+                Ok(idx) => self.push_cmd(DebugCommand::TeleportStoneRing { index: idx }),
+                Err(_) => self.log(format!("Bad ring index: {}", n)),
+            },
+            [xs, ys]
+                if xs.chars().next().map_or(false, |c| c.is_ascii_digit())
+                    && ys.chars().next().map_or(false, |c| c.is_ascii_digit()) =>
+            {
                 let x = xs.parse::<u16>();
                 let y = ys.parse::<u16>();
                 match (x, y) {
@@ -420,7 +531,7 @@ impl DebugConsole {
     fn cmd_god(&mut self, args: &[&str]) {
         let current = GodModeFlags::from_bits_truncate(self.status.god_mode_flags);
         let new_flags = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("noclip")     => current ^ GodModeFlags::NOCLIP,
+            Some("noclip") => current ^ GodModeFlags::NOCLIP,
             Some("invincible") => current ^ GodModeFlags::INVINCIBLE,
             Some("ohk") | Some("onehit") => current ^ GodModeFlags::ONE_HIT_KILL,
             Some("reach") | Some("insane") => current ^ GodModeFlags::INSANE_REACH,
@@ -428,38 +539,52 @@ impl DebugConsole {
             Some("off") | Some("none") => GodModeFlags::empty(),
             None | Some("") => {
                 let s = build_god_str(self.status.god_mode_flags);
-                self.log(format!("God mode: {}", if s.is_empty() { "off" } else { &s }));
+                self.log(format!(
+                    "God mode: {}",
+                    if s.is_empty() { "off" } else { &s }
+                ));
                 return;
             }
             Some(other) => {
-                self.log(format!("Unknown flag: {}  (noclip/invincible/ohk/reach/all/off)", other));
+                self.log(format!(
+                    "Unknown flag: {}  (noclip/invincible/ohk/reach/all/off)",
+                    other
+                ));
                 return;
             }
         };
         self.push_cmd(DebugCommand::SetGodMode { flags: new_flags });
         let s = build_god_str(new_flags.bits());
-        self.log(format!("God mode: {}", if s.is_empty() { "off" } else { &s }));
+        self.log(format!(
+            "God mode: {}",
+            if s.is_empty() { "off" } else { &s }
+        ));
         self.status.god_mode_flags = new_flags.bits();
     }
 
     fn cmd_magic(&mut self, args: &[&str]) {
         let effect = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("light")   => MagicEffect::Light,
-            Some("secret")  => MagicEffect::Secret,
-            Some("freeze")  => MagicEffect::Freeze,
-            _ => { self.log("Usage: /magic <light|secret|freeze>"); return; }
+            Some("light") => MagicEffect::Light,
+            Some("secret") => MagicEffect::Secret,
+            Some("freeze") => MagicEffect::Freeze,
+            _ => {
+                self.log("Usage: /magic <light|secret|freeze>");
+                return;
+            }
         };
         self.push_cmd(DebugCommand::ToggleMagicEffect { effect });
     }
 
     fn cmd_time(&mut self, args: &[&str]) {
         match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("hold")      => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: true }),
-            Some("resume") | Some("free") | Some("unhold") => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: false }),
-            Some("midnight")  => self.push_cmd(DebugCommand::SetDayPhase { phase: 0 }),
-            Some("dawn")      => self.push_cmd(DebugCommand::SetDayPhase { phase: 6000 }),
-            Some("noon")      => self.push_cmd(DebugCommand::SetDayPhase { phase: 12000 }),
-            Some("dusk")      => self.push_cmd(DebugCommand::SetDayPhase { phase: 18000 }),
+            Some("hold") => self.push_cmd(DebugCommand::HoldTimeOfDay { hold: true }),
+            Some("resume") | Some("free") | Some("unhold") => {
+                self.push_cmd(DebugCommand::HoldTimeOfDay { hold: false })
+            }
+            Some("midnight") => self.push_cmd(DebugCommand::SetDayPhase { phase: 0 }),
+            Some("dawn") => self.push_cmd(DebugCommand::SetDayPhase { phase: 6000 }),
+            Some("noon") => self.push_cmd(DebugCommand::SetDayPhase { phase: 12000 }),
+            Some("dusk") => self.push_cmd(DebugCommand::SetDayPhase { phase: 18000 }),
             Some(hhmm) => {
                 let parts: Vec<&str> = hhmm.split(':').collect();
                 if parts.len() == 2 {
@@ -472,7 +597,9 @@ impl DebugConsole {
                         _ => self.log("Usage: /time HH:MM  (e.g. /time 08:30)"),
                     }
                 } else {
-                    self.log("Usage: /time <HH:MM | dawn | noon | dusk | midnight | hold | resume>");
+                    self.log(
+                        "Usage: /time <HH:MM | dawn | noon | dusk | midnight | hold | resume>",
+                    );
                 }
             }
             None => {
@@ -490,52 +617,55 @@ impl DebugConsole {
 
     fn cmd_brother(&mut self, args: &[&str]) {
         let brother = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("julian")  => BrotherId::Julian,
+            Some("julian") => BrotherId::Julian,
             Some("phillip") => BrotherId::Phillip,
-            Some("kevin")   => BrotherId::Kevin,
-            _ => { self.log("Usage: /brother <julian|phillip|kevin>"); return; }
+            Some("kevin") => BrotherId::Kevin,
+            _ => {
+                self.log("Usage: /brother <julian|phillip|kevin>");
+                return;
+            }
         };
         self.push_cmd(DebugCommand::RestartAsBrother { brother });
     }
 
     fn cmd_fx(&mut self, args: &[&str]) {
         match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("witch")    => self.push_cmd(DebugCommand::TriggerWitchEffect),
+            Some("witch") => self.push_cmd(DebugCommand::TriggerWitchEffect),
             Some("teleport") => self.push_cmd(DebugCommand::TriggerTeleportEffect),
-            Some("fadeout")  => self.push_cmd(DebugCommand::TriggerPaletteTransition { to_black: true }),
-            Some("fadein")   => self.push_cmd(DebugCommand::TriggerPaletteTransition { to_black: false }),
+            Some("fadeout") => {
+                self.push_cmd(DebugCommand::TriggerPaletteTransition { to_black: true })
+            }
+            Some("fadein") => {
+                self.push_cmd(DebugCommand::TriggerPaletteTransition { to_black: false })
+            }
             _ => self.log("Usage: /fx <witch|teleport|fadeout|fadein>"),
         }
     }
 
     fn cmd_songs(&mut self, args: &[&str]) {
         match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("play") => {
-                match args.get(1).and_then(|s| s.parse::<usize>().ok()) {
-                    Some(n) if n >= 1 => {
-                        self.song_group_requested = Some(n - 1);
-                        self.log(format!("Playing song group {}.", n));
-                    }
-                    _ => self.log("Usage: /songs play <N>  (1-based group number)"),
+            Some("play") => match args.get(1).and_then(|s| s.parse::<usize>().ok()) {
+                Some(n) if n >= 1 => {
+                    self.song_group_requested = Some(n - 1);
+                    self.log(format!("Playing song group {}.", n));
                 }
-            }
+                _ => self.log("Usage: /songs play <N>  (1-based group number)"),
+            },
             Some("stop") => {
                 self.stop_requested = true;
                 self.log("Music stopped.");
             }
-            Some("cave") => {
-                match args.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
-                    Some("on") => {
-                        self.cave_mode_requested = Some(true);
-                        self.log("Cave instrument mode ON (slot 10 → wave=3, vol=7).");
-                    }
-                    Some("off") => {
-                        self.cave_mode_requested = Some(false);
-                        self.log("Cave instrument mode OFF (slot 10 → default).");
-                    }
-                    _ => self.log("Usage: /songs cave <on|off>"),
+            Some("cave") => match args.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                Some("on") => {
+                    self.cave_mode_requested = Some(true);
+                    self.log("Cave instrument mode ON (slot 10 → wave=3, vol=7).");
                 }
-            }
+                Some("off") => {
+                    self.cave_mode_requested = Some(false);
+                    self.log("Cave instrument mode OFF (slot 10 → default).");
+                }
+                _ => self.log("Usage: /songs cave <on|off>"),
+            },
             _ => {
                 let count = self.status.song_group_count;
                 if count == 0 {
@@ -545,7 +675,12 @@ impl DebugConsole {
                     let cur = self.status.current_song_group;
                     for i in 0..count {
                         let marker = if cur == Some(i) { " ◄ playing" } else { "" };
-                        self.log(format!("  /songs play {}  — group {}{}", i + 1, i + 1, marker));
+                        self.log(format!(
+                            "  /songs play {}  — group {}{}",
+                            i + 1,
+                            i + 1,
+                            marker
+                        ));
                     }
                     let cave_label = if self.status.cave_mode { "ON" } else { "OFF" };
                     self.log(format!("Cave mode: {}", cave_label));
@@ -560,13 +695,22 @@ impl DebugConsole {
         let (block, count) = match args {
             [b] => match b.parse::<u32>() {
                 Ok(b) => (b, 1u32),
-                Err(_) => { self.log("Usage: /adf <block> [count]"); return; }
+                Err(_) => {
+                    self.log("Usage: /adf <block> [count]");
+                    return;
+                }
             },
             [b, c] => match (b.parse::<u32>(), c.parse::<u32>()) {
                 (Ok(b), Ok(c)) if c >= 1 => (b, c),
-                _ => { self.log("Usage: /adf <block> [count]  (count must be >= 1)"); return; }
+                _ => {
+                    self.log("Usage: /adf <block> [count]  (count must be >= 1)");
+                    return;
+                }
             },
-            _ => { self.log("Usage: /adf <block> [count]"); return; }
+            _ => {
+                self.log("Usage: /adf <block> [count]");
+                return;
+            }
         };
         self.push_cmd(DebugCommand::DumpAdfBlock { block, count });
     }
@@ -578,14 +722,14 @@ impl DebugConsole {
             Some("clear") => self.push_cmd(DebugCommand::ClearEncounters),
             Some(name) => {
                 let npc_type = match name {
-                    "orc"      => Some(NPC_TYPE_ORC),
-                    "ghost"    => Some(NPC_TYPE_GHOST),
+                    "orc" => Some(NPC_TYPE_ORC),
+                    "ghost" => Some(NPC_TYPE_GHOST),
                     "skeleton" => Some(NPC_TYPE_SKELETON),
-                    "wraith"   => Some(NPC_TYPE_WRAITH),
-                    "dragon"   => Some(NPC_TYPE_DRAGON),
-                    "snake"    => Some(NPC_TYPE_SKELETON),
-                    "swan"     => Some(NPC_TYPE_SWAN),
-                    "horse"    => Some(NPC_TYPE_HORSE),
+                    "wraith" => Some(NPC_TYPE_WRAITH),
+                    "dragon" => Some(NPC_TYPE_DRAGON),
+                    "snake" => Some(NPC_TYPE_SKELETON),
+                    "swan" => Some(NPC_TYPE_SWAN),
+                    "horse" => Some(NPC_TYPE_HORSE),
                     _ => None,
                 };
                 match npc_type {
@@ -602,29 +746,45 @@ impl DebugConsole {
     fn cmd_items(&mut self, args: &[&str]) {
         match args {
             [] => {
-                self.push_cmd(DebugCommand::ScatterItems { count: 30, item_id: None });
+                self.push_cmd(DebugCommand::ScatterItems {
+                    count: 30,
+                    item_id: None,
+                });
             }
             [arg] => {
                 if let Ok(n) = arg.parse::<usize>() {
-                    self.push_cmd(DebugCommand::ScatterItems { count: n, item_id: None });
+                    self.push_cmd(DebugCommand::ScatterItems {
+                        count: n,
+                        item_id: None,
+                    });
                 } else {
                     match crate::game::sprites::item_name_to_id(arg) {
-                        Some(id) => self.push_cmd(DebugCommand::ScatterItems { count: 1, item_id: Some(id) }),
-                        None => self.log(format!("Unknown item: {}.  Use a name or index 0-30.", arg)),
+                        Some(id) => self.push_cmd(DebugCommand::ScatterItems {
+                            count: 1,
+                            item_id: Some(id),
+                        }),
+                        None => {
+                            self.log(format!("Unknown item: {}.  Use a name or index 0-30.", arg))
+                        }
                     }
                 }
             }
-            [count_str, name] => {
-                match count_str.parse::<usize>() {
-                    Err(_) => self.log(format!(
-                        "Invalid count '{}'. Usage: /items [count] [name|index]", count_str
+            [count_str, name] => match count_str.parse::<usize>() {
+                Err(_) => self.log(format!(
+                    "Invalid count '{}'. Usage: /items [count] [name|index]",
+                    count_str
+                )),
+                Ok(n) => match crate::game::sprites::item_name_to_id(name) {
+                    Some(id) => self.push_cmd(DebugCommand::ScatterItems {
+                        count: n,
+                        item_id: Some(id),
+                    }),
+                    None => self.log(format!(
+                        "Unknown item: {}.  Use a name or index 0-30.",
+                        name
                     )),
-                    Ok(n) => match crate::game::sprites::item_name_to_id(name) {
-                        Some(id) => self.push_cmd(DebugCommand::ScatterItems { count: n, item_id: Some(id) }),
-                        None => self.log(format!("Unknown item: {}.  Use a name or index 0-30.", name)),
-                    },
-                }
-            }
+                },
+            },
             _ => self.log("Usage: /items [count] [name|index]  e.g. /items 5 sword".to_string()),
         }
     }
@@ -694,17 +854,28 @@ impl DebugConsole {
 fn build_god_str(flags: u8) -> String {
     let f = GodModeFlags::from_bits_truncate(flags);
     let mut parts = Vec::new();
-    if f.contains(GodModeFlags::NOCLIP)       { parts.push("NOCLIP"); }
-    if f.contains(GodModeFlags::INVINCIBLE)   { parts.push("INVINCIBLE"); }
-    if f.contains(GodModeFlags::ONE_HIT_KILL) { parts.push("ONE_HIT_KILL"); }
-    if f.contains(GodModeFlags::INSANE_REACH) { parts.push("INSANE_REACH"); }
+    if f.contains(GodModeFlags::NOCLIP) {
+        parts.push("NOCLIP");
+    }
+    if f.contains(GodModeFlags::INVINCIBLE) {
+        parts.push("INVINCIBLE");
+    }
+    if f.contains(GodModeFlags::ONE_HIT_KILL) {
+        parts.push("ONE_HIT_KILL");
+    }
+    if f.contains(GodModeFlags::INSANE_REACH) {
+        parts.push("INSANE_REACH");
+    }
     parts.join("+")
 }
 
 /// Parse a category name token (case-insensitive) into a [`LogCategory`].
 pub(super) fn parse_category(name: &str) -> Option<LogCategory> {
     let up = name.to_ascii_uppercase();
-    LogCategory::ALL.iter().copied().find(|c| c.label() == up.as_str())
+    LogCategory::ALL
+        .iter()
+        .copied()
+        .find(|c| c.label() == up.as_str())
 }
 
 /// Filter log entries by the given active-category set (DBG-LOG-05).
@@ -712,13 +883,21 @@ pub(super) fn filter_log_entries<'a>(
     entries: &'a [DebugLogEntry],
     active: &std::collections::HashSet<LogCategory>,
 ) -> Vec<&'a DebugLogEntry> {
-    entries.iter().filter(|e| active.contains(&e.category)).collect()
+    entries
+        .iter()
+        .filter(|e| active.contains(&e.category))
+        .collect()
 }
 
 /// Format a single log entry for rendering.
 pub(super) fn format_log_entry(entry: &DebugLogEntry) -> String {
     if entry.timestamp_ticks != 0 {
-        format!("[{}] [{}] {}", entry.timestamp_ticks, entry.category.label(), entry.text)
+        format!(
+            "[{}] [{}] {}",
+            entry.timestamp_ticks,
+            entry.category.label(),
+            entry.text
+        )
     } else {
         format!("[{}] {}", entry.category.label(), entry.text)
     }
@@ -732,7 +911,11 @@ pub(super) fn filter_modal_lines(
     let mut out = Vec::with_capacity(LogCategory::ALL.len() + 1);
     for (i, cat) in LogCategory::ALL.iter().enumerate() {
         let marker = if i == cursor { ">" } else { " " };
-        let state = if active.contains(cat) { "[ON] " } else { "[OFF]" };
+        let state = if active.contains(cat) {
+            "[ON] "
+        } else {
+            "[OFF]"
+        };
         out.push(format!("{} {} {}", marker, state, cat.label()));
     }
     out
@@ -740,11 +923,15 @@ pub(super) fn filter_modal_lines(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::view::MAX_LOG_LINES;
+    use super::*;
 
     fn make_entry(cat: LogCategory, ticks: u64, text: &str) -> DebugLogEntry {
-        DebugLogEntry { category: cat, timestamp_ticks: ticks, text: text.to_owned() }
+        DebugLogEntry {
+            category: cat,
+            timestamp_ticks: ticks,
+            text: text.to_owned(),
+        }
     }
 
     /// Mimics `DebugConsole::log_entry` for testing without allocating a
@@ -767,17 +954,26 @@ mod tests {
     fn log_entry_appends_and_respects_max_lines() {
         let mut entries: Vec<DebugLogEntry> = Vec::new();
         for i in 0..(MAX_LOG_LINES + 25) {
-            push(&mut entries, make_entry(LogCategory::General, 0, &format!("msg {}", i)));
+            push(
+                &mut entries,
+                make_entry(LogCategory::General, 0, &format!("msg {}", i)),
+            );
         }
         assert_eq!(entries.len(), MAX_LOG_LINES);
         assert_eq!(entries[0].text, "msg 25");
-        assert_eq!(entries.last().unwrap().text, format!("msg {}", MAX_LOG_LINES + 24));
+        assert_eq!(
+            entries.last().unwrap().text,
+            format!("msg {}", MAX_LOG_LINES + 24)
+        );
     }
 
     #[test]
     fn log_entry_splits_on_newlines_preserving_category() {
         let mut entries: Vec<DebugLogEntry> = Vec::new();
-        push(&mut entries, make_entry(LogCategory::Combat, 42, "line a\nline b\nline c"));
+        push(
+            &mut entries,
+            make_entry(LogCategory::Combat, 42, "line a\nline b\nline c"),
+        );
         assert_eq!(entries.len(), 3);
         for e in &entries {
             assert_eq!(e.category, LogCategory::Combat);
@@ -809,7 +1005,10 @@ mod tests {
             make_entry(LogCategory::Ai, 0, "think"),
         ];
         let active: std::collections::HashSet<LogCategory> =
-            [LogCategory::Combat, LogCategory::Quest].iter().copied().collect();
+            [LogCategory::Combat, LogCategory::Quest]
+                .iter()
+                .copied()
+                .collect();
         let kept = filter_log_entries(&entries, &active);
         assert_eq!(kept.len(), 2);
         assert_eq!(kept[0].text, "hit");
@@ -880,7 +1079,10 @@ mod tests {
         assert!(lines[5].starts_with("> "));
         for (i, line) in lines.iter().enumerate() {
             if i != 5 {
-                assert!(line.starts_with("  "), "row {i} should not have cursor: {line:?}");
+                assert!(
+                    line.starts_with("  "),
+                    "row {i} should not have cursor: {line:?}"
+                );
             }
         }
     }

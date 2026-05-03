@@ -30,11 +30,11 @@ pub fn genmini(img_x: u16, img_y: u16, world: &WorldData) -> [u16; VIEWPORT_TILE
 
     for i in 0..VIEWPORT_TILES_W {
         let x = img_x.wrapping_add(i as u16) & 0x7ff; // tile col 0..2047, wraps at world edge
-        let xs = (x >> 4) as usize;                    // sector col 0..127
+        let xs = (x >> 4) as usize; // sector col 0..127
 
         for j in 0..VIEWPORT_TILES_H {
             let y = img_y.wrapping_add(j as u16) & 0x3ff; // tile row 0..1023, wraps at world edge
-            let ys = (y >> 3) as usize;                    // sector row 0..127
+            let ys = (y >> 3) as usize; // sector row 0..127
 
             let sec_num = world.sector_at(xs, ys);
             let lx = (x & 0xF) as usize; // tile column within sector (0..15)
@@ -98,7 +98,9 @@ pub fn bigdraw(hero_x: u16, hero_y: u16, world: &WorldData) -> Vec<u32> {
             let base = tile_idx * 4;
             let color_byte = if base + 3 < world.terra_mem.len() {
                 world.terra_mem[base + 3]
-            } else { 0 };
+            } else {
+                0
+            };
             let c = (color_byte as u32 * 8).min(255);
             buf[py * BIGDRAW_COLS + px] = 0xFF000000 | (c << 8);
         }

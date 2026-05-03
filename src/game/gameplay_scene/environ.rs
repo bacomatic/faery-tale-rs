@@ -15,9 +15,7 @@ impl GameplayScene {
 
     pub(crate) fn update_environ(&mut self) {
         let terrain = if let Some(ref world) = self.map_world {
-            collision::px_to_terrain_type(
-                world, self.state.hero_x as i32, self.state.hero_y as i32,
-            )
+            collision::px_to_terrain_type(world, self.state.hero_x as i32, self.state.hero_y as i32)
         } else {
             return;
         };
@@ -33,12 +31,24 @@ impl GameplayScene {
         let mut k: i8 = cur_environ;
 
         match terrain {
-            0 => { k = 0; }
-            6 => { k = -1; } // slippery (environ -1)
-            7 => { k = -2; } // ice (environ -2)
-            8 => { k = -3; } // lava (environ -3)
-            2 => { k = 2; }  // shallow water/wading
-            3 => { k = 5; }  // brush/deep wade
+            0 => {
+                k = 0;
+            }
+            6 => {
+                k = -1;
+            } // slippery (environ -1)
+            7 => {
+                k = -2;
+            } // ice (environ -2)
+            8 => {
+                k = -3;
+            } // lava (environ -3)
+            2 => {
+                k = 2;
+            } // shallow water/wading
+            3 => {
+                k = 5;
+            } // brush/deep wade
             4 | 5 => {
                 let threshold: i8 = if terrain == 4 { 10 } else { 30 };
                 if k > threshold {
@@ -87,14 +97,15 @@ impl GameplayScene {
     /// Extracted from `update()` to allow unit-testing without SDL dependencies.
     pub(crate) fn tick_goodfairy_countdown(&mut self, game_lib: &GameLibrary, delta_ticks: u32) {
         // Start countdown on hero death.
-        if !self.dying && self.state.vitality <= 0
+        if !self.dying
+            && self.state.vitality <= 0
             && !self.state.god_mode.contains(GodModeFlags::INVINCIBLE)
         {
             self.dying = true;
             self.goodfairy = 255;
             self.luck_gate_fired = false;
             self.last_mood = u8::MAX; // force death music re-evaluation
-            // fmain.c:1725 — dying state resets frustflag.
+                                      // fmain.c:1725 — dying state resets frustflag.
             self.state.frustflag = 0;
 
             // SPEC §20.2: every death costs 5 luck (single deduction, any cause).
@@ -155,7 +166,8 @@ impl GameplayScene {
                     }
                     if let Some(next) = self.state.next_brother() {
                         if let Some(bro) = game_lib.get_brother(next) {
-                            let (sx, sy, sr) = game_lib.find_location(&bro.spawn)
+                            let (sx, sy, sr) = game_lib
+                                .find_location(&bro.spawn)
                                 .map(|loc| (loc.x, loc.y, loc.region))
                                 .unwrap_or((19036, 15755, 3));
                             self.state.activate_brother_from_config(
@@ -179,16 +191,17 @@ impl GameplayScene {
                         let bname = self.brother_name().to_string();
                         // Original: event(9) + event(10) for Phillip,
                         //           event(9) + event(11) for Kevin.
-                        self.messages.push_wrapped(
-                            crate::game::events::event_msg(&self.narr, 9, &bname));
+                        self.messages
+                            .push_wrapped(crate::game::events::event_msg(&self.narr, 9, &bname));
                         let cont_id = match self.state.brother {
                             2 => Some(10),
                             3 => Some(11),
                             _ => None,
                         };
                         if let Some(id) = cont_id {
-                            self.messages.push_wrapped(
-                                crate::game::events::event_msg(&self.narr, id, &bname));
+                            self.messages.push_wrapped(crate::game::events::event_msg(
+                                &self.narr, id, &bname,
+                            ));
                         }
                         self.last_mood = u8::MAX;
                         self.dlog(format!("brother died, {} continues", &bname));
@@ -226,7 +239,10 @@ impl GameplayScene {
                 // fairy rescue. Do not invent one.
                 let bname = self.brother_name().to_string();
                 self.last_mood = u8::MAX; // restart normal music
-                self.dlog(format!("faery revived {}, luck now {}", &bname, self.state.luck));
+                self.dlog(format!(
+                    "faery revived {}, luck now {}",
+                    &bname, self.state.luck
+                ));
             }
         }
     }

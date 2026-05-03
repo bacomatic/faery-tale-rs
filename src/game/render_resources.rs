@@ -22,7 +22,6 @@
 /// let mut resources = rr.prepare(&mut scratch_tex, audio.as_ref());
 /// scene.update(&mut canvas, &mut play_tex, delta, &game_lib, &mut resources);
 /// ```
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -33,8 +32,8 @@ use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
 
 use crate::game::audio::AudioSystem;
-use crate::game::bitmap::BitMap;
 use crate::game::bitblit;
+use crate::game::bitmap::BitMap;
 use crate::game::colors::Palette;
 use crate::game::font_texture::FontTexture;
 use crate::game::game_library::GameLibrary;
@@ -99,11 +98,19 @@ impl<'tex> RenderResources<'tex> {
         // ── Stencil textures (inverted alpha for bg-color rendering) ──────
         let mut amber = amber;
         let mut topaz = topaz;
-        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), amber_bounds.width(), amber_bounds.height()) {
+        if let Ok(mut s) = tex_maker.create_texture_static(
+            Some(PixelFormatEnum::RGBA32),
+            amber_bounds.width(),
+            amber_bounds.height(),
+        ) {
             s.set_blend_mode(sdl2::render::BlendMode::Blend);
             amber.init_stencil(s);
         }
-        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), topaz_bounds.width(), topaz_bounds.height()) {
+        if let Ok(mut s) = tex_maker.create_texture_static(
+            Some(PixelFormatEnum::RGBA32),
+            topaz_bounds.width(),
+            topaz_bounds.height(),
+        ) {
             s.set_blend_mode(sdl2::render::BlendMode::Blend);
             topaz.init_stencil(s);
         }
@@ -112,11 +119,7 @@ impl<'tex> RenderResources<'tex> {
         let image_atlas_rect = Rect::new(0, 0, IMAGE_ATLAS_W, IMAGE_ATLAS_H);
         let image_backing = Rc::new(RefCell::new(
             tex_maker
-                .create_texture_static(
-                    Some(PixelFormatEnum::RGBA32),
-                    IMAGE_ATLAS_W,
-                    IMAGE_ATLAS_H,
-                )
+                .create_texture_static(Some(PixelFormatEnum::RGBA32), IMAGE_ATLAS_W, IMAGE_ATLAS_H)
                 .unwrap(),
         ));
 
@@ -142,7 +145,12 @@ impl<'tex> RenderResources<'tex> {
                 next_y += row_h;
                 row_h = 0;
             }
-            let slot = Rect::new(next_x as i32, next_y as i32, iff.width as u32, iff.height as u32);
+            let slot = Rect::new(
+                next_x as i32,
+                next_y as i32,
+                iff.width as u32,
+                iff.height as u32,
+            );
             let mut img_tex = ImageTexture::new(iff, &slot, Rc::downgrade(&image_backing));
 
             let palette = iff.colormap.as_ref().unwrap_or(sys_palette);
@@ -158,9 +166,7 @@ impl<'tex> RenderResources<'tex> {
         // ── Compass textures ───────────────────────────────────────────────
         // Extract the compass region from hiscreen, combine with hinor/hivar
         // as plane 2, convert to RGBA using the textcolors palette.
-        let (compass_normal, compass_highlight) = Self::build_compass_textures(
-            tex_maker, game_lib,
-        );
+        let (compass_normal, compass_highlight) = Self::build_compass_textures(tex_maker, game_lib);
 
         RenderResources {
             _font_backing: font_backing,
@@ -181,7 +187,10 @@ impl<'tex> RenderResources<'tex> {
     }
 
     pub fn find_image_mut(&mut self, name: &str) -> Option<&mut ImageTexture<'tex>> {
-        self.image_map.get(name).copied().map(|i| &mut self.images[i])
+        self.image_map
+            .get(name)
+            .copied()
+            .map(|i| &mut self.images[i])
     }
 
     /// Return the pixel dimensions of the image at `index` (for the debug window).
@@ -243,7 +252,9 @@ impl<'tex> RenderResources<'tex> {
         const CH: usize = 24;
 
         let compass_cfg = game_lib.get_compass()?;
-        let hiscreen_iff = game_lib.find_image("hiscreen").and_then(|a| a.image.as_ref())?;
+        let hiscreen_iff = game_lib
+            .find_image("hiscreen")
+            .and_then(|a| a.image.as_ref())?;
         let textcolors = game_lib.find_palette("textcolors")?;
 
         // Create a BitMap from the full hiscreen image.
@@ -277,20 +288,12 @@ impl<'tex> RenderResources<'tex> {
 
         // Create SDL2 textures from the RGBA buffers.
         let mut normal_tex = tex_maker
-            .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
-                CW as u32,
-                CH as u32,
-            )
+            .create_texture_static(Some(PixelFormatEnum::RGBA32), CW as u32, CH as u32)
             .ok()?;
         normal_tex.update(None, &normal_rgba, CW * 4).ok()?;
 
         let mut highlight_tex = tex_maker
-            .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
-                CW as u32,
-                CH as u32,
-            )
+            .create_texture_static(Some(PixelFormatEnum::RGBA32), CW as u32, CH as u32)
             .ok()?;
         highlight_tex.update(None, &highlight_rgba, CW * 4).ok()?;
 

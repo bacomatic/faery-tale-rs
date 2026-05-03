@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "bacon-lcm": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["../bacon-lcm/dist/mcp-server.js"],
+      "env": {
+        "DATABASE_URL": "postgres://localhost:5432/bacon_lcm"
+      }
+    }
+  }
+}

@@ -16,9 +16,13 @@ impl GameplayScene {
         // Search enemy NPCs from npc_table
         if let Some(ref table) = self.npc_table {
             for (i, npc) in table.npcs.iter().enumerate() {
-                if !npc.active { continue; }
+                if !npc.active {
+                    continue;
+                }
                 let is_dead = npc.state == NpcState::Dead;
-                if constraint == 1 && is_dead { continue; }
+                if constraint == 1 && is_dead {
+                    continue;
+                }
                 let d = calc_dist(hx, hy, npc.x as i32, npc.y as i32);
                 if d < best_dist {
                     best_dist = d;
@@ -32,20 +36,36 @@ impl GameplayScene {
 
         // Search world_objects for setfigs (ob_stat=3) and ground items (ob_stat=1/5)
         for (i, obj) in self.state.world_objects.iter().enumerate() {
-            if obj.region != self.state.region_num { continue; }
+            if obj.region != self.state.region_num {
+                continue;
+            }
 
             if constraint == 1 {
                 // Looking for actors: must be visible setfigs only
-                if !obj.visible { continue; }
-                if obj.ob_stat != 3 { continue; }
+                if !obj.visible {
+                    continue;
+                }
+                if obj.ob_stat != 3 {
+                    continue;
+                }
             } else {
                 // Looking for items: visible ground items (ob_stat=1) OR hidden items
                 // (ob_stat=5) — original Take picks up hidden items without Look first.
-                if obj.ob_stat == 3 { continue; }           // skip setfigs
-                if obj.ob_stat == 0 { continue; }           // skip already-taken items
-                if obj.ob_stat != 1 && obj.ob_stat != 5 { continue; }
-                if !obj.visible && obj.ob_stat != 5 { continue; } // skip invisible non-hidden
-                if obj.ob_id == 0x1d { continue; }          // empty chest
+                if obj.ob_stat == 3 {
+                    continue;
+                } // skip setfigs
+                if obj.ob_stat == 0 {
+                    continue;
+                } // skip already-taken items
+                if obj.ob_stat != 1 && obj.ob_stat != 5 {
+                    continue;
+                }
+                if !obj.visible && obj.ob_stat != 5 {
+                    continue;
+                } // skip invisible non-hidden
+                if obj.ob_id == 0x1d {
+                    continue;
+                } // empty chest
             }
 
             let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
@@ -53,12 +73,18 @@ impl GameplayScene {
                 best_dist = d;
                 if obj.ob_stat == 3 {
                     best = Some(NearestFig {
-                        kind: FigKind::SetFig { world_idx: i, setfig_type: obj.ob_id },
+                        kind: FigKind::SetFig {
+                            world_idx: i,
+                            setfig_type: obj.ob_id,
+                        },
                         dist: d,
                     });
                 } else {
                     best = Some(NearestFig {
-                        kind: FigKind::Item { world_idx: i, ob_id: obj.ob_id },
+                        kind: FigKind::Item {
+                            world_idx: i,
+                            ob_id: obj.ob_id,
+                        },
                         dist: d,
                     });
                 }
@@ -98,7 +124,8 @@ impl GameplayScene {
                             _ => None,
                         };
                         if let Some(id) = speech_id {
-                            self.messages.push(crate::game::events::speak(&self.narr, id, &bname));
+                            self.messages
+                                .push(crate::game::events::speak(&self.narr, id, &bname));
                         }
                     }
                 }
@@ -108,16 +135,23 @@ impl GameplayScene {
                     13 => Some(23), // Beggar
                     9 => Some(46),  // Witch
                     4 => {
-                        let princess_captive = self.state.world_objects
+                        let princess_captive = self
+                            .state
+                            .world_objects
                             .get(PRINCESS_OB_INDEX)
                             .map(|obj| obj.ob_stat != 0)
                             .unwrap_or(false);
-                        if princess_captive { Some(16) } else { None }
+                        if princess_captive {
+                            Some(16)
+                        } else {
+                            None
+                        }
                     }
                     _ => None,
                 };
                 if let Some(id) = speech_id {
-                    self.messages.push(crate::game::events::speak(&self.narr, id, &bname));
+                    self.messages
+                        .push(crate::game::events::speak(&self.narr, id, &bname));
                 }
             }
             FigKind::Item { .. } => {

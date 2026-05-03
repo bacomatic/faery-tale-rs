@@ -6,7 +6,12 @@ impl Scene for GameplayScene {
     fn handle_event(&mut self, event: &Event) -> bool {
         // If rebinding mode is active and waiting for a key, capture the next keypress.
         if self.rebinding.active {
-            if let Event::KeyDown { keycode: Some(kc), repeat: false, .. } = event {
+            if let Event::KeyDown {
+                keycode: Some(kc),
+                repeat: false,
+                ..
+            } = event
+            {
                 if *kc == Keycode::Escape {
                     self.rebinding.active = false;
                     self.rebinding.waiting_for_action = None;
@@ -21,7 +26,12 @@ impl Scene for GameplayScene {
             }
         }
         match event {
-            Event::KeyDown { keycode: Some(kc), keymod, repeat: false, .. } => {
+            Event::KeyDown {
+                keycode: Some(kc),
+                keymod,
+                repeat: false,
+                ..
+            } => {
                 // ALT+F4 → immediate quit (OS convention, takes priority over everything).
                 use sdl2::keyboard::Mod;
                 let alt_held = keymod.intersects(Mod::LALTMOD | Mod::RALTMOD);
@@ -43,40 +53,104 @@ impl Scene for GameplayScene {
                     return true;
                 }
                 match *kc {
-                // Movement keys: arrow keys + numpad (no WASD — those are commands)
-                Keycode::Up    | Keycode::Kp8 => { self.input.up = true; true }
-                Keycode::Down  | Keycode::Kp2 => { self.input.down = true; true }
-                Keycode::Left  | Keycode::Kp4 => { self.input.left = true; true }
-                Keycode::Right | Keycode::Kp6 => { self.input.right = true; true }
-                // Diagonal movement (numpad only)
-                Keycode::Kp7 => { self.input.up = true; self.input.left = true; true }
-                Keycode::Kp9 => { self.input.up = true; self.input.right = true; true }
-                Keycode::Kp1 => { self.input.down = true; self.input.left = true; true }
-                Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
-                // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
-                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = true; true }
-                // All letter_list keys → route through MenuState
-                _ => {
-                    if let Some(menu_key) = keycode_to_menukey(*kc) {
-                        let action = self.menu.handle_key(menu_key);
-                        self.dispatch_menu_action(action);
+                    // Movement keys: arrow keys + numpad (no WASD — those are commands)
+                    Keycode::Up | Keycode::Kp8 => {
+                        self.input.up = true;
                         true
-                    } else {
-                        false
+                    }
+                    Keycode::Down | Keycode::Kp2 => {
+                        self.input.down = true;
+                        true
+                    }
+                    Keycode::Left | Keycode::Kp4 => {
+                        self.input.left = true;
+                        true
+                    }
+                    Keycode::Right | Keycode::Kp6 => {
+                        self.input.right = true;
+                        true
+                    }
+                    // Diagonal movement (numpad only)
+                    Keycode::Kp7 => {
+                        self.input.up = true;
+                        self.input.left = true;
+                        true
+                    }
+                    Keycode::Kp9 => {
+                        self.input.up = true;
+                        self.input.right = true;
+                        true
+                    }
+                    Keycode::Kp1 => {
+                        self.input.down = true;
+                        self.input.left = true;
+                        true
+                    }
+                    Keycode::Kp3 => {
+                        self.input.down = true;
+                        self.input.right = true;
+                        true
+                    }
+                    // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
+                    Keycode::Kp0 | Keycode::Num0 => {
+                        self.input.fight = true;
+                        true
+                    }
+                    // All letter_list keys → route through MenuState
+                    _ => {
+                        if let Some(menu_key) = keycode_to_menukey(*kc) {
+                            let action = self.menu.handle_key(menu_key);
+                            self.dispatch_menu_action(action);
+                            true
+                        } else {
+                            false
+                        }
                     }
                 }
+            }
+            Event::KeyUp {
+                keycode: Some(kc), ..
+            } => match *kc {
+                Keycode::Up | Keycode::Kp8 => {
+                    self.input.up = false;
+                    true
                 }
-            },
-            Event::KeyUp { keycode: Some(kc), .. } => match *kc {
-                Keycode::Up    | Keycode::Kp8 => { self.input.up = false; true }
-                Keycode::Down  | Keycode::Kp2 => { self.input.down = false; true }
-                Keycode::Left  | Keycode::Kp4 => { self.input.left = false; true }
-                Keycode::Right | Keycode::Kp6 => { self.input.right = false; true }
-                Keycode::Kp7 => { self.input.up = false; self.input.left = false; true }
-                Keycode::Kp9 => { self.input.up = false; self.input.right = false; true }
-                Keycode::Kp1 => { self.input.down = false; self.input.left = false; true }
-                Keycode::Kp3 => { self.input.down = false; self.input.right = false; true }
-                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = false; true }
+                Keycode::Down | Keycode::Kp2 => {
+                    self.input.down = false;
+                    true
+                }
+                Keycode::Left | Keycode::Kp4 => {
+                    self.input.left = false;
+                    true
+                }
+                Keycode::Right | Keycode::Kp6 => {
+                    self.input.right = false;
+                    true
+                }
+                Keycode::Kp7 => {
+                    self.input.up = false;
+                    self.input.left = false;
+                    true
+                }
+                Keycode::Kp9 => {
+                    self.input.up = false;
+                    self.input.right = false;
+                    true
+                }
+                Keycode::Kp1 => {
+                    self.input.down = false;
+                    self.input.left = false;
+                    true
+                }
+                Keycode::Kp3 => {
+                    self.input.down = false;
+                    self.input.right = false;
+                    true
+                }
+                Keycode::Kp0 | Keycode::Num0 => {
+                    self.input.fight = false;
+                    true
+                }
                 _ => false,
             },
             // Controller axis motion: map left stick to movement input
@@ -85,22 +159,23 @@ impl Scene for GameplayScene {
                 const THRESHOLD: i16 = 8000;
                 match axis {
                     Axis::LeftX => {
-                        self.input.left  = *value < -THRESHOLD;
-                        self.input.right = *value >  THRESHOLD;
+                        self.input.left = *value < -THRESHOLD;
+                        self.input.right = *value > THRESHOLD;
                         true
                     }
                     Axis::LeftY => {
-                        self.input.up   = *value < -THRESHOLD;
-                        self.input.down = *value >  THRESHOLD;
+                        self.input.up = *value < -THRESHOLD;
+                        self.input.down = *value > THRESHOLD;
                         true
                     }
                     _ => false,
                 }
             }
             Event::ControllerButtonDown { button, .. } => {
-                if let Some(action) = self.controller_bindings.action_for_button(
-                    self.controller_mode, *button
-                ) {
+                if let Some(action) = self
+                    .controller_bindings
+                    .action_for_button(self.controller_mode, *button)
+                {
                     if action == GameAction::Fight {
                         self.input.fight = true;
                     } else {
@@ -110,9 +185,10 @@ impl Scene for GameplayScene {
                 true
             }
             Event::ControllerButtonUp { button, .. } => {
-                if let Some(action) = self.controller_bindings.action_for_button(
-                    self.controller_mode, *button
-                ) {
+                if let Some(action) = self
+                    .controller_bindings
+                    .action_for_button(self.controller_mode, *button)
+                {
                     if action == GameAction::Fight {
                         self.input.fight = false;
                     }
@@ -120,7 +196,12 @@ impl Scene for GameplayScene {
                 true
             }
             // Mouse click: close overlay views, or dispatch through MenuState button grid
-            Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+            Event::MouseButtonDown {
+                x,
+                y,
+                mouse_btn: sdl2::mouse::MouseButton::Left,
+                ..
+            } => {
                 // Any click dismisses inventory or map view.
                 if self.state.viewstatus == 4 || self.state.viewstatus == 1 {
                     self.state.viewstatus = 0;
@@ -133,8 +214,10 @@ impl Scene for GameplayScene {
                 const BTN_X_END: i32 = 530;
                 let mx = *x;
                 let my = *y;
-                if mx >= BTN_X_LEFT && mx <= BTN_X_END
-                    && my >= HIBAR_Y && my < HIBAR_Y + HIBAR_H as i32
+                if mx >= BTN_X_LEFT
+                    && mx <= BTN_X_END
+                    && my >= HIBAR_Y
+                    && my < HIBAR_Y + HIBAR_H as i32
                 {
                     let col = if mx < BTN_X_RIGHT { 0usize } else { 1usize };
                     // Native y within the 57px band; divide by propt row pitch (9) to get row.
@@ -165,11 +248,14 @@ impl Scene for GameplayScene {
                     false
                 }
             }
-            Event::MouseButtonUp { mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+            Event::MouseButtonUp {
+                mouse_btn: sdl2::mouse::MouseButton::Left,
+                ..
+            } => {
                 if self.input.compass_held {
-                    self.input.up    = false;
-                    self.input.down  = false;
-                    self.input.left  = false;
+                    self.input.up = false;
+                    self.input.down = false;
+                    self.input.left = false;
                     self.input.right = false;
                     self.input.compass_held = false;
                     true
@@ -258,9 +344,12 @@ impl Scene for GameplayScene {
                             vec![cfg.map_block]
                         };
                         crate::game::world_data::WorldData::load(
-                            &adf, region,
-                            cfg.sector_block, &map_blocks,
-                            cfg.terra_block, cfg.terra2_block,
+                            &adf,
+                            region,
+                            cfg.sector_block,
+                            &map_blocks,
+                            cfg.terra_block,
+                            cfg.terra2_block,
                             &cfg.image_blocks,
                         )
                     } else {
@@ -268,13 +357,18 @@ impl Scene for GameplayScene {
                     };
                     match world_result {
                         Ok(world) => {
-                            self.base_colors_palette = Self::build_base_colors_palette(game_lib, region);
+                            self.base_colors_palette =
+                                Self::build_base_colors_palette(game_lib, region);
                             self.current_palette = Self::region_palette(game_lib, region);
                             self.palette_dirty = true; // force recompute next cadence tick
-                            // Load global shadow_mem bitmask table (sprite-depth masking).
+                                                       // Load global shadow_mem bitmask table (sprite-depth masking).
                             let shadow_mem = if let Some(ref disk) = game_lib.disk {
                                 if disk.shadow_count > 0 {
-                                    crate::game::world_data::load_shadow_mem(&adf, disk.shadow_block, disk.shadow_count)
+                                    crate::game::world_data::load_shadow_mem(
+                                        &adf,
+                                        disk.shadow_block,
+                                        disk.shadow_count,
+                                    )
                                 } else {
                                     Vec::new()
                                 }
@@ -287,10 +381,12 @@ impl Scene for GameplayScene {
                             self.npc_table = Some(crate::game::npc::NpcTable::load(&adf, region));
                             self.state.populate_world_objects(game_lib);
                             // sprite-101: load player (cfile 0-2), enemies (cfile 4-12), and setfig (cfile 13-17) sprites
-                            for cfile_idx in [0u8, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] {
-                                if let Some(sheet) = crate::game::sprites::SpriteSheet::load(
-                                    &adf, cfile_idx,
-                                ) {
+                            for cfile_idx in
+                                [0u8, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+                            {
+                                if let Some(sheet) =
+                                    crate::game::sprites::SpriteSheet::load(&adf, cfile_idx)
+                                {
                                     self.dlog(format!(
                                         "sprite-load: cfile {} → {} frames",
                                         cfile_idx, sheet.num_frames
@@ -299,25 +395,32 @@ impl Scene for GameplayScene {
                                 }
                             }
                             // Load objects sprite sheet (cfile 3, 16×16) for inventory screen.
-                            self.object_sprites = crate::game::sprites::SpriteSheet::load_objects(
-                                &adf,
-                            );
+                            self.object_sprites =
+                                crate::game::sprites::SpriteSheet::load_objects(&adf);
                             self.map_world = Some(world);
                             self.map_renderer = Some(renderer);
                             self.adf = Some(adf);
-                            self.dlog(format!("render-world-load: world loaded for region {}", region));
+                            self.dlog(format!(
+                                "render-world-load: world loaded for region {}",
+                                region
+                            ));
                         }
-                        Err(e) => self.dlog(format!("render-world-load: WorldData::load failed: {e}")),
+                        Err(e) => {
+                            self.dlog(format!("render-world-load: WorldData::load failed: {e}"))
+                        }
                     }
                 }
-                Err(e) => self.dlog(format!("render-world-load: AdfDisk::open failed (ADF may not be present): {e}")),
+                Err(e) => self.dlog(format!(
+                    "render-world-load: AdfDisk::open failed (ADF may not be present): {e}"
+                )),
             }
         }
 
-
         // SPEC §17.5: day_fade() — update palette every 4 ticks (daynight & 3 == 0) or
         // during screen rebuild (viewstatus > 97), or when palette_dirty is set (region change).
-        if Self::should_update_palette(self.state.daynight, self.state.viewstatus) || self.palette_dirty {
+        if Self::should_update_palette(self.state.daynight, self.state.viewstatus)
+            || self.palette_dirty
+        {
             self.palette_dirty = false;
             if let Some(ref base) = self.base_colors_palette {
                 let lightlevel = self.state.lightlevel;
@@ -350,7 +453,6 @@ impl Scene for GameplayScene {
 
         // Fatigue is updated per movement step in apply_player_input (player-111).
 
-
         // setmood: check music group every 4 ticks (gameloop-113)
         self.mood_tick += delta_ticks;
         if self.mood_tick >= 4 {
@@ -366,21 +468,31 @@ impl Scene for GameplayScene {
             }
         }
 
-
         // Indoor/outdoor mode detection (world-108)
         let indoor = self.state.region_num > 7;
         if indoor != self.last_indoor {
             if indoor {
-                self.dlog(format!("{:?}", crate::game::game_event::GameEvent::EnterIndoor { door_index: self.state.region_num }));
+                self.dlog(format!(
+                    "{:?}",
+                    crate::game::game_event::GameEvent::EnterIndoor {
+                        door_index: self.state.region_num
+                    }
+                ));
             } else {
-                self.dlog(format!("{:?}", crate::game::game_event::GameEvent::ExitIndoor));
+                self.dlog(format!(
+                    "{:?}",
+                    crate::game::game_event::GameEvent::ExitIndoor
+                ));
             }
             self.last_indoor = indoor;
         }
 
         // Encounter zone check (world-111)
         self.in_encounter_zone = crate::game::zones::in_encounter_zone(
-            &self.zones, self.state.hero_x, self.state.hero_y);
+            &self.zones,
+            self.state.hero_x,
+            self.state.hero_y,
+        );
 
         // Event zone entry check (#107)
         {
@@ -403,7 +515,8 @@ impl Scene for GameplayScene {
                         // Looking at the spec, ob_list8[9] is a specific world object.
                         // We need to find the princess object in world_objects.
                         if self.state.world_objects.len() > PRINCESS_OB_INDEX {
-                            let princess_captive = self.state.world_objects[PRINCESS_OB_INDEX].ob_stat != 0;
+                            let princess_captive =
+                                self.state.world_objects[PRINCESS_OB_INDEX].ob_stat != 0;
                             if princess_captive {
                                 self.trigger_princess_rescue = true;
                             }
@@ -482,16 +595,23 @@ impl Scene for GameplayScene {
                 let hero_x = self.state.hero_x as i32;
                 let hero_y = self.state.hero_y as i32;
                 // Snapshot NPC positions to avoid simultaneous mutable borrow conflicts.
-                let npc_positions: Vec<(usize, i32, i32)> = self.npc_table.as_ref().map_or(vec![], |t| {
-                    t.npcs.iter().enumerate()
-                        .filter(|(_, n)| n.active && n.state != crate::game::npc::NpcState::Dead)
-                        .map(|(i, n)| (i, n.x as i32, n.y as i32))
-                        .collect()
-                });
+                let npc_positions: Vec<(usize, i32, i32)> =
+                    self.npc_table.as_ref().map_or(vec![], |t| {
+                        t.npcs
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, n)| {
+                                n.active && n.state != crate::game::npc::NpcState::Dead
+                            })
+                            .map(|(i, n)| (i, n.x as i32, n.y as i32))
+                            .collect()
+                    });
                 let mut hero_missile_damage: i16 = 0;
                 let mut npc_hits: Vec<(usize, i16)> = vec![];
                 for missile in self.missiles.iter_mut() {
-                    if !missile.active { continue; }
+                    if !missile.active {
+                        continue;
+                    }
                     // Age expiry: original fmain.c:2274 / combat.md#missile_step —
                     // missile dies after 40 ticks of flight.
                     if missile.time_of_flight > 40 {
@@ -518,7 +638,9 @@ impl Scene for GameplayScene {
                                 break;
                             }
                         }
-                    } else if (missile.x - hero_x).abs() < radius && (missile.y - hero_y).abs() < radius {
+                    } else if (missile.x - hero_x).abs() < radius
+                        && (missile.y - hero_y).abs() < radius
+                    {
                         missile.active = false;
                         hero_missile_damage += missile.damage();
                     }
@@ -539,10 +661,8 @@ impl Scene for GameplayScene {
                 self.state.vitality -= hero_missile_damage;
             }
 
-            let (new_map_x, new_map_y) = Self::map_adjust(
-                self.state.hero_x, self.state.hero_y,
-                self.map_x, self.map_y,
-            );
+            let (new_map_x, new_map_y) =
+                Self::map_adjust(self.state.hero_x, self.state.hero_y, self.map_x, self.map_y);
             self.map_x = new_map_x;
             self.map_y = new_map_y;
             self.state.map_x = self.map_x;
@@ -555,13 +675,18 @@ impl Scene for GameplayScene {
         let region = self.state.region_num;
         if region != self.last_region_num {
             self.on_region_changed(region, game_lib);
-            self.dlog(format!("region_num changed: {} -> {} ({:?})", self.last_region_num, region,
-                crate::game::game_event::GameEvent::RegionTransition { region }));
+            self.dlog(format!(
+                "region_num changed: {} -> {} ({:?})",
+                self.last_region_num,
+                region,
+                crate::game::game_event::GameEvent::RegionTransition { region }
+            ));
             // Cave instrument swap: region 9 uses new_wave[10] = 0x0307 (audio-105).
             if let Some(audio) = resources.audio {
                 audio.set_cave_mode(region == 9);
             }
-            let from = self.palette_transition
+            let from = self
+                .palette_transition
                 .as_ref()
                 .map(|pt| pt.to)
                 .unwrap_or([crate::game::palette::BLACK; crate::game::palette::PALETTE_SIZE]);
@@ -589,9 +714,11 @@ impl Scene for GameplayScene {
             if let Some(ref mut mr) = self.map_renderer {
                 // --- Unified Y-sorted render pass (fmain2.c:set_objects) ---
                 // Build render list for ALL visible entities, sort by Y, render in order.
-                use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+                use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
                 use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
-                use crate::game::sprites::{SPRITE_W, SPRITE_H, OBJ_SPRITE_H, SETFIG_TABLE, STATELIST};
+                use crate::game::sprites::{
+                    OBJ_SPRITE_H, SETFIG_TABLE, SPRITE_H, SPRITE_W, STATELIST,
+                };
 
                 let fb_w = MAP_DST_W as i32;
                 let fb_h = MAP_DST_H as i32;
@@ -618,38 +745,67 @@ impl Scene for GameplayScene {
                 // Hero
                 {
                     let hero_actor = self.state.actors.first();
-                    let dead = hero_actor.map_or(false, |a| matches!(a.state, crate::game::actor::ActorState::Dead));
+                    let dead = hero_actor.map_or(false, |a| {
+                        matches!(a.state, crate::game::actor::ActorState::Dead)
+                    });
                     let environ = hero_actor.map_or(0i8, |a| a.environ);
                     let sort_y = self.state.hero_y as i32
                         + if dead { -32 } else { 0 }
                         + if environ > 25 { 32 } else { 0 };
-                    entries.push(RenderEntry { abs_y: self.state.hero_y, sort_y, kind: RenderKind::Hero });
+                    entries.push(RenderEntry {
+                        abs_y: self.state.hero_y,
+                        sort_y,
+                        kind: RenderKind::Hero,
+                    });
                 }
 
                 // Enemy NPCs (skip setfig-type entries from NpcTable)
                 if let Some(ref table) = self.npc_table {
-                    use crate::game::npc::{NpcState, NPC_TYPE_RAFT, NPC_TYPE_SWAN, NPC_TYPE_HORSE, NPC_TYPE_DRAGON};
+                    use crate::game::npc::{
+                        NpcState, NPC_TYPE_DRAGON, NPC_TYPE_HORSE, NPC_TYPE_RAFT, NPC_TYPE_SWAN,
+                    };
                     let hero_riding = self.state.riding != 0;
                     for (i, npc) in table.npcs.iter().enumerate() {
-                        if !npc.active { continue; }
-                        if Self::npc_to_setfig_idx(npc.npc_type, npc.race).is_some() { continue; }
+                        if !npc.active {
+                            continue;
+                        }
+                        if Self::npc_to_setfig_idx(npc.npc_type, npc.race).is_some() {
+                            continue;
+                        }
                         let dead = npc.state == NpcState::Dead;
                         let is_raft = npc.npc_type == NPC_TYPE_RAFT;
-                        let is_carrier = matches!(npc.npc_type, NPC_TYPE_SWAN | NPC_TYPE_HORSE | NPC_TYPE_DRAGON | NPC_TYPE_RAFT);
+                        let is_carrier = matches!(
+                            npc.npc_type,
+                            NPC_TYPE_SWAN | NPC_TYPE_HORSE | NPC_TYPE_DRAGON | NPC_TYPE_RAFT
+                        );
                         let sort_y = npc.y as i32
                             + if dead || is_raft { -32 } else { 0 }
                             + if is_carrier && hero_riding { -32 } else { 0 };
-                        entries.push(RenderEntry { abs_y: npc.y as u16, sort_y, kind: RenderKind::Enemy(i) });
+                        entries.push(RenderEntry {
+                            abs_y: npc.y as u16,
+                            sort_y,
+                            kind: RenderKind::Enemy(i),
+                        });
                     }
                 }
 
                 // World objects and setfigs from world_objects list
                 for (i, obj) in self.state.world_objects.iter().enumerate() {
-                    if !obj.visible || obj.region != self.state.region_num { continue; }
+                    if !obj.visible || obj.region != self.state.region_num {
+                        continue;
+                    }
                     if obj.ob_stat == 3 {
-                        entries.push(RenderEntry { abs_y: obj.y, sort_y: obj.y as i32, kind: RenderKind::SetFig(i) });
+                        entries.push(RenderEntry {
+                            abs_y: obj.y,
+                            sort_y: obj.y as i32,
+                            kind: RenderKind::SetFig(i),
+                        });
                     } else {
-                        entries.push(RenderEntry { abs_y: obj.y, sort_y: obj.y as i32, kind: RenderKind::WorldObj(i) });
+                        entries.push(RenderEntry {
+                            abs_y: obj.y,
+                            sort_y: obj.y as i32,
+                            kind: RenderKind::WorldObj(i),
+                        });
                     }
                 }
 
@@ -666,7 +822,10 @@ impl Scene for GameplayScene {
                             let hero_cfile = self.state.brother.saturating_sub(1) as usize;
                             if let Some(Some(ref sheet)) = self.sprite_sheets.get(hero_cfile) {
                                 let (rel_x, mut rel_y) = Self::actor_rel_pos(
-                                    self.state.hero_x, self.state.hero_y, map_x, map_y,
+                                    self.state.hero_x,
+                                    self.state.hero_y,
+                                    map_x,
+                                    map_y,
                                 );
                                 let environ = self.state.actors.first().map_or(0i8, |a| a.environ);
                                 // Environ rendering (fmain.c:3026-3040, passmode==0):
@@ -680,9 +839,12 @@ impl Scene for GameplayScene {
                                     if let Some(ref obj_sheet) = self.object_sprites {
                                         let frame = 97 + (self.state.cycle & 1) as usize;
                                         if let Some(pix) = obj_sheet.frame_pixels(frame) {
-                                            let splash_y = rel_y + (SPRITE_H as i32 - OBJ_SPRITE_H as i32);
-                                            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
-                                                && splash_y > -(OBJ_SPRITE_H as i32) && splash_y < fb_h
+                                            let splash_y =
+                                                rel_y + (SPRITE_H as i32 - OBJ_SPRITE_H as i32);
+                                            if rel_x > -(SPRITE_W as i32)
+                                                && rel_x < fb_w
+                                                && splash_y > -(OBJ_SPRITE_H as i32)
+                                                && splash_y < fb_h
                                             {
                                                 let sprite_info = BlittedSprite {
                                                     screen_x: rel_x,
@@ -692,8 +854,21 @@ impl Scene for GameplayScene {
                                                     ground: splash_y + OBJ_SPRITE_H as i32,
                                                     is_falling: false,
                                                 };
-                                                Self::blit_obj_to_framebuf(pix, rel_x, splash_y, OBJ_SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
-                                                apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                                Self::blit_obj_to_framebuf(
+                                                    pix,
+                                                    rel_x,
+                                                    splash_y,
+                                                    OBJ_SPRITE_H,
+                                                    &mut mr.framebuf,
+                                                    fb_w,
+                                                    fb_h,
+                                                );
+                                                apply_sprite_mask(
+                                                    mr,
+                                                    &sprite_info,
+                                                    self.state.hero_sector,
+                                                    0,
+                                                );
                                                 blitted.push(sprite_info);
                                             }
                                         }
@@ -708,25 +883,37 @@ impl Scene for GameplayScene {
                                 } else {
                                     SPRITE_H
                                 };
-                                if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
-                                    && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
+                                if rel_x > -(SPRITE_W as i32)
+                                    && rel_x < fb_w
+                                    && rel_y > -(SPRITE_H as i32)
+                                    && rel_y < fb_h
                                 {
-                                    let hero_facing = self.state.actors.first().map_or(0u8, |a| a.facing);
-                                    let is_moving = self.state.actors.first().map_or(false, |a| a.moving);
+                                    let hero_facing =
+                                        self.state.actors.first().map_or(0u8, |a| a.facing);
+                                    let is_moving =
+                                        self.state.actors.first().map_or(false, |a| a.moving);
                                     let hero_state = self.state.actors.first().map(|a| &a.state);
-                                    let frame = if let Some(ActorState::Fighting(fight_state)) = hero_state {
-                                        let fight_base = Self::facing_to_fight_frame_base(hero_facing);
+                                    let frame = if let Some(ActorState::Fighting(fight_state)) =
+                                        hero_state
+                                    {
+                                        let fight_base =
+                                            Self::facing_to_fight_frame_base(hero_facing);
                                         fight_base + (*fight_state as usize).min(8)
                                     } else {
                                         let frame_base = Self::facing_to_frame_base(hero_facing);
-                                        if is_moving { frame_base + (self.state.cycle as usize) % 8 } else { frame_base + 1 }
+                                        if is_moving {
+                                            frame_base + (self.state.cycle as usize) % 8
+                                        } else {
+                                            frame_base + 1
+                                        }
                                     };
                                     // Body sprite frame: for fighting, use STATELIST figure field; for walking/still, frame is already correct
-                                    let body_frame = if let Some(ActorState::Fighting(_)) = hero_state {
-                                        STATELIST[frame].figure as usize
-                                    } else {
-                                        frame
-                                    };
+                                    let body_frame =
+                                        if let Some(ActorState::Fighting(_)) = hero_state {
+                                            STATELIST[frame].figure as usize
+                                        } else {
+                                            frame
+                                        };
 
                                     // Weapon draw order (fmain.c:2907-2916 passmode):
                                     // Original facing: 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
@@ -746,35 +933,76 @@ impl Scene for GameplayScene {
                                     };
 
                                     // Prepare weapon blit parameters
-                                    let weapon_type = self.state.actors.first().map_or(0u8, |a| a.weapon);
-                                    let wpn_blit = if let Some(ref obj_sheet) = self.object_sprites {
-                                        Self::compute_weapon_blit(frame, hero_facing, weapon_type, obj_sheet, rel_x, rel_y)
-                                    } else { None };
+                                    let weapon_type =
+                                        self.state.actors.first().map_or(0u8, |a| a.weapon);
+                                    let wpn_blit = if let Some(ref obj_sheet) = self.object_sprites
+                                    {
+                                        Self::compute_weapon_blit(
+                                            frame,
+                                            hero_facing,
+                                            weapon_type,
+                                            obj_sheet,
+                                            rel_x,
+                                            rel_y,
+                                        )
+                                    } else {
+                                        None
+                                    };
 
                                     // Draw weapon BEHIND body when facing N/SW/W/NW
                                     if weapon_behind {
                                         if let Some((wfp, wx, wy, wh)) = wpn_blit {
-                                            Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                            Self::blit_obj_to_framebuf(
+                                                wfp,
+                                                wx,
+                                                wy,
+                                                wh,
+                                                &mut mr.framebuf,
+                                                fb_w,
+                                                fb_h,
+                                            );
                                         }
                                     }
 
                                     if let Some(fp) = sheet.frame_pixels(body_frame) {
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_sprite_to_framebuf(
+                                            fp,
+                                            rel_x,
+                                            rel_y,
+                                            body_rows,
+                                            &mut mr.framebuf,
+                                            fb_w,
+                                            fb_h,
+                                        );
                                     }
 
                                     // Draw weapon IN FRONT when facing NE/E/SE/S
                                     if !weapon_behind {
                                         if let Some((wfp, wx, wy, wh)) = wpn_blit {
-                                            Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                            Self::blit_obj_to_framebuf(
+                                                wfp,
+                                                wx,
+                                                wy,
+                                                wh,
+                                                &mut mr.framebuf,
+                                                fb_w,
+                                                fb_h,
+                                            );
                                         }
                                     }
 
                                     // Mask AFTER blit: restore foreground terrain over the body.
                                     // should_apply_terrain_mask bypasses (fmain.c:2563-2566):
                                     //   hero on swan (riding==11) and hero in fiery_death zone skip masking.
-                                    let hero_skip_mask = self.state.riding == 11 || self.fiery_death;
+                                    let hero_skip_mask =
+                                        self.state.riding == 11 || self.fiery_death;
                                     if !hero_skip_mask {
-                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                        apply_sprite_mask(
+                                            mr,
+                                            &sprite_info,
+                                            self.state.hero_sector,
+                                            0,
+                                        );
                                     }
 
                                     // Mask the weapon separately (original uses two-pass masking:
@@ -790,7 +1018,12 @@ impl Scene for GameplayScene {
                                                 ground: sprite_info.ground,
                                                 is_falling: false,
                                             };
-                                            apply_sprite_mask(mr, &wpn_info, self.state.hero_sector, 0);
+                                            apply_sprite_mask(
+                                                mr,
+                                                &wpn_info,
+                                                self.state.hero_sector,
+                                                0,
+                                            );
                                         }
                                     }
 
@@ -802,19 +1035,36 @@ impl Scene for GameplayScene {
                             if let Some(ref table) = self.npc_table {
                                 let npc = &table.npcs[idx];
                                 let (cfile_idx, override_frame) =
-                                    if let Some((ovr_cfile, ovr_frame)) = Self::swan_grounded_override(npc, &self.state) {
+                                    if let Some((ovr_cfile, ovr_frame)) =
+                                        Self::swan_grounded_override(npc, &self.state)
+                                    {
                                         (ovr_cfile, Some(ovr_frame))
                                     } else {
-                                        let Some(c) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
+                                        let Some(c) =
+                                            Self::npc_type_to_cfile(npc.npc_type, npc.race)
+                                        else {
+                                            continue;
+                                        };
                                         (c, None)
                                     };
-                                let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx) else { continue };
+                                let Some(Some(ref sheet)) = self.sprite_sheets.get(cfile_idx)
+                                else {
+                                    continue;
+                                };
 
-                                let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
+                                let (rel_x, rel_y) =
+                                    Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
 
                                 let frame = override_frame
                                     .map(|f| f.min(sheet.num_frames.saturating_sub(1)))
-                                    .unwrap_or_else(|| Self::npc_animation_frame(npc, idx, self.state.cycle, sheet.num_frames));
+                                    .unwrap_or_else(|| {
+                                        Self::npc_animation_frame(
+                                            npc,
+                                            idx,
+                                            self.state.cycle,
+                                            sheet.num_frames,
+                                        )
+                                    });
 
                                 let sprite_info = BlittedSprite {
                                     screen_x: rel_x,
@@ -829,30 +1079,68 @@ impl Scene for GameplayScene {
                                 let weapon_behind = matches!(npc.facing, 0 | 5 | 6 | 7);
                                 let wpn_blit = if npc.weapon > 0 && npc.weapon < 8 {
                                     if let Some(ref obj_sheet) = self.object_sprites {
-                                        Self::compute_weapon_blit(frame, npc.facing, npc.weapon, obj_sheet, rel_x, rel_y)
-                                    } else { None }
-                                } else { None };
+                                        Self::compute_weapon_blit(
+                                            frame, npc.facing, npc.weapon, obj_sheet, rel_x, rel_y,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
 
                                 if weapon_behind {
                                     if let Some((wfp, wx, wy, wh)) = wpn_blit {
-                                        Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_obj_to_framebuf(
+                                            wfp,
+                                            wx,
+                                            wy,
+                                            wh,
+                                            &mut mr.framebuf,
+                                            fb_w,
+                                            fb_h,
+                                        );
                                     }
                                 }
                                 if let Some(fp) = sheet.frame_pixels(frame) {
-                                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                    Self::blit_sprite_to_framebuf(
+                                        fp,
+                                        rel_x,
+                                        rel_y,
+                                        SPRITE_H,
+                                        &mut mr.framebuf,
+                                        fb_w,
+                                        fb_h,
+                                    );
                                 }
                                 if !weapon_behind {
                                     if let Some((wfp, wx, wy, wh)) = wpn_blit {
-                                        Self::blit_obj_to_framebuf(wfp, wx, wy, wh, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_obj_to_framebuf(
+                                            wfp,
+                                            wx,
+                                            wy,
+                                            wh,
+                                            &mut mr.framebuf,
+                                            fb_w,
+                                            fb_h,
+                                        );
                                     }
                                 }
 
                                 // should_apply_terrain_mask bypasses (fmain.c:2563-2569):
                                 //   CARRIER types never occlude; race 0x85/0x87 are transparent setfigs.
-                                use crate::game::npc::{NPC_TYPE_SWAN, NPC_TYPE_HORSE, NPC_TYPE_DRAGON, NPC_TYPE_RAFT,
-                                                       RACE_NOMASK_A, RACE_NOMASK_B};
-                                let skip_mask = matches!(npc.npc_type, NPC_TYPE_SWAN | NPC_TYPE_HORSE | NPC_TYPE_DRAGON | NPC_TYPE_RAFT)
-                                    || npc.race == RACE_NOMASK_A || npc.race == RACE_NOMASK_B;
+                                use crate::game::npc::{
+                                    NPC_TYPE_DRAGON, NPC_TYPE_HORSE, NPC_TYPE_RAFT, NPC_TYPE_SWAN,
+                                    RACE_NOMASK_A, RACE_NOMASK_B,
+                                };
+                                let skip_mask = matches!(
+                                    npc.npc_type,
+                                    NPC_TYPE_SWAN
+                                        | NPC_TYPE_HORSE
+                                        | NPC_TYPE_DRAGON
+                                        | NPC_TYPE_RAFT
+                                ) || npc.race == RACE_NOMASK_A
+                                    || npc.race == RACE_NOMASK_B;
                                 if !skip_mask {
                                     apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
                                 }
@@ -874,17 +1162,22 @@ impl Scene for GameplayScene {
                                 use crate::game::world_objects::ob_id_to_stuff_index;
                                 let (frame, img_off, img_height) = ob_id_to_stuff_index(obj.ob_id)
                                     .and_then(|s| INV_LIST.get(s))
-                                    .map(|it| (
-                                        it.image_number as usize,
-                                        it.img_off as usize,
-                                        it.img_height as usize,
-                                    ))
+                                    .map(|it| {
+                                        (
+                                            it.image_number as usize,
+                                            it.img_off as usize,
+                                            it.img_height as usize,
+                                        )
+                                    })
                                     .unwrap_or((obj.ob_id as usize, 0, OBJ_SPRITE_H));
                                 if let Some(pix) = obj_sheet.frame_pixels(frame) {
                                     // Use actor_rel_pos_offset so indoor coords (bit 15 set)
                                     // wrap correctly against the indoor map_y origin.
                                     let (rel_x, rel_y) = Self::actor_rel_pos_offset(
-                                        obj.x, obj.y, map_x, map_y,
+                                        obj.x,
+                                        obj.y,
+                                        map_x,
+                                        map_y,
                                         -(SPRITE_W as i32 / 2),
                                         -(img_height as i32 / 2),
                                     );
@@ -908,12 +1201,25 @@ impl Scene for GameplayScene {
                                         ground: rel_y + img_height as i32,
                                         is_falling: false,
                                     };
-                                    Self::blit_obj_to_framebuf(pix_clip, rel_x, rel_y, img_height, &mut mr.framebuf, fb_w, fb_h);
+                                    Self::blit_obj_to_framebuf(
+                                        pix_clip,
+                                        rel_x,
+                                        rel_y,
+                                        img_height,
+                                        &mut mr.framebuf,
+                                        fb_w,
+                                        fb_h,
+                                    );
 
                                     // should_apply_terrain_mask bypass: OBJECTS frames 100-101
                                     // are bubble/spell-effect sprites (fmain.c:2568).
                                     if frame < 100 || frame > 101 {
-                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                        apply_sprite_mask(
+                                            mr,
+                                            &sprite_info,
+                                            self.state.hero_sector,
+                                            0,
+                                        );
                                     }
 
                                     blitted.push(sprite_info);
@@ -938,12 +1244,14 @@ impl Scene for GameplayScene {
                                     } else {
                                         0
                                     };
-                                    let frame = (sf_entry.image_base as usize + jitter) % sheet.num_frames;
+                                    let frame =
+                                        (sf_entry.image_base as usize + jitter) % sheet.num_frames;
                                     if let Some(fp) = sheet.frame_pixels(frame) {
                                         // Original does ystart = yc - map_y - 8; ystart -= 18 (total: -26).
                                         // actor_rel_pos already applies a Y offset of -26, matching that total,
                                         // so no further adjustment is needed here.
-                                        let (rel_x, rel_y) = Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
+                                        let (rel_x, rel_y) =
+                                            Self::actor_rel_pos(obj.x, obj.y, map_x, map_y);
 
                                         // Mask BEFORE blit
                                         let sprite_info = BlittedSprite {
@@ -954,10 +1262,23 @@ impl Scene for GameplayScene {
                                             ground: rel_y + SPRITE_H as i32,
                                             is_falling: false,
                                         };
-                                        Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, &mut mr.framebuf, fb_w, fb_h);
+                                        Self::blit_sprite_to_framebuf(
+                                            fp,
+                                            rel_x,
+                                            rel_y,
+                                            SPRITE_H,
+                                            &mut mr.framebuf,
+                                            fb_w,
+                                            fb_h,
+                                        );
 
                                         // Mask AFTER blit: restore foreground terrain over the sprite
-                                        apply_sprite_mask(mr, &sprite_info, self.state.hero_sector, 0);
+                                        apply_sprite_mask(
+                                            mr,
+                                            &sprite_info,
+                                            self.state.hero_sector,
+                                            0,
+                                        );
 
                                         blitted.push(sprite_info);
                                     }

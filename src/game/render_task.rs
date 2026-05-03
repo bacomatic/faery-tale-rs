@@ -1,4 +1,3 @@
-
 use sdl2::{rect::Rect, render::Canvas, video::Window};
 
 /**
@@ -16,8 +15,12 @@ pub trait RenderTask {
      * @param area Optional area that needs updating. If None, the entire area should be updated.
      * @return true if the task needs to continue running, false if it is complete and can be removed.
      */
-    fn update(self: &mut Self, _canvas: &mut Canvas<Window>, _delta_ticks: i32, _area: Option<Rect>) -> bool
-    {
+    fn update(
+        self: &mut Self,
+        _canvas: &mut Canvas<Window>,
+        _delta_ticks: i32,
+        _area: Option<Rect>,
+    ) -> bool {
         false
     }
 

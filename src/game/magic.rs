@@ -9,16 +9,16 @@ use crate::game::game_state::GameState;
 
 /// Magic item indices in stuff[] (MAGICBASE = 9 in fmain.c).
 /// hit=5..=11 in the MAGIC menu; item = stuff[4 + hit].
-pub const ITEM_STONE_RING: usize = 9;   // hit=5: teleport via stone ring
-pub const ITEM_LANTERN:    usize = 10;  // hit=6: light_timer += 760
-pub const ITEM_VIAL:       usize = 11;  // hit=7: heal (vitality += rand8() + 4)
-pub const ITEM_ORB:        usize = 12;  // hit=8: secret_timer += 360
-pub const ITEM_TOTEM:      usize = 13;  // hit=9: show world map
-pub const ITEM_RING:       usize = 14;  // hit=10: freeze_timer += 100
-pub const ITEM_SKULL:      usize = 15;  // hit=11: kill all on-screen enemies
+pub const ITEM_STONE_RING: usize = 9; // hit=5: teleport via stone ring
+pub const ITEM_LANTERN: usize = 10; // hit=6: light_timer += 760
+pub const ITEM_VIAL: usize = 11; // hit=7: heal (vitality += rand8() + 4)
+pub const ITEM_ORB: usize = 12; // hit=8: secret_timer += 360
+pub const ITEM_TOTEM: usize = 13; // hit=9: show world map
+pub const ITEM_RING: usize = 14; // hit=10: freeze_timer += 100
+pub const ITEM_SKULL: usize = 15; // hit=11: kill all on-screen enemies
 
 /// Timer increments ported verbatim from fmain.c.
-pub const LIGHT_TIMER_INCREMENT:  i16 = 760;
+pub const LIGHT_TIMER_INCREMENT: i16 = 760;
 pub const SECRET_TIMER_INCREMENT: i16 = 360;
 pub const FREEZE_TIMER_INCREMENT: i16 = 100;
 
@@ -41,8 +41,17 @@ fn rand8() -> i16 {
 /// Stone ring sector coordinates from fmain.c stone_list[].
 /// 11 pairs of (x_sector, y_sector) for teleport destinations.
 const STONE_RINGS: [(u8, u8); 11] = [
-    (54, 43), (71, 77),  (78, 102), (66, 121), (12, 85),
-    (79, 40), (107, 38), (73, 21),  (12, 26),  (26, 53), (84, 60),
+    (54, 43),
+    (71, 77),
+    (78, 102),
+    (66, 121),
+    (12, 85),
+    (79, 40),
+    (107, 38),
+    (73, 21),
+    (12, 26),
+    (26, 53),
+    (84, 60),
 ];
 
 /// Stone ring activation sector (fmain.c: hero_sector == 144).
@@ -53,7 +62,9 @@ const STONE_RING_SECTOR: u16 = 144;
 fn find_current_ring(hero_x: u16, hero_y: u16) -> Option<usize> {
     let sx = (hero_x >> 8) as u8;
     let sy = (hero_y >> 8) as u8;
-    STONE_RINGS.iter().position(|&(rx, ry)| rx == sx && ry == sy)
+    STONE_RINGS
+        .iter()
+        .position(|&(rx, ry)| rx == sx && ry == sy)
 }
 
 /// Structured outcome of a MAGIC submenu cast.
@@ -184,7 +195,10 @@ pub fn use_magic(state: &mut GameState, item_idx: usize) -> MagicResult {
                     slain.push(i);
                 }
             }
-            MagicResult::MassKill { slain, in_battle: state.battleflag }
+            MagicResult::MassKill {
+                slain,
+                in_battle: state.battleflag,
+            }
         }
         _ => return MagicResult::NoOwned,
     };
@@ -268,7 +282,7 @@ mod tests {
     #[test]
     fn test_heal_cap() {
         assert_eq!(heal_cap(40), 25); // 15 + 40/4 = 25
-        assert_eq!(heal_cap(0),  15);
+        assert_eq!(heal_cap(0), 15);
     }
 
     #[test]
@@ -296,9 +310,15 @@ mod tests {
             let _ = use_magic(&mut state, ITEM_VIAL);
             let gained = state.vitality - before;
             let expected_max = (11).min(25 - before);
-            assert!(gained >= 4.min(25 - before) && gained <= expected_max,
-                    "Heal gained {gained} outside expected range");
-            assert!(state.vitality <= 25, "Vitality {0} exceeded cap 25", state.vitality);
+            assert!(
+                gained >= 4.min(25 - before) && gained <= expected_max,
+                "Heal gained {gained} outside expected range"
+            );
+            assert!(
+                state.vitality <= 25,
+                "Vitality {0} exceeded cap 25",
+                state.vitality
+            );
         }
     }
 
@@ -369,7 +389,13 @@ mod tests {
         state.anix = 1;
         state.battleflag = true;
         let r = use_magic(&mut state, ITEM_SKULL);
-        assert_eq!(r, MagicResult::MassKill { slain: vec![], in_battle: true });
+        assert_eq!(
+            r,
+            MagicResult::MassKill {
+                slain: vec![],
+                in_battle: true
+            }
+        );
     }
 
     #[test]
@@ -379,9 +405,15 @@ mod tests {
         let mut state = GameState::new();
         state.stuff_mut()[ITEM_SKULL] = 1;
         state.anix = 4;
-        state.actors[1].vitality = 10; state.actors[1].kind = ActorKind::Enemy; state.actors[1].race = 7;
-        state.actors[2].vitality = 10; state.actors[2].kind = ActorKind::Enemy; state.actors[2].race = 9;
-        state.actors[3].vitality = 10; state.actors[3].kind = ActorKind::Enemy; state.actors[3].race = 0x89;
+        state.actors[1].vitality = 10;
+        state.actors[1].kind = ActorKind::Enemy;
+        state.actors[1].race = 7;
+        state.actors[2].vitality = 10;
+        state.actors[2].kind = ActorKind::Enemy;
+        state.actors[2].race = 9;
+        state.actors[3].vitality = 10;
+        state.actors[3].kind = ActorKind::Enemy;
+        state.actors[3].race = 0x89;
         let _ = use_magic(&mut state, ITEM_SKULL);
         assert_eq!(state.actors[1].vitality, 10);
         assert_eq!(state.actors[2].vitality, 10);
@@ -398,7 +430,11 @@ mod tests {
 
         let r = use_magic(&mut state, ITEM_TOTEM);
         assert_eq!(r, MagicResult::Suppressed);
-        assert_eq!(state.stuff()[ITEM_TOTEM], 1, "Charge must be preserved on suppressed");
+        assert_eq!(
+            state.stuff()[ITEM_TOTEM],
+            1,
+            "Charge must be preserved on suppressed"
+        );
     }
 
     #[test]
@@ -506,8 +542,10 @@ mod tests {
         state.brave = 40;
         let before = state.vitality;
         let _ = use_magic(&mut state, ITEM_STONE_RING);
-        assert!(state.vitality > before,
-            "stone ring teleport must also heal (case 5 fall-through)");
+        assert!(
+            state.vitality > before,
+            "stone ring teleport must also heal (case 5 fall-through)"
+        );
     }
 
     #[test]

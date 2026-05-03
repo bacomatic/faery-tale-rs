@@ -1,7 +1,10 @@
 //! MapRenderer: combines TileAtlas and genmini() to blit the map viewport.
 
-use crate::game::tile_atlas::{TileAtlas, TILE_W, TILE_H};
-use crate::game::map_view::{genmini_scrolled, SCROLL_TILES, SCROLL_TILES_W, SCROLL_TILES_H, VIEWPORT_TILES_W, VIEWPORT_TILES_H};
+use crate::game::map_view::{
+    genmini_scrolled, SCROLL_TILES, SCROLL_TILES_H, SCROLL_TILES_W, VIEWPORT_TILES_H,
+    VIEWPORT_TILES_W,
+};
+use crate::game::tile_atlas::{TileAtlas, TILE_H, TILE_W};
 use crate::game::world_data::WorldData;
 
 pub const MAP_DST_X: i32 = 0;
@@ -51,14 +54,20 @@ impl MapRenderer {
             for tx in 0..SCROLL_TILES_W {
                 let dst_x = tx as i32 * TILE_W as i32 - ox;
                 let dst_y = ty as i32 * TILE_H as i32 - oy;
-                if dst_x >= MAP_DST_W as i32 || dst_y >= MAP_DST_H as i32 { continue; }
-                if dst_x + TILE_W as i32 <= 0 || dst_y + TILE_H as i32 <= 0 { continue; }
+                if dst_x >= MAP_DST_W as i32 || dst_y >= MAP_DST_H as i32 {
+                    continue;
+                }
+                if dst_x + TILE_W as i32 <= 0 || dst_y + TILE_H as i32 <= 0 {
+                    continue;
+                }
                 let tile_idx = minimap[ty * SCROLL_TILES_W + tx] as usize;
                 let clamped = tile_idx.min(255);
                 let tile_pixels = self.atlas.tile_pixels(clamped);
                 for row in 0..TILE_H {
                     let py = dst_y + row as i32;
-                    if py < 0 || py >= MAP_DST_H as i32 { continue; }
+                    if py < 0 || py >= MAP_DST_H as i32 {
+                        continue;
+                    }
                     let col_start = dst_x.max(0) as usize;
                     let col_end = (dst_x + TILE_W as i32).min(MAP_DST_W as i32) as usize;
                     let src_off = (col_start as i32 - dst_x) as usize;

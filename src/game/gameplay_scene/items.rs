@@ -17,17 +17,22 @@ impl GameplayScene {
             // MONEY — +50 gold
             13 => {
                 self.state.gold += 50;
-                self.messages.push(format!("{} found 50 gold pieces.", bname));
+                self.messages
+                    .push(format!("{} found 50 gold pieces.", bname));
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
             // SCRAP OF PAPER (ob_id 20): event 17, then 18 or 19 by region
             20 => {
                 let msg17 = crate::game::events::event_msg(&self.narr, 17, bname);
-                if !msg17.is_empty() { self.messages.push(msg17); }
+                if !msg17.is_empty() {
+                    self.messages.push(msg17);
+                }
                 let region_event = if self.state.region_num > 7 { 19 } else { 18 };
                 let msg = crate::game::events::event_msg(&self.narr, region_event, bname);
-                if !msg.is_empty() { self.messages.push(msg); }
+                if !msg.is_empty() {
+                    self.messages.push(msg);
+                }
                 self.state.mark_object_taken(world_idx);
                 return true;
             }
@@ -38,7 +43,9 @@ impl GameplayScene {
                     self.dlog(format!("ate fruit, hunger now {}", self.state.hunger));
                 } else {
                     let msg = crate::game::events::event_msg(&self.narr, 36, bname);
-                    if !msg.is_empty() { self.messages.push(msg); }
+                    if !msg.is_empty() {
+                        self.messages.push(msg);
+                    }
                 }
                 self.state.mark_object_taken(world_idx);
                 return true;
@@ -48,7 +55,8 @@ impl GameplayScene {
             // reference/logic/brother-succession.md §pickup_brother_bones.
             28 => {
                 // announce_treasure("his brother's bones.") → "{name} found his brother's bones."
-                self.messages.push(format!("{} found his brother's bones.", bname));
+                self.messages
+                    .push(format!("{} found his brother's bones.", bname));
                 // Both ghost set-figures retire regardless of which bones were picked up
                 // (ob_listg[3].ob_stat = 0, ob_listg[4].ob_stat = 0; fmain.c:3174).
                 for ghost_idx in [3usize, 4usize] {
@@ -100,7 +108,11 @@ impl GameplayScene {
                         if item_idx < 36 {
                             self.state.pickup_item(item_idx);
                         }
-                        let name = if item_idx < 31 { stuff_index_name(item_idx) } else { "quiver of arrows" };
+                        let name = if item_idx < 31 {
+                            stuff_index_name(item_idx)
+                        } else {
+                            "quiver of arrows"
+                        };
                         self.messages.push_wrapped(format!("{}a {}.", prefix, name));
                     }
                     2 => {
@@ -116,16 +128,31 @@ impl GameplayScene {
                             self.state.gold += 100;
                         }
                         let mut item2 = ((self.state.tick_counter >> 5) & 7) as usize + 8;
-                        if item2 == raw1 { item2 = ((item2 + 1) & 7) + 8; }
+                        if item2 == raw1 {
+                            item2 = ((item2 + 1) & 7) + 8;
+                        }
                         let item2 = if item2 == 8 { 35 } else { item2 };
-                        if !gold_special && item1 < 31 { self.state.pickup_item(item1); }
+                        if !gold_special && item1 < 31 {
+                            self.state.pickup_item(item1);
+                        }
                         // inventory.md#take_command (fmain.c:3229): stuff[k] += 1
                         // unconditionally — including when k == 35 (ARROWBASE),
                         // which is folded to stuff[8] * 10 at the epilogue.
                         self.state.pickup_item(item2);
-                        let n1 = if item1 < 31 { stuff_index_name(item1) } else if item1 == 34 { "100 Gold Pieces" } else { "quiver of arrows" };
-                        let n2 = if item2 < 31 { stuff_index_name(item2) } else { "quiver of arrows" };
-                        self.messages.push_wrapped(format!("{}{} and a {}.", prefix, n1, n2));
+                        let n1 = if item1 < 31 {
+                            stuff_index_name(item1)
+                        } else if item1 == 34 {
+                            "100 Gold Pieces"
+                        } else {
+                            "quiver of arrows"
+                        };
+                        let n2 = if item2 < 31 {
+                            stuff_index_name(item2)
+                        } else {
+                            "quiver of arrows"
+                        };
+                        self.messages
+                            .push_wrapped(format!("{}{} and a {}.", prefix, n1, n2));
                     }
                     3 | _ => {
                         // Three of the same item
@@ -134,14 +161,24 @@ impl GameplayScene {
                             // Special: 3 random keys
                             self.messages.push_wrapped(format!("{}3 keys.", prefix));
                             for shift in [4, 7, 10] {
-                                let mut key_idx = ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
-                                if key_idx == 22 { key_idx = 16; }
-                                if key_idx == 23 { key_idx = 20; }
+                                let mut key_idx =
+                                    ((self.state.tick_counter >> shift) & 7) as usize + 16; // KEYBASE
+                                if key_idx == 22 {
+                                    key_idx = 16;
+                                }
+                                if key_idx == 23 {
+                                    key_idx = 20;
+                                }
                                 self.state.pickup_item(key_idx);
                             }
                         } else {
-                            let name = if item < 31 { stuff_index_name(item) } else { "quiver of arrows" };
-                            self.messages.push_wrapped(format!("{}3 {}s.", prefix, name));
+                            let name = if item < 31 {
+                                stuff_index_name(item)
+                            } else {
+                                "quiver of arrows"
+                            };
+                            self.messages
+                                .push_wrapped(format!("{}3 {}s.", prefix, name));
                             if item < 35 {
                                 self.state.pickup_item(item);
                                 self.state.pickup_item(item);
@@ -206,9 +243,9 @@ impl GameplayScene {
     /// `reference/logic/dialog_system.md` (see "TAKE — body search
     /// composition") and `event_msg[35]`. No new prose.
     pub(crate) fn search_body(&mut self, npc_idx: usize, bname: &str) {
+        use crate::game::loot::GOLDBASE;
         use crate::game::npc::NpcState;
         use crate::game::world_objects::stuff_index_name;
-        use crate::game::loot::{GOLDBASE};
 
         // Snapshot what we need from the body without holding the borrow
         // across mutations to `self.state`.
@@ -221,9 +258,20 @@ impl GameplayScene {
                 Some(n) => n,
                 None => return,
             };
-            (n.active, n.state.clone(), n.vitality, n.race, n.weapon, n.looted, n.x, n.y)
+            (
+                n.active,
+                n.state.clone(),
+                n.vitality,
+                n.race,
+                n.weapon,
+                n.looted,
+                n.x,
+                n.y,
+            )
         };
-        if !npc_active { return; }
+        if !npc_active {
+            return;
+        }
 
         // Alive guard. fmain.c:3252 checks `vitality && !frzcount`; this
         // port's freeze model is global (`state.freeze_timer`) rather than
@@ -242,7 +290,9 @@ impl GameplayScene {
         // but with `weapon=0` it produces only "found nothing." which we
         // suppress to keep TAKE on a previously-looted body quiet (matches
         // typical play experience; see SPEC §14.x note on loot idempotence).
-        if npc_looted { return; }
+        if npc_looted {
+            return;
+        }
 
         // --- Composed scroll line (fmain.c:3253-3283) ---
         // Prefix: "% searched the body and found"
@@ -277,10 +327,10 @@ impl GameplayScene {
             // loot.rs::rand8_from_tick — keep determinism while no
             // PRNG is plumbed yet).
             let h = (self.state.tick_counter ^ npc_x as u32 ^ npc_y as u32)
-                .wrapping_mul(2246822519).wrapping_add(3266489917);
+                .wrapping_mul(2246822519)
+                .wrapping_add(3266489917);
             let n = ((h as usize) & 7) + 2;
-            self.state.stuff_mut()[35] =
-                self.state.stuff()[35].saturating_add(n as u8);
+            self.state.stuff_mut()[35] = self.state.stuff()[35].saturating_add(n as u8);
             line.push_str(&format!(" and {} Arrows.", n));
             self.messages.push_wrapped(line);
             self.mark_npc_looted(npc_idx);
@@ -301,7 +351,8 @@ impl GameplayScene {
                 race: npc_race,
                 ..Default::default()
             };
-            if let Some(drop) = crate::game::loot::roll_treasure(&temp_npc, self.state.tick_counter) {
+            if let Some(drop) = crate::game::loot::roll_treasure(&temp_npc, self.state.tick_counter)
+            {
                 use crate::game::loot::LootDrop;
                 match drop {
                     LootDrop::Item(slot) => {

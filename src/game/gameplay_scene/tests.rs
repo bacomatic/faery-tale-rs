@@ -17,12 +17,10 @@ fn world_obj_rel_pos_handles_indoor_wrap() {
     // Tambry-interior hidden item coords from faery.toml.
     let obj_x: u16 = 3872;
     let obj_y: u16 = 33546; // 0x830A — indoor flag set
-    // Plausible indoor viewport origin: low Y range with bit 15 clear.
+                            // Plausible indoor viewport origin: low Y range with bit 15 clear.
     let map_x: u16 = 3800;
     let map_y: u16 = 0x82E0; // hero stands near the item indoors
-    let (rel_x, rel_y) = GameplayScene::actor_rel_pos_offset(
-        obj_x, obj_y, map_x, map_y, -8, -8,
-    );
+    let (rel_x, rel_y) = GameplayScene::actor_rel_pos_offset(obj_x, obj_y, map_x, map_y, -8, -8);
     // Expect on-screen-ish offsets, not ~33k.
     assert!(rel_x.abs() < 1024, "rel_x out of range: {rel_x}");
     assert!(rel_y.abs() < 1024, "rel_y out of range: {rel_y}");
@@ -81,7 +79,11 @@ fn test_proximity_auto_speech_no_repeat_for_same_person() {
 
     scene.update_proximity_speech();
     scene.update_proximity_speech();
-    assert_eq!(scene.messages.len(), 1, "speech should not repeat for same person");
+    assert_eq!(
+        scene.messages.len(),
+        1,
+        "speech should not repeat for same person"
+    );
 }
 
 #[test]
@@ -96,18 +98,28 @@ fn test_proximity_auto_speech_resets_after_leaving_range() {
 
     scene.state.hero_x = 100 + PROXIMITY_SPEECH_RANGE as u16 + 10;
     scene.update_proximity_speech();
-    assert_eq!(scene.messages.len(), 1, "leaving range should not emit speech");
+    assert_eq!(
+        scene.messages.len(),
+        1,
+        "leaving range should not emit speech"
+    );
 
     scene.state.hero_x = 100;
     scene.update_proximity_speech();
-    assert_eq!(scene.messages.len(), 2, "re-approach should emit speech again");
+    assert_eq!(
+        scene.messages.len(),
+        2,
+        "re-approach should emit speech again"
+    );
 }
 
 #[test]
 fn test_proximity_auto_speech_switches_to_new_person() {
     let mut scene = scene_with_speeches();
     add_setfig(&mut scene, 13, 100, 100); // Beggar
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_NECROMANCER,
         race: RACE_NECROMANCER,
@@ -134,9 +146,13 @@ fn test_proximity_auto_speech_switches_to_new_person() {
 fn test_necromancer_death_transforms_to_woodcutter() {
     // SPEC §15.7: on death, necromancer → race 10 (Woodcutter), vitality 10,
     // state Still, weapon 0.  NPC must remain active (not despawned).
-    use crate::game::npc::{NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER, NpcState};
+    use crate::game::npc::{
+        NpcState, NpcTable, NPC_TYPE_NECROMANCER, RACE_NECROMANCER, RACE_WOODCUTTER,
+    };
     let mut scene = GameplayScene::new();
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_NECROMANCER,
         race: RACE_NECROMANCER,
@@ -151,11 +167,24 @@ fn test_necromancer_death_transforms_to_woodcutter() {
     // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
     scene.apply_hit(0, 2, 0, 0);
     let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
-    assert_eq!(npc.race, RACE_WOODCUTTER, "necromancer must transform to Woodcutter (race 10)");
-    assert_eq!(npc.vitality, 10, "transformed woodcutter must have vitality 10");
-    assert_eq!(npc.state, NpcState::Still, "state must be Still after transform");
+    assert_eq!(
+        npc.race, RACE_WOODCUTTER,
+        "necromancer must transform to Woodcutter (race 10)"
+    );
+    assert_eq!(
+        npc.vitality, 10,
+        "transformed woodcutter must have vitality 10"
+    );
+    assert_eq!(
+        npc.state,
+        NpcState::Still,
+        "state must be Still after transform"
+    );
     assert_eq!(npc.weapon, 0, "weapon must be cleared after transform");
-    assert!(npc.active, "NPC must remain active after necromancer transform");
+    assert!(
+        npc.active,
+        "NPC must remain active after necromancer transform"
+    );
 }
 
 #[test]
@@ -165,7 +194,9 @@ fn test_necromancer_death_drops_talisman_at_death_location() {
     let nx: i16 = 500;
     let ny: i16 = 600;
     let mut scene = GameplayScene::new();
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_NECROMANCER,
         race: RACE_NECROMANCER,
@@ -183,16 +214,32 @@ fn test_necromancer_death_drops_talisman_at_death_location() {
         let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
         (npc.x as u16, npc.y as u16)
     };
-    let talisman = scene.state.world_objects.iter()
+    let talisman = scene
+        .state
+        .world_objects
+        .iter()
         .find(|o| o.ob_id == 139)
         .expect("Talisman (ob_id 139) must be present in world_objects after necromancer death");
-    assert_eq!(talisman.ob_stat, 1, "talisman must be a ground item (ob_stat 1)");
-    assert_eq!(talisman.x, expected_x, "talisman x must match death location");
+    assert_eq!(
+        talisman.ob_stat, 1,
+        "talisman must be a ground item (ob_stat 1)"
+    );
+    assert_eq!(
+        talisman.x, expected_x,
+        "talisman x must match death location"
+    );
     // leave_item places the drop at y+10 (reference/logic/quests.md#leave_item,
     // fmain2.c:1193).
-    assert_eq!(talisman.y, expected_y + 10, "talisman y must equal death y + 10 (leave_item offset)");
+    assert_eq!(
+        talisman.y,
+        expected_y + 10,
+        "talisman y must equal death y + 10 (leave_item offset)"
+    );
     assert!(talisman.visible, "talisman must be visible");
-    assert_eq!(talisman.region, scene.state.region_num, "talisman region must match current region");
+    assert_eq!(
+        talisman.region, scene.state.region_num,
+        "talisman region must match current region"
+    );
 }
 
 #[test]
@@ -200,7 +247,9 @@ fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
     // Killing a non-necromancer must not spawn a talisman.
     use crate::game::npc::{NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
     let mut scene = GameplayScene::new();
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
@@ -223,44 +272,61 @@ fn test_talisman_pickup_triggers_victory() {
     // Spec §15.8 (fmain.c:3244-3247): when stuff[22] is set after an item
     // pickup, quitflag=TRUE, viewstatus=2, and the victory sequence fires.
     let mut gs = GameplayScene::new();
-    assert!(!gs.is_victory(), "fresh scene should not be in victory state");
+    assert!(
+        !gs.is_victory(),
+        "fresh scene should not be in victory state"
+    );
     assert!(!gs.state.quitflag);
 
     // Place the Necromancer's Talisman (world object 139) on the ground at
     // the hero's position, then invoke Take via do_option.
-    gs.state.world_objects.push(crate::game::game_state::WorldObject {
-        ob_id: 139,
-        ob_stat: 1,
-        region: gs.state.region_num,
-        x: gs.state.hero_x,
-        y: gs.state.hero_y,
-        visible: true,
-        goal: 0,
-    });
+    gs.state
+        .world_objects
+        .push(crate::game::game_state::WorldObject {
+            ob_id: 139,
+            ob_stat: 1,
+            region: gs.state.region_num,
+            x: gs.state.hero_x,
+            y: gs.state.hero_y,
+            visible: true,
+            goal: 0,
+        });
     gs.do_option(GameAction::Take);
 
     assert!(gs.is_victory(), "picking up Talisman must trigger victory");
     assert!(gs.state.quitflag, "quitflag must be set per spec §15.8");
-    assert_eq!(gs.state.viewstatus, 2, "viewstatus must be 2 per spec §15.8");
-    assert_eq!(gs.state.stuff()[22], 1, "stuff[22] must record the Talisman");
+    assert_eq!(
+        gs.state.viewstatus, 2,
+        "viewstatus must be 2 per spec §15.8"
+    );
+    assert_eq!(
+        gs.state.stuff()[22],
+        1,
+        "stuff[22] must record the Talisman"
+    );
 }
 
 #[test]
 fn test_non_talisman_pickup_does_not_trigger_victory() {
     let mut gs = GameplayScene::new();
     // Rose (world obj 141 → stuff[23]) or any non-Talisman item.
-    gs.state.world_objects.push(crate::game::game_state::WorldObject {
-        ob_id: 141,
-        ob_stat: 1,
-        region: gs.state.region_num,
-        x: gs.state.hero_x,
-        y: gs.state.hero_y,
-        visible: true,
-        goal: 0,
-    });
+    gs.state
+        .world_objects
+        .push(crate::game::game_state::WorldObject {
+            ob_id: 141,
+            ob_stat: 1,
+            region: gs.state.region_num,
+            x: gs.state.hero_x,
+            y: gs.state.hero_y,
+            visible: true,
+            goal: 0,
+        });
     gs.do_option(GameAction::Take);
 
-    assert!(!gs.is_victory(), "non-Talisman pickups must not trigger victory");
+    assert!(
+        !gs.is_victory(),
+        "non-Talisman pickups must not trigger victory"
+    );
     assert!(!gs.state.quitflag);
 }
 
@@ -271,10 +337,10 @@ fn test_facing_to_frame_base() {
     assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
     assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
     assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(3), 0);  // SE → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(4), 0);  // S  → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(5), 8);  // SW → westwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(6), 8);  // W  → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(3), 0); // SE → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(4), 0); // S  → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(5), 8); // SW → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(6), 8); // W  → westwalk
     assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
 }
 
@@ -303,13 +369,13 @@ fn test_compass_dir_for_input_maps_all_directions() {
     // RESEARCH §4.5: input direction drives the highlight wedge.
     let cases = [
         (Direction::NW, 0usize),
-        (Direction::N,  1),
+        (Direction::N, 1),
         (Direction::NE, 2),
-        (Direction::E,  3),
+        (Direction::E, 3),
         (Direction::SE, 4),
-        (Direction::S,  5),
+        (Direction::S, 5),
         (Direction::SW, 6),
-        (Direction::W,  7),
+        (Direction::W, 7),
     ];
     for (dir, expected) in cases {
         assert_eq!(compass_dir_for_input(dir), expected, "direction {:?}", dir);
@@ -328,34 +394,76 @@ fn test_compass_dir_for_input_regression_after_release() {
 fn test_npc_type_to_cfile() {
     use crate::game::npc::*;
     // Enemy humans → ogre sheet
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_ENEMY), Some(6));
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_ENEMY),
+        Some(6)
+    );
     // Named humans → None (SetFig pass)
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_NORMAL), None);
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_SHOPKEEPER), None);
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_NORMAL),
+        None
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_SHOPKEEPER),
+        None
+    );
     // Enemy types
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_ORC,      RACE_ENEMY),  Some(6));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_GHOST,    RACE_UNDEAD), Some(7));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SKELETON, RACE_UNDEAD), Some(7));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_WRAITH,   RACE_WRAITH), Some(7));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_DRAGON,   RACE_ENEMY),  Some(10));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_SWAN,     RACE_NORMAL), Some(11));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HORSE,    RACE_NORMAL), Some(5));
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_RAFT,     RACE_NORMAL), Some(4));
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_ORC, RACE_ENEMY),
+        Some(6)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_GHOST, RACE_UNDEAD),
+        Some(7)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_SKELETON, RACE_UNDEAD),
+        Some(7)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_WRAITH, RACE_WRAITH),
+        Some(7)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_DRAGON, RACE_ENEMY),
+        Some(10)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_SWAN, RACE_NORMAL),
+        Some(11)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_HORSE, RACE_NORMAL),
+        Some(5)
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_RAFT, RACE_NORMAL),
+        Some(4)
+    );
     // Inactive / container → None
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE,      RACE_NORMAL), None);
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL), None);
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_NONE, RACE_NORMAL),
+        None
+    );
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_CONTAINER, RACE_NORMAL),
+        None
+    );
     // Unknown type → default ogre sheet
     assert_eq!(GameplayScene::npc_type_to_cfile(99, RACE_ENEMY), Some(6));
     // Beggar → SetFig pass (not enemy)
-    assert_eq!(GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR), None);
+    assert_eq!(
+        GameplayScene::npc_type_to_cfile(NPC_TYPE_HUMAN, RACE_BEGGAR),
+        None
+    );
 }
 
 #[test]
 fn test_enemy_npc_render_pass_writes_pixels() {
-    use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
     use crate::game::game_state::GameState;
-    use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+    use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_ORC, RACE_ENEMY};
+    use crate::game::sprites::{SpriteSheet, SPRITE_H, SPRITE_W};
 
     // Build a minimal mock sprite sheet for cfile 6 (ogre).
     // Pixel value 0 is non-transparent (only 31 is transparent).
@@ -377,12 +485,14 @@ fn test_enemy_npc_render_pass_writes_pixels() {
     state.hero_y = 26;
 
     // Place an ORC near the hero but offset so it appears in viewport
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
-        x: 80,  // rel_x = 80 - 0 - 8 = 72, well within 304px viewport
-        y: 80,  // rel_y = 80 - 0 - 26 = 54
+        x: 80, // rel_x = 80 - 0 - 8 = 72, well within 304px viewport
+        y: 80, // rel_y = 80 - 0 - 26 = 54
         vitality: 10,
         gold: 5,
         speed: 2,
@@ -392,7 +502,14 @@ fn test_enemy_npc_render_pass_writes_pixels() {
 
     let mut framebuf = vec![31u8; (MAP_DST_W * MAP_DST_H) as usize]; // all transparent
     GameplayScene::blit_actors_to_framebuf(
-        &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+        &sheets,
+        &None,
+        &state,
+        &Some(table),
+        0,
+        0,
+        &mut framebuf,
+        false,
     );
 
     // At least some pixels in the ORC's blit area should have been overwritten to 0
@@ -411,10 +528,10 @@ fn test_setfig_render_pass_writes_pixels() {
     // not crash when a HUMAN/SHOPKEEPER NPC (setfig) is present in the table
     // (it should be silently skipped since npc_type_to_cfile returns None for
     // non-enemy humans).
-    use crate::game::sprites::{SpriteSheet, SPRITE_W, SPRITE_H};
-    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
     use crate::game::game_state::GameState;
-    use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+    use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
+    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_HUMAN, RACE_SHOPKEEPER};
+    use crate::game::sprites::{SpriteSheet, SPRITE_H, SPRITE_W};
 
     let mock_sheet = SpriteSheet {
         cfile_idx: 15,
@@ -429,12 +546,17 @@ fn test_setfig_render_pass_writes_pixels() {
     state.hero_x = 8;
     state.hero_y = 26;
 
-    let mut table = NpcTable { npcs: Default::default() };
+    let mut table = NpcTable {
+        npcs: Default::default(),
+    };
     table.npcs[0] = Npc {
         npc_type: NPC_TYPE_HUMAN,
         race: RACE_SHOPKEEPER,
-        x: 80, y: 80,
-        vitality: 10, gold: 0, speed: 0,
+        x: 80,
+        y: 80,
+        vitality: 10,
+        gold: 0,
+        speed: 0,
         active: true,
         ..Default::default()
     };
@@ -443,7 +565,14 @@ fn test_setfig_render_pass_writes_pixels() {
     // blit_actors_to_framebuf should skip the human/shopkeeper NPC (setfig)
     // without crashing.
     GameplayScene::blit_actors_to_framebuf(
-        &sheets, &None, &state, &Some(table), 0, 0, &mut framebuf, false,
+        &sheets,
+        &None,
+        &state,
+        &Some(table),
+        0,
+        0,
+        &mut framebuf,
+        false,
     );
 
     // The setfig NPC should NOT have been rendered by blit_actors_to_framebuf
@@ -452,7 +581,10 @@ fn test_setfig_render_pass_writes_pixels() {
     let has_written = framebuf[setfig_area_start..setfig_area_start + SPRITE_W]
         .iter()
         .any(|&p| p == 0);
-    assert!(!has_written, "setfig NPC should not be rendered by blit_actors_to_framebuf");
+    assert!(
+        !has_written,
+        "setfig NPC should not be rendered by blit_actors_to_framebuf"
+    );
 }
 
 #[test]
@@ -478,13 +610,17 @@ fn test_scatter_items_adds_world_objects() {
             ob_id: item_id as u8,
             ob_stat: 1,
             region: state.region_num,
-            x, y,
+            x,
+            y,
             visible: true,
             goal: 0,
         });
     }
     assert_eq!(state.world_objects.len(), 5);
-    assert!(state.world_objects.iter().all(|o| o.ob_id != TALISMAN_IDX as u8));
+    assert!(state
+        .world_objects
+        .iter()
+        .all(|o| o.ob_id != TALISMAN_IDX as u8));
 }
 
 #[test]
@@ -508,7 +644,7 @@ fn test_cycle_weapon_next() {
     stuff[0] = 1; // Dirk (weapon 1)
     stuff[2] = 1; // Sword (weapon 3)
     stuff[4] = 1; // Wand (weapon 5)
-    // From Dirk (1), next should be Sword (3)
+                  // From Dirk (1), next should be Sword (3)
     assert_eq!(cycle_weapon_slot(1, 1, &stuff), Some(3));
     // From Sword (3), next should be Wand (5)
     assert_eq!(cycle_weapon_slot(3, 1, &stuff), Some(5));
@@ -522,7 +658,7 @@ fn test_cycle_weapon_prev() {
     stuff[0] = 1; // Dirk (weapon 1)
     stuff[2] = 1; // Sword (weapon 3)
     stuff[4] = 1; // Wand (weapon 5)
-    // From Dirk (1), prev should wrap to Wand (5)
+                  // From Dirk (1), prev should wrap to Wand (5)
     assert_eq!(cycle_weapon_slot(1, -1, &stuff), Some(5));
     // From Sword (3), prev should be Dirk (1)
     assert_eq!(cycle_weapon_slot(3, -1, &stuff), Some(1));
@@ -606,8 +742,11 @@ fn test_menu_cursor_position_persists() {
 fn test_npc_animation_frame_walking_default() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
     let npc = Npc {
-        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-        facing: 4, state: NpcState::Walking, active: true,
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        facing: 4,
+        state: NpcState::Walking,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
@@ -619,8 +758,11 @@ fn test_npc_animation_frame_walking_default() {
 fn test_npc_animation_frame_still_default() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
     let npc = Npc {
-        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-        facing: 4, state: NpcState::Still, active: true,
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        facing: 4,
+        state: NpcState::Still,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 1);
@@ -631,8 +773,11 @@ fn test_npc_animation_frame_still_default() {
 fn test_npc_animation_frame_wraith_no_cycle() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_WRAITH, RACE_WRAITH};
     let npc = Npc {
-        npc_type: NPC_TYPE_WRAITH, race: RACE_WRAITH,
-        facing: 4, state: NpcState::Walking, active: true,
+        npc_type: NPC_TYPE_WRAITH,
+        race: RACE_WRAITH,
+        facing: 4,
+        state: NpcState::Walking,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
@@ -643,8 +788,11 @@ fn test_npc_animation_frame_wraith_no_cycle() {
 fn test_npc_animation_frame_snake_walking() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
     let npc = Npc {
-        npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
-        facing: 4, state: NpcState::Walking, active: true,
+        npc_type: NPC_TYPE_SNAKE,
+        race: RACE_SNAKE,
+        facing: 4,
+        state: NpcState::Walking,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
@@ -657,8 +805,11 @@ fn test_npc_animation_frame_snake_walking() {
 fn test_npc_animation_frame_snake_still() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_SNAKE, RACE_SNAKE};
     let npc = Npc {
-        npc_type: NPC_TYPE_SNAKE, race: RACE_SNAKE,
-        facing: 4, state: NpcState::Still, active: true,
+        npc_type: NPC_TYPE_SNAKE,
+        race: RACE_SNAKE,
+        facing: 4,
+        state: NpcState::Still,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
@@ -669,8 +820,11 @@ fn test_npc_animation_frame_snake_still() {
 fn test_npc_animation_frame_wraps_short_sheet() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
     let npc = Npc {
-        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-        facing: 4, state: NpcState::Walking, active: true,
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        facing: 4,
+        state: NpcState::Walking,
+        active: true,
         ..Default::default()
     };
     let frame = GameplayScene::npc_animation_frame(&npc, 0, 6, 5);
@@ -681,8 +835,11 @@ fn test_npc_animation_frame_wraps_short_sheet() {
 fn test_npc_animation_frame_dying() {
     use crate::game::npc::{Npc, NpcState, NPC_TYPE_ORC, RACE_ENEMY};
     let npc = Npc {
-        npc_type: NPC_TYPE_ORC, race: RACE_ENEMY,
-        facing: 4, state: NpcState::Dying, active: true,
+        npc_type: NPC_TYPE_ORC,
+        race: RACE_ENEMY,
+        facing: 4,
+        state: NpcState::Dying,
+        active: true,
         ..Default::default()
     };
     assert_eq!(GameplayScene::npc_animation_frame(&npc, 0, 0, 64), 0);
@@ -766,7 +923,10 @@ fn t_f118_clear_inner_rect_clears_visible_message_queue() {
         toml::from_str(&cfg).expect("faery.toml must parse");
     let mut scene = GameplayScene::new();
     scene.messages.push("seed message");
-    assert!(!scene.messages.is_empty(), "precondition: queue must be non-empty");
+    assert!(
+        !scene.messages.is_empty(),
+        "precondition: queue must be non-empty"
+    );
 
     scene.debug_enqueue_sequence_for_test(vec![
         crate::game::narrative_sequence::NarrativeStep::ClearInnerRect,
@@ -774,7 +934,10 @@ fn t_f118_clear_inner_rect_clears_visible_message_queue() {
 
     scene.debug_tick_and_execute_sequence_only(1, &lib);
 
-    assert!(scene.messages.is_empty(), "ClearInnerRect must clear visible queue");
+    assert!(
+        scene.messages.is_empty(),
+        "ClearInnerRect must clear visible queue"
+    );
     assert_eq!(scene.debug_active_step_index(), None);
 }
 
@@ -838,8 +1001,8 @@ mod look_handler_tests {
         scene.state.hero_x = 1000;
         scene.state.hero_y = 1000;
         scene.state.world_objects.push(WorldObject {
-            ob_id: 22,        // arbitrary pickable item
-            ob_stat: 5,       // hidden (revealed by Look)
+            ob_id: 22,  // arbitrary pickable item
+            ob_stat: 5, // hidden (revealed by Look)
             region,
             x: ox,
             y: oy,
@@ -899,7 +1062,10 @@ mod look_handler_tests {
         );
 
         scene.do_option(GameAction::Look);
-        assert!(scene.state.world_objects[0].visible, "Look should reveal it");
+        assert!(
+            scene.state.world_objects[0].visible,
+            "Look should reveal it"
+        );
 
         // After Look, Take should find the now-visible item.
         assert!(
@@ -915,14 +1081,14 @@ mod combat_tests {
 
     #[test]
     fn test_push_offset_directions() {
-        assert_eq!(push_offset(0, 2), (0, -2));   // N
-        assert_eq!(push_offset(2, 2), (2, 0));    // E
-        assert_eq!(push_offset(4, 2), (0, 2));    // S
-        assert_eq!(push_offset(6, 2), (-2, 0));   // W
-        assert_eq!(push_offset(1, 2), (2, -2));   // NE
-        assert_eq!(push_offset(3, 2), (2, 2));    // SE
-        assert_eq!(push_offset(5, 2), (-2, 2));   // SW
-        assert_eq!(push_offset(7, 2), (-2, -2));  // NW
+        assert_eq!(push_offset(0, 2), (0, -2)); // N
+        assert_eq!(push_offset(2, 2), (2, 0)); // E
+        assert_eq!(push_offset(4, 2), (0, 2)); // S
+        assert_eq!(push_offset(6, 2), (-2, 0)); // W
+        assert_eq!(push_offset(1, 2), (2, -2)); // NE
+        assert_eq!(push_offset(3, 2), (2, 2)); // SE
+        assert_eq!(push_offset(5, 2), (-2, 2)); // SW
+        assert_eq!(push_offset(7, 2), (-2, -2)); // NW
     }
 }
 
@@ -931,7 +1097,7 @@ mod search_body_tests {
     use super::*;
     use crate::game::game_library::NarrConfig;
     use crate::game::npc::{
-        Npc, NpcState, NpcTable, NPC_TYPE_ORC, RACE_ENEMY, RACE_SNAKE, RACE_NECROMANCER,
+        Npc, NpcState, NpcTable, NPC_TYPE_ORC, RACE_ENEMY, RACE_NECROMANCER, RACE_SNAKE,
     };
 
     fn make_scene_with_dead_npc(weapon: u8, race: u8) -> GameplayScene {
@@ -946,7 +1112,9 @@ mod search_body_tests {
             place_msg: vec![],
             inside_msg: vec![],
         };
-        let mut table = NpcTable { npcs: Default::default() };
+        let mut table = NpcTable {
+            npcs: Default::default(),
+        };
         table.npcs[0] = Npc {
             npc_type: NPC_TYPE_ORC,
             race,
@@ -1000,11 +1168,21 @@ mod search_body_tests {
         assert_eq!(scene.state.stuff()[3], 1, "Bow slot incremented");
         // Arrow accumulator (stuff[35]) advanced by N >= 2
         let arrows = scene.state.stuff()[35];
-        assert!(arrows >= 2 && arrows <= 9, "rand8()+2 in [2,9], got {}", arrows);
+        assert!(
+            arrows >= 2 && arrows <= 9,
+            "rand8()+2 in [2,9], got {}",
+            arrows
+        );
         // Treasure phase skipped: nothing else should change beyond
         // stuff[3] (bow) and stuff[35] (arrow accumulator).
-        for (i, (b, a)) in stuff_before.iter().zip(scene.state.stuff().iter()).enumerate() {
-            if i == 3 || i == 35 { continue; }
+        for (i, (b, a)) in stuff_before
+            .iter()
+            .zip(scene.state.stuff().iter())
+            .enumerate()
+        {
+            if i == 3 || i == 35 {
+                continue;
+            }
             assert_eq!(b, a, "slot {} should not change in bow short-circuit", i);
         }
         assert!(scene.npc_table.as_ref().unwrap().npcs[0].looted);
@@ -1049,7 +1227,10 @@ mod search_body_tests {
         let bname = scene.brother_name().to_string();
         scene.search_body(0, &bname);
         assert_eq!(scene.messages.latest().unwrap(), "No time for that now!");
-        assert!(!scene.npc_table.as_ref().unwrap().npcs[0].looted, "alive body untouched");
+        assert!(
+            !scene.npc_table.as_ref().unwrap().npcs[0].looted,
+            "alive body untouched"
+        );
         assert_eq!(stuff_before, scene.state.stuff().to_vec());
     }
 
@@ -1087,10 +1268,12 @@ mod search_body_tests {
         // (race=1, treasure_row=1) and scan a few ticks until
         // roll_treasure returns LootDrop::Gold.
         use crate::game::loot::{roll_treasure, LootDrop};
-        let temp = Npc { race: 1, ..Default::default() };
-        let gold_tick = (0u32..256).find(|t| matches!(
-            roll_treasure(&temp, *t), Some(LootDrop::Gold(_))
-        ));
+        let temp = Npc {
+            race: 1,
+            ..Default::default()
+        };
+        let gold_tick =
+            (0u32..256).find(|t| matches!(roll_treasure(&temp, *t), Some(LootDrop::Gold(_))));
         let Some(tick) = gold_tick else {
             // Skip if no gold column hit in 256 ticks (acceptable per loot tests).
             return;
@@ -1101,7 +1284,10 @@ mod search_body_tests {
         let wealth_before = scene.state.wealth;
         let bname = scene.brother_name().to_string();
         scene.search_body(0, &bname);
-        assert_eq!(scene.state.gold, gold_before, "body-search must not touch state.gold");
+        assert_eq!(
+            scene.state.gold, gold_before,
+            "body-search must not touch state.gold"
+        );
         assert!(scene.state.wealth > wealth_before, "wealth must increase");
     }
 
@@ -1109,7 +1295,7 @@ mod search_body_tests {
     fn test_take_dispatches_to_body_when_npc_nearer_than_item() {
         use crate::game::game_state::WorldObject;
         let mut scene = make_scene_with_dead_npc(2, RACE_SNAKE); // Mace
-        // Place a ground item further than the body.
+                                                                 // Place a ground item further than the body.
         scene.state.world_objects.push(WorldObject {
             ob_id: 12, // Dirk
             ob_stat: 1,
@@ -1145,7 +1331,9 @@ mod search_body_tests {
         let mut scene = make_scene_with_dead_npc(0, RACE_ENEMY);
         // Manually flip via the path used by ClearEncounters.
         if let Some(ref mut table) = scene.npc_table {
-            for npc in table.npcs.iter_mut() { npc.active = false; }
+            for npc in table.npcs.iter_mut() {
+                npc.active = false;
+            }
         }
         let nf = scene.nearest_fig(0, 100);
         assert!(nf.is_none(), "all bodies must be gone after clear");
@@ -1186,7 +1374,11 @@ mod search_body_tests {
             ..Default::default()
         };
         npc.mark_dead();
-        assert_eq!(stuff_before, state.stuff().to_vec(), "no inventory change on kill");
+        assert_eq!(
+            stuff_before,
+            state.stuff().to_vec(),
+            "no inventory change on kill"
+        );
         assert_eq!(state.gold, gold_before, "no gold change on kill");
         let _ = RACE_NECROMANCER; // keep import alive
     }
@@ -1206,7 +1398,10 @@ mod death_tests {
         scene.goodfairy = -1; // trigger rescue check
 
         // With luck = 1, should qualify for fairy rescue
-        assert!(scene.state.luck >= 1, "luck=1 should pass the fairy rescue threshold");
+        assert!(
+            scene.state.luck >= 1,
+            "luck=1 should pass the fairy rescue threshold"
+        );
     }
 
     #[test]
@@ -1215,7 +1410,10 @@ mod death_tests {
         let mut scene = GameplayScene::new();
         scene.state.luck = 0;
 
-        assert!(scene.state.luck < 1, "luck=0 should fail the fairy rescue threshold");
+        assert!(
+            scene.state.luck < 1,
+            "luck=0 should fail the fairy rescue threshold"
+        );
     }
 
     #[test]
@@ -1243,9 +1441,15 @@ mod death_tests {
 
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 5, bname);
-        assert!(!msg.is_empty(), "death event message 5 (combat) should exist");
-        assert!(msg.contains("killed") || msg.contains("hit"),
-                "combat death message should mention being hit/killed, got: {}", msg);
+        assert!(
+            !msg.is_empty(),
+            "death event message 5 (combat) should exist"
+        );
+        assert!(
+            msg.contains("killed") || msg.contains("hit"),
+            "combat death message should mention being hit/killed, got: {}",
+            msg
+        );
     }
 
     #[test]
@@ -1258,9 +1462,15 @@ mod death_tests {
 
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 6, bname);
-        assert!(!msg.is_empty(), "death event message 6 (drowning) should exist");
-        assert!(msg.contains("drown") || msg.contains("water"),
-                "drowning death message should mention drowning/water, got: {}", msg);
+        assert!(
+            !msg.is_empty(),
+            "death event message 6 (drowning) should exist"
+        );
+        assert!(
+            msg.contains("drown") || msg.contains("water"),
+            "drowning death message should mention drowning/water, got: {}",
+            msg
+        );
     }
 
     #[test]
@@ -1274,9 +1484,15 @@ mod death_tests {
         let bname = "Julian";
         let msg = crate::game::events::event_msg(&lib.narr, 27, bname);
         // Event 27 should be lava death per SPEC §20.1
-        assert!(!msg.is_empty(), "death event message 27 (lava) should exist");
-        assert!(msg.contains("lava") || msg.contains("perished"),
-                "lava death message should mention lava/perished, got: {}", msg);
+        assert!(
+            !msg.is_empty(),
+            "death event message 27 (lava) should exist"
+        );
+        assert!(
+            msg.contains("lava") || msg.contains("perished"),
+            "lava death message should mention lava/perished, got: {}",
+            msg
+        );
     }
 
     #[test]
@@ -1318,8 +1534,10 @@ mod death_tests {
         scene.tick_goodfairy_countdown(&lib, 0);
         assert!(scene.dying, "dying must be true after vitality drops to 0");
         assert_eq!(scene.goodfairy, 255, "countdown must start at 255");
-        assert_eq!(scene.state.luck, 15,
-            "SPEC §20.2: death deducts 5 luck once at death-init");
+        assert_eq!(
+            scene.state.luck, 15,
+            "SPEC §20.2: death deducts 5 luck once at death-init"
+        );
     }
 
     #[test]
@@ -1346,8 +1564,10 @@ mod death_tests {
         }
 
         assert!(!scene.dying, "fairy rescue should have fired");
-        assert_eq!(scene.state.luck, 15,
-            "fairy rescue must not apply a second luck deduction");
+        assert_eq!(
+            scene.state.luck, 15,
+            "fairy rescue must not apply a second luck deduction"
+        );
     }
 
     #[test]
@@ -1359,7 +1579,10 @@ mod death_tests {
         scene.goodfairy = 255;
         scene.state.luck = 20; // above gate threshold — won't trigger succession
         scene.tick_goodfairy_countdown(&lib, 1);
-        assert_eq!(scene.goodfairy, 254, "countdown must decrement by delta each tick");
+        assert_eq!(
+            scene.goodfairy, 254,
+            "countdown must decrement by delta each tick"
+        );
         scene.tick_goodfairy_countdown(&lib, 1);
         assert_eq!(scene.goodfairy, 253);
     }
@@ -1372,9 +1595,9 @@ mod death_tests {
         let mut scene = GameplayScene::new();
         scene.dying = true;
         scene.luck_gate_fired = true; // gate already passed (luck was >= 1)
-        scene.goodfairy = 2;          // one tick away from 1
+        scene.goodfairy = 2; // one tick away from 1
         scene.state.luck = 20;
-        scene.state.brave = 35;       // heal_cap = 15 + 35/4 = 23
+        scene.state.brave = 35; // heal_cap = 15 + 35/4 = 23
         scene.state.hunger = 80;
         scene.state.fatigue = 90;
         scene.state.battleflag = true;
@@ -1385,15 +1608,24 @@ mod death_tests {
 
         // Should NOT fire yet at goodfairy=2→1 after one delta=1 tick
         scene.tick_goodfairy_countdown(&lib, 1);
-        assert_eq!(scene.goodfairy, 1, "goodfairy should be at 1 before rescue fires");
+        assert_eq!(
+            scene.goodfairy, 1,
+            "goodfairy should be at 1 before rescue fires"
+        );
         // goodfairy is now 1, so rescue fires this tick
         assert!(!scene.dying, "dying must clear once goodfairy reaches 1");
         assert_eq!(scene.state.hero_x, 5000, "hero must teleport to safe_x");
         assert_eq!(scene.state.hero_y, 6000, "hero must teleport to safe_y");
-        assert_eq!(scene.state.vitality, 23, "vitality must be restored to heal_cap (15+brave/4)");
+        assert_eq!(
+            scene.state.vitality, 23,
+            "vitality must be restored to heal_cap (15+brave/4)"
+        );
         assert_eq!(scene.state.hunger, 0, "hunger must be cleared on revive");
         assert_eq!(scene.state.fatigue, 0, "fatigue must be cleared on revive");
-        assert!(!scene.state.battleflag, "battleflag must be cleared on revive");
+        assert!(
+            !scene.state.battleflag,
+            "battleflag must be cleared on revive"
+        );
         // SPEC §20.2: the 5-luck cost is applied once at death-init, not at
         // fairy rescue. This test starts already in the dying state, so no
         // deduction should occur here.
@@ -1408,7 +1640,7 @@ mod death_tests {
         let mut scene = GameplayScene::new();
         scene.dying = true;
         scene.goodfairy = 200; // one tick away from triggering the luck gate
-        scene.state.luck = 0;  // fairy NOT available
+        scene.state.luck = 0; // fairy NOT available
         scene.state.brother = 1;
         scene.state.active_brother = 0;
         scene.state.brother_alive = [true, true, true];
@@ -1417,15 +1649,21 @@ mod death_tests {
         scene.tick_goodfairy_countdown(&lib, 1);
 
         // With luck=0, brother succession must have triggered (dying cleared).
-        assert!(!scene.dying,
-            "dying must clear at luck gate when luck < 1 (brother succession)");
+        assert!(
+            !scene.dying,
+            "dying must clear at luck gate when luck < 1 (brother succession)"
+        );
         // Brother must have changed (Julian → Phillip), not fairy rescued.
-        assert_eq!(scene.state.brother, 2,
-            "brother must advance to Phillip (2) on succession, not stay as Julian (1)");
+        assert_eq!(
+            scene.state.brother, 2,
+            "brother must advance to Phillip (2) on succession, not stay as Julian (1)"
+        );
         // No fairy rescue message should have been emitted.
         let transcript = scene.messages.transcript().join(" ");
-        assert!(!transcript.contains("faery saved"),
-            "fairy rescue message must NOT appear when luck < 1");
+        assert!(
+            !transcript.contains("faery saved"),
+            "fairy rescue message must NOT appear when luck < 1"
+        );
     }
 
     #[test]
@@ -1434,7 +1672,7 @@ mod death_tests {
         let mut scene = GameplayScene::new();
         scene.dying = true;
         scene.goodfairy = 200; // one tick away from triggering luck gate
-        scene.state.luck = 0;  // force brother succession path
+        scene.state.luck = 0; // force brother succession path
         scene.state.brother = 1;
         scene.state.active_brother = 0;
         scene.state.brother_alive = [true, true, true];
@@ -1464,7 +1702,7 @@ mod death_tests {
         let mut scene = GameplayScene::new();
         scene.dying = true;
         scene.goodfairy = 200; // one tick away from triggering luck gate
-        scene.state.luck = 0;  // force brother succession path
+        scene.state.luck = 0; // force brother succession path
         scene.state.brother = 2;
         scene.state.active_brother = 1;
         scene.state.brother_alive = [true, true, true];
@@ -1495,25 +1733,25 @@ mod death_tests {
         scene.state.princess = 0;
 
         while scene.state.world_objects.len() <= 9 {
-            scene.state.world_objects.push(crate::game::game_state::WorldObject {
-                ob_id: 0,
-                ob_stat: 0,
-                region: 0,
-                x: 0,
-                y: 0,
-                visible: false,
-                goal: 0,
-            });
+            scene
+                .state
+                .world_objects
+                .push(crate::game::game_state::WorldObject {
+                    ob_id: 0,
+                    ob_stat: 0,
+                    region: 0,
+                    x: 0,
+                    y: 0,
+                    visible: false,
+                    goal: 0,
+                });
         }
         scene.state.world_objects[9].ob_stat = 3;
 
         scene.debug_trigger_princess_rescue_for_test();
 
         let keys = scene.debug_sequence_placard_keys();
-        assert_eq!(
-            keys,
-            vec!["rescue_katra".to_string()]
-        );
+        assert_eq!(keys, vec!["rescue_katra".to_string()]);
 
         scene.debug_run_sequence_to_completion(&lib);
 
@@ -1526,11 +1764,13 @@ mod death_tests {
 
         let logs = scene.debug_drain_logs_for_test();
         assert!(
-            logs.iter().any(|line| line.contains("narrative: clear_inner_rect")),
+            logs.iter()
+                .any(|line| line.contains("narrative: clear_inner_rect")),
             "clear-inner-rect stage should execute and log"
         );
         assert!(
-            logs.iter().any(|line| line.contains("narrative: rescue_home_text")),
+            logs.iter()
+                .any(|line| line.contains("narrative: rescue_home_text")),
             "rescue-home stage should execute and log"
         );
     }
@@ -1540,22 +1780,34 @@ mod death_tests {
         let mut scene0 = GameplayScene::new();
         scene0.state.princess = 0;
         scene0.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene0.debug_sequence_placard_keys(), vec!["rescue_katra".to_string()]);
+        assert_eq!(
+            scene0.debug_sequence_placard_keys(),
+            vec!["rescue_katra".to_string()]
+        );
 
         let mut scene1 = GameplayScene::new();
         scene1.state.princess = 1;
         scene1.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene1.debug_sequence_placard_keys(), vec!["rescue_karla".to_string()]);
+        assert_eq!(
+            scene1.debug_sequence_placard_keys(),
+            vec!["rescue_karla".to_string()]
+        );
 
         let mut scene2 = GameplayScene::new();
         scene2.state.princess = 2;
         scene2.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene2.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
+        assert_eq!(
+            scene2.debug_sequence_placard_keys(),
+            vec!["rescue_kandy".to_string()]
+        );
 
         let mut scene5 = GameplayScene::new();
         scene5.state.princess = 5;
         scene5.debug_trigger_princess_rescue_for_test();
-        assert_eq!(scene5.debug_sequence_placard_keys(), vec!["rescue_kandy".to_string()]);
+        assert_eq!(
+            scene5.debug_sequence_placard_keys(),
+            vec!["rescue_kandy".to_string()]
+        );
     }
 
     #[test]
@@ -1613,9 +1865,14 @@ mod death_tests {
         let transcript = scene.messages.transcript();
 
         assert_eq!(scene.debug_active_step_index(), None);
-        assert!(transcript.len() > before, "ShowPlacard should emit placard text");
         assert!(
-            transcript.iter().any(|line| line.contains("Julian had rescued Katra,")),
+            transcript.len() > before,
+            "ShowPlacard should emit placard text"
+        );
+        assert!(
+            transcript
+                .iter()
+                .any(|line| line.contains("Julian had rescued Katra,")),
             "ShowPlacard output should come from authoritative placard text with substitution"
         );
     }
@@ -1640,10 +1897,12 @@ mod death_tests {
             "ShowRescueHomeText should push authoritative output"
         );
         assert!(
-            scene.messages
+            scene
+                .messages
                 .transcript()
                 .iter()
-                .any(|line| line.contains("After seeing the") || line.contains("Julian once more set")),
+                .any(|line| line.contains("After seeing the")
+                    || line.contains("Julian once more set")),
             "Home-text output should come from princess_home placard lines"
         );
     }
@@ -1665,7 +1924,9 @@ mod death_tests {
 
         assert_eq!(scene.messages.transcript().len(), before);
         assert!(
-            logs.iter().any(|line| line.contains("fidelity error: missing placard key missing_rescue_home_key")),
+            logs.iter()
+                .any(|line| line
+                    .contains("fidelity error: missing placard key missing_rescue_home_key")),
             "Missing home-text placard key should be logged as a fidelity error"
         );
     }
@@ -1705,7 +1966,8 @@ mod death_tests {
             "Missing placard key should be logged as a fidelity error"
         );
         assert!(
-            logs.iter().any(|line| line.contains("narrative: clear_inner_rect")),
+            logs.iter()
+                .any(|line| line.contains("narrative: clear_inner_rect")),
             "Sequence should continue to subsequent steps after missing placard key"
         );
     }
@@ -1778,7 +2040,7 @@ mod death_tests {
 #[cfg(test)]
 mod t1_arena_spectre_tests {
     use super::*;
-    use crate::game::game_library::{ZoneConfig, NarrConfig};
+    use crate::game::game_library::{NarrConfig, ZoneConfig};
     use crate::game::game_state::WorldObject;
     use crate::game::magic::{ITEM_LANTERN, ITEM_VIAL};
 
@@ -1804,15 +2066,17 @@ mod t1_arena_spectre_tests {
         let mut scene = test_scene();
 
         // Create zone with v3 == 9 (Necromancer arena)
-        scene.zones = vec![
-            ZoneConfig {
-                label: "necro_arena".to_string(),
-                etype: 60,
-                x1: 1000, y1: 1000,
-                x2: 2000, y2: 2000,
-                v1: 0, v2: 0, v3: 9,
-            }
-        ];
+        scene.zones = vec![ZoneConfig {
+            label: "necro_arena".to_string(),
+            etype: 60,
+            x1: 1000,
+            y1: 1000,
+            x2: 2000,
+            y2: 2000,
+            v1: 0,
+            v2: 0,
+            v3: 9,
+        }];
 
         // Place hero in the arena
         scene.state.hero_x = 1500;
@@ -1839,15 +2103,17 @@ mod t1_arena_spectre_tests {
         let mut scene = test_scene();
 
         // Create zone WITHOUT v3 == 9
-        scene.zones = vec![
-            ZoneConfig {
-                label: "normal_zone".to_string(),
-                etype: 10,
-                x1: 1000, y1: 1000,
-                x2: 2000, y2: 2000,
-                v1: 0, v2: 0, v3: 0,
-            }
-        ];
+        scene.zones = vec![ZoneConfig {
+            label: "normal_zone".to_string(),
+            etype: 10,
+            x1: 1000,
+            y1: 1000,
+            x2: 2000,
+            y2: 2000,
+            v1: 0,
+            v2: 0,
+            v3: 0,
+        }];
 
         // Place hero in normal zone
         scene.state.hero_x = 1500;
@@ -1980,7 +2246,7 @@ mod t1_arena_spectre_tests {
 
         // Add spectre and other objects
         scene.state.world_objects.push(WorldObject {
-            ob_id: 10,  // Spectre
+            ob_id: 10, // Spectre
             ob_stat: 3,
             region: 255,
             x: 12439,
@@ -1989,7 +2255,7 @@ mod t1_arena_spectre_tests {
             goal: 0,
         });
         scene.state.world_objects.push(WorldObject {
-            ob_id: 11,  // Ghost (different setfig)
+            ob_id: 11, // Ghost (different setfig)
             ob_stat: 3,
             region: 255,
             x: 5000,
@@ -1998,7 +2264,7 @@ mod t1_arena_spectre_tests {
             goal: 0,
         });
         scene.state.world_objects.push(WorldObject {
-            ob_id: 15,  // Chest (ground item)
+            ob_id: 15, // Chest (ground item)
             ob_stat: 1,
             region: 3,
             x: 6000,
@@ -2007,7 +2273,7 @@ mod t1_arena_spectre_tests {
             goal: 0,
         });
 
-        scene.state.lightlevel = 30;  // Night
+        scene.state.lightlevel = 30; // Night
         scene.update_spectre_visibility();
 
         // Spectre should be visible
@@ -2047,15 +2313,17 @@ mod quest_tests {
 
         // Setup princess as captive
         while gs.state.world_objects.len() <= 9 {
-            gs.state.world_objects.push(crate::game::game_state::WorldObject {
-                ob_id: 0,
-                ob_stat: 0,
-                region: 0,
-                x: 0,
-                y: 0,
-                visible: false,
-                goal: 0,
-            });
+            gs.state
+                .world_objects
+                .push(crate::game::game_state::WorldObject {
+                    ob_id: 0,
+                    ob_stat: 0,
+                    region: 0,
+                    x: 0,
+                    y: 0,
+                    visible: false,
+                    goal: 0,
+                });
         }
         gs.state.world_objects[9].ob_stat = 3; // Princess captive
 
@@ -2076,7 +2344,10 @@ mod quest_tests {
         assert_eq!(gs.state.princess, 1, "Princess counter should increment");
 
         // Check princess flag cleared
-        assert_eq!(gs.state.world_objects[9].ob_stat, 0, "Princess captive flag should be cleared");
+        assert_eq!(
+            gs.state.world_objects[9].ob_stat, 0,
+            "Princess captive flag should be cleared"
+        );
     }
 
     #[test]
@@ -2085,15 +2356,17 @@ mod quest_tests {
 
         // Setup world objects for bones and ghosts
         for _ in 0..5 {
-            gs.state.world_objects.push(crate::game::game_state::WorldObject {
-                ob_id: 0,
-                ob_stat: 0,
-                region: 255,
-                x: 0,
-                y: 0,
-                visible: false,
-                goal: 0,
-            });
+            gs.state
+                .world_objects
+                .push(crate::game::game_state::WorldObject {
+                    ob_id: 0,
+                    ob_stat: 0,
+                    region: 255,
+                    x: 0,
+                    y: 0,
+                    visible: false,
+                    goal: 0,
+                });
         }
         // Index 1-2: bones (ob_id 28)
         gs.state.world_objects[1].ob_id = 28;
@@ -2130,12 +2403,24 @@ mod quest_tests {
         }
 
         // Check bones set visible (ob_stat = 1)
-        assert_eq!(gs.state.world_objects[1].ob_stat, 1, "Bone 1 should be visible");
-        assert_eq!(gs.state.world_objects[2].ob_stat, 1, "Bone 2 should be visible");
+        assert_eq!(
+            gs.state.world_objects[1].ob_stat, 1,
+            "Bone 1 should be visible"
+        );
+        assert_eq!(
+            gs.state.world_objects[2].ob_stat, 1,
+            "Bone 2 should be visible"
+        );
 
         // Check ghosts set visible (ob_stat = 3)
-        assert_eq!(gs.state.world_objects[3].ob_stat, 3, "Ghost 1 should be visible");
-        assert_eq!(gs.state.world_objects[4].ob_stat, 3, "Ghost 2 should be visible");
+        assert_eq!(
+            gs.state.world_objects[3].ob_stat, 3,
+            "Ghost 1 should be visible"
+        );
+        assert_eq!(
+            gs.state.world_objects[4].ob_stat, 3,
+            "Ghost 2 should be visible"
+        );
     }
 
     #[test]
@@ -2145,11 +2430,17 @@ mod quest_tests {
 
         let mut stuff_blocked = [0u8; 31];
         stuff_blocked[ITEM_STATUE] = 2;
-        assert!(stuff_blocked[ITEM_STATUE] < 5, "With 2 statues, gate should be blocked");
+        assert!(
+            stuff_blocked[ITEM_STATUE] < 5,
+            "With 2 statues, gate should be blocked"
+        );
 
         let mut stuff_open = [0u8; 31];
         stuff_open[ITEM_STATUE] = 5;
-        assert!(stuff_open[ITEM_STATUE] >= 5, "With 5 statues, gate should be open");
+        assert!(
+            stuff_open[ITEM_STATUE] >= 5,
+            "With 5 statues, gate should be open"
+        );
     }
 
     #[test]
@@ -2221,7 +2512,10 @@ mod quest_tests {
 
         // When riding != 0, the doorfind_exit branch should be skipped
         let should_check_exit = gs.state.riding == 0;
-        assert!(!should_check_exit, "Exit check should be skipped when riding");
+        assert!(
+            !should_check_exit,
+            "Exit check should be skipped when riding"
+        );
 
         gs.state.riding = 0; // On foot
         let should_check_exit = gs.state.riding == 0;
@@ -2230,8 +2524,8 @@ mod quest_tests {
 
     #[test]
     fn test_dragon_stationary() {
-        use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
         use crate::game::npc::NpcTable;
+        use crate::game::npc::{Npc, NpcState, NPC_TYPE_DRAGON, RACE_ENEMY};
 
         let dragon = Npc {
             npc_type: NPC_TYPE_DRAGON,
@@ -2249,7 +2543,9 @@ mod quest_tests {
         let initial_y = dragon.y;
 
         // Dragon should never move (stationary per SPEC §21.5)
-        let mut table = NpcTable { npcs: std::array::from_fn(|_| Npc::default()) };
+        let mut table = NpcTable {
+            npcs: std::array::from_fn(|_| Npc::default()),
+        };
         table.npcs[0] = dragon;
 
         // Simulate AI tick - dragon should remain stationary
@@ -2308,7 +2604,7 @@ mod quest_tests {
         assert!(missiles[0].active);
         assert_eq!(missiles[0].missile_type, MissileType::Fireball);
         assert!(!missiles[0].is_friendly); // Dragon is hostile
-        // Speed 5: dy should be 5 for south-facing (dir=4)
+                                           // Speed 5: dy should be 5 for south-facing (dir=4)
         assert_eq!(missiles[0].dy, 5);
     }
 
@@ -2323,12 +2619,17 @@ mod quest_tests {
             dx: 0,
             dy: 5,
             missile_type: MissileType::Fireball,
-            is_friendly: false, time_of_flight: 0,
+            is_friendly: false,
+            time_of_flight: 0,
         };
 
         // Damage should be rand8() + 4 = 4-11 per SPEC §10.4
         let damage = fireball.damage();
-        assert!(damage >= 4 && damage <= 11, "Fireball damage should be 4-11, got {}", damage);
+        assert!(
+            damage >= 4 && damage <= 11,
+            "Fireball damage should be 4-11, got {}",
+            damage
+        );
     }
 
     #[test]
@@ -2342,7 +2643,8 @@ mod quest_tests {
             dx: 0,
             dy: 5,
             missile_type: MissileType::Fireball,
-            is_friendly: false, time_of_flight: 0,
+            is_friendly: false,
+            time_of_flight: 0,
         };
 
         // After tick, fireball at y=105. Target at 113 → distance 8px → should hit (radius 9)
@@ -2359,7 +2661,7 @@ mod quest_tests {
         gs.state.battleflag = true;
         gs.state.region_num = 10; // dungeon
         gs.state.lightlevel = 200; // day
-        // Death should override all other conditions
+                                   // Death should override all other conditions
         assert_eq!(gs.setmood(), 6);
     }
 
@@ -2393,7 +2695,7 @@ mod quest_tests {
         gs.state.battleflag = false;
         gs.state.region_num = 10; // dungeon
         gs.state.lightlevel = 200; // day
-        // Dungeon should override day/night
+                                   // Dungeon should override day/night
         assert_eq!(gs.setmood(), 5);
     }
 
@@ -2485,17 +2787,26 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 1, 0); // setfig type 1 = Priest
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 1 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 1,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
 
         // HP should be 15 + 40/4 = 25
-        assert_eq!(scene.state.vitality, 25, "priest should heal to 15 + brave/4");
+        assert_eq!(
+            scene.state.vitality, 25,
+            "priest should heal to 15 + brave/4"
+        );
         // Should have spoken speak(36) ("seek enemy on spirit plane")
         assert_eq!(scene.messages.len(), 1);
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_36"),
-            "priest should speak(36) at daynight%3==0, got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_36"),
+            "priest should speak(36) at daynight%3==0, got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2507,14 +2818,20 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 1, 0);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 1 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 1,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
 
         assert_eq!(scene.state.vitality, 3, "no heal when kind < 10");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_40"),
-            "should speak(40), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_40"),
+            "should speak(40), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T2-NPC-WIZARD-GOAL ───────────────────────────────────────────────────
@@ -2527,12 +2844,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 0, 2); // goal=2, but should be ignored
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 0 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 0,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_35"),
-            "wizard kind<10 should speak(35), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_35"),
+            "wizard kind<10 should speak(35), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2543,12 +2866,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 0, 2); // goal = 2 → speak(29)
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 0 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 0,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_29"),
-            "wizard kind>=10 goal=2 should speak(29), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_29"),
+            "wizard kind>=10 goal=2 should speak(29), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T2-NPC-INNKEEPER ────────────────────────────────────────────────────
@@ -2561,12 +2890,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 8, 0);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 8,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_13"),
-            "innkeeper fatigue<5 should speak(13), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_13"),
+            "innkeeper fatigue<5 should speak(13), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2578,12 +2913,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 8, 0);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 8,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_12"),
-            "innkeeper dayperiod>7 fatigue>=5 should speak(12), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_12"),
+            "innkeeper dayperiod>7 fatigue>=5 should speak(12), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2595,12 +2936,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 8, 0);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 8 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 8,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_14"),
-            "innkeeper else should speak(14), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_14"),
+            "innkeeper else should speak(14), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T2-NPC-RANGER-GOAL ──────────────────────────────────────────────────
@@ -2613,12 +2960,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 12, 1); // goal=1 but shouldn't matter
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 12,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_22"),
-            "ranger region=2 should speak(22), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_22"),
+            "ranger region=2 should speak(22), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2629,12 +2982,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 12, 0);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 12,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_53"),
-            "ranger goal=0 should speak(53), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_53"),
+            "ranger goal=0 should speak(53), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2645,12 +3004,18 @@ mod t2_npc_talk_tests {
         push_setfig(&mut scene, 12, 1);
 
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: 0, setfig_type: 12 },
+            kind: FigKind::SetFig {
+                world_idx: 0,
+                setfig_type: 12,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_54"),
-            "ranger goal=1 should speak(54), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_54"),
+            "ranger goal=1 should speak(54), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T2-NPC-BEGGAR-GOAL ──────────────────────────────────────────────────
@@ -2675,8 +3040,11 @@ mod t2_npc_talk_tests {
         scene.do_option(GameAction::Give);
 
         assert_eq!(scene.state.wealth, 8, "wealth should decrease by 2");
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_24"),
-            "beggar goal=0 should speak(24), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_24"),
+            "beggar goal=0 should speak(24), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2685,15 +3053,21 @@ mod t2_npc_talk_tests {
         let mut scene = scene_with_speeches(60);
         scene.state.wealth = 10;
         scene.state.world_objects.push(WorldObject {
-            ob_id: 13, ob_stat: 3,
+            ob_id: 13,
+            ob_stat: 3,
             region: scene.state.region_num,
-            x: scene.state.hero_x, y: scene.state.hero_y,
-            visible: true, goal: 2,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal: 2,
         });
 
         scene.do_option(GameAction::Give);
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_26"),
-            "beggar goal=2 should speak(26), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_26"),
+            "beggar goal=2 should speak(26), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2703,15 +3077,21 @@ mod t2_npc_talk_tests {
         let mut scene = scene_with_speeches(60);
         scene.state.wealth = 10;
         scene.state.world_objects.push(WorldObject {
-            ob_id: 13, ob_stat: 3,
+            ob_id: 13,
+            ob_stat: 3,
             region: scene.state.region_num,
-            x: scene.state.hero_x, y: scene.state.hero_y,
-            visible: true, goal: 3,
+            x: scene.state.hero_x,
+            y: scene.state.hero_y,
+            visible: true,
+            goal: 3,
         });
 
         scene.do_option(GameAction::Give);
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_27"),
-            "beggar goal=3 overflow should speak(27), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_27"),
+            "beggar goal=3 overflow should speak(27), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T2-NPC-TURTLE-DIALOG ────────────────────────────────────────────────
@@ -2725,10 +3105,17 @@ mod t2_npc_talk_tests {
 
         scene.do_option(GameAction::Speak);
 
-        assert_eq!(scene.state.stuff()[ITEM_SHELL], 1, "shell should be awarded");
+        assert_eq!(
+            scene.state.stuff()[ITEM_SHELL],
+            1,
+            "shell should be awarded"
+        );
         assert_eq!(scene.messages.len(), 1);
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_56"),
-            "no shell → speak(56), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_56"),
+            "no shell → speak(56), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     #[test]
@@ -2742,8 +3129,11 @@ mod t2_npc_talk_tests {
 
         // Shell count should remain unchanged
         assert_eq!(scene.state.stuff()[ITEM_SHELL], 1);
-        assert!(scene.messages.latest().unwrap_or("").contains("speech_57"),
-            "has shell → speak(57), got: {}", scene.messages.latest().unwrap_or(""));
+        assert!(
+            scene.messages.latest().unwrap_or("").contains("speech_57"),
+            "has shell → speak(57), got: {}",
+            scene.messages.latest().unwrap_or("")
+        );
     }
 
     // ── T4-NPC-TALK-ANIM (#168) ───────────────────────────────────────────────
@@ -2760,7 +3150,10 @@ mod t2_npc_talk_tests {
             scene.state.vitality = 10;
             let widx = push_setfig(&mut scene, k, 0);
             let fig = NearestFig {
-                kind: FigKind::SetFig { world_idx: widx, setfig_type: k },
+                kind: FigKind::SetFig {
+                    world_idx: widx,
+                    setfig_type: k,
+                },
                 dist: 0,
             };
             scene.handle_setfig_talk(&fig, "Julian");
@@ -2781,7 +3174,10 @@ mod t2_npc_talk_tests {
             scene.state.kind = 15;
             let widx = push_setfig(&mut scene, k, 0);
             let fig = NearestFig {
-                kind: FigKind::SetFig { world_idx: widx, setfig_type: k },
+                kind: FigKind::SetFig {
+                    world_idx: widx,
+                    setfig_type: k,
+                },
                 dist: 0,
             };
             scene.handle_setfig_talk(&fig, "Julian");
@@ -2800,7 +3196,10 @@ mod t2_npc_talk_tests {
         scene.state.kind = 15;
         let widx = push_setfig(&mut scene, 0, 0); // Wizard
         let fig = NearestFig {
-            kind: FigKind::SetFig { world_idx: widx, setfig_type: 0 },
+            kind: FigKind::SetFig {
+                world_idx: widx,
+                setfig_type: 0,
+            },
             dist: 0,
         };
         scene.handle_setfig_talk(&fig, "Julian");
@@ -2852,10 +3251,16 @@ mod t3_loot_container_gold_tests {
         let world_idx = scene.state.world_objects.len() - 1;
         scene.handle_take_item(world_idx, 15, "Julian");
 
-        assert_eq!(scene.state.gold, initial_gold + 100,
-            "tier-2 container index 8 must add 100 gold (SPEC §14.10)");
-        assert_eq!(scene.state.stuff()[8], initial_arrows,
-            "tier-2 container index 8 must not change arrow count");
+        assert_eq!(
+            scene.state.gold,
+            initial_gold + 100,
+            "tier-2 container index 8 must add 100 gold (SPEC §14.10)"
+        );
+        assert_eq!(
+            scene.state.stuff()[8],
+            initial_arrows,
+            "tier-2 container index 8 must not change arrow count"
+        );
     }
 }
 
@@ -2990,8 +3395,14 @@ mod t3_death_sleep_collapse_tests {
         scene.input.right = true;
         scene.apply_player_input();
 
-        assert_eq!(scene.state.hero_x, initial_x, "hero_x must not change while sleeping");
-        assert_eq!(scene.state.hero_y, initial_y, "hero_y must not change while sleeping");
+        assert_eq!(
+            scene.state.hero_x, initial_x,
+            "hero_x must not change while sleeping"
+        );
+        assert_eq!(
+            scene.state.hero_y, initial_y,
+            "hero_y must not change while sleeping"
+        );
         let moving = scene.state.actors.first().map_or(false, |a| a.moving);
         assert!(!moving, "actor moving flag must stay false while sleeping");
     }
@@ -3088,7 +3499,11 @@ mod t4_palette_fade_freq_tests {
         let updates: Vec<u16> = (0u16..12)
             .filter(|&dn| GameplayScene::should_update_palette(dn, 0))
             .collect();
-        assert_eq!(updates, vec![0, 4, 8], "palette must update only at daynight 0, 4, 8 in ticks 0..12");
+        assert_eq!(
+            updates,
+            vec![0, 4, 8],
+            "palette must update only at daynight 0, 4, 8 in ticks 0..12"
+        );
     }
 
     #[test]
@@ -3180,12 +3595,12 @@ mod tests_turtle_auto {
         let ty = scene.state.actors[3].abs_y;
 
         if let Some(ref world) = scene.map_world {
-            let right = crate::game::collision::px_to_terrain_type(
-                world, tx as i32 + 4, ty as i32 + 2);
-            let left  = crate::game::collision::px_to_terrain_type(
-                world, tx as i32 - 4, ty as i32 + 2);
+            let right =
+                crate::game::collision::px_to_terrain_type(world, tx as i32 + 4, ty as i32 + 2);
+            let left =
+                crate::game::collision::px_to_terrain_type(world, tx as i32 - 4, ty as i32 + 2);
             assert_eq!(right, 5, "turtle right probe must be on water (terrain 5)");
-            assert_eq!(left,  5, "turtle left probe must be on water (terrain 5)");
+            assert_eq!(left, 5, "turtle left probe must be on water (terrain 5)");
         }
     }
 
@@ -3252,8 +3667,14 @@ mod tests_turtle_auto {
         scene.state.tick_counter = 5;
         scene.update_turtle_autonomous();
 
-        assert_eq!(scene.state.actors[3].abs_x, initial_x, "no move on non-water");
-        assert_eq!(scene.state.actors[3].abs_y, initial_y, "no move on non-water");
+        assert_eq!(
+            scene.state.actors[3].abs_x, initial_x,
+            "no move on non-water"
+        );
+        assert_eq!(
+            scene.state.actors[3].abs_y, initial_y,
+            "no move on non-water"
+        );
         assert_eq!(
             scene.state.actors[3].facing, initial_facing,
             "facing must be untouched on probe failure (original: goto raise bypasses facing = d)"
@@ -3301,7 +3722,11 @@ mod tests_turtle_auto {
         scene.state.stuff_mut()[5] = 0;
         let consumed = scene.handle_cheat1_key(Keycode::B);
         assert!(consumed);
-        assert_eq!(scene.state.stuff()[5], 1, "B grants Golden Lasso (stuff[5]=1)");
+        assert_eq!(
+            scene.state.stuff()[5],
+            1,
+            "B grants Golden Lasso (stuff[5]=1)"
+        );
     }
 
     #[test]
@@ -3372,8 +3797,11 @@ mod swan_grounded_tests {
         let mut state = GameState::new();
         state.flying = 0;
         let result = GameplayScene::swan_grounded_override(&npc, &state);
-        assert_eq!(result, Some((4, 1)),
-            "grounded swan must render as RAFT (cfile 4) frame 1");
+        assert_eq!(
+            result,
+            Some((4, 1)),
+            "grounded swan must render as RAFT (cfile 4) frame 1"
+        );
     }
 
     #[test]
@@ -3381,8 +3809,11 @@ mod swan_grounded_tests {
         let npc = swan_npc();
         let mut state = GameState::new();
         state.flying = 1;
-        assert_eq!(GameplayScene::swan_grounded_override(&npc, &state), None,
-            "mounted swan must render via the normal carrier sheet path");
+        assert_eq!(
+            GameplayScene::swan_grounded_override(&npc, &state),
+            None,
+            "mounted swan must render via the normal carrier sheet path"
+        );
     }
 
     #[test]
@@ -3412,9 +3843,16 @@ mod swan_grounded_tests {
         scene.apply_command(DebugCommand::SummonSwan);
 
         let table = scene.npc_table.as_ref().unwrap();
-        let swan = table.npcs.iter().find(|n| n.active && n.npc_type == NPC_TYPE_SWAN)
+        let swan = table
+            .npcs
+            .iter()
+            .find(|n| n.active && n.npc_type == NPC_TYPE_SWAN)
             .expect("SummonSwan must activate a swan slot");
-        assert_eq!(swan.state, NpcState::Still, "spawned swan must be stationary");
+        assert_eq!(
+            swan.state,
+            NpcState::Still,
+            "spawned swan must be stationary"
+        );
         assert_eq!(swan.x as i32, 1000 + 48, "spawned swan is offset from hero");
     }
 }
@@ -3425,7 +3863,7 @@ mod swan_grounded_tests {
 mod swan_mount_dismount_tests {
     use super::*;
     use crate::game::game_state::{CARRIER_SWAN, ITEM_LASSO};
-    use crate::game::npc::{Npc, NpcTable, NPC_TYPE_SWAN, MAX_NPCS, RACE_NORMAL};
+    use crate::game::npc::{Npc, NpcTable, MAX_NPCS, NPC_TYPE_SWAN, RACE_NORMAL};
 
     /// Build a scene with a single swan NPC placed at (npc_x, npc_y).
     fn scene_with_swan(npc_x: i16, npc_y: i16) -> GameplayScene {
@@ -3453,10 +3891,15 @@ mod swan_mount_dismount_tests {
 
         scene.apply_player_input();
 
-        assert_eq!(scene.state.active_carrier, CARRIER_SWAN,
-            "close swan must latch active_carrier = CARRIER_SWAN");
+        assert_eq!(
+            scene.state.active_carrier, CARRIER_SWAN,
+            "close swan must latch active_carrier = CARRIER_SWAN"
+        );
         assert_eq!(scene.state.wcarry, 3, "swan lives in slot 3 (wcarry = 3)");
-        assert!(scene.state.raftprox > 0, "swan within 16 px → raftprox != 0");
+        assert!(
+            scene.state.raftprox > 0,
+            "swan within 16 px → raftprox != 0"
+        );
         assert_eq!(scene.state.flying, 0, "no lasso → no mount");
     }
 
@@ -3487,8 +3930,10 @@ mod swan_mount_dismount_tests {
         scene.state.hero_y = 5000;
         scene.apply_player_input();
 
-        assert_eq!(scene.state.active_carrier, 0,
-            "out-of-range swan releases active_carrier when not flying");
+        assert_eq!(
+            scene.state.active_carrier, 0,
+            "out-of-range swan releases active_carrier when not flying"
+        );
         assert_eq!(scene.state.raftprox, 0);
         assert_eq!(scene.state.wcarry, 0);
     }
@@ -3511,8 +3956,10 @@ mod swan_mount_dismount_tests {
 
         scene.apply_player_input();
 
-        assert_eq!(scene.state.flying, 1,
-            "fiery_death vetoes dismount — hero stays in flight");
+        assert_eq!(
+            scene.state.flying, 1,
+            "fiery_death vetoes dismount — hero stays in flight"
+        );
         assert!(!scene.input.fight, "fight input must be consumed");
     }
 
@@ -3533,8 +3980,10 @@ mod swan_mount_dismount_tests {
 
         scene.apply_player_input();
 
-        assert_eq!(scene.state.flying, 1,
-            "high velocity vetoes dismount — hero stays in flight");
+        assert_eq!(
+            scene.state.flying, 1,
+            "high velocity vetoes dismount — hero stays in flight"
+        );
     }
 
     #[test]
@@ -3557,10 +4006,15 @@ mod swan_mount_dismount_tests {
 
         assert_eq!(scene.state.flying, 0, "dismount commits on clear terrain");
         assert_eq!(scene.state.riding, 0, "riding cleared on dismount");
-        assert_eq!(scene.state.hero_y, y_before - 14,
-            "hero lands 14 px above flight position (fmain.c:1420)");
-        assert_eq!(scene.state.active_carrier, CARRIER_SWAN,
-            "swan stays spawned in slot 3 after dismount");
+        assert_eq!(
+            scene.state.hero_y,
+            y_before - 14,
+            "hero lands 14 px above flight position (fmain.c:1420)"
+        );
+        assert_eq!(
+            scene.state.active_carrier, CARRIER_SWAN,
+            "swan stays spawned in slot 3 after dismount"
+        );
     }
 }
 
@@ -3576,8 +4030,11 @@ mod load_game_tests {
     /// the path from the user config dir) so we override the state directly
     /// after a round-trip through persist helpers.
     fn make_scene_post_load(
-        hero_x: u16, hero_y: u16, region_num: u8,
-        sleeping: bool, paused: bool,
+        hero_x: u16,
+        hero_y: u16,
+        region_num: u8,
+        sleeping: bool,
+        paused: bool,
     ) -> GameplayScene {
         // Write a save file and read it back into a GameState.
         let dir = tempdir().unwrap();
@@ -3630,8 +4087,11 @@ mod load_game_tests {
         // T2-LOAD-RUNTIME-01: last_region_num must be u8::MAX after load so
         // on_region_changed() fires on the next tick even if the region is unchanged.
         let scene = make_scene_post_load(1000, 1000, 3, false, false);
-        assert_eq!(scene.last_region_num, u8::MAX,
-            "last_region_num must be u8::MAX to force on_region_changed()");
+        assert_eq!(
+            scene.last_region_num,
+            u8::MAX,
+            "last_region_num must be u8::MAX to force on_region_changed()"
+        );
     }
 
     #[test]
@@ -3646,10 +4106,14 @@ mod load_game_tests {
         const WRAP: i32 = 0x8000;
         let expected_x = ((hero_x as i32 - CX).rem_euclid(WRAP)) as u16;
         let expected_y = ((hero_y as i32 - CY).rem_euclid(WRAP)) as u16;
-        assert_eq!(scene.map_x, expected_x,
-            "map_x must be snapped to loaded hero_x ({hero_x})");
-        assert_eq!(scene.map_y, expected_y,
-            "map_y must be snapped to loaded hero_y ({hero_y})");
+        assert_eq!(
+            scene.map_x, expected_x,
+            "map_x must be snapped to loaded hero_x ({hero_x})"
+        );
+        assert_eq!(
+            scene.map_y, expected_y,
+            "map_y must be snapped to loaded hero_y ({hero_y})"
+        );
     }
 
     #[test]
@@ -3663,16 +4127,25 @@ mod load_game_tests {
     fn test_load_clears_paused_flag() {
         // T2-LOAD-RUNTIME-04: paused and menu pause state must be cleared after load.
         let scene = make_scene_post_load(1000, 1000, 0, false, true);
-        assert!(!scene.paused, "GameplayScene::paused must be false after load");
-        assert!(!scene.menu.is_paused(), "MenuState pause must be cleared after load");
+        assert!(
+            !scene.paused,
+            "GameplayScene::paused must be false after load"
+        );
+        assert!(
+            !scene.menu.is_paused(),
+            "MenuState pause must be cleared after load"
+        );
     }
 
     #[test]
     fn test_load_resets_menu_to_items() {
         // T2-LOAD-RUNTIME-05: menu mode resets to Items after load (fmain.c:3471).
         let scene = make_scene_post_load(1000, 1000, 0, false, false);
-        assert_eq!(scene.menu.cmode, crate::game::menu::MenuMode::Items,
-            "menu mode must return to Items after load");
+        assert_eq!(
+            scene.menu.cmode,
+            crate::game::menu::MenuMode::Items,
+            "menu mode must return to Items after load"
+        );
     }
 
     #[test]

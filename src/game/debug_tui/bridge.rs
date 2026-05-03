@@ -19,7 +19,7 @@ use crate::game::npc::{Npc, NpcState};
 // the single import surface the spec describes.
 #[allow(unused_imports)]
 pub use crate::game::debug_command::{
-    BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId,
+    BrotherId, DebugCommand, GodModeFlags, MagicEffect, StatId, DEFAULT_TICK_RATE_HZ,
 };
 #[allow(unused_imports)]
 pub use crate::game::debug_log::{DebugLogEntry, LogCategory};

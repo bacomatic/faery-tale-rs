@@ -1,4 +1,3 @@
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -8,9 +7,9 @@ use sdl2::video::Window;
 
 use std::any::Any;
 
+use crate::game::game_library::GameLibrary;
 use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
-use crate::game::game_library::GameLibrary;
 
 /**
  * Copy protection scene.
@@ -48,10 +47,7 @@ const RESULT_PAUSE_TICKS: u32 = 30; // ~1 second at 30Hz
 
 enum CopyProtectPhase {
     /// Display the copy_junk placard preamble. Wait briefly before asking.
-    ShowPreamble {
-        ticks_remaining: u32,
-        drawn: bool,
-    },
+    ShowPreamble { ticks_remaining: u32, drawn: bool },
     /// Ask a question, accept typed input.
     AskQuestion {
         /// Which question we're on (0, 1, 2).
@@ -66,7 +62,10 @@ enum CopyProtectPhase {
     /// Answer was wrong — brief pause then done.
     Failed { ticks_remaining: u32 },
     /// Fade to black before completing the scene.
-    FadeOut { fader: FadeController, success: bool },
+    FadeOut {
+        fader: FadeController,
+        success: bool,
+    },
     /// Scene complete.
     Done { success: bool },
 }
@@ -177,32 +176,42 @@ fn keycode_to_char(keycode: Keycode) -> Option<char> {
 }
 
 impl Scene for CopyProtectScene {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn handle_event(&mut self, event: &Event) -> bool {
         match &self.phase {
-            CopyProtectPhase::AskQuestion { .. } => {
-                match event {
-                    Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
-                        self.submit_pending = true;
-                        true
-                    }
-                    Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
-                        self.input.pop();
-                        true
-                    }
-                    Event::KeyDown { keycode: Some(kc), .. } => {
-                        if let Some(ch) = keycode_to_char(*kc) {
-                            if self.input.len() < MAX_ANSWER_LEN {
-                                self.input.push(ch);
-                            }
-                        }
-                        true
-                    }
-                    _ => false,
+            CopyProtectPhase::AskQuestion { .. } => match event {
+                Event::KeyDown {
+                    keycode: Some(Keycode::Return),
+                    ..
+                } => {
+                    self.submit_pending = true;
+                    true
                 }
-            }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Backspace),
+                    ..
+                } => {
+                    self.input.pop();
+                    true
+                }
+                Event::KeyDown {
+                    keycode: Some(kc), ..
+                } => {
+                    if let Some(ch) = keycode_to_char(*kc) {
+                        if self.input.len() < MAX_ANSWER_LEN {
+                            self.input.push(ch);
+                        }
+                    }
+                    true
+                }
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -216,7 +225,10 @@ impl Scene for CopyProtectScene {
         resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         match &mut self.phase {
-            CopyProtectPhase::ShowPreamble { ticks_remaining, drawn } => {
+            CopyProtectPhase::ShowPreamble {
+                ticks_remaining,
+                drawn,
+            } => {
                 if !*drawn {
                     let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                         play_canvas.set_draw_color(BG_COLOR);
@@ -271,7 +283,8 @@ impl Scene for CopyProtectScene {
                 let need_draw_question = !*question_drawn;
                 *question_drawn = true;
 
-                let question_text = if let Some(q) = game_lib.get_copy_protect_questions().get(qidx) {
+                let question_text = if let Some(q) = game_lib.get_copy_protect_questions().get(qidx)
+                {
                     q.question.clone()
                 } else {
                     "???".to_string()
@@ -287,17 +300,16 @@ impl Scene for CopyProtectScene {
                 let _ = canvas.with_texture_canvas(play_tex, |play_canvas| {
                     if need_draw_question {
                         resources.topaz_font.set_color_mod(255, 255, 255);
-                        resources.topaz_font.render_string(
-                            &question_text,
-                            play_canvas,
-                            10,
-                            y_pos,
-                        );
+                        resources
+                            .topaz_font
+                            .render_string(&question_text, play_canvas, 10, y_pos);
                     }
 
                     // Clear and redraw input area on the same line, after the prompt
                     play_canvas.set_draw_color(BG_COLOR);
-                    play_canvas.fill_rect(Rect::new(input_x, y_pos - 8, 200, 10)).unwrap();
+                    play_canvas
+                        .fill_rect(Rect::new(input_x, y_pos - 8, 200, 10))
+                        .unwrap();
 
                     // Draw typed text
                     if !current_input.is_empty() {
@@ -317,7 +329,14 @@ impl Scene for CopyProtectScene {
                     let cursor_w = font.x_size as u32; // space-width for monospaced font
                     let cursor_h = font.y_size as u32;
                     play_canvas.set_draw_color(CURSOR_COLOR);
-                    play_canvas.fill_rect(Rect::new(cursor_x, y_pos - font.baseline as i32, cursor_w, cursor_h)).unwrap();
+                    play_canvas
+                        .fill_rect(Rect::new(
+                            cursor_x,
+                            y_pos - font.baseline as i32,
+                            cursor_w,
+                            cursor_h,
+                        ))
+                        .unwrap();
                 });
 
                 canvas.set_draw_color(Color::BLACK);
@@ -339,7 +358,14 @@ impl Scene for CopyProtectScene {
                         let cursor_w = font.x_size as u32;
                         let cursor_h = font.y_size as u32;
                         play_canvas.set_draw_color(BG_COLOR);
-                        play_canvas.fill_rect(Rect::new(cursor_x, y_pos - font.baseline as i32, cursor_w, cursor_h)).unwrap();
+                        play_canvas
+                            .fill_rect(Rect::new(
+                                cursor_x,
+                                y_pos - font.baseline as i32,
+                                cursor_w,
+                                cursor_h,
+                            ))
+                            .unwrap();
                     });
 
                     let correct = if let Some(q) = game_lib.get_copy_protect_questions().get(qidx) {
@@ -449,19 +475,19 @@ mod tests {
         // SPEC §23.2: Copy protection riddle answer comparison is case-sensitive (uppercase required).
         // Exact match required — lowercase should fail.
         let answer = "HEED";
-        
+
         // Uppercase match → correct
         assert_eq!("HEED", answer);
-        
+
         // Lowercase → incorrect
         assert_ne!("heed", answer);
         assert_ne!("Heed", answer);
         assert_ne!("hEED", answer);
-        
+
         // Other valid answers
         assert_eq!("LIGHT", "LIGHT");
         assert_ne!("light", "LIGHT");
-        
+
         assert_eq!("NIGHT", "NIGHT");
         assert_ne!("Night", "NIGHT");
     }

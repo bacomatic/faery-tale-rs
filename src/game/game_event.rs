@@ -18,7 +18,10 @@ pub enum GameEvent {
     /// Return outdoors from indoor.
     ExitIndoor,
     /// Start a combat encounter.
-    StartEncounter { encounter_type: u8, encounter_number: u8 },
+    StartEncounter {
+        encounter_type: u8,
+        encounter_number: u8,
+    },
     /// Combat encounter has ended (enemies defeated or fled).
     EndEncounter,
 }

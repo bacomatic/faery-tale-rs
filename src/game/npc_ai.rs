@@ -232,7 +232,17 @@ pub fn tick_npc(
     if freeze && npc.race < 7 {
         return;
     }
-    select_tactic(npc, npc_idx, hero_x, hero_y, hero_dead, leader_idx, xtype, turtle_eggs, tick);
+    select_tactic(
+        npc,
+        npc_idx,
+        hero_x,
+        hero_y,
+        hero_dead,
+        leader_idx,
+        xtype,
+        turtle_eggs,
+        tick,
+    );
     do_tactic(npc, hero_x, hero_y, leader_idx, npcs, tick);
 }
 
@@ -289,7 +299,11 @@ pub fn select_tactic(
             Some(li) => li == npc_idx,
             None => true,
         };
-        npc.goal = if is_first_leader { Goal::Flee } else { Goal::Follower };
+        npc.goal = if is_first_leader {
+            Goal::Flee
+        } else {
+            Goal::Follower
+        };
     }
 
     // Vitality critically low → FLEE (ref ai-system.md:65).
@@ -316,7 +330,11 @@ pub fn select_tactic(
             }
         } else {
             // melee: rand(3, 4) → BUMBLE_SEEK, RANDOM
-            if rr & 1 == 0 { Tactic::BumbleSeek } else { Tactic::Random }
+            if rr & 1 == 0 {
+                Tactic::BumbleSeek
+            } else {
+                Tactic::Random
+            }
         };
         return;
     }
@@ -352,7 +370,11 @@ pub fn select_tactic(
     let xd = (hero_x - npc.x as i32).abs();
     let yd = (hero_y - npc.y as i32).abs();
     // Ref: thresh = 14 - mode (numeric GOAL_*); dark knight (race 7) uses 16.
-    let thresh = if npc.race == 7 { 16 } else { 14 - goal_numeric(&npc.goal) };
+    let thresh = if npc.race == 7 {
+        16
+    } else {
+        14 - goal_numeric(&npc.goal)
+    };
     // Ref: `(weapon & 4) == 0` — bit 2 clear means melee (non-bow/wand).
     let is_melee = (npc.weapon & 4) == 0;
     if is_melee && xd < thresh && yd < thresh {
@@ -375,7 +397,7 @@ pub fn select_tactic(
     // ARCHER1=3 (bit1=1, 1/16), ARCHER2=4 (bit1=0, 1/4).
     let gate_mask = match npc.goal {
         Goal::Attack1 | Goal::Archer2 => 3, // ~25%
-        _ => 15,                             // ~6.25%
+        _ => 15,                            // ~6.25%
     };
     if (r & gate_mask) != 0 {
         return; // Keep current tactic this tick.
@@ -570,7 +592,10 @@ mod tests {
                 break;
             }
         }
-        assert!(triggered_away, "Backup should eventually face away from hero");
+        assert!(
+            triggered_away,
+            "Backup should eventually face away from hero"
+        );
     }
 
     #[test]
@@ -680,12 +705,19 @@ mod tests {
             select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.tactic == Tactic::Random {
                 // Updated: goal must also be Confused (§11.9).
-                assert_eq!(npc.goal, Goal::Confused, "weapon=0 NPC must have Goal::Confused");
+                assert_eq!(
+                    npc.goal,
+                    Goal::Confused,
+                    "weapon=0 NPC must have Goal::Confused"
+                );
                 confused = true;
                 break;
             }
         }
-        assert!(confused, "Weaponless NPC should get tactic=Random (confused)");
+        assert!(
+            confused,
+            "Weaponless NPC should get tactic=Random (confused)"
+        );
     }
 
     #[test]
@@ -710,19 +742,19 @@ mod tests {
         // Test that all four goal types have correct reconsider probabilities per SPEC §11.7:
         // - ATTACK1 and ARCHER2 should reconsider at 25% (gate_mask = 3)
         // - ATTACK2 and ARCHER1 should reconsider at 6.25% (gate_mask = 15)
-        
+
         const ITERATIONS: u32 = 2000;
         let mut reconsider_attack1 = 0u32;
         let mut reconsider_attack2 = 0u32;
         let mut reconsider_archer1 = 0u32;
         let mut reconsider_archer2 = 0u32;
-        
+
         for tick in 0..ITERATIONS {
             // For archers, place hero close enough to trigger Backup tactic when reconsidering
             // (xd < 40 && yd < 30). Start with Pursue tactic.
             // If it stays Pursue, the gate blocked reconsideration.
             // If it changes to Backup, reconsideration happened.
-            
+
             // Test ARCHER1 (should be ~6.25%)
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Archer1;
@@ -732,7 +764,7 @@ mod tests {
             if npc.tactic == Tactic::Backup {
                 reconsider_archer1 += 1;
             }
-            
+
             // Test ARCHER2 (should be ~25%)
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Archer2;
@@ -742,14 +774,14 @@ mod tests {
             if npc.tactic == Tactic::Backup {
                 reconsider_archer2 += 1;
             }
-            
+
             // For melee, we need a condition that changes tactic.
             // Use low vitality (< 6) to potentially trigger Evade.
             // The evade check also has a 50% chance (r >> 8) & 1 == 0.
             // So we expect: reconsider_rate * 0.5 = observed_evade_rate
             // ATTACK1 at 25% * 0.5 = 12.5%
             // ATTACK2 at 6.25% * 0.5 = 3.125%
-            
+
             // Test ATTACK1 (should be ~25%, so ~12.5% will trigger Evade)
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack1;
@@ -760,7 +792,7 @@ mod tests {
             if npc.tactic == Tactic::Evade {
                 reconsider_attack1 += 1;
             }
-            
+
             // Test ATTACK2 (should be ~6.25%, so ~3.125% will trigger Evade)
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack2;
@@ -772,9 +804,9 @@ mod tests {
                 reconsider_attack2 += 1;
             }
         }
-        
+
         // Allow ±5% margin for probabilistic tests
-        
+
         // ARCHER1: 6.25% of 2000 = 125 ± 50
         assert!(
             reconsider_archer1 > 75 && reconsider_archer1 < 175,
@@ -782,7 +814,7 @@ mod tests {
             reconsider_archer1,
             reconsider_archer1 * 100 / ITERATIONS
         );
-        
+
         // ARCHER2: 25% of 2000 = 500 ± 100
         assert!(
             reconsider_archer2 > 400 && reconsider_archer2 < 600,
@@ -790,7 +822,7 @@ mod tests {
             reconsider_archer2,
             reconsider_archer2 * 100 / ITERATIONS
         );
-        
+
         // ATTACK1: 25% * 50% = 12.5% of 2000 = 250 ± 75
         assert!(
             reconsider_attack1 > 175 && reconsider_attack1 < 325,
@@ -798,7 +830,7 @@ mod tests {
             reconsider_attack1,
             reconsider_attack1 * 100 / ITERATIONS
         );
-        
+
         // ATTACK2: 6.25% * 50% = 3.125% of 2000 = 62.5 ± 40
         assert!(
             reconsider_attack2 > 20 && reconsider_attack2 < 100,
@@ -806,7 +838,7 @@ mod tests {
             reconsider_attack2,
             reconsider_attack2 * 100 / ITERATIONS
         );
-        
+
         // Verify the 4x relationship between high and low reconsider rates
         assert!(
             reconsider_archer2 > reconsider_archer1 * 3,
@@ -836,9 +868,22 @@ mod tests {
         let initial_facing = npc.facing;
 
         for tick in 0..100u32 {
-            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, true);
+            tick_npc(
+                &mut npc,
+                0,
+                200,
+                100,
+                false,
+                None,
+                &[],
+                tick,
+                0,
+                false,
+                true,
+            );
             assert_eq!(
-                npc.state, NpcState::Still,
+                npc.state,
+                NpcState::Still,
                 "Frozen hostile NPC changed state at tick {tick}"
             );
             assert_eq!(
@@ -869,7 +914,10 @@ mod tests {
         // SETFIG short-circuit: state/facing/goal must not be touched, even with freeze=true.
         tick_npc(&mut npc, 0, 200, 100, false, None, &[], 0, 0, false, true);
         assert_eq!(npc.state, NpcState::Still);
-        assert_eq!(npc.facing, 4, "SETFIG shopkeeper spawn facing must be preserved");
+        assert_eq!(
+            npc.facing, 4,
+            "SETFIG shopkeeper spawn facing must be preserved"
+        );
     }
 
     #[test]
@@ -883,13 +931,28 @@ mod tests {
             npc.weapon = 1;
             npc.facing = 0;
             npc.state = NpcState::Still;
-            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
+            tick_npc(
+                &mut npc,
+                0,
+                200,
+                100,
+                false,
+                None,
+                &[],
+                tick,
+                0,
+                false,
+                false,
+            );
             if npc.state != NpcState::Still || npc.facing != 0 {
                 acted = true;
                 break;
             }
         }
-        assert!(acted, "Unfrozen hostile NPC should eventually change state or facing");
+        assert!(
+            acted,
+            "Unfrozen hostile NPC should eventually change state or facing"
+        );
     }
 
     #[test]
@@ -902,7 +965,11 @@ mod tests {
         state.freeze_timer = FREEZE_TIMER_INCREMENT;
         // Tick exactly FREEZE_TIMER_INCREMENT times.
         state.tick(FREEZE_TIMER_INCREMENT as u32);
-        assert_eq!(state.freeze_timer, 0, "Freeze should expire after {} ticks", FREEZE_TIMER_INCREMENT);
+        assert_eq!(
+            state.freeze_timer, 0,
+            "Freeze should expire after {} ticks",
+            FREEZE_TIMER_INCREMENT
+        );
     }
 
     #[test]
@@ -910,11 +977,14 @@ mod tests {
         // SPEC §19.2: Gold Ring cast increments freeze_timer by FREEZE_TIMER_INCREMENT.
         // (a) cast applies freeze effect to game state.
         use crate::game::game_state::GameState;
-        use crate::game::magic::{use_magic, ITEM_RING, FREEZE_TIMER_INCREMENT};
+        use crate::game::magic::{use_magic, FREEZE_TIMER_INCREMENT, ITEM_RING};
         let mut state = GameState::new();
         state.stuff_mut()[ITEM_RING] = 1;
         let _ = use_magic(&mut state, ITEM_RING);
-        assert!(state.freeze_timer > 0, "freeze_timer must be > 0 after cast");
+        assert!(
+            state.freeze_timer > 0,
+            "freeze_timer must be > 0 after cast"
+        );
         assert_eq!(state.freeze_timer, FREEZE_TIMER_INCREMENT);
     }
 
@@ -952,13 +1022,18 @@ mod tests {
             npc.state = NpcState::Still;
             select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             if npc.goal == Goal::Confused {
-                assert_eq!(npc.state, NpcState::Walking, "first CONFUSED tick must set Walking");
+                assert_eq!(
+                    npc.state,
+                    NpcState::Walking,
+                    "first CONFUSED tick must set Walking"
+                );
                 assert!(npc.facing <= 7, "facing must be 0–7, got {}", npc.facing);
                 // do_tactic must be a no-op for Confused — confirm it doesn't touch state.
                 let facing_before = npc.facing;
                 do_tactic(&mut npc, 200, 100, None, &[], tick);
                 assert_eq!(
-                    npc.state, NpcState::Walking,
+                    npc.state,
+                    NpcState::Walking,
                     "do_tactic must not change state for Confused actor"
                 );
                 assert_eq!(
@@ -1003,7 +1078,11 @@ mod tests {
             select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             do_tactic(&mut npc, 200, 100, None, &[], tick);
 
-            assert_eq!(npc.goal, Goal::Confused, "Confused goal must persist on tick {tick}");
+            assert_eq!(
+                npc.goal,
+                Goal::Confused,
+                "Confused goal must persist on tick {tick}"
+            );
             assert_eq!(
                 npc.facing, facing_after_first,
                 "facing must not change on subsequent Confused ticks (tick {tick})"
@@ -1030,9 +1109,9 @@ mod tests {
         for tick in 0..200u32 {
             let mut npc = make_npc(100, 100);
             npc.goal = Goal::Attack1; // goal reset by caller
-            npc.weapon = 1;           // weapon restored
+            npc.weapon = 1; // weapon restored
             npc.tactic = Tactic::Random; // leftover from confused period
-            // Hero is far → no melee engage.
+                                         // Hero is far → no melee engage.
             select_tactic(&mut npc, 0, 200, 100, false, None, 0, false, tick);
             // Should NOT assign Confused; when gate fires, should choose Pursue.
             assert_ne!(
@@ -1045,7 +1124,10 @@ mod tests {
                 break;
             }
         }
-        assert!(got_pursue, "re-armed actor must eventually select Pursue tactic");
+        assert!(
+            got_pursue,
+            "re-armed actor must eventually select Pursue tactic"
+        );
     }
 
     // ── T4-NPC-SETFIG: SETFIG AI exclusion tests (§11.5 step 3) ────────────
@@ -1070,7 +1152,19 @@ mod tests {
             ..Default::default()
         };
         for tick in 0..200u32 {
-            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
+            tick_npc(
+                &mut npc,
+                0,
+                200,
+                100,
+                false,
+                None,
+                &[],
+                tick,
+                0,
+                false,
+                false,
+            );
             assert_eq!(
                 npc.state,
                 NpcState::Still,
@@ -1100,7 +1194,19 @@ mod tests {
             npc.weapon = 1;
             npc.state = NpcState::Still;
             npc.facing = 0;
-            tick_npc(&mut npc, 0, 200, 100, false, None, &[], tick, 0, false, false);
+            tick_npc(
+                &mut npc,
+                0,
+                200,
+                100,
+                false,
+                None,
+                &[],
+                tick,
+                0,
+                false,
+                false,
+            );
             if npc.state != NpcState::Still || npc.facing != 0 {
                 acted = true;
                 break;
@@ -1204,7 +1310,11 @@ mod tests {
         // Force the reconsider gate closed so we don't accidentally pick Pursue.
         // We only care that Fighting is NOT entered; at xd=12 thresh=12, 12 < 12 is false.
         select_tactic(&mut a2, 0, 112, 100, false, None, 0, false, 0);
-        assert_ne!(a2.state, NpcState::Fighting, "ATTACK2 at xd=12 must NOT engage");
+        assert_ne!(
+            a2.state,
+            NpcState::Fighting,
+            "ATTACK2 at xd=12 must NOT engage"
+        );
     }
 
     /// F3.5: a frust-latched NPC receives a randomized fallback tactic, not a no-op.
@@ -1222,7 +1332,10 @@ mod tests {
                 break;
             }
         }
-        assert!(changed, "Frust must dispatch to BUMBLE_SEEK/RANDOM for melee actors");
+        assert!(
+            changed,
+            "Frust must dispatch to BUMBLE_SEEK/RANDOM for melee actors"
+        );
     }
 
     #[test]
@@ -1239,11 +1352,24 @@ mod tests {
             }
         }
         // Bow frust fallback: rand(2,5) → FOLLOW/BUMBLE_SEEK/RANDOM/BACKUP.
-        let allowed = [Tactic::Follow, Tactic::BumbleSeek, Tactic::Random, Tactic::Backup];
+        let allowed = [
+            Tactic::Follow,
+            Tactic::BumbleSeek,
+            Tactic::Random,
+            Tactic::Backup,
+        ];
         for t in &seen {
-            assert!(allowed.contains(t), "bow frust dispatch produced illegal tactic {:?}", t);
+            assert!(
+                allowed.contains(t),
+                "bow frust dispatch produced illegal tactic {:?}",
+                t
+            );
         }
-        assert!(seen.len() >= 3, "bow frust dispatch must randomize: seen={:?}", seen);
+        assert!(
+            seen.len() >= 3,
+            "bow frust dispatch must randomize: seen={:?}",
+            seen
+        );
     }
 
     /// F3.7: on hero death, the NPC at `leader_idx` flees; others follow.
@@ -1258,7 +1384,11 @@ mod tests {
         let mut follower = make_npc(150, 150);
         follower.goal = Goal::Attack1;
         select_tactic(&mut follower, 3, 400, 400, true, Some(2), 0, false, 0);
-        assert_eq!(follower.goal, Goal::Follower, "non-leader follows when hero is dead");
+        assert_eq!(
+            follower.goal,
+            Goal::Follower,
+            "non-leader follows when hero is dead"
+        );
     }
 
     /// F3.6: SHOOT tactic bypasses the do_tactic rate limit (ref RESEARCH §8.2,
@@ -1274,10 +1404,15 @@ mod tests {
             npc.goal = Goal::Archer1;
             npc.facing = 7; // starting facing NW; hero east → should change
             do_tactic(&mut npc, 200, 100, None, &[], tick);
-            if npc.facing != 7 { updates += 1; }
+            if npc.facing != 7 {
+                updates += 1;
+            }
         }
         // With the SHOOT-bypass, should be very close to 100.
-        assert!(updates >= 90, "SHOOT must not be rate-limited: updates={updates}/100");
+        assert!(
+            updates >= 90,
+            "SHOOT must not be rate-limited: updates={updates}/100"
+        );
     }
 
     /// F3.3: snakes do NOT unconditionally march to the turtle nest — only when
@@ -1291,13 +1426,18 @@ mod tests {
         let mut saw_egg_seek = false;
         for tick in 0..500u32 {
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ false, tick);
+            select_tactic(
+                &mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ false, tick,
+            );
             if npc.tactic == Tactic::EggSeek {
                 saw_egg_seek = true;
                 break;
             }
         }
-        assert!(!saw_egg_seek, "snake must not enter EGG_SEEK when turtle_eggs == 0");
+        assert!(
+            !saw_egg_seek,
+            "snake must not enter EGG_SEEK when turtle_eggs == 0"
+        );
     }
 
     #[test]
@@ -1309,12 +1449,17 @@ mod tests {
         let mut saw_egg_seek = false;
         for tick in 0..500u32 {
             npc.tactic = Tactic::Pursue;
-            select_tactic(&mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ true, tick);
+            select_tactic(
+                &mut npc, 0, 500, 500, false, None, 0, /*turtle_eggs*/ true, tick,
+            );
             if npc.tactic == Tactic::EggSeek {
                 saw_egg_seek = true;
                 break;
             }
         }
-        assert!(saw_egg_seek, "snake must select EGG_SEEK when turtle_eggs is set");
+        assert!(
+            saw_egg_seek,
+            "snake must select EGG_SEEK when turtle_eggs is set"
+        );
     }
 }

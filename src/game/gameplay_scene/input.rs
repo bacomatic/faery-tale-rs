@@ -17,13 +17,10 @@ impl GameplayScene {
         }
 
         // fmain.c:3304 — extent dampener (astral zone v3==9) ⇒ speak(59).
-        let in_necro_arena = crate::game::zones::find_zone(
-            &self.zones,
-            self.state.hero_x,
-            self.state.hero_y,
-        )
-        .and_then(|idx| self.zones.get(idx))
-        .map_or(false, |z| z.v3 == 9);
+        let in_necro_arena =
+            crate::game::zones::find_zone(&self.zones, self.state.hero_x, self.state.hero_y)
+                .and_then(|idx| self.zones.get(idx))
+                .map_or(false, |z| z.v3 == 9);
         if in_necro_arena {
             let msg = crate::game::events::speak(&self.narr, 59, &bname);
             self.messages.push(msg);
@@ -63,22 +60,29 @@ impl GameplayScene {
 
     /// Decode 8-way direction from current input flags.
     pub(crate) fn current_direction(&self) -> Direction {
-        match (self.input.up, self.input.down, self.input.left, self.input.right) {
-            (true,  false, false, false) => Direction::N,
-            (true,  false, false, true)  => Direction::NE,
-            (false, false, false, true)  => Direction::E,
-            (false, true,  false, true)  => Direction::SE,
-            (false, true,  false, false) => Direction::S,
-            (false, true,  true,  false) => Direction::SW,
-            (false, false, true,  false) => Direction::W,
-            (true,  false, true,  false) => Direction::NW,
-            _                            => Direction::None,
+        match (
+            self.input.up,
+            self.input.down,
+            self.input.left,
+            self.input.right,
+        ) {
+            (true, false, false, false) => Direction::N,
+            (true, false, false, true) => Direction::NE,
+            (false, false, false, true) => Direction::E,
+            (false, true, false, true) => Direction::SE,
+            (false, true, false, false) => Direction::S,
+            (false, true, true, false) => Direction::SW,
+            (false, false, true, false) => Direction::W,
+            (true, false, true, false) => Direction::NW,
+            _ => Direction::None,
         }
     }
 
     /// Apply player input: move hero and update actor facing/state.
     pub(crate) fn apply_player_input(&mut self) {
-        if self.sleeping { return; }
+        if self.sleeping {
+            return;
+        }
         let dir = self.current_direction();
 
         // Swan dismount — fire button while flying.
@@ -91,20 +95,20 @@ impl GameplayScene {
             let bname = self.brother_name().to_string();
             if self.fiery_death {
                 // fmain.c:1418 — event(32) "Ground is too hot for swan to land."
-                self.messages.push(crate::game::events::event_msg(&self.narr, 32, &bname));
+                self.messages
+                    .push(crate::game::events::event_msg(&self.narr, 32, &bname));
             } else if !self.state.can_dismount_swan() {
                 // fmain.c:1427 — event(33) "Flying too fast to dismount."
-                self.messages.push(crate::game::events::event_msg(&self.narr, 33, &bname));
+                self.messages
+                    .push(crate::game::events::event_msg(&self.narr, 33, &bname));
             } else {
                 // fmain.c:1420-1424 — proxcheck both head (y-14) and feet
                 // (y-4) to verify landing spot is clear.
                 let hx = self.state.hero_x as i32;
                 let hy = self.state.hero_y as i32;
                 let land_y = hy - 14;
-                let head_clear =
-                    collision::proxcheck(self.map_world.as_ref(), hx, land_y);
-                let feet_clear =
-                    collision::proxcheck(self.map_world.as_ref(), hx, land_y + 10);
+                let head_clear = collision::proxcheck(self.map_world.as_ref(), hx, land_y);
+                let feet_clear = collision::proxcheck(self.map_world.as_ref(), hx, land_y + 10);
                 if head_clear && feet_clear {
                     // Commit dismount: clear flight state and land the hero
                     // 14 px above current position. active_carrier stays set
@@ -129,8 +133,14 @@ impl GameplayScene {
             use crate::game::game_state::ITEM_ARROWS;
 
             let facing = match dir {
-                Direction::N  => 0u8, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
-                Direction::S  => 4,   Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                Direction::N => 0u8,
+                Direction::NE => 1,
+                Direction::E => 2,
+                Direction::SE => 3,
+                Direction::S => 4,
+                Direction::SW => 5,
+                Direction::W => 6,
+                Direction::NW => 7,
                 Direction::None => self.state.facing,
             };
             self.state.facing = facing;
@@ -173,8 +183,8 @@ impl GameplayScene {
         // while hero is in Shooting state (SHOOT1 → SHOOT3 transition).
         if let Some(player) = self.state.actors.first() {
             if matches!(player.state, ActorState::Shooting(_)) {
-                use crate::game::game_state::ITEM_ARROWS;
                 use crate::game::combat::fire_missile;
+                use crate::game::game_state::ITEM_ARROWS;
                 let weapon = player.weapon;
 
                 let can_fire = if weapon == 4 {
@@ -219,38 +229,45 @@ impl GameplayScene {
         // Per-direction base deltas from original xdir/ydir tables (fsubs.asm:1277-1278).
         // Applied as: delta = base * speed / 2  →  cardinal=3px, diagonal=2px at speed=2.
         let (base_dx, base_dy): (i32, i32) = match dir {
-            Direction::N    => ( 0, -3),
-            Direction::NE   => ( 2, -2),
-            Direction::E    => ( 3,  0),
-            Direction::SE   => ( 2,  2),
-            Direction::S    => ( 0,  3),
-            Direction::SW   => (-2,  2),
-            Direction::W    => (-3,  0),
-            Direction::NW   => (-2, -2),
-            Direction::None => ( 0,  0),
+            Direction::N => (0, -3),
+            Direction::NE => (2, -2),
+            Direction::E => (3, 0),
+            Direction::SE => (2, 2),
+            Direction::S => (0, 3),
+            Direction::SW => (-2, 2),
+            Direction::W => (-3, 0),
+            Direction::NW => (-2, -2),
+            Direction::None => (0, 0),
         };
 
         let prev_x = self.state.hero_x;
         let prev_y = self.state.hero_y;
 
         // Stagger when starving (hunger > 120, 1-in-4 chance)
-        let dir = if self.state.hunger > 120 && dir != Direction::None && (self.state.cycle & 3) == 0 {
-            let r = (self.state.cycle >> 2) & 1;
-            let f = if r == 0 {
-                (self.state.facing + 1) & 7
+        let dir =
+            if self.state.hunger > 120 && dir != Direction::None && (self.state.cycle & 3) == 0 {
+                let r = (self.state.cycle >> 2) & 1;
+                let f = if r == 0 {
+                    (self.state.facing + 1) & 7
+                } else {
+                    (self.state.facing + 7) & 7
+                };
+                let facing_to_dir = |f: u8| match f {
+                    0 => Direction::N,
+                    1 => Direction::NE,
+                    2 => Direction::E,
+                    3 => Direction::SE,
+                    4 => Direction::S,
+                    5 => Direction::SW,
+                    6 => Direction::W,
+                    7 => Direction::NW,
+                    _ => Direction::None,
+                };
+                self.state.facing = f;
+                facing_to_dir(f)
             } else {
-                (self.state.facing + 7) & 7
+                dir
             };
-            let facing_to_dir = |f: u8| match f {
-                0 => Direction::N,  1 => Direction::NE, 2 => Direction::E,  3 => Direction::SE,
-                4 => Direction::S,  5 => Direction::SW, 6 => Direction::W,  7 => Direction::NW,
-                _ => Direction::None,
-            };
-            self.state.facing = f;
-            facing_to_dir(f)
-        } else {
-            dir
-        };
 
         if dir != Direction::None {
             // Speed calculation per SPEC §9.5: terrain-modulated via environ.
@@ -272,22 +289,24 @@ impl GameplayScene {
                 // Swan flight: apply velocity impulse from directional input.
                 // xdir/ydir from collision module match the base_dx/base_dy values.
                 let (xdir, ydir): (i16, i16) = match dir {
-                    Direction::N    => ( 0, -3),
-                    Direction::NE   => ( 2, -2),
-                    Direction::E    => ( 3,  0),
-                    Direction::SE   => ( 2,  2),
-                    Direction::S    => ( 0,  3),
-                    Direction::SW   => (-2,  2),
-                    Direction::W    => (-3,  0),
-                    Direction::NW   => (-2, -2),
-                    Direction::None => ( 0,  0),
+                    Direction::N => (0, -3),
+                    Direction::NE => (2, -2),
+                    Direction::E => (3, 0),
+                    Direction::SE => (2, 2),
+                    Direction::S => (0, 3),
+                    Direction::SW => (-2, 2),
+                    Direction::W => (-3, 0),
+                    Direction::NW => (-2, -2),
+                    Direction::None => (0, 0),
                 };
                 self.state.apply_swan_velocity_impulse(xdir, ydir);
 
                 // Position is determined by velocity, not input direction.
                 let (new_x, new_y) = self.state.compute_swan_position();
-                let dx = (new_x as i32 - self.state.hero_x as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
-                let dy = (new_y as i32 - self.state.hero_y as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
+                let dx =
+                    (new_x as i32 - self.state.hero_x as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
+                let dy =
+                    (new_y as i32 - self.state.hero_y as i32 + 0x8000).rem_euclid(0x8000) - 0x8000;
 
                 // Facing is derived from velocity per SPEC §21.4: set_course(0, -nvx, -nvy, 6).
                 // This means facing toward the direction of motion (reversed velocity vector).
@@ -323,8 +342,14 @@ impl GameplayScene {
                 let dy = base_dy * speed / 2;
 
                 let facing: u8 = match dir {
-                    Direction::N  => 0, Direction::NE => 1, Direction::E  => 2, Direction::SE => 3,
-                    Direction::S  => 4, Direction::SW => 5, Direction::W  => 6, Direction::NW => 7,
+                    Direction::N => 0,
+                    Direction::NE => 1,
+                    Direction::E => 2,
+                    Direction::SE => 3,
+                    Direction::S => 4,
+                    Direction::SW => 5,
+                    Direction::W => 6,
+                    Direction::NW => 7,
                     Direction::None => 0,
                 };
                 (dx, dy, facing)
@@ -352,11 +377,15 @@ impl GameplayScene {
             let mut final_facing = facing;
             // Gather live NPC positions for actor collision (mirrors original proxcheck actor loop).
             let npc_positions: Vec<(i32, i32)> = if self.state.flying == 0 && !self.state.on_raft {
-                self.npc_table.as_ref()
-                    .map(|t| t.npcs.iter()
-                        .filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead)
-                        .map(|n| (n.x as i32, n.y as i32))
-                        .collect())
+                self.npc_table
+                    .as_ref()
+                    .map(|t| {
+                        t.npcs
+                            .iter()
+                            .filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead)
+                            .map(|n| (n.x as i32, n.y as i32))
+                            .collect()
+                    })
                     .unwrap_or_default()
             } else {
                 Vec::new()
@@ -364,30 +393,48 @@ impl GameplayScene {
 
             let has_crystal = self.state.stuff()[30] != 0;
             let mut can_move = !turtle_blocked
-                && (self.state.flying != 0 || self.state.on_raft
-                    || (collision::hero_proxcheck(self.map_world.as_ref(), new_x as i32, new_y as i32, has_crystal)
-                        && !collision::actor_collides(new_x as i32, new_y as i32, &npc_positions)));
+                && (self.state.flying != 0
+                    || self.state.on_raft
+                    || (collision::hero_proxcheck(
+                        self.map_world.as_ref(),
+                        new_x as i32,
+                        new_y as i32,
+                        has_crystal,
+                    ) && !collision::actor_collides(
+                        new_x as i32,
+                        new_y as i32,
+                        &npc_positions,
+                    )));
 
             // Direction deviation (wall-sliding): fmain.c:1615-1625 walk_step.
             // Ref applies the +1 CW / -2 CCW deviation for ALL 8 directions, not just
             // diagonals; cardinal walls must slide the same way (see movement.md#walk_step).
             // Skip deviation when blocked by a door tile (terrain 15) — the player must
             // bump the door to open it, not slide around it.
-            let blocked_by_door = !can_move && self.map_world.as_ref().map_or(false, |w| {
-                let rt = collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2);
-                let lt = collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2);
-                rt == 15 || lt == 15
-            });
-            if !can_move && !turtle_blocked && !blocked_by_door
-                && self.state.flying == 0 && !self.state.on_raft
+            let blocked_by_door = !can_move
+                && self.map_world.as_ref().map_or(false, |w| {
+                    let rt = collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2);
+                    let lt = collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2);
+                    rt == 15 || lt == 15
+                });
+            if !can_move
+                && !turtle_blocked
+                && !blocked_by_door
+                && self.state.flying == 0
+                && !self.state.on_raft
             {
                 // checkdev1: try (facing + 1) & 7
                 let dev1 = (facing + 1) & 7;
                 let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
                 let dev1_y = collision::newy(self.state.hero_y, dev1, speed);
                 // Deviation probes use hero lava/pit bypass but NOT crystal bypass (fmain.c:1615).
-                if collision::hero_proxcheck(self.map_world.as_ref(), dev1_x as i32, dev1_y as i32, false)
-                    && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions) {
+                if collision::hero_proxcheck(
+                    self.map_world.as_ref(),
+                    dev1_x as i32,
+                    dev1_y as i32,
+                    false,
+                ) && !collision::actor_collides(dev1_x as i32, dev1_y as i32, &npc_positions)
+                {
                     final_x = dev1_x;
                     final_y = dev1_y;
                     final_facing = dev1;
@@ -397,8 +444,13 @@ impl GameplayScene {
                     let dev2 = (dev1.wrapping_sub(2)) & 7;
                     let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
                     let dev2_y = collision::newy(self.state.hero_y, dev2, speed);
-                    if collision::hero_proxcheck(self.map_world.as_ref(), dev2_x as i32, dev2_y as i32, false)
-                        && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions) {
+                    if collision::hero_proxcheck(
+                        self.map_world.as_ref(),
+                        dev2_x as i32,
+                        dev2_y as i32,
+                        false,
+                    ) && !collision::actor_collides(dev2_x as i32, dev2_y as i32, &npc_positions)
+                    {
                         final_x = dev2_x;
                         final_y = dev2_y;
                         final_facing = dev2;
@@ -430,33 +482,45 @@ impl GameplayScene {
                     // Mirrors fmain.c indoor branch: xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0.
                     // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry (and exit).
                     if self.state.riding == 0 {
-                        if let Some(door) = crate::game::doors::doorfind_exit(&self.doors, final_x, final_y) {
+                        if let Some(door) =
+                            crate::game::doors::doorfind_exit(&self.doors, final_x, final_y)
+                        {
                             let (ex, ey) = crate::game::doors::exit_spawn(&door);
                             let outdoor_region = Self::outdoor_region_from_pos(ex, ey);
                             self.state.region_num = outdoor_region;
                             self.state.hero_x = ex;
                             self.state.hero_y = ey;
-                            self.dlog(format!("door: indoor exit to region {} ({}, {})", outdoor_region, ex, ey));
+                            self.dlog(format!(
+                                "door: indoor exit to region {} ({}, {})",
+                                outdoor_region, ex, ey
+                            ));
                         }
                     }
-                } else if let Some(door) = crate::game::doors::doorfind(&self.doors, self.state.region_num, final_x, final_y) {
+                } else if let Some(door) = crate::game::doors::doorfind(
+                    &self.doors,
+                    self.state.region_num,
+                    final_x,
+                    final_y,
+                ) {
                     // Outdoor (region < 8): walk-on entry check — match on src coords.
                     // Sub-tile position guard mirrors fmain.c Phase-2 nodoor conditions:
                     //   Horizontal (type & 1): skip if hero_y & 0x10 != 0 (lower half — not through yet)
                     //   Vertical             : skip if hero_x & 15 > 6   (right portion — not through yet)
                     let in_doorway = if door.door_type & 1 != 0 {
-                        final_y & 0x10 == 0  // horizontal: upper half
+                        final_y & 0x10 == 0 // horizontal: upper half
                     } else {
-                        final_x & 15 <= 6    // vertical: left portion
+                        final_x & 15 <= 6 // vertical: left portion
                     };
                     // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry.
                     let not_riding = self.state.riding == 0;
                     // DESERT doors (oasis) require 5 gold statues; original silently blocks if < 5.
                     use crate::game::doors::{key_req, KeyReq};
-                    let allow = in_doorway && not_riding && match key_req(door.door_type) {
-                        KeyReq::GoldStatues => self.state.stuff()[25] >= 5,
-                        _ => true, // walk-on path: door was already opened by bump; NOKEY always allowed
-                    };
+                    let allow = in_doorway
+                        && not_riding
+                        && match key_req(door.door_type) {
+                            KeyReq::GoldStatues => self.state.stuff()[25] >= 5,
+                            _ => true, // walk-on path: door was already opened by bump; NOKEY always allowed
+                        };
                     if allow {
                         let (ix, iy) = crate::game::doors::entry_spawn(&door);
                         self.state.region_num = door.dst_region;
@@ -471,14 +535,12 @@ impl GameplayScene {
                 // regions; door transitions to F9/F10 (>= 8) are handled above and must not
                 // be overridden.
                 if self.state.region_num < 8 {
-                    let pos_region = Self::outdoor_region_from_pos(
-                        self.state.hero_x, self.state.hero_y,
-                    );
+                    let pos_region =
+                        Self::outdoor_region_from_pos(self.state.hero_x, self.state.hero_y);
                     if pos_region != self.state.region_num {
                         self.dlog(format!(
                             "outdoor region transition: {} -> {} at ({}, {})",
-                            self.state.region_num, pos_region,
-                            self.state.hero_x, self.state.hero_y,
+                            self.state.region_num, pos_region, self.state.hero_x, self.state.hero_y,
                         ));
                         self.state.region_num = pos_region;
                     }
@@ -486,7 +548,9 @@ impl GameplayScene {
                 // Track safe spawn point after successful movement.
                 if let Some(ref world) = self.map_world {
                     let terrain = collision::px_to_terrain_type(
-                        world, self.state.hero_x as i32, self.state.hero_y as i32,
+                        world,
+                        self.state.hero_x as i32,
+                        self.state.hero_y as i32,
                     );
                     self.state.update_safe_spawn(terrain);
                 }
@@ -500,22 +564,30 @@ impl GameplayScene {
                 //
                 // This mirrors fmain.c where doorfind() changes sector_mem tiles (making the
                 // tile passable) and the actual xfer() teleport fires on the next frame's door scan.
-                let right_t = self.map_world.as_ref().map_or(0, |w|
-                    collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2));
-                let left_t  = self.map_world.as_ref().map_or(0, |w|
-                    collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2));
+                let right_t = self.map_world.as_ref().map_or(0, |w| {
+                    collision::px_to_terrain_type(w, new_x as i32 + 4, new_y as i32 + 2)
+                });
+                let left_t = self.map_world.as_ref().map_or(0, |w| {
+                    collision::px_to_terrain_type(w, new_x as i32 - 4, new_y as i32 + 2)
+                });
                 let door_tile = right_t == 15 || left_t == 15;
                 // probe_x: the probe point that found terrain-15 (used for tile-origin alignment).
-                let probe_x = if right_t == 15 { new_x as i32 + 4 } else { new_x as i32 - 4 };
+                let probe_x = if right_t == 15 {
+                    new_x as i32 + 4
+                } else {
+                    new_x as i32 - 4
+                };
                 let probe_y = new_y as i32 + 2;
                 if door_tile && self.state.region_num < 8 {
                     // Indoor exit is handled by the walk-on branch above (mirrors fmain.c: door
                     // scan runs on hero_x/hero_y after every successful move).
-                    use crate::game::doors::{doorfind_nearest_by_bump_radius, key_req, KeyReq,
-                                             apply_door_tile_replacement};
+                    use crate::game::doors::{
+                        apply_door_tile_replacement, doorfind_nearest_by_bump_radius, key_req,
+                        KeyReq,
+                    };
                     let region = self.state.region_num;
-                    let nearest = doorfind_nearest_by_bump_radius(
-                        &self.doors, region, new_x, new_y);
+                    let nearest =
+                        doorfind_nearest_by_bump_radius(&self.doors, region, new_x, new_y);
                     if let Some((idx, door)) = nearest {
                         if self.opened_doors.contains(&idx) {
                             // Phase 2 — door was opened; let the hero cross the threshold.
@@ -527,9 +599,9 @@ impl GameplayScene {
                             // Use new_y/new_x (proposed blocked position) as the equivalent
                             // of the original's post-move hero_y/hero_x.
                             let sub_tile_ok = if door.door_type & 1 != 0 {
-                                new_y & 0x10 == 0  // horizontal: upper half
+                                new_y & 0x10 == 0 // horizontal: upper half
                             } else {
-                                new_x & 15 <= 6    // vertical: left portion
+                                new_x & 15 <= 6 // vertical: left portion
                             };
                             // SPEC §21.7 (T1-CARRY-DOOR-BLOCK): All riding values block door entry.
                             let not_riding = self.state.riding == 0;
@@ -540,7 +612,10 @@ impl GameplayScene {
                                 self.state.hero_y = iy;
                                 self.opened_doors.remove(&idx);
                                 self.bumped_door = None;
-                                self.dlog(format!("door: walk-through to region {}", door.dst_region));
+                                self.dlog(format!(
+                                    "door: walk-through to region {}",
+                                    door.dst_region
+                                ));
                             }
                         } else {
                             // Phase 1 — attempt to open the door.
@@ -548,7 +623,12 @@ impl GameplayScene {
                                 KeyReq::NoKey => {
                                     // Freely-opening doors (wood, city gates, caves, stairs).
                                     if let Some(ref mut world) = self.map_world {
-                                        apply_door_tile_replacement(world, door.door_type, probe_x, probe_y);
+                                        apply_door_tile_replacement(
+                                            world,
+                                            door.door_type,
+                                            probe_x,
+                                            probe_y,
+                                        );
                                     }
                                     self.messages.push("It opened.");
                                     self.opened_doors.insert(idx);
@@ -567,7 +647,12 @@ impl GameplayScene {
                                     // (original fmain.c: `if (d->type == DESERT && stuff[STATBASE] < 5) break;`)
                                     if self.state.stuff()[25] >= 5 {
                                         if let Some(ref mut world) = self.map_world {
-                                            apply_door_tile_replacement(world, door.door_type, probe_x, probe_y);
+                                            apply_door_tile_replacement(
+                                                world,
+                                                door.door_type,
+                                                probe_x,
+                                                probe_y,
+                                            );
                                         }
                                         self.messages.push("It opened.");
                                         self.opened_doors.insert(idx);
@@ -686,7 +771,7 @@ impl GameplayScene {
                     self.state.raftprox = 2;
                     self.state.active_carrier = crate::game::game_state::CARRIER_RAFT;
                     self.state.on_raft = true;
-                    self.state.wcarry = 1;  // SPEC §21.2: raft is in actor slot 1
+                    self.state.wcarry = 1; // SPEC §21.2: raft is in actor slot 1
                 } else if within_16 {
                     self.state.raftprox = 1;
                 } else {
@@ -710,29 +795,28 @@ impl GameplayScene {
         const COMPASS_X_MAX: i32 = 567 + 48;
         let compass_y_min = HIBAR_Y + 30; // COMPASS_SRC_Y(15) × 2
         let compass_y_max = HIBAR_Y + 78; // (COMPASS_SRC_Y+COMPASS_SRC_H)(39) × 2
-        if mx >= COMPASS_X_MIN && mx < COMPASS_X_MAX
-            && my >= compass_y_min && my < compass_y_max
-        {
+        if mx >= COMPASS_X_MIN && mx < COMPASS_X_MAX && my >= compass_y_min && my < compass_y_max {
             let nx = mx - COMPASS_X_MIN;
             let ny = (my - compass_y_min) / 2; // scale back to native 24px height
-            for (idx, &(rx, ry, rw, rh)) in self.compass_regions[..8.min(self.compass_regions.len())].iter().enumerate() {
-                if rw > 0 && rh > 0
-                    && nx >= rx && nx < rx + rw
-                    && ny >= ry && ny < ry + rh
-                {
+            for (idx, &(rx, ry, rw, rh)) in self.compass_regions
+                [..8.min(self.compass_regions.len())]
+                .iter()
+                .enumerate()
+            {
+                if rw > 0 && rh > 0 && nx >= rx && nx < rx + rw && ny >= ry && ny < ry + rh {
                     // comptable: NW=0,N=1,NE=2,E=3,SE=4,S=5,SW=6,W=7
-                    self.input.up    = matches!(idx, 0 | 1 | 2);
-                    self.input.down  = matches!(idx, 4 | 5 | 6);
-                    self.input.left  = matches!(idx, 0 | 6 | 7);
+                    self.input.up = matches!(idx, 0 | 1 | 2);
+                    self.input.down = matches!(idx, 4 | 5 | 6);
+                    self.input.left = matches!(idx, 0 | 6 | 7);
                     self.input.right = matches!(idx, 2 | 3 | 4);
                     return true;
                 }
             }
         }
         // Outside all hitboxes — stop movement while held
-        self.input.up    = false;
-        self.input.down  = false;
-        self.input.left  = false;
+        self.input.up = false;
+        self.input.down = false;
+        self.input.left = false;
         self.input.right = false;
         false
     }
@@ -768,10 +852,7 @@ impl GameplayScene {
                 let idx = (nanos % 31) as usize;
                 let new_val = self.state.stuff()[idx].saturating_add(3);
                 self.state.stuff_mut()[idx] = new_val;
-                self.dlog(format!(
-                    "cheat1(.): stuff[{}] += 3 -> {}",
-                    idx, new_val
-                ));
+                self.dlog(format!("cheat1(.): stuff[{}] += 3 -> {}", idx, new_val));
                 true
             }
             K::R => {
@@ -784,7 +865,10 @@ impl GameplayScene {
             }
             K::F9 => {
                 self.state.daynight = self.state.daynight.wrapping_add(1000);
-                self.dlog(format!("cheat1(F9): daynight += 1000 -> {}", self.state.daynight));
+                self.dlog(format!(
+                    "cheat1(F9): daynight += 1000 -> {}",
+                    self.state.daynight
+                ));
                 true
             }
             K::F10 => {

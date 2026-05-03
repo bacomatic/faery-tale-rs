@@ -1,4 +1,3 @@
-
 // IFF ILBM image loading
 
 use serde::Deserialize;
@@ -15,7 +14,7 @@ pub struct ImageAsset {
     pub path: String,
 
     #[serde(skip)]
-    pub image: Option<IffImage>
+    pub image: Option<IffImage>,
 }
 
 /*
@@ -38,7 +37,6 @@ const MASK_LASSO: u8 = 3;
 const COMPRESSION_NONE: u8 = 0;
 const COMPRESSION_BYTE_RUN1: u8 = 1;
 
-
 #[derive(Debug)]
 pub struct IffImage {
     pub width: usize,
@@ -46,17 +44,22 @@ pub struct IffImage {
     pub bitplanes: usize,
     pub colormap: Option<Palette>,
     pub transparent_color: Option<usize>,
-    pub pixels: Vec<u8>
+    pub pixels: Vec<u8>,
 }
 
 impl IffImage {
     pub fn load_from_file(path: &Path) -> Result<IffImage, String> {
         // load the file data
-        let file_data = std::fs::read(path).map_err(|e| format!("Failed to read IFF image file {:?}: {}", path, e))?;
+        let file_data = std::fs::read(path)
+            .map_err(|e| format!("Failed to read IFF image file {:?}: {}", path, e))?;
 
         let result = IffImage::load_from_data(&file_data);
         if result.is_err() {
-            return Err(format!("Failed to load IFF image from file {:?}: {}", path, result.err().unwrap()));
+            return Err(format!(
+                "Failed to load IFF image from file {:?}: {}",
+                path,
+                result.err().unwrap()
+            ));
         }
         Ok(result.unwrap())
     }
@@ -81,7 +84,7 @@ impl IffImage {
             bitplanes: 0,
             colormap: None,
             transparent_color: None,
-            pixels: Vec::new()
+            pixels: Vec::new(),
         };
 
         let mut compressed = false;
@@ -106,12 +109,15 @@ impl IffImage {
 
                     let compression = input_data[header_offset];
                     match compression {
-                        COMPRESSION_NONE => {},
+                        COMPRESSION_NONE => {}
                         COMPRESSION_BYTE_RUN1 => {
                             compressed = true;
-                        },
+                        }
                         _ => {
-                            return Err(format!("Unsupported compression type {:?} in BMHD", compression));
+                            return Err(format!(
+                                "Unsupported compression type {:?} in BMHD",
+                                compression
+                            ));
                         }
                     }
                     header_offset += 1; // skip pad byte
@@ -129,11 +135,11 @@ impl IffImage {
                 FOURCC_CMAP => {
                     // read colormap
                     let mut colormap = Palette { colors: Vec::new() };
-                    for _ in 0 .. (chunk_size / 3) {
+                    for _ in 0..(chunk_size / 3) {
                         colormap.colors.push(RGB4::from((
                             input_data[offset],
                             input_data[offset + 1],
-                            input_data[offset + 2]
+                            input_data[offset + 2],
                         )));
                         offset += 3;
                     }
@@ -143,7 +149,7 @@ impl IffImage {
                     // read body data
                     if !compressed {
                         // uncompressed, just read the data
-                        let pixels = input_data.get(offset..offset+chunk_size);
+                        let pixels = input_data.get(offset..offset + chunk_size);
                         if pixels.is_none() {
                             return Err("BODY chunk in ILBM is truncated".to_string());
                         }
@@ -154,14 +160,17 @@ impl IffImage {
                     } else {
                         // compressed with ByteRun1
                         let mut body_offset: usize = 0;
-                        let mut pixel_data: Vec<u8> = Vec::with_capacity(image.height * ((image.width + 15) / 16) * 2 * image.bitplanes);
+                        let mut pixel_data: Vec<u8> = Vec::with_capacity(
+                            image.height * ((image.width + 15) / 16) * 2 * image.bitplanes,
+                        );
                         while body_offset < chunk_size {
                             let n = input_data[offset + body_offset] as i8;
                             body_offset += 1;
                             if n >= 0 {
                                 // copy next n+1 bytes literally
                                 let copy_size = (n as usize) + 1;
-                                let bytes = input_data.get(offset + body_offset .. offset + body_offset + copy_size);
+                                let bytes = input_data
+                                    .get(offset + body_offset..offset + body_offset + copy_size);
                                 if bytes.is_none() {
                                     return Err("BODY chunk in ILBM is truncated during ByteRun1 literal copy".to_string());
                                 }
@@ -172,10 +181,13 @@ impl IffImage {
                                 let repeat_count = ((-n) as usize) + 1;
                                 let byte_opt = input_data.get(offset + body_offset);
                                 if byte_opt.is_none() {
-                                    return Err("BODY chunk in ILBM is truncated during ByteRun1 repeat".to_string());
+                                    return Err(
+                                        "BODY chunk in ILBM is truncated during ByteRun1 repeat"
+                                            .to_string(),
+                                    );
                                 }
                                 let byte = *byte_opt.unwrap();
-                                for _ in 0 .. repeat_count {
+                                for _ in 0..repeat_count {
                                     pixel_data.push(byte);
                                 }
                                 body_offset += 1;

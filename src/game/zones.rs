@@ -24,10 +24,10 @@ impl ZoneType {
     /// Derive zone category from the raw etype value.
     pub fn from_etype(etype: u8) -> ZoneType {
         match etype {
-            0..=49  => ZoneType::Encounter,
+            0..=49 => ZoneType::Encounter,
             50..=69 => ZoneType::Special,
             70..=79 => ZoneType::Carrier,
-            _       => ZoneType::Peace,  // 80+
+            _ => ZoneType::Peace, // 80+
         }
     }
 }
@@ -75,7 +75,17 @@ mod tests {
     use super::*;
 
     fn make_zone(label: &str, etype: u8, x1: u16, y1: u16, x2: u16, y2: u16) -> ZoneConfig {
-        ZoneConfig { label: label.to_string(), etype, x1, y1, x2, y2, v1: 0, v2: 0, v3: 0 }
+        ZoneConfig {
+            label: label.to_string(),
+            etype,
+            x1,
+            y1,
+            x2,
+            y2,
+            v1: 0,
+            v2: 0,
+            v3: 0,
+        }
     }
 
     #[test]
@@ -103,7 +113,7 @@ mod tests {
         assert!(!zone_contains(&z, 100, 100)); // x == x2
         assert!(!zone_contains(&z, 50, 20)); // y == y1
         assert!(!zone_contains(&z, 50, 200)); // y == y2
-        // Outside
+                                              // Outside
         assert!(!zone_contains(&z, 5, 100));
         assert!(!zone_contains(&z, 50, 300));
     }
@@ -121,15 +131,17 @@ mod tests {
 
     #[test]
     fn find_zone_returns_first_match() {
-        let zones: Vec<ZoneConfig> = (0..23).map(|i| {
-            if i == 3 {
-                make_zone("spider pit", 53, 4063, 34819, 4909, 35125)
-            } else if i == 22 {
-                make_zone("whole world", 3, 0, 0, 32767, 40959)
-            } else {
-                make_zone("empty", 80, 0, 0, 0, 0)
-            }
-        }).collect();
+        let zones: Vec<ZoneConfig> = (0..23)
+            .map(|i| {
+                if i == 3 {
+                    make_zone("spider pit", 53, 4063, 34819, 4909, 35125)
+                } else if i == 22 {
+                    make_zone("whole world", 3, 0, 0, 32767, 40959)
+                } else {
+                    make_zone("empty", 80, 0, 0, 0, 0)
+                }
+            })
+            .collect();
 
         // Point inside spider pit
         assert_eq!(find_zone(&zones, 4500, 35000), Some(3));
@@ -145,20 +157,22 @@ mod tests {
 
     #[test]
     fn in_encounter_zone_checks_etype() {
-        let zones: Vec<ZoneConfig> = (0..23).map(|i| {
-            if i == 16 {
-                // swamp region: etype=7 (< 50 = encounter zone)
-                make_zone("swamp region", 7, 6156, 12755, 12316, 15905)
-            } else if i == 12 {
-                // peace zone: etype=80 (>= 80 = peace)
-                make_zone("peace 1", 80, 2752, 33300, 8632, 35400)
-            } else if i == 22 {
-                // whole world fallback: etype=3 (< 50 = encounter)
-                make_zone("whole world", 3, 0, 0, 32767, 40959)
-            } else {
-                make_zone("empty", 80, 0, 0, 0, 0)
-            }
-        }).collect();
+        let zones: Vec<ZoneConfig> = (0..23)
+            .map(|i| {
+                if i == 16 {
+                    // swamp region: etype=7 (< 50 = encounter zone)
+                    make_zone("swamp region", 7, 6156, 12755, 12316, 15905)
+                } else if i == 12 {
+                    // peace zone: etype=80 (>= 80 = peace)
+                    make_zone("peace 1", 80, 2752, 33300, 8632, 35400)
+                } else if i == 22 {
+                    // whole world fallback: etype=3 (< 50 = encounter)
+                    make_zone("whole world", 3, 0, 0, 32767, 40959)
+                } else {
+                    make_zone("empty", 80, 0, 0, 0, 0)
+                }
+            })
+            .collect();
 
         // In swamp region (etype=7 → Encounter)
         assert!(in_encounter_zone(&zones, 8000, 14000));

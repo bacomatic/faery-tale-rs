@@ -3,9 +3,9 @@
 
 use crate::game::actor::{Goal, Tactic};
 use crate::game::npc::{
-    Npc, NpcState, NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_GHOST, NPC_TYPE_WRAITH,
-    NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_DKNIGHT, NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER,
-    RACE_ENEMY, RACE_UNDEAD, RACE_WRAITH, RACE_SNAKE,
+    Npc, NpcState, NPC_TYPE_DKNIGHT, NPC_TYPE_GHOST, NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER,
+    NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_WRAITH, RACE_ENEMY,
+    RACE_SNAKE, RACE_UNDEAD, RACE_WRAITH,
 };
 
 /// Per-enemy-type stats from fmain.c encounter_chart[].
@@ -20,48 +20,114 @@ pub struct EnemyTypeStats {
 
 /// Full encounter chart from fmain.c (11 enemy types).
 pub const ENCOUNTER_CHART_FULL: [EnemyTypeStats; 11] = [
-    EnemyTypeStats { hp: 18, arms: 2, clever: 0, treasure: 2, cfile: 6 },  // 0: Ogre
-    EnemyTypeStats { hp: 12, arms: 4, clever: 1, treasure: 1, cfile: 6 },  // 1: Orcs
-    EnemyTypeStats { hp: 16, arms: 6, clever: 1, treasure: 4, cfile: 7 },  // 2: Wraith
-    EnemyTypeStats { hp: 8,  arms: 3, clever: 0, treasure: 3, cfile: 7 },  // 3: Skeleton
-    EnemyTypeStats { hp: 16, arms: 6, clever: 1, treasure: 0, cfile: 8 },  // 4: Snake
-    EnemyTypeStats { hp: 9,  arms: 3, clever: 0, treasure: 0, cfile: 7 },  // 5: Salamander
-    EnemyTypeStats { hp: 10, arms: 6, clever: 1, treasure: 0, cfile: 8 },  // 6: Spider
-    EnemyTypeStats { hp: 40, arms: 7, clever: 1, treasure: 0, cfile: 8 },  // 7: DKnight
-    EnemyTypeStats { hp: 12, arms: 6, clever: 1, treasure: 0, cfile: 9 },  // 8: Loraii
-    EnemyTypeStats { hp: 50, arms: 5, clever: 0, treasure: 0, cfile: 9 },  // 9: Necromancer
-    EnemyTypeStats { hp: 4,  arms: 0, clever: 0, treasure: 0, cfile: 9 },  // 10: Woodcutter
+    EnemyTypeStats {
+        hp: 18,
+        arms: 2,
+        clever: 0,
+        treasure: 2,
+        cfile: 6,
+    }, // 0: Ogre
+    EnemyTypeStats {
+        hp: 12,
+        arms: 4,
+        clever: 1,
+        treasure: 1,
+        cfile: 6,
+    }, // 1: Orcs
+    EnemyTypeStats {
+        hp: 16,
+        arms: 6,
+        clever: 1,
+        treasure: 4,
+        cfile: 7,
+    }, // 2: Wraith
+    EnemyTypeStats {
+        hp: 8,
+        arms: 3,
+        clever: 0,
+        treasure: 3,
+        cfile: 7,
+    }, // 3: Skeleton
+    EnemyTypeStats {
+        hp: 16,
+        arms: 6,
+        clever: 1,
+        treasure: 0,
+        cfile: 8,
+    }, // 4: Snake
+    EnemyTypeStats {
+        hp: 9,
+        arms: 3,
+        clever: 0,
+        treasure: 0,
+        cfile: 7,
+    }, // 5: Salamander
+    EnemyTypeStats {
+        hp: 10,
+        arms: 6,
+        clever: 1,
+        treasure: 0,
+        cfile: 8,
+    }, // 6: Spider
+    EnemyTypeStats {
+        hp: 40,
+        arms: 7,
+        clever: 1,
+        treasure: 0,
+        cfile: 8,
+    }, // 7: DKnight
+    EnemyTypeStats {
+        hp: 12,
+        arms: 6,
+        clever: 1,
+        treasure: 0,
+        cfile: 9,
+    }, // 8: Loraii
+    EnemyTypeStats {
+        hp: 50,
+        arms: 5,
+        clever: 0,
+        treasure: 0,
+        cfile: 9,
+    }, // 9: Necromancer
+    EnemyTypeStats {
+        hp: 4,
+        arms: 0,
+        clever: 0,
+        treasure: 0,
+        cfile: 9,
+    }, // 10: Woodcutter
 ];
 
 /// Map encounter_chart index → NPC type constant for sprite rendering.
 /// In the original game, all enemies had type=ENEMY and race=encounter_index;
 /// the Rust port uses npc_type for cfile lookup, so we need this translation.
 const ENCOUNTER_TO_NPC_TYPE: [u8; 11] = [
-    NPC_TYPE_ORC,          // 0: Ogre
-    NPC_TYPE_ORC,          // 1: Orcs
-    NPC_TYPE_WRAITH,       // 2: Wraith
-    NPC_TYPE_SKELETON,     // 3: Skeleton
-    NPC_TYPE_SNAKE,        // 4: Snake
-    NPC_TYPE_GHOST,        // 5: Salamander (shares cfile 7 with ghost)
-    NPC_TYPE_SPIDER,       // 6: Spider
-    NPC_TYPE_DKNIGHT,      // 7: DKnight
-    NPC_TYPE_LORAII,       // 8: Loraii
-    NPC_TYPE_NECROMANCER,  // 9: Necromancer
-    NPC_TYPE_ORC,          // 10: Woodcutter (placeholder)
+    NPC_TYPE_ORC,         // 0: Ogre
+    NPC_TYPE_ORC,         // 1: Orcs
+    NPC_TYPE_WRAITH,      // 2: Wraith
+    NPC_TYPE_SKELETON,    // 3: Skeleton
+    NPC_TYPE_SNAKE,       // 4: Snake
+    NPC_TYPE_GHOST,       // 5: Salamander (shares cfile 7 with ghost)
+    NPC_TYPE_SPIDER,      // 6: Spider
+    NPC_TYPE_DKNIGHT,     // 7: DKnight
+    NPC_TYPE_LORAII,      // 8: Loraii
+    NPC_TYPE_NECROMANCER, // 9: Necromancer
+    NPC_TYPE_ORC,         // 10: Woodcutter (placeholder)
 ];
 
 /// Weapon probability table from fmain.c weapon_probs[] (`fmain2.c:860-868`).
 /// Indexed by arms * 4 + rand4(). Returns weapon index for the NPC.
 /// Weapon codes: 0=none, 1=dirk, 2=mace, 3=sword, 4=bow, 5=wand, 8=touch.
 pub const WEAPON_PROBS: [u8; 32] = [
-    0, 0, 0, 0,  // arms=0: no weapon
-    1, 1, 1, 1,  // arms=1: all dirks
-    1, 2, 1, 2,  // arms=2: dirks and maces
-    1, 2, 3, 2,  // arms=3: mostly maces, some swords
-    4, 4, 3, 2,  // arms=4: bows and swords
-    5, 5, 5, 5,  // arms=5: all magic wands
-    8, 8, 8, 8,  // arms=6: touch attack
-    3, 3, 3, 3,  // arms=7: all swords
+    0, 0, 0, 0, // arms=0: no weapon
+    1, 1, 1, 1, // arms=1: all dirks
+    1, 2, 1, 2, // arms=2: dirks and maces
+    1, 2, 3, 2, // arms=3: mostly maces, some swords
+    4, 4, 3, 2, // arms=4: bows and swords
+    5, 5, 5, 5, // arms=5: all magic wands
+    8, 8, 8, 8, // arms=6: touch attack
+    3, 3, 3, 3, // arms=7: all swords
 ];
 
 fn rand4_from_tick(tick: u32) -> u32 {
@@ -85,11 +151,7 @@ fn bitrand_from_tick(tick: u32, mask: u32) -> u32 {
 }
 
 /// Check if any active enemy NPC is within visibility range (~300px).
-pub fn actors_on_screen(
-    table: &crate::game::npc::NpcTable,
-    hero_x: i16,
-    hero_y: i16,
-) -> bool {
+pub fn actors_on_screen(table: &crate::game::npc::NpcTable, hero_x: i16, hero_y: i16) -> bool {
     table.npcs.iter().any(|n| {
         n.active
             && (n.x as i32 - hero_x as i32).abs() < 300
@@ -106,9 +168,9 @@ pub fn active_enemy_count(table: &crate::game::npc::NpcTable) -> usize {
 pub fn pick_encounter_type(xtype: u16, tick: u32) -> usize {
     let base = rand4_from_tick(tick) as usize;
     match xtype {
-        7 if base == 2 => 4,   // swamp: wraith→snake
-        8 => 6,                // spider zone: always spider
-        49 => 2,               // forced wraith
+        7 if base == 2 => 4, // swamp: wraith→snake
+        8 => 6,              // spider zone: always spider
+        49 => 2,             // forced wraith
         _ => base,
     }
 }
@@ -179,7 +241,9 @@ fn encounter_origin(hero_x: i16, hero_y: i16, tick: u32) -> (i16, i16) {
 pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick: u32) -> Npc {
     let etype = encounter_type.min(10);
     let stats = &ENCOUNTER_CHART_FULL[etype];
-    let wp_idx = (stats.arms as usize * 4 + rand4_from_tick(tick.wrapping_add(etype as u32)) as usize).min(31);
+    let wp_idx = (stats.arms as usize * 4
+        + rand4_from_tick(tick.wrapping_add(etype as u32)) as usize)
+        .min(31);
     let weapon = WEAPON_PROBS[wp_idx];
     let race = match etype {
         2 => RACE_WRAITH,
@@ -190,9 +254,17 @@ pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick
     // Assign goal based on weapon type and cleverness.
     let is_ranged = weapon >= 4; // bow or wand
     let goal = if is_ranged {
-        if stats.clever > 0 { Goal::Archer2 } else { Goal::Archer1 }
+        if stats.clever > 0 {
+            Goal::Archer2
+        } else {
+            Goal::Archer1
+        }
     } else {
-        if stats.clever > 0 { Goal::Attack2 } else { Goal::Attack1 }
+        if stats.clever > 0 {
+            Goal::Attack2
+        } else {
+            Goal::Attack1
+        }
     };
 
     Npc {
@@ -259,14 +331,19 @@ pub fn spawn_encounter_group(
         // Retry loop: try up to MAX_TRY scatter positions per NPC (original set_encounter).
         let mut placed = false;
         for j in 0..MAX_TRY {
-            let sub_tick = tick.wrapping_add(i as u32).wrapping_mul(31).wrapping_add(j * 7);
+            let sub_tick = tick
+                .wrapping_add(i as u32)
+                .wrapping_mul(31)
+                .wrapping_add(j * 7);
             let scatter_x = bitrand_from_tick(sub_tick, SPREAD as u32) as i16 - SPREAD / 2;
-            let scatter_y = bitrand_from_tick(sub_tick.wrapping_add(13), SPREAD as u32) as i16 - SPREAD / 2;
+            let scatter_y =
+                bitrand_from_tick(sub_tick.wrapping_add(13), SPREAD as u32) as i16 - SPREAD / 2;
             let npc_x = enc_x.wrapping_add(scatter_x);
             let npc_y = enc_y.wrapping_add(scatter_y);
 
             if !actor_collides(npc_x as i32, npc_y as i32, &occupied) {
-                let mut npc = spawn_encounter(encounter_type, npc_x, npc_y, tick.wrapping_add(i as u32));
+                let mut npc =
+                    spawn_encounter(encounter_type, npc_x, npc_y, tick.wrapping_add(i as u32));
                 npc.x = npc_x;
                 npc.y = npc_y;
                 table.npcs[slot_idx] = npc;
@@ -310,13 +387,13 @@ mod tests {
         // Verify encounter-spawned NPCs get the correct npc_type for cfile lookup.
         // Bug: previously stored raw encounter_chart index as npc_type,
         // causing wraith→bird sprites, skeleton→turtle sprites, etc.
-        assert_eq!(spawn_encounter(0, 0, 0, 1).npc_type, NPC_TYPE_ORC);       // Ogre
-        assert_eq!(spawn_encounter(1, 0, 0, 1).npc_type, NPC_TYPE_ORC);       // Orcs
-        assert_eq!(spawn_encounter(2, 0, 0, 1).npc_type, NPC_TYPE_WRAITH);    // Wraith
-        assert_eq!(spawn_encounter(3, 0, 0, 1).npc_type, NPC_TYPE_SKELETON);  // Skeleton
-        assert_eq!(spawn_encounter(4, 0, 0, 1).npc_type, NPC_TYPE_SNAKE);     // Snake
-        assert_eq!(spawn_encounter(5, 0, 0, 1).npc_type, NPC_TYPE_GHOST);     // Salamander
-        assert_eq!(spawn_encounter(6, 0, 0, 1).npc_type, NPC_TYPE_SPIDER);    // Spider
+        assert_eq!(spawn_encounter(0, 0, 0, 1).npc_type, NPC_TYPE_ORC); // Ogre
+        assert_eq!(spawn_encounter(1, 0, 0, 1).npc_type, NPC_TYPE_ORC); // Orcs
+        assert_eq!(spawn_encounter(2, 0, 0, 1).npc_type, NPC_TYPE_WRAITH); // Wraith
+        assert_eq!(spawn_encounter(3, 0, 0, 1).npc_type, NPC_TYPE_SKELETON); // Skeleton
+        assert_eq!(spawn_encounter(4, 0, 0, 1).npc_type, NPC_TYPE_SNAKE); // Snake
+        assert_eq!(spawn_encounter(5, 0, 0, 1).npc_type, NPC_TYPE_GHOST); // Salamander
+        assert_eq!(spawn_encounter(6, 0, 0, 1).npc_type, NPC_TYPE_SPIDER); // Spider
     }
 
     #[test]
@@ -327,51 +404,91 @@ mod tests {
 
     #[test]
     fn test_actors_on_screen_empty() {
-        let table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         assert!(!actors_on_screen(&table, 100, 100));
     }
 
     #[test]
     fn test_actors_on_screen_nearby() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc { active: true, x: 150, y: 150, ..Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
+        table.npcs[0] = Npc {
+            active: true,
+            x: 150,
+            y: 150,
+            ..Default::default()
+        };
         assert!(actors_on_screen(&table, 100, 100));
     }
 
     #[test]
     fn test_actors_on_screen_far_away() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc { active: true, x: 1000, y: 1000, ..Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
+        table.npcs[0] = Npc {
+            active: true,
+            x: 1000,
+            y: 1000,
+            ..Default::default()
+        };
         assert!(!actors_on_screen(&table, 100, 100));
     }
 
     #[test]
     fn test_try_trigger_encounter_respects_tick_gate() {
-        let table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         assert!(try_trigger_encounter(1, &table, 100, 100, 0, 0, 0).is_none());
     }
 
     #[test]
     fn test_try_trigger_encounter_blocks_when_actors_present() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
-        table.npcs[0] = Npc { active: true, x: 100, y: 100, ..Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
+        table.npcs[0] = Npc {
+            active: true,
+            x: 100,
+            y: 100,
+            ..Default::default()
+        };
         assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0, 0).is_none());
     }
 
     #[test]
     fn test_active_enemy_count() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         assert_eq!(active_enemy_count(&table), 0);
-        table.npcs[0] = Npc { active: true, ..Default::default() };
-        table.npcs[3] = Npc { active: true, ..Default::default() };
+        table.npcs[0] = Npc {
+            active: true,
+            ..Default::default()
+        };
+        table.npcs[3] = Npc {
+            active: true,
+            ..Default::default()
+        };
         assert_eq!(active_enemy_count(&table), 2);
     }
 
     #[test]
     fn test_try_trigger_encounter_blocks_at_4_enemies() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         for i in 0..4 {
-            table.npcs[i] = Npc { active: true, x: 5000, y: 5000, ..Default::default() };
+            table.npcs[i] = Npc {
+                active: true,
+                x: 5000,
+                y: 5000,
+                ..Default::default()
+            };
         }
         assert!(try_trigger_encounter(32, &table, 100, 100, 0, 0, 0).is_none());
     }
@@ -379,15 +496,21 @@ mod tests {
     #[test]
     fn test_try_trigger_encounter_blocks_on_carrier() {
         // fmain.c:2081 — `active_carrier == 0` is part of the 14j gate.
-        let table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         // graveyard-ish xtype=48 would otherwise fire almost every window.
-        assert!(try_trigger_encounter(32, &table, 100, 100, 48, 0, 1).is_none(),
-            "encounters must be suppressed while riding a carrier");
+        assert!(
+            try_trigger_encounter(32, &table, 100, 100, 48, 0, 1).is_none(),
+            "encounters must be suppressed while riding a carrier"
+        );
     }
 
     #[test]
     fn test_spawn_encounter_group_caps_at_4() {
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         let spawned = spawn_encounter_group(&mut table, 0, 100, 100, 42);
         assert_eq!(spawned, 4);
         assert_eq!(active_enemy_count(&table), 4);
@@ -404,25 +527,40 @@ mod tests {
             let dy = (oy as i32 - 1000).abs();
             // At minimum, distance = 150 with smallest dir component (magnitude 2),
             // giving offset = (2*150)/2 = 150px. Must be well outside half-viewport.
-            assert!(dx > 70 || dy > 70,
+            assert!(
+                dx > 70 || dy > 70,
                 "tick={}: origin ({},{}) too close to hero (1000,1000): dx={}, dy={}",
-                tick, ox, oy, dx, dy);
+                tick,
+                ox,
+                oy,
+                dx,
+                dy
+            );
         }
     }
 
     #[test]
     fn test_spawn_encounter_group_positions_offscreen() {
         // All spawned enemies should be far from the hero, not surrounding them.
-        let mut table = crate::game::npc::NpcTable { npcs: Default::default() };
+        let mut table = crate::game::npc::NpcTable {
+            npcs: Default::default(),
+        };
         let hero_x = 5000i16;
         let hero_y = 5000i16;
         spawn_encounter_group(&mut table, 0, hero_x, hero_y, 42);
         for npc in table.npcs.iter().filter(|n| n.active) {
             let dx = (npc.x as i32 - hero_x as i32).abs();
             let dy = (npc.y as i32 - hero_y as i32).abs();
-            assert!(dx > 50 || dy > 50,
+            assert!(
+                dx > 50 || dy > 50,
                 "Enemy at ({},{}) too close to hero ({},{}): dx={}, dy={}",
-                npc.x, npc.y, hero_x, hero_y, dx, dy);
+                npc.x,
+                npc.y,
+                hero_x,
+                hero_y,
+                dx,
+                dy
+            );
         }
     }
 
@@ -460,8 +598,11 @@ mod tests {
         for tick in 0..100u32 {
             let npc = spawn_encounter(7, 100, 100, tick);
             if npc.weapon >= 4 {
-                assert!(matches!(npc.goal, Goal::Archer1 | Goal::Archer2),
-                    "Bow/wand wielder should get Archer goal, got {:?}", npc.goal);
+                assert!(
+                    matches!(npc.goal, Goal::Archer1 | Goal::Archer2),
+                    "Bow/wand wielder should get Archer goal, got {:?}",
+                    npc.goal
+                );
                 return;
             }
         }

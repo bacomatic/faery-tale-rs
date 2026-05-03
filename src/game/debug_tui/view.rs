@@ -270,7 +270,9 @@ impl DebugConsole {
                     // History: Up
                     KeyCode::Up => {
                         let len = self.command_history.len();
-                        if len == 0 { return true; }
+                        if len == 0 {
+                            return true;
+                        }
                         let idx = match self.history_index {
                             None => len - 1,
                             Some(i) => i.saturating_sub(1),
@@ -280,21 +282,19 @@ impl DebugConsole {
                     }
 
                     // History: Down
-                    KeyCode::Down => {
-                        match self.history_index {
-                            None => {}
-                            Some(i) => {
-                                if i + 1 < self.command_history.len() {
-                                    let next = i + 1;
-                                    self.history_index = Some(next);
-                                    self.input_buffer = self.command_history[next].clone();
-                                } else {
-                                    self.history_index = None;
-                                    self.input_buffer.clear();
-                                }
+                    KeyCode::Down => match self.history_index {
+                        None => {}
+                        Some(i) => {
+                            if i + 1 < self.command_history.len() {
+                                let next = i + 1;
+                                self.history_index = Some(next);
+                                self.input_buffer = self.command_history[next].clone();
+                            } else {
+                                self.history_index = None;
+                                self.input_buffer.clear();
                             }
                         }
-                    }
+                    },
 
                     // Log scrolling
                     KeyCode::PageUp => {
@@ -334,7 +334,9 @@ impl DebugConsole {
 
     /// DBG-LOG-08: handle a key press while the interactive `/filter` modal is open.
     fn handle_filter_interactive_key(&mut self, code: KeyCode, mods: KeyModifiers) {
-        let Some(cursor) = self.filter_interactive else { return };
+        let Some(cursor) = self.filter_interactive else {
+            return;
+        };
         let n = LogCategory::ALL.len();
         match code {
             KeyCode::Esc | KeyCode::Enter => {
@@ -415,7 +417,12 @@ impl DebugConsole {
             let god_str = build_god_str(status.god_mode_flags);
             let hero_stats_text = vec![
                 Line::from(vec![
-                    Span::styled(brother_name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        brother_name,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("  "),
                     styled_label("HP: "),
                     Span::raw(format!("{}/{}", status.vitality, status.max_vitality)),
@@ -444,7 +451,10 @@ impl DebugConsole {
                     styled_label("F:"),
                     Span::raw(facing_name(status.hero_facing)),
                     if !god_str.is_empty() {
-                        Span::styled(format!("  God:{}", god_str), Style::default().fg(Color::Yellow))
+                        Span::styled(
+                            format!("  God:{}", god_str),
+                            Style::default().fg(Color::Yellow),
+                        )
                     } else {
                         Span::raw("")
                     },
@@ -460,7 +470,11 @@ impl DebugConsole {
                 (Some(idx), None) => format!("{}", idx),
                 _ => "—".to_string(),
             };
-            let env_str = format!("{} ({})", status.hero_environ, environ_label(status.hero_environ));
+            let env_str = format!(
+                "{} ({})",
+                status.hero_environ,
+                environ_label(status.hero_environ)
+            );
             let geo_text = vec![
                 Line::from(vec![
                     styled_label("Pos: "),
@@ -472,10 +486,7 @@ impl DebugConsole {
                     styled_label("Ext: "),
                     Span::raw(zone_str),
                 ]),
-                Line::from(vec![
-                    styled_label("Env: "),
-                    Span::raw(env_str),
-                ]),
+                Line::from(vec![styled_label("Env: "), Span::raw(env_str)]),
                 Line::from(vec![
                     styled_label("Carrier: "),
                     Span::raw(status.active_carrier_name.clone()),
@@ -489,26 +500,41 @@ impl DebugConsole {
             let vfx_text = vec![
                 Line::from(vec![
                     if status.is_paused {
-                        Span::styled("[PAUSED]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                        Span::styled(
+                            "[PAUSED]",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        )
                     } else {
                         Span::raw("")
                     },
                     if status.vfx_witch_active {
                         Span::styled(" Witch", Style::default().fg(Color::Magenta))
-                    } else { Span::raw("") },
+                    } else {
+                        Span::raw("")
+                    },
                     if status.vfx_teleport_active {
                         Span::styled(" TP", Style::default().fg(Color::Green))
-                    } else { Span::raw("") },
+                    } else {
+                        Span::raw("")
+                    },
                     if status.vfx_secret_active {
                         Span::styled(" Secret", Style::default().fg(Color::Green))
-                    } else { Span::raw("") },
+                    } else {
+                        Span::raw("")
+                    },
                 ]),
                 Line::from(vec![
                     styled_label("Cave:"),
                     Span::raw(if status.cave_mode { "on" } else { "off" }),
                     Span::raw("  "),
                     styled_label("Princess:"),
-                    Span::raw(if status.princess_captive { "captive" } else { "freed" }),
+                    Span::raw(if status.princess_captive {
+                        "captive"
+                    } else {
+                        "freed"
+                    }),
                 ]),
                 Line::from(vec![
                     styled_label("Writ:"),
@@ -522,7 +548,11 @@ impl DebugConsole {
                 ]),
                 Line::from(vec![
                     styled_label("Palette:"),
-                    Span::raw(if status.vfx_palette_xfade { "xfade" } else { "—" }),
+                    Span::raw(if status.vfx_palette_xfade {
+                        "xfade"
+                    } else {
+                        "—"
+                    }),
                     Span::raw("  "),
                     styled_label("Jewel:"),
                     Span::raw(if status.vfx_jewel_active { "on" } else { "—" }),
@@ -537,10 +567,7 @@ impl DebugConsole {
                 Line::from(vec![
                     styled_label("Time: "),
                     Span::raw(format!("{}  ", status.daynight)),
-                    Span::styled(
-                        status.time_period.clone(),
-                        Style::default().fg(Color::Cyan),
-                    ),
+                    Span::styled(status.time_period.clone(), Style::default().fg(Color::Cyan)),
                 ]),
                 Line::from(vec![
                     styled_label("Light: "),
@@ -575,16 +602,19 @@ impl DebugConsole {
                 Some((x, y)) => format!("Raft:({},{})", x, y),
                 None => "Raft:—".to_string(),
             };
-            let indicator = if self.watch_expanded { "[▼]" } else { "[▶]" };
+            let indicator = if self.watch_expanded {
+                "[▼]"
+            } else {
+                "[▶]"
+            };
             let watch_title = format!(
                 " Actors {}  {}  Msls:{} Items:{} ",
                 indicator, raft_str, status.missile_count, status.item_count,
             );
             if self.watch_expanded {
                 let mut rows: Vec<Line> = Vec::with_capacity(5);
-                let non_player: Vec<_> = status.actors.iter()
-                    .filter(|a| a.actor_type != 0)
-                    .collect();
+                let non_player: Vec<_> =
+                    status.actors.iter().filter(|a| a.actor_type != 0).collect();
                 for i in 0..5 {
                     let line = if let Some(a) = non_player.get(i) {
                         let kind = actor_kind_name(a.actor_type);
@@ -642,7 +672,11 @@ impl DebugConsole {
                 .map(|e| Line::raw(format_log_entry(e)))
                 .collect();
             let log_widget = Paragraph::new(log_text)
-                .block(Block::default().borders(Borders::ALL).title(" Log  [PgUp/PgDn/Home/End to scroll] "))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Log  [PgUp/PgDn/Home/End to scroll] "),
+                )
                 .wrap(Wrap { trim: false })
                 .scroll((top_offset as u16, 0));
             f.render_widget(log_widget, chunks[2]);
@@ -662,14 +696,18 @@ impl DebugConsole {
                 let h: u16 = n + 3;
                 let x = area.x + area.width.saturating_sub(w) / 2;
                 let y = area.y + area.height.saturating_sub(h) / 2;
-                let popup = ratatui::layout::Rect { x, y, width: w.min(area.width), height: h.min(area.height) };
+                let popup = ratatui::layout::Rect {
+                    x,
+                    y,
+                    width: w.min(area.width),
+                    height: h.min(area.height),
+                };
                 f.render_widget(Clear, popup);
-                let modal = Paragraph::new(text)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(" /filter — Space toggle  Tab/↑↓ move  Enter/Esc close "),
-                    );
+                let modal = Paragraph::new(text).block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" /filter — Space toggle  Tab/↑↓ move  Enter/Esc close "),
+                );
                 f.render_widget(modal, popup);
             }
         });
@@ -687,16 +725,28 @@ impl Drop for DebugConsole {
 // ── Styling helpers used by render() ─────────────────────────────────────────
 
 fn styled_label(s: &'static str) -> Span<'static> {
-    Span::styled(s, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+    Span::styled(
+        s,
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )
 }
 
 fn build_god_str(flags: u8) -> String {
     let f = GodModeFlags::from_bits_truncate(flags);
     let mut parts = Vec::new();
-    if f.contains(GodModeFlags::NOCLIP)       { parts.push("NOCLIP"); }
-    if f.contains(GodModeFlags::INVINCIBLE)   { parts.push("INVINCIBLE"); }
-    if f.contains(GodModeFlags::ONE_HIT_KILL) { parts.push("ONE_HIT_KILL"); }
-    if f.contains(GodModeFlags::INSANE_REACH) { parts.push("INSANE_REACH"); }
+    if f.contains(GodModeFlags::NOCLIP) {
+        parts.push("NOCLIP");
+    }
+    if f.contains(GodModeFlags::INVINCIBLE) {
+        parts.push("INVINCIBLE");
+    }
+    if f.contains(GodModeFlags::ONE_HIT_KILL) {
+        parts.push("ONE_HIT_KILL");
+    }
+    if f.contains(GodModeFlags::INSANE_REACH) {
+        parts.push("INSANE_REACH");
+    }
     parts.join("+")
 }
-

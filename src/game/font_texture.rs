@@ -1,4 +1,3 @@
-
 use crate::game::font::DiskFont;
 
 use sdl2::rect::Rect;
@@ -35,7 +34,11 @@ pub struct FontTexture<'a> {
 }
 
 impl<'a> FontTexture<'a> {
-    pub fn new(font: &DiskFont, bounds: &Rect, texture: Weak<RefCell<Texture<'a>>>) -> FontTexture<'a> {
+    pub fn new(
+        font: &DiskFont,
+        bounds: &Rect,
+        texture: Weak<RefCell<Texture<'a>>>,
+    ) -> FontTexture<'a> {
         let mut ft = FontTexture {
             font: font.clone(),
             bounds: *bounds,
@@ -43,7 +46,6 @@ impl<'a> FontTexture<'a> {
             texture: texture.clone(),
             stencil: None,
         };
-
 
         ft.init_texture();
 
@@ -105,9 +107,9 @@ impl<'a> FontTexture<'a> {
     fn init_texture(&mut self) {
         // build the pixel cache if needed
         if self.pixels_32.len() == 0 {
-            for yy in 0 .. self.font.y_size {
+            for yy in 0..self.font.y_size {
                 let offset = yy * self.font.modulo;
-                for xx in 0 .. self.font.modulo {
+                for xx in 0..self.font.modulo {
                     let px = self.font.char_data[offset + xx];
 
                     // move to all four bytes
@@ -126,13 +128,14 @@ impl<'a> FontTexture<'a> {
                 Err(e) => {
                     println!("Error borrowing font texture for update: {}", e);
                     return;
-                },
+                }
                 Ok(ref mut tex) => {
                     let tex_info = tex.query();
                     // println!("texture info: {:?}", tex_info);
                     assert_eq!(tex_info.format.byte_size_per_pixel(), 4); // Enforce 32 bits per pixel
 
-                    tex.update(self.bounds, self.pixels_32.as_slice(), self.font.modulo * 4).unwrap();
+                    tex.update(self.bounds, self.pixels_32.as_slice(), self.font.modulo * 4)
+                        .unwrap();
                 }
             }
         }
@@ -165,7 +168,7 @@ impl<'a> FontTexture<'a> {
                 Err(e) => {
                     println!("Error borrowing font texture for rendering: {}", e);
                     return;
-                },
+                }
                 Ok(ref tex) => {
                     self.render_string_internal(s, canvas, tex, x, y);
                 }
@@ -229,12 +232,27 @@ impl<'a> FontTexture<'a> {
             if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
                 let cc_index = (cc - self.font.lo_char) as usize;
                 let cc_loc = self.font.char_loc[cc_index];
-                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
-                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+                let kern: i32 = if self.font.is_proportional() {
+                    self.font.char_kern[cc_index] as i32
+                } else {
+                    0
+                };
+                let space: i32 = if self.font.is_proportional() {
+                    self.font.char_space[cc_index] as i32
+                } else {
+                    self.font.x_size as i32
+                };
                 if cc_loc.1 > 0 {
                     glyph_rect.set_width(cc_loc.1 as u32);
-                    let src_rect = Rect::new(src_origin.x + cc_loc.0 as i32 + kern, src_origin.y, cc_loc.1 as u32, self.font.y_size as u32);
-                    canvas.copy(texture, Some(src_rect), Some(glyph_rect)).unwrap();
+                    let src_rect = Rect::new(
+                        src_origin.x + cc_loc.0 as i32 + kern,
+                        src_origin.y,
+                        cc_loc.1 as u32,
+                        self.font.y_size as u32,
+                    );
+                    canvas
+                        .copy(texture, Some(src_rect), Some(glyph_rect))
+                        .unwrap();
                 }
                 glyph_rect.set_x(glyph_rect.x() + space);
             }
@@ -250,7 +268,14 @@ impl<'a> FontTexture<'a> {
      *      3. If this is a proportional font, look in the spacing table and figure how many pixels to advance the rastport's horizontal position.
      *         For a monospaced font, the horizontal position advance comes from the TextFont's tf_XSize field.
      */
-    fn render_string_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
+    fn render_string_internal<T: RenderTarget>(
+        &self,
+        s: &str,
+        canvas: &mut Canvas<T>,
+        texture: &Texture,
+        x: i32,
+        y: i32,
+    ) {
         let cstr = s.as_bytes();
 
         // y coordinate is for the baseline of the font, so adjust for that
@@ -262,17 +287,32 @@ impl<'a> FontTexture<'a> {
                 let cc_index = (cc - self.font.lo_char) as usize;
                 let cc_loc = self.font.char_loc[cc_index];
 
-                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
-                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+                let kern: i32 = if self.font.is_proportional() {
+                    self.font.char_kern[cc_index] as i32
+                } else {
+                    0
+                };
+                let space: i32 = if self.font.is_proportional() {
+                    self.font.char_space[cc_index] as i32
+                } else {
+                    self.font.x_size as i32
+                };
 
                 // Don't do anything for spaces, just skip ahead to the next coordinates
                 if cc_loc.1 > 0 {
                     // grab glyph width and adjust glyph_rect, making sure to adjust the origin to our shared texture bounds
                     glyph_rect.set_width(cc_loc.1 as u32);
-                    let src_rect = Rect::new(self.bounds.x + cc_loc.0 as i32 + kern, self.bounds.y, cc_loc.1 as u32, self.font.y_size as u32);
+                    let src_rect = Rect::new(
+                        self.bounds.x + cc_loc.0 as i32 + kern,
+                        self.bounds.y,
+                        cc_loc.1 as u32,
+                        self.font.y_size as u32,
+                    );
 
                     // copy the glyph
-                    canvas.copy(texture, Some(src_rect), Some(glyph_rect)).unwrap();
+                    canvas
+                        .copy(texture, Some(src_rect), Some(glyph_rect))
+                        .unwrap();
                 }
 
                 // advance to the next glyph location
@@ -282,7 +322,13 @@ impl<'a> FontTexture<'a> {
     }
 
     /// Render a string with glyphs stretched to 2× height (title screen style).
-    pub fn render_string_hires<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, x: i32, y: i32) {
+    pub fn render_string_hires<T: RenderTarget>(
+        &self,
+        s: &str,
+        canvas: &mut Canvas<T>,
+        x: i32,
+        y: i32,
+    ) {
         if let Some(strong_texture) = self.texture.upgrade() {
             let result = strong_texture.try_borrow();
             match result {
@@ -294,7 +340,14 @@ impl<'a> FontTexture<'a> {
         }
     }
 
-    fn render_string_hires_internal<T: RenderTarget>(&self, s: &str, canvas: &mut Canvas<T>, texture: &Texture, x: i32, y: i32) {
+    fn render_string_hires_internal<T: RenderTarget>(
+        &self,
+        s: &str,
+        canvas: &mut Canvas<T>,
+        texture: &Texture,
+        x: i32,
+        y: i32,
+    ) {
         let cstr = s.as_bytes();
         let y_adjusted = y - self.font.baseline as i32;
         let dst_h = (self.font.y_size * 2) as u32;
@@ -303,8 +356,16 @@ impl<'a> FontTexture<'a> {
             if *cc >= self.font.lo_char && *cc <= self.font.hi_char {
                 let cc_index = (cc - self.font.lo_char) as usize;
                 let cc_loc = self.font.char_loc[cc_index];
-                let kern: i32 = if self.font.is_proportional() { self.font.char_kern[cc_index] as i32 } else { 0 };
-                let space: i32 = if self.font.is_proportional() { self.font.char_space[cc_index] as i32 } else { self.font.x_size as i32 };
+                let kern: i32 = if self.font.is_proportional() {
+                    self.font.char_kern[cc_index] as i32
+                } else {
+                    0
+                };
+                let space: i32 = if self.font.is_proportional() {
+                    self.font.char_space[cc_index] as i32
+                } else {
+                    self.font.x_size as i32
+                };
                 if cc_loc.1 > 0 {
                     dst_rect.set_width(cc_loc.1 as u32);
                     let src_rect = Rect::new(
@@ -313,7 +374,9 @@ impl<'a> FontTexture<'a> {
                         cc_loc.1 as u32,
                         self.font.y_size as u32,
                     );
-                    canvas.copy(texture, Some(src_rect), Some(dst_rect)).unwrap();
+                    canvas
+                        .copy(texture, Some(src_rect), Some(dst_rect))
+                        .unwrap();
                 }
                 dst_rect.set_x(dst_rect.x() + space);
             }

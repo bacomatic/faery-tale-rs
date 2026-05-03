@@ -15,22 +15,22 @@ pub struct DoorEntry {
 
 // Door type constants matching original fmain.c defines.
 // Horizontals all have lsb set (type & 1 == 1).
-pub const HWOOD:  u8 = 1;
-pub const VWOOD:  u8 = 2;
+pub const HWOOD: u8 = 1;
+pub const VWOOD: u8 = 2;
 pub const HSTONE: u8 = 3;
 pub const VSTONE: u8 = 4;
-pub const HCITY:  u8 = 5;
-pub const VCITY:  u8 = 6;
-pub const CRYST:  u8 = 7;
+pub const HCITY: u8 = 5;
+pub const VCITY: u8 = 6;
+pub const CRYST: u8 = 7;
 pub const SECRET: u8 = 8;
-pub const BLACK:  u8 = 9;
+pub const BLACK: u8 = 9;
 pub const MARBLE: u8 = 10;
-pub const LOG:    u8 = 11;
+pub const LOG: u8 = 11;
 pub const HSTON2: u8 = 13;
 pub const VSTON2: u8 = 14;
-pub const STAIR:  u8 = 15;
+pub const STAIR: u8 = 15;
 pub const DESERT: u8 = 17;
-pub const CAVE:   u8 = 18;
+pub const CAVE: u8 = 18;
 // VLOG = 18 (same as CAVE); distinguish by context only
 
 /// Key type enum matching original fmain.c `enum ky`.
@@ -54,13 +54,13 @@ pub fn key_req(door_type: u8) -> KeyReq {
     match door_type {
         HWOOD | VWOOD | HCITY | VCITY | LOG | STAIR | CAVE => KeyReq::NoKey,
         HSTONE | VSTONE => KeyReq::Key(1), // GREEN
-        CRYST            => KeyReq::Key(2), // KBLUE
-        SECRET           => KeyReq::Key(3), // RED
-        HSTON2 | VSTON2  => KeyReq::Key(4), // GREY
-        MARBLE           => KeyReq::Key(5), // WHITE
-        BLACK            => KeyReq::Talisman,
-        DESERT           => KeyReq::GoldStatues,
-        _                => KeyReq::NoKey,
+        CRYST => KeyReq::Key(2),           // KBLUE
+        SECRET => KeyReq::Key(3),          // RED
+        HSTON2 | VSTON2 => KeyReq::Key(4), // GREY
+        MARBLE => KeyReq::Key(5),          // WHITE
+        BLACK => KeyReq::Talisman,
+        DESERT => KeyReq::GoldStatues,
+        _ => KeyReq::NoKey,
     }
 }
 
@@ -100,22 +100,78 @@ pub fn door_tile_replacement(door_type: u8) -> Option<DoorTileReplacement> {
     //  {165, 800,  85,  86, 4, GREEN}  HCITY/VCITY (multi-tile gate)
     //  {210, 840, 208, 209, 2, NOKEY}  CAVE
     match door_type {
-        HWOOD  => Some(DoorTileReplacement { new1: 125, new2: 126, above: 2 }),
-        VWOOD  => Some(DoorTileReplacement { new1: 127, new2:   0, above: 0 }),
-        HSTONE => Some(DoorTileReplacement { new1: 123, new2: 124, above: 2 }),
+        HWOOD => Some(DoorTileReplacement {
+            new1: 125,
+            new2: 126,
+            above: 2,
+        }),
+        VWOOD => Some(DoorTileReplacement {
+            new1: 127,
+            new2: 0,
+            above: 0,
+        }),
+        HSTONE => Some(DoorTileReplacement {
+            new1: 123,
+            new2: 124,
+            above: 2,
+        }),
         VSTONE => None, // tile ID unknown; no open_list entry observed
-        HCITY | VCITY => Some(DoorTileReplacement { new1:  85, new2:  86, above: 4 }),
-        CRYST  => Some(DoorTileReplacement { new1:  84, new2:  85, above: 2 }),
-        SECRET => Some(DoorTileReplacement { new1: 116, new2: 117, above: 1 }),
-        BLACK  => Some(DoorTileReplacement { new1:  41, new2:  42, above: 2 }), // horizontal variant
-        MARBLE => Some(DoorTileReplacement { new1: 154, new2: 155, above: 1 }),
-        LOG    => Some(DoorTileReplacement { new1:  76, new2:  77, above: 2 }),
-        HSTON2 => Some(DoorTileReplacement { new1: 124, new2: 125, above: 2 }),
-        VSTON2 => Some(DoorTileReplacement { new1: 126, new2:   0, above: 0 }),
-        STAIR  => Some(DoorTileReplacement { new1:  75, new2:   0, above: 0 }),
-        DESERT => Some(DoorTileReplacement { new1: 105, new2: 106, above: 2 }),
-        CAVE   => Some(DoorTileReplacement { new1: 208, new2: 209, above: 2 }),
-        _      => None,
+        HCITY | VCITY => Some(DoorTileReplacement {
+            new1: 85,
+            new2: 86,
+            above: 4,
+        }),
+        CRYST => Some(DoorTileReplacement {
+            new1: 84,
+            new2: 85,
+            above: 2,
+        }),
+        SECRET => Some(DoorTileReplacement {
+            new1: 116,
+            new2: 117,
+            above: 1,
+        }),
+        BLACK => Some(DoorTileReplacement {
+            new1: 41,
+            new2: 42,
+            above: 2,
+        }), // horizontal variant
+        MARBLE => Some(DoorTileReplacement {
+            new1: 154,
+            new2: 155,
+            above: 1,
+        }),
+        LOG => Some(DoorTileReplacement {
+            new1: 76,
+            new2: 77,
+            above: 2,
+        }),
+        HSTON2 => Some(DoorTileReplacement {
+            new1: 124,
+            new2: 125,
+            above: 2,
+        }),
+        VSTON2 => Some(DoorTileReplacement {
+            new1: 126,
+            new2: 0,
+            above: 0,
+        }),
+        STAIR => Some(DoorTileReplacement {
+            new1: 75,
+            new2: 0,
+            above: 0,
+        }),
+        DESERT => Some(DoorTileReplacement {
+            new1: 105,
+            new2: 106,
+            above: 2,
+        }),
+        CAVE => Some(DoorTileReplacement {
+            new1: 208,
+            new2: 209,
+            above: 2,
+        }),
+        _ => None,
     }
 }
 
@@ -140,8 +196,12 @@ pub fn apply_door_tile_replacement(
     // Align to tile origin (mirrors doorfind grid-align steps).
     let mut px = probe_x;
     let py = probe_y;
-    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 { px -= 16; }
-    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 { px -= 16; }
+    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 {
+        px -= 16;
+    }
+    if px >= 16 && px_to_terrain_type(world, px - 16, py) == 15 {
+        px -= 16;
+    }
     // Note: original also checks y+32; uncommon in practice for outdoor doors.
     // (The y+32 step handles doors whose reference coord is at the upper tile.)
 
@@ -152,13 +212,19 @@ pub fn apply_door_tile_replacement(
 
     if rep.new2 != 0 {
         match rep.above {
-            1 => { world.set_tile_at_image(imx,     imy.saturating_sub(1), rep.new2); }
-            2 => { world.set_tile_at_image(imx + 1, imy, rep.new2); }
-            3 => { world.set_tile_at_image(imx.saturating_sub(1), imy, rep.new2); }
+            1 => {
+                world.set_tile_at_image(imx, imy.saturating_sub(1), rep.new2);
+            }
+            2 => {
+                world.set_tile_at_image(imx + 1, imy, rep.new2);
+            }
+            3 => {
+                world.set_tile_at_image(imx.saturating_sub(1), imy, rep.new2);
+            }
             4 => {
                 // Multi-tile gate (HCITY/VCITY): hardcoded 4-cell pattern from fmain.c.
-                world.set_tile_at_image(imx,     imy.saturating_sub(1), 87);
-                world.set_tile_at_image(imx + 1, imy,                   86);
+                world.set_tile_at_image(imx, imy.saturating_sub(1), 87);
+                world.set_tile_at_image(imx + 1, imy, 86);
                 world.set_tile_at_image(imx + 1, imy.saturating_sub(1), 88);
             }
             _ => {
@@ -169,8 +235,6 @@ pub fn apply_door_tile_replacement(
         }
     }
 }
-
-
 
 /// Bump-detection search window (pixels). Mirrors the original's grid-aligned exact match
 /// while tolerating sub-pixel approach offsets.
@@ -210,7 +274,12 @@ pub fn doorfind_nearest_by_bump_radius(
 /// Sub-tile position guard (caller responsibility):
 ///   Horizontal: skip if hero_y & 0x10 != 0  (lower half → not yet through)
 ///   Vertical  : skip if hero_x & 15 > 6     (right portion → not yet through)
-pub fn doorfind(table: &[DoorEntry], region_num: u8, hero_x: u16, hero_y: u16) -> Option<DoorEntry> {
+pub fn doorfind(
+    table: &[DoorEntry],
+    region_num: u8,
+    hero_x: u16,
+    hero_y: u16,
+) -> Option<DoorEntry> {
     let xtest = hero_x & 0xFFF0;
     let ytest = hero_y & 0xFFE0;
     for door in table {
@@ -294,7 +363,15 @@ mod tests {
 
     #[test]
     fn test_doorfind_no_match() {
-        let table = [DoorEntry { src_region: 0, src_x: 0x1390, src_y: 0x1B60, dst_region: 9, dst_x: 0x1980, dst_y: 0x8C60, door_type: CAVE }];
+        let table = [DoorEntry {
+            src_region: 0,
+            src_x: 0x1390,
+            src_y: 0x1B60,
+            dst_region: 9,
+            dst_x: 0x1980,
+            dst_y: 0x8C60,
+            door_type: CAVE,
+        }];
         let result = doorfind(&table, 1, 100, 100);
         assert!(result.is_none());
     }
@@ -302,7 +379,15 @@ mod tests {
     #[test]
     fn test_doorfind_exact_match() {
         // Dragon cave: region 0, (0x1390, 0x1B60)
-        let table = [DoorEntry { src_region: 0, src_x: 0x1390, src_y: 0x1B60, dst_region: 9, dst_x: 0x1980, dst_y: 0x8C60, door_type: CAVE }];
+        let table = [DoorEntry {
+            src_region: 0,
+            src_x: 0x1390,
+            src_y: 0x1B60,
+            dst_region: 9,
+            dst_x: 0x1980,
+            dst_y: 0x8C60,
+            door_type: CAVE,
+        }];
         let result = doorfind(&table, 0, 0x1390, 0x1B60);
         assert!(result.is_some());
         let d = result.unwrap();
@@ -314,15 +399,31 @@ mod tests {
     fn test_doorfind_grid_match() {
         // VWOOD (vertical, type & 1 == 0): exact grid x match required.
         // Door at grid-aligned (0x60, 0x60); hero anywhere in same 16×32px cell triggers it.
-        let table = [DoorEntry { src_region: 2, src_x: 0x60, src_y: 0x60, dst_region: 5, dst_x: 200, dst_y: 200, door_type: VWOOD }];
+        let table = [DoorEntry {
+            src_region: 2,
+            src_x: 0x60,
+            src_y: 0x60,
+            dst_region: 5,
+            dst_x: 200,
+            dst_y: 200,
+            door_type: VWOOD,
+        }];
         // hero_x & 0xFFF0 = 0x60, hero_y & 0xFFE0 = 0x60 → match
         assert!(doorfind(&table, 2, 0x60, 0x60).is_some());
         assert!(doorfind(&table, 2, 0x6F, 0x7F).is_some()); // right edge of cell
-        // hero_x & 0xFFF0 = 0x70 ≠ 0x60 → no match (vertical requires exact x)
+                                                            // hero_x & 0xFFF0 = 0x70 ≠ 0x60 → no match (vertical requires exact x)
         assert!(doorfind(&table, 2, 0x70, 0x60).is_none());
         // HWOOD (horizontal, type & 1 == 1): xtest in [src_x, src_x+16] covers both tile cells.
         // Original: `d->xc1 + 16 < xtest` → skip, so match iff xtest <= src_x+16.
-        let htable = [DoorEntry { src_region: 2, src_x: 0x60, src_y: 0x60, dst_region: 5, dst_x: 200, dst_y: 200, door_type: HWOOD }];
+        let htable = [DoorEntry {
+            src_region: 2,
+            src_x: 0x60,
+            src_y: 0x60,
+            dst_region: 5,
+            dst_x: 200,
+            dst_y: 200,
+            door_type: HWOOD,
+        }];
         assert!(doorfind(&htable, 2, 0x60, 0x60).is_some()); // xtest=0x60 = src_x → left cell
         assert!(doorfind(&htable, 2, 0x6F, 0x60).is_some()); // xtest=0x60, still left cell
         assert!(doorfind(&htable, 2, 0x70, 0x60).is_some()); // xtest=0x70 = src_x+16 → right cell ✓
@@ -335,8 +436,13 @@ mod tests {
         // VWOOD exit is triggered via bump detection — probe_x = hero_x+4 lands inside the door tile.
         // entry_spawn puts hero at (0x0bcf, 0x84d0); walking north, right probe = 0x0bd3.
         let table = [DoorEntry {
-            src_region: 2, src_x: 0x49d0, src_y: 0x3dc0,
-            dst_region: 8, dst_x: 0x0bd0, dst_y: 0x84c0, door_type: VWOOD,
+            src_region: 2,
+            src_x: 0x49d0,
+            src_y: 0x3dc0,
+            dst_region: 8,
+            dst_x: 0x0bd0,
+            dst_y: 0x84c0,
+            door_type: VWOOD,
         }];
         // Bump probe inside door tile: xtest=0x0bd0 ✓, ytest=0x84c0 ✓, x & 15 = 3 >= 2 ✓ → match
         assert!(doorfind_exit(&table, 0x0bd3, 0x84c2).is_some());
@@ -350,8 +456,13 @@ mod tests {
     fn test_doorfind_exit_horizontal() {
         // HWOOD door (type & 1 == 1): hero can be 16px right of dst_x
         let table = [DoorEntry {
-            src_region: 2, src_x: 0x4a10, src_y: 0x3c80,
-            dst_region: 8, dst_x: 0x0d10, dst_y: 0x8280, door_type: HWOOD,
+            src_region: 2,
+            src_x: 0x4a10,
+            src_y: 0x3c80,
+            dst_region: 8,
+            dst_x: 0x0d10,
+            dst_y: 0x8280,
+            door_type: HWOOD,
         }];
         // y=0x8290: ytest=0x8280 ✓, y & 0x10 = 0x10 ✓ → direct match
         assert!(doorfind_exit(&table, 0x0d10, 0x8290).is_some());
@@ -365,7 +476,12 @@ mod tests {
 
     #[test]
     fn test_exit_spawn_vertical() {
-        let door = DoorEntry { src_x: 0x49d0, src_y: 0x3dc0, door_type: VWOOD, ..Default::default() };
+        let door = DoorEntry {
+            src_x: 0x49d0,
+            src_y: 0x3dc0,
+            door_type: VWOOD,
+            ..Default::default()
+        };
         let (x, y) = exit_spawn(&door);
         assert_eq!(x, 0x49d0 + 20);
         assert_eq!(y, 0x3dc0 + 16);
@@ -373,7 +489,12 @@ mod tests {
 
     #[test]
     fn test_exit_spawn_horizontal() {
-        let door = DoorEntry { src_x: 0x4a10, src_y: 0x3c80, door_type: HWOOD, ..Default::default() };
+        let door = DoorEntry {
+            src_x: 0x4a10,
+            src_y: 0x3c80,
+            door_type: HWOOD,
+            ..Default::default()
+        };
         let (x, y) = exit_spawn(&door);
         assert_eq!(x, 0x4a10 + 16);
         assert_eq!(y, 0x3c80 + 34);
@@ -381,7 +502,12 @@ mod tests {
 
     #[test]
     fn test_entry_spawn_vertical() {
-        let door = DoorEntry { dst_x: 0x0bd0, dst_y: 0x84c0, door_type: VWOOD, ..Default::default() };
+        let door = DoorEntry {
+            dst_x: 0x0bd0,
+            dst_y: 0x84c0,
+            door_type: VWOOD,
+            ..Default::default()
+        };
         let (x, y) = entry_spawn(&door);
         assert_eq!(x, 0x0bd0u16.wrapping_sub(1));
         assert_eq!(y, 0x84c0 + 16);
@@ -389,20 +515,48 @@ mod tests {
 
     #[test]
     fn test_doorfind_nearest_by_bump_radius_no_match() {
-        let table = [DoorEntry { src_region: 0, src_x: 500, src_y: 500, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD }];
+        let table = [DoorEntry {
+            src_region: 0,
+            src_x: 500,
+            src_y: 500,
+            dst_region: 8,
+            dst_x: 0,
+            dst_y: 0,
+            door_type: HWOOD,
+        }];
         // Wrong region
         assert!(doorfind_nearest_by_bump_radius(&table, 1, 500, 500).is_none());
         // Too far X
-        assert!(doorfind_nearest_by_bump_radius(&table, 0, 500 + BUMP_PROX_X as u16, 500).is_none());
+        assert!(
+            doorfind_nearest_by_bump_radius(&table, 0, 500 + BUMP_PROX_X as u16, 500).is_none()
+        );
         // Too far Y
-        assert!(doorfind_nearest_by_bump_radius(&table, 0, 500, 500 + BUMP_PROX_Y as u16).is_none());
+        assert!(
+            doorfind_nearest_by_bump_radius(&table, 0, 500, 500 + BUMP_PROX_Y as u16).is_none()
+        );
     }
 
     #[test]
     fn test_doorfind_nearest_by_bump_radius_match() {
         let table = [
-            DoorEntry { src_region: 2, src_x: 100, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD },
-            DoorEntry { src_region: 2, src_x: 200, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: VWOOD },
+            DoorEntry {
+                src_region: 2,
+                src_x: 100,
+                src_y: 100,
+                dst_region: 8,
+                dst_x: 0,
+                dst_y: 0,
+                door_type: HWOOD,
+            },
+            DoorEntry {
+                src_region: 2,
+                src_x: 200,
+                src_y: 100,
+                dst_region: 8,
+                dst_x: 0,
+                dst_y: 0,
+                door_type: VWOOD,
+            },
         ];
         // Within radius of first door only
         let result = doorfind_nearest_by_bump_radius(&table, 2, 110, 100);
@@ -413,8 +567,24 @@ mod tests {
         // Nearest of two doors both in range — hero at x=120, door1 Δ20, door2 Δ80 (out of range)
         // Use doors closer together so both fit within BUMP_PROX_X=32: door1@100, door2@130
         let table2 = [
-            DoorEntry { src_region: 2, src_x: 100, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: HWOOD },
-            DoorEntry { src_region: 2, src_x: 130, src_y: 100, dst_region: 8, dst_x: 0, dst_y: 0, door_type: VWOOD },
+            DoorEntry {
+                src_region: 2,
+                src_x: 100,
+                src_y: 100,
+                dst_region: 8,
+                dst_x: 0,
+                dst_y: 0,
+                door_type: HWOOD,
+            },
+            DoorEntry {
+                src_region: 2,
+                src_x: 130,
+                src_y: 100,
+                dst_region: 8,
+                dst_x: 0,
+                dst_y: 0,
+                door_type: VWOOD,
+            },
         ];
         // Hero at x=120: Δ20 from door1, Δ10 from door2 → door2 is nearest
         let result2 = doorfind_nearest_by_bump_radius(&table2, 2, 120, 100);

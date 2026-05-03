@@ -25,14 +25,18 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
         slots: arr[0..35].iter().map(|&v| v as u32).collect(),
     };
 
-    let world_objects = state.world_objects.iter().map(|wo| proto::SavedWorldObject {
-        ob_id: wo.ob_id as u32,
-        ob_stat: wo.ob_stat as u32,
-        region: wo.region as u32,
-        x: wo.x as u32,
-        y: wo.y as u32,
-        visible: wo.visible,
-    }).collect();
+    let world_objects = state
+        .world_objects
+        .iter()
+        .map(|wo| proto::SavedWorldObject {
+            ob_id: wo.ob_id as u32,
+            ob_stat: wo.ob_stat as u32,
+            region: wo.region as u32,
+            x: wo.x as u32,
+            y: wo.y as u32,
+            visible: wo.visible,
+        })
+        .collect();
 
     proto::SaveFile {
         save_version: SAVE_VERSION,
@@ -283,7 +287,7 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
     state.encounter_number = 0;
     state.actors_loading = false;
     state.encounter_type = 0;
-    state.viewstatus = 99;  // Force full redraw
+    state.viewstatus = 99; // Force full redraw
 
     Ok(state)
 }
@@ -387,7 +391,9 @@ mod tests {
         let mut buf: Vec<u8> = b"XXXZ".to_vec();
         buf.extend_from_slice(&SAVE_VERSION.to_le_bytes());
         std::fs::write(&path, &buf).unwrap();
-        let err = load_from_path(&path).err().expect("expected Err for bad magic");
+        let err = load_from_path(&path)
+            .err()
+            .expect("expected Err for bad magic");
         assert!(err.to_string().contains("bad magic"), "got: {}", err);
     }
 
@@ -398,14 +404,18 @@ mod tests {
         let mut buf: Vec<u8> = SAVE_MAGIC.to_vec();
         buf.extend_from_slice(&99u32.to_le_bytes());
         std::fs::write(&path, &buf).unwrap();
-        let err = load_from_path(&path).err().expect("expected Err for wrong version");
+        let err = load_from_path(&path)
+            .err()
+            .expect("expected Err for wrong version");
         assert!(err.to_string().contains("version mismatch"), "got: {}", err);
     }
 
     #[test]
     fn test_load_missing_file() {
         let path = std::path::Path::new("/tmp/faery_nonexistent_save_xyzzy.sav");
-        let err = load_from_path(path).err().expect("expected Err for missing file");
+        let err = load_from_path(path)
+            .err()
+            .expect("expected Err for missing file");
         assert!(err.to_string().contains("failed to read"), "got: {}", err);
     }
 
@@ -453,8 +463,14 @@ mod tests {
         let loaded = load_from_path(&path).unwrap();
 
         // Post-load cleanup should reset these fields
-        assert_eq!(loaded.encounter_number, 0, "encounter_number should be cleared");
-        assert_eq!(loaded.actors_loading, false, "actors_loading should be cleared");
+        assert_eq!(
+            loaded.encounter_number, 0,
+            "encounter_number should be cleared"
+        );
+        assert_eq!(
+            loaded.actors_loading, false,
+            "actors_loading should be cleared"
+        );
         assert_eq!(loaded.encounter_type, 0, "encounter_type should be cleared");
         assert_eq!(loaded.viewstatus, 99, "viewstatus should be set to 99");
     }

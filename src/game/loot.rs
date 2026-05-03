@@ -1,8 +1,8 @@
 //! Enemy loot tables: treasure_probs[] and item drop resolution.
 //! Ports treasure_probs[] and encounter_chart.treasure from fmain.c.
 
-use crate::game::npc::{Npc, RACE_WITCH};
 use crate::game::game_state::GameState;
+use crate::game::npc::{Npc, RACE_WITCH};
 
 /// First gold item index in inv_list[] (from fmain.c: #define GOLDBASE 31).
 pub const GOLDBASE: usize = 31;
@@ -14,11 +14,11 @@ const GOLD_AMOUNTS: [i32; 4] = [2, 5, 10, 100];
 /// Row index = encounter_chart[race].treasure. Column = rand 0-7.
 /// Values are inv_list[] indices; 0 = no drop, ≥31 = gold.
 const TREASURE_PROBS: &[u8] = &[
-    0,  0,  0,  0,  0,  0,  0,  0,  // row 0: no treasure
-    9,  11, 13, 31, 31, 17, 17, 32, // row 1: stone/vial/totem/gold/keys
+    0, 0, 0, 0, 0, 0, 0, 0, // row 0: no treasure
+    9, 11, 13, 31, 31, 17, 17, 32, // row 1: stone/vial/totem/gold/keys
     12, 14, 20, 20, 20, 31, 33, 31, // row 2: skull/ring/fruit/gold
     10, 10, 16, 16, 11, 17, 18, 19, // row 3: jewels/keys/vial
-    15, 21, 0,  0,  0,  0,  0,  0,  // row 4: jade skull / white key
+    15, 21, 0, 0, 0, 0, 0, 0, // row 4: jade skull / white key
 ];
 
 /// treasure field from encounter_chart[] indexed by race (fmain.c).
@@ -28,7 +28,9 @@ const ENCOUNTER_TREASURE: &[u8] = &[2, 1, 4, 3, 0, 0, 0, 0, 0, 0, 0];
 
 /// Simple tick-seeded pseudo-random 0-7.
 fn rand8_from_tick(tick: u32, salt: u32) -> usize {
-    let h = (tick ^ salt).wrapping_mul(2246822519).wrapping_add(3266489917);
+    let h = (tick ^ salt)
+        .wrapping_mul(2246822519)
+        .wrapping_add(3266489917);
     (h as usize) & 7
 }
 
@@ -38,14 +40,28 @@ fn rand8_from_tick(tick: u32, salt: u32) -> usize {
 /// Returns None if no treasure drops.
 pub fn roll_treasure(npc: &Npc, tick: u32) -> Option<LootDrop> {
     // Setfigs (race >= 0x80) never drop treasure (fmain.c: if j & 0x80 then j=0).
-    if npc.race >= 0x80 { return None; }
-    let treasure_row = ENCOUNTER_TREASURE.get(npc.race as usize).copied().unwrap_or(0) as usize;
+    if npc.race >= 0x80 {
+        return None;
+    }
+    let treasure_row = ENCOUNTER_TREASURE
+        .get(npc.race as usize)
+        .copied()
+        .unwrap_or(0) as usize;
     let col = rand8_from_tick(tick, npc.race as u32 ^ 0xDEAD);
-    let inv_idx = TREASURE_PROBS.get(treasure_row * 8 + col).copied().unwrap_or(0) as usize;
-    if inv_idx == 0 { return None; }
+    let inv_idx = TREASURE_PROBS
+        .get(treasure_row * 8 + col)
+        .copied()
+        .unwrap_or(0) as usize;
+    if inv_idx == 0 {
+        return None;
+    }
     if inv_idx >= GOLDBASE {
         let gold = GOLD_AMOUNTS.get(inv_idx - GOLDBASE).copied().unwrap_or(0);
-        if gold > 0 { Some(LootDrop::Gold(gold)) } else { None }
+        if gold > 0 {
+            Some(LootDrop::Gold(gold))
+        } else {
+            None
+        }
     } else {
         Some(LootDrop::Item(inv_idx))
     }
@@ -75,7 +91,11 @@ pub fn award_treasure(state: &mut GameState, drop: &LootDrop) -> Option<u8> {
             }
             // Weapons are inv_list slots 0-3 (Dirk, Mace, Sword, Bow).
             // In anim_list weapon encoding: 1=dirk, 2=mace, 3=sword, 4=bow.
-            if slot < 4 { Some((slot + 1) as u8) } else { None }
+            if slot < 4 {
+                Some((slot + 1) as u8)
+            } else {
+                None
+            }
         }
     }
 }
@@ -111,16 +131,23 @@ pub fn setfig_death_ob_id(race: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::npc::{Npc, NPC_TYPE_ORC};
     use crate::game::game_state::GameState;
+    use crate::game::npc::{Npc, NPC_TYPE_ORC};
 
     fn make_orc() -> Npc {
-        Npc { npc_type: NPC_TYPE_ORC, race: 1, ..Default::default() }
+        Npc {
+            npc_type: NPC_TYPE_ORC,
+            race: 1,
+            ..Default::default()
+        }
     }
 
     #[test]
     fn test_setfig_no_treasure() {
-        let npc = Npc { race: 0x89, ..Default::default() };
+        let npc = Npc {
+            race: 0x89,
+            ..Default::default()
+        };
         assert!(roll_treasure(&npc, 42).is_none());
     }
 
@@ -129,7 +156,10 @@ mod tests {
         // Orc race=1 → treasure_row=1; some column should yield a non-zero drop over 8 tries.
         let npc = make_orc();
         let any_drop = (0u32..8).any(|t| roll_treasure(&npc, t).is_some());
-        assert!(any_drop, "Orc (row 1) should have at least one non-zero entry");
+        assert!(
+            any_drop,
+            "Orc (row 1) should have at least one non-zero entry"
+        );
     }
 
     #[test]
@@ -182,7 +212,10 @@ mod tests {
 
     fn make_witch() -> Npc {
         use crate::game::npc::RACE_WITCH;
-        Npc { race: RACE_WITCH, ..Default::default() }
+        Npc {
+            race: RACE_WITCH,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -194,7 +227,8 @@ mod tests {
             assert_eq!(
                 roll_treasure(&npc, tick),
                 None,
-                "Witch should never drop treasure via roll_treasure (tick {})", tick
+                "Witch should never drop treasure via roll_treasure (tick {})",
+                tick
             );
         }
     }
@@ -213,8 +247,8 @@ mod tests {
     #[test]
     fn t4_lasso_ob_id_27_maps_to_stuff_slot_5() {
         // SPEC §14.3: ob_id 27 → stuff[5] (ITEM_LASSO).
-        use crate::game::world_objects::ob_id_to_stuff_index;
         use crate::game::game_state::ITEM_LASSO;
+        use crate::game::world_objects::ob_id_to_stuff_index;
         assert_eq!(
             ob_id_to_stuff_index(27),
             Some(ITEM_LASSO),
@@ -225,9 +259,25 @@ mod tests {
     #[test]
     fn t4_non_witch_setfig_no_special_drop() {
         // Only RACE_WITCH has a special drop; other races return None.
-        assert_eq!(setfig_death_ob_id(0x80), None, "Wizard should not have a special drop");
-        assert_eq!(setfig_death_ob_id(0x88), None, "Innkeeper should not have a special drop");
-        assert_eq!(setfig_death_ob_id(0x00), None, "Regular NPC should not have a special drop");
-        assert_eq!(setfig_death_ob_id(0x09), None, "Necromancer uses transform path, not setfig_death_ob_id");
+        assert_eq!(
+            setfig_death_ob_id(0x80),
+            None,
+            "Wizard should not have a special drop"
+        );
+        assert_eq!(
+            setfig_death_ob_id(0x88),
+            None,
+            "Innkeeper should not have a special drop"
+        );
+        assert_eq!(
+            setfig_death_ob_id(0x00),
+            None,
+            "Regular NPC should not have a special drop"
+        );
+        assert_eq!(
+            setfig_death_ob_id(0x09),
+            None,
+            "Necromancer uses transform path, not setfig_death_ob_id"
+        );
     }
 }

@@ -16,22 +16,22 @@ use sdl2::surface::Surface;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::game::audio::{AudioSystem, Instruments};
+use crate::game::colors::Palette;
+use crate::game::copy_protect_scene::CopyProtectScene;
+use crate::game::cursor::CursorAsset;
+use crate::game::debug_command::{DebugCommand, DEFAULT_TICK_RATE_HZ};
 use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
-use crate::game::debug_command::DebugCommand;
 use crate::game::game_clock::GameClock;
 use crate::game::game_state::DayPhase;
-use crate::game::settings::{self, GameSettings};
-use crate::game::cursor::CursorAsset;
-use crate::game::colors::Palette;
+use crate::game::gameplay_scene::GameplayScene;
+use crate::game::intro_scene::IntroScene;
+use crate::game::placard_scene::PlacardScene;
 use crate::game::render_resources::RenderResources;
 use crate::game::scene::{Scene, SceneResult};
-use crate::game::intro_scene::IntroScene;
-use crate::game::copy_protect_scene::CopyProtectScene;
-use crate::game::placard_scene::PlacardScene;
-use crate::game::gameplay_scene::GameplayScene;
-use crate::game::victory_scene::VictoryScene;
-use crate::game::audio::{AudioSystem, Instruments};
+use crate::game::settings::{self, GameSettings};
 use crate::game::songs::{SongLibrary, Track};
+use crate::game::victory_scene::VictoryScene;
 
 #[derive(Parser, Debug)]
 #[command(name = "fmainrs", about = "The Faery Tale Adventure")]
@@ -54,7 +54,10 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
     // build RGBA32 pixel data from cursor and palette
     let result = cursor.bitmap.generate_rgb32(color, Some(0));
     if result.is_err() {
-        println!("Error generating RGB32 data for cursor: {}", result.err().unwrap());
+        println!(
+            "Error generating RGB32 data for cursor: {}",
+            result.err().unwrap()
+        );
         return None;
     }
 
@@ -69,7 +72,9 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
         orig_w,
         orig_h,
         stride as u32,
-        PixelFormatEnum::RGBA32).unwrap();
+        PixelFormatEnum::RGBA32,
+    )
+    .unwrap();
 
     // Scale 2× for better visual appearance (matches the 2× line-doubled canvas)
     let mut scaled = Surface::new(orig_w * 2, orig_h * 2, PixelFormatEnum::RGBA32).unwrap();
@@ -79,7 +84,9 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
     let pointer = Cursor::from_surface(
         scaled,
         (cursor.hotspot.x * 2) as i32,
-        (cursor.hotspot.y * 2) as i32).unwrap();
+        (cursor.hotspot.y * 2) as i32,
+    )
+    .unwrap();
     pointer.set();
 
     Some(pointer)
@@ -91,10 +98,13 @@ pub fn main() -> Result<(), String> {
     let mut settings: GameSettings = settings::GameSettings::load();
 
     let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
+    let video_subsystem = sdl_context
+        .video()
+        .expect("Could not initialize SDL2 video subsystem");
 
     // Initialize game controller subsystem so SDL2 generates ControllerButton/Axis events.
-    let game_controller_subsystem = sdl_context.game_controller()
+    let game_controller_subsystem = sdl_context
+        .game_controller()
         .map_err(|e| format!("Could not initialize game controller subsystem: {}", e))?;
     let mut controllers: Vec<sdl2::controller::GameController> = Vec::new();
     // Open any controllers that are already connected at startup.
@@ -109,7 +119,6 @@ pub fn main() -> Result<(), String> {
             }
         }
     }
-
 
     let mut width = 640;
     let mut height = 480;
@@ -129,22 +138,25 @@ pub fn main() -> Result<(), String> {
         window_builder.position_centered();
     }
 
-    let window = window_builder
-        .build()
-        .unwrap();
+    let window = window_builder.build().unwrap();
 
-    let mut canvas = window.into_canvas()
+    let mut canvas = window
+        .into_canvas()
         .accelerated()
         .target_texture()
         .present_vsync()
-        .build().unwrap();
+        .build()
+        .unwrap();
     // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio
     canvas.set_logical_size(640, 480).unwrap();
 
     // load the game library
     let game_lib = game_library::load_game_library(Path::new("faery.toml"));
     if game_lib.is_err() {
-        return Err(format!("Failed to load game library: {}", game_lib.err().unwrap()));
+        return Err(format!(
+            "Failed to load game library: {}",
+            game_lib.err().unwrap()
+        ));
     }
     let game_lib = game_lib.unwrap();
 
@@ -157,19 +169,38 @@ pub fn main() -> Result<(), String> {
     // Audio system — load songs and waveforms, init the software synthesizer.
     // Music playback is started by IntroScene (matching original: playscore() is
     // called mid-intro, not at startup) and stopped before gameplay begins.
-    let songs_path = game_lib.audio.as_ref().map(|a| a.songs.as_str()).unwrap_or("game/songs");
-    let instruments_path = game_lib.audio.as_ref().map(|a| a.instruments.as_str()).unwrap_or("game/v6");
-    let song_library: Option<SongLibrary> = SongLibrary::load(Path::new(songs_path));
-    let intro_tracks: Option<[Arc<Track>; 4]> = song_library
+    let songs_path = game_lib
+        .audio
         .as_ref()
-        .and_then(|songs| songs.intro_tracks().map(|t| t.map(|tr| Arc::new(tr.clone()))));
+        .map(|a| a.songs.as_str())
+        .unwrap_or("game/songs");
+    let instruments_path = game_lib
+        .audio
+        .as_ref()
+        .map(|a| a.instruments.as_str())
+        .unwrap_or("game/v6");
+    let song_library: Option<SongLibrary> = SongLibrary::load(Path::new(songs_path));
+    let intro_tracks: Option<[Arc<Track>; 4]> = song_library.as_ref().and_then(|songs| {
+        songs
+            .intro_tracks()
+            .map(|t| t.map(|tr| Arc::new(tr.clone())))
+    });
     let audio_system: Option<AudioSystem> = {
         match Instruments::load(Path::new(instruments_path)) {
             Some(inst) => match AudioSystem::new(&sdl_context, inst, cli.no_interpolation) {
                 Ok(sys) => Some(sys),
-                Err(e) => { println!("Warning: could not open audio device: {}", e); None }
+                Err(e) => {
+                    println!("Warning: could not open audio device: {}", e);
+                    None
+                }
             },
-            None => { println!("Warning: could not load {} (instruments file missing)", instruments_path); None }
+            None => {
+                println!(
+                    "Warning: could not load {} (instruments file missing)",
+                    instruments_path
+                );
+                None
+            }
         }
     };
 
@@ -190,8 +221,12 @@ pub fn main() -> Result<(), String> {
     // Build all SDL2 rendering resources (font atlas, image atlas, render targets).
     let mut render_resources = RenderResources::build(&tex_maker, &game_lib, &sys_palette);
 
-    let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
-    let mut scratch_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
+    let mut play_tex = tex_maker
+        .create_texture_target(PixelFormatEnum::RGBA32, 320, 200)
+        .unwrap();
+    let mut scratch_tex = tex_maker
+        .create_texture_target(PixelFormatEnum::RGBA32, 320, 200)
+        .unwrap();
 
     let mut dirty: bool = true;
     let mut clear_flag = true;
@@ -202,7 +237,14 @@ pub fn main() -> Result<(), String> {
 
     // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
     // The scene_phase tracks what to start next when a scene completes.
-    enum ScenePhase { Intro, CopyProtect, PlacardStart, Gameplay, VictoryPlacard, VictoryImage }
+    enum ScenePhase {
+        Intro,
+        CopyProtect,
+        PlacardStart,
+        Gameplay,
+        VictoryPlacard,
+        VictoryImage,
+    }
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
             let mut gs = GameplayScene::new();
@@ -210,7 +252,10 @@ pub fn main() -> Result<(), String> {
             gs.set_echo_transcript(cli.echo_transcript);
             (ScenePhase::Gameplay, Some(Box::new(gs)))
         } else {
-            (ScenePhase::Intro, Some(Box::new(IntroScene::new(intro_tracks))))
+            (
+                ScenePhase::Intro,
+                Some(Box::new(IntroScene::new(intro_tracks))),
+            )
         };
 
     // Debug console (TUI in the launch terminal), active only when --debug is passed
@@ -235,7 +280,7 @@ pub fn main() -> Result<(), String> {
     // Debug step budget: when the console queues /step, this many frames get
     // the real delta while clock.paused remains true. See DEBUG_SPEC §Flow.
     let mut debug_step_budget: u32 = 0;
-    let mut debug_tick_hz: u32 = 30;
+    let mut debug_tick_hz: u32 = DEFAULT_TICK_RATE_HZ;
     let mut debug_tick_accum: f64 = 0.0;
 
     'running: loop {
@@ -245,11 +290,13 @@ pub fn main() -> Result<(), String> {
         let delta_ticks = if clock.paused && debug_step_budget == 0 {
             0
         } else {
-            if debug_step_budget > 0 { debug_step_budget -= 1; }
+            if debug_step_budget > 0 {
+                debug_step_budget -= 1;
+            }
             raw_delta
         };
 
-        // Apply debug tick rate override (30 = normal; set via /rate).
+        // Apply debug tick rate override (15 by default; 30 = normal; set via /rate).
         // Accumulate fractional ticks so rates like 15 Hz work correctly
         // even though raw_delta is discrete (0 or 1 per frame at 60 fps).
         debug_tick_accum += delta_ticks as f64 * (debug_tick_hz as f64 / 30.0);
@@ -277,7 +324,6 @@ pub fn main() -> Result<(), String> {
         }
 
         for event in event_pump.poll_iter() {
-
             // Let the active scene consume events first
             if let Some(ref mut scene) = active_scene {
                 if scene.handle_event(&event) {
@@ -287,7 +333,11 @@ pub fn main() -> Result<(), String> {
 
             match event {
                 // handle window events
-                Event::Window { win_event, window_id, .. } => {
+                Event::Window {
+                    win_event,
+                    window_id,
+                    ..
+                } => {
                     if window_id != canvas.window().id() {
                         // ignore events for other windows
                         continue;
@@ -299,14 +349,20 @@ pub fn main() -> Result<(), String> {
                         settings.set_window_size((w as u32, h as u32));
                     }
                     dirty = true;
-                },
-                Event::Quit { .. } |
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. }
-                => {
+                }
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
                     kill_flag = true;
-                },
-                Event::KeyDown {scancode, keymod: _, repeat: false, .. }
-                => {
+                }
+                Event::KeyDown {
+                    scancode,
+                    keymod: _,
+                    repeat: false,
+                    ..
+                } => {
                     // println!("Key DOWN: scancode = {:?}, mod {}", scancode, keymod);
                     if scancode.is_none() {
                         continue;
@@ -326,8 +382,7 @@ pub fn main() -> Result<(), String> {
                             }
                         }
 
-                        Scancode::Pause |
-                        Scancode::P => {
+                        Scancode::Pause | Scancode::P => {
                             // toggle pause
                             if clock.paused {
                                 clock.resume();
@@ -349,7 +404,7 @@ pub fn main() -> Result<(), String> {
 
                         _ => {}
                     }
-                },
+                }
                 /*
                 Event::KeyUp {scancode, keymod, ..}
                 => {
@@ -363,7 +418,9 @@ pub fn main() -> Result<(), String> {
                                 println!("Controller connected: {}", c.name());
                                 controllers.push(c);
                             }
-                            Err(e) => println!("Warning: could not open controller {}: {}", which, e),
+                            Err(e) => {
+                                println!("Warning: could not open controller {}: {}", which, e)
+                            }
                         }
                     }
                 }
@@ -385,7 +442,13 @@ pub fn main() -> Result<(), String> {
         // Scene rendering takes priority when active
         if let Some(ref mut scene) = active_scene {
             let mut resources = render_resources.prepare(&mut scratch_tex, audio_system.as_ref());
-            let result = scene.update(&mut canvas, &mut play_tex, delta_ticks, &game_lib, &mut resources);
+            let result = scene.update(
+                &mut canvas,
+                &mut play_tex,
+                delta_ticks,
+                &game_lib,
+                &mut resources,
+            );
             match result {
                 SceneResult::Done => {
                     scene.on_exit();
@@ -397,22 +460,24 @@ pub fn main() -> Result<(), String> {
                             // Pass `true` for skip to bypass during development
                             let skip_copy_protect = false;
                             let q_count = game_lib.get_copy_protect_count();
-                            active_scene = Some(Box::new(CopyProtectScene::new(skip_copy_protect, q_count)));
+                            active_scene =
+                                Some(Box::new(CopyProtectScene::new(skip_copy_protect, q_count)));
                             scene_phase = ScenePhase::CopyProtect;
                         }
                         ScenePhase::CopyProtect => {
                             // Copy protection finished — quit if failed
-                            let passed = scene.as_any()
+                            let passed = scene
+                                .as_any()
                                 .downcast_ref::<CopyProtectScene>()
                                 .map_or(false, |cp| cp.passed());
                             if !passed {
                                 println!("Copy protection failed — exiting.");
                                 break 'running;
                             }
-                            active_scene = Some(Box::new(PlacardScene::new(
-                                "julian_start",
-                                "pagecolors",
-                            ).with_hold_ticks(300))); // 10s at 30Hz
+                            active_scene = Some(Box::new(
+                                PlacardScene::new("julian_start", "pagecolors")
+                                    .with_hold_ticks(300),
+                            )); // 10s at 30Hz
                             scene_phase = ScenePhase::PlacardStart;
                         }
                         ScenePhase::PlacardStart => {
@@ -434,11 +499,17 @@ pub fn main() -> Result<(), String> {
                             // If the Talisman win condition fired, transition
                             // into the victory sequence (placard → winpic);
                             // otherwise treat as restart.
-                            let won = scene.as_any().downcast_ref::<GameplayScene>()
-                                .map(|gs| gs.is_victory()).unwrap_or(false);
+                            let won = scene
+                                .as_any()
+                                .downcast_ref::<GameplayScene>()
+                                .map(|gs| gs.is_victory())
+                                .unwrap_or(false);
                             if won {
-                                let hero = scene.as_any().downcast_ref::<GameplayScene>()
-                                    .map(|gs| gs.hero_name()).unwrap_or("Julian");
+                                let hero = scene
+                                    .as_any()
+                                    .downcast_ref::<GameplayScene>()
+                                    .map(|gs| gs.hero_name())
+                                    .unwrap_or("Julian");
                                 if let Some(ref a) = audio_system {
                                     a.stop_score();
                                 }
@@ -482,7 +553,6 @@ pub fn main() -> Result<(), String> {
             let clear_canvas = clear_flag;
 
             let _ = canvas.with_texture_canvas(&mut play_tex, |play_canvas| {
-
                 play_canvas.set_viewport(Rect::new(16, 0, 288, 400));
 
                 if clear_flag == true {
@@ -521,13 +591,19 @@ pub fn main() -> Result<(), String> {
 
         // Feed debug commands from console into GameplayScene
         // and drain gameplay debug logs back to the console.
-        if let (Some(ref mut dc), Some(ref mut scene)) = (debug_console.as_mut(), active_scene.as_mut()) {
+        if let (Some(ref mut dc), Some(ref mut scene)) =
+            (debug_console.as_mut(), active_scene.as_mut())
+        {
             let cmds = dc.drain_commands();
             if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
                 for cmd in cmds {
                     if let DebugCommand::SetTickRate { hz } = cmd {
                         debug_tick_hz = hz;
-                        dc.log(format!("Tick rate: {} Hz  ({:.2}x speed)", hz, hz as f64 / 30.0));
+                        dc.log(format!(
+                            "Tick rate: {} Hz  ({:.2}x speed)",
+                            hz,
+                            hz as f64 / 30.0
+                        ));
                     } else {
                         gs.apply_command(cmd);
                     }
@@ -586,7 +662,11 @@ pub fn main() -> Result<(), String> {
                     vfx_palette_xfade: gs.is_palette_xfade_active(),
                     time_period: crate::game::debug_tui::day_phase_label(gs.state.get_day_phase()),
                     is_paused: clock.paused,
-                    princess_captive: gs.state.world_objects.get(9).map_or(false, |o| o.ob_stat != 0),
+                    princess_captive: gs
+                        .state
+                        .world_objects
+                        .get(9)
+                        .map_or(false, |o| o.ob_stat != 0),
                     princess_rescues: gs.state.princess as u16,
                     statues_collected: gs.state.stuff().get(25).copied().unwrap_or(0) as u8,
                     has_writ: gs.state.stuff().get(28).copied().unwrap_or(0) != 0,
@@ -600,10 +680,16 @@ pub fn main() -> Result<(), String> {
                     brave: gs.state.brave as u16,
                     actors: {
                         use crate::game::npc::NPC_TYPE_NONE;
-                        let mut v: Vec<crate::game::debug_tui::ActorSnapshot> = gs.state.actors.iter().enumerate()
+                        let mut v: Vec<crate::game::debug_tui::ActorSnapshot> = gs
+                            .state
+                            .actors
+                            .iter()
+                            .enumerate()
                             .filter(|(_, a)| a.is_active())
                             .take(20)
-                            .map(|(slot, a)| crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a))
+                            .map(|(slot, a)| {
+                                crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a)
+                            })
                             .collect();
                         if let Some(ref table) = gs.npc_table {
                             for (i, npc) in table.npcs.iter().enumerate() {
@@ -621,24 +707,43 @@ pub fn main() -> Result<(), String> {
                     hero_weapon: gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
                     hero_weapon_name: crate::game::debug_tui::weapon_short_name(
                         gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
-                    ).to_string(),
-                    hero_state_u8: gs.state.actors.first()
+                    )
+                    .to_string(),
+                    hero_state_u8: gs
+                        .state
+                        .actors
+                        .first()
                         .map(|a| {
                             use crate::game::actor::ActorState as AS;
                             match a.state {
-                                AS::Still => 0, AS::Walking => 1, AS::Fighting(_) => 2,
-                                AS::Dying => 3, AS::Dead => 4, AS::Shooting(_) => 5,
-                                AS::Sinking => 6, AS::Falling => 7, AS::Sleeping => 8,
+                                AS::Still => 0,
+                                AS::Walking => 1,
+                                AS::Fighting(_) => 2,
+                                AS::Dying => 3,
+                                AS::Dead => 4,
+                                AS::Shooting(_) => 5,
+                                AS::Sinking => 6,
+                                AS::Falling => 7,
+                                AS::Sleeping => 8,
                             }
                         })
                         .unwrap_or(0),
-                    hero_state_name: gs.state.actors.first()
+                    hero_state_name: gs
+                        .state
+                        .actors
+                        .first()
                         .map(|a| {
                             use crate::game::actor::ActorState as AS;
                             let discriminant: u8 = match a.state {
-                                AS::Still => 0, AS::Walking => 1, AS::Fighting(_) => 2,
-                                AS::Dying => 3, AS::Dead => 4, AS::Shooting(_) => 5,
-                                AS::Sinking => 6, AS::Falling => 7, AS::Sleeping => 8,
+                                AS::Still => 0,
+                                AS::Walking => 1,
+                                AS::Fighting(_) => 2,
+                                AS::Dying => 3,
+                                AS::Dead => 4,
+                                AS::Shooting(_) => 5,
+                                AS::Sinking => 6,
+                                AS::Falling => 7,
+                                AS::Sleeping => 8,
                             };
                             crate::game::debug_tui::actor_state_name(discriminant).to_string()
                         })
@@ -648,7 +753,8 @@ pub fn main() -> Result<(), String> {
                     active_carrier: gs.state.active_carrier,
                     active_carrier_name: crate::game::debug_tui::carrier_name(
                         gs.state.active_carrier,
-                    ).to_string(),
+                    )
+                    .to_string(),
                     jewel_timer: gs.state.light_timer.max(0) as u16,
                     totem_timer: 0,
                     freeze_timer: gs.state.freeze_timer.max(0) as u16,
@@ -665,9 +771,16 @@ pub fn main() -> Result<(), String> {
                     missile_count: gs.missiles.iter().filter(|m| m.active).count().min(255) as u8,
                     item_count: {
                         use crate::game::actor::ActorKind;
-                        gs.state.actors.iter().enumerate()
-                            .filter(|(i, a)| *i >= 7 && *i <= 19 && a.is_active()
-                                && matches!(a.kind, ActorKind::Object))
+                        gs.state
+                            .actors
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, a)| {
+                                *i >= 7
+                                    && *i <= 19
+                                    && a.is_active()
+                                    && matches!(a.kind, ActorKind::Object)
+                            })
                             .count()
                             .min(255) as u8
                     },
@@ -698,12 +811,13 @@ pub fn main() -> Result<(), String> {
                 };
                 dc.update_status(status);
                 // Drain any leftover commands (no-op during intro)
-                for _ in cmds { }
+                for _ in cmds {}
             }
 
             // Handle song play/stop requests
             if let Some(group) = dc.take_song_request() {
-                if let (Some(ref a), Some(ref lib)) = (audio_system.as_ref(), song_library.as_ref()) {
+                if let (Some(ref a), Some(ref lib)) = (audio_system.as_ref(), song_library.as_ref())
+                {
                     if !a.play_group(group, lib) {
                         dc.log(format!("Song group {} not available", group));
                     }
@@ -767,7 +881,7 @@ pub fn main() -> Result<(), String> {
         }
 
         if kill_flag {
-            break 'running
+            break 'running;
         }
     }
 

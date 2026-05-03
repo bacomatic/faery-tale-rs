@@ -7,12 +7,16 @@ impl GameplayScene {
     /// Render the HI bar (stats, messages, buttons, compass) to the canvas.
     /// Constructs a texture target and blits the hiscreen background, stats text,
     /// message queue, menu buttons, and compass overlay.
-    pub(super) fn render_hibar(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
-        let brave    = self.state.brave;
-        let luck     = self.state.luck;
-        let kind     = self.state.kind;
+    pub(super) fn render_hibar(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        resources: &mut SceneResources<'_, '_>,
+    ) {
+        let brave = self.state.brave;
+        let luck = self.state.luck;
+        let kind = self.state.kind;
         let vitality = self.state.vitality;
-        let wealth   = self.state.wealth;
+        let wealth = self.state.wealth;
         let buttons = self.menu.print_options();
         let msg_count = self.messages.len().min(4);
         let msgs: Vec<&str> = self.messages.iter().collect();
@@ -32,9 +36,9 @@ impl GameplayScene {
         let topaz_baseline = topaz_font.get_font().baseline as i32;
 
         let tc = canvas.texture_creator();
-        if let Ok(mut hibar_tex) = tc.create_texture_target(
-            sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H,
-        ) {
+        if let Ok(mut hibar_tex) =
+            tc.create_texture_target(sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H)
+        {
             let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
                 hc.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
                 hc.clear();
@@ -43,15 +47,16 @@ impl GameplayScene {
                     hiscreen.draw_scaled(hc, sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
                 } else {
                     hc.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
-                    hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
+                    hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H))
+                        .ok();
                 }
 
                 amber_font.set_color_mod(0xAA, 0x55, 0x00);
-                amber_font.render_string(&format!("Brv:{:3}", brave),     hc, 14,  52);
-                amber_font.render_string(&format!("Lck:{:3}", luck),      hc, 90,  52);
-                amber_font.render_string(&format!("Knd:{:3}", kind),      hc, 168, 52);
-                amber_font.render_string(&format!("Vit:{:3}", vitality),  hc, 245, 52);
-                amber_font.render_string(&format!("Wlth:{:3}", wealth),   hc, 321, 52);
+                amber_font.render_string(&format!("Brv:{:3}", brave), hc, 14, 52);
+                amber_font.render_string(&format!("Lck:{:3}", luck), hc, 90, 52);
+                amber_font.render_string(&format!("Knd:{:3}", kind), hc, 168, 52);
+                amber_font.render_string(&format!("Vit:{:3}", vitality), hc, 245, 52);
+                amber_font.render_string(&format!("Wlth:{:3}", wealth), hc, 321, 52);
 
                 for (i, msg) in msgs_visible.iter().enumerate() {
                     let line_from_bottom = (msg_count - 1 - i) as i32;
@@ -66,9 +71,17 @@ impl GameplayScene {
                     let btn_x = if col == 0 { 430i32 } else { 482i32 };
                     let btn_y = (row as i32) * 9 + 8;
                     let bg_rgba = textcolors[btn.bg_color as usize];
-                    let bg = (((bg_rgba >> 16) & 0xFF) as u8, ((bg_rgba >> 8) & 0xFF) as u8, (bg_rgba & 0xFF) as u8);
+                    let bg = (
+                        ((bg_rgba >> 16) & 0xFF) as u8,
+                        ((bg_rgba >> 8) & 0xFF) as u8,
+                        (bg_rgba & 0xFF) as u8,
+                    );
                     let fg_rgba = textcolors[btn.fg_color as usize];
-                    let fg = (((fg_rgba >> 16) & 0xFF) as u8, ((fg_rgba >> 8) & 0xFF) as u8, (fg_rgba & 0xFF) as u8);
+                    let fg = (
+                        ((fg_rgba >> 16) & 0xFF) as u8,
+                        ((fg_rgba >> 8) & 0xFF) as u8,
+                        (fg_rgba & 0xFF) as u8,
+                    );
                     topaz_font.render_string_with_bg("      ", hc, btn_x, btn_y, bg, fg);
                     topaz_font.set_color_mod(fg.0, fg.1, fg.2);
                     topaz_font.render_string(&btn.text, hc, btn_x + 4, btn_y);
@@ -79,7 +92,8 @@ impl GameplayScene {
                 const COMPASS_SRC_Y: i32 = 15;
                 const COMPASS_SRC_W: u32 = 48;
                 const COMPASS_SRC_H: u32 = 24;
-                let compass_dest = sdl2::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
+                let compass_dest =
+                    sdl2::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
                 if let Some(normal_tex) = compass_normal {
                     hc.copy(normal_tex, None, compass_dest).ok();
                 }
@@ -88,7 +102,12 @@ impl GameplayScene {
                     if rw > 1 || rh > 1 {
                         if let Some(highlight_tex) = compass_highlight {
                             let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
-                            let dst = sdl2::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
+                            let dst = sdl2::rect::Rect::new(
+                                COMPASS_X + rx,
+                                COMPASS_SRC_Y + ry,
+                                rw as u32,
+                                rh as u32,
+                            );
                             hc.copy(highlight_tex, src, dst).ok();
                         }
                     }
@@ -99,23 +118,33 @@ impl GameplayScene {
                     let cursor_x = if cursor_col == 0 { 430i32 } else { 482i32 };
                     let cursor_y = (cursor_row as i32) * 9 + 8 - topaz_baseline;
                     let cursor_w = 48u32; // button text width (6 chars × 8px)
-                    let cursor_h = 9u32;  // row height
+                    let cursor_h = 9u32; // row height
                     hc.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
                     hc.draw_rect(sdl2::rect::Rect::new(
-                        cursor_x - 1, cursor_y - 1, cursor_w + 2, cursor_h + 2
-                    )).ok();
+                        cursor_x - 1,
+                        cursor_y - 1,
+                        cursor_w + 2,
+                        cursor_h + 2,
+                    ))
+                    .ok();
                 }
             });
-            canvas.copy(
-                &hibar_tex,
-                sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
-                sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
-            ).ok();
+            canvas
+                .copy(
+                    &hibar_tex,
+                    sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                    sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+                )
+                .ok();
         }; // semicolon: drops Result<Texture> temporary before tc is dropped
     }
 
     /// Clear and color the canvas according to the current viewstatus mode.
-    pub(super) fn render_by_viewstatus(&mut self, canvas: &mut Canvas<Window>, resources: &mut SceneResources<'_, '_>) {
+    pub(super) fn render_by_viewstatus(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        resources: &mut SceneResources<'_, '_>,
+    ) {
         match self.state.viewstatus {
             // Normal play or forced redraw
             0 | 98 | 99 => {
@@ -145,10 +174,17 @@ impl GameplayScene {
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                                let src = sdl2::rect::Rect::new(0, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
+                                let src = sdl2::rect::Rect::new(
+                                    0,
+                                    0,
+                                    PLAYFIELD_LORES_W,
+                                    PLAYFIELD_LORES_H,
+                                );
                                 let dst = sdl2::rect::Rect::new(
-                                    PLAYFIELD_X, PLAYFIELD_Y,
-                                    PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
+                                    PLAYFIELD_X,
+                                    PLAYFIELD_Y,
+                                    PLAYFIELD_CANVAS_W,
+                                    PLAYFIELD_CANVAS_H,
                                 );
                                 let _ = canvas.copy(&tex, Some(src), Some(dst));
                             }
@@ -167,9 +203,8 @@ impl GameplayScene {
                 canvas.clear();
 
                 if let Some(ref world) = self.map_world {
-                    let buf = crate::game::map_view::bigdraw(
-                        self.state.hero_x, self.state.hero_y, world,
-                    );
+                    let buf =
+                        crate::game::map_view::bigdraw(self.state.hero_x, self.state.hero_y, world);
                     let mut pixels_u8: Vec<u8> = Vec::with_capacity(buf.len() * 4);
                     for &px in &buf {
                         pixels_u8.push((px & 0xFF) as u8);
@@ -233,7 +268,9 @@ impl GameplayScene {
 
                     for (j, item) in INV_LIST.iter().enumerate() {
                         let count = stuff[j] as usize;
-                        if count == 0 { continue; }
+                        if count == 0 {
+                            continue;
+                        }
                         let num = count.min(item.maxshown as usize);
                         let frame = item.image_number as usize;
                         if let Some(frame_pix) = obj_sheet.frame_pixels(frame) {
@@ -242,15 +279,22 @@ impl GameplayScene {
                                 let dst_x = item.xoff as i32 + 20;
                                 for row in 0..item.img_height as usize {
                                     let src_row = item.img_off as usize + row;
-                                    if src_row >= OBJ_SPRITE_H { break; }
+                                    if src_row >= OBJ_SPRITE_H {
+                                        break;
+                                    }
                                     let py = dst_y + row as i32;
-                                    if py < 0 || py >= LORES_H as i32 { continue; }
+                                    if py < 0 || py >= LORES_H as i32 {
+                                        continue;
+                                    }
                                     for col in 0..SPRITE_W {
                                         let px = dst_x + col as i32;
-                                        if px < 0 || px >= LORES_W as i32 { continue; }
+                                        if px < 0 || px >= LORES_W as i32 {
+                                            continue;
+                                        }
                                         let src_idx = frame_pix[src_row * SPRITE_W + col];
                                         if src_idx != 31 {
-                                            inv_indices[py as usize * LORES_W + px as usize] = src_idx;
+                                            inv_indices[py as usize * LORES_W + px as usize] =
+                                                src_idx;
                                         }
                                     }
                                 }
@@ -277,17 +321,19 @@ impl GameplayScene {
                     let tc = canvas.texture_creator();
                     if let Ok(surface) = sdl2::surface::Surface::from_data(
                         &mut rgb_buf,
-                        LORES_W as u32, LORES_H as u32,
+                        LORES_W as u32,
+                        LORES_H as u32,
                         LORES_W as u32 * 4,
                         sdl2::pixels::PixelFormatEnum::ARGB8888,
                     ) {
                         if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                            let src = sdl2::rect::Rect::new(
-                                16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
-                            );
+                            let src =
+                                sdl2::rect::Rect::new(16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
                             let dst = sdl2::rect::Rect::new(
-                                PLAYFIELD_X, PLAYFIELD_Y,
-                                PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
+                                PLAYFIELD_X,
+                                PLAYFIELD_Y,
+                                PLAYFIELD_CANVAS_W,
+                                PLAYFIELD_CANVAS_H,
                             );
                             let _ = canvas.copy(&tex, Some(src), Some(dst));
                         }
@@ -314,16 +360,22 @@ impl GameplayScene {
         fb_w: i32,
         fb_h: i32,
     ) {
-        use crate::game::sprites::{SPRITE_W, SPRITE_H};
+        use crate::game::sprites::{SPRITE_H, SPRITE_W};
         let row_limit = max_rows.min(SPRITE_H) as i32;
         for row in 0..row_limit {
             let dst_y = rel_y + row;
-            if dst_y < 0 || dst_y >= fb_h { continue; }
+            if dst_y < 0 || dst_y >= fb_h {
+                continue;
+            }
             for col in 0..SPRITE_W as i32 {
                 let dst_x = rel_x + col;
-                if dst_x < 0 || dst_x >= fb_w { continue; }
+                if dst_x < 0 || dst_x >= fb_w {
+                    continue;
+                }
                 let src_idx = frame_pixels[(row as usize) * SPRITE_W + col as usize];
-                if src_idx == 31 { continue; } // transparent
+                if src_idx == 31 {
+                    continue;
+                } // transparent
                 framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
             }
         }
@@ -342,12 +394,18 @@ impl GameplayScene {
         use crate::game::sprites::SPRITE_W;
         for row in 0..obj_h as i32 {
             let dst_y = rel_y + row;
-            if dst_y < 0 || dst_y >= fb_h { continue; }
+            if dst_y < 0 || dst_y >= fb_h {
+                continue;
+            }
             for col in 0..SPRITE_W as i32 {
                 let dst_x = rel_x + col;
-                if dst_x < 0 || dst_x >= fb_w { continue; }
+                if dst_x < 0 || dst_x >= fb_w {
+                    continue;
+                }
                 let src_idx = frame_pixels[(row as usize) * SPRITE_W + col as usize];
-                if src_idx == 31 { continue; }
+                if src_idx == 31 {
+                    continue;
+                }
                 framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
             }
         }
@@ -369,10 +427,12 @@ impl GameplayScene {
         rel_y: i32,
     ) -> Option<(&'a [u8], i32, i32, usize)> {
         use crate::game::sprites::{
-            STATELIST, SPRITE_W, BOW_X, BOW_Y,
-            obj_frame_height, obj_frame_y_offset, obj_frame_index,
+            obj_frame_height, obj_frame_index, obj_frame_y_offset, BOW_X, BOW_Y, SPRITE_W,
+            STATELIST,
         };
-        if !(weapon_type > 0 && weapon_type <= 5) { return None; }
+        if !(weapon_type > 0 && weapon_type <= 5) {
+            return None;
+        }
         let entry = STATELIST.get(frame)?;
 
         // Resolve (x_off, y_off, raw_inum) per weapon class.
@@ -380,8 +440,16 @@ impl GameplayScene {
         //   bow=0 (special-cased), mace=32, sword=48, dirk=64.
         let (x_off, y_off, raw_inum): (i32, i32, u8) = if weapon_type == 5 {
             // Wand: inum = facing + 103; DIR_NE (=2) shifts Y by -6 (fmain.c:2418).
-            let wy = if hero_facing == 2 { entry.wpn_y as i32 - 6 } else { entry.wpn_y as i32 };
-            (entry.wpn_x as i32, wy, (hero_facing as u8).wrapping_add(103))
+            let wy = if hero_facing == 2 {
+                entry.wpn_y as i32 - 6
+            } else {
+                entry.wpn_y as i32
+            };
+            (
+                entry.wpn_x as i32,
+                wy,
+                (hero_facing as u8).wrapping_add(103),
+            )
         } else if weapon_type == 4 && frame < 32 {
             // Bow walking pose: per-frame BOW_X/BOW_Y offsets and direction-dependent
             // bow inum derived from walk-cycle group (frame / 8) — fmain.c:2429-2433:
@@ -396,8 +464,17 @@ impl GameplayScene {
             (BOW_X[frame] as i32, BOW_Y[frame] as i32, bow_inum)
         } else {
             // Hand weapons (and bow on non-walking frames): wpn_no + k.
-            let k: u8 = match weapon_type { 1 => 64, 2 => 32, 3 => 48, _ => 0 };
-            (entry.wpn_x as i32, entry.wpn_y as i32, entry.wpn_no.wrapping_add(k))
+            let k: u8 = match weapon_type {
+                1 => 64,
+                2 => 32,
+                3 => 48,
+                _ => 0,
+            };
+            (
+                entry.wpn_x as i32,
+                entry.wpn_y as i32,
+                entry.wpn_no.wrapping_add(k),
+            )
         };
 
         // Bit-7 dual role + half-height set: pick the right row band of the
@@ -409,7 +486,9 @@ impl GameplayScene {
         let row_bytes = SPRITE_W;
         let start = y_skip * row_bytes;
         let end = start + h * row_bytes;
-        if end > fp_full.len() { return None; }
+        if end > fp_full.len() {
+            return None;
+        }
         Some((&fp_full[start..end], rel_x + x_off, rel_y + y_off, h))
     }
 
@@ -458,18 +537,18 @@ impl GameplayScene {
         match npc_type {
             NPC_TYPE_NONE | NPC_TYPE_CONTAINER => None,
             NPC_TYPE_HUMAN if race == RACE_ENEMY => Some(6),
-            NPC_TYPE_HUMAN => None,  // SetFig — handled in setfig pass
-            NPC_TYPE_SWAN     => Some(11),
-            NPC_TYPE_HORSE    => Some(5),
-            NPC_TYPE_DRAGON   => Some(10),
-            NPC_TYPE_GHOST    => Some(7),
-            NPC_TYPE_ORC      => Some(6),
-            NPC_TYPE_WRAITH   => Some(7),
+            NPC_TYPE_HUMAN => None, // SetFig — handled in setfig pass
+            NPC_TYPE_SWAN => Some(11),
+            NPC_TYPE_HORSE => Some(5),
+            NPC_TYPE_DRAGON => Some(10),
+            NPC_TYPE_GHOST => Some(7),
+            NPC_TYPE_ORC => Some(6),
+            NPC_TYPE_WRAITH => Some(7),
             NPC_TYPE_SKELETON => Some(7),
             NPC_TYPE_SNAKE | NPC_TYPE_SPIDER | NPC_TYPE_DKNIGHT => Some(8),
             NPC_TYPE_LORAII | NPC_TYPE_NECROMANCER => Some(9),
-            NPC_TYPE_RAFT     => Some(4),
-            _                 => Some(6), // unknown enemy types default to ogre sheet
+            NPC_TYPE_RAFT => Some(4),
+            _ => Some(6), // unknown enemy types default to ogre sheet
         }
     }
 
@@ -478,12 +557,14 @@ impl GameplayScene {
     /// SETFIG_TABLE indices: 0=wizard, 8=bartender, 13=beggar (see sprites.rs).
     pub(super) fn npc_to_setfig_idx(npc_type: u8, race: u8) -> Option<usize> {
         use crate::game::npc::*;
-        if npc_type != NPC_TYPE_HUMAN { return None; }
+        if npc_type != NPC_TYPE_HUMAN {
+            return None;
+        }
         match race {
-            RACE_SHOPKEEPER => Some(8),   // bartender
-            RACE_BEGGAR     => Some(13),  // beggar
-            RACE_NORMAL     => Some(0),   // wizard (default named NPC)
-            _               => None,
+            RACE_SHOPKEEPER => Some(8), // bartender
+            RACE_BEGGAR => Some(13),    // beggar
+            RACE_NORMAL => Some(0),     // wizard (default named NPC)
+            _ => None,
         }
     }
 
@@ -517,7 +598,7 @@ impl GameplayScene {
         cycle: u32,
         num_frames: usize,
     ) -> usize {
-        use crate::game::npc::{NpcState, RACE_WRAITH, RACE_SNAKE};
+        use crate::game::npc::{NpcState, RACE_SNAKE, RACE_WRAITH};
 
         let frame_base = Self::facing_to_frame_base(npc.facing);
 
@@ -562,7 +643,7 @@ impl GameplayScene {
         framebuf: &mut Vec<u8>,
         _hero_submerged: bool,
     ) {
-        use crate::game::map_renderer::{MAP_DST_W, MAP_DST_H};
+        use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
         use crate::game::sprites::{SPRITE_H, SPRITE_W, STATELIST};
         let fb_w = MAP_DST_W as i32;
         let fb_h = MAP_DST_H as i32;
@@ -581,7 +662,11 @@ impl GameplayScene {
             } else {
                 SPRITE_H
             };
-            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w && rel_y > -(SPRITE_H as i32) && rel_y < fb_h {
+            if rel_x > -(SPRITE_W as i32)
+                && rel_x < fb_w
+                && rel_y > -(SPRITE_H as i32)
+                && rel_y < fb_h
+            {
                 let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
                 // Sprite sheet layout (from fmain.c statelist[] and diroffs[]):
@@ -611,7 +696,11 @@ impl GameplayScene {
                 } else {
                     // Walking or still: existing logic.
                     let frame_base = Self::facing_to_frame_base(hero_facing);
-                    if is_moving { frame_base + (state.cycle as usize) % 8 } else { frame_base + 1 }
+                    if is_moving {
+                        frame_base + (state.cycle as usize) % 8
+                    } else {
+                        frame_base + 1
+                    }
                 };
                 // Body sprite frame: for fighting, use STATELIST figure field; for walking/still, frame is already correct
                 let body_frame = if let Some(ActorState::Fighting(_)) = hero_state {
@@ -623,8 +712,17 @@ impl GameplayScene {
                 // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
                 let wpn_blit = if let Some(ref obj_sheet) = obj_sprites {
-                    Self::compute_weapon_blit(frame, hero_facing, weapon_type, obj_sheet, rel_x, rel_y)
-                } else { None };
+                    Self::compute_weapon_blit(
+                        frame,
+                        hero_facing,
+                        weapon_type,
+                        obj_sheet,
+                        rel_x,
+                        rel_y,
+                    )
+                } else {
+                    None
+                };
 
                 // Weapon behind body for N(0), SW(5), W(6), NW(7)
                 let weapon_behind = matches!(hero_facing, 0 | 5 | 6 | 7);
@@ -634,7 +732,9 @@ impl GameplayScene {
                     }
                 }
                 if let Some(fp) = sheet.frame_pixels(body_frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(
+                        fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h,
+                    );
                 }
                 if !weapon_behind {
                     if let Some((wfp, wx, wy, oh)) = wpn_blit {
@@ -647,22 +747,37 @@ impl GameplayScene {
         // --- Enemy NPCs from npc_table ---
         if let Some(ref table) = npc_table {
             for (npc_idx, npc) in table.npcs.iter().enumerate().filter(|(_, n)| n.active) {
-                let (cfile_idx, override_frame) =
-                    if let Some((ovr_cfile, ovr_frame)) = Self::swan_grounded_override(npc, state) {
-                        (ovr_cfile, Some(ovr_frame))
-                    } else {
-                        let Some(c) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else { continue };
-                        (c, None)
+                let (cfile_idx, override_frame) = if let Some((ovr_cfile, ovr_frame)) =
+                    Self::swan_grounded_override(npc, state)
+                {
+                    (ovr_cfile, Some(ovr_frame))
+                } else {
+                    let Some(c) = Self::npc_type_to_cfile(npc.npc_type, npc.race) else {
+                        continue;
                     };
-                let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else { continue };
+                    (c, None)
+                };
+                let Some(Some(ref sheet)) = sprite_sheets.get(cfile_idx) else {
+                    continue;
+                };
 
                 let (rel_x, rel_y) = Self::actor_rel_pos(npc.x as u16, npc.y as u16, map_x, map_y);
                 let frame = override_frame
                     .map(|f| f.min(sheet.num_frames.saturating_sub(1)))
-                    .unwrap_or_else(|| Self::npc_animation_frame(npc, npc_idx, state.cycle, sheet.num_frames));
+                    .unwrap_or_else(|| {
+                        Self::npc_animation_frame(npc, npc_idx, state.cycle, sheet.num_frames)
+                    });
 
                 if let Some(fp) = sheet.frame_pixels(frame) {
-                    Self::blit_sprite_to_framebuf(fp, rel_x, rel_y, crate::game::sprites::SPRITE_H, framebuf, fb_w, fb_h);
+                    Self::blit_sprite_to_framebuf(
+                        fp,
+                        rel_x,
+                        rel_y,
+                        crate::game::sprites::SPRITE_H,
+                        framebuf,
+                        fb_w,
+                        fb_h,
+                    );
                 }
             }
         }

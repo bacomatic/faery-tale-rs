@@ -2,16 +2,16 @@
 
 ### 17.1 Day Counter
 
-`daynight` is a 16-bit unsigned integer (`USHORT`), cycling from 0 to 23999. Incremented by 1 each non-scrolling game tick:
+`daynight` is a 16-bit unsigned integer (`USHORT`), cycling from 0 to 23999. Incremented by 1 each non-scrolling world-clock tick:
 
 ```
 if (!freeze_timer)
     if ((daynight++) >= 24000) daynight = 0;
 ```
 
-Does not advance during freeze spells. During sleep: `daynight += 63` per tick (plus normal +1 = 64 effective advance). Initialized to 8000 (morning) during `revive()`.
+Does not advance during freeze spells. During sleep: `daynight += 63` per world-clock tick (plus normal +1 = 64 effective advance). Initialized to 8000 (morning) during `revive()`.
 
-Full cycle = 24000 ticks (≈ 6.7 minutes at 60 Hz in the original game).
+Full cycle = 24000 world-clock ticks. This counter is distinct from both the 30 fps presentation cadence and the 15 Hz animation/AI tick.
 
 ### 17.2 Light Level
 
@@ -49,7 +49,7 @@ When `lightlevel < 40` (deep night, daynight < 1600 or > 22400): `ob_listg[5].ob
 
 ### 17.5 Palette Fading (`day_fade`)
 
-Called every tick. Updates palette every 4 ticks (`(daynight & 3) == 0`) or during screen rebuild (`viewstatus > 97`):
+Called every world-clock tick. Updates palette every 4 world-clock ticks (`(daynight & 3) == 0`) or during screen rebuild (`viewstatus > 97`):
 
 ```
 day_fade():
@@ -125,13 +125,13 @@ Selects one of 7 four-channel music tracks based on game state. Priority (highes
 
 Day/night music crossover: `lightlevel > 120` = day, `≤ 120` = night. Crossover at daynight ≈ 4800 (dawn) and ≈ 19200 (dusk).
 
-Playback: `now = TRUE` → `playscore()` (immediate restart); `now = FALSE` → `setscore()` (crossfade). Mood re-evaluated every 8 ticks. Indoor waveform tweak: dungeons (region 9) use `new_wave[10] = 0x0307`; buildings (region 8) use `0x0100`.
+Playback: `now = TRUE` → `playscore()` (immediate restart); `now = FALSE` → `setscore()` (crossfade). Mood re-evaluated every 8 world-clock ticks. Indoor waveform tweak: dungeons (region 9) use `new_wave[10] = 0x0307`; buildings (region 8) use `0x0100`.
 
 ### 17.9 Gameplay Effects
 
 - **Encounter spawning**: Rate is constant regardless of time of day. `danger_level` depends on `region_num` and `xtype`, not `lightlevel`.
 - **Innkeeper dialogue**: `dayperiod > 7` (evening/night) triggers lodging speech.
-- **Vitality recovery**: Every 1024 ticks (`(daynight & 0x3FF) == 0`), hero regenerates +1 HP up to max. Tied to `daynight` counter but not time-of-day dependent.
+- **Vitality recovery**: Every 1024 world-clock ticks (`(daynight & 0x3FF) == 0`), hero regenerates +1 HP up to max. Tied to `daynight` counter but not time-of-day dependent.
 - **Sleep**: Time passes 64× faster. Wake conditions include morning window (daynight 9000–10000).
 
 ### 17.10 Palette Data
@@ -144,5 +144,3 @@ Playback: `now = TRUE` → `playscore()` (immediate restart); `now = FALSE` → 
 - **`colorplay()`**: Teleportation effect — 32 frames of random 12-bit RGB colors for all palette entries except color 0.
 
 ---
-
-

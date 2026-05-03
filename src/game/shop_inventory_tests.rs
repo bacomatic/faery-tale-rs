@@ -17,19 +17,33 @@ mod tests {
     // ============================================================
 
     #[test]
-    fn t2_shop_costs_food_is_3()   { assert_eq!(JTRANS[0].1, 3); }
+    fn t2_shop_costs_food_is_3() {
+        assert_eq!(JTRANS[0].1, 3);
+    }
     #[test]
-    fn t2_shop_costs_arrow_is_10() { assert_eq!(JTRANS[1].1, 10); }
+    fn t2_shop_costs_arrow_is_10() {
+        assert_eq!(JTRANS[1].1, 10);
+    }
     #[test]
-    fn t2_shop_costs_vial_is_15()  { assert_eq!(JTRANS[2].1, 15); }
+    fn t2_shop_costs_vial_is_15() {
+        assert_eq!(JTRANS[2].1, 15);
+    }
     #[test]
-    fn t2_shop_costs_mace_is_30()  { assert_eq!(JTRANS[3].1, 30); }
+    fn t2_shop_costs_mace_is_30() {
+        assert_eq!(JTRANS[3].1, 30);
+    }
     #[test]
-    fn t2_shop_costs_sword_is_45() { assert_eq!(JTRANS[4].1, 45); }
+    fn t2_shop_costs_sword_is_45() {
+        assert_eq!(JTRANS[4].1, 45);
+    }
     #[test]
-    fn t2_shop_costs_bow_is_75()   { assert_eq!(JTRANS[5].1, 75); }
+    fn t2_shop_costs_bow_is_75() {
+        assert_eq!(JTRANS[5].1, 75);
+    }
     #[test]
-    fn t2_shop_costs_totem_is_20() { assert_eq!(JTRANS[6].1, 20); }
+    fn t2_shop_costs_totem_is_20() {
+        assert_eq!(JTRANS[6].1, 20);
+    }
 
     #[test]
     fn t2_shop_buy_food_deducts_3_gold_no_dirk_grant() {
@@ -85,7 +99,10 @@ mod tests {
     fn t2_inv_lasso_slot_16_is_gold_key() {
         let mut state = GameState::new();
         state.stuff_mut()[16] = 1;
-        assert!(!state.has_lasso(), "stuff[16] should not trigger has_lasso()");
+        assert!(
+            !state.has_lasso(),
+            "stuff[16] should not trigger has_lasso()"
+        );
     }
 
     // ============================================================

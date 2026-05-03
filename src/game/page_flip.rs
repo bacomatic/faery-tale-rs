@@ -1,4 +1,3 @@
-
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, RenderTarget, Texture};
 
@@ -21,14 +20,17 @@ use sdl2::render::{Canvas, RenderTarget, Texture};
  */
 
 // rate: how many pixels to advance per strip
-const FLIP1: [i32; 22] = [8,  6, 5, 4, 3, 2, 3, 5, 13, 0, 0,
-                           13, 5, 3, 2, 3, 4, 5, 6, 8,  0, 0];
+const FLIP1: [i32; 22] = [
+    8, 6, 5, 4, 3, 2, 3, 5, 13, 0, 0, 13, 5, 3, 2, 3, 4, 5, 6, 8, 0, 0,
+];
 // width: width of each strip in pixels
-const FLIP2: [i32; 22] = [7, 5, 4, 3, 2, 1, 1, 1, 1, 0, 0,
-                           1, 1, 1, 1, 2, 3, 4, 5, 7, 0, 0];
+const FLIP2: [i32; 22] = [
+    7, 5, 4, 3, 2, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 2, 3, 4, 5, 7, 0, 0,
+];
 // delay: extra delay in ticks after this step (original uses Delay(n) at 50Hz)
-const FLIP3: [i32; 22] = [12, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0,
-                           0,  0, 0, 0, 0, 0, 3, 6, 9, 0, 0];
+const FLIP3: [i32; 22] = [
+    12, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 6, 9, 0, 0,
+];
 
 /// Lookup table for the page edge curve at small column offsets (0..10).
 const PAGE_DET_TABLE: [i32; 11] = [9, 9, 8, 7, 6, 5, 5, 5, 4, 4, 4];
@@ -39,11 +41,21 @@ fn page_det(col: i32) -> i32 {
     if col < 11 {
         return PAGE_DET_TABLE[col as usize];
     }
-    if col > 136 { return 10; }
-    if col > 135 { return 7; }
-    if col > 123 { return 6; }
-    if col > 98 { return 5; }
-    if col > 71 { return 4; }
+    if col > 136 {
+        return 10;
+    }
+    if col > 135 {
+        return 7;
+    }
+    if col > 123 {
+        return 6;
+    }
+    if col > 98 {
+        return 5;
+    }
+    if col > 71 {
+        return 4;
+    }
     3 // default for 11..71
 }
 
@@ -198,8 +210,24 @@ impl PageFlip {
             // Right half phase: reveal new page on the right, old page strips retreating
 
             // Draw the left half from old page and right half from new page
-            copy_region(canvas, old_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
-            copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
+            copy_region(
+                canvas,
+                old_page,
+                Rect::new(0, 0, 160, 200),
+                0,
+                0,
+                scale,
+                y_offset,
+            );
+            copy_region(
+                canvas,
+                new_page,
+                Rect::new(160, 0, 160, 200),
+                160,
+                0,
+                scale,
+                y_offset,
+            );
 
             if rate == 0 {
                 // No strips to draw, just the base composition
@@ -217,10 +245,13 @@ impl PageFlip {
                 let strip_height = (200 - h - h).max(0);
                 if strip_height > 0 && wide > 0 {
                     copy_region(
-                        canvas, old_page,
+                        canvas,
+                        old_page,
                         Rect::new(bcol + scol, h, wide as u32, strip_height as u32),
-                        161 + dcol, h,
-                        scale, y_offset,
+                        161 + dcol,
+                        h,
+                        scale,
+                        y_offset,
                     );
                 }
                 dcol += wide;
@@ -230,10 +261,13 @@ impl PageFlip {
             // Draw the spine edge from old page
             if dcol > 0 {
                 copy_region(
-                    canvas, old_page,
+                    canvas,
+                    old_page,
                     Rect::new(296, 7, 1, 186),
-                    161 + dcol, h,
-                    scale, y_offset,
+                    161 + dcol,
+                    h,
+                    scale,
+                    y_offset,
                 );
             }
         } else {
@@ -242,14 +276,46 @@ impl PageFlip {
 
             if rate == 0 {
                 // Just copy both halves from new page
-                copy_region(canvas, new_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
-                copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
+                copy_region(
+                    canvas,
+                    new_page,
+                    Rect::new(0, 0, 160, 200),
+                    0,
+                    0,
+                    scale,
+                    y_offset,
+                );
+                copy_region(
+                    canvas,
+                    new_page,
+                    Rect::new(160, 0, 160, 200),
+                    160,
+                    0,
+                    scale,
+                    y_offset,
+                );
                 return;
             }
 
             // Draw the left half of old page as base, right half is new page
-            copy_region(canvas, old_page, Rect::new(0, 0, 160, 200), 0, 0, scale, y_offset);
-            copy_region(canvas, new_page, Rect::new(160, 0, 160, 200), 160, 0, scale, y_offset);
+            copy_region(
+                canvas,
+                old_page,
+                Rect::new(0, 0, 160, 200),
+                0,
+                0,
+                scale,
+                y_offset,
+            );
+            copy_region(
+                canvas,
+                new_page,
+                Rect::new(160, 0, 160, 200),
+                160,
+                0,
+                scale,
+                y_offset,
+            );
 
             // Overlay strips from new page expanding leftward
             let mut dcol: i32 = 0;
@@ -262,10 +328,13 @@ impl PageFlip {
                 let strip_height = (200 - h - h).max(0);
                 if strip_height > 0 && wide > 0 {
                     copy_region(
-                        canvas, new_page,
+                        canvas,
+                        new_page,
                         Rect::new(bcol - scol, h, wide as u32, strip_height as u32),
-                        bcol - dcol, h,
-                        scale, y_offset,
+                        bcol - dcol,
+                        h,
+                        scale,
+                        y_offset,
                     );
                 }
                 scol += rate;
@@ -275,10 +344,13 @@ impl PageFlip {
             let h = 7;
             if dcol > 0 {
                 copy_region(
-                    canvas, new_page,
+                    canvas,
+                    new_page,
                     Rect::new(24, h, 1, (200 - h - h) as u32),
-                    159 - dcol, h,
-                    scale, y_offset,
+                    159 - dcol,
+                    h,
+                    scale,
+                    y_offset,
                 );
             }
         }

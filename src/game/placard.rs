@@ -1,6 +1,5 @@
-
-use crate::game::font_texture::FontTexture;
 use crate::game::colors::Palette;
+use crate::game::font_texture::FontTexture;
 use crate::game::render_task::RenderTask;
 
 use sdl2::pixels::Color;
@@ -19,13 +18,13 @@ use serde::Deserialize;
 pub struct PlacardLine {
     x: usize,
     y: usize,
-    text: String
+    text: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Placard {
     #[serde(default)]
-    lines: Vec<PlacardLine>
+    lines: Vec<PlacardLine>,
 }
 
 /// Parse an ssp-encoded byte stream into placard lines.
@@ -56,7 +55,11 @@ fn parse_ssp_lines(data: &[u8]) -> Vec<PlacardLine> {
                 idx += 1;
             }
             let text = String::from_utf8_lossy(&text_bytes).to_string();
-            lines.push(PlacardLine { x: x_half * 2, y, text });
+            lines.push(PlacardLine {
+                x: x_half * 2,
+                y,
+                text,
+            });
             continue;
         }
         idx += 1;
@@ -74,7 +77,7 @@ impl Placard {
     pub fn print(&self) {
         for line in &self.lines {
             // only use x here
-            println!("{0: <1$}{2}", "", line.x/10, line.text);
+            println!("{0: <1$}{2}", "", line.x / 10, line.text);
         }
     }
 
@@ -172,7 +175,7 @@ impl Placard {
  */
 #[derive(Debug)]
 pub struct PlacardRenderer {
-    block_index: usize, // outer loop: current block index 0..17
+    block_index: usize,   // outer loop: current block index 0..17
     segment_index: usize, // inner loop: current segment index 0..16
 
     xorg: i32, // current x origin for drawing (border-local)
@@ -187,8 +190,12 @@ pub struct PlacardRenderer {
 
 // segment offset tables, pulled directly from the original game code
 const MOD: i32 = 4;
-const XMOD: [i32; 16] = [-MOD,-MOD,-MOD,  0,  0,  0,MOD,MOD,   0,-MOD,   0,MOD,MOD,  0,  0,  0];
-const YMOD: [i32; 16] = [   0,   0,   0,MOD,MOD,MOD,  0,  0,-MOD,   0,-MOD,  0,  0,MOD,MOD,MOD];
+const XMOD: [i32; 16] = [
+    -MOD, -MOD, -MOD, 0, 0, 0, MOD, MOD, 0, -MOD, 0, MOD, MOD, 0, 0, 0,
+];
+const YMOD: [i32; 16] = [
+    0, 0, 0, MOD, MOD, MOD, 0, 0, -MOD, 0, -MOD, 0, 0, MOD, MOD, MOD,
+];
 
 impl PlacardRenderer {
     /// Returns true when the border animation is complete.
@@ -199,7 +206,11 @@ impl PlacardRenderer {
     /// Draw border segments for this frame onto any canvas.
     /// Advances the animation by `delta_ticks` worth of segments.
     /// Returns true if still animating, false if complete.
-    pub fn draw_segments<T: RenderTarget>(&mut self, canvas: &mut Canvas<T>, delta_ticks: i32) -> bool {
+    pub fn draw_segments<T: RenderTarget>(
+        &mut self,
+        canvas: &mut Canvas<T>,
+        delta_ticks: i32,
+    ) -> bool {
         // loop to catch up if we are behind
         let count = delta_ticks * 3; // multiple iterations per frame, otherwise it's too slow
         let x_min = self.x_offset;
@@ -220,27 +231,35 @@ impl PlacardRenderer {
 
             canvas.set_draw_color(self.colors[1]); // border color
             if self.block_index < 7 {
-                    // Left
-                canvas.draw_line(
-                    Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
-                    Point::new(cx(dx + self.x_offset), cy(dy))
-                ).unwrap();
-                    // Right
-                canvas.draw_line(
-                    Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
-                    Point::new(cx(284 - dx + self.x_offset), cy(124 - dy))
-                ).unwrap();
+                // Left
+                canvas
+                    .draw_line(
+                        Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
+                        Point::new(cx(dx + self.x_offset), cy(dy)),
+                    )
+                    .unwrap();
+                // Right
+                canvas
+                    .draw_line(
+                        Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
+                        Point::new(cx(284 - dx + self.x_offset), cy(124 - dy)),
+                    )
+                    .unwrap();
             }
-                // Top
-            canvas.draw_line(
-                Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
-                Point::new(cx(16 + dy + self.x_offset), cy(12 - dx))
-            ).unwrap();
-                // Bottom
-            canvas.draw_line(
-                Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
-                Point::new(cx(268 - dy + self.x_offset), cy(112 + dx))
-            ).unwrap();
+            // Top
+            canvas
+                .draw_line(
+                    Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
+                    Point::new(cx(16 + dy + self.x_offset), cy(12 - dx)),
+                )
+                .unwrap();
+            // Bottom
+            canvas
+                .draw_line(
+                    Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
+                    Point::new(cx(268 - dy + self.x_offset), cy(112 + dx)),
+                )
+                .unwrap();
 
             self.xorg = dx;
             self.yorg = dy;
@@ -260,27 +279,35 @@ impl PlacardRenderer {
 
             canvas.set_draw_color(self.colors[0]); // white
             if self.block_index < 7 {
-                    // Left
-                canvas.draw_line(
-                    Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
-                    Point::new(cx(dx + self.x_offset), cy(dy))
-                ).unwrap();
-                    // Right
-                canvas.draw_line(
-                    Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
-                    Point::new(cx(284 - dx + self.x_offset), cy(124 - dy))
-                ).unwrap();
+                // Left
+                canvas
+                    .draw_line(
+                        Point::new(cx(self.xorg + self.x_offset), cy(self.yorg)),
+                        Point::new(cx(dx + self.x_offset), cy(dy)),
+                    )
+                    .unwrap();
+                // Right
+                canvas
+                    .draw_line(
+                        Point::new(cx(284 - self.xorg + self.x_offset), cy(124 - self.yorg)),
+                        Point::new(cx(284 - dx + self.x_offset), cy(124 - dy)),
+                    )
+                    .unwrap();
             }
-                // Top
-            canvas.draw_line(
-                Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
-                Point::new(cx(16 + dy + self.x_offset), cy(12 - dx))
-            ).unwrap();
-                // Bottom
-            canvas.draw_line(
-                Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
-                Point::new(cx(268 - dy + self.x_offset), cy(112 + dx))
-            ).unwrap();
+            // Top
+            canvas
+                .draw_line(
+                    Point::new(cx(16 + self.yorg + self.x_offset), cy(12 - self.xorg)),
+                    Point::new(cx(16 + dy + self.x_offset), cy(12 - dx)),
+                )
+                .unwrap();
+            // Bottom
+            canvas
+                .draw_line(
+                    Point::new(cx(268 - self.yorg + self.x_offset), cy(112 + self.xorg)),
+                    Point::new(cx(268 - dy + self.x_offset), cy(112 + dx)),
+                )
+                .unwrap();
         }
 
         true
@@ -288,23 +315,25 @@ impl PlacardRenderer {
 }
 
 impl RenderTask for PlacardRenderer {
-    fn update(&mut self, canvas: &mut Canvas<Window>, delta_ticks: i32, _area: Option<sdl2::rect::Rect>) -> bool {
+    fn update(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        delta_ticks: i32,
+        _area: Option<sdl2::rect::Rect>,
+    ) -> bool {
         self.draw_segments(canvas, delta_ticks)
     }
 }
 
-pub fn start_placard_renderer(
-    origin: &Point,
-    palette: &Palette,
-) -> PlacardRenderer {
+pub fn start_placard_renderer(origin: &Point, palette: &Palette) -> PlacardRenderer {
     // pick colors from the palette
     let color1 = match palette.get_color(1) {
         Some(c) => c.to_color(),
-        None => Color::RGB(255, 255, 255)
+        None => Color::RGB(255, 255, 255),
     };
     let color2 = match palette.get_color(24) {
         Some(c) => c.to_color(),
-        None => Color::RGB(255, 0, 0)
+        None => Color::RGB(255, 0, 0),
     };
 
     PlacardRenderer {
@@ -313,7 +342,7 @@ pub fn start_placard_renderer(
         xorg: 12, // border-local starting position
         yorg: 0,
         x_offset: origin.x,
-        colors: [color1, color2]
+        colors: [color1, color2],
     }
 }
 
@@ -321,11 +350,10 @@ pub fn start_placard_renderer(
  * Draw the placard border in one shot, for debugging purposes. Only red will be drawn here.
  */
 pub fn draw_placard_border<'a, T: RenderTarget>(canvas: &mut Canvas<T>, palette: &Palette) {
-    let color =
-        match palette.get_color(24) {
-            Some(c) => c.to_color(),
-            None => Color::RGB(255, 0, 0)
-        };
+    let color = match palette.get_color(24) {
+        Some(c) => c.to_color(),
+        None => Color::RGB(255, 0, 0),
+    };
     canvas.set_draw_color(color);
 
     let mut xorg: i32 = 12;
@@ -338,29 +366,34 @@ pub fn draw_placard_border<'a, T: RenderTarget>(canvas: &mut Canvas<T>, palette:
 
             if ii < 7 {
                 // vertical borders
-                    // LEFT (drawn top to bottom)
-                canvas.draw_line(
-                    Point::new(xorg, yorg),
-                    Point::new(dx, dy)
-                ).unwrap();
+                // LEFT (drawn top to bottom)
+                canvas
+                    .draw_line(Point::new(xorg, yorg), Point::new(dx, dy))
+                    .unwrap();
 
-                    // RIGHT (drawn bottom to top)
-                canvas.draw_line(
-                    Point::new(284 - xorg, 124 - yorg),
-                    Point::new(284 - dx, 124 - dy)
-                ).unwrap();
+                // RIGHT (drawn bottom to top)
+                canvas
+                    .draw_line(
+                        Point::new(284 - xorg, 124 - yorg),
+                        Point::new(284 - dx, 124 - dy),
+                    )
+                    .unwrap();
             }
             // TOP (drawn left to right)
-            canvas.draw_line(
-                Point::new(16 + yorg, 12 - xorg),
-                Point::new(16 + dy, 12 - dx)
-            ).unwrap();
+            canvas
+                .draw_line(
+                    Point::new(16 + yorg, 12 - xorg),
+                    Point::new(16 + dy, 12 - dx),
+                )
+                .unwrap();
 
             // BOTTOM (drawn right to left)
-            canvas.draw_line(
-                Point::new(268 - yorg, 112 + xorg),
-                Point::new(268 - dy, 112 + dx)
-            ).unwrap();
+            canvas
+                .draw_line(
+                    Point::new(268 - yorg, 112 + xorg),
+                    Point::new(268 - dy, 112 + dx),
+                )
+                .unwrap();
 
             xorg = dx;
             yorg = dy;

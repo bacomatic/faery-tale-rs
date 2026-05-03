@@ -1,4 +1,3 @@
-
 use std::any::Any;
 use std::sync::Arc;
 
@@ -9,12 +8,12 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
+use crate::game::game_library::GameLibrary;
 use crate::game::page_flip::PageFlip;
 use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
-use crate::game::viewport_zoom::ViewportZoom;
-use crate::game::game_library::GameLibrary;
 use crate::game::songs::Track;
+use crate::game::viewport_zoom::ViewportZoom;
 
 /**
  * The intro scene plays the complete opening sequence:
@@ -82,9 +81,24 @@ struct PageOverlay {
 }
 
 const PAGE_OVERLAYS: [PageOverlay; 3] = [
-    PageOverlay { portrait: "p1a", bio: "p1b", bio_x: 168, bio_y: 29 }, // Julian  (21 bytes * 8)
-    PageOverlay { portrait: "p2a", bio: "p2b", bio_x: 160, bio_y: 29 }, // Phillip (20 bytes * 8)
-    PageOverlay { portrait: "p3a", bio: "p3b", bio_x: 160, bio_y: 33 }, // Kevin   (20 bytes * 8)
+    PageOverlay {
+        portrait: "p1a",
+        bio: "p1b",
+        bio_x: 168,
+        bio_y: 29,
+    }, // Julian  (21 bytes * 8)
+    PageOverlay {
+        portrait: "p2a",
+        bio: "p2b",
+        bio_x: 160,
+        bio_y: 29,
+    }, // Phillip (20 bytes * 8)
+    PageOverlay {
+        portrait: "p3a",
+        bio: "p3b",
+        bio_x: 160,
+        bio_y: 33,
+    }, // Kevin   (20 bytes * 8)
 ];
 
 /// Portrait position: same for all pages (from original: unpackbrush(br1, &pageb, 4, 24))
@@ -165,18 +179,14 @@ impl IntroScene {
                     fader: FadeController::fade_down(text_palette, TITLE_FADE_TICKS),
                 }
             }
-            IntroPhase::TitleFadeOut { .. } => {
-                IntroPhase::ZoomIn {
-                    zoom: ViewportZoom::zoom_in_duration(ZOOM_DURATION_TICKS),
-                    page_drawn: false,
-                }
-            }
-            IntroPhase::ZoomIn { .. } => {
-                IntroPhase::ShowPage {
-                    page_index: 0,
-                    ticks_remaining: PAGE0_DISPLAY_TICKS,
-                }
-            }
+            IntroPhase::TitleFadeOut { .. } => IntroPhase::ZoomIn {
+                zoom: ViewportZoom::zoom_in_duration(ZOOM_DURATION_TICKS),
+                page_drawn: false,
+            },
+            IntroPhase::ZoomIn { .. } => IntroPhase::ShowPage {
+                page_index: 0,
+                ticks_remaining: PAGE0_DISPLAY_TICKS,
+            },
             IntroPhase::ShowPage { page_index, .. } => {
                 let pi = *page_index;
                 if pi < 3 {
@@ -208,7 +218,6 @@ impl IntroScene {
             IntroPhase::Done => IntroPhase::Done,
         };
     }
-
 }
 
 /// Draw a page's overlay images (portrait + bio) onto a canvas.
@@ -240,12 +249,19 @@ fn draw_page_overlays<T: sdl2::render::RenderTarget>(
 }
 
 impl Scene for IntroScene {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn handle_event(&mut self, event: &Event) -> bool {
         match event {
-            Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+            Event::KeyDown {
+                keycode: Some(Keycode::Space),
+                ..
+            } => {
                 self.skip_requested = true;
                 true
             }
@@ -284,12 +300,7 @@ impl Scene for IntroScene {
                 canvas.clear();
                 resources.amber_font.set_color_mod(255, 255, 255);
                 if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_line_doubled(
-                        resources.amber_font,
-                        canvas,
-                        0,
-                        TITLE_Y_OFFSET,
-                    );
+                    placard.draw_line_doubled(resources.amber_font, canvas, 0, TITLE_Y_OFFSET);
                 }
 
                 if tick_countdown(ticks_remaining, delta) {
@@ -302,7 +313,8 @@ impl Scene for IntroScene {
             IntroPhase::TitleFadeOut { fader } => {
                 // Start music on the first frame of TitleFadeOut.
                 if !self.music_started {
-                    if let (Some(tracks), Some(audio)) = (self.intro_tracks.take(), resources.audio) {
+                    if let (Some(tracks), Some(audio)) = (self.intro_tracks.take(), resources.audio)
+                    {
                         audio.play_score(tracks);
                     }
                     self.music_started = true;
@@ -319,12 +331,7 @@ impl Scene for IntroScene {
                 canvas.clear();
                 resources.amber_font.set_color_mod(r, g, b);
                 if let Some(placard) = game_lib.find_placard("titletext") {
-                    placard.draw_line_doubled(
-                        resources.amber_font,
-                        canvas,
-                        0,
-                        TITLE_Y_OFFSET,
-                    );
+                    placard.draw_line_doubled(resources.amber_font, canvas, 0, TITLE_Y_OFFSET);
                 }
                 resources.amber_font.set_color_mod(255, 255, 255);
 
@@ -380,7 +387,9 @@ impl Scene for IntroScene {
                         viewport.width() * 2,
                         viewport.height() * 2,
                     );
-                    canvas.copy(play_tex, Some(viewport), Some(screen_dest)).unwrap();
+                    canvas
+                        .copy(play_tex, Some(viewport), Some(screen_dest))
+                        .unwrap();
                 }
 
                 if zoom.is_done() {
@@ -402,7 +411,9 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
-            IntroPhase::ShowPage { ticks_remaining, .. } => {
+            IntroPhase::ShowPage {
+                ticks_remaining, ..
+            } => {
                 // The page content is already on play_tex (drawn by ZoomIn or FlipPage).
                 // Just blit it to the screen and count down.
                 canvas.set_draw_color(Color::BLACK);
@@ -418,7 +429,12 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
-            IntroPhase::FlipPage { to_index, flipper, initialized, .. } => {
+            IntroPhase::FlipPage {
+                to_index,
+                flipper,
+                initialized,
+                ..
+            } => {
                 // On the first frame, snapshot the current play_tex (old page)
                 // into the scratch texture, then draw the new page's overlays
                 // onto play_tex so it becomes the new page.
@@ -493,7 +509,9 @@ impl Scene for IntroScene {
                         viewport.width() * 2,
                         viewport.height() * 2,
                     );
-                    canvas.copy(play_tex, Some(viewport), Some(screen_dest)).unwrap();
+                    canvas
+                        .copy(play_tex, Some(viewport), Some(screen_dest))
+                        .unwrap();
                 }
 
                 if zoom.is_done() {
@@ -510,12 +528,12 @@ impl Scene for IntroScene {
             }
 
             IntroPhase::Done => {
-            // Stop intro music when intro completes normally
-            if let Some(audio) = resources.audio {
-                audio.stop_score();
+                // Stop intro music when intro completes normally
+                if let Some(audio) = resources.audio {
+                    audio.stop_score();
+                }
+                SceneResult::Done
             }
-            SceneResult::Done
-        },
         }
     }
 }
@@ -557,8 +575,10 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(elapsed, 30,
-            "SPEC §23.1 step 2: TitleText phase must expire at exactly 30 ticks (1 second)");
+        assert_eq!(
+            elapsed, 30,
+            "SPEC §23.1 step 2: TitleText phase must expire at exactly 30 ticks (1 second)"
+        );
     }
 
     /// Tick the last-page countdown one-by-one; must fire at exactly LAST_PAGE_HOLD_TICKS.
@@ -572,8 +592,10 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(elapsed, 114,
-            "SPEC §23.1 step 8: last ShowPage phase must expire at exactly 114 ticks (3.8 seconds)");
+        assert_eq!(
+            elapsed, 114,
+            "SPEC §23.1 step 8: last ShowPage phase must expire at exactly 114 ticks (3.8 seconds)"
+        );
     }
 
     /// tick_countdown must not underflow with large delta.

@@ -222,7 +222,7 @@ impl GameState {
             secret_timer: 0,
             freeze_timer: 0,
 
-            daynight: 8000,  // start at full brightness (noon); original pre-initializes here
+            daynight: 8000, // start at full brightness (noon); original pre-initializes here
             game_days: 0,
             lightlevel: 300, // full brightness at startup (original: explicit init)
             cycle: 0,
@@ -267,7 +267,7 @@ impl GameState {
             set_file: 0,
 
             princess: 0,
-            dayperiod: 4,    // morning period (0=midnight, 4=morning, 6=midday, 9=evening)
+            dayperiod: 4, // morning period (0=midnight, 4=morning, 6=midday, 9=evening)
 
             current_mood: 0,
 
@@ -390,10 +390,10 @@ impl GameState {
     /// (see `reference/logic/day-night.md#tick_daynight`, fmain.c:2031-2036).
     pub fn get_day_phase(&self) -> DayPhase {
         match self.dayperiod {
-            0..=3   => DayPhase::Midnight, // buckets 0..3  → 00:00-05:59
-            4..=5   => DayPhase::Morning,  // buckets 4..5  → 06:00-11:59
-            6..=8   => DayPhase::Midday,   // buckets 6..8  → 12:00-17:59
-            _       => DayPhase::Evening,  // buckets 9..11 → 18:00-23:59
+            0..=3 => DayPhase::Midnight, // buckets 0..3  → 00:00-05:59
+            4..=5 => DayPhase::Morning,  // buckets 4..5  → 06:00-11:59
+            6..=8 => DayPhase::Midday,   // buckets 6..8  → 12:00-17:59
+            _ => DayPhase::Evening,      // buckets 9..11 → 18:00-23:59
         }
     }
 
@@ -430,7 +430,9 @@ impl GameState {
             // Natural healing (SPEC §18.6): +1 HP every 1024 daynight ticks.
             // Tying the check to daynight means sleep's 64× time acceleration
             // automatically produces ≈63× faster healing (63 extra steps per frame).
-            if !self.battleflag && self.vitality > 0 && self.vitality < cap
+            if !self.battleflag
+                && self.vitality > 0
+                && self.vitality < cap
                 && (self.daynight & 0x3FF) == 0
             {
                 self.vitality = (self.vitality + 1).min(cap);
@@ -482,7 +484,9 @@ impl GameState {
                 self.daynight = 0;
                 self.game_days += 1;
             }
-            if !self.battleflag && self.vitality > 0 && self.vitality < cap
+            if !self.battleflag
+                && self.vitality > 0
+                && self.vitality < cap
                 && (self.daynight & 0x3FF) == 0
             {
                 self.vitality = (self.vitality + 1).min(cap);
@@ -491,15 +495,17 @@ impl GameState {
 
         // Refresh the brightness triangle wave after the daynight jump.
         let raw = self.daynight / 40;
-        self.lightlevel = if raw >= 300 { 600u16.saturating_sub(raw) } else { raw };
+        self.lightlevel = if raw >= 300 {
+            600u16.saturating_sub(raw)
+        } else {
+            raw
+        };
 
         self.fatigue = self.fatigue.saturating_sub(1);
 
         let can_wake_time = self.daynight >= 9000 && self.daynight < 10000;
         let battle_wake = self.battleflag && self.battle_wake_roll();
-        let should_wake = self.fatigue == 0
-            || (self.fatigue < 30 && can_wake_time)
-            || battle_wake;
+        let should_wake = self.fatigue == 0 || (self.fatigue < 30 && can_wake_time) || battle_wake;
 
         if should_wake {
             // fmain.c:2021 — snap abs_y down to the nearest 32px tile row and
@@ -730,7 +736,7 @@ impl GameState {
             self.stuff_mut()[ITEM_SHELL] -= 1;
             self.active_carrier = CARRIER_TURTLE;
             self.on_raft = true;
-            self.wcarry = 3;  // SPEC §21.3: turtle is in actor slot 3
+            self.wcarry = 3; // SPEC §21.3: turtle is in actor slot 3
             self.riding = 5;
             true
         } else {
@@ -751,9 +757,10 @@ impl GameState {
     /// Return eggs to the turtle nest for shell reward.
     /// Returns number of shells received.
     pub fn return_eggs_to_nest(&mut self, hero_x: u16, hero_y: u16, egg_count: u8) -> u8 {
-        let at_nest = hero_x.abs_diff(TURTLE_NEST_X) < 32
-            && hero_y.abs_diff(TURTLE_NEST_Y) < 32;
-        if !at_nest || egg_count == 0 { return 0; }
+        let at_nest = hero_x.abs_diff(TURTLE_NEST_X) < 32 && hero_y.abs_diff(TURTLE_NEST_Y) < 32;
+        if !at_nest || egg_count == 0 {
+            return 0;
+        }
         let award = egg_count.min(255 - self.stuff()[ITEM_SHELL]);
         self.stuff_mut()[ITEM_SHELL] += award;
         award
@@ -791,11 +798,13 @@ impl GameState {
     /// xdir/ydir are the directional impulse values from collision::XDIR/YDIR.
     /// Velocity is clamped to ±32 horizontal, ±40 vertical.
     pub fn apply_swan_velocity_impulse(&mut self, xdir: i16, ydir: i16) {
-        if self.flying == 0 { return; }
-        
+        if self.flying == 0 {
+            return;
+        }
+
         self.swan_vx += xdir;
         self.swan_vy += ydir;
-        
+
         // Clamp horizontal velocity to ±32
         self.swan_vx = self.swan_vx.clamp(-32, 32);
         // Clamp vertical velocity to ±40
@@ -809,10 +818,10 @@ impl GameState {
         if self.flying == 0 {
             return (self.hero_x, self.hero_y);
         }
-        
+
         let dx = self.swan_vx / 4;
         let dy = self.swan_vy / 4;
-        
+
         // Outdoor world wraps at 0x8000
         let new_x = ((self.hero_x as i32 + dx as i32).rem_euclid(0x8000)) as u16;
         let new_y = if self.region_num < 8 {
@@ -820,14 +829,16 @@ impl GameState {
         } else {
             (self.hero_y as i32 + dy as i32) as u16
         };
-        
+
         (new_x, new_y)
     }
 
     /// Check if swan can dismount at current velocity (SPEC §21.4).
     /// Dismount allowed when |vel_x| < 15 && |vel_y| < 15.
     pub fn can_dismount_swan(&self) -> bool {
-        if self.flying == 0 { return false; }
+        if self.flying == 0 {
+            return false;
+        }
         self.swan_vx.abs() < 15 && self.swan_vy.abs() < 15
     }
 
@@ -850,8 +861,7 @@ impl GameState {
     /// — strict inequalities, i.e. the edge coordinates (11194 / 21373 /
     /// 10205 / 16208) are **outside** the veto box.
     pub fn is_turtle_summon_blocked(&self) -> bool {
-        self.hero_x > 11194 && self.hero_x < 21373
-            && self.hero_y > 10205 && self.hero_y < 16208
+        self.hero_x > 11194 && self.hero_x < 21373 && self.hero_y > 10205 && self.hero_y < 16208
     }
 
     /// Move the active carrier actor to the hero's current position (SPEC §21.7).
@@ -949,7 +959,9 @@ impl GameState {
     /// Pick up an item (port of itrans[] logic from fmain.c).
     /// item_id: item type (0-34). Returns true if picked up.
     pub fn pickup_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 36 { return false; }
+        if item_id >= 36 {
+            return false;
+        }
         let stuff = self.stuff_mut();
         if stuff[item_id] < 255 {
             stuff[item_id] += 1;
@@ -961,7 +973,9 @@ impl GameState {
 
     /// Drop an item.
     pub fn drop_item(&mut self, item_id: usize) -> bool {
-        if item_id >= 36 { return false; }
+        if item_id >= 36 {
+            return false;
+        }
         let stuff = self.stuff_mut();
         if stuff[item_id] > 0 {
             stuff[item_id] -= 1;
@@ -977,7 +991,9 @@ impl GameState {
             self.world_objects.push(WorldObject {
                 ob_id: item_id as u8,
                 ob_stat: 1,
-                region, x, y,
+                region,
+                x,
+                y,
                 visible: true,
                 goal: 0,
             });
@@ -990,7 +1006,13 @@ impl GameState {
     /// Find the nearest visible ground item within range using calc_dist.
     /// Returns (world_objects index, ob_id) of the nearest item, or None.
     /// Does NOT modify state — caller decides what to do with the item.
-    pub fn find_nearest_item(&self, region: u8, hero_x: u16, hero_y: u16, max_range: i32) -> Option<(usize, u8)> {
+    pub fn find_nearest_item(
+        &self,
+        region: u8,
+        hero_x: u16,
+        hero_y: u16,
+        max_range: i32,
+    ) -> Option<(usize, u8)> {
         use crate::game::collision::calc_dist;
 
         let hx = hero_x as i32;
@@ -999,10 +1021,18 @@ impl GameState {
         let mut best_dist = max_range;
 
         for (i, obj) in self.world_objects.iter().enumerate() {
-            if obj.ob_stat == 3 { continue; } // setfigs not pickable
-            if !obj.visible { continue; }
-            if obj.region != region { continue; }
-            if obj.ob_id == 0x1d { continue; } // empty chest (skip per original)
+            if obj.ob_stat == 3 {
+                continue;
+            } // setfigs not pickable
+            if !obj.visible {
+                continue;
+            }
+            if obj.region != region {
+                continue;
+            }
+            if obj.ob_id == 0x1d {
+                continue;
+            } // empty chest (skip per original)
 
             let d = calc_dist(hx, hy, obj.x as i32, obj.y as i32);
             if d < best_dist {
@@ -1027,13 +1057,22 @@ impl GameState {
     /// - MONEY (13): adds 50 gold
     /// - FOOTSTOOL (31), TURTLE (102): not pickable
     /// - Containers (URN 14, CHEST 15, SACKS 16): not yet implemented (skip)
-    pub fn pickup_world_object(&mut self, region: u8, hero_x: u16, hero_y: u16, range: u16) -> Option<u8> {
+    pub fn pickup_world_object(
+        &mut self,
+        region: u8,
+        hero_x: u16,
+        hero_y: u16,
+        range: u16,
+    ) -> Option<u8> {
         use crate::game::world_objects::ob_id_to_stuff_index;
 
         let mut found_idx = None;
         for (i, obj) in self.world_objects.iter().enumerate() {
-            if obj.ob_stat == 3 { continue; } // setfig NPCs are not pickable
-            if obj.visible && obj.region == region
+            if obj.ob_stat == 3 {
+                continue;
+            } // setfig NPCs are not pickable
+            if obj.visible
+                && obj.region == region
                 && hero_x.abs_diff(obj.x) < range
                 && hero_y.abs_diff(obj.y) < range
             {
@@ -1085,7 +1124,11 @@ impl GameState {
 
         for obj_cfg in &game_lib.objects {
             let is_global = obj_cfg.region == 255;
-            let counter_idx = if is_global { 10 } else { obj_cfg.region as usize };
+            let counter_idx = if is_global {
+                10
+            } else {
+                obj_cfg.region as usize
+            };
             if counter_idx >= goal_counters.len() {
                 continue; // unexpected region tag
             }
@@ -1110,7 +1153,11 @@ impl GameState {
 
     /// Backwards-compatible shim used by tests. Region argument is ignored
     /// (kept for the existing test signature) — population is global.
-    pub fn populate_region_objects(&mut self, _region: u8, game_lib: &crate::game::game_library::GameLibrary) {
+    pub fn populate_region_objects(
+        &mut self,
+        _region: u8,
+        game_lib: &crate::game::game_library::GameLibrary,
+    ) {
         self.populate_world_objects(game_lib);
     }
 
@@ -1200,18 +1247,22 @@ mod tests {
     #[test]
     fn test_update_safe_spawn() {
         let mut s = GameState::new();
-        s.hero_x = 100; s.hero_y = 200; s.region_num = 3;
+        s.hero_x = 100;
+        s.hero_y = 200;
+        s.region_num = 3;
         s.update_safe_spawn(0);
         assert_eq!(s.safe_x, 100);
         s.hero_x = 999;
         s.update_safe_spawn(3); // water — should not update
         assert_eq!(s.safe_x, 100);
         // Indoor regions should not update safe spawn.
-        s.hero_x = 500; s.region_num = 8;
+        s.hero_x = 500;
+        s.region_num = 8;
         s.update_safe_spawn(0);
         assert_eq!(s.safe_x, 100, "indoor region must not update safe spawn");
         // Battle should not update safe spawn.
-        s.region_num = 3; s.battleflag = true;
+        s.region_num = 3;
+        s.battleflag = true;
         s.update_safe_spawn(0);
         assert_eq!(s.safe_x, 100, "battleflag must prevent safe spawn update");
     }
@@ -1242,14 +1293,20 @@ mod tests {
         // Fatigue must NOT be zeroed — it drives the actual sleep duration via
         // sleep_advance_daynight(), so zeroing it would cause immediate wake.
         let mut s = GameState::new();
-        s.vitality = 3;   // ≤ 5: else branch in the 8-tick check
-        s.fatigue = 80;   // < 170: event 12 won't take priority
-        s.hunger = 143;   // +1 → 144: 144 > 140, (144 & 7) == 0
+        s.vitality = 3; // ≤ 5: else branch in the 8-tick check
+        s.fatigue = 80; // < 170: event 12 won't take priority
+        s.hunger = 143; // +1 → 144: 144 > 140, (144 & 7) == 0
         let mut events = Vec::new();
         s.hunger_fatigue_step(&mut events);
-        assert!(events.contains(&24), "should emit event 24 at hunger collapse");
+        assert!(
+            events.contains(&24),
+            "should emit event 24 at hunger collapse"
+        );
         assert_eq!(s.hunger, 130, "hunger must be reset to 130 on collapse");
-        assert_eq!(s.fatigue, 81, "fatigue must only increment (+1), not be zeroed");
+        assert_eq!(
+            s.fatigue, 81,
+            "fatigue must only increment (+1), not be zeroed"
+        );
     }
 
     #[test]
@@ -1258,13 +1315,19 @@ mod tests {
         // Fatigue must NOT be zeroed — the hero should sleep until it naturally
         // decrements to 0 via sleep_advance_daynight().
         let mut s = GameState::new();
-        s.vitality = 3;   // ≤ 5: else branch
-        s.fatigue = 175;  // +1 → 176 > 170: event 12 takes priority over event 24
-        s.hunger = 7;     // +1 → 8: (8 & 7) == 0, not > 140 so event 24 won't fire
+        s.vitality = 3; // ≤ 5: else branch
+        s.fatigue = 175; // +1 → 176 > 170: event 12 takes priority over event 24
+        s.hunger = 7; // +1 → 8: (8 & 7) == 0, not > 140 so event 24 won't fire
         let mut events = Vec::new();
         s.hunger_fatigue_step(&mut events);
-        assert!(events.contains(&12), "should emit event 12 at fatigue > 170");
-        assert_eq!(s.fatigue, 176, "fatigue must only increment (+1), not be zeroed");
+        assert!(
+            events.contains(&12),
+            "should emit event 12 at fatigue > 170"
+        );
+        assert_eq!(
+            s.fatigue, 176,
+            "fatigue must only increment (+1), not be zeroed"
+        );
     }
 
     #[test]
@@ -1324,7 +1387,13 @@ mod tests {
         s.hero_y = 100;
         // Gold Key: ob_id 25 → stuff index 16
         s.world_objects.push(WorldObject {
-            ob_id: 25, ob_stat: 1, region: 3, x: 100, y: 100, visible: true, goal: 0,
+            ob_id: 25,
+            ob_stat: 1,
+            region: 3,
+            x: 100,
+            y: 100,
+            visible: true,
+            goal: 0,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -1340,7 +1409,13 @@ mod tests {
         s.hero_y = 100;
         s.gold = 10;
         s.world_objects.push(WorldObject {
-            ob_id: 13, ob_stat: 1, region: 3, x: 100, y: 100, visible: true, goal: 0,
+            ob_id: 13,
+            ob_stat: 1,
+            region: 3,
+            x: 100,
+            y: 100,
+            visible: true,
+            goal: 0,
         });
         let result = s.pickup_world_object(3, 100, 100, 24);
         assert!(result.is_some());
@@ -1354,7 +1429,13 @@ mod tests {
         s.hero_x = 100;
         s.hero_y = 100;
         s.world_objects.push(WorldObject {
-            ob_id: 31, ob_stat: 1, region: 8, x: 100, y: 100, visible: true, goal: 0,
+            ob_id: 31,
+            ob_stat: 1,
+            region: 8,
+            x: 100,
+            y: 100,
+            visible: true,
+            goal: 0,
         });
         let result = s.pickup_world_object(8, 100, 100, 24);
         assert!(result.is_none());
@@ -1367,18 +1448,28 @@ mod tests {
             .expect("should load faery.toml");
         let mut s = GameState::new();
         s.populate_region_objects(3, &lib);
-        let ground_items: Vec<_> = s.world_objects.iter()
+        let ground_items: Vec<_> = s
+            .world_objects
+            .iter()
             .filter(|o| o.visible && o.ob_stat == 1)
             .collect();
-        assert!(ground_items.len() >= 9, "region 3 should have at least 9 visible items, got {}", ground_items.len());
+        assert!(
+            ground_items.len() >= 9,
+            "region 3 should have at least 9 visible items, got {}",
+            ground_items.len()
+        );
         let chest = ground_items.iter().find(|o| o.ob_id == 15 && o.x == 19298);
         assert!(chest.is_some(), "should have the starting chest");
         // SetFigs (ob_stat 3) should also be loaded and visible.
-        let setfigs: Vec<_> = s.world_objects.iter()
-            .filter(|o| o.ob_stat == 3)
-            .collect();
-        assert!(!setfigs.is_empty(), "region 3 should have at least one setfig");
-        assert!(setfigs.iter().all(|o| o.visible), "setfigs should be visible");
+        let setfigs: Vec<_> = s.world_objects.iter().filter(|o| o.ob_stat == 3).collect();
+        assert!(
+            !setfigs.is_empty(),
+            "region 3 should have at least one setfig"
+        );
+        assert!(
+            setfigs.iter().all(|o| o.visible),
+            "setfigs should be visible"
+        );
     }
 
     #[test]
@@ -1416,9 +1507,15 @@ mod tests {
     fn test_can_board_turtle_gating() {
         let mut s = GameState::new();
         s.wcarry = 0;
-        assert!(!s.can_board_turtle(), "cannot board turtle when wcarry == 0");
+        assert!(
+            !s.can_board_turtle(),
+            "cannot board turtle when wcarry == 0"
+        );
         s.wcarry = 1;
-        assert!(!s.can_board_turtle(), "cannot board turtle when wcarry == 1 (raft slot)");
+        assert!(
+            !s.can_board_turtle(),
+            "cannot board turtle when wcarry == 1 (raft slot)"
+        );
         s.wcarry = 3;
         assert!(s.can_board_turtle(), "can board turtle when wcarry == 3");
     }
@@ -1446,11 +1543,17 @@ mod tests {
         // Edge values (11194, 21373, 10205, 16208) are OUTSIDE the box.
         s.hero_x = 11194;
         s.hero_y = 10205;
-        assert!(!s.is_turtle_summon_blocked(), "at lower corner (strictly outside)");
+        assert!(
+            !s.is_turtle_summon_blocked(),
+            "at lower corner (strictly outside)"
+        );
 
         s.hero_x = 21373;
         s.hero_y = 16208;
-        assert!(!s.is_turtle_summon_blocked(), "at upper corner (strictly outside)");
+        assert!(
+            !s.is_turtle_summon_blocked(),
+            "at upper corner (strictly outside)"
+        );
 
         s.hero_x = 11195;
         s.hero_y = 10206;
@@ -1596,10 +1699,13 @@ mod tests {
         state.swan_vx = 14;
         state.swan_vy = 14;
         assert!(state.can_dismount_swan(), "vel < 15 should allow dismount");
-        
+
         state.swan_vx = 15;
-        assert!(!state.can_dismount_swan(), "vel >= 15 should block dismount");
-        
+        assert!(
+            !state.can_dismount_swan(),
+            "vel >= 15 should block dismount"
+        );
+
         state.swan_vx = 14;
         state.swan_vy = 15;
         assert!(!state.can_dismount_swan(), "vy >= 15 should block dismount");
@@ -1611,7 +1717,10 @@ mod tests {
         state.flying = 0;
         state.swan_vx = 0;
         state.swan_vy = 0;
-        assert!(!state.can_dismount_swan(), "cannot dismount when not flying");
+        assert!(
+            !state.can_dismount_swan(),
+            "cannot dismount when not flying"
+        );
     }
 
     #[test]
@@ -1621,7 +1730,10 @@ mod tests {
         state.swan_vx = 0;
         state.swan_vy = 0;
         state.apply_swan_velocity_impulse(3, 3);
-        assert_eq!(state.swan_vx, 0, "velocity should not change when not flying");
+        assert_eq!(
+            state.swan_vx, 0,
+            "velocity should not change when not flying"
+        );
         assert_eq!(state.swan_vy, 0);
     }
 
@@ -1629,7 +1741,11 @@ mod tests {
     fn test_inventory_array_len_is_36() {
         // T3-INV-STUFF-36: SPEC §14.1 — ARROWBASE = 35, array must be length 36.
         let state = GameState::new();
-        assert_eq!(state.julstuff.len(), 36, "julstuff must have 36 slots (indices 0-35)");
+        assert_eq!(
+            state.julstuff.len(),
+            36,
+            "julstuff must have 36 slots (indices 0-35)"
+        );
         assert_eq!(state.philstuff.len(), 36);
         assert_eq!(state.kevstuff.len(), 36);
         assert_eq!(state.stuff().len(), 36, "stuff() slice must be length 36");
@@ -1642,7 +1758,11 @@ mod tests {
         assert_eq!(state.stuff()[35], 0, "ARROWBASE slot starts at 0");
         let ok = state.pickup_item(35);
         assert!(ok, "pickup_item(35) should succeed");
-        assert_eq!(state.stuff()[35], 1, "ARROWBASE accumulator should be incremented");
+        assert_eq!(
+            state.stuff()[35],
+            1,
+            "ARROWBASE accumulator should be incremented"
+        );
 
         // Index 36+ still rejected.
         assert!(!state.pickup_item(36), "pickup_item(36) must return false");
@@ -1664,15 +1784,18 @@ mod tests {
     fn test_awake_healing_baseline() {
         // SPEC §18.6: +1 HP every 1024 daynight ticks while awake and injured.
         let mut state = GameState::new();
-        state.brave = 0;           // cap = 15
-        state.vitality = 1;        // injured
+        state.brave = 0; // cap = 15
+        state.vitality = 1; // injured
         state.battleflag = false;
         // Align daynight to a known position so the boundary is predictable.
         state.daynight = 0;
 
         // Advance exactly 1024 daynight ticks (one awake heal period).
         let healed = advance_awake(&mut state, 1024);
-        assert_eq!(healed, 1, "awake: should gain exactly 1 HP per 1024 daynight ticks");
+        assert_eq!(
+            healed, 1,
+            "awake: should gain exactly 1 HP per 1024 daynight ticks"
+        );
     }
 
     #[test]
@@ -1725,7 +1848,8 @@ mod tests {
         assert!(
             sleep_heal > awake_heal * 50,
             "sleeping heal ({}) must far exceed awake heal ({})",
-            sleep_heal, awake_heal
+            sleep_heal,
+            awake_heal
         );
     }
 
@@ -1733,8 +1857,8 @@ mod tests {
     fn test_sleep_heal_clamps_at_max_hp() {
         // SPEC §18.6: vitality must not exceed 15 + brave/4.
         let mut state = GameState::new();
-        state.brave = 40;           // cap = 25
-        state.vitality = 24;       // one below cap
+        state.brave = 40; // cap = 25
+        state.vitality = 24; // one below cap
         state.battleflag = false;
         state.daynight = 0;
         state.fatigue = 200;
@@ -1744,28 +1868,34 @@ mod tests {
             state.tick(1);
             state.sleep_advance_daynight();
         }
-        assert_eq!(state.vitality, 25, "vitality must not exceed heal cap (15 + brave/4)");
+        assert_eq!(
+            state.vitality, 25,
+            "vitality must not exceed heal cap (15 + brave/4)"
+        );
     }
 
     #[test]
     fn test_awake_heal_no_overshoot() {
         // Healing while awake also must not exceed cap.
         let mut state = GameState::new();
-        state.brave = 20;           // cap = 20
+        state.brave = 20; // cap = 20
         state.vitality = 19;
         state.battleflag = false;
         state.daynight = 0;
         // 5000 ticks — enough for multiple heal events.
         state.tick(5000);
-        assert_eq!(state.vitality, 20, "awake: vitality must not exceed heal cap");
+        assert_eq!(
+            state.vitality, 20,
+            "awake: vitality must not exceed heal cap"
+        );
     }
 
     #[test]
     fn test_sleep_no_heal_at_max_hp() {
         // If already at cap, sleeping should not change vitality.
         let mut state = GameState::new();
-        state.brave = 0;            // cap = 15
-        state.vitality = 15;        // already at cap
+        state.brave = 0; // cap = 15
+        state.vitality = 15; // already at cap
         state.battleflag = false;
         state.daynight = 0;
         state.fatigue = 100;

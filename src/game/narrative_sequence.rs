@@ -2,13 +2,34 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NarrativeStep {
-    WaitTicks { remaining: u32 },
-    ShowPlacard { key: String, substitution: Option<String>, hold_ticks: u32 },
+    WaitTicks {
+        remaining: u32,
+    },
+    ShowPlacard {
+        key: String,
+        substitution: Option<String>,
+        hold_ticks: u32,
+    },
     ClearInnerRect,
-    ShowRescueHomeText { line17: String, hero_name: String, line18: String },
-    TeleportHero { x: i32, y: i32, region: u8 },
-    MoveExtent { index: usize, x: i32, y: i32 },
-    SwapObjectId { object_index: usize, new_id: u8 },
+    ShowRescueHomeText {
+        line17: String,
+        hero_name: String,
+        line18: String,
+    },
+    TeleportHero {
+        x: i32,
+        y: i32,
+        region: u8,
+    },
+    MoveExtent {
+        index: usize,
+        x: i32,
+        y: i32,
+    },
+    SwapObjectId {
+        object_index: usize,
+        new_id: u8,
+    },
     ApplyRescueRewardsAndFlags,
 }
 
@@ -96,7 +117,8 @@ impl NarrativeQueue {
 
     #[cfg(test)]
     pub fn debug_snapshot_steps(&self) -> Vec<NarrativeStep> {
-        let mut out = Vec::with_capacity(self.steps.len() + usize::from(self.active_step.is_some()));
+        let mut out =
+            Vec::with_capacity(self.steps.len() + usize::from(self.active_step.is_some()));
         if let Some(step) = self.active_step.as_ref() {
             out.push(step.clone());
         }

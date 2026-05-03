@@ -1,4 +1,3 @@
-
 use std::time::Instant;
 
 /**
@@ -11,8 +10,8 @@ pub struct GameClock {
     // game clock
     ticker: GameTicker,
 
-    mono_base: Instant, // time when the game clock was started
-    pub mono_ticks: u64, // total number of ticks since start, monotonic, not affected by pauses
+    mono_base: Instant,   // time when the game clock was started
+    pub mono_ticks: u64,  // total number of ticks since start, monotonic, not affected by pauses
     last_mono_ticks: u64, // mono_ticks at the previous update() call, for computing delta
 
     pub game_ticks: u64, // number of game ticks passed total, resets on death/start
@@ -58,48 +57,47 @@ impl GameTicker {
 }
 
 /*
-    Original game clock update logic (from fmain.c):
+   Original game clock update logic (from fmain.c):
 
-    if (!freeze_timer) /* no time in timestop */
-        if ((daynight++) >= 24000)
-            daynight = 0;
+   if (!freeze_timer) /* no time in timestop */
+       if ((daynight++) >= 24000)
+           daynight = 0;
 
-    lightlevel = daynight / 40;
-    if (lightlevel >= 300)
-        lightlevel = 600 - lightlevel;
-    if (lightlevel < 40)
-        ob_listg[5].ob_stat = 3;
-    else
-        ob_listg[5].ob_stat = 2;
+   lightlevel = daynight / 40;
+   if (lightlevel >= 300)
+       lightlevel = 600 - lightlevel;
+   if (lightlevel < 40)
+       ob_listg[5].ob_stat = 3;
+   else
+       ob_listg[5].ob_stat = 2;
 
-    Day period, two hour segments:
-    0 = Midnight (00:00 - 05:59)
-    4 = Morning (06:00 - 11:59)
-    6 = Midday (12:00 - 17:59)
-    9 = Evening (18:00 - 23:59)
+   Day period, two hour segments:
+   0 = Midnight (00:00 - 05:59)
+   4 = Morning (06:00 - 11:59)
+   6 = Midday (12:00 - 17:59)
+   9 = Evening (18:00 - 23:59)
 
-    i = (daynight / 2000);
-    if (i != dayperiod) {
-        switch (dayperiod = i) {
-        case 0:
-            event(28);
-            break;
-        case 4:
-            event(29);
-            break;
-        case 6:
-            event(30);
-            break;
-        case 9:
-            event(31);
-            break;
-        }
-    }
+   i = (daynight / 2000);
+   if (i != dayperiod) {
+       switch (dayperiod = i) {
+       case 0:
+           event(28);
+           break;
+       case 4:
+           event(29);
+           break;
+       case 6:
+           event(30);
+           break;
+       case 9:
+           event(31);
+           break;
+       }
+   }
 
-    The game loop runs at 30 Hz (NTSC interlaced frame rate). A full day is 24000 ticks,
-    or 800 seconds (13 minutes 20 seconds) of real time. Each hour is 1000 ticks (33.3 seconds).
- */
-
+   The game loop runs at 30 Hz (NTSC interlaced frame rate). A full day is 24000 ticks,
+   or 800 seconds (13 minutes 20 seconds) of real time. Each hour is 1000 ticks (33.3 seconds).
+*/
 
 impl GameClock {
     pub fn new() -> GameClock {
@@ -154,7 +152,10 @@ impl GameClock {
         // make sure we're up to date before pausing
         self.update();
         self.paused = true;
-        println!("Game clock paused at {} total ticks, {} game ticks", self.mono_ticks, self.game_ticks);
+        println!(
+            "Game clock paused at {} total ticks, {} game ticks",
+            self.mono_ticks, self.game_ticks
+        );
     }
 
     /**
@@ -163,8 +164,9 @@ impl GameClock {
     pub fn resume(&mut self) {
         self.ticker.reset();
         self.paused = false;
-        println!("Game clock resumed at {} total ticks, {} game ticks", self.mono_ticks, self.game_ticks);
+        println!(
+            "Game clock resumed at {} total ticks, {} game ticks",
+            self.mono_ticks, self.game_ticks
+        );
     }
-
-
 }

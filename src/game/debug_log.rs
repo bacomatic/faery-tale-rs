@@ -125,13 +125,17 @@ mod tests {
 
     #[test]
     fn test_all_categories_count() {
-        assert_eq!(LogCategory::ALL.len(), 13, "Should have exactly 13 categories");
+        assert_eq!(
+            LogCategory::ALL.len(),
+            13,
+            "Should have exactly 13 categories"
+        );
     }
 
     #[test]
     fn test_all_categories_present() {
         let all_set: std::collections::HashSet<_> = LogCategory::ALL.iter().copied().collect();
-        
+
         // Verify each variant is in ALL
         assert!(all_set.contains(&LogCategory::Combat));
         assert!(all_set.contains(&LogCategory::Encounter));
@@ -146,7 +150,7 @@ mod tests {
         assert!(all_set.contains(&LogCategory::Rendering));
         assert!(all_set.contains(&LogCategory::Animation));
         assert!(all_set.contains(&LogCategory::Time));
-        
+
         assert_eq!(all_set.len(), 13, "No duplicates in ALL");
     }
 
@@ -161,7 +165,7 @@ mod tests {
         assert!(LogCategory::Carrier.default_enabled());
         assert!(LogCategory::Magic.default_enabled());
         assert!(LogCategory::General.default_enabled());
-        
+
         // Last 5: OFF by default (noisy)
         assert!(!LogCategory::Movement.default_enabled());
         assert!(!LogCategory::Ai.default_enabled());

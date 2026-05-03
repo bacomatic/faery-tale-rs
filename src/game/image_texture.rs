@@ -1,7 +1,6 @@
-
 use crate::game::bitmap::BitMap;
-use crate::game::iff_image::IffImage;
 use crate::game::colors::Palette;
+use crate::game::iff_image::IffImage;
 
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, RenderTarget, Texture};
@@ -36,7 +35,11 @@ impl<'tex> ImageTexture<'tex> {
     ///
     /// The planar pixel data is decoded into a [`BitMap`] immediately;
     /// after this call the `image` reference is no longer needed.
-    pub fn new(image: &IffImage, bounds: &Rect, texture: Weak<RefCell<Texture<'tex>>>) -> ImageTexture<'tex> {
+    pub fn new(
+        image: &IffImage,
+        bounds: &Rect,
+        texture: Weak<RefCell<Texture<'tex>>>,
+    ) -> ImageTexture<'tex> {
         let row_bytes = ((image.width + 15) / 16) * 2;
         let bitmap = BitMap::with_interleaved_data(
             image.pixels.clone(),
@@ -63,7 +66,10 @@ impl<'tex> ImageTexture<'tex> {
         if self.pixels_32.is_empty() {
             let result = self.bitmap.generate_rgb32(palette, key_color);
             if result.is_err() {
-                println!("Error generating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
+                println!(
+                    "Error generating RGB32 pixel data for ImageTexture: {}",
+                    result.err().unwrap()
+                );
                 return;
             }
             let (pixels, stride) = result.unwrap();
@@ -71,16 +77,23 @@ impl<'tex> ImageTexture<'tex> {
             self.stride = stride;
         } else {
             // update existing pixel cache in case palette changed
-            let result = self.bitmap.update_rgb32(&mut self.pixels_32, self.stride, palette, key_color);
+            let result =
+                self.bitmap
+                    .update_rgb32(&mut self.pixels_32, self.stride, palette, key_color);
             if result.is_err() {
-                println!("Error updating RGB32 pixel data for ImageTexture: {}", result.err().unwrap());
+                println!(
+                    "Error updating RGB32 pixel data for ImageTexture: {}",
+                    result.err().unwrap()
+                );
                 return;
             }
         }
 
         if let Some(strong_texture) = self.texture.upgrade() {
             let mut texture = strong_texture.borrow_mut();
-            texture.update(Some(self.texture_bounds), &self.pixels_32, self.stride).unwrap();
+            texture
+                .update(Some(self.texture_bounds), &self.pixels_32, self.stride)
+                .unwrap();
         } else {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
         }
@@ -92,7 +105,9 @@ impl<'tex> ImageTexture<'tex> {
             let src_rect = self.texture_bounds;
             let (width, height) = self.bitmap.get_size();
             let dest_rect = Rect::new(x, y, width as u32, height as u32);
-            canvas.copy(&*texture, Some(src_rect), Some(dest_rect)).unwrap();
+            canvas
+                .copy(&*texture, Some(src_rect), Some(dest_rect))
+                .unwrap();
         } else {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
         }
@@ -102,15 +117,25 @@ impl<'tex> ImageTexture<'tex> {
     pub fn draw_scaled<T: RenderTarget>(&self, canvas: &mut Canvas<T>, dst: Rect) {
         if let Some(strong_texture) = self.texture.upgrade() {
             let texture = strong_texture.borrow();
-            canvas.copy(&*texture, Some(self.texture_bounds), Some(dst)).unwrap();
+            canvas
+                .copy(&*texture, Some(self.texture_bounds), Some(dst))
+                .unwrap();
         } else {
-            println!("Error upgrading weak reference to shared texture in ImageTexture::draw_scaled");
+            println!(
+                "Error upgrading weak reference to shared texture in ImageTexture::draw_scaled"
+            );
         }
     }
 
     /// Draw a sub-region of the image to the canvas at the specified position.
     /// `region` is in image-local coordinates (relative to the image's own top-left).
-    pub fn draw_region<T: RenderTarget>(&self, canvas: &mut Canvas<T>, region: Rect, x: i32, y: i32) {
+    pub fn draw_region<T: RenderTarget>(
+        &self,
+        canvas: &mut Canvas<T>,
+        region: Rect,
+        x: i32,
+        y: i32,
+    ) {
         if let Some(strong_texture) = self.texture.upgrade() {
             let texture = strong_texture.borrow();
             let src_rect = Rect::new(
@@ -120,9 +145,13 @@ impl<'tex> ImageTexture<'tex> {
                 region.height(),
             );
             let dest_rect = Rect::new(x, y, region.width(), region.height());
-            canvas.copy(&*texture, Some(src_rect), Some(dest_rect)).unwrap();
+            canvas
+                .copy(&*texture, Some(src_rect), Some(dest_rect))
+                .unwrap();
         } else {
-            println!("Error upgrading weak reference to shared texture in ImageTexture::draw_region");
+            println!(
+                "Error upgrading weak reference to shared texture in ImageTexture::draw_region"
+            );
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::fs;
 /// Software 4-voice synthesizer, porting the Amiga audio system from
 /// `gdriver.asm` + `fmain.c`.
 ///
@@ -46,14 +47,15 @@
 /// |  9   |  5   |  4  |
 /// | 10   |  1   |  0  |
 /// | 11   |  5   |  0  |
-
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::fs;
 
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
-use super::songs::{SongLibrary, Track, TrackEvent, PTABLE, NOTE_DURATIONS, AMIGA_CLOCK_NTSC, VBL_RATE_HZ, DEFAULT_TEMPO};
+use super::songs::{
+    SongLibrary, Track, TrackEvent, AMIGA_CLOCK_NTSC, DEFAULT_TEMPO, NOTE_DURATIONS, PTABLE,
+    VBL_RATE_HZ,
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -75,9 +77,18 @@ const INSTRUMENT_SLOTS: usize = 12;
 /// Initial instrument mappings from `new_wave[]` in `fmain.c`.
 /// Each entry is `(wave_num, vol_num)`.
 const NEW_WAVE: [(u8, u8); INSTRUMENT_SLOTS] = [
-    (0, 0), (0, 0), (0, 0), (0, 0), // slots 0-3
-    (0, 5), (2, 2), (1, 1), (1, 3), // slots 4-7
-    (0, 4), (5, 4), (1, 0), (5, 0), // slots 8-11
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0), // slots 0-3
+    (0, 5),
+    (2, 2),
+    (1, 1),
+    (1, 3), // slots 4-7
+    (0, 4),
+    (5, 4),
+    (1, 0),
+    (5, 0), // slots 8-11
 ];
 
 /// Gap between the end-of-note and the start of the next event, in timeclock
@@ -96,7 +107,7 @@ const NOTE_GAP: u32 = 300;
 ///   max L = 2 × PRIMARY × 0.5 + 2 × BLEED × 0.5 = PRIMARY + BLEED = 1.0
 /// so these two constants must sum to exactly 1.0.
 const STEREO_PRIMARY: f32 = 0.75; // primary-side weight for a voice
-const STEREO_BLEED:   f32 = 0.25; // opposite-side bleed weight
+const STEREO_BLEED: f32 = 0.25; // opposite-side bleed weight
 
 /// SDL2 PCM sample rate for synthesis output.
 pub const SAMPLE_RATE: u32 = 44100;
@@ -164,7 +175,7 @@ impl SfxChannel {
                 break;
             }
             let s = pb.data[idx] as f32 / 128.0 * SFX_AMPLITUDE;
-            left[i]  += s;
+            left[i] += s;
             right[i] += s;
             pb.pos += SFX_STEP;
         }
@@ -220,7 +231,10 @@ impl Instruments {
             }
         }
 
-        Instruments { waveforms, envelopes }
+        Instruments {
+            waveforms,
+            envelopes,
+        }
     }
 
     /// Return a slice covering the looping portion of waveform `wave_num`
@@ -231,7 +245,7 @@ impl Instruments {
     pub fn wave_loop<'a>(&'a self, wave_num: usize, wave_offset: u16) -> &'a [i8] {
         let wf = &self.waveforms[wave_num.min(WAVEFORM_COUNT - 1)];
         let start = (wave_offset as usize) * 4;
-        let len = ((32 - wave_offset as usize)) * 2;
+        let len = (32 - wave_offset as usize) * 2;
         let end = (start + len).min(WAVEFORM_BYTES);
         &wf[start..end]
     }
@@ -368,7 +382,8 @@ impl Voice {
             // hold
             return;
         }
-        let byte = envelopes[self.vol_num.min(ENVELOPE_COUNT - 1)][self.vol_list.min(ENVELOPE_BYTES - 1)];
+        let byte =
+            envelopes[self.vol_num.min(ENVELOPE_COUNT - 1)][self.vol_list.min(ENVELOPE_BYTES - 1)];
         if byte >= 0x80 {
             // negative sentinel → hold, do not advance pointer
             self.vol_delay = 0xff;
@@ -386,7 +401,14 @@ impl Voice {
         // Route entirely to the left side (gain=1.0) and discard the right
         // side output (gain=0.0, written into a throwaway buffer).
         let mut right_dummy = vec![0.0f32; buf.len()];
-        self.mix_stereo(buf, &mut right_dummy, instruments, no_interpolation, 1.0, 0.0);
+        self.mix_stereo(
+            buf,
+            &mut right_dummy,
+            instruments,
+            no_interpolation,
+            1.0,
+            0.0,
+        );
     }
 
     /// Synthesise samples for this voice and mix them into both `left` and
@@ -525,7 +547,14 @@ impl SequencerState {
     }
 
     /// Assign four tracks and begin playback from the start (mirrors `_playscore`).
-    fn play_score(&mut self, t0: Arc<Track>, t1: Arc<Track>, t2: Arc<Track>, t3: Arc<Track>, inst: &Instruments) {
+    fn play_score(
+        &mut self,
+        t0: Arc<Track>,
+        t1: Arc<Track>,
+        t2: Arc<Track>,
+        t3: Arc<Track>,
+        inst: &Instruments,
+    ) {
         let tracks = [t0, t1, t2, t3];
         self.timeclock = 0;
         self.tempo = DEFAULT_TEMPO;
@@ -534,8 +563,8 @@ impl SequencerState {
             // Set initial instrument from NEW_WAVE slot matching original
             // playscore: reads 4 words sequentially from new_wave[0..4]
             v.set_instrument_slot(i); // slots 0-3 all have wave=0, vol=0
-            // Pre-load initial envelope volume from vol_num.
-            // vol_list is a 0-based index within the per-envelope 256-byte array.
+                                      // Pre-load initial envelope volume from vol_num.
+                                      // vol_list is a 0-based index within the per-envelope 256-byte array.
             let vol_num = v.vol_num.min(ENVELOPE_COUNT - 1);
             let first_env = inst.envelopes[vol_num][0];
             if first_env < 0x80 {
@@ -624,7 +653,10 @@ impl SequencerState {
             ptr += 1;
 
             match event {
-                TrackEvent::Note { pitch, duration_idx } => {
+                TrackEvent::Note {
+                    pitch,
+                    duration_idx,
+                } => {
                     let dur = NOTE_DURATIONS[(*duration_idx as usize).min(63)] as u32;
                     // Original gdriver.asm `note_comm`:
                     //   sub.l #300,d4   ; d4 = duration - NOTE_GAP
@@ -748,15 +780,43 @@ impl AudioCallback for SynthCallback {
             // phase cancellation on harmonically related melodic lines.
             // A bleed of STEREO_BLEED to the opposite side centres the soundstage
             // while preserving the original left/right bias of the hardware.
-            let mut left_buf  = vec![0.0f32; chunk_frames];
+            let mut left_buf = vec![0.0f32; chunk_frames];
             let mut right_buf = vec![0.0f32; chunk_frames];
 
             // Voices 0 and 3: left-primary, right-bleed
-            st.voices[0].mix_stereo(&mut left_buf, &mut right_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
-            st.voices[3].mix_stereo(&mut left_buf, &mut right_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
+            st.voices[0].mix_stereo(
+                &mut left_buf,
+                &mut right_buf,
+                inst,
+                self.no_interpolation,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
+            st.voices[3].mix_stereo(
+                &mut left_buf,
+                &mut right_buf,
+                inst,
+                self.no_interpolation,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
             // Voices 1 and 2: right-primary, left-bleed
-            st.voices[1].mix_stereo(&mut right_buf, &mut left_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
-            st.voices[2].mix_stereo(&mut right_buf, &mut left_buf, inst, self.no_interpolation, STEREO_PRIMARY, STEREO_BLEED);
+            st.voices[1].mix_stereo(
+                &mut right_buf,
+                &mut left_buf,
+                inst,
+                self.no_interpolation,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
+            st.voices[2].mix_stereo(
+                &mut right_buf,
+                &mut left_buf,
+                inst,
+                self.no_interpolation,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
 
             // Mix any active SFX (independent of the 4 music voices; centred stereo).
             if let Ok(mut sfx) = self.sfx.lock() {
@@ -768,7 +828,7 @@ impl AudioCallback for SynthCallback {
             // to the device's native format if needed.
             for i in 0..chunk_frames {
                 let base = (frame_pos + i) * 2;
-                out[base]     = (left_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                out[base] = (left_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 out[base + 1] = (right_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
             }
 
@@ -799,7 +859,11 @@ impl AudioSystem {
     ///
     /// * `sdl_context` — the SDL2 context (used to open the audio subsystem)
     /// * `instruments` — loaded from `game/v6` via [`Instruments::load`]
-    pub fn new(sdl_context: &sdl2::Sdl, instruments: Instruments, no_interpolation: bool) -> Result<Self, String> {
+    pub fn new(
+        sdl_context: &sdl2::Sdl,
+        instruments: Instruments,
+        no_interpolation: bool,
+    ) -> Result<Self, String> {
         let audio_subsystem = sdl_context.audio()?;
 
         let desired = AudioSpecDesired {
@@ -817,17 +881,28 @@ impl AudioSystem {
 
         let sfx = Arc::new(Mutex::new(SfxChannel::new()));
         let sfx_cb = Arc::clone(&sfx);
-        
+
         let music_enabled = Arc::new(Mutex::new(true));
         let sfx_enabled = Arc::new(Mutex::new(true));
 
-        let device = audio_subsystem.open_playback(None, &desired, |_spec| {
-            SynthCallback { state: state_cb, instruments: instruments_cb, sfx: sfx_cb, no_interpolation }
+        let device = audio_subsystem.open_playback(None, &desired, |_spec| SynthCallback {
+            state: state_cb,
+            instruments: instruments_cb,
+            sfx: sfx_cb,
+            no_interpolation,
         })?;
 
         device.resume();
 
-        Ok(AudioSystem { state, instruments, sfx, _device: device, song_library: None, music_enabled, sfx_enabled })
+        Ok(AudioSystem {
+            state,
+            instruments,
+            sfx,
+            _device: device,
+            song_library: None,
+            music_enabled,
+            sfx_enabled,
+        })
     }
 
     /// Start playing four tracks from the beginning (mirrors `_playscore`).
@@ -865,9 +940,10 @@ impl AudioSystem {
 
     /// Return the song group currently being played (0–6), or `None` if stopped.
     pub fn current_group(&self) -> Option<usize> {
-        self.state.lock().ok().and_then(|st| {
-            if !st.nosound { st.current_group } else { None }
-        })
+        self.state
+            .lock()
+            .ok()
+            .and_then(|st| if !st.nosound { st.current_group } else { None })
     }
 
     /// Change the current tempo (mirrors `_set_tempo`).
@@ -901,7 +977,7 @@ impl AudioSystem {
         if !self.is_music_enabled() {
             return;
         }
-        
+
         let group = group as usize;
         if self.current_group() == Some(group) {
             return;
@@ -911,7 +987,10 @@ impl AudioSystem {
                 return;
             }
         }
-        eprintln!("audio: set_score({}) — library not available or group missing", group);
+        eprintln!(
+            "audio: set_score({}) — library not available or group missing",
+            group
+        );
     }
 
     /// Enable or disable cave instrument overrides.
@@ -945,7 +1024,10 @@ impl AudioSystem {
             }
         };
 
-        let mut sfx = self.sfx.lock().map_err(|e| format!("sfx lock poisoned: {e}"))?;
+        let mut sfx = self
+            .sfx
+            .lock()
+            .map_err(|e| format!("sfx lock poisoned: {e}"))?;
         let mut cursor = 0usize;
         for i in 0..SFX_COUNT {
             if cursor + 4 > data.len() {
@@ -953,14 +1035,20 @@ impl AudioSystem {
                 break;
             }
             let len = u32::from_be_bytes([
-                data[cursor], data[cursor + 1], data[cursor + 2], data[cursor + 3],
+                data[cursor],
+                data[cursor + 1],
+                data[cursor + 2],
+                data[cursor + 3],
             ]) as usize;
             cursor += 4;
             if cursor + len > data.len() {
                 eprintln!("audio: SFX {i}: declared length {len} exceeds file size; remaining SFX disabled");
                 break;
             }
-            let pcm: Vec<i8> = data[cursor..cursor + len].iter().map(|&b| b as i8).collect();
+            let pcm: Vec<i8> = data[cursor..cursor + len]
+                .iter()
+                .map(|&b| b as i8)
+                .collect();
             sfx.samples[i] = Some(Arc::new(pcm));
             cursor += len;
         }
@@ -970,7 +1058,7 @@ impl AudioSystem {
     /// Trigger sound effect `sfx_id` (0–5).  Plays alongside music voices
     /// without interrupting them.  If `sfx_id` is out of range or samples
     /// have not been loaded, this is a no-op.
-    /// 
+    ///
     /// This method respects the SFX enable flag (SPEC §25.5 GAME, Sound toggle).
     pub fn play_sfx(&self, sfx_id: u8) {
         // Check if SFX is enabled
@@ -979,7 +1067,7 @@ impl AudioSystem {
                 return;
             }
         }
-        
+
         let id = sfx_id as usize;
         if id >= SFX_COUNT {
             return;
@@ -990,7 +1078,7 @@ impl AudioSystem {
             }
         }
     }
-    
+
     /// Enable or disable music playback (SPEC §25.5 GAME, Music toggle).
     /// When disabled, stops current playback; when enabled, caller must
     /// call `set_score()` to resume appropriate mood music.
@@ -1002,19 +1090,19 @@ impl AudioSystem {
             self.stop_score();
         }
     }
-    
+
     /// Return true if music playback is enabled.
     pub fn is_music_enabled(&self) -> bool {
         self.music_enabled.lock().ok().map_or(true, |f| *f)
     }
-    
+
     /// Enable or disable sound effects (SPEC §25.5 GAME, Sound toggle).
     pub fn set_sfx_enabled(&self, enabled: bool) {
         if let Ok(mut flag) = self.sfx_enabled.lock() {
             *flag = enabled;
         }
     }
-    
+
     /// Return true if sound effects are enabled.
     pub fn is_sfx_enabled(&self) -> bool {
         self.sfx_enabled.lock().ok().map_or(true, |f| *f)
@@ -1077,7 +1165,11 @@ mod tests {
         let inst = load_instruments();
         let loop_slice = inst.wave_loop(0, 0);
         // wave_offset=0 → start=0, len=(32-0)*2=64
-        assert_eq!(loop_slice.len(), 64, "offset=0 loop length should be 64 bytes");
+        assert_eq!(
+            loop_slice.len(),
+            64,
+            "offset=0 loop length should be 64 bytes"
+        );
     }
 
     #[test]
@@ -1085,7 +1177,11 @@ mod tests {
         let inst = load_instruments();
         let loop_slice = inst.wave_loop(0, 16);
         // wave_offset=16 → start=64, len=(32-16)*2=32
-        assert_eq!(loop_slice.len(), 32, "offset=16 loop length should be 32 bytes");
+        assert_eq!(
+            loop_slice.len(),
+            32,
+            "offset=16 loop length should be 32 bytes"
+        );
     }
 
     #[test]
@@ -1093,7 +1189,11 @@ mod tests {
         let inst = load_instruments();
         let loop_slice = inst.wave_loop(0, 28);
         // wave_offset=28 → start=112, len=(32-28)*2=8
-        assert_eq!(loop_slice.len(), 8, "offset=28 loop length should be 8 bytes");
+        assert_eq!(
+            loop_slice.len(),
+            8,
+            "offset=28 loop length should be 8 bytes"
+        );
     }
 
     #[test]
@@ -1155,7 +1255,10 @@ mod tests {
         st.vbl_tick(&inst);
 
         let any_playing = st.voices.iter().any(|v| v.playing);
-        assert!(any_playing, "at least one voice should be playing after the first VBL tick");
+        assert!(
+            any_playing,
+            "at least one voice should be playing after the first VBL tick"
+        );
     }
 
     #[test]
@@ -1170,7 +1273,7 @@ mod tests {
 
     #[test]
     fn test_timeclock_rate_constant() {
-        use super::super::songs::{DEFAULT_TEMPO, VBL_RATE_HZ, TIMECLOCK_RATE};
+        use super::super::songs::{DEFAULT_TEMPO, TIMECLOCK_RATE, VBL_RATE_HZ};
         assert_eq!(TIMECLOCK_RATE, DEFAULT_TEMPO * VBL_RATE_HZ);
         assert_eq!(TIMECLOCK_RATE, 9000);
     }
@@ -1197,14 +1300,17 @@ mod tests {
         let mut buf = vec![0.0f32; 256];
         v.mix_into(&mut buf, &inst, false);
         let nonzero = buf.iter().any(|&s| s != 0.0);
-        assert!(nonzero, "mix_into should produce non-zero output for a playing voice");
+        assert!(
+            nonzero,
+            "mix_into should produce non-zero output for a playing voice"
+        );
     }
 
     // T2-AUDIO-MUSIC-TOGGLE and T2-AUDIO-SFX-TOGGLE tests (SPEC §25.5 GAME)
-    
+
     // Note: Full AudioSystem tests require SDL2 audio device initialization,
     // which is not available in unit tests. These tests verify the flag state management only.
-    
+
     #[test]
     fn test_music_enabled_defaults_to_true() {
         // Music should be enabled by default (matching original behavior)

@@ -8,26 +8,24 @@ use std::convert::From;
 // type alias to be consistent with original code
 #[derive(Deserialize, Debug, Clone, Copy)]
 pub struct RGB4 {
-    pub color: u16
+    pub color: u16,
 }
 
 impl From<(u8, u8, u8)> for RGB4 {
     fn from(c: (u8, u8, u8)) -> RGB4 {
         RGB4 {
-            color:
-              ((c.0 as u16 & 0xF0) << 4)
-            |  (c.1 as u16 & 0xF0)
-            | ((c.2 as u16 & 0xF0) >> 4)
+            color: ((c.0 as u16 & 0xF0) << 4) | (c.1 as u16 & 0xF0) | ((c.2 as u16 & 0xF0) >> 4),
         }
     }
 }
 
 impl From<[u8; 3]> for RGB4 {
     fn from(ca: [u8; 3]) -> RGB4 {
-        RGB4 {color:
-              ((ca[0] as u16 & 0xF0) << 4)
-            |  (ca[1] as u16 & 0xF0)
-            | ((ca[2] as u16 & 0xF0) >> 4)}
+        RGB4 {
+            color: ((ca[0] as u16 & 0xF0) << 4)
+                | (ca[1] as u16 & 0xF0)
+                | ((ca[2] as u16 & 0xF0) >> 4),
+        }
     }
 }
 
@@ -40,12 +38,9 @@ impl From<u16> for RGB4 {
 impl From<&Color> for RGB4 {
     fn from(c: &Color) -> RGB4 {
         RGB4 {
-            color:
-              ((c.r as u16 & 0xF0) << 4)
-            |  (c.g as u16 & 0xF0)
-            | ((c.b as u16 & 0xF0) >> 4)
+            color: ((c.r as u16 & 0xF0) << 4) | (c.g as u16 & 0xF0) | ((c.b as u16 & 0xF0) >> 4),
         }
-  }
+    }
 }
 
 impl From<&RGB4> for Color {
@@ -54,10 +49,10 @@ impl From<&RGB4> for Color {
         let gc = (c.color & 0xF0) >> 4;
         let bc = c.color & 0x0F;
 
-        Color::RGB (
+        Color::RGB(
             (rc | (rc << 4)) as u8,
             (gc | (gc << 4)) as u8,
-            (bc | (bc << 4)) as u8
+            (bc | (bc << 4)) as u8,
         )
     }
 }
@@ -68,10 +63,10 @@ impl RGB4 {
         let gc = (self.color & 0xF0) >> 4;
         let bc = self.color & 0x0F;
 
-        Color::RGB (
+        Color::RGB(
             (rc | (rc << 4)) as u8,
             (gc | (gc << 4)) as u8,
-            (bc | (bc << 4)) as u8
+            (bc | (bc << 4)) as u8,
         )
     }
 
@@ -92,7 +87,7 @@ impl RGB4 {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Palette {
     #[serde(deserialize_with = "deserialize_rgb4_vec")]
-    pub colors: Vec<RGB4>
+    pub colors: Vec<RGB4>,
 }
 
 impl Palette {
@@ -114,11 +109,10 @@ impl Palette {
         for i in 0..(1 << depth) {
             if i < color_count {
                 let c = &self.colors[i];
-                let color: u32 =
-                    ((c.r() as u32) << 24) |
-                    ((c.g() as u32) << 16) |
-                    ((c.b() as u32) << 8)  |
-                    (0xFF);
+                let color: u32 = ((c.r() as u32) << 24)
+                    | ((c.g() as u32) << 16)
+                    | ((c.b() as u32) << 8)
+                    | (0xFF);
                 table.push(color);
             } else {
                 table.push(0); // transparent
@@ -257,5 +251,4 @@ mod tests {
         assert_eq!(thirtytwo_table[30], 0xDDDDDDFF);
         assert_eq!(thirtytwo_table[31], 0xEEEEEEFF);
     }
-
 }

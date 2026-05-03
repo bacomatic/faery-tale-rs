@@ -1,4 +1,3 @@
-
 // Amiga-style bitplane blitting utilities for BitMap.
 //
 // These mirror the Amiga blitter's BltBitMap functionality:
@@ -16,9 +15,18 @@ use crate::game::bitmap::BitMap;
 /// new bitmap whose stride is word-aligned per Amiga conventions.
 /// Handles non-byte-aligned x coordinates (bit-level shifting).
 pub fn extract_region(src: &BitMap, sx: usize, sy: usize, w: usize, h: usize) -> BitMap {
-    assert!(sx + w <= src.width, "extract_region: x+w exceeds source width");
-    assert!(sy + h <= src.height, "extract_region: y+h exceeds source height");
-    assert!(w > 0 && h > 0, "extract_region: width and height must be > 0");
+    assert!(
+        sx + w <= src.width,
+        "extract_region: x+w exceeds source width"
+    );
+    assert!(
+        sy + h <= src.height,
+        "extract_region: y+h exceeds source height"
+    );
+    assert!(
+        w > 0 && h > 0,
+        "extract_region: width and height must be > 0"
+    );
 
     // Destination stride: word-aligned bytes per row
     let dst_stride = ((w + 15) >> 3) & !1_usize;
@@ -52,7 +60,11 @@ pub fn extract_region(src: &BitMap, sx: usize, sy: usize, w: usize, h: usize) ->
                 for col in 0..bytes_needed {
                     let si = src_row_start + src_byte_start + col;
                     let hi = if si < plane.len() { plane[si] } else { 0 };
-                    let lo = if si + 1 < plane.len() { plane[si + 1] } else { 0 };
+                    let lo = if si + 1 < plane.len() {
+                        plane[si + 1]
+                    } else {
+                        0
+                    };
                     dst_plane[dst_row_start + col] = (hi << shift_left) | (lo >> shift_right);
                 }
             }
@@ -77,12 +89,17 @@ pub fn extract_region(src: &BitMap, sx: usize, sy: usize, w: usize, h: usize) ->
 /// `plane_data` must be exactly `dst.stride * dst.height` bytes.
 /// `plane_index` is zero-based and must be < `dst.depth`.
 pub fn set_plane(dst: &mut BitMap, plane_index: usize, plane_data: &[u8]) {
-    assert!(plane_index < dst.depth, "set_plane: plane_index out of range");
+    assert!(
+        plane_index < dst.depth,
+        "set_plane: plane_index out of range"
+    );
     let expected = dst.stride * dst.height;
     assert_eq!(
-        plane_data.len(), expected,
+        plane_data.len(),
+        expected,
         "set_plane: plane_data length ({}) != stride*height ({})",
-        plane_data.len(), expected
+        plane_data.len(),
+        expected
     );
     dst.planes[plane_index] = plane_data.to_vec();
     dst.invalidate_cache();
@@ -95,16 +112,31 @@ pub fn set_plane(dst: &mut BitMap, plane_index: usize, plane_data: &[u8]) {
 /// minterm 0xC0 = D := A (straight copy of source to destination).
 pub fn blt_copy_region(
     src: &BitMap,
-    sx: usize, sy: usize,
+    sx: usize,
+    sy: usize,
     dst: &mut BitMap,
-    dx: usize, dy: usize,
-    w: usize, h: usize,
+    dx: usize,
+    dy: usize,
+    w: usize,
+    h: usize,
     plane_mask: u8,
 ) {
-    assert!(sx + w <= src.width, "blt_copy_region: source region exceeds width");
-    assert!(sy + h <= src.height, "blt_copy_region: source region exceeds height");
-    assert!(dx + w <= dst.width, "blt_copy_region: dest region exceeds width");
-    assert!(dy + h <= dst.height, "blt_copy_region: dest region exceeds height");
+    assert!(
+        sx + w <= src.width,
+        "blt_copy_region: source region exceeds width"
+    );
+    assert!(
+        sy + h <= src.height,
+        "blt_copy_region: source region exceeds height"
+    );
+    assert!(
+        dx + w <= dst.width,
+        "blt_copy_region: dest region exceeds width"
+    );
+    assert!(
+        dy + h <= dst.height,
+        "blt_copy_region: dest region exceeds height"
+    );
 
     let num_planes = src.depth.min(dst.depth);
 
@@ -178,10 +210,10 @@ mod tests {
         assert_eq!(sub.height, 2);
         assert_eq!(sub.depth, 2);
         assert_eq!(sub.stride, 2); // word-aligned: ((8+15)>>3)&!1 = 2
-        // Plane 0: should be 0xFF for the first byte, 0 for padding
+                                   // Plane 0: should be 0xFF for the first byte, 0 for padding
         assert_eq!(sub.planes[0][0], 0xFF);
         assert_eq!(sub.planes[0][1], 0x00); // padding byte
-        // Plane 1 row 0: 0xAA -> first 8 bits = 0xAA
+                                            // Plane 1 row 0: 0xAA -> first 8 bits = 0xAA
         assert_eq!(sub.planes[1][0], 0xAA);
     }
 
@@ -247,7 +279,7 @@ mod tests {
         // Plane 0 of dst should have the first 8 bits set in rows 0-1
         assert_eq!(dst.planes[0][0], 0xFF); // row 0, byte 0
         assert_eq!(dst.planes[0][1], 0x00); // row 0, byte 1 (not copied)
-        // Plane 1 should remain all zeros (plane_mask didn't include it)
+                                            // Plane 1 should remain all zeros (plane_mask didn't include it)
         assert_eq!(dst.planes[1][0], 0x00);
     }
 

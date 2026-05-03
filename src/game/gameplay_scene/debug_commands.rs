@@ -42,7 +42,10 @@ impl GameplayScene {
                 self.snap_camera_to_hero();
             }
             TeleportStoneRing { index } => {
-                self.dlog(format!("debug command not yet wired: TeleportStoneRing {{ index: {} }}", index));
+                self.dlog(format!(
+                    "debug command not yet wired: TeleportStoneRing {{ index: {} }}",
+                    index
+                ));
             }
             ToggleMagicEffect { effect } => match effect {
                 MagicEffect::Light => self.state.light_sticky = !self.state.light_sticky,
@@ -56,16 +59,18 @@ impl GameplayScene {
                 self.state.daynight = phase;
                 let raw = self.state.daynight / 40;
                 self.state.lightlevel = if raw >= 300 { 600 - raw } else { raw };
-                self.state.dayperiod = crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
+                self.state.dayperiod =
+                    crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
             }
             SetGameTime { hour, minute } => {
                 // Each hour = 1000 daynight ticks; each minute ≈ 1000/60
-                let ticks = (hour as u16).saturating_mul(1000)
-                    + (minute as u16).saturating_mul(1000) / 60;
+                let ticks =
+                    (hour as u16).saturating_mul(1000) + (minute as u16).saturating_mul(1000) / 60;
                 self.state.daynight = ticks % 24000;
                 let raw = self.state.daynight / 40;
                 self.state.lightlevel = if raw >= 300 { 600 - raw } else { raw };
-                self.state.dayperiod = crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
+                self.state.dayperiod =
+                    crate::game::game_state::dayperiod_from_daynight(self.state.daynight);
             }
             HoldTimeOfDay { hold } => {
                 self.state.freeze_sticky = hold;
@@ -96,20 +101,26 @@ impl GameplayScene {
                 // Fill a sensible selection: full weapon set, all magic, all keys, arrows
                 let stuff = self.state.stuff_mut();
                 // Weapons: dirk(0), mace(1), sword(2), bow(3), magic wand(4), golden lasso(5)
-                for i in 0..=5 { stuff[i] = 1; }
+                for i in 0..=5 {
+                    stuff[i] = 1;
+                }
                 // Arrows: slot 8
                 stuff[8] = 99;
                 // Magic items: slots 9-15
-                for i in 9..=15 { stuff[i] = 1; }
+                for i in 9..=15 {
+                    stuff[i] = 1;
+                }
                 // Keys: slots 16-21
-                for i in 16..=21 { stuff[i] = 1; }
+                for i in 16..=21 {
+                    stuff[i] = 1;
+                }
                 self.dlog("HeroPack: weapons, magic, and keys filled".to_string());
                 let wealth = self.state.wealth;
                 self.menu.set_options(self.state.stuff(), wealth);
             }
             SummonSwan => {
-                use crate::game::npc::*;
                 use crate::game::actor::{Goal, Tactic};
+                use crate::game::npc::*;
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
                 if let Some(ref mut table) = self.npc_table {
@@ -131,7 +142,10 @@ impl GameplayScene {
                             cleverness: 0,
                             looted: false,
                         };
-                        self.dlog("summoned swan near hero (grounded, requires Golden Lasso to mount)".to_string());
+                        self.dlog(
+                            "summoned swan near hero (grounded, requires Golden Lasso to mount)"
+                                .to_string(),
+                        );
                     } else {
                         self.dlog("summon swan: no free NPC slots".to_string());
                     }
@@ -158,7 +172,10 @@ impl GameplayScene {
                         "terrain: map_world not loaded".to_string(),
                     ],
                     Some(world) => {
-                        let terra_head = format!("terrain: terra_mem[0..16] = {:02x?}", &world.terra_mem[..16]);
+                        let terra_head = format!(
+                            "terrain: terra_mem[0..16] = {:02x?}",
+                            &world.terra_mem[..16]
+                        );
                         let probes: Vec<String> = [
                             ("right_foot", x + 4, y + 2),
                             ("left_foot",  x - 4, y + 2),
@@ -180,7 +197,9 @@ impl GameplayScene {
                             .collect()
                     }
                 };
-                for line in lines { self.dlog(line); }
+                for line in lines {
+                    self.dlog(line);
+                }
             }
             QueryActors => {
                 let count = self.state.actors.len();
@@ -188,8 +207,13 @@ impl GameplayScene {
                     .chain(self.state.actors.iter().enumerate().map(|(i, actor)| {
                         format!(
                             "  [{:2}] {:?} race={} vit={} @({},{}) {:?}",
-                            i, actor.kind, actor.race, actor.vitality,
-                            actor.abs_x, actor.abs_y, actor.state
+                            i,
+                            actor.kind,
+                            actor.race,
+                            actor.vitality,
+                            actor.abs_x,
+                            actor.abs_y,
+                            actor.state
                         )
                     }))
                     .collect();
@@ -218,47 +242,57 @@ impl GameplayScene {
             QuerySongs => {
                 self.dlog("QuerySongs: song library info is in main loop; use /songs".to_string());
             }
-            DumpAdfBlock { block, count } => {
-                match &self.adf {
-                    None => self.dlog("DumpAdfBlock: ADF not loaded".to_string()),
-                    Some(adf) => {
-                        let total = adf.num_blocks() as u32;
-                        let end = block + count;
-                        if end > total {
-                            self.dlog(format!(
-                                "DumpAdfBlock: range [{}, {}) exceeds ADF size ({} blocks)",
-                                block, end, total
-                            ));
-                        } else {
-                            let data = adf.load_blocks(block, count).to_vec();
-                            self.dlog(format!(
-                                "ADF block(s) {}..{} ({} bytes):",
-                                block, end, data.len()
-                            ));
-                            for (row_i, chunk) in data.chunks(16).enumerate() {
-                                let offset = block as usize * 512 + row_i * 16;
-                                let hex: String = chunk
-                                    .iter()
-                                    .map(|b| format!("{:02X}", b))
-                                    .collect::<Vec<_>>()
-                                    .join(" ");
-                                let ascii: String = chunk
-                                    .iter()
-                                    .map(|&b| if b >= 0x20 && b < 0x7F { b as char } else { '.' })
-                                    .collect();
-                                self.dlog(format!("{:06X}: {}  {}", offset, hex, ascii));
-                            }
+            DumpAdfBlock { block, count } => match &self.adf {
+                None => self.dlog("DumpAdfBlock: ADF not loaded".to_string()),
+                Some(adf) => {
+                    let total = adf.num_blocks() as u32;
+                    let end = block + count;
+                    if end > total {
+                        self.dlog(format!(
+                            "DumpAdfBlock: range [{}, {}) exceeds ADF size ({} blocks)",
+                            block, end, total
+                        ));
+                    } else {
+                        let data = adf.load_blocks(block, count).to_vec();
+                        self.dlog(format!(
+                            "ADF block(s) {}..{} ({} bytes):",
+                            block,
+                            end,
+                            data.len()
+                        ));
+                        for (row_i, chunk) in data.chunks(16).enumerate() {
+                            let offset = block as usize * 512 + row_i * 16;
+                            let hex: String = chunk
+                                .iter()
+                                .map(|b| format!("{:02X}", b))
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            let ascii: String = chunk
+                                .iter()
+                                .map(|&b| {
+                                    if b >= 0x20 && b < 0x7F {
+                                        b as char
+                                    } else {
+                                        '.'
+                                    }
+                                })
+                                .collect();
+                            self.dlog(format!("{:06X}: {}  {}", offset, hex, ascii));
                         }
                     }
                 }
-            }
+            },
             SpawnEncounterRandom => {
                 let zone_idx = self.state.region_num as usize;
                 let hero_x = self.state.hero_x as i16;
                 let hero_y = self.state.hero_y as i16;
                 if let Some(ref mut table) = self.npc_table {
                     let spawned = crate::game::encounter::spawn_encounter_group(
-                        table, zone_idx, hero_x, hero_y, self.state.tick_counter,
+                        table,
+                        zone_idx,
+                        hero_x,
+                        hero_y,
+                        self.state.tick_counter,
                     );
                     self.dlog(format!("forced encounter: {} enemies", spawned));
                 } else {
@@ -274,13 +308,16 @@ impl GameplayScene {
                 if let Some(ref mut table) = self.npc_table {
                     if let Some(slot) = table.npcs.iter_mut().find(|n| n.slot_free()) {
                         let mut npc = crate::game::encounter::spawn_encounter(
-                            zone_idx, hero_x + 48, hero_y, self.state.tick_counter,
+                            zone_idx,
+                            hero_x + 48,
+                            hero_y,
+                            self.state.tick_counter,
                         );
                         npc.npc_type = requested_type;
                         npc.race = match requested_type {
-                            NPC_TYPE_WRAITH   => RACE_WRAITH,
+                            NPC_TYPE_WRAITH => RACE_WRAITH,
                             NPC_TYPE_GHOST | NPC_TYPE_SKELETON => RACE_UNDEAD,
-                            _                 => RACE_ENEMY,
+                            _ => RACE_ENEMY,
                         };
                         *slot = npc;
                         self.dlog(format!("spawned enemy type={}", requested_type));
@@ -303,8 +340,8 @@ impl GameplayScene {
                 }
             }
             ScatterItems { count, item_id } => {
-                use crate::game::sprites::INV_LIST;
                 use crate::game::game_state::WorldObject;
+                use crate::game::sprites::INV_LIST;
                 use crate::game::world_objects::stuff_index_to_ob_id;
                 const TALISMAN_IDX: usize = 22;
 
@@ -334,20 +371,27 @@ impl GameplayScene {
                             ob_id: ob_id_val,
                             ob_stat: 1,
                             region,
-                            x, y,
+                            x,
+                            y,
                             visible: true,
                             goal: 0,
                         });
                         dropped += 1;
                     }
-                    self.dlog(format!("scattered {} x item {} ({})", dropped, id,
-                        if id == TALISMAN_IDX { "TALISMAN — end-of-game item" } else { "" }
+                    self.dlog(format!(
+                        "scattered {} x item {} ({})",
+                        dropped,
+                        id,
+                        if id == TALISMAN_IDX {
+                            "TALISMAN — end-of-game item"
+                        } else {
+                            ""
+                        }
                     ));
                 } else {
                     // Drop `count` items from the safe pool (no talisman), in a ring.
-                    let safe_pool: Vec<usize> = (0..INV_LIST.len())
-                        .filter(|&i| i != TALISMAN_IDX)
-                        .collect();
+                    let safe_pool: Vec<usize> =
+                        (0..INV_LIST.len()).filter(|&i| i != TALISMAN_IDX).collect();
                     let n = count.min(safe_pool.len() * 4); // allow cycling
                     for i in 0..n {
                         let item_id = safe_pool[i % safe_pool.len()];
@@ -359,7 +403,8 @@ impl GameplayScene {
                             ob_id: ob_id_val,
                             ob_stat: 1,
                             region,
-                            x, y,
+                            x,
+                            y,
                             visible: true,
                             goal: 0,
                         });
@@ -412,7 +457,10 @@ impl GameplayScene {
                         self.pending_log.push(crate::debug_log!(
                             General,
                             "teleport: '{}' (zone {}, center {},{})",
-                            label, idx, self.state.hero_x, self.state.hero_y
+                            label,
+                            idx,
+                            self.state.hero_x,
+                            self.state.hero_y
                         ));
                     }
                     n => {
@@ -433,13 +481,33 @@ impl GameplayScene {
                 let total = self.doors.len();
                 let opened = self.opened_doors.len();
                 let region = self.state.region_num;
-                let rows: Vec<(usize, u8, u16, u16, u8, u16, u16, crate::game::doors::KeyReq)> =
-                    self.doors.iter().enumerate()
-                        .filter(|(_, d)| d.src_region == region)
-                        .map(|(i, d)| (i, d.door_type, d.src_x, d.src_y,
-                                        d.dst_region, d.dst_x, d.dst_y,
-                                        crate::game::doors::key_req(d.door_type)))
-                        .collect();
+                let rows: Vec<(
+                    usize,
+                    u8,
+                    u16,
+                    u16,
+                    u8,
+                    u16,
+                    u16,
+                    crate::game::doors::KeyReq,
+                )> = self
+                    .doors
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, d)| d.src_region == region)
+                    .map(|(i, d)| {
+                        (
+                            i,
+                            d.door_type,
+                            d.src_x,
+                            d.src_y,
+                            d.dst_region,
+                            d.dst_x,
+                            d.dst_y,
+                            crate::game::doors::key_req(d.door_type),
+                        )
+                    })
+                    .collect();
                 self.dlog(format!("── Doors ── total: {}", total));
                 self.dlog(format!(
                     "  Keys held (slots 16-21): gold={} silver={} ruby={} skull={} iron={} crystal={}",
@@ -466,20 +534,35 @@ impl GameplayScene {
                 let y = self.state.hero_y;
                 match crate::game::zones::find_zone(&self.zones, x, y) {
                     None => self.dlog(format!(
-                        "── Extent ── hero at ({},{}): no matching zone", x, y
+                        "── Extent ── hero at ({},{}): no matching zone",
+                        x, y
                     )),
                     Some(idx) => {
                         let (label, etype, x1, y1, x2, y2, v1, v2, v3) = {
                             let z = &self.zones[idx];
-                            (z.label.clone(), z.etype, z.x1, z.y1, z.x2, z.y2,
-                             z.v1, z.v2, z.v3)
+                            (
+                                z.label.clone(),
+                                z.etype,
+                                z.x1,
+                                z.y1,
+                                z.x2,
+                                z.y2,
+                                z.v1,
+                                z.v2,
+                                z.v3,
+                            )
                         };
                         self.dlog(format!("── Extent ── hero at ({},{})", x, y));
                         self.dlog(format!(
                             "  [{}] '{}' etype={} ({:?})  bounds=({},{})-({},{})",
-                            idx, label, etype,
+                            idx,
+                            label,
+                            etype,
                             crate::game::zones::ZoneType::from_etype(etype),
-                            x1, y1, x2, y2
+                            x1,
+                            y1,
+                            x2,
+                            y2
                         ));
                         self.dlog(format!("  v1={}  v2={}  v3={}", v1, v2, v3));
                     }

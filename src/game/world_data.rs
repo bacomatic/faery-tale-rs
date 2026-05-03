@@ -6,9 +6,9 @@ use crate::game::palette::{amiga_color_to_rgba, Palette, PALETTE_SIZE};
 use anyhow::Result;
 
 /// Block counts for each data segment (from fmain.c memory layout).
-pub const SECTOR_BLOCKS: u32 = 64;   // 32768 bytes
-pub const MAP_BLOCKS: u32 = 8;       // 4096 bytes per y-band strip
-pub const TERRA_BLOCKS: u32 = 1;     // 512 bytes per terra layer
+pub const SECTOR_BLOCKS: u32 = 64; // 32768 bytes
+pub const MAP_BLOCKS: u32 = 8; // 4096 bytes per y-band strip
+pub const TERRA_BLOCKS: u32 = 1; // 512 bytes per terra layer
 pub const IMAGE_BLOCKS_PER_GROUP: u32 = 40; // 5 planes × 8 blocks per tile group
 pub const IMAGE_GROUP_COUNT: u32 = 4;
 
@@ -19,9 +19,9 @@ pub const MAP_MEM_SIZE: usize = 16384;
 
 pub struct WorldData {
     pub sector_mem: Box<[u8; 32768]>,
-    pub map_mem:    Box<[u8; MAP_MEM_SIZE]>,
-    pub terra_mem:  Box<[u8; 1024]>,
-    pub image_mem:  Box<[u8; 81920]>,
+    pub map_mem: Box<[u8; MAP_MEM_SIZE]>,
+    pub terra_mem: Box<[u8; 1024]>,
+    pub image_mem: Box<[u8; 81920]>,
     pub region_num: u8,
 }
 
@@ -30,9 +30,9 @@ impl WorldData {
     pub fn empty() -> Self {
         WorldData {
             sector_mem: Box::new([0u8; 32768]),
-            map_mem:    Box::new([0u8; MAP_MEM_SIZE]),
-            terra_mem:  Box::new([0u8; 1024]),
-            image_mem:  Box::new([0u8; 81920]),
+            map_mem: Box::new([0u8; MAP_MEM_SIZE]),
+            terra_mem: Box::new([0u8; 1024]),
+            image_mem: Box::new([0u8; 81920]),
             region_num: 0,
         }
     }
@@ -58,9 +58,9 @@ impl WorldData {
         image_group_blocks: &[u32],
     ) -> Result<Self> {
         let mut sector_mem = Box::new([0u8; 32768]);
-        let mut map_mem    = Box::new([0u8; MAP_MEM_SIZE]);
-        let mut terra_mem  = Box::new([0u8; 1024]);
-        let mut image_mem  = Box::new([0u8; 81920]);
+        let mut map_mem = Box::new([0u8; MAP_MEM_SIZE]);
+        let mut terra_mem = Box::new([0u8; 1024]);
+        let mut image_mem = Box::new([0u8; 81920]);
 
         if let Ok(slice) = Self::try_load(adf, sector_block, SECTOR_BLOCKS) {
             sector_mem[..slice.len()].copy_from_slice(slice);
@@ -81,19 +81,33 @@ impl WorldData {
                 terra_mem[..slice.len().min(512)].copy_from_slice(&slice[..slice.len().min(512)]);
             }
         }
-        let t2 = if terra2_block > 0 { terra2_block } else { terra_block + 1 };
+        let t2 = if terra2_block > 0 {
+            terra2_block
+        } else {
+            terra_block + 1
+        };
         if let Ok(slice) = Self::try_load(adf, t2, TERRA_BLOCKS) {
-            terra_mem[512..512 + slice.len().min(512)].copy_from_slice(&slice[..slice.len().min(512)]);
+            terra_mem[512..512 + slice.len().min(512)]
+                .copy_from_slice(&slice[..slice.len().min(512)]);
         }
 
         // Load image groups. Each group = IMAGE_BLOCKS_PER_GROUP (40) consecutive ADF blocks.
         // Groups are packed consecutively in image_mem: group 0 at 0, group 1 at 20480, etc.
-        for (gi, &group_block) in image_group_blocks.iter().enumerate().take(IMAGE_GROUP_COUNT as usize) {
+        for (gi, &group_block) in image_group_blocks
+            .iter()
+            .enumerate()
+            .take(IMAGE_GROUP_COUNT as usize)
+        {
             let dest_base = gi * (IMAGE_BLOCKS_PER_GROUP as usize * 512);
             if let Ok(slice) = Self::try_load(adf, group_block, IMAGE_BLOCKS_PER_GROUP) {
                 if dest_base + slice.len() > image_mem.len() {
-                    eprintln!("world_data: image group {} exceeds buffer ({} + {} > {})",
-                              gi, dest_base, slice.len(), image_mem.len());
+                    eprintln!(
+                        "world_data: image group {} exceeds buffer ({} + {} > {})",
+                        gi,
+                        dest_base,
+                        slice.len(),
+                        image_mem.len()
+                    );
                     continue;
                 }
                 let dest = &mut image_mem[dest_base..dest_base + slice.len()];
@@ -101,7 +115,13 @@ impl WorldData {
             }
         }
 
-        Ok(WorldData { sector_mem, map_mem, terra_mem, image_mem, region_num })
+        Ok(WorldData {
+            sector_mem,
+            map_mem,
+            terra_mem,
+            image_mem,
+            region_num,
+        })
     }
 
     fn try_load(adf: &AdfDisk, f_block: u32, count: u32) -> Result<&[u8]> {

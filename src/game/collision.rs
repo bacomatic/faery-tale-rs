@@ -33,9 +33,15 @@ pub fn px_to_terrain_type(world: &WorldData, x: i32, y: i32) -> u8 {
 
     // Tile bitmask selector: from bits 3,3,4 of x,y,y (tested before coordinate shifts).
     let mut d4: u8 = 0x80;
-    if x & 0x08 != 0 { d4 >>= 4; }
-    if y & 0x08 != 0 { d4 >>= 1; }
-    if y & 0x10 != 0 { d4 >>= 2; }
+    if x & 0x08 != 0 {
+        d4 >>= 4;
+    }
+    if y & 0x08 != 0 {
+        d4 >>= 1;
+    }
+    if y & 0x10 != 0 {
+        d4 >>= 2;
+    }
 
     // Image tile coords: imx = x/16, imy = y/32.
     let imx = (x >> 4) as usize;
@@ -85,7 +91,7 @@ pub fn proxcheck(world: Option<&WorldData>, x: i32, y: i32) -> bool {
         None => return true,
     };
     let right_terrain = px_to_terrain_type(world, x + 4, y + 2);
-    let left_terrain  = px_to_terrain_type(world, x - 4, y + 2);
+    let left_terrain = px_to_terrain_type(world, x - 4, y + 2);
     !is_hard_block_right(right_terrain) && !is_hard_block_left(left_terrain)
 }
 
@@ -156,8 +162,12 @@ pub fn hero_proxcheck(world: Option<&WorldData>, x: i32, y: i32, has_crystal: bo
     };
     let mut rt = px_to_terrain_type(world, x + 4, y + 2);
     let mut lt = px_to_terrain_type(world, x - 4, y + 2);
-    if rt == 8 || rt == 9 || (has_crystal && rt == 12) { rt = 0; }
-    if lt == 8 || lt == 9 || (has_crystal && lt == 12) { lt = 0; }
+    if rt == 8 || rt == 9 || (has_crystal && rt == 12) {
+        rt = 0;
+    }
+    if lt == 8 || lt == 9 || (has_crystal && lt == 12) {
+        lt = 0;
+    }
     !is_hard_block_right(rt) && !is_hard_block_left(lt)
 }
 
@@ -185,10 +195,22 @@ pub struct TerrainProbe {
 pub fn terrain_probe(world: &WorldData, x: i32, y: i32) -> TerrainProbe {
     if x < 0 || y < 0 {
         return TerrainProbe {
-            x, y, d4: 0, imx: 0, imy: 0, xs: 0, ys: 0,
-            map_offset: 0, sec_num: 0, local_x: 0, local_y: 0,
-            sector_offset: 0, tile_idx: 0, terra_bytes: [0; 4],
-            tiles_and_d4: 0, terrain_type: 0,
+            x,
+            y,
+            d4: 0,
+            imx: 0,
+            imy: 0,
+            xs: 0,
+            ys: 0,
+            map_offset: 0,
+            sec_num: 0,
+            local_x: 0,
+            local_y: 0,
+            sector_offset: 0,
+            tile_idx: 0,
+            terra_bytes: [0; 4],
+            tiles_and_d4: 0,
+            terrain_type: 0,
         };
     }
 
@@ -196,17 +218,35 @@ pub fn terrain_probe(world: &WorldData, x: i32, y: i32) -> TerrainProbe {
     let y = if world.region_num >= 8 { y - 0x8000 } else { y };
     if y < 0 {
         return TerrainProbe {
-            x, y, d4: 0, imx: 0, imy: 0, xs: 0, ys: 0,
-            map_offset: 0, sec_num: 0, local_x: 0, local_y: 0,
-            sector_offset: 0, tile_idx: 0, terra_bytes: [0; 4],
-            tiles_and_d4: 0, terrain_type: 0,
+            x,
+            y,
+            d4: 0,
+            imx: 0,
+            imy: 0,
+            xs: 0,
+            ys: 0,
+            map_offset: 0,
+            sec_num: 0,
+            local_x: 0,
+            local_y: 0,
+            sector_offset: 0,
+            tile_idx: 0,
+            terra_bytes: [0; 4],
+            tiles_and_d4: 0,
+            terrain_type: 0,
         };
     }
 
     let mut d4: u8 = 0x80;
-    if x & 0x08 != 0 { d4 >>= 4; }
-    if y & 0x08 != 0 { d4 >>= 1; }
-    if y & 0x10 != 0 { d4 >>= 2; }
+    if x & 0x08 != 0 {
+        d4 >>= 4;
+    }
+    if y & 0x08 != 0 {
+        d4 >>= 1;
+    }
+    if y & 0x10 != 0 {
+        d4 >>= 2;
+    }
 
     let imx = (x >> 4) as usize;
     let imy = (y >> 5) as usize;
@@ -222,19 +262,40 @@ pub fn terrain_probe(world: &WorldData, x: i32, y: i32) -> TerrainProbe {
 
     let base = (tile_idx as usize) * 4;
     let terra_bytes = if base + 3 < world.terra_mem.len() {
-        [world.terra_mem[base], world.terra_mem[base+1],
-         world.terra_mem[base+2], world.terra_mem[base+3]]
+        [
+            world.terra_mem[base],
+            world.terra_mem[base + 1],
+            world.terra_mem[base + 2],
+            world.terra_mem[base + 3],
+        ]
     } else {
         [0; 4]
     };
 
     let tiles_and_d4 = terra_bytes[2] & d4;
-    let terrain_type = if tiles_and_d4 == 0 { 0 } else { (terra_bytes[1] >> 4) & 0xF };
+    let terrain_type = if tiles_and_d4 == 0 {
+        0
+    } else {
+        (terra_bytes[1] >> 4) & 0xF
+    };
 
     TerrainProbe {
-        x, y, d4, imx, imy, xs, ys, map_offset, sec_num,
-        local_x, local_y, sector_offset, tile_idx, terra_bytes,
-        tiles_and_d4, terrain_type,
+        x,
+        y,
+        d4,
+        imx,
+        imy,
+        xs,
+        ys,
+        map_offset,
+        sec_num,
+        local_x,
+        local_y,
+        sector_offset,
+        tile_idx,
+        terra_bytes,
+        tiles_and_d4,
+        terrain_type,
     }
 }
 
@@ -399,9 +460,9 @@ mod actor_collision_tests {
     #[test]
     fn test_actor_collides_negative_direction() {
         let others = vec![(100i32, 100i32)];
-        assert!(actor_collides(90, 92, &others));   // dx=-10, dy=-8
-        assert!(!actor_collides(89, 100, &others));  // dx=-11 — outside
-        assert!(!actor_collides(100, 91, &others));  // dy=-9 — outside
+        assert!(actor_collides(90, 92, &others)); // dx=-10, dy=-8
+        assert!(!actor_collides(89, 100, &others)); // dx=-11 — outside
+        assert!(!actor_collides(100, 91, &others)); // dy=-9 — outside
     }
 
     #[test]

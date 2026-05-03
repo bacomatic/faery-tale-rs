@@ -111,9 +111,15 @@ impl MessageQueue {
         self.lines.last().map(|s| s.as_str())
     }
 
-    pub fn is_empty(&self) -> bool { self.lines.is_empty() }
-    pub fn len(&self) -> usize { self.lines.len() }
-    pub fn clear(&mut self) { self.lines.clear(); }
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
+    pub fn clear(&mut self) {
+        self.lines.clear();
+    }
 
     fn apply_substitution<'a>(&self, msg: &'a str) -> Cow<'a, str> {
         match self.substitution.as_deref() {
@@ -163,7 +169,9 @@ fn truncate_line(text: &str) -> String {
 }
 
 impl Default for MessageQueue {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -191,14 +199,16 @@ mod tests {
     #[test]
     fn test_push_wrapped_splits_long_message() {
         let mut q = MessageQueue::new();
-        q.push_wrapped(
-            "Julian started the journey in his home village of Tambry."
-        );
+        q.push_wrapped("Julian started the journey in his home village of Tambry.");
         // Should be split into two lines, both <= 40 chars
         assert_eq!(q.len(), 2);
         for msg in q.iter() {
-            assert!(msg.chars().count() <= MSG_LINE_MAX,
-                "line too long: {:?} ({})", msg, msg.chars().count());
+            assert!(
+                msg.chars().count() <= MSG_LINE_MAX,
+                "line too long: {:?} ({})",
+                msg,
+                msg.chars().count()
+            );
         }
     }
 
@@ -212,7 +222,10 @@ mod tests {
 
     #[test]
     fn test_wrap_words() {
-        let lines = wrap_words("Julian started the journey in his home village of Tambry.", 40);
+        let lines = wrap_words(
+            "Julian started the journey in his home village of Tambry.",
+            40,
+        );
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], "Julian started the journey in his home");
         assert_eq!(lines[1], "village of Tambry.");

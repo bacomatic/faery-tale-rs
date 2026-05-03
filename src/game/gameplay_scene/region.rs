@@ -7,7 +7,8 @@ impl GameplayScene {
     /// Called when the hero transitions to a new region.
     /// Reloads world data and NPC table for the new region (npc-101, world-110).
     pub(crate) fn on_region_changed(&mut self, region: u8, game_lib: &GameLibrary) {
-        self.log_buffer.push(format!("on_region_changed: region changed to {}", region));
+        self.log_buffer
+            .push(format!("on_region_changed: region changed to {}", region));
         // Reset door interaction state: all opened doors and the locked-message dedup.
         self.opened_doors.clear();
         self.bumped_door = None;
@@ -15,7 +16,10 @@ impl GameplayScene {
         // Idempotent — populates all regions on first call, preserves
         // pickup/visibility state on subsequent transitions.
         self.state.populate_world_objects(game_lib);
-        self.log_buffer.push(format!("on_region_changed: {} world objects loaded", self.state.world_objects.len()));
+        self.log_buffer.push(format!(
+            "on_region_changed: {} world objects loaded",
+            self.state.world_objects.len()
+        ));
         if let Some(ref adf) = self.adf {
             let world_result = if let Some(cfg) = game_lib.find_region_config(region) {
                 let map_blocks: Vec<u32> = if region < 8 {
@@ -24,9 +28,12 @@ impl GameplayScene {
                     vec![cfg.map_block]
                 };
                 crate::game::world_data::WorldData::load(
-                    adf, region,
-                    cfg.sector_block, &map_blocks,
-                    cfg.terra_block, cfg.terra2_block,
+                    adf,
+                    region,
+                    cfg.sector_block,
+                    &map_blocks,
+                    cfg.terra_block,
+                    cfg.terra2_block,
                     &cfg.image_blocks,
                 )
             } else {
@@ -46,7 +53,8 @@ impl GameplayScene {
                                 world.map_mem[offset + 1] = 254;
                                 world.map_mem[offset + 2] = 254;
                                 world.map_mem[offset + 3] = 254;
-                                self.log_buffer.push("Azal city entrance blocked (statues < 5)".to_string());
+                                self.log_buffer
+                                    .push("Azal city entrance blocked (statues < 5)".to_string());
                             }
                         }
                     }
@@ -56,18 +64,28 @@ impl GameplayScene {
                     self.palette_dirty = true; // force recompute next cadence tick
                     self.map_renderer = Some(MapRenderer::new(&world, self.shadow_mem.clone()));
                     self.map_world = Some(world);
-                    self.log_buffer.push(format!("on_region_changed: world reloaded for region {}", region));
+                    self.log_buffer.push(format!(
+                        "on_region_changed: world reloaded for region {}",
+                        region
+                    ));
                 }
-                Err(e) => self.log_buffer.push(format!("on_region_changed: WorldData::load failed: {e}")),
+                Err(e) => self
+                    .log_buffer
+                    .push(format!("on_region_changed: WorldData::load failed: {e}")),
             }
             self.npc_table = Some(crate::game::npc::NpcTable::load(adf, region));
-            self.log_buffer.push(format!("on_region_changed: NPC table loaded for region {}", region));
+            self.log_buffer.push(format!(
+                "on_region_changed: NPC table loaded for region {}",
+                region
+            ));
         }
     }
 
     /// Collect the four y-band map_block values for the full overworld map (regions 0,2,4,6).
     /// All outdoor region pairs share a map file per y-band (F1/F2 share 160, F3/F4 share 168…).
-    pub(crate) fn outdoor_map_blocks(game_lib: &crate::game::game_library::GameLibrary) -> Vec<u32> {
+    pub(crate) fn outdoor_map_blocks(
+        game_lib: &crate::game::game_library::GameLibrary,
+    ) -> Vec<u32> {
         [0u8, 2, 4, 6]
             .iter()
             .filter_map(|&r| game_lib.find_region_config(r))
@@ -97,7 +115,10 @@ impl GameplayScene {
     ///   - region 4 (desert):        0x0980
     ///   - region 9 (dungeons/caves): 0x0445
     ///   - all other regions:         0x0bdf  (already the default in pagecolors)
-    pub(crate) fn region_palette(game_lib: &GameLibrary, region: u8) -> crate::game::palette::Palette {
+    pub(crate) fn region_palette(
+        game_lib: &GameLibrary,
+        region: u8,
+    ) -> crate::game::palette::Palette {
         use crate::game::palette::{amiga_color_to_rgba, PALETTE_SIZE};
         let mut palette = [0xFF808080_u32; PALETTE_SIZE];
         if let Some(base) = game_lib.find_palette("pagecolors") {
@@ -165,9 +186,9 @@ impl GameplayScene {
             }
             // SPEC §17.6: color 31 (sky) override for all indoor cases.
             pal[31] = amiga_color_to_rgba(match (region_num, secret_active) {
-                (9, true)  => 0x00f0, // secret area active: bright green
+                (9, true) => 0x00f0,  // secret area active: bright green
                 (9, false) => 0x0445, // dungeon normal: dark grey-blue
-                _          => 0x0bdf, // other indoor regions: light blue
+                _ => 0x0bdf,          // other indoor regions: light blue
             });
             return pal;
         }
@@ -178,9 +199,8 @@ impl GameplayScene {
         let g_pct = (ll - 61) as i16;
         let b_pct = (ll - 62) as i16;
 
-        let faded = crate::game::palette_fader::fade_page(
-            r_pct, g_pct, b_pct, true, light_on, base,
-        );
+        let faded =
+            crate::game::palette_fader::fade_page(r_pct, g_pct, b_pct, true, light_on, base);
 
         // Convert colors::Palette (RGB4) → [u32; 32] (ARGB8888).
         let mut out = [0xFF808080_u32; PALETTE_SIZE];
@@ -217,20 +237,48 @@ impl GameplayScene {
         // Ideal camera origin, wrapped into [0, WRAP).
         let ideal_x = (hero_x as i32 - CX).rem_euclid(WRAP);
         // Shortest-path signed delta in (-WRAP/2, WRAP/2].
-        let dx = { let d = (ideal_x - map_x as i32).rem_euclid(WRAP); if d > WRAP/2 { d - WRAP } else { d } };
-        let new_map_x = (if dx > 70       { ideal_x - 70 }
-                         else if dx < -70 { ideal_x + 70 }
-                         else if dx > 20  { map_x as i32 + 1 }
-                         else if dx < -20 { map_x as i32 - 1 }
-                         else             { map_x as i32 }).rem_euclid(WRAP);
+        let dx = {
+            let d = (ideal_x - map_x as i32).rem_euclid(WRAP);
+            if d > WRAP / 2 {
+                d - WRAP
+            } else {
+                d
+            }
+        };
+        let new_map_x = (if dx > 70 {
+            ideal_x - 70
+        } else if dx < -70 {
+            ideal_x + 70
+        } else if dx > 20 {
+            map_x as i32 + 1
+        } else if dx < -20 {
+            map_x as i32 - 1
+        } else {
+            map_x as i32
+        })
+        .rem_euclid(WRAP);
 
         let ideal_y = (hero_y as i32 - CY).rem_euclid(WRAP);
-        let dy = { let d = (ideal_y - map_y as i32).rem_euclid(WRAP); if d > WRAP/2 { d - WRAP } else { d } };
-        let new_map_y = (if dy > 44       { ideal_y - 44 }
-                         else if dy < -24 { ideal_y + 24 }
-                         else if dy > 10  { map_y as i32 + 1 }
-                         else if dy < -10 { map_y as i32 - 1 }
-                         else             { map_y as i32 }).rem_euclid(WRAP);
+        let dy = {
+            let d = (ideal_y - map_y as i32).rem_euclid(WRAP);
+            if d > WRAP / 2 {
+                d - WRAP
+            } else {
+                d
+            }
+        };
+        let new_map_y = (if dy > 44 {
+            ideal_y - 44
+        } else if dy < -24 {
+            ideal_y + 24
+        } else if dy > 10 {
+            map_y as i32 + 1
+        } else if dy < -10 {
+            map_y as i32 - 1
+        } else {
+            map_y as i32
+        })
+        .rem_euclid(WRAP);
 
         (new_map_x as u16, new_map_y as u16)
     }
@@ -244,7 +292,14 @@ impl GameplayScene {
         Self::actor_rel_pos_offset(abs_x, abs_y, map_x, map_y, -16, -16)
     }
 
-    pub(crate) fn actor_rel_pos_offset(abs_x: u16, abs_y: u16, map_x: u16, map_y: u16, ox: i32, oy: i32) -> (i32, i32) {
+    pub(crate) fn actor_rel_pos_offset(
+        abs_x: u16,
+        abs_y: u16,
+        map_x: u16,
+        map_y: u16,
+        ox: i32,
+        oy: i32,
+    ) -> (i32, i32) {
         const WRAP: i32 = 0x8000;
         let dx = (abs_x as i32 - map_x as i32 + ox).rem_euclid(WRAP);
         let rel_x = if dx > WRAP / 2 { dx - WRAP } else { dx };

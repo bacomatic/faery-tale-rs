@@ -21,13 +21,13 @@ use crate::game::npc::{Npc, RACE_SHOPKEEPER};
 /// Slot 1 (Arrow) uses `inv_list` index `8` as a second sentinel: arrows
 /// are granted in ten-shot bundles (`stuff[8] += 10`) with `event(23)`.
 pub const JTRANS: [(usize, i16); 7] = [
-    (0,   3),  // slot 0 — Food   (sentinel → eat(50) + event(22))
-    (8,  10),  // slot 1 — Arrow  (sentinel → stuff[8] += 10 + event(23))
-    (11, 15),  // slot 2 — Glass Vial
-    (1,  30),  // slot 3 — Mace
-    (2,  45),  // slot 4 — Sword
-    (3,  75),  // slot 5 — Bow
-    (13, 20),  // slot 6 — Bird Totem
+    (0, 3),   // slot 0 — Food   (sentinel → eat(50) + event(22))
+    (8, 10),  // slot 1 — Arrow  (sentinel → stuff[8] += 10 + event(23))
+    (11, 15), // slot 2 — Glass Vial
+    (1, 30),  // slot 3 — Mace
+    (2, 45),  // slot 4 — Sword
+    (3, 75),  // slot 5 — Bow
+    (13, 20), // slot 6 — Bird Totem
 ];
 
 /// Side-effect classification for a successful purchase.  Mirrors the

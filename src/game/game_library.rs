@@ -1,17 +1,15 @@
-
 use crate::game::{
     bitmap::BitMap,
-    placard::Placard, cursor::CursorAsset, font::{DiskFont, FontAsset}, colors::Palette, iff_image::{IffImage, ImageAsset}
+    colors::Palette,
+    cursor::CursorAsset,
+    font::{DiskFont, FontAsset},
+    iff_image::{IffImage, ImageAsset},
+    placard::Placard,
 };
 
 use serde::Deserialize;
 
-use std::{
-    collections::HashMap,
-    error::Error,
-    fs,
-    path::Path
-};
+use std::{collections::HashMap, error::Error, fs, path::Path};
 
 /*
  * GameLibrary contains all the information needed in the game.
@@ -26,29 +24,29 @@ use std::{
 #[derive(Deserialize, Debug)]
 pub struct CopyProtectQuestion {
     pub question: String,
-    pub answer: String
+    pub answer: String,
 }
 
 /// A named point-of-interest on the world map (village, landmark, etc.).
 /// Expandable: add new entries to [[locations]] in faery.toml as POIs are decoded.
 #[derive(Deserialize, Debug, Clone)]
 pub struct LocationConfig {
-    pub name:   String,
-    pub x:      u16,
-    pub y:      u16,
+    pub name: String,
+    pub x: u16,
+    pub y: u16,
     pub region: u8,
 }
 
 /// Per-brother starting attributes (mirrors blist[] from fmain.c).
 #[derive(Deserialize, Debug, Clone)]
 pub struct BrotherConfig {
-    pub name:   String,
-    pub brave:  i16,
-    pub luck:   i16,
-    pub kind:   i16,
+    pub name: String,
+    pub brave: i16,
+    pub luck: i16,
+    pub kind: i16,
     pub wealth: i16,
     /// Location name where this brother spawns at start and on revive.
-    pub spawn:  String,
+    pub spawn: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -69,26 +67,26 @@ pub struct ObjectConfig {
 #[derive(Deserialize, Debug)]
 pub struct DoorConfig {
     pub src_region: u8,
-    pub src_x:      u16,
-    pub src_y:      u16,
+    pub src_x: u16,
+    pub src_y: u16,
     pub dst_region: u8,
-    pub dst_x:      u16,
-    pub dst_y:      u16,
+    pub dst_x: u16,
+    pub dst_y: u16,
     #[serde(default)]
-    pub door_type:  u8,
+    pub door_type: u8,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ZoneConfig {
-    pub label:  String,
-    pub etype:  u8,
-    pub x1:     u16,
-    pub y1:     u16,
-    pub x2:     u16,
-    pub y2:     u16,
-    pub v1:     u8,
-    pub v2:     u8,
-    pub v3:     u8,
+    pub label: String,
+    pub etype: u8,
+    pub x1: u16,
+    pub y1: u16,
+    pub x2: u16,
+    pub y2: u16,
+    pub v1: u8,
+    pub v2: u8,
+    pub v3: u8,
 }
 
 #[derive(Debug, Deserialize)]
@@ -302,7 +300,11 @@ impl GameLibrary {
 
     // region block config
     pub fn find_region_config(&self, region_num: u8) -> Option<&RegionBlockConfig> {
-        self.world.as_ref()?.region.iter().find(|r| r.id == region_num)
+        self.world
+            .as_ref()?
+            .region
+            .iter()
+            .find(|r| r.id == region_num)
     }
 
     // locations
@@ -323,7 +325,8 @@ impl GameLibrary {
     /// Returns all objects for a given region (both global objects with region=255
     /// and region-specific objects).
     pub fn objects_for_region(&self, region: u8) -> Vec<&ObjectConfig> {
-        self.objects.iter()
+        self.objects
+            .iter()
             .filter(|o| o.region == region || o.region == 255)
             .collect()
     }
@@ -350,8 +353,8 @@ mod tests {
     use super::*;
 
     fn load_library() -> GameLibrary {
-        let config = fs::read_to_string("faery.toml")
-            .expect("faery.toml should exist in the project root");
+        let config =
+            fs::read_to_string("faery.toml").expect("faery.toml should exist in the project root");
         toml::from_str::<GameLibrary>(&config)
             .expect("faery.toml should deserialize into GameLibrary without errors")
     }
@@ -369,8 +372,13 @@ mod tests {
         let r3 = lib.objects_for_region(3);
         // Region 3 should have ground items (CHEST at 19298,16128 etc.) + globals
         assert!(!r3.is_empty(), "region 3 should have objects");
-        let chest = r3.iter().find(|o| o.ob_id == 15 && o.x == 19298 && o.y == 16128);
-        assert!(chest.is_some(), "region 3 should have the starting chest at (19298, 16128)");
+        let chest = r3
+            .iter()
+            .find(|o| o.ob_id == 15 && o.x == 19298 && o.y == 16128);
+        assert!(
+            chest.is_some(),
+            "region 3 should have the starting chest at (19298, 16128)"
+        );
     }
 
     #[test]

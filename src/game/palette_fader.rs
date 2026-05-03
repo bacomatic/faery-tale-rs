@@ -1,4 +1,3 @@
-
 use crate::game::colors::{Palette, RGB4};
 
 /// Scale an RGBA32 palette by a lightlevel percentage (0–100).
@@ -16,8 +15,8 @@ pub fn apply_lightlevel_dim(
     let mut out = [0u32; crate::game::palette::PALETTE_SIZE];
     for (i, &c) in palette.iter().enumerate() {
         let r = (c >> 16 & 0xFF) * pct / 100;
-        let g = (c >> 8  & 0xFF) * pct / 100;
-        let b = (c        & 0xFF) * pct / 100;
+        let g = (c >> 8 & 0xFF) * pct / 100;
+        let b = (c & 0xFF) * pct / 100;
         out[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
     }
     out
@@ -158,7 +157,9 @@ impl FadeController {
         duration_ticks: u32,
     ) -> FadeController {
         FadeController {
-            source: Palette { colors: source.colors.clone() },
+            source: Palette {
+                colors: source.colors.clone(),
+            },
             from_rgb,
             to_rgb,
             limit,
@@ -172,13 +173,27 @@ impl FadeController {
     /// Equivalent to the original `fade_down()`: 21 steps with Delay(1) each.
     /// At 30Hz, 24 ticks ≈ 0.8s.
     pub fn fade_down(source: &Palette, duration_ticks: u32) -> FadeController {
-        FadeController::new(source, (100, 100, 100), (0, 0, 0), false, false, duration_ticks)
+        FadeController::new(
+            source,
+            (100, 100, 100),
+            (0, 0, 0),
+            false,
+            false,
+            duration_ticks,
+        )
     }
 
     /// Create a uniform fade from black to full brightness (0 → 100 on all channels).
     /// Equivalent to the original `fade_normal()`.
     pub fn fade_normal(source: &Palette, duration_ticks: u32) -> FadeController {
-        FadeController::new(source, (0, 0, 0), (100, 100, 100), false, false, duration_ticks)
+        FadeController::new(
+            source,
+            (0, 0, 0),
+            (100, 100, 100),
+            false,
+            false,
+            duration_ticks,
+        )
     }
 
     /// Compute the fade percentages for a given zoom half-width value.
@@ -255,7 +270,14 @@ impl FadeController {
             FadeResult::ColorMod(mod_val, mod_val, mod_val)
         } else {
             // Non-uniform — compute full palette
-            FadeResult::PaletteUpdate(fade_page(r, g, b, self.limit, self.light_timer, &self.source))
+            FadeResult::PaletteUpdate(fade_page(
+                r,
+                g,
+                b,
+                self.limit,
+                self.light_timer,
+                &self.source,
+            ))
         }
     }
 
@@ -361,7 +383,9 @@ fn lerp_rgb4(from: &RGB4, to: &RGB4, t: f32) -> RGB4 {
     let g = (fg + (tg - fg) * t).round() as u16;
     let b = (fb + (tb - fb) * t).round() as u16;
 
-    RGB4 { color: (r << 8) | (g << 4) | b }
+    RGB4 {
+        color: (r << 8) | (g << 4) | b,
+    }
 }
 
 #[cfg(test)]
@@ -417,7 +441,10 @@ mod tests {
         let g = (result.colors[0].color & 0x0F0) >> 4;
         let b = result.colors[0].color & 0x00F;
         assert!(r >= 1, "Red should be at least 1 with night floor on white");
-        assert!(g >= 3, "Green should be at least 3 with night floor on white");
+        assert!(
+            g >= 3,
+            "Green should be at least 3 with night floor on white"
+        );
         assert!(b >= 5, "Blue should be boosted with night tint on white");
     }
 
@@ -436,7 +463,11 @@ mod tests {
         // g2 = (100-40)/3 = 20, g1 = (40 * 0x90) / 1600 = (40*144)/1600 = 3
         // b1 = (20*3)/100 = 0, +2 boost = 2
         let b16 = result.colors[16].color & 0x00F;
-        assert!(b16 >= 2, "Vegetation index 16 should get blue boost at partial darkness, got {}", b16);
+        assert!(
+            b16 >= 2,
+            "Vegetation index 16 should get blue boost at partial darkness, got {}",
+            b16
+        );
     }
 
     // Helper: fade a palette of `n` all-black (0x000) entries with the given
@@ -486,10 +517,26 @@ mod tests {
     fn test_veg_boost_index_boundary() {
         // Use g=40 so we're firmly in the +2 range; 26 entries to cover 15–25.
         let g = 40;
-        assert_eq!(veg_blue(26, 15, 50, g, 50), 0, "index 15 must NOT be boosted");
-        assert_eq!(veg_blue(26, 16, 50, g, 50), 2, "index 16 must be boosted +2");
-        assert_eq!(veg_blue(26, 24, 50, g, 50), 2, "index 24 must be boosted +2");
-        assert_eq!(veg_blue(26, 25, 50, g, 50), 0, "index 25 must NOT be boosted");
+        assert_eq!(
+            veg_blue(26, 15, 50, g, 50),
+            0,
+            "index 15 must NOT be boosted"
+        );
+        assert_eq!(
+            veg_blue(26, 16, 50, g, 50),
+            2,
+            "index 16 must be boosted +2"
+        );
+        assert_eq!(
+            veg_blue(26, 24, 50, g, 50),
+            2,
+            "index 24 must be boosted +2"
+        );
+        assert_eq!(
+            veg_blue(26, 25, 50, g, 50),
+            0,
+            "index 25 must NOT be boosted"
+        );
     }
 
     /// SPEC §17: vegetation boost is only active when limit=true (night mode).
@@ -500,7 +547,10 @@ mod tests {
         // g=40 would trigger +2 if limit=true, but limit=false disables it.
         let result = fade_page(50, 40, 50, false, false, &palette);
         let b = result.colors[16].color & 0x00F;
-        assert_eq!(b, 0, "No vegetation boost when limit=false (not night mode)");
+        assert_eq!(
+            b, 0,
+            "No vegetation boost when limit=false (not night mode)"
+        );
     }
 
     #[test]
@@ -516,7 +566,12 @@ mod tests {
 
         let no_r = (no_light.colors[0].color & 0xF00) >> 8;
         let with_r = (with_light.colors[0].color & 0xF00) >> 8;
-        assert!(with_r > no_r, "Light timer should boost red: {} > {}", with_r, no_r);
+        assert!(
+            with_r > no_r,
+            "Light timer should boost red: {} > {}",
+            with_r,
+            no_r
+        );
     }
 
     #[test]
@@ -654,8 +709,12 @@ mod tests {
 
     #[test]
     fn test_palette_fader_basic() {
-        let from = Palette { colors: vec![RGB4 { color: 0x000 }, RGB4 { color: 0xFFF }] };
-        let to = Palette { colors: vec![RGB4 { color: 0xFFF }, RGB4 { color: 0x000 }] };
+        let from = Palette {
+            colors: vec![RGB4 { color: 0x000 }, RGB4 { color: 0xFFF }],
+        };
+        let to = Palette {
+            colors: vec![RGB4 { color: 0xFFF }, RGB4 { color: 0x000 }],
+        };
 
         let mut fader = PaletteFader::new(&from, &to, 10);
         assert!(!fader.is_done());
@@ -674,8 +733,12 @@ mod tests {
 
     #[test]
     fn test_palette_fader_reverse() {
-        let from = Palette { colors: vec![RGB4 { color: 0x000 }] };
-        let to = Palette { colors: vec![RGB4 { color: 0xFFF }] };
+        let from = Palette {
+            colors: vec![RGB4 { color: 0x000 }],
+        };
+        let to = Palette {
+            colors: vec![RGB4 { color: 0xFFF }],
+        };
 
         let mut fader = PaletteFader::new(&from, &to, 10);
         fader.tick(10);

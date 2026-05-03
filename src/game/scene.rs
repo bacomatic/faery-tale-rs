@@ -1,4 +1,3 @@
-
 use std::any::Any;
 use std::collections::HashMap;
 
@@ -51,12 +50,17 @@ pub struct SceneResources<'a, 'tex> {
 impl<'a, 'tex> SceneResources<'a, 'tex> {
     /// Look up an image texture by its name (as defined in faery.toml).
     pub fn find_image(&self, name: &str) -> Option<&ImageTexture<'tex>> {
-        self.image_name_map.get(name).map(|&idx| &self.image_textures[idx])
+        self.image_name_map
+            .get(name)
+            .map(|&idx| &self.image_textures[idx])
     }
 
     /// Look up a mutable image texture by name, for palette re-rasterization.
     pub fn find_image_mut(&mut self, name: &str) -> Option<&mut ImageTexture<'tex>> {
-        self.image_name_map.get(name).copied().map(move |idx| &mut self.image_textures[idx])
+        self.image_name_map
+            .get(name)
+            .copied()
+            .map(move |idx| &mut self.image_textures[idx])
     }
 }
 

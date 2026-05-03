@@ -5,8 +5,8 @@ use super::*;
 
 impl GameplayScene {
     pub(crate) fn update_turtle_autonomous(&mut self) {
-        use crate::game::game_state::CARRIER_TURTLE;
         use crate::game::collision::{newx, newy, px_to_terrain_type};
+        use crate::game::game_state::CARRIER_TURTLE;
 
         if self.state.wcarry != 3
             || self.state.riding == 5

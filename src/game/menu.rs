@@ -16,14 +16,14 @@ pub const LABELB: &str = "  A    B    C    D    E    F    G    H  ";
 pub enum MenuMode {
     Items = 0,
     Magic = 1,
-    Talk  = 2,
-    Buy   = 3,
-    Game  = 4,
+    Talk = 2,
+    Buy = 3,
+    Game = 4,
     SaveX = 5,
-    Keys  = 6,
-    Give  = 7,
-    Use   = 8,
-    File  = 9,
+    Keys = 6,
+    Give = 7,
+    Use = 8,
+    File = 9,
 }
 
 impl From<usize> for MenuMode {
@@ -46,10 +46,10 @@ impl From<usize> for MenuMode {
 
 // bit0 = selected/on, bit1 = displayed/visible, bits 2-7 = action type
 pub const TYPE_MASK: u8 = 0xFC;
-pub const TYPE_TAB: u8 = 0;       // not changeable (tab header)
-pub const TYPE_TOGGLE: u8 = 4;    // click flips bit0
+pub const TYPE_TAB: u8 = 0; // not changeable (tab header)
+pub const TYPE_TOGGLE: u8 = 4; // click flips bit0
 pub const TYPE_IMMEDIATE: u8 = 8; // fire on click
-pub const TYPE_RADIO: u8 = 12;    // radio button
+pub const TYPE_RADIO: u8 = 12; // radio button
 pub const FLAG_SELECTED: u8 = 1;
 pub const FLAG_DISPLAYED: u8 = 2;
 
@@ -65,10 +65,10 @@ pub struct MenuDef {
 
 pub struct ButtonRender {
     pub display_slot: usize,
-    pub menu_index: i8,   // -1 = empty slot
-    pub text: String,     // 5 chars (padded)
-    pub fg_color: u8,     // textcolors palette index (0=black, 1=white)
-    pub bg_color: u8,     // textcolors palette index
+    pub menu_index: i8, // -1 = empty slot
+    pub text: String,   // 5 chars (padded)
+    pub fg_color: u8,   // textcolors palette index (0=black, 1=white)
+    pub bg_color: u8,   // textcolors palette index
 }
 
 pub enum MenuAction {
@@ -104,26 +104,44 @@ pub enum MenuAction {
 
 // (key_char, menu_mode, menu_slot) — fmain.c:579-589
 pub const LETTER_LIST: &[(u8, MenuMode, u8)] = &[
-    (b'I', MenuMode::Items, 5),  (b'T', MenuMode::Items, 6),
-    (b'?', MenuMode::Items, 7),  (b'U', MenuMode::Items, 8),
-    (b'G', MenuMode::Items, 9),  (b'Y', MenuMode::Talk,  5),
-    (b'S', MenuMode::Talk,  6),  (b'A', MenuMode::Talk,  7),
-    (b' ', MenuMode::Game,  5),  (b'M', MenuMode::Game,  6),
-    (b'F', MenuMode::Game,  7),  (b'Q', MenuMode::Game,  8),
-    (b'L', MenuMode::Game,  9),  (b'O', MenuMode::Buy,   5),
-    (b'R', MenuMode::Buy,   6),  (b'8', MenuMode::Buy,   7),
-    (b'C', MenuMode::Buy,   8),  (b'W', MenuMode::Buy,   9),
-    (b'B', MenuMode::Buy,  10),  (b'E', MenuMode::Buy,  11),
-    (b'V', MenuMode::SaveX, 5),  (b'X', MenuMode::SaveX, 6),
+    (b'I', MenuMode::Items, 5),
+    (b'T', MenuMode::Items, 6),
+    (b'?', MenuMode::Items, 7),
+    (b'U', MenuMode::Items, 8),
+    (b'G', MenuMode::Items, 9),
+    (b'Y', MenuMode::Talk, 5),
+    (b'S', MenuMode::Talk, 6),
+    (b'A', MenuMode::Talk, 7),
+    (b' ', MenuMode::Game, 5),
+    (b'M', MenuMode::Game, 6),
+    (b'F', MenuMode::Game, 7),
+    (b'Q', MenuMode::Game, 8),
+    (b'L', MenuMode::Game, 9),
+    (b'O', MenuMode::Buy, 5),
+    (b'R', MenuMode::Buy, 6),
+    (b'8', MenuMode::Buy, 7),
+    (b'C', MenuMode::Buy, 8),
+    (b'W', MenuMode::Buy, 9),
+    (b'B', MenuMode::Buy, 10),
+    (b'E', MenuMode::Buy, 11),
+    (b'V', MenuMode::SaveX, 5),
+    (b'X', MenuMode::SaveX, 6),
     // F1-F7 → MAGIC slots 5-11 (fmain.c:537-547, key codes 10-16)
-    (10, MenuMode::Magic,  5),   (11, MenuMode::Magic,  6),
-    (12, MenuMode::Magic,  7),   (13, MenuMode::Magic,  8),
-    (14, MenuMode::Magic,  9),   (15, MenuMode::Magic, 10),
+    (10, MenuMode::Magic, 5),
+    (11, MenuMode::Magic, 6),
+    (12, MenuMode::Magic, 7),
+    (13, MenuMode::Magic, 8),
+    (14, MenuMode::Magic, 9),
+    (15, MenuMode::Magic, 10),
     (16, MenuMode::Magic, 11),
-    (b'1', MenuMode::Use,   0),  (b'2', MenuMode::Use,   1),
-    (b'3', MenuMode::Use,   2),  (b'4', MenuMode::Use,   3),
-    (b'5', MenuMode::Use,   4),  (b'6', MenuMode::Use,   5),
-    (b'7', MenuMode::Use,   6),  (b'K', MenuMode::Use,   7),
+    (b'1', MenuMode::Use, 0),
+    (b'2', MenuMode::Use, 1),
+    (b'3', MenuMode::Use, 2),
+    (b'4', MenuMode::Use, 3),
+    (b'5', MenuMode::Use, 4),
+    (b'6', MenuMode::Use, 5),
+    (b'7', MenuMode::Use, 6),
+    (b'K', MenuMode::Use, 7),
 ];
 
 pub struct MenuState {
@@ -143,42 +161,86 @@ impl MenuState {
             save_pending: false,
             menus: [
                 // ITEMS
-                MenuDef { labels: LABEL2, num: 10, color: 6,
-                    enabled: [3,2,2,2,2, 10,10,10,10,10, 0, 0] },
+                MenuDef {
+                    labels: LABEL2,
+                    num: 10,
+                    color: 6,
+                    enabled: [3, 2, 2, 2, 2, 10, 10, 10, 10, 10, 0, 0],
+                },
                 // MAGIC
-                MenuDef { labels: LABEL6, num: 12, color: 5,
-                    enabled: [2,3,2,2,2, 8, 8, 8, 8, 8, 8, 8] },
+                MenuDef {
+                    labels: LABEL6,
+                    num: 12,
+                    color: 5,
+                    enabled: [2, 3, 2, 2, 2, 8, 8, 8, 8, 8, 8, 8],
+                },
                 // TALK
-                MenuDef { labels: LABEL3, num: 8,  color: 9,
-                    enabled: [2,2,3,2,2, 10,10,10, 0, 0, 0, 0] },
+                MenuDef {
+                    labels: LABEL3,
+                    num: 8,
+                    color: 9,
+                    enabled: [2, 2, 3, 2, 2, 10, 10, 10, 0, 0, 0, 0],
+                },
                 // BUY
-                MenuDef { labels: LABEL5, num: 12, color: 10,
-                    enabled: [2,2,2,3,2, 10,10,10,10,10,10,10] },
+                MenuDef {
+                    labels: LABEL5,
+                    num: 12,
+                    color: 10,
+                    enabled: [2, 2, 2, 3, 2, 10, 10, 10, 10, 10, 10, 10],
+                },
                 // GAME
-                MenuDef { labels: LABEL4, num: 10, color: 2,
-                    enabled: [2,2,2,2,3, 6, 7, 7,10,10, 0, 0] },
+                MenuDef {
+                    labels: LABEL4,
+                    num: 10,
+                    color: 2,
+                    enabled: [2, 2, 2, 2, 3, 6, 7, 7, 10, 10, 0, 0],
+                },
                 // SAVEX
-                MenuDef { labels: LABEL8, num: 7,  color: 0,
-                    enabled: [2,2,2,2,2, 10,10, 0, 0, 0, 0, 0] },
+                MenuDef {
+                    labels: LABEL8,
+                    num: 7,
+                    color: 0,
+                    enabled: [2, 2, 2, 2, 2, 10, 10, 0, 0, 0, 0, 0],
+                },
                 // KEYS
-                MenuDef { labels: LABEL9, num: 11, color: 8,
-                    enabled: [2,2,2,2,2, 10,10,10,10,10,10, 0] },
+                MenuDef {
+                    labels: LABEL9,
+                    num: 11,
+                    color: 8,
+                    enabled: [2, 2, 2, 2, 2, 10, 10, 10, 10, 10, 10, 0],
+                },
                 // GIVE
-                MenuDef { labels: LABELA, num: 9,  color: 10,
-                    enabled: [2,2,2,2,2, 10, 0, 0, 0, 0, 0, 0] },
+                MenuDef {
+                    labels: LABELA,
+                    num: 9,
+                    color: 10,
+                    enabled: [2, 2, 2, 2, 2, 10, 0, 0, 0, 0, 0, 0],
+                },
                 // USE
-                MenuDef { labels: LABEL7, num: 10, color: 8,
-                    enabled: [10,10,10,10,10, 10,10,10,10, 0,10,10] },
+                MenuDef {
+                    labels: LABEL7,
+                    num: 10,
+                    color: 8,
+                    enabled: [10, 10, 10, 10, 10, 10, 10, 10, 10, 0, 10, 10],
+                },
                 // FILE
-                MenuDef { labels: LABELB, num: 10, color: 5,
-                    enabled: [10,10,10,10,10, 10,10,10, 0, 0, 0, 0] },
+                MenuDef {
+                    labels: LABELB,
+                    num: 10,
+                    color: 5,
+                    enabled: [10, 10, 10, 10, 10, 10, 10, 10, 0, 0, 0, 0],
+                },
             ],
         }
     }
 
     /// Returns 8 if stuff[i] == 0, else 10 (fmain.c: stuff_flag helper).
     pub fn stuff_flag(stuff: &[u8], i: usize) -> u8 {
-        if stuff[i] == 0 { 8 } else { 10 }
+        if stuff[i] == 0 {
+            8
+        } else {
+            10
+        }
     }
 
     /// Update enabled flags based on player inventory and wealth (fmain.c:4419-4441).
@@ -200,10 +262,11 @@ impl MenuState {
         self.menus[MenuMode::Use as usize].enabled[8] = Self::stuff_flag(stuff, 7); // sunstone
 
         let j = if wealth > 2 { 10 } else { 8 };
-        self.menus[MenuMode::Give as usize].enabled[5] = j;       // gold
-        self.menus[MenuMode::Give as usize].enabled[6] = 8;        // book (always hidden)
+        self.menus[MenuMode::Give as usize].enabled[5] = j; // gold
+        self.menus[MenuMode::Give as usize].enabled[6] = 8; // book (always hidden)
         self.menus[MenuMode::Give as usize].enabled[7] = Self::stuff_flag(stuff, 28); // writ
-        self.menus[MenuMode::Give as usize].enabled[8] = Self::stuff_flag(stuff, 29); // bone
+        self.menus[MenuMode::Give as usize].enabled[8] = Self::stuff_flag(stuff, 29);
+        // bone
     }
 
     /// Switch menu mode; refuses if paused (fmain.c:4409-4414).
@@ -275,7 +338,13 @@ impl MenuState {
             self.menus[self.cmode as usize].labels[off..off + 5].to_string()
         };
 
-        ButtonRender { display_slot: j, menu_index: self.real_options[j], text, fg_color, bg_color }
+        ButtonRender {
+            display_slot: j,
+            menu_index: self.real_options[j],
+            text,
+            fg_color,
+            bg_color,
+        }
     }
 
     /// Handle a button click at the given display slot (fmain.c:1447-1474).
@@ -344,8 +413,14 @@ impl MenuState {
             (MenuMode::Items, 5) => MenuAction::Inventory,
             (MenuMode::Items, 6) => MenuAction::Take,
             (MenuMode::Items, 7) => MenuAction::Look,
-            (MenuMode::Items, 8) => { self.gomenu(MenuMode::Use);  MenuAction::None }
-            (MenuMode::Items, 9) => { self.gomenu(MenuMode::Give); MenuAction::None }
+            (MenuMode::Items, 8) => {
+                self.gomenu(MenuMode::Use);
+                MenuAction::None
+            }
+            (MenuMode::Items, 9) => {
+                self.gomenu(MenuMode::Give);
+                MenuAction::None
+            }
             (MenuMode::Magic, 5..=11) => MenuAction::CastSpell(hit - 5),
             (MenuMode::Talk, 5) => MenuAction::Yell,
             (MenuMode::Talk, 6) => MenuAction::Say,
@@ -354,13 +429,26 @@ impl MenuState {
             (MenuMode::Game, 5) => MenuAction::TogglePause,
             (MenuMode::Game, 6) => MenuAction::ToggleMusic,
             (MenuMode::Game, 7) => MenuAction::ToggleSound,
-            (MenuMode::Game, 8) => { self.gomenu(MenuMode::SaveX); MenuAction::None }
-            (MenuMode::Game, 9) => { self.gomenu(MenuMode::File);  MenuAction::None }
+            (MenuMode::Game, 8) => {
+                self.gomenu(MenuMode::SaveX);
+                MenuAction::None
+            }
+            (MenuMode::Game, 9) => {
+                self.gomenu(MenuMode::File);
+                MenuAction::None
+            }
             (MenuMode::Use, 0..=4) => MenuAction::SetWeapon(hit),
             (MenuMode::Use, 6) => MenuAction::SummonTurtle,
-            (MenuMode::Use, 7) => { self.gomenu(MenuMode::Keys);   MenuAction::None }
+            (MenuMode::Use, 7) => {
+                self.gomenu(MenuMode::Keys);
+                MenuAction::None
+            }
             (MenuMode::Use, 8) => MenuAction::UseSunstone,
-            (MenuMode::SaveX, 5) => { self.save_pending = true; self.gomenu(MenuMode::File); MenuAction::None }
+            (MenuMode::SaveX, 5) => {
+                self.save_pending = true;
+                self.gomenu(MenuMode::File);
+                MenuAction::None
+            }
             (MenuMode::SaveX, 6) => MenuAction::Quit,
             (MenuMode::File, 0..=7) => {
                 let slot = hit;
@@ -478,7 +566,7 @@ mod tests {
     fn test_propt_tab_bg_color() {
         let mut ms = MenuState::new();
         ms.print_options(); // populate real_options
-        // Slot 0 → menu_index 0 (tab, k < 5) → bg_color = 4
+                            // Slot 0 → menu_index 0 (tab, k < 5) → bg_color = 4
         let btn = ms.propt(0, false);
         assert_eq!(btn.bg_color, 4);
     }
@@ -488,8 +576,12 @@ mod tests {
         let mut ms = MenuState::new();
         ms.gomenu(MenuMode::Game);
         ms.print_options(); // populate real_options
-        // Find the Music button (menu_index 6)
-        let music_slot = ms.real_options.iter().position(|&x| x == 6).expect("Music button not found");
+                            // Find the Music button (menu_index 6)
+        let music_slot = ms
+            .real_options
+            .iter()
+            .position(|&x| x == 6)
+            .expect("Music button not found");
         let btn = ms.propt(music_slot, true);
         // cmode == Game, k=6 >= 5, not Keys/SaveX → bg_color = menus[Game].color = 2
         assert_eq!(btn.bg_color, 2);

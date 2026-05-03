@@ -7,37 +7,37 @@
 /// Port of `itrans[]` from `fmain2.c:1325–1332`.
 pub fn ob_id_to_stuff_index(ob_id: u8) -> Option<usize> {
     const ITRANS: &[(u8, u8)] = &[
-        (11, 35),   // QUIVER → arrows (×10)
-        (18, 9),    // B_STONE
-        (19, 10),   // G_JEWEL
-        (22, 11),   // VIAL
-        (21, 12),   // C_ORB
-        (23, 13),   // B_TOTEM
-        (17, 14),   // G_RING
-        (24, 15),   // J_SKULL
-        (145, 4),   // M_WAND
-        (27, 5),    // Golden Lasso
-        (8, 2),     // Sword
-        (9, 1),     // Mace
-        (12, 0),    // Dirk
-        (10, 3),    // Bow
-        (147, 23),  // ROSE
-        (148, 24),  // FRUIT
-        (149, 25),  // STATUE
-        (150, 26),  // BOOK
-        (151, 6),   // SHELL
-        (155, 7),   // Sun Stone
-        (136, 27),  // Herb
-        (137, 28),  // Writ
-        (138, 29),  // Bone
-        (139, 22),  // Talisman
-        (140, 30),  // Shard
-        (25, 16),   // GOLD_KEY
-        (153, 17),  // GREEN_KEY
-        (114, 18),  // BLUE_KEY
-        (242, 19),  // RED_KEY
-        (26, 20),   // GREY_KEY
-        (154, 21),  // WHITE_KEY
+        (11, 35),  // QUIVER → arrows (×10)
+        (18, 9),   // B_STONE
+        (19, 10),  // G_JEWEL
+        (22, 11),  // VIAL
+        (21, 12),  // C_ORB
+        (23, 13),  // B_TOTEM
+        (17, 14),  // G_RING
+        (24, 15),  // J_SKULL
+        (145, 4),  // M_WAND
+        (27, 5),   // Golden Lasso
+        (8, 2),    // Sword
+        (9, 1),    // Mace
+        (12, 0),   // Dirk
+        (10, 3),   // Bow
+        (147, 23), // ROSE
+        (148, 24), // FRUIT
+        (149, 25), // STATUE
+        (150, 26), // BOOK
+        (151, 6),  // SHELL
+        (155, 7),  // Sun Stone
+        (136, 27), // Herb
+        (137, 28), // Writ
+        (138, 29), // Bone
+        (139, 22), // Talisman
+        (140, 30), // Shard
+        (25, 16),  // GOLD_KEY
+        (153, 17), // GREEN_KEY
+        (114, 18), // BLUE_KEY
+        (242, 19), // RED_KEY
+        (26, 20),  // GREY_KEY
+        (154, 21), // WHITE_KEY
     ];
     for &(oid, sidx) in ITRANS {
         if oid == ob_id {
@@ -51,15 +51,42 @@ pub fn ob_id_to_stuff_index(ob_id: u8) -> Option<usize> {
 /// Inverse of ob_id_to_stuff_index.
 pub fn stuff_index_to_ob_id(stuff_idx: usize) -> Option<u8> {
     const INVERSE: &[(usize, u8)] = &[
-        (0, 12), (1, 9), (2, 8), (3, 10), (4, 145), (5, 27),
-        (6, 151), (7, 155), (8, 11), (9, 18), (10, 19), (11, 22),
-        (12, 21), (13, 23), (14, 17), (15, 24), (16, 25), (17, 153),
-        (18, 114), (19, 242), (20, 26), (21, 154), (22, 139), (23, 147),
-        (24, 148), (25, 149), (26, 150), (27, 136), (28, 137), (29, 138),
+        (0, 12),
+        (1, 9),
+        (2, 8),
+        (3, 10),
+        (4, 145),
+        (5, 27),
+        (6, 151),
+        (7, 155),
+        (8, 11),
+        (9, 18),
+        (10, 19),
+        (11, 22),
+        (12, 21),
+        (13, 23),
+        (14, 17),
+        (15, 24),
+        (16, 25),
+        (17, 153),
+        (18, 114),
+        (19, 242),
+        (20, 26),
+        (21, 154),
+        (22, 139),
+        (23, 147),
+        (24, 148),
+        (25, 149),
+        (26, 150),
+        (27, 136),
+        (28, 137),
+        (29, 138),
         (30, 140),
     ];
     for &(si, oid) in INVERSE {
-        if si == stuff_idx { return Some(oid); }
+        if si == stuff_idx {
+            return Some(oid);
+        }
     }
     None
 }
@@ -68,12 +95,37 @@ pub fn stuff_index_to_ob_id(stuff_idx: usize) -> Option<u8> {
 /// Matches inv_list[].name ordering from fmain.c:428.
 pub fn stuff_index_name(idx: usize) -> &'static str {
     const NAMES: [&str; 31] = [
-        "Dirk", "Mace", "Sword", "Bow", "Magic Wand", "Golden Lasso",
-        "Sea Shell", "Sun Stone", "Arrows", "Blue Stone", "Green Jewel",
-        "Glass Vial", "Crystal Orb", "Bird Totem", "Gold Ring", "Jade Skull",
-        "Gold Key", "Green Key", "Blue Key", "Red Key", "Grey Key", "White Key",
-        "Talisman", "Rose", "Fruit", "Gold Statue", "Book", "Herb", "Writ",
-        "Bone", "Shard",
+        "Dirk",
+        "Mace",
+        "Sword",
+        "Bow",
+        "Magic Wand",
+        "Golden Lasso",
+        "Sea Shell",
+        "Sun Stone",
+        "Arrows",
+        "Blue Stone",
+        "Green Jewel",
+        "Glass Vial",
+        "Crystal Orb",
+        "Bird Totem",
+        "Gold Ring",
+        "Jade Skull",
+        "Gold Key",
+        "Green Key",
+        "Blue Key",
+        "Red Key",
+        "Grey Key",
+        "White Key",
+        "Talisman",
+        "Rose",
+        "Fruit",
+        "Gold Statue",
+        "Book",
+        "Herb",
+        "Writ",
+        "Bone",
+        "Shard",
     ];
     NAMES.get(idx).copied().unwrap_or("an unknown thing")
 }
@@ -101,37 +153,37 @@ mod tests {
     #[test]
     fn test_itrans_covers_all_documented_items() {
         let mappings = [
-            (11, 35),   // QUIVER
-            (18, 9),    // B_STONE
-            (19, 10),   // G_JEWEL
-            (22, 11),   // VIAL
-            (21, 12),   // C_ORB
-            (23, 13),   // B_TOTEM
-            (17, 14),   // G_RING
-            (24, 15),   // J_SKULL
-            (145, 4),   // M_WAND
-            (27, 5),    // Golden Lasso
-            (8, 2),     // Sword
-            (9, 1),     // Mace
-            (12, 0),    // Dirk
-            (10, 3),    // Bow
-            (147, 23),  // ROSE
-            (148, 24),  // FRUIT
-            (149, 25),  // STATUE
-            (150, 26),  // BOOK
-            (151, 6),   // SHELL
-            (155, 7),   // Sun Stone
-            (136, 27),  // Herb
-            (137, 28),  // Writ
-            (138, 29),  // Bone
-            (139, 22),  // Talisman
-            (140, 30),  // Shard
-            (25, 16),   // GOLD_KEY
-            (153, 17),  // GREEN_KEY
-            (114, 18),  // BLUE_KEY
-            (242, 19),  // RED_KEY
-            (26, 20),   // GREY_KEY
-            (154, 21),  // WHITE_KEY
+            (11, 35),  // QUIVER
+            (18, 9),   // B_STONE
+            (19, 10),  // G_JEWEL
+            (22, 11),  // VIAL
+            (21, 12),  // C_ORB
+            (23, 13),  // B_TOTEM
+            (17, 14),  // G_RING
+            (24, 15),  // J_SKULL
+            (145, 4),  // M_WAND
+            (27, 5),   // Golden Lasso
+            (8, 2),    // Sword
+            (9, 1),    // Mace
+            (12, 0),   // Dirk
+            (10, 3),   // Bow
+            (147, 23), // ROSE
+            (148, 24), // FRUIT
+            (149, 25), // STATUE
+            (150, 26), // BOOK
+            (151, 6),  // SHELL
+            (155, 7),  // Sun Stone
+            (136, 27), // Herb
+            (137, 28), // Writ
+            (138, 29), // Bone
+            (139, 22), // Talisman
+            (140, 30), // Shard
+            (25, 16),  // GOLD_KEY
+            (153, 17), // GREEN_KEY
+            (114, 18), // BLUE_KEY
+            (242, 19), // RED_KEY
+            (26, 20),  // GREY_KEY
+            (154, 21), // WHITE_KEY
         ];
 
         for (ob_id, expected_idx) in &mappings {

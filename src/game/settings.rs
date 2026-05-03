@@ -1,6 +1,5 @@
-
 use crate::game::key_bindings::KeyBindings;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameSettings {
@@ -112,8 +111,6 @@ impl GameSettings {
             self.dirty = true;
         }
     }
-
-
 }
 
 fn get_settings_path() -> std::path::PathBuf {

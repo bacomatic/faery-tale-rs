@@ -1,4 +1,3 @@
-
 // Classes and utilities for working with bitmaps and bitplanes
 
 use std::cell::RefCell;
@@ -17,7 +16,7 @@ pub struct BitMap {
 
     // Optimization: cached index buffer
     #[serde(skip)]
-    index_buffer: RefCell<Option<Vec<usize>>>
+    index_buffer: RefCell<Option<Vec<usize>>>,
 }
 
 impl BitMap {
@@ -31,13 +30,19 @@ impl BitMap {
             depth: 0,
             stride: 0,
             planes: Vec::new(),
-            index_buffer: RefCell::new(None)
+            index_buffer: RefCell::new(None),
         }
     }
 
     /// Build a BitMap from pre-separated plane data.
     /// Each entry in `planes` is the raw bytes for one bitplane.
-    pub fn from_planes(planes: Vec<Vec<u8>>, width: usize, height: usize, depth: usize, stride: usize) -> BitMap {
+    pub fn from_planes(
+        planes: Vec<Vec<u8>>,
+        width: usize,
+        height: usize,
+        depth: usize,
+        stride: usize,
+    ) -> BitMap {
         BitMap {
             width,
             height,
@@ -64,14 +69,20 @@ impl BitMap {
      * Stride is the number of bytes per row per plane, padded to a WORD boundary. To get to the next row for the same plane,
      * skip depth * stride bytes.
      */
-    pub fn with_interleaved_data(data: Vec<u8>, width: usize, height: usize, depth: usize, stride: usize) -> BitMap {
+    pub fn with_interleaved_data(
+        data: Vec<u8>,
+        width: usize,
+        height: usize,
+        depth: usize,
+        stride: usize,
+    ) -> BitMap {
         let mut bitmap = BitMap {
             width: width,
             height: height,
             depth: depth,
             stride: stride,
             planes: Vec::with_capacity(depth),
-            index_buffer: RefCell::new(None)
+            index_buffer: RefCell::new(None),
         };
 
         let plane_size = stride * height;
@@ -83,7 +94,7 @@ impl BitMap {
 
         let mut plane_index = 0;
         let mut offset = 0;
-        for _ in 0..height*depth {
+        for _ in 0..height * depth {
             // copy row by row to each plane
             let plane = &mut bitmap.planes[plane_index];
             let row_start = offset;
@@ -105,14 +116,20 @@ impl BitMap {
      * Create a new BitMap from raw plane data. Pixels are in contiguous
      * plane order. For interleaved use with_interleaved_data.
      */
-    pub fn with_data(data: Vec<u8>, width: usize, height: usize, depth: usize, stride: usize) -> BitMap {
+    pub fn with_data(
+        data: Vec<u8>,
+        width: usize,
+        height: usize,
+        depth: usize,
+        stride: usize,
+    ) -> BitMap {
         let mut bitmap = BitMap {
             width: width,
             height: height,
             depth: depth,
             stride: stride,
             planes: Vec::with_capacity(depth),
-            index_buffer: RefCell::new(None)
+            index_buffer: RefCell::new(None),
         };
 
         let plane_size = stride * height;
@@ -148,7 +165,7 @@ impl BitMap {
             depth: depth,
             stride: ((width + 15) >> 3) & !1_usize,
             planes: Vec::with_capacity(depth),
-            index_buffer: RefCell::new(None)
+            index_buffer: RefCell::new(None),
         };
 
         let plane_size = bitmap.stride * height;
@@ -168,7 +185,11 @@ impl BitMap {
      *
      * @return tuple containing a u8 vector and the byte stride for the pixel buffer
      */
-    pub fn generate_rgb32(&self, colors: &Palette, key_color: Option<usize>) -> Result<(Vec<u8>, usize), String> {
+    pub fn generate_rgb32(
+        &self,
+        colors: &Palette,
+        key_color: Option<usize>,
+    ) -> Result<(Vec<u8>, usize), String> {
         // start with a clear pixel buffer
         let pixel_count = self.width * self.height;
         let mut pixels: Vec<u8> = Vec::with_capacity(pixel_count * 4);
@@ -178,7 +199,13 @@ impl BitMap {
         Ok((pixels, self.width * 4))
     }
 
-    pub fn update_rgb32(&self, pixels: &mut Vec<u8>, stride: usize, colors: &Palette, key_color: Option<usize>) -> Result<(), String> {
+    pub fn update_rgb32(
+        &self,
+        pixels: &mut Vec<u8>,
+        stride: usize,
+        colors: &Palette,
+        key_color: Option<usize>,
+    ) -> Result<(), String> {
         let pixel_count = self.width * self.height;
         if pixels.len() < pixel_count * 4 {
             return Err("Provided pixel buffer is too small for BitMap dimensions".to_string());
@@ -228,8 +255,8 @@ impl BitMap {
                 let pixel_offset = pixel_row_start + col * 4;
                 pixels[pixel_offset + 0] = ((color >> 24) & 0xFF) as u8; // R
                 pixels[pixel_offset + 1] = ((color >> 16) & 0xFF) as u8; // G
-                pixels[pixel_offset + 2] = ((color >> 8) & 0xFF) as u8;  // B
-                pixels[pixel_offset + 3] = (color & 0xFF) as u8;         // A
+                pixels[pixel_offset + 2] = ((color >> 8) & 0xFF) as u8; // B
+                pixels[pixel_offset + 3] = (color & 0xFF) as u8; // A
             }
         }
 
@@ -349,17 +376,17 @@ mod tests {
         assert_eq!(pixels[1], 0x99); // G
         assert_eq!(pixels[2], 0x00); // B
         assert_eq!(pixels[3], 0xFF); // A
-        // Pixel (1,0) should be color index 0 (blue)
+                                     // Pixel (1,0) should be color index 0 (blue)
         assert_eq!(pixels[4], 0x00); // R
         assert_eq!(pixels[5], 0x00); // G
         assert_eq!(pixels[6], 0x66); // B
         assert_eq!(pixels[7], 0xFF); // A
-        // Pixel (0,1) should be color index 0 (blue)
+                                     // Pixel (0,1) should be color index 0 (blue)
         assert_eq!(pixels[64], 0x00); // R
         assert_eq!(pixels[65], 0x00); // G
         assert_eq!(pixels[66], 0x66); // B
         assert_eq!(pixels[67], 0xFF); // A
-        // Pixel (1,1) should be color index 2 (green)
+                                      // Pixel (1,1) should be color index 2 (green)
         assert_eq!(pixels[68], 0x33); // R
         assert_eq!(pixels[69], 0x99); // G
         assert_eq!(pixels[70], 0x00); // B
@@ -375,7 +402,9 @@ mod tests {
         palette.colors.push(RGB4::from(0x390)); // green
         palette.colors.push(RGB4::from(0x000)); // black
         let key_color_index = 2; // green
-        let (pixels, stride) = bitmap.generate_rgb32(&palette, Some(key_color_index)).unwrap();
+        let (pixels, stride) = bitmap
+            .generate_rgb32(&palette, Some(key_color_index))
+            .unwrap();
         assert_eq!(stride, 64); // 16 pixels * 4 bytes
         assert_eq!(pixels.len(), 16 * 16 * 4);
 
@@ -385,7 +414,7 @@ mod tests {
         assert_eq!(pixels[1], 0x00); // G
         assert_eq!(pixels[2], 0x00); // B
         assert_eq!(pixels[3], 0x00); // A
-        // Pixel (1,0) should be color index 0 (blue)
+                                     // Pixel (1,0) should be color index 0 (blue)
         assert_eq!(pixels[4], 0x00); // R
         assert_eq!(pixels[5], 0x00); // G
         assert_eq!(pixels[6], 0x66); // B
@@ -411,11 +440,10 @@ mod tests {
         assert_eq!(pixels[1], 0x99); // G
         assert_eq!(pixels[2], 0x00); // B
         assert_eq!(pixels[3], 0xFF); // A
-        // Pixel (1,0) should be color index 0 (blue)
+                                     // Pixel (1,0) should be color index 0 (blue)
         assert_eq!(pixels[4], 0x00); // R
         assert_eq!(pixels[5], 0x00); // G
         assert_eq!(pixels[6], 0x66); // B
         assert_eq!(pixels[7], 0xFF); // A
     }
-
 }

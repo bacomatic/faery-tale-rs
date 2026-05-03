@@ -1,26 +1,25 @@
-
 // Byte vector operations
 
 pub fn read_u32(data: &Vec<u8>, offset: &mut usize) -> u32 {
-    let vs = &data[*offset .. *offset + 4];
+    let vs = &data[*offset..*offset + 4];
     *offset += 4;
     u32::from_be_bytes(vs.try_into().unwrap())
 }
 
 pub fn read_i32(data: &Vec<u8>, offset: &mut usize) -> i32 {
-    let vs = &data[*offset .. *offset + 4];
+    let vs = &data[*offset..*offset + 4];
     *offset += 4;
     i32::from_be_bytes(vs.try_into().unwrap())
 }
 
 pub fn read_u16(data: &Vec<u8>, offset: &mut usize) -> u16 {
-    let vs = &data[*offset .. *offset + 2];
+    let vs = &data[*offset..*offset + 2];
     *offset += 2;
     u16::from_be_bytes(vs.try_into().unwrap())
 }
 
 pub fn read_i16(data: &Vec<u8>, offset: &mut usize) -> i16 {
-    let vs = &data[*offset .. *offset + 2];
+    let vs = &data[*offset..*offset + 2];
     *offset += 2;
     i16::from_be_bytes(vs.try_into().unwrap())
 }
@@ -53,14 +52,20 @@ pub fn read_string(data: &Vec<u8>, offset: &mut usize) -> String {
         return "".to_string();
     }
 
-    std::str::from_utf8(&data[str_start .. str_end]).unwrap().to_string()
+    std::str::from_utf8(&data[str_start..str_end])
+        .unwrap()
+        .to_string()
 }
 
 // Bounds-checked variants that return Result instead of panicking.
 
 pub fn try_read_u32(data: &[u8], offset: &mut usize) -> Result<u32, String> {
     if *offset + 4 > data.len() {
-        return Err(format!("read_u32: offset {} + 4 exceeds length {}", *offset, data.len()));
+        return Err(format!(
+            "read_u32: offset {} + 4 exceeds length {}",
+            *offset,
+            data.len()
+        ));
     }
     let vs = &data[*offset..*offset + 4];
     *offset += 4;

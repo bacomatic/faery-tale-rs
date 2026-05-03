@@ -1,3 +1,4 @@
+use std::fs;
 /// Audio score / music-track parser for the Faery Tale Adventure `songs` file.
 ///
 /// # File format  (ported from `fmain2.c` `read_score()` + `gdriver.asm`)
@@ -35,9 +36,7 @@
 /// voice) and the offset into the table is always a multiple of four.
 ///
 /// Amiga Paula period → frequency: `freq = AMIGA_CLOCK_NTSC / period`.
-
 use std::path::Path;
-use std::fs;
 
 // ---------------------------------------------------------------------------
 // Amiga hardware constants
@@ -82,25 +81,90 @@ pub const TIMECLOCK_RATE: u32 = DEFAULT_TEMPO * VBL_RATE_HZ;
 /// Frequency ≈ `AMIGA_CLOCK_NTSC / period` Hz.
 pub const PTABLE: [(u16, u16); 78] = [
     // Row 0 – partial (pitch 0–5, D#1–G#1)
-    (1440, 0),  (1356, 0),  (1280, 0),  (1208, 0),  (1140, 0),  (1076, 0),
+    (1440, 0),
+    (1356, 0),
+    (1280, 0),
+    (1208, 0),
+    (1140, 0),
+    (1076, 0),
     // Row 1 – A1–G#2       (pitch 6–17)
-    (1016, 0),  (960,  0),  (906,  0),  (856,  0),  (808,  0),  (762,  0),
-    (720,  0),  (678,  0),  (640,  0),  (604,  0),  (570,  0),  (538,  0),
+    (1016, 0),
+    (960, 0),
+    (906, 0),
+    (856, 0),
+    (808, 0),
+    (762, 0),
+    (720, 0),
+    (678, 0),
+    (640, 0),
+    (604, 0),
+    (570, 0),
+    (538, 0),
     // Row 2 – A2–G#3       (pitch 18–29)
-    (508,  0),  (480,  0),  (453,  0),  (428,  0),  (404,  0),  (381,  0),
-    (360,  0),  (339,  0),  (320,  0),  (302,  0),  (285,  0),  (269,  0),
+    (508, 0),
+    (480, 0),
+    (453, 0),
+    (428, 0),
+    (404, 0),
+    (381, 0),
+    (360, 0),
+    (339, 0),
+    (320, 0),
+    (302, 0),
+    (285, 0),
+    (269, 0),
     // Row 3 – A3–G#4       (pitch 30–41, wave_offset 16)
-    (508, 16),  (480, 16),  (453, 16),  (428, 16),  (404, 16),  (381, 16),
-    (360, 16),  (339, 16),  (320, 16),  (302, 16),  (285, 16),  (269, 16),
+    (508, 16),
+    (480, 16),
+    (453, 16),
+    (428, 16),
+    (404, 16),
+    (381, 16),
+    (360, 16),
+    (339, 16),
+    (320, 16),
+    (302, 16),
+    (285, 16),
+    (269, 16),
     // Row 4 – A4–G#5       (pitch 42–53, wave_offset 24)
-    (508, 24),  (480, 24),  (453, 24),  (428, 24),  (404, 24),  (381, 24),
-    (360, 24),  (339, 24),  (320, 24),  (302, 24),  (285, 24),  (269, 24),
+    (508, 24),
+    (480, 24),
+    (453, 24),
+    (428, 24),
+    (404, 24),
+    (381, 24),
+    (360, 24),
+    (339, 24),
+    (320, 24),
+    (302, 24),
+    (285, 24),
+    (269, 24),
     // Row 5 – A5–G#6       (pitch 54–65, wave_offset 28)
-    (508, 28),  (480, 28),  (453, 28),  (428, 28),  (404, 28),  (381, 28),
-    (360, 28),  (339, 28),  (320, 28),  (302, 28),  (285, 28),  (269, 28),
+    (508, 28),
+    (480, 28),
+    (453, 28),
+    (428, 28),
+    (404, 28),
+    (381, 28),
+    (360, 28),
+    (339, 28),
+    (320, 28),
+    (302, 28),
+    (285, 28),
+    (269, 28),
     // Row 6 – A6–G#7       (pitch 66–77, wave_offset 28)
-    (254, 28),  (240, 28),  (226, 28),  (214, 28),  (202, 28),  (190, 28),
-    (180, 28),  (170, 28),  (160, 28),  (151, 28),  (143, 28),  (135, 28),
+    (254, 28),
+    (240, 28),
+    (226, 28),
+    (214, 28),
+    (202, 28),
+    (190, 28),
+    (180, 28),
+    (170, 28),
+    (160, 28),
+    (151, 28),
+    (143, 28),
+    (135, 28),
 ];
 
 /// Duration table, ported from `notevals` in `gdriver.asm`.
@@ -114,20 +178,14 @@ pub const PTABLE: [(u16, u16); 78] = [
 /// signatures (see original source comments).
 pub const NOTE_DURATIONS: [u16; 64] = [
     // Group 0 – 4/4
-    26880, 13440, 6720, 3360, 1680, 840, 420, 210,
-    // Group 1 – 6/8
-    40320, 20160, 10080, 5040, 2520, 1260, 630, 315,
-    // Group 2 – 3/4
+    26880, 13440, 6720, 3360, 1680, 840, 420, 210, // Group 1 – 6/8
+    40320, 20160, 10080, 5040, 2520, 1260, 630, 315, // Group 2 – 3/4
     17920, 8960, 4480, 2240, 1120, 560, 280, 140,
     // Group 3 – 4/4 (duplicate, different base)
-    26880, 13440, 6720, 3360, 1680, 840, 420, 210,
-    // Group 4 – 7/8
-    21504, 10752, 5376, 2688, 1344, 672, 336, 168,
-    // Group 5 – 5/4
-    32256, 16128, 8064, 4032, 2016, 1008, 504, 252,
-    // Group 6 – 3/4 alt
-    23040, 11520, 5760, 2880, 1440, 720, 360, 180,
-    // Group 7 – 9/8
+    26880, 13440, 6720, 3360, 1680, 840, 420, 210, // Group 4 – 7/8
+    21504, 10752, 5376, 2688, 1344, 672, 336, 168, // Group 5 – 5/4
+    32256, 16128, 8064, 4032, 2016, 1008, 504, 252, // Group 6 – 3/4 alt
+    23040, 11520, 5760, 2880, 1440, 720, 360, 180, // Group 7 – 9/8
     34560, 17280, 8640, 4320, 2160, 1080, 540, 270,
 ];
 
@@ -221,9 +279,7 @@ impl SongLibrary {
                 break;
             }
             // Read 4-byte big-endian packlen
-            let packlen = i32::from_be_bytes(
-                data[offset..offset + 4].try_into().unwrap(),
-            );
+            let packlen = i32::from_be_bytes(data[offset..offset + 4].try_into().unwrap());
             offset += 4;
 
             if packlen <= 0 {
@@ -283,9 +339,7 @@ impl SongLibrary {
                     }
                     129 => {
                         // Set instrument
-                        events.push(TrackEvent::SetInstrument {
-                            slot: val & 0x0f,
-                        });
+                        events.push(TrackEvent::SetInstrument { slot: val & 0x0f });
                     }
                     0x90 => {
                         // Set tempo
@@ -293,14 +347,15 @@ impl SongLibrary {
                     }
                     0xff => {
                         // End of track
-                        events.push(TrackEvent::End {
-                            looping: val != 0,
-                        });
+                        events.push(TrackEvent::End { looping: val != 0 });
                         break; // nothing meaningful after end
                     }
                     _ => {
                         // Unrecognised — original asm skips these
-                        events.push(TrackEvent::Unknown { command: cmd, value: val });
+                        events.push(TrackEvent::Unknown {
+                            command: cmd,
+                            value: val,
+                        });
                     }
                 }
             }
@@ -335,9 +390,9 @@ impl SongLibrary {
     ///
     /// Returns `None` if the pitch index is out of range.
     pub fn pitch_freq(pitch: usize) -> Option<f32> {
-        PTABLE.get(pitch).map(|(period, _)| {
-            AMIGA_CLOCK_NTSC as f32 / *period as f32
-        })
+        PTABLE
+            .get(pitch)
+            .map(|(period, _)| AMIGA_CLOCK_NTSC as f32 / *period as f32)
     }
 }
 
@@ -437,7 +492,10 @@ mod tests {
         assert_eq!(
             t,
             vec![
-                TrackEvent::Note { pitch: 4, duration_idx: 3 },
+                TrackEvent::Note {
+                    pitch: 4,
+                    duration_idx: 3
+                },
                 TrackEvent::End { looping: true },
             ]
         );
@@ -461,10 +519,7 @@ mod tests {
         // command=129 (0x81), value=0x1f → slot = 0x1f & 0x0f = 0x0f = 15
         let bytes: &[u8] = &[0x81, 0x1f, 0xFF, 0x00];
         let t = SongLibrary::parse_track_bytes(bytes);
-        assert_eq!(
-            t[0],
-            TrackEvent::SetInstrument { slot: 15 }
-        );
+        assert_eq!(t[0], TrackEvent::SetInstrument { slot: 15 });
     }
 
     #[test]
@@ -480,6 +535,12 @@ mod tests {
         // value = 0xff → 0xff & 0x3f = 0x3f = 63
         let bytes: &[u8] = &[0x00, 0xff, 0xFF, 0x00];
         let t = SongLibrary::parse_track_bytes(bytes);
-        assert_eq!(t[0], TrackEvent::Note { pitch: 0, duration_idx: 63 });
+        assert_eq!(
+            t[0],
+            TrackEvent::Note {
+                pitch: 0,
+                duration_idx: 63
+            }
+        );
     }
 }

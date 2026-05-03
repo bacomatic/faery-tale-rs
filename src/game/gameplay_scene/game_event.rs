@@ -33,9 +33,9 @@ impl GameplayScene {
         }
         // Priority 5 & 6: Day/Night based on lightlevel
         if s.lightlevel > 120 {
-            0  // Day
+            0 // Day
         } else {
-            2  // Night
+            2 // Night
         }
     }
 

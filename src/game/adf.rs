@@ -5,8 +5,8 @@
 //! No filesystem parsing is needed — all data offsets are hardcoded from
 //! the original game's hdrive.c block table.
 
+use anyhow::{bail, Context, Result};
 use std::path::Path;
-use anyhow::{Context, Result, bail};
 
 /// Number of bytes per ADF block (sector).
 pub const BLOCK_SIZE: usize = 512;
@@ -40,8 +40,13 @@ impl AdfDisk {
     pub fn load_blocks(&self, f_block: u32, count: u32) -> &[u8] {
         let start = (f_block as usize) * BLOCK_SIZE;
         let end = start + (count as usize) * BLOCK_SIZE;
-        assert!(end <= self.data.len(),
-            "ADF block range [{}, {}) exceeds image size {}", f_block, f_block + count, self.data.len() / BLOCK_SIZE);
+        assert!(
+            end <= self.data.len(),
+            "ADF block range [{}, {}) exceeds image size {}",
+            f_block,
+            f_block + count,
+            self.data.len() / BLOCK_SIZE
+        );
         &self.data[start..end]
     }
 

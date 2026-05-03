@@ -40,10 +40,12 @@ use crossterm::{
     cursor,
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers,
-        KeyboardEnhancementFlags, PushKeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
+    style::{
+        Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
+    },
     terminal::{self, ClearType},
 };
 
@@ -72,31 +74,42 @@ const RELEASE_RATE: u8 = 4;
 
 /// NEW_WAVE table: (wave_num, vol_num) for each instrument slot.
 const NEW_WAVE: [(u8, u8); 12] = [
-    (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 5), (2, 2), (1, 1), (1, 3),
-    (0, 4), (5, 4), (1, 0), (5, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 5),
+    (2, 2),
+    (1, 1),
+    (1, 3),
+    (0, 4),
+    (5, 4),
+    (1, 0),
+    (5, 0),
 ];
 
 const INSTRUMENT_NAMES: [&str; 12] = [
-    "Piano",       // slot 0
-    "Piano",       // slot 1
-    "Piano",       // slot 2
-    "Piano",       // slot 3
-    "Strings",     // slot 4
-    "Brass",       // slot 5
-    "Harpsichrd",  // slot 6
-    "Woodwind",    // slot 7
-    "Flute",       // slot 8
-    "Organ",       // slot 9
-    "Pluck",       // slot 10
-    "Pad",         // slot 11
+    "Piano",      // slot 0
+    "Piano",      // slot 1
+    "Piano",      // slot 2
+    "Piano",      // slot 3
+    "Strings",    // slot 4
+    "Brass",      // slot 5
+    "Harpsichrd", // slot 6
+    "Woodwind",   // slot 7
+    "Flute",      // slot 8
+    "Organ",      // slot 9
+    "Pluck",      // slot 10
+    "Pad",        // slot 11
 ];
 
 // ---------------------------------------------------------------------------
 // Note names
 // ---------------------------------------------------------------------------
 
-const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NOTE_NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
 
 /// Convert a PTABLE pitch index to a note name string like "C#4".
 fn pitch_to_name(pitch: u8) -> String {
@@ -124,23 +137,23 @@ fn pitch_to_name(pitch: u8) -> String {
 /// Returns None if the key is not a piano key.
 fn key_to_semitone(c: char) -> Option<u8> {
     match c {
-        'a' => Some(0),   // C
-        'w' => Some(1),   // C#
-        's' => Some(2),   // D
-        'e' => Some(3),   // D#
-        'd' => Some(4),   // E
-        'f' => Some(5),   // F
-        't' => Some(6),   // F#
-        'g' => Some(7),   // G
-        'y' => Some(8),   // G#
-        'h' => Some(9),   // A
-        'u' => Some(10),  // A#
-        'j' => Some(11),  // B
-        'k' => Some(12),  // C+1
-        'o' => Some(13),  // C#+1
-        'l' => Some(14),  // D+1
-        'p' => Some(15),  // D#+1
-        ';' => Some(16),  // E+1
+        'a' => Some(0),  // C
+        'w' => Some(1),  // C#
+        's' => Some(2),  // D
+        'e' => Some(3),  // D#
+        'd' => Some(4),  // E
+        'f' => Some(5),  // F
+        't' => Some(6),  // F#
+        'g' => Some(7),  // G
+        'y' => Some(8),  // G#
+        'h' => Some(9),  // A
+        'u' => Some(10), // A#
+        'j' => Some(11), // B
+        'k' => Some(12), // C+1
+        'o' => Some(13), // C#+1
+        'l' => Some(14), // D+1
+        'p' => Some(15), // D#+1
+        ';' => Some(16), // E+1
         _ => None,
     }
 }
@@ -150,16 +163,16 @@ fn key_to_semitone(c: char) -> Option<u8> {
 #[allow(dead_code)]
 fn semitone_to_key(semi: u8) -> Option<char> {
     match semi {
-        0  => Some('A'),
-        1  => Some('W'),
-        2  => Some('S'),
-        3  => Some('E'),
-        4  => Some('D'),
-        5  => Some('F'),
-        6  => Some('T'),
-        7  => Some('G'),
-        8  => Some('Y'),
-        9  => Some('H'),
+        0 => Some('A'),
+        1 => Some('W'),
+        2 => Some('S'),
+        3 => Some('E'),
+        4 => Some('D'),
+        5 => Some('F'),
+        6 => Some('T'),
+        7 => Some('G'),
+        8 => Some('Y'),
+        9 => Some('H'),
         10 => Some('U'),
         11 => Some('J'),
         12 => Some('K'),
@@ -205,7 +218,10 @@ impl Instruments {
                 env.copy_from_slice(&data[base..base + ENVELOPE_BYTES]);
             }
         }
-        Instruments { waveforms, envelopes }
+        Instruments {
+            waveforms,
+            envelopes,
+        }
     }
 }
 
@@ -237,11 +253,21 @@ struct Voice {
 impl Voice {
     fn new() -> Self {
         Voice {
-            wave_num: 0, vol_num: 0, vol_list: 0, vol_delay: 0xff,
-            volume: 0, wave_start: 0, wave_len: 64,
-            phase: 0.0, phase_inc: 0.0, playing: false,
-            lp_state: 0.0, declick: 0.0, manual: false,
-            releasing: false, key_char: None,
+            wave_num: 0,
+            vol_num: 0,
+            vol_list: 0,
+            vol_delay: 0xff,
+            volume: 0,
+            wave_start: 0,
+            wave_len: 64,
+            phase: 0.0,
+            phase_inc: 0.0,
+            playing: false,
+            lp_state: 0.0,
+            declick: 0.0,
+            manual: false,
+            releasing: false,
+            key_char: None,
         }
     }
 
@@ -252,12 +278,19 @@ impl Voice {
     }
 
     fn trigger_note(&mut self, pitch: usize, ptable: &[(u16, u16); 78], inst: &Instruments) {
-        if pitch >= ptable.len() { return; }
+        if pitch >= ptable.len() {
+            return;
+        }
         let (period, wave_offset) = ptable[pitch];
-        if period == 0 { return; }
+        if period == 0 {
+            return;
+        }
         self.wave_start = (wave_offset as usize) * 4;
         self.wave_len = ((32 - wave_offset as usize) * 2).min(WAVEFORM_BYTES - self.wave_start);
-        if self.wave_len == 0 { self.playing = false; return; }
+        if self.wave_len == 0 {
+            self.playing = false;
+            return;
+        }
         self.phase = 0.0;
         self.phase_inc = AMIGA_CLOCK_NTSC as f64 / (period as f64 * SAMPLE_RATE as f64);
         self.releasing = false;
@@ -268,8 +301,12 @@ impl Voice {
         } else {
             let vol_num = self.vol_num.min(ENVELOPE_COUNT - 1);
             let first = inst.envelopes[vol_num][0];
-            if first < 0x80 { self.volume = first.min(64); self.vol_list = 1; }
-            else { self.vol_list = 0; }
+            if first < 0x80 {
+                self.volume = first.min(64);
+                self.vol_list = 1;
+            } else {
+                self.vol_list = 0;
+            }
             self.vol_delay = 0;
         }
         self.playing = true;
@@ -277,12 +314,19 @@ impl Voice {
 
     /// Re-pitch without resetting phase (for live PTABLE editing / arrow keys).
     fn retrigger_pitch(&mut self, pitch: usize, ptable: &[(u16, u16); 78]) {
-        if pitch >= ptable.len() { return; }
+        if pitch >= ptable.len() {
+            return;
+        }
         let (period, wave_offset) = ptable[pitch];
-        if period == 0 { return; }
+        if period == 0 {
+            return;
+        }
         self.wave_start = (wave_offset as usize) * 4;
         self.wave_len = ((32 - wave_offset as usize) * 2).min(WAVEFORM_BYTES - self.wave_start);
-        if self.wave_len == 0 { self.playing = false; return; }
+        if self.wave_len == 0 {
+            self.playing = false;
+            return;
+        }
         self.phase_inc = AMIGA_CLOCK_NTSC as f64 / (period as f64 * SAMPLE_RATE as f64);
         // Keep phase, volume, playing state — seamless pitch change
         if self.phase >= self.wave_len as f64 {
@@ -301,12 +345,16 @@ impl Voice {
     /// Begin the release phase: volume fades out over several VBL ticks
     /// while the waveform keeps playing (smooth fade, no click).
     fn release(&mut self) {
-        if !self.playing { return; }
+        if !self.playing {
+            return;
+        }
         self.releasing = true;
     }
 
     fn step_envelope(&mut self, envelopes: &[[u8; ENVELOPE_BYTES]; ENVELOPE_COUNT]) {
-        if self.manual { return; } // manual mode skips envelope
+        if self.manual {
+            return;
+        } // manual mode skips envelope
 
         // Release phase: fade volume down at a fixed rate
         if self.releasing {
@@ -319,8 +367,11 @@ impl Voice {
         }
 
         // Normal envelope stepping (attack/decay/sustain)
-        if self.vol_delay != 0 { return; }
-        let byte = envelopes[self.vol_num.min(ENVELOPE_COUNT - 1)][self.vol_list.min(ENVELOPE_BYTES - 1)];
+        if self.vol_delay != 0 {
+            return;
+        }
+        let byte =
+            envelopes[self.vol_num.min(ENVELOPE_COUNT - 1)][self.vol_list.min(ENVELOPE_BYTES - 1)];
         if byte >= 0x80 {
             self.vol_delay = 0xff; // hold (sustain)
         } else {
@@ -375,7 +426,9 @@ impl Voice {
                 let i1 = start + (int_part + 1) % len;
                 let s = (wf[i0] as f32 + frac * (wf[i1] as f32 - wf[i0] as f32)) / 128.0;
                 self.phase += self.phase_inc;
-                if self.phase >= len as f64 { self.phase -= len as f64; }
+                if self.phase >= len as f64 {
+                    self.phase -= len as f64;
+                }
                 s
             } else {
                 0.0
@@ -400,7 +453,10 @@ struct SineConfig {
 
 impl SineConfig {
     fn new() -> Self {
-        SineConfig { harmonic2: 0.0, harmonic3: 0.0 }
+        SineConfig {
+            harmonic2: 0.0,
+            harmonic3: 0.0,
+        }
     }
 }
 
@@ -464,7 +520,9 @@ impl ManualState {
     /// `latched`: if true, uses manual mode (fixed volume, no envelope).
     /// If false, uses the real ADSR envelope (attack → decay → sustain hold).
     fn trigger_voice(&mut self, voice_idx: usize, pitch: u8, latched: bool, key_char: char) {
-        if voice_idx >= 4 { return; }
+        if voice_idx >= 4 {
+            return;
+        }
         let v = &mut self.voices[voice_idx];
         v.set_instrument_slot(self.current_instrument);
         v.manual = latched;
@@ -474,18 +532,24 @@ impl ManualState {
 
     /// Immediate silence (for unlatching).
     fn release_voice(&mut self, voice_idx: usize) {
-        if voice_idx >= 4 { return; }
+        if voice_idx >= 4 {
+            return;
+        }
         self.voices[voice_idx].silence(); // also clears key_char
     }
 
     /// Begin the release phase (smooth fade-out for non-latched keys).
     fn release_voice_soft(&mut self, voice_idx: usize) {
-        if voice_idx >= 4 { return; }
+        if voice_idx >= 4 {
+            return;
+        }
         self.voices[voice_idx].release();
     }
 
     fn retrigger_voice(&mut self, voice_idx: usize, pitch: u8) {
-        if voice_idx >= 4 { return; }
+        if voice_idx >= 4 {
+            return;
+        }
         self.voices[voice_idx].retrigger_pitch(pitch as usize, &self.ptable);
     }
 
@@ -511,7 +575,9 @@ impl ManualState {
 
     /// Regenerate sine waveform with updated config (while sine mode is active).
     fn update_sine(&mut self) {
-        if !self.sine_mode { return; }
+        if !self.sine_mode {
+            return;
+        }
         let (wave_num, _) = NEW_WAVE[self.current_instrument.min(NEW_WAVE.len() - 1)];
         let wn = wave_num as usize;
         let sine = generate_sine_waveform(&self.sine_config);
@@ -520,7 +586,9 @@ impl ManualState {
 
     /// Adjust the period for a given pitch index by delta. Returns new period.
     fn adjust_period(&mut self, pitch: usize, delta: i32) -> u16 {
-        if pitch >= 78 { return 0; }
+        if pitch >= 78 {
+            return 0;
+        }
         let (period, wo) = self.ptable[pitch];
         let new_period = (period as i32 + delta).clamp(1, 65535) as u16;
         self.ptable[pitch] = (new_period, wo);
@@ -549,8 +617,13 @@ impl AudioCallback for SynthCallback {
     type Channel = i16;
 
     fn callback(&mut self, out: &mut [i16]) {
-        for s in out.iter_mut() { *s = 0; }
-        let mut st = match self.state.lock() { Ok(g) => g, Err(_) => return };
+        for s in out.iter_mut() {
+            *s = 0;
+        }
+        let mut st = match self.state.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         let inst = st.instruments.clone();
         let total_frames = out.len() / 2;
         let mut frame_pos = 0usize;
@@ -573,14 +646,38 @@ impl AudioCallback for SynthCallback {
             let mut right_buf = vec![0.0f32; chunk];
 
             // Mix all 4 voices with Paula stereo routing
-            st.voices[0].mix_stereo(&mut left_buf, &mut right_buf, &inst, STEREO_PRIMARY, STEREO_BLEED);
-            st.voices[3].mix_stereo(&mut left_buf, &mut right_buf, &inst, STEREO_PRIMARY, STEREO_BLEED);
-            st.voices[1].mix_stereo(&mut right_buf, &mut left_buf, &inst, STEREO_PRIMARY, STEREO_BLEED);
-            st.voices[2].mix_stereo(&mut right_buf, &mut left_buf, &inst, STEREO_PRIMARY, STEREO_BLEED);
+            st.voices[0].mix_stereo(
+                &mut left_buf,
+                &mut right_buf,
+                &inst,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
+            st.voices[3].mix_stereo(
+                &mut left_buf,
+                &mut right_buf,
+                &inst,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
+            st.voices[1].mix_stereo(
+                &mut right_buf,
+                &mut left_buf,
+                &inst,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
+            st.voices[2].mix_stereo(
+                &mut right_buf,
+                &mut left_buf,
+                &inst,
+                STEREO_PRIMARY,
+                STEREO_BLEED,
+            );
 
             for i in 0..chunk {
                 let base = (frame_pos + i) * 2;
-                out[base]     = (left_buf[i].clamp(-1.0, 1.0)  * i16::MAX as f32) as i16;
+                out[base] = (left_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 out[base + 1] = (right_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
             }
 
@@ -682,7 +779,9 @@ fn pitch_is_black(pitch: u8) -> bool {
 fn nearest_black_above(pitch: u8) -> u8 {
     let mut p = pitch;
     while p <= 77 {
-        if pitch_is_black(p) { return p; }
+        if pitch_is_black(p) {
+            return p;
+        }
         p += 1;
     }
     pitch // no black key found above, stay put
@@ -692,8 +791,12 @@ fn nearest_black_above(pitch: u8) -> u8 {
 fn nearest_white_below(pitch: u8) -> u8 {
     let mut p = pitch;
     loop {
-        if !pitch_is_black(p) { return p; }
-        if p == 0 { return 0; }
+        if !pitch_is_black(p) {
+            return p;
+        }
+        if p == 0 {
+            return 0;
+        }
         p -= 1;
     }
 }
@@ -702,11 +805,7 @@ fn nearest_white_below(pitch: u8) -> u8 {
 // Terminal rendering
 // ---------------------------------------------------------------------------
 
-fn render(
-    stdout: &mut io::Stdout,
-    kbd: &KeyboardState,
-    st: &ManualState,
-) -> io::Result<()> {
+fn render(stdout: &mut io::Stdout, kbd: &KeyboardState, st: &ManualState) -> io::Result<()> {
     // Derive active key display from voice state.
     // A key is "active" if its voice is playing and not releasing.
     // A key is "latched" if its voice is in manual (latched) mode.
@@ -722,16 +821,27 @@ fn render(
     let (term_w, _term_h) = terminal::size()?;
     let term_w = term_w as usize;
 
-    execute!(stdout, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
+    execute!(
+        stdout,
+        cursor::MoveTo(0, 0),
+        terminal::Clear(ClearType::All)
+    )?;
 
     // ── Status line 1: instrument, octave, sine ─────────────────────────────
-    let inst_name = INSTRUMENT_NAMES.get(kbd.current_instrument).copied().unwrap_or("?");
+    let inst_name = INSTRUMENT_NAMES
+        .get(kbd.current_instrument)
+        .copied()
+        .unwrap_or("?");
     let sine_status = if kbd.sine_mode { "ON" } else { "OFF" };
     let line1 = if kbd.sine_mode {
         format!(
             " Instrument: {} ({})  |  Octave: {}  |  Sine: {}  |  H2: {:.2}  H3: {:.2}  [F{}]",
-            kbd.current_instrument, inst_name, kbd.base_octave,
-            sine_status, kbd.sine_config.harmonic2, kbd.sine_config.harmonic3,
+            kbd.current_instrument,
+            inst_name,
+            kbd.base_octave,
+            sine_status,
+            kbd.sine_config.harmonic2,
+            kbd.sine_config.harmonic3,
             kbd.selected_harmonic
         )
     } else {
@@ -782,7 +892,8 @@ fn render(
     )?;
 
     // ── Help line ───────────────────────────────────────────────────────────
-    let help = " [1-9]/[]=instr  Z/X=oct  Tab=sine  Shift+key=latch  Arrows=bend  KP2/KP8=tune  Q=quit";
+    let help =
+        " [1-9]/[]=instr  Z/X=oct  Tab=sine  Shift+key=latch  Arrows=bend  KP2/KP8=tune  Q=quit";
     let help = pad_or_clip(help, term_w);
     execute!(
         stdout,
@@ -813,12 +924,25 @@ fn render(
     //   Row 4 (note names):  │ C3      │ D3      │ E3 │ F3      │ G3      │ A3      │ B3 │ C4      │ D4      │ E4  │
 
     let white_keys: [(u8, char); 10] = [
-        (0, 'A'), (2, 'S'), (4, 'D'), (5, 'F'), (7, 'G'),
-        (9, 'H'), (11, 'J'), (12, 'K'), (14, 'L'), (16, ';'),
+        (0, 'A'),
+        (2, 'S'),
+        (4, 'D'),
+        (5, 'F'),
+        (7, 'G'),
+        (9, 'H'),
+        (11, 'J'),
+        (12, 'K'),
+        (14, 'L'),
+        (16, ';'),
     ];
     let black_keys: [(u8, char); 7] = [
-        (1, 'W'), (3, 'E'), (6, 'T'), (8, 'Y'), (10, 'U'),
-        (13, 'O'), (15, 'P'),
+        (1, 'W'),
+        (3, 'E'),
+        (6, 'T'),
+        (8, 'Y'),
+        (10, 'U'),
+        (13, 'O'),
+        (15, 'P'),
     ];
 
     let key_width = 8usize;
@@ -829,18 +953,25 @@ fn render(
     // Precompute black key info: (boundary_pos, key_char, 2-char note name)
     // boundary_pos = wi * key_width, where wi is the index of the white key to the right.
     // All black key names are exactly 2 chars (C#, D#, F#, G#, A#).
-    let bk: Vec<(usize, char, &str)> = black_keys.iter().filter_map(|&(semi, kc)| {
-        let wi = white_keys.iter().position(|&(ws, _)| ws > semi)?;
-        if wi == 0 { return None; }
-        Some((wi * key_width, kc, NOTE_NAMES[semi as usize % 12]))
-    }).collect();
+    let bk: Vec<(usize, char, &str)> = black_keys
+        .iter()
+        .filter_map(|&(semi, kc)| {
+            let wi = white_keys.iter().position(|&(ws, _)| ws > semi)?;
+            if wi == 0 {
+                return None;
+            }
+            Some((wi * key_width, kc, NOTE_NAMES[semi as usize % 12]))
+        })
+        .collect();
 
     // Base buffer: borders at every white-key boundary, spaces elsewhere.
     let mut base_buf = vec![' '; total_width];
     base_buf[0] = '│';
     for i in 1..=white_keys.len() {
         let p = i * key_width;
-        if p < total_width { base_buf[p] = '│'; }
+        if p < total_width {
+            base_buf[p] = '│';
+        }
     }
 
     // ── Black key NOTE NAMES row ─────────────────────────────────────────────
@@ -851,7 +982,7 @@ fn render(
             let mut nc = note.chars();
             if let (Some(c0), Some(c1)) = (nc.next(), nc.next()) {
                 if pos + 1 < total_width {
-                    buf[pos]     = c0;
+                    buf[pos] = c0;
                     buf[pos + 1] = c1;
                 }
             }
@@ -865,25 +996,43 @@ fn render(
                 let s: String = buf[i..end].iter().collect();
                 let lc = kc.to_ascii_lowercase();
                 let is_latched = active_keys.get(&lc).copied().unwrap_or(false);
-                let is_active  = active_keys.contains_key(&lc);
+                let is_active = active_keys.contains_key(&lc);
                 if is_latched {
-                    execute!(stdout,
-                        SetBackgroundColor(Color::Red), SetForegroundColor(Color::White),
-                        SetAttribute(Attribute::Bold), Print(&s),
-                        SetAttribute(Attribute::Reset), ResetColor,
+                    execute!(
+                        stdout,
+                        SetBackgroundColor(Color::Red),
+                        SetForegroundColor(Color::White),
+                        SetAttribute(Attribute::Bold),
+                        Print(&s),
+                        SetAttribute(Attribute::Reset),
+                        ResetColor,
                     )?;
                 } else if is_active {
-                    execute!(stdout,
-                        SetBackgroundColor(Color::Green), SetForegroundColor(Color::Black),
-                        SetAttribute(Attribute::Bold), Print(&s),
-                        SetAttribute(Attribute::Reset), ResetColor,
+                    execute!(
+                        stdout,
+                        SetBackgroundColor(Color::Green),
+                        SetForegroundColor(Color::Black),
+                        SetAttribute(Attribute::Bold),
+                        Print(&s),
+                        SetAttribute(Attribute::Reset),
+                        ResetColor,
                     )?;
                 } else {
-                    execute!(stdout, SetForegroundColor(Color::DarkGrey), Print(&s), ResetColor)?;
+                    execute!(
+                        stdout,
+                        SetForegroundColor(Color::DarkGrey),
+                        Print(&s),
+                        ResetColor
+                    )?;
                 }
                 i += 2;
             } else if buf[i] == '│' {
-                execute!(stdout, SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor)?;
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor
+                )?;
                 i += 1;
             } else {
                 execute!(stdout, Print(format!("{}", buf[i])))?;
@@ -900,7 +1049,7 @@ fn render(
         for &(pos, kc, _) in &bk {
             if pos >= 1 && pos + 1 < total_width {
                 buf[pos - 1] = ' ';
-                buf[pos]     = kc;
+                buf[pos] = kc;
                 buf[pos + 1] = ' ';
             }
         }
@@ -909,24 +1058,42 @@ fn render(
             if let Some(&(_, kc, _)) = bk.iter().find(|&&(pos, kc, _)| i == pos && ch == kc) {
                 let lc = kc.to_ascii_lowercase();
                 let is_latched = active_keys.get(&lc).copied().unwrap_or(false);
-                let is_active  = active_keys.contains_key(&lc);
+                let is_active = active_keys.contains_key(&lc);
                 if is_latched {
-                    execute!(stdout,
-                        SetBackgroundColor(Color::Red), SetForegroundColor(Color::White),
-                        SetAttribute(Attribute::Bold), Print(format!("{}", ch)),
-                        SetAttribute(Attribute::Reset), ResetColor,
+                    execute!(
+                        stdout,
+                        SetBackgroundColor(Color::Red),
+                        SetForegroundColor(Color::White),
+                        SetAttribute(Attribute::Bold),
+                        Print(format!("{}", ch)),
+                        SetAttribute(Attribute::Reset),
+                        ResetColor,
                     )?;
                 } else if is_active {
-                    execute!(stdout,
-                        SetBackgroundColor(Color::Green), SetForegroundColor(Color::Black),
-                        SetAttribute(Attribute::Bold), Print(format!("{}", ch)),
-                        SetAttribute(Attribute::Reset), ResetColor,
+                    execute!(
+                        stdout,
+                        SetBackgroundColor(Color::Green),
+                        SetForegroundColor(Color::Black),
+                        SetAttribute(Attribute::Bold),
+                        Print(format!("{}", ch)),
+                        SetAttribute(Attribute::Reset),
+                        ResetColor,
                     )?;
                 } else {
-                    execute!(stdout, SetForegroundColor(Color::Grey), Print(format!("{}", ch)), ResetColor)?;
+                    execute!(
+                        stdout,
+                        SetForegroundColor(Color::Grey),
+                        Print(format!("{}", ch)),
+                        ResetColor
+                    )?;
                 }
             } else if ch == '│' {
-                execute!(stdout, SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor)?;
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor
+                )?;
             } else {
                 execute!(stdout, Print(format!("{}", ch)))?;
             }
@@ -940,7 +1107,7 @@ fn render(
         for (i, &(semi, key_char)) in white_keys.iter().enumerate() {
             let lc = key_char.to_ascii_lowercase();
             let is_latched = active_keys.get(&lc).copied().unwrap_or(false);
-            let is_active  = active_keys.contains_key(&lc);
+            let is_active = active_keys.contains_key(&lc);
             // Row 0: show key char centred; row 1: blank (adds height)
             let content = if row == 0 {
                 format!(" {:^w$}", key_char, w = key_width - 2)
@@ -948,27 +1115,47 @@ fn render(
                 " ".repeat(key_width - 1)
             };
             if is_latched {
-                execute!(stdout,
-                    SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor,
-                    SetBackgroundColor(Color::Red), SetForegroundColor(Color::White),
-                    SetAttribute(Attribute::Bold), Print(&content),
-                    SetAttribute(Attribute::Reset), ResetColor,
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor,
+                    SetBackgroundColor(Color::Red),
+                    SetForegroundColor(Color::White),
+                    SetAttribute(Attribute::Bold),
+                    Print(&content),
+                    SetAttribute(Attribute::Reset),
+                    ResetColor,
                 )?;
             } else if is_active {
-                execute!(stdout,
-                    SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor,
-                    SetBackgroundColor(Color::Green), SetForegroundColor(Color::Black),
-                    SetAttribute(Attribute::Bold), Print(&content),
-                    SetAttribute(Attribute::Reset), ResetColor,
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor,
+                    SetBackgroundColor(Color::Green),
+                    SetForegroundColor(Color::Black),
+                    SetAttribute(Attribute::Bold),
+                    Print(&content),
+                    SetAttribute(Attribute::Reset),
+                    ResetColor,
                 )?;
             } else {
-                execute!(stdout,
-                    SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor,
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor,
                     Print(&content),
                 )?;
             }
             if i == white_keys.len() - 1 {
-                execute!(stdout, SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor)?;
+                execute!(
+                    stdout,
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("│"),
+                    ResetColor
+                )?;
             }
             let _ = semi;
         }
@@ -979,16 +1166,26 @@ fn render(
     // Use pitch_to_name so the label matches the actual note played (C-correct).
     execute!(stdout, Print(&pad_left))?;
     for (i, &(semi, _key_char)) in white_keys.iter().enumerate() {
-        let pitch = (kbd.base_octave as i32 * 12 + semi as i32 - 3).max(0).min(77) as u8;
+        let pitch = (kbd.base_octave as i32 * 12 + semi as i32 - 3)
+            .max(0)
+            .min(77) as u8;
         let note_label = pitch_to_name(pitch);
-        execute!(stdout,
-            SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor,
+        execute!(
+            stdout,
+            SetForegroundColor(Color::DarkGrey),
+            Print("│"),
+            ResetColor,
             SetForegroundColor(Color::Cyan),
             Print(format!(" {:^w$}", note_label, w = key_width - 2)),
             ResetColor,
         )?;
         if i == white_keys.len() - 1 {
-            execute!(stdout, SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor)?;
+            execute!(
+                stdout,
+                SetForegroundColor(Color::DarkGrey),
+                Print("│"),
+                ResetColor
+            )?;
         }
     }
     execute!(stdout, cursor::MoveToNextLine(1))?;
@@ -996,7 +1193,8 @@ fn render(
     // ── Bottom border ───────────────────────────────────────────────────────
     execute!(stdout, Print(&pad_left))?;
     let bottom = format!("└{}┘", "─".repeat(total_width - 2));
-    execute!(stdout,
+    execute!(
+        stdout,
         SetForegroundColor(Color::DarkGrey),
         Print(&bottom),
         ResetColor,
@@ -1006,15 +1204,20 @@ fn render(
     // ── Active notes list ───────────────────────────────────────────────────
     if !kbd.held_keys.is_empty() {
         execute!(stdout, cursor::MoveToNextLine(1))?;
-        let mut notes: Vec<String> = kbd.held_keys.iter().map(|(c, hk)| {
-            let name = pitch_to_name(hk.pitch);
-            let latch = if hk.latched { " [L]" } else { "" };
-            format!("{}:{}{}", c.to_uppercase(), name, latch)
-        }).collect();
+        let mut notes: Vec<String> = kbd
+            .held_keys
+            .iter()
+            .map(|(c, hk)| {
+                let name = pitch_to_name(hk.pitch);
+                let latch = if hk.latched { " [L]" } else { "" };
+                format!("{}:{}{}", c.to_uppercase(), name, latch)
+            })
+            .collect();
         notes.sort();
         let notes_line = format!(" Active: {}", notes.join("  "));
         let notes_line = pad_or_clip(&notes_line, term_w);
-        execute!(stdout,
+        execute!(
+            stdout,
             SetForegroundColor(Color::Green),
             Print(&notes_line),
             ResetColor,
@@ -1044,8 +1247,8 @@ fn print_ptable(ptable: &[(u16, u16); 78]) {
 
     // Row 0 is 6 entries; rows 1-6 are 12 entries each.
     let rows: &[(usize, usize, &str)] = &[
-        (0,  6,  "Row 0 – D#1–G#1    (pitch 0–5)"),
-        (6,  12, "Row 1 – A1–G#2     (pitch 6–17)"),
+        (0, 6, "Row 0 – D#1–G#1    (pitch 0–5)"),
+        (6, 12, "Row 1 – A1–G#2     (pitch 6–17)"),
         (18, 12, "Row 2 – A2–G#3     (pitch 18–29)"),
         (30, 12, "Row 3 – A3–G#4     (pitch 30–41, wave_offset 16)"),
         (42, 12, "Row 4 – A4–G#5     (pitch 42–53, wave_offset 24)"),
@@ -1062,10 +1265,14 @@ fn print_ptable(ptable: &[(u16, u16); 78]) {
             let (orig_period, _) = PTABLE[idx];
             if period != orig_period {
                 print!("({:>4}, {:>2}), // was {}", period, wo, orig_period);
-                if i < len - 1 { print!("\n    "); }
+                if i < len - 1 {
+                    print!("\n    ");
+                }
             } else {
                 print!("({:>4}, {:>2}),", period, wo);
-                if i < len - 1 { print!("  "); }
+                if i < len - 1 {
+                    print!("  ");
+                }
             }
         }
         println!();
@@ -1094,9 +1301,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let audio_state = Arc::new(Mutex::new(ManualState::new(instruments)));
     let cb_state = Arc::clone(&audio_state);
 
-    let device = audio_ss.open_playback(None, &desired, |_spec| {
-        SynthCallback { state: cb_state }
-    })?;
+    let device =
+        audio_ss.open_playback(None, &desired, |_spec| SynthCallback { state: cb_state })?;
     device.resume();
 
     // ── Terminal setup ──────────────────────────────────────────────────────
@@ -1108,7 +1314,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cursor::Hide,
         PushKeyboardEnhancementFlags(
             KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-            | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
         )
     )?;
 
@@ -1128,9 +1334,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // from voice state in render(), so no separate tracking needed.
         {
             let st = audio_state.lock().unwrap();
-            let stale: Vec<char> = kbd.held_keys.iter()
+            let stale: Vec<char> = kbd
+                .held_keys
+                .iter()
                 .filter(|(c, hk)| {
-                    if hk.latched { return false; }
+                    if hk.latched {
+                        return false;
+                    }
                     let v = &st.voices[hk.voice_idx];
                     // Also stale if the voice was stolen by a different key
                     v.releasing || !v.playing || v.key_char != Some(**c)
@@ -1164,7 +1374,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut needs_render = false;
 
         match ev {
-            Event::Key(KeyEvent { code, modifiers, kind, state, .. }) => {
+            Event::Key(KeyEvent {
+                code,
+                modifiers,
+                kind,
+                state,
+                ..
+            }) => {
                 // We care about Press and Repeat events for most keys,
                 // and Release events for non-latched piano keys.
                 let is_press = kind == KeyEventKind::Press || kind == KeyEventKind::Repeat;
@@ -1178,10 +1394,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Only quit on 'q' if it's not being used as a piano key
                         // 'q' is not mapped as a piano key, so it's safe
                         break 'main;
-                    },
+                    }
                     KeyCode::Char('c') if is_press && modifiers.contains(KeyModifiers::CONTROL) => {
                         break 'main;
-                    },
+                    }
 
                     // ── Octave ────────────────────────────────────────────
                     KeyCode::Char('z') if is_press && !has_shift => {
@@ -1189,16 +1405,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             kbd.base_octave -= 1;
                             needs_render = true;
                         }
-                    },
+                    }
                     KeyCode::Char('x') if is_press && !has_shift => {
                         if kbd.base_octave < 6 {
                             kbd.base_octave += 1;
                             needs_render = true;
                         }
-                    },
+                    }
 
                     // ── Instrument select (number keys, not numpad) ──────────────────
-                    KeyCode::Char(c @ '1'..='9') if is_press && !state.contains(KeyEventState::KEYPAD) => {
+                    KeyCode::Char(c @ '1'..='9')
+                        if is_press && !state.contains(KeyEventState::KEYPAD) =>
+                    {
                         let slot = (c as usize - '1' as usize).min(11);
                         kbd.current_instrument = slot;
                         let mut st = audio_state.lock().unwrap();
@@ -1209,27 +1427,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         st.current_instrument = slot;
                         kbd.sine_mode = st.sine_mode;
                         needs_render = true;
-                    },
+                    }
 
                     // ── Instrument cycle ─────────────────────────────────
                     KeyCode::Char('[') if is_press => {
-                        let slot = if kbd.current_instrument == 0 { 11 } else { kbd.current_instrument - 1 };
+                        let slot = if kbd.current_instrument == 0 {
+                            11
+                        } else {
+                            kbd.current_instrument - 1
+                        };
                         kbd.current_instrument = slot;
                         let mut st = audio_state.lock().unwrap();
-                        if st.sine_mode { st.toggle_sine(); }
+                        if st.sine_mode {
+                            st.toggle_sine();
+                        }
                         st.current_instrument = slot;
                         kbd.sine_mode = st.sine_mode;
                         needs_render = true;
-                    },
+                    }
                     KeyCode::Char(']') if is_press => {
                         let slot = (kbd.current_instrument + 1) % 12;
                         kbd.current_instrument = slot;
                         let mut st = audio_state.lock().unwrap();
-                        if st.sine_mode { st.toggle_sine(); }
+                        if st.sine_mode {
+                            st.toggle_sine();
+                        }
                         st.current_instrument = slot;
                         kbd.sine_mode = st.sine_mode;
                         needs_render = true;
-                    },
+                    }
 
                     // ── Sine mode toggle ─────────────────────────────────
                     KeyCode::Tab if is_press => {
@@ -1237,17 +1463,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         st.toggle_sine();
                         kbd.sine_mode = st.sine_mode;
                         needs_render = true;
-                    },
+                    }
 
                     // ── Harmonic selection ────────────────────────────────
                     KeyCode::F(2) if is_press => {
                         kbd.selected_harmonic = 2;
                         needs_render = true;
-                    },
+                    }
                     KeyCode::F(3) if is_press => {
                         kbd.selected_harmonic = 3;
                         needs_render = true;
-                    },
+                    }
 
                     // ── Harmonic adjustment ──────────────────────────────
                     KeyCode::Char('+') | KeyCode::Char('=') if is_press && kbd.sine_mode => {
@@ -1260,7 +1486,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         st.sine_config = kbd.sine_config.clone();
                         st.update_sine();
                         needs_render = true;
-                    },
+                    }
                     KeyCode::Char('-') | KeyCode::Char('_') if is_press && kbd.sine_mode => {
                         if kbd.selected_harmonic == 2 {
                             kbd.sine_config.harmonic2 = (kbd.sine_config.harmonic2 - 0.05).max(0.0);
@@ -1271,7 +1497,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         st.sine_config = kbd.sine_config.clone();
                         st.update_sine();
                         needs_render = true;
-                    },
+                    }
 
                     // ── PTABLE fine tuning (Numpad 2/8) ──────────────────
                     KeyCode::Char('2') if is_press && state.contains(KeyEventState::KEYPAD) => {
@@ -1282,7 +1508,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             kbd.ptable_dirty = true;
                             needs_render = true;
                         }
-                    },
+                    }
                     KeyCode::Char('8') if is_press && state.contains(KeyEventState::KEYPAD) => {
                         if let Some(pitch) = kbd.active_pitch {
                             let delta = if has_shift { 10 } else { 1 };
@@ -1291,7 +1517,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             kbd.ptable_dirty = true;
                             needs_render = true;
                         }
-                    },
+                    }
 
                     // ── Arrow keys (re-pitch latched notes) ──────────────
                     KeyCode::Right if is_press => {
@@ -1308,7 +1534,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                    },
+                    }
                     KeyCode::Left if is_press => {
                         if let Some(latch_char) = kbd.last_latched {
                             if let Some(hk) = kbd.held_keys.get_mut(&latch_char) {
@@ -1323,7 +1549,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                    },
+                    }
                     KeyCode::Up if is_press => {
                         if let Some(latch_char) = kbd.last_latched {
                             if let Some(hk) = kbd.held_keys.get_mut(&latch_char) {
@@ -1338,7 +1564,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                    },
+                    }
                     KeyCode::Down if is_press => {
                         if let Some(latch_char) = kbd.last_latched {
                             if let Some(hk) = kbd.held_keys.get_mut(&latch_char) {
@@ -1353,7 +1579,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                    },
+                    }
 
                     // ── Piano keys ───────────────────────────────────────
                     // Only trigger on Press, not Repeat — we track held
@@ -1372,18 +1598,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     kbd.held_keys.remove(&lc);
                                     if kbd.last_latched == Some(lc) {
                                         // Find another latched key, or None
-                                        kbd.last_latched = kbd.held_keys.iter()
+                                        kbd.last_latched = kbd
+                                            .held_keys
+                                            .iter()
                                             .find(|(_, hk)| hk.latched)
                                             .map(|(c, _)| *c);
                                     }
                                     // Update active pitch
-                                    kbd.active_pitch = kbd.last_latched
+                                    kbd.active_pitch = kbd
+                                        .last_latched
                                         .and_then(|c| kbd.held_keys.get(&c))
                                         .map(|hk| hk.pitch);
                                 } else {
                                     // New latch
                                     let vi = kbd.find_free_voice();
-                                    kbd.held_keys.insert(lc, HeldKey { pitch, voice_idx: vi, latched: true });
+                                    kbd.held_keys.insert(
+                                        lc,
+                                        HeldKey {
+                                            pitch,
+                                            voice_idx: vi,
+                                            latched: true,
+                                        },
+                                    );
                                     kbd.last_latched = Some(lc);
                                     kbd.active_pitch = Some(pitch);
                                     let mut st = audio_state.lock().unwrap();
@@ -1399,11 +1635,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         st.release_voice(vi);
                                         kbd.held_keys.remove(&lc);
                                         if kbd.last_latched == Some(lc) {
-                                            kbd.last_latched = kbd.held_keys.iter()
+                                            kbd.last_latched = kbd
+                                                .held_keys
+                                                .iter()
                                                 .find(|(_, hk)| hk.latched)
                                                 .map(|(c, _)| *c);
                                         }
-                                        kbd.active_pitch = kbd.last_latched
+                                        kbd.active_pitch = kbd
+                                            .last_latched
                                             .and_then(|c| kbd.held_keys.get(&c))
                                             .map(|hk| hk.pitch);
                                     } else {
@@ -1412,7 +1651,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 } else {
                                     // New non-latched hold (uses ADSR envelope)
                                     let vi = kbd.find_free_voice();
-                                    kbd.held_keys.insert(lc, HeldKey { pitch, voice_idx: vi, latched: false });
+                                    kbd.held_keys.insert(
+                                        lc,
+                                        HeldKey {
+                                            pitch,
+                                            voice_idx: vi,
+                                            latched: false,
+                                        },
+                                    );
                                     kbd.active_pitch = Some(pitch);
                                     let mut st = audio_state.lock().unwrap();
                                     st.trigger_voice(vi, pitch, false, lc);
@@ -1420,7 +1666,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             needs_render = true;
                         }
-                    },
+                    }
 
                     _ => {}
                 }
@@ -1442,11 +1688,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-            },
+            }
             Event::Resize(_, _) => {
                 needs_render = true;
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         if needs_render {

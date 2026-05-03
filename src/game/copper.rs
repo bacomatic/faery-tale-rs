@@ -20,16 +20,24 @@ pub struct CopperList {
 
 impl CopperList {
     pub fn new() -> Self {
-        CopperList { instructions: Vec::new() }
+        CopperList {
+            instructions: Vec::new(),
+        }
     }
 
     pub fn add(&mut self, scanline: u16, color_reg: u8, color: u16) {
-        self.instructions.push(CopperInstruction { scanline, color_reg, color });
+        self.instructions.push(CopperInstruction {
+            scanline,
+            color_reg,
+            color,
+        });
     }
 
     /// Returns instructions that apply at or before `scanline`, sorted by scanline.
     pub fn instructions_up_to(&self, scanline: u16) -> impl Iterator<Item = &CopperInstruction> {
-        self.instructions.iter().filter(move |i| i.scanline <= scanline)
+        self.instructions
+            .iter()
+            .filter(move |i| i.scanline <= scanline)
     }
 
     /// Parse a raw copper list from bytes.
@@ -42,8 +50,8 @@ impl CopperList {
         let mut current_scanline = 0u16;
         let mut i = 0;
         while i + 3 < data.len() {
-            let word1 = u16::from_be_bytes([data[i], data[i+1]]);
-            let word2 = u16::from_be_bytes([data[i+2], data[i+3]]);
+            let word1 = u16::from_be_bytes([data[i], data[i + 1]]);
+            let word2 = u16::from_be_bytes([data[i + 2], data[i + 3]]);
             i += 4;
             if word1 == 0xFFFF && word2 == 0xFFFE {
                 break; // End of copper list
@@ -67,5 +75,7 @@ impl CopperList {
 }
 
 impl Default for CopperList {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

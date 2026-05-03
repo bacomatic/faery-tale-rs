@@ -13,7 +13,8 @@ This file is the compact agent contract for this repository. Keep it stable and 
 
 ## Timing invariant (critical)
 
-- **NTSC-only at 30 fps** for gameplay (the audio VBL interrupt is 60 Hz).
+- **NTSC-only at 30 fps for presentation**; the audio VBL interrupt is 60 Hz.
+- **Animation and AI advance on a 15 Hz gameplay tick** (one gameplay tick every two presented frames).
 - There was no PAL release; treat all gameplay, audio, and animation timing as NTSC.
 
 ## Agent working rules
@@ -123,4 +124,3 @@ When investigating any game mechanic (combat, movement, AI, timings, formulas, e
 2. Search `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
 3. Use the relevant `docs/spec/` subsystem file (local) to resolve implementation details and keep the port internally consistent.
 4. Do not create competing source-of-truth documents unless the user explicitly requests it.
-

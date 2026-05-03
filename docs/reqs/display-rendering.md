@@ -9,7 +9,7 @@
 | R-DISP-003 | The rendering pipeline shall use double-buffered page flipping: one drawing page and one viewing page, swapped each frame. |
 | R-DISP-004 | Each page shall maintain its own scroll position (`isv_x`, `isv_y`), sprite count (`obcount`), background save queue (up to `MAXSHAPES` = 25 sprites), background save buffer (up to 5920 bytes), and witch FX position state. |
 | R-DISP-005 | Sprite backgrounds shall be restored in reverse compositing order before the next frame's tile rendering. |
-| R-DISP-006 | The target frame rate shall be 30 fps (NTSC timing). Each main loop iteration equals one frame, synchronized to vertical blank. |
+| R-DISP-006 | The target presentation rate shall be 30 fps (NTSC timing). Rendering shall remain synchronized to vertical blank, but animation and AI updates shall advance on a 15 Hz gameplay tick rather than every presented frame. |
 | R-DISP-007 | The full raster shall be 320×200 pixels (`PHANTA_WIDTH` × `RAST_HEIGHT`), with the visible playfield area inset by a 16-pixel scroll margin on each side. |
 | R-DISP-008 | Color 31 (all 5 bitplanes set = `11111`) shall be the transparency color for sprite compositing. |
 | R-DISP-009 | A hardware sprite (sprite 0) shall serve as the mouse pointer cursor, rendered in the status bar viewport. |
@@ -18,7 +18,7 @@
 ### User Stories
 
 - As a player, I see a game world viewport above a status bar, matching the original Amiga split-screen layout.
-- As a player, I experience smooth rendering at 30 fps without screen tearing or flicker.
+- As a player, I experience smooth rendering at 30 fps without screen tearing or flicker, while animation and AI cadence still matches the original game.
 - As a player, I see a mouse pointer cursor in the status bar area.
 
 ---
@@ -105,5 +105,4 @@
 - As a player, I see flying creatures (bird carrier, fairy) rendered without being occluded by ground terrain.
 
 ---
-
 

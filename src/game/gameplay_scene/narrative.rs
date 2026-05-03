@@ -15,7 +15,11 @@ impl GameplayScene {
 
         match step {
             NarrativeStep::WaitTicks { .. } => {}
-            NarrativeStep::ShowPlacard { key, substitution, hold_ticks } => {
+            NarrativeStep::ShowPlacard {
+                key,
+                substitution,
+                hold_ticks,
+            } => {
                 if hold_ticks > 0 {
                     return;
                 }
@@ -34,7 +38,11 @@ impl GameplayScene {
                 self.dlog("narrative: clear_inner_rect");
                 self.narrative_queue.advance_active_step();
             }
-            NarrativeStep::ShowRescueHomeText { line17, hero_name, line18 } => {
+            NarrativeStep::ShowRescueHomeText {
+                line17,
+                hero_name,
+                line18,
+            } => {
                 for key in [line17.as_str(), line18.as_str()] {
                     if key.is_empty() {
                         continue;
@@ -67,8 +75,14 @@ impl GameplayScene {
                 }
                 self.narrative_queue.advance_active_step();
             }
-            NarrativeStep::SwapObjectId { object_index, new_id } => {
-                if !self.state.swap_world_object_id_for_script(object_index, new_id) {
+            NarrativeStep::SwapObjectId {
+                object_index,
+                new_id,
+            } => {
+                if !self
+                    .state
+                    .swap_world_object_id_for_script(object_index, new_id)
+                {
                     self.dlog(format!(
                         "fidelity blocker: swap_object_id missing target index={} new_id={}",
                         object_index, new_id,
@@ -113,9 +127,20 @@ impl GameplayScene {
             hero_name,
             line18: String::new(),
         });
-        steps.push(NarrativeStep::TeleportHero { x: 5511, y: 33780, region: 0 });
-        steps.push(NarrativeStep::MoveExtent { index: 0, x: 22205, y: 21231 });
-        steps.push(NarrativeStep::SwapObjectId { object_index: 2, new_id: 4 });
+        steps.push(NarrativeStep::TeleportHero {
+            x: 5511,
+            y: 33780,
+            region: 0,
+        });
+        steps.push(NarrativeStep::MoveExtent {
+            index: 0,
+            x: 22205,
+            y: 21231,
+        });
+        steps.push(NarrativeStep::SwapObjectId {
+            object_index: 2,
+            new_id: 4,
+        });
         steps.push(NarrativeStep::ApplyRescueRewardsAndFlags);
 
         self.narrative_queue.enqueue(steps);
@@ -142,7 +167,7 @@ impl GameplayScene {
     }
 
     pub(crate) fn execute_princess_rescue(&mut self) {
-        const ITEM_WRIT: usize = 28;  // stuff[28] = Writ
+        const ITEM_WRIT: usize = 28; // stuff[28] = Writ
 
         let bname = self.brother_name().to_string();
 
@@ -169,9 +194,13 @@ impl GameplayScene {
 
         // King's post-rescue line (fmain2.c:1599, `speak(18)`): the writ
         // designation speech sourced from faery.toml [narr].speeches[18].
-        self.messages.push(crate::game::events::speak(&self.narr, 18, &bname));
+        self.messages
+            .push(crate::game::events::speak(&self.narr, 18, &bname));
 
-        self.dlog(format!("Princess rescue complete (count={})", self.state.princess));
+        self.dlog(format!(
+            "Princess rescue complete (count={})",
+            self.state.princess
+        ));
     }
 
     #[cfg(test)]
@@ -187,7 +216,11 @@ impl GameplayScene {
     }
 
     #[cfg(test)]
-    pub(crate) fn debug_tick_and_execute_sequence_only(&mut self, ticks: u32, game_lib: &GameLibrary) {
+    pub(crate) fn debug_tick_and_execute_sequence_only(
+        &mut self,
+        ticks: u32,
+        game_lib: &GameLibrary,
+    ) {
         for _ in 0..ticks {
             self.tick_narrative_sequence();
             self.execute_active_narrative_step(game_lib);

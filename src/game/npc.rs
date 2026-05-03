@@ -1,8 +1,8 @@
 //! NPC data loading and actor initialization.
 //! Ports the carrier/enemy table loading from fmain.c hdrive.c.
 
-use crate::game::adf::AdfDisk;
 use crate::game::actor::{Goal, Tactic};
+use crate::game::adf::AdfDisk;
 
 /// Maximum number of NPCs in any region (original limit).
 pub const MAX_NPCS: usize = 16;
@@ -111,10 +111,7 @@ impl Npc {
 
     /// Execute one frame of movement (terrain-only collision).
     /// Delegates to `tick_with_actors()` with no actor positions.
-    pub fn tick(
-        &mut self,
-        world: Option<&crate::game::world_data::WorldData>,
-    ) {
+    pub fn tick(&mut self, world: Option<&crate::game::world_data::WorldData>) {
         self.tick_with_actors(world, &[]);
     }
 
@@ -132,8 +129,8 @@ impl Npc {
         world: Option<&crate::game::world_data::WorldData>,
         other_actors: &[(i32, i32)],
     ) {
-        use crate::game::collision::{proxcheck, actor_collides, newx, newy, px_to_terrain_type};
         use crate::game::actor::Tactic;
+        use crate::game::collision::{actor_collides, newx, newy, proxcheck, px_to_terrain_type};
 
         if !self.active || self.state != NpcState::Walking {
             return;
@@ -144,16 +141,17 @@ impl Npc {
         // same speed-by-terrain chain. Wraiths (race 2) and Snakes (race 4)
         // bypass the chain per fmain.c:1639 — always normal speed 2.
         let race_ignores_terrain = self.race == RACE_WRAITH || self.race == RACE_SNAKE;
-        let terrain_here = world.map_or(0u8, |w|
-            px_to_terrain_type(w, self.x as i32, self.y as i32));
-        let dist = crate::game::combat::npc_speed_for_terrain(terrain_here, race_ignores_terrain) as i32;
+        let terrain_here =
+            world.map_or(0u8, |w| px_to_terrain_type(w, self.x as i32, self.y as i32));
+        let dist =
+            crate::game::combat::npc_speed_for_terrain(terrain_here, race_ignores_terrain) as i32;
 
         let proposed_x = newx(self.x as u16, facing, dist);
         let proposed_y = newy(self.y as u16, facing, dist);
 
         // Race-specific terrain bypass: wraith (race 2) skips terrain checks.
-        let terrain_passable = self.race == RACE_WRAITH
-            || proxcheck(world, proposed_x as i32, proposed_y as i32);
+        let terrain_passable =
+            self.race == RACE_WRAITH || proxcheck(world, proposed_x as i32, proposed_y as i32);
         let actor_passable = !actor_collides(proposed_x as i32, proposed_y as i32, other_actors);
 
         if terrain_passable && actor_passable {
@@ -164,8 +162,7 @@ impl Npc {
             let dev_cw = (facing + 1) & 7;
             let cw_x = newx(self.x as u16, dev_cw, dist);
             let cw_y = newy(self.y as u16, dev_cw, dist);
-            let cw_terrain = self.race == RACE_WRAITH
-                || proxcheck(world, cw_x as i32, cw_y as i32);
+            let cw_terrain = self.race == RACE_WRAITH || proxcheck(world, cw_x as i32, cw_y as i32);
             let cw_actor = !actor_collides(cw_x as i32, cw_y as i32, other_actors);
             if cw_terrain && cw_actor {
                 self.x = cw_x as i16;
@@ -174,8 +171,8 @@ impl Npc {
                 let dev_ccw = (facing.wrapping_sub(1)) & 7;
                 let ccw_x = newx(self.x as u16, dev_ccw, dist);
                 let ccw_y = newy(self.y as u16, dev_ccw, dist);
-                let ccw_terrain = self.race == RACE_WRAITH
-                    || proxcheck(world, ccw_x as i32, ccw_y as i32);
+                let ccw_terrain =
+                    self.race == RACE_WRAITH || proxcheck(world, ccw_x as i32, ccw_y as i32);
                 let ccw_actor = !actor_collides(ccw_x as i32, ccw_y as i32, other_actors);
                 if ccw_terrain && ccw_actor {
                     self.x = ccw_x as i16;
@@ -277,8 +274,9 @@ mod tests {
     fn test_npc_from_bytes_human() {
         let mut data = [0u8; 16];
         data[0] = NPC_TYPE_HUMAN; // type
-        data[1] = RACE_NORMAL;    // race
-        data[2] = 0x01; data[3] = 0x00; // x = 256
+        data[1] = RACE_NORMAL; // race
+        data[2] = 0x01;
+        data[3] = 0x00; // x = 256
         let npc = Npc::from_bytes(&data);
         assert!(npc.active);
         assert_eq!(npc.npc_type, NPC_TYPE_HUMAN);
@@ -290,12 +288,13 @@ mod tests {
         let mut npc = Npc {
             npc_type: NPC_TYPE_ORC,
             race: RACE_ENEMY,
-            x: 0, y: 0,
+            x: 0,
+            y: 0,
             vitality: 10,
             gold: 5,
             speed: 2,
             active: true,
-            facing: 2,  // East
+            facing: 2, // East
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -314,7 +313,7 @@ mod tests {
             gold: 0,
             speed: 2,
             active: true,
-            facing: 2,  // East
+            facing: 2, // East
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -325,7 +324,12 @@ mod tests {
 
     #[test]
     fn test_npc_defeat() {
-        let mut npc = Npc { active: true, gold: 50, vitality: 10, ..Default::default() };
+        let mut npc = Npc {
+            active: true,
+            gold: 50,
+            vitality: 10,
+            ..Default::default()
+        };
         let (gold, _) = npc.defeat();
         assert!(!npc.active);
         assert_eq!(gold, 50);
@@ -407,7 +411,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,  // East
+            facing: 2, // East
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -431,7 +435,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,  // East
+            facing: 2, // East
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -530,8 +534,20 @@ mod tests {
     fn test_wraith_and_snake_ignore_terrain_speed() {
         use crate::game::combat::npc_speed_for_terrain;
         // fmain.c:1639 — wraiths and snakes bypass terrain-speed entirely.
-        assert_eq!(npc_speed_for_terrain(2, true), 2, "wraith/snake in water = normal speed");
-        assert_eq!(npc_speed_for_terrain(6, true), 2, "wraith/snake on slippery = normal speed");
-        assert_eq!(npc_speed_for_terrain(3, true), 2, "wraith/snake in deep water = normal speed");
+        assert_eq!(
+            npc_speed_for_terrain(2, true),
+            2,
+            "wraith/snake in water = normal speed"
+        );
+        assert_eq!(
+            npc_speed_for_terrain(6, true),
+            2,
+            "wraith/snake on slippery = normal speed"
+        );
+        assert_eq!(
+            npc_speed_for_terrain(3, true),
+            2,
+            "wraith/snake in deep water = normal speed"
+        );
     }
 }

@@ -1,4 +1,3 @@
-
 use std::any::Any;
 
 use sdl2::event::Event;
@@ -8,10 +7,10 @@ use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
-use crate::game::palette_fader::{FadeController, FadeResult};
-use crate::game::placard::{PlacardRenderer, start_placard_renderer};
-use crate::game::scene::{Scene, SceneResources, SceneResult};
 use crate::game::game_library::GameLibrary;
+use crate::game::palette_fader::{FadeController, FadeResult};
+use crate::game::placard::{start_placard_renderer, PlacardRenderer};
+use crate::game::scene::{Scene, SceneResources, SceneResult};
 
 /**
  * Scene that displays a named placard with the swirly border.
@@ -90,12 +89,19 @@ impl PlacardScene {
 }
 
 impl Scene for PlacardScene {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 
     fn handle_event(&mut self, event: &Event) -> bool {
         match event {
-            Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+            Event::KeyDown {
+                keycode: Some(Keycode::Space),
+                ..
+            } => {
                 self.skip_requested = true;
                 true
             }
@@ -142,10 +148,17 @@ impl Scene for PlacardScene {
                     if let Some(plac) = game_lib.find_placard(&placard_name) {
                         match &substitution {
                             Some(sub) => plac.draw_offset_substituted(
-                                resources.amber_font, play_canvas, BORDER_X_OFFSET, 0, sub,
+                                resources.amber_font,
+                                play_canvas,
+                                BORDER_X_OFFSET,
+                                0,
+                                sub,
                             ),
                             None => plac.draw_offset(
-                                resources.amber_font, play_canvas, BORDER_X_OFFSET, 0,
+                                resources.amber_font,
+                                play_canvas,
+                                BORDER_X_OFFSET,
+                                0,
                             ),
                         }
                     }

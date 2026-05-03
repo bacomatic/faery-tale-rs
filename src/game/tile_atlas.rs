@@ -67,7 +67,11 @@ impl TileAtlas {
                 mask_type[tile_idx] = world.terra_mem[terra_base + 1] & 0x0F;
             }
         }
-        TileAtlas { pixels, mask_type, maptag }
+        TileAtlas {
+            pixels,
+            mask_type,
+            maptag,
+        }
     }
 
     /// Returns the palette-index slice for a single tile (TILE_PIXELS bytes).
@@ -80,8 +84,8 @@ impl TileAtlas {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::world_data::WorldData;
     use crate::game::adf::AdfDisk;
+    use crate::game::world_data::WorldData;
 
     fn empty_world() -> WorldData {
         let adf = AdfDisk::from_bytes(vec![0u8; 2048 * 512]);
@@ -117,14 +121,14 @@ mod tests {
         // Build a world with known terra_mem values.
         let mut world = empty_world();
         // tile 0: maptag=5, mask_type=2 (ground-level)
-        world.terra_mem[0] = 5;       // maptag
-        world.terra_mem[1] = 0x72;    // collision=7, mask_type=2
-        // tile 1: maptag=0, mask_type=0 (transparent/no mask)
+        world.terra_mem[0] = 5; // maptag
+        world.terra_mem[1] = 0x72; // collision=7, mask_type=2
+                                   // tile 1: maptag=0, mask_type=0 (transparent/no mask)
         world.terra_mem[4] = 0;
-        world.terra_mem[5] = 0x30;    // collision=3, mask_type=0
-        // tile 2: maptag=10, mask_type=6 (full-if-above)
+        world.terra_mem[5] = 0x30; // collision=3, mask_type=0
+                                   // tile 2: maptag=10, mask_type=6 (full-if-above)
         world.terra_mem[8] = 10;
-        world.terra_mem[9] = 0x16;    // collision=1, mask_type=6
+        world.terra_mem[9] = 0x16; // collision=1, mask_type=6
 
         let atlas = TileAtlas::from_world_data(&world);
 

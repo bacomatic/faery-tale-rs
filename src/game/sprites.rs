@@ -24,18 +24,18 @@ pub const CFILE_BLOCKS: [u32; CFILE_COUNT] = [
     1312, // 3  objects
     1348, // 4  raft
     1351, // 5  turtle/carrier
-     960, // 6  ogre
+    960,  // 6  ogre
     1080, // 7  ghost
     1000, // 8  dknight/spiders
     1040, // 9  necromancer/farmer/loraii
     1160, // 10 dragon
     1120, // 11 bird
     1376, // 12 snake/salamander (reuses julian block)
-     936, // 13 wizard/priest
-     931, // 14 royal set (guard/princess/king/noble/sorceress)
-     941, // 15 bartender
-     946, // 16 witch/spectre/ghost
-     951, // 17 ranger/beggar
+    936,  // 13 wizard/priest
+    931,  // 14 royal set (guard/princess/king/noble/sorceress)
+    941,  // 15 bartender
+    946,  // 16 witch/spectre/ghost
+    951,  // 17 ranger/beggar
 ];
 
 /// Number of ADF blocks per shape file (cfiles[].numblocks from fmain2.c).
@@ -44,7 +44,7 @@ pub const CFILE_BLOCK_COUNTS: [u32; CFILE_COUNT] = [
     42, // 1  phillip
     42, // 2  kevin
     36, // 3  objects
-     3, // 4  raft
+    3,  // 4  raft
     20, // 5  turtle/carrier
     40, // 6  ogre
     40, // 7  ghost
@@ -53,11 +53,11 @@ pub const CFILE_BLOCK_COUNTS: [u32; CFILE_COUNT] = [
     12, // 10 dragon
     40, // 11 bird
     40, // 12 snake/salamander
-     5, // 13 wizard/priest
-     5, // 14 royal set
-     5, // 15 bartender
-     5, // 16 witch
-     5, // 17 ranger/beggar
+    5,  // 13 wizard/priest
+    5,  // 14 royal set
+    5,  // 15 bartender
+    5,  // 16 witch
+    5,  // 17 ranger/beggar
 ];
 
 /// Animation frame count per shape file (cfiles[].count from fmain2.c).
@@ -75,20 +75,20 @@ pub const CFILE_FRAME_COUNTS: [usize; CFILE_COUNT] = [
     67,  // 1  phillip
     67,  // 2  kevin
     116, // 3  objects (height=16, decoded separately)
-     2,  // 4  raft
+    2,   // 4  raft
     16,  // 5  turtle/carrier
     64,  // 6  ogre
     64,  // 7  ghost
     64,  // 8  dknight/spiders
     64,  // 9  necromancer
-     5,  // 10 dragon
-     8,  // 11 bird
+    5,   // 10 dragon
+    8,   // 11 bird
     64,  // 12 snake/salamander
-     8,  // 13 wizard/priest
-     8,  // 14 royal set
-     8,  // 15 bartender
-     8,  // 16 witch
-     8,  // 17 ranger/beggar
+    8,   // 13 wizard/priest
+    8,   // 14 royal set
+    8,   // 15 bartender
+    8,   // 16 witch
+    8,   // 17 ranger/beggar
 ];
 
 /// Entry in setfig_table: maps NPC type → cfile index, animation base, talk flag.
@@ -101,20 +101,76 @@ pub struct SetfigEntry {
 
 /// setfig_table[14] from fmain.c — direct port.
 pub const SETFIG_TABLE: [SetfigEntry; 14] = [
-    SetfigEntry { cfile_entry: 13, image_base: 0, can_talk: true  }, // 0 wizard
-    SetfigEntry { cfile_entry: 13, image_base: 4, can_talk: true  }, // 1 priest
-    SetfigEntry { cfile_entry: 14, image_base: 0, can_talk: false }, // 2 guard
-    SetfigEntry { cfile_entry: 14, image_base: 1, can_talk: false }, // 3 guard (back)
-    SetfigEntry { cfile_entry: 14, image_base: 2, can_talk: false }, // 4 princess
-    SetfigEntry { cfile_entry: 14, image_base: 4, can_talk: true  }, // 5 king
-    SetfigEntry { cfile_entry: 14, image_base: 6, can_talk: false }, // 6 noble
-    SetfigEntry { cfile_entry: 14, image_base: 7, can_talk: false }, // 7 sorceress
-    SetfigEntry { cfile_entry: 15, image_base: 0, can_talk: false }, // 8 bartender
-    SetfigEntry { cfile_entry: 16, image_base: 0, can_talk: false }, // 9 witch
-    SetfigEntry { cfile_entry: 16, image_base: 6, can_talk: false }, // 10 spectre
-    SetfigEntry { cfile_entry: 16, image_base: 7, can_talk: false }, // 11 ghost
-    SetfigEntry { cfile_entry: 17, image_base: 0, can_talk: true  }, // 12 ranger
-    SetfigEntry { cfile_entry: 17, image_base: 4, can_talk: true  }, // 13 beggar
+    SetfigEntry {
+        cfile_entry: 13,
+        image_base: 0,
+        can_talk: true,
+    }, // 0 wizard
+    SetfigEntry {
+        cfile_entry: 13,
+        image_base: 4,
+        can_talk: true,
+    }, // 1 priest
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 0,
+        can_talk: false,
+    }, // 2 guard
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 1,
+        can_talk: false,
+    }, // 3 guard (back)
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 2,
+        can_talk: false,
+    }, // 4 princess
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 4,
+        can_talk: true,
+    }, // 5 king
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 6,
+        can_talk: false,
+    }, // 6 noble
+    SetfigEntry {
+        cfile_entry: 14,
+        image_base: 7,
+        can_talk: false,
+    }, // 7 sorceress
+    SetfigEntry {
+        cfile_entry: 15,
+        image_base: 0,
+        can_talk: false,
+    }, // 8 bartender
+    SetfigEntry {
+        cfile_entry: 16,
+        image_base: 0,
+        can_talk: false,
+    }, // 9 witch
+    SetfigEntry {
+        cfile_entry: 16,
+        image_base: 6,
+        can_talk: false,
+    }, // 10 spectre
+    SetfigEntry {
+        cfile_entry: 16,
+        image_base: 7,
+        can_talk: false,
+    }, // 11 ghost
+    SetfigEntry {
+        cfile_entry: 17,
+        image_base: 0,
+        can_talk: true,
+    }, // 12 ranger
+    SetfigEntry {
+        cfile_entry: 17,
+        image_base: 4,
+        can_talk: true,
+    }, // 13 beggar
 ];
 
 /// Sequence list slot names (from fmain.c seq_list[7]).
@@ -158,37 +214,285 @@ pub struct InvItem {
 /// inv_list[] from fmain.c:428 — direct port.
 /// Indexed by stuff[] slot (0..GOLDBASE=31). Gold piles (31–34) are excluded from display.
 pub const INV_LIST: [InvItem; 31] = [
-    InvItem { image_number: 12, xoff: 10,  yoff: 0,   ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 0  Dirk
-    InvItem { image_number:  9, xoff: 10,  yoff: 10,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 1  Mace
-    InvItem { image_number:  8, xoff: 10,  yoff: 20,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 2  Sword
-    InvItem { image_number: 10, xoff: 10,  yoff: 30,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 3  Bow
-    InvItem { image_number: 17, xoff: 10,  yoff: 40,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 4  Magic Wand
-    InvItem { image_number: 27, xoff: 10,  yoff: 50,  ydelta: 0,  img_off: 0, img_height: 8, maxshown: 1  }, // 5  Golden Lasso
-    InvItem { image_number: 23, xoff: 10,  yoff: 60,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 6  Sea Shell
-    InvItem { image_number: 27, xoff: 10,  yoff: 70,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 7  Sun Stone
-    InvItem { image_number:  3, xoff: 30,  yoff: 0,   ydelta: 3,  img_off: 7, img_height: 1, maxshown: 45 }, // 8  Arrows
-    InvItem { image_number: 18, xoff: 50,  yoff: 0,   ydelta: 9,  img_off: 0, img_height: 8, maxshown: 15 }, // 9  Blue Stone
-    InvItem { image_number: 19, xoff: 65,  yoff: 0,   ydelta: 6,  img_off: 0, img_height: 5, maxshown: 23 }, // 10 Green Jewel
-    InvItem { image_number: 22, xoff: 80,  yoff: 0,   ydelta: 8,  img_off: 0, img_height: 7, maxshown: 17 }, // 11 Glass Vial
-    InvItem { image_number: 21, xoff: 95,  yoff: 0,   ydelta: 7,  img_off: 0, img_height: 6, maxshown: 20 }, // 12 Crystal Orb
-    InvItem { image_number: 23, xoff: 110, yoff: 0,   ydelta: 10, img_off: 0, img_height: 9, maxshown: 14 }, // 13 Bird Totem
-    InvItem { image_number: 17, xoff: 125, yoff: 0,   ydelta: 6,  img_off: 0, img_height: 5, maxshown: 23 }, // 14 Gold Ring
-    InvItem { image_number: 24, xoff: 140, yoff: 0,   ydelta: 10, img_off: 0, img_height: 9, maxshown: 14 }, // 15 Jade Skull
-    InvItem { image_number: 25, xoff: 160, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 16 Gold Key
-    InvItem { image_number: 25, xoff: 172, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 17 Green Key
-    InvItem { image_number: 114,xoff: 184, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 18 Blue Key
-    InvItem { image_number: 114,xoff: 196, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 19 Red Key
-    InvItem { image_number: 26, xoff: 208, yoff: 0,   ydelta: 5,  img_off: 0, img_height: 5, maxshown: 25 }, // 20 Grey Key
-    InvItem { image_number: 26, xoff: 220, yoff: 0,   ydelta: 5,  img_off: 8, img_height: 5, maxshown: 25 }, // 21 White Key
-    InvItem { image_number: 11, xoff: 0,   yoff: 80,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 22 Talisman
-    InvItem { image_number: 19, xoff: 0,   yoff: 90,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 23 Rose
-    InvItem { image_number: 20, xoff: 0,   yoff: 100, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 24 Fruit
-    InvItem { image_number: 21, xoff: 232, yoff: 0,   ydelta: 10, img_off: 8, img_height: 8, maxshown: 5  }, // 25 Gold Statue
-    InvItem { image_number: 22, xoff: 0,   yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 26 Book
-    InvItem { image_number:  8, xoff: 14,  yoff: 80,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 27 Herb
-    InvItem { image_number:  9, xoff: 14,  yoff: 90,  ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 28 Writ
-    InvItem { image_number: 10, xoff: 14,  yoff: 100, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 29 Bone
-    InvItem { image_number: 12, xoff: 14,  yoff: 110, ydelta: 0,  img_off: 8, img_height: 8, maxshown: 1  }, // 30 Shard
+    InvItem {
+        image_number: 12,
+        xoff: 10,
+        yoff: 0,
+        ydelta: 0,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 1,
+    }, // 0  Dirk
+    InvItem {
+        image_number: 9,
+        xoff: 10,
+        yoff: 10,
+        ydelta: 0,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 1,
+    }, // 1  Mace
+    InvItem {
+        image_number: 8,
+        xoff: 10,
+        yoff: 20,
+        ydelta: 0,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 1,
+    }, // 2  Sword
+    InvItem {
+        image_number: 10,
+        xoff: 10,
+        yoff: 30,
+        ydelta: 0,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 1,
+    }, // 3  Bow
+    InvItem {
+        image_number: 17,
+        xoff: 10,
+        yoff: 40,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 4  Magic Wand
+    InvItem {
+        image_number: 27,
+        xoff: 10,
+        yoff: 50,
+        ydelta: 0,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 1,
+    }, // 5  Golden Lasso
+    InvItem {
+        image_number: 23,
+        xoff: 10,
+        yoff: 60,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 6  Sea Shell
+    InvItem {
+        image_number: 27,
+        xoff: 10,
+        yoff: 70,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 7  Sun Stone
+    InvItem {
+        image_number: 3,
+        xoff: 30,
+        yoff: 0,
+        ydelta: 3,
+        img_off: 7,
+        img_height: 1,
+        maxshown: 45,
+    }, // 8  Arrows
+    InvItem {
+        image_number: 18,
+        xoff: 50,
+        yoff: 0,
+        ydelta: 9,
+        img_off: 0,
+        img_height: 8,
+        maxshown: 15,
+    }, // 9  Blue Stone
+    InvItem {
+        image_number: 19,
+        xoff: 65,
+        yoff: 0,
+        ydelta: 6,
+        img_off: 0,
+        img_height: 5,
+        maxshown: 23,
+    }, // 10 Green Jewel
+    InvItem {
+        image_number: 22,
+        xoff: 80,
+        yoff: 0,
+        ydelta: 8,
+        img_off: 0,
+        img_height: 7,
+        maxshown: 17,
+    }, // 11 Glass Vial
+    InvItem {
+        image_number: 21,
+        xoff: 95,
+        yoff: 0,
+        ydelta: 7,
+        img_off: 0,
+        img_height: 6,
+        maxshown: 20,
+    }, // 12 Crystal Orb
+    InvItem {
+        image_number: 23,
+        xoff: 110,
+        yoff: 0,
+        ydelta: 10,
+        img_off: 0,
+        img_height: 9,
+        maxshown: 14,
+    }, // 13 Bird Totem
+    InvItem {
+        image_number: 17,
+        xoff: 125,
+        yoff: 0,
+        ydelta: 6,
+        img_off: 0,
+        img_height: 5,
+        maxshown: 23,
+    }, // 14 Gold Ring
+    InvItem {
+        image_number: 24,
+        xoff: 140,
+        yoff: 0,
+        ydelta: 10,
+        img_off: 0,
+        img_height: 9,
+        maxshown: 14,
+    }, // 15 Jade Skull
+    InvItem {
+        image_number: 25,
+        xoff: 160,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 0,
+        img_height: 5,
+        maxshown: 25,
+    }, // 16 Gold Key
+    InvItem {
+        image_number: 25,
+        xoff: 172,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 8,
+        img_height: 5,
+        maxshown: 25,
+    }, // 17 Green Key
+    InvItem {
+        image_number: 114,
+        xoff: 184,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 0,
+        img_height: 5,
+        maxshown: 25,
+    }, // 18 Blue Key
+    InvItem {
+        image_number: 114,
+        xoff: 196,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 8,
+        img_height: 5,
+        maxshown: 25,
+    }, // 19 Red Key
+    InvItem {
+        image_number: 26,
+        xoff: 208,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 0,
+        img_height: 5,
+        maxshown: 25,
+    }, // 20 Grey Key
+    InvItem {
+        image_number: 26,
+        xoff: 220,
+        yoff: 0,
+        ydelta: 5,
+        img_off: 8,
+        img_height: 5,
+        maxshown: 25,
+    }, // 21 White Key
+    InvItem {
+        image_number: 11,
+        xoff: 0,
+        yoff: 80,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 22 Talisman
+    InvItem {
+        image_number: 19,
+        xoff: 0,
+        yoff: 90,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 23 Rose
+    InvItem {
+        image_number: 20,
+        xoff: 0,
+        yoff: 100,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 24 Fruit
+    InvItem {
+        image_number: 21,
+        xoff: 232,
+        yoff: 0,
+        ydelta: 10,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 5,
+    }, // 25 Gold Statue
+    InvItem {
+        image_number: 22,
+        xoff: 0,
+        yoff: 110,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 26 Book
+    InvItem {
+        image_number: 8,
+        xoff: 14,
+        yoff: 80,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 27 Herb
+    InvItem {
+        image_number: 9,
+        xoff: 14,
+        yoff: 90,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 28 Writ
+    InvItem {
+        image_number: 10,
+        xoff: 14,
+        yoff: 100,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 29 Bone
+    InvItem {
+        image_number: 12,
+        xoff: 14,
+        yoff: 110,
+        ydelta: 0,
+        img_off: 8,
+        img_height: 8,
+        maxshown: 1,
+    }, // 30 Shard
 ];
 
 /// Map a short item name or numeric string to an INV_LIST index (0–30).
@@ -197,45 +501,47 @@ pub const INV_LIST: [InvItem; 31] = [
 /// Talisman (index 22) is intentionally included — callers guard against it.
 pub fn item_name_to_id(name: &str) -> Option<usize> {
     const TABLE: &[(&str, usize)] = &[
-        ("dirk",         0),
-        ("mace",         1),
-        ("sword",        2),
-        ("bow",          3),
-        ("wand",         4),
-        ("lasso",        5),
-        ("shell",        6),
-        ("sunstone",     7),
-        ("sun stone",    7),
-        ("arrow",        8),
-        ("blue stone",   9),
-        ("bluestone",    9),
-        ("jewel",       10),
-        ("vial",        11),
-        ("orb",         12),
-        ("totem",       13),
-        ("gold ring",   14),
-        ("gold key",    16),
-        ("green key",   17),
-        ("blue key",    18),
-        ("red key",     19),
-        ("grey key",    20),
-        ("gray key",    20),
-        ("white key",   21),
-        ("ring",        14),  // after "gold ring" so specific match wins
-        ("key",         16),  // generic key → gold key (first key)
-        ("talisman",    22),
-        ("rose",        23),
-        ("fruit",       24),
-        ("statue",      25),
-        ("book",        26),
-        ("herb",        27),
-        ("writ",        28),
-        ("bone",        29),
-        ("shard",       30),
+        ("dirk", 0),
+        ("mace", 1),
+        ("sword", 2),
+        ("bow", 3),
+        ("wand", 4),
+        ("lasso", 5),
+        ("shell", 6),
+        ("sunstone", 7),
+        ("sun stone", 7),
+        ("arrow", 8),
+        ("blue stone", 9),
+        ("bluestone", 9),
+        ("jewel", 10),
+        ("vial", 11),
+        ("orb", 12),
+        ("totem", 13),
+        ("gold ring", 14),
+        ("gold key", 16),
+        ("green key", 17),
+        ("blue key", 18),
+        ("red key", 19),
+        ("grey key", 20),
+        ("gray key", 20),
+        ("white key", 21),
+        ("ring", 14), // after "gold ring" so specific match wins
+        ("key", 16),  // generic key → gold key (first key)
+        ("talisman", 22),
+        ("rose", 23),
+        ("fruit", 24),
+        ("statue", 25),
+        ("book", 26),
+        ("herb", 27),
+        ("writ", 28),
+        ("bone", 29),
+        ("shard", 30),
     ];
 
     let lower = name.to_ascii_lowercase();
-    if lower.is_empty() { return None; }
+    if lower.is_empty() {
+        return None;
+    }
 
     // Numeric index
     if let Ok(n) = lower.parse::<usize>() {
@@ -243,7 +549,8 @@ pub fn item_name_to_id(name: &str) -> Option<usize> {
     }
 
     // Exact match first, then substring
-    TABLE.iter()
+    TABLE
+        .iter()
         .find(|(entry, _)| *entry == lower.as_str())
         .or_else(|| TABLE.iter().find(|(entry, _)| lower.contains(*entry)))
         .map(|(_, id)| *id)
@@ -255,15 +562,15 @@ mod tests {
 
     #[test]
     fn test_item_name_to_id_exact() {
-        assert_eq!(item_name_to_id("sword"),    Some(2));
-        assert_eq!(item_name_to_id("bow"),      Some(3));
+        assert_eq!(item_name_to_id("sword"), Some(2));
+        assert_eq!(item_name_to_id("bow"), Some(3));
         assert_eq!(item_name_to_id("talisman"), Some(22));
-        assert_eq!(item_name_to_id("shard"),    Some(30));
+        assert_eq!(item_name_to_id("shard"), Some(30));
     }
 
     #[test]
     fn test_item_name_to_id_numeric() {
-        assert_eq!(item_name_to_id("0"),  Some(0));
+        assert_eq!(item_name_to_id("0"), Some(0));
         assert_eq!(item_name_to_id("22"), Some(22));
         assert_eq!(item_name_to_id("30"), Some(30));
         assert_eq!(item_name_to_id("31"), None); // out of range
@@ -271,18 +578,18 @@ mod tests {
 
     #[test]
     fn test_item_name_to_id_aliases() {
-        assert_eq!(item_name_to_id("wand"),   Some(4));
-        assert_eq!(item_name_to_id("lasso"),  Some(5));
-        assert_eq!(item_name_to_id("shell"),  Some(6));
+        assert_eq!(item_name_to_id("wand"), Some(4));
+        assert_eq!(item_name_to_id("lasso"), Some(5));
+        assert_eq!(item_name_to_id("shell"), Some(6));
         assert_eq!(item_name_to_id("arrows"), Some(8));
-        assert_eq!(item_name_to_id("key"),    Some(16)); // first key match
+        assert_eq!(item_name_to_id("key"), Some(16)); // first key match
     }
 
     #[test]
     fn test_item_name_to_id_unknown() {
         assert_eq!(item_name_to_id("fireball"), None);
-        assert_eq!(item_name_to_id("orc"),      None);
-        assert_eq!(item_name_to_id(""),         None);
+        assert_eq!(item_name_to_id("orc"), None);
+        assert_eq!(item_name_to_id(""), None);
     }
 }
 
@@ -346,7 +653,12 @@ impl SpriteSheet {
                 }
             }
         }
-        SpriteSheet { cfile_idx, pixels, num_frames: frame_count, frame_h }
+        SpriteSheet {
+            cfile_idx,
+            pixels,
+            num_frames: frame_count,
+            frame_h,
+        }
     }
 
     /// Load and decode a character/enemy sprite sheet from the ADF for a given cfile index.
@@ -379,7 +691,9 @@ impl SpriteSheet {
     /// Return the palette-index slice for a single frame (frame_h * SPRITE_W bytes).
     /// Returns None for out-of-range frame indices.
     pub fn frame_pixels(&self, frame: usize) -> Option<&[u8]> {
-        if frame >= self.num_frames { return None; }
+        if frame >= self.num_frames {
+            return None;
+        }
         let frame_pixels = self.frame_h * SPRITE_W;
         let start = frame * frame_pixels;
         Some(&self.pixels[start..start + frame_pixels])
@@ -392,112 +706,547 @@ impl SpriteSheet {
 pub struct StatEntry {
     pub figure: u8,
     pub wpn_no: u8,
-    pub wpn_x:  i8,
-    pub wpn_y:  i8,
+    pub wpn_x: i8,
+    pub wpn_y: i8,
 }
 
 /// STATELIST — 87 entries ported from fmain.c statelist[].
 /// Index = animation state index.
 pub const STATELIST: [StatEntry; 87] = [
     // 0–7: southwalk
-    StatEntry { figure: 0,  wpn_no: 11, wpn_x: -2, wpn_y: 11 },
-    StatEntry { figure: 1,  wpn_no: 11, wpn_x: -3, wpn_y: 11 },
-    StatEntry { figure: 2,  wpn_no: 11, wpn_x: -3, wpn_y: 10 },
-    StatEntry { figure: 3,  wpn_no: 11, wpn_x: -3, wpn_y:  9 },
-    StatEntry { figure: 4,  wpn_no: 11, wpn_x: -3, wpn_y: 10 },
-    StatEntry { figure: 5,  wpn_no: 11, wpn_x: -3, wpn_y: 11 },
-    StatEntry { figure: 6,  wpn_no: 11, wpn_x: -2, wpn_y: 11 },
-    StatEntry { figure: 7,  wpn_no: 11, wpn_x: -1, wpn_y: 11 },
+    StatEntry {
+        figure: 0,
+        wpn_no: 11,
+        wpn_x: -2,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 1,
+        wpn_no: 11,
+        wpn_x: -3,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 2,
+        wpn_no: 11,
+        wpn_x: -3,
+        wpn_y: 10,
+    },
+    StatEntry {
+        figure: 3,
+        wpn_no: 11,
+        wpn_x: -3,
+        wpn_y: 9,
+    },
+    StatEntry {
+        figure: 4,
+        wpn_no: 11,
+        wpn_x: -3,
+        wpn_y: 10,
+    },
+    StatEntry {
+        figure: 5,
+        wpn_no: 11,
+        wpn_x: -3,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 6,
+        wpn_no: 11,
+        wpn_x: -2,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 7,
+        wpn_no: 11,
+        wpn_x: -1,
+        wpn_y: 11,
+    },
     // 8–15: westwalk
-    StatEntry { figure: 8,  wpn_no:  9, wpn_x: -12, wpn_y: 11 },
-    StatEntry { figure: 9,  wpn_no:  9, wpn_x: -11, wpn_y: 12 },
-    StatEntry { figure: 10, wpn_no:  9, wpn_x:  -8, wpn_y: 13 },
-    StatEntry { figure: 11, wpn_no:  9, wpn_x:  -4, wpn_y: 13 },
-    StatEntry { figure: 12, wpn_no:  9, wpn_x:   0, wpn_y: 13 },
-    StatEntry { figure: 13, wpn_no:  9, wpn_x:  -4, wpn_y: 13 },
-    StatEntry { figure: 14, wpn_no:  9, wpn_x:  -8, wpn_y: 13 },
-    StatEntry { figure: 15, wpn_no:  9, wpn_x: -11, wpn_y: 12 },
+    StatEntry {
+        figure: 8,
+        wpn_no: 9,
+        wpn_x: -12,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 9,
+        wpn_no: 9,
+        wpn_x: -11,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 10,
+        wpn_no: 9,
+        wpn_x: -8,
+        wpn_y: 13,
+    },
+    StatEntry {
+        figure: 11,
+        wpn_no: 9,
+        wpn_x: -4,
+        wpn_y: 13,
+    },
+    StatEntry {
+        figure: 12,
+        wpn_no: 9,
+        wpn_x: 0,
+        wpn_y: 13,
+    },
+    StatEntry {
+        figure: 13,
+        wpn_no: 9,
+        wpn_x: -4,
+        wpn_y: 13,
+    },
+    StatEntry {
+        figure: 14,
+        wpn_no: 9,
+        wpn_x: -8,
+        wpn_y: 13,
+    },
+    StatEntry {
+        figure: 15,
+        wpn_no: 9,
+        wpn_x: -11,
+        wpn_y: 12,
+    },
     // 16–23: northwalk
-    StatEntry { figure: 16, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
-    StatEntry { figure: 17, wpn_no: 14, wpn_x: -1, wpn_y: 2 },
-    StatEntry { figure: 18, wpn_no: 14, wpn_x: -1, wpn_y: 3 },
-    StatEntry { figure: 19, wpn_no: 14, wpn_x: -1, wpn_y: 4 },
-    StatEntry { figure: 20, wpn_no: 14, wpn_x: -1, wpn_y: 3 },
-    StatEntry { figure: 21, wpn_no: 14, wpn_x: -1, wpn_y: 2 },
-    StatEntry { figure: 22, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
-    StatEntry { figure: 23, wpn_no: 14, wpn_x: -1, wpn_y: 1 },
+    StatEntry {
+        figure: 16,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 17,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 2,
+    },
+    StatEntry {
+        figure: 18,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 19,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 4,
+    },
+    StatEntry {
+        figure: 20,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 21,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 2,
+    },
+    StatEntry {
+        figure: 22,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 23,
+        wpn_no: 14,
+        wpn_x: -1,
+        wpn_y: 1,
+    },
     // 24–31: eastwalk
-    StatEntry { figure: 24, wpn_no: 10, wpn_x: 5, wpn_y: 12 },
-    StatEntry { figure: 25, wpn_no: 10, wpn_x: 3, wpn_y: 12 },
-    StatEntry { figure: 26, wpn_no: 10, wpn_x: 2, wpn_y: 12 },
-    StatEntry { figure: 27, wpn_no: 10, wpn_x: 3, wpn_y: 12 },
-    StatEntry { figure: 28, wpn_no: 10, wpn_x: 5, wpn_y: 12 },
-    StatEntry { figure: 29, wpn_no: 10, wpn_x: 6, wpn_y: 12 },
-    StatEntry { figure: 30, wpn_no: 10, wpn_x: 6, wpn_y: 11 },
-    StatEntry { figure: 31, wpn_no: 10, wpn_x: 6, wpn_y: 12 },
+    StatEntry {
+        figure: 24,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 25,
+        wpn_no: 10,
+        wpn_x: 3,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 26,
+        wpn_no: 10,
+        wpn_x: 2,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 27,
+        wpn_no: 10,
+        wpn_x: 3,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 28,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 29,
+        wpn_no: 10,
+        wpn_x: 6,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 30,
+        wpn_no: 10,
+        wpn_x: 6,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 31,
+        wpn_no: 10,
+        wpn_x: 6,
+        wpn_y: 12,
+    },
     // 32–43: south fight
-    StatEntry { figure: 32, wpn_no: 11, wpn_x: -2, wpn_y: 12 },
-    StatEntry { figure: 32, wpn_no: 10, wpn_x:  0, wpn_y: 12 },
-    StatEntry { figure: 33, wpn_no:  0, wpn_x:  2, wpn_y: 10 },
-    StatEntry { figure: 34, wpn_no:  1, wpn_x:  4, wpn_y:  6 },
-    StatEntry { figure: 34, wpn_no:  2, wpn_x:  1, wpn_y:  4 },
-    StatEntry { figure: 34, wpn_no:  3, wpn_x:  0, wpn_y:  4 },
-    StatEntry { figure: 36, wpn_no:  4, wpn_x: -5, wpn_y:  0 },
-    StatEntry { figure: 36, wpn_no:  5, wpn_x: -10, wpn_y: 1 },
-    StatEntry { figure: 35, wpn_no: 12, wpn_x: -5, wpn_y:  5 },
-    StatEntry { figure: 36, wpn_no:  0, wpn_x:  0, wpn_y:  6 },
-    StatEntry { figure: 38, wpn_no: 85, wpn_x: -6, wpn_y:  5 },
-    StatEntry { figure: 37, wpn_no: 81, wpn_x: -6, wpn_y:  5 },
+    StatEntry {
+        figure: 32,
+        wpn_no: 11,
+        wpn_x: -2,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 32,
+        wpn_no: 10,
+        wpn_x: 0,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 33,
+        wpn_no: 0,
+        wpn_x: 2,
+        wpn_y: 10,
+    },
+    StatEntry {
+        figure: 34,
+        wpn_no: 1,
+        wpn_x: 4,
+        wpn_y: 6,
+    },
+    StatEntry {
+        figure: 34,
+        wpn_no: 2,
+        wpn_x: 1,
+        wpn_y: 4,
+    },
+    StatEntry {
+        figure: 34,
+        wpn_no: 3,
+        wpn_x: 0,
+        wpn_y: 4,
+    },
+    StatEntry {
+        figure: 36,
+        wpn_no: 4,
+        wpn_x: -5,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 36,
+        wpn_no: 5,
+        wpn_x: -10,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 35,
+        wpn_no: 12,
+        wpn_x: -5,
+        wpn_y: 5,
+    },
+    StatEntry {
+        figure: 36,
+        wpn_no: 0,
+        wpn_x: 0,
+        wpn_y: 6,
+    },
+    StatEntry {
+        figure: 38,
+        wpn_no: 85,
+        wpn_x: -6,
+        wpn_y: 5,
+    },
+    StatEntry {
+        figure: 37,
+        wpn_no: 81,
+        wpn_x: -6,
+        wpn_y: 5,
+    },
     // 44–55: west fight
-    StatEntry { figure: 40, wpn_no:  9, wpn_x: -7, wpn_y: 12 },
-    StatEntry { figure: 40, wpn_no:  8, wpn_x: -9, wpn_y:  9 },
-    StatEntry { figure: 41, wpn_no:  7, wpn_x: -10, wpn_y: 5 },
-    StatEntry { figure: 42, wpn_no:  7, wpn_x: -12, wpn_y: 4 },
-    StatEntry { figure: 42, wpn_no:  6, wpn_x: -12, wpn_y: 3 },
-    StatEntry { figure: 42, wpn_no:  5, wpn_x: -12, wpn_y: 3 },
-    StatEntry { figure: 44, wpn_no:  5, wpn_x: -8, wpn_y:  3 },
-    StatEntry { figure: 44, wpn_no: 14, wpn_x: -7, wpn_y:  6 },
-    StatEntry { figure: 43, wpn_no: 13, wpn_x: -7, wpn_y:  8 },
-    StatEntry { figure: 42, wpn_no:  5, wpn_x: -12, wpn_y: 3 },
-    StatEntry { figure: 46, wpn_no: 86, wpn_x: -3, wpn_y:  0 },
-    StatEntry { figure: 45, wpn_no: 82, wpn_x: -3, wpn_y:  0 },
+    StatEntry {
+        figure: 40,
+        wpn_no: 9,
+        wpn_x: -7,
+        wpn_y: 12,
+    },
+    StatEntry {
+        figure: 40,
+        wpn_no: 8,
+        wpn_x: -9,
+        wpn_y: 9,
+    },
+    StatEntry {
+        figure: 41,
+        wpn_no: 7,
+        wpn_x: -10,
+        wpn_y: 5,
+    },
+    StatEntry {
+        figure: 42,
+        wpn_no: 7,
+        wpn_x: -12,
+        wpn_y: 4,
+    },
+    StatEntry {
+        figure: 42,
+        wpn_no: 6,
+        wpn_x: -12,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 42,
+        wpn_no: 5,
+        wpn_x: -12,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 44,
+        wpn_no: 5,
+        wpn_x: -8,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 44,
+        wpn_no: 14,
+        wpn_x: -7,
+        wpn_y: 6,
+    },
+    StatEntry {
+        figure: 43,
+        wpn_no: 13,
+        wpn_x: -7,
+        wpn_y: 8,
+    },
+    StatEntry {
+        figure: 42,
+        wpn_no: 5,
+        wpn_x: -12,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 46,
+        wpn_no: 86,
+        wpn_x: -3,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 45,
+        wpn_no: 82,
+        wpn_x: -3,
+        wpn_y: 0,
+    },
     // 56–67: north fight
-    StatEntry { figure: 48, wpn_no: 14, wpn_x: -3, wpn_y:  0 },
-    StatEntry { figure: 48, wpn_no:  6, wpn_x: -3, wpn_y: -1 },
-    StatEntry { figure: 49, wpn_no:  5, wpn_x: -2, wpn_y: -3 },
-    StatEntry { figure: 50, wpn_no:  5, wpn_x: -3, wpn_y: -4 },
-    StatEntry { figure: 50, wpn_no:  4, wpn_x:  0, wpn_y:  0 },
-    StatEntry { figure: 50, wpn_no:  3, wpn_x:  3, wpn_y:  0 },
-    StatEntry { figure: 52, wpn_no:  4, wpn_x:  6, wpn_y:  1 },
-    StatEntry { figure: 52, wpn_no: 15, wpn_x:  7, wpn_y:  3 },
-    StatEntry { figure: 51, wpn_no: 14, wpn_x:  1, wpn_y:  6 },
-    StatEntry { figure: 50, wpn_no:  4, wpn_x:  0, wpn_y:  0 },
-    StatEntry { figure: 54, wpn_no: 87, wpn_x:  3, wpn_y:  0 },
-    StatEntry { figure: 53, wpn_no: 83, wpn_x:  3, wpn_y:  0 },
+    StatEntry {
+        figure: 48,
+        wpn_no: 14,
+        wpn_x: -3,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 48,
+        wpn_no: 6,
+        wpn_x: -3,
+        wpn_y: -1,
+    },
+    StatEntry {
+        figure: 49,
+        wpn_no: 5,
+        wpn_x: -2,
+        wpn_y: -3,
+    },
+    StatEntry {
+        figure: 50,
+        wpn_no: 5,
+        wpn_x: -3,
+        wpn_y: -4,
+    },
+    StatEntry {
+        figure: 50,
+        wpn_no: 4,
+        wpn_x: 0,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 50,
+        wpn_no: 3,
+        wpn_x: 3,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 52,
+        wpn_no: 4,
+        wpn_x: 6,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 52,
+        wpn_no: 15,
+        wpn_x: 7,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 51,
+        wpn_no: 14,
+        wpn_x: 1,
+        wpn_y: 6,
+    },
+    StatEntry {
+        figure: 50,
+        wpn_no: 4,
+        wpn_x: 0,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 54,
+        wpn_no: 87,
+        wpn_x: 3,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 53,
+        wpn_no: 83,
+        wpn_x: 3,
+        wpn_y: 0,
+    },
     // 68–79: east fight
-    StatEntry { figure: 56, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
-    StatEntry { figure: 56, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
-    StatEntry { figure: 57, wpn_no:  1, wpn_x: 10, wpn_y:  6 },
-    StatEntry { figure: 58, wpn_no:  1, wpn_x: 10, wpn_y:  5 },
-    StatEntry { figure: 58, wpn_no:  2, wpn_x:  7, wpn_y:  3 },
-    StatEntry { figure: 58, wpn_no:  3, wpn_x:  6, wpn_y:  3 },
-    StatEntry { figure: 60, wpn_no:  4, wpn_x:  1, wpn_y:  0 },
-    StatEntry { figure: 60, wpn_no:  3, wpn_x:  3, wpn_y:  2 },
-    StatEntry { figure: 59, wpn_no: 15, wpn_x:  4, wpn_y:  1 },
-    StatEntry { figure: 58, wpn_no:  4, wpn_x:  5, wpn_y:  1 },
-    StatEntry { figure: 62, wpn_no: 84, wpn_x:  3, wpn_y:  0 },
-    StatEntry { figure: 61, wpn_no: 80, wpn_x:  3, wpn_y:  0 },
+    StatEntry {
+        figure: 56,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 56,
+        wpn_no: 0,
+        wpn_x: 6,
+        wpn_y: 9,
+    },
+    StatEntry {
+        figure: 57,
+        wpn_no: 1,
+        wpn_x: 10,
+        wpn_y: 6,
+    },
+    StatEntry {
+        figure: 58,
+        wpn_no: 1,
+        wpn_x: 10,
+        wpn_y: 5,
+    },
+    StatEntry {
+        figure: 58,
+        wpn_no: 2,
+        wpn_x: 7,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 58,
+        wpn_no: 3,
+        wpn_x: 6,
+        wpn_y: 3,
+    },
+    StatEntry {
+        figure: 60,
+        wpn_no: 4,
+        wpn_x: 1,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 60,
+        wpn_no: 3,
+        wpn_x: 3,
+        wpn_y: 2,
+    },
+    StatEntry {
+        figure: 59,
+        wpn_no: 15,
+        wpn_x: 4,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 58,
+        wpn_no: 4,
+        wpn_x: 5,
+        wpn_y: 1,
+    },
+    StatEntry {
+        figure: 62,
+        wpn_no: 84,
+        wpn_x: 3,
+        wpn_y: 0,
+    },
+    StatEntry {
+        figure: 61,
+        wpn_no: 80,
+        wpn_x: 3,
+        wpn_y: 0,
+    },
     // 80–82: death sequence
-    StatEntry { figure: 47, wpn_no:  0, wpn_x:  5, wpn_y: 11 },
-    StatEntry { figure: 63, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
-    StatEntry { figure: 39, wpn_no:  0, wpn_x:  6, wpn_y:  9 },
+    StatEntry {
+        figure: 47,
+        wpn_no: 0,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 63,
+        wpn_no: 0,
+        wpn_x: 6,
+        wpn_y: 9,
+    },
+    StatEntry {
+        figure: 39,
+        wpn_no: 0,
+        wpn_x: 6,
+        wpn_y: 9,
+    },
     // 83: sinking sequence
-    StatEntry { figure: 55, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    StatEntry {
+        figure: 55,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
     // 84–85: oscillations
-    StatEntry { figure: 64, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
-    StatEntry { figure: 65, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    StatEntry {
+        figure: 64,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
+    StatEntry {
+        figure: 65,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
     // 86: asleep
-    StatEntry { figure: 66, wpn_no: 10, wpn_x:  5, wpn_y: 11 },
+    StatEntry {
+        figure: 66,
+        wpn_no: 10,
+        wpn_x: 5,
+        wpn_y: 11,
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -510,19 +1259,19 @@ pub const STATELIST: [StatEntry; 87] = [
 /// `bow_x[32]` — per-frame X pixel offset added to `xstart` on the bow
 /// weapon-overlay pass when `inum < 32`.
 pub const BOW_X: [i8; 32] = [
-     1,  2,  3,  4,  3,  2,  1,  0,   //  0..7   south-walk
-     3,  2,  0, -2, -3, -2,  0,  2,   //  8..15  west-walk
-    -3, -3, -3, -3, -3, -3, -3, -2,   // 16..23  north-walk
-     0,  1,  1,  1,  0, -2, -3, -2,   // 24..31  east-walk
+    1, 2, 3, 4, 3, 2, 1, 0, //  0..7   south-walk
+    3, 2, 0, -2, -3, -2, 0, 2, //  8..15  west-walk
+    -3, -3, -3, -3, -3, -3, -3, -2, // 16..23  north-walk
+    0, 1, 1, 1, 0, -2, -3, -2, // 24..31  east-walk
 ];
 
 /// `bow_y[32]` — per-frame Y pixel offset added to `ystart` on the bow
 /// weapon-overlay pass when `inum < 32`.
 pub const BOW_Y: [i8; 32] = [
-     8,  8,  8,  7,  8,  8,  8,  8,   //  0..7   south-walk
-    11, 12, 13, 13, 13, 13, 13, 12,   //  8..15  west-walk
-     8,  7,  6,  5,  6,  7,  8,  9,   // 16..23  north-walk
-    12, 12, 12, 12, 12, 12, 11, 12,   // 24..31  east-walk
+    8, 8, 8, 7, 8, 8, 8, 8, //  0..7   south-walk
+    11, 12, 13, 13, 13, 13, 13, 12, //  8..15  west-walk
+    8, 7, 6, 5, 6, 7, 8, 9, // 16..23  north-walk
+    12, 12, 12, 12, 12, 12, 11, 12, // 24..31  east-walk
 ];
 
 // ---------------------------------------------------------------------------
@@ -562,7 +1311,11 @@ pub const fn obj_frame_height(inum: u8) -> u8 {
 /// OBJECTS frame. For bit-7 frames this is +8 (the lower-half row); for
 /// all other frames it is 0. Mirrors `compute_shape_clip` (`fmain.c:2524`).
 pub const fn obj_frame_y_offset(inum: u8) -> u8 {
-    if inum & INUM_BIT7_HALF_HEIGHT != 0 { 8 } else { 0 }
+    if inum & INUM_BIT7_HALF_HEIGHT != 0 {
+        8
+    } else {
+        0
+    }
 }
 
 /// Strip the bit-7 half-height flag from an `inum`, returning the
@@ -596,10 +1349,14 @@ mod sprite_metadata_tests {
     fn obj_frame_height_half_height_inum_list() {
         // {0x1b, 8..=12, 25, 26, 0x11..=0x17}
         assert_eq!(obj_frame_height(0x1b), 8);
-        for f in 8u8..=12 { assert_eq!(obj_frame_height(f), 8, "inum={}", f); }
+        for f in 8u8..=12 {
+            assert_eq!(obj_frame_height(f), 8, "inum={}", f);
+        }
         assert_eq!(obj_frame_height(25), 8);
         assert_eq!(obj_frame_height(26), 8);
-        for f in 0x11u8..=0x17 { assert_eq!(obj_frame_height(f), 8, "inum={:#x}", f); }
+        for f in 0x11u8..=0x17 {
+            assert_eq!(obj_frame_height(f), 8, "inum={:#x}", f);
+        }
     }
 
     #[test]

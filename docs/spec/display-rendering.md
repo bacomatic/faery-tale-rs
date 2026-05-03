@@ -22,6 +22,8 @@ Palette is `pagecolors` in Gameplay, `introcolors` in Cinematic/Storybook (with 
 
 The composed view is 400 px tall, vertically centered with 40 px top/bottom margins. Cinematic and Storybook configs scale their playfield proportionally into the same 400 px vertical slot with their own inset, status bar hidden.
 
+Presentation cadence is 30 fps (NTSC-style refresh), but gameplay does **not** advance a full animation/AI step on every presented frame. Animation and AI run on a 15 Hz gameplay tick, so one gameplay tick spans two displayed frames.
+
 Key constants:
 - `PAGE_DEPTH` = 5 (playfield bitplanes — 32 colors)
 - `TEXT_DEPTH` = 4 (HUD bitplanes — 16 colors)
@@ -546,5 +548,4 @@ During dialogue mode (`viewstatus == 1`), color register 31 blinks white↔black
 `placard()`: A recursive fractal line pattern drawn on the playfield using `xmod`/`ymod` offset tables (±4 pixel deltas). The pattern is mirror-symmetric: draws lines at the original position, center-mirrored at (284, 124), and two 90°/270° rotations. Uses 16×15 outer iterations with 5 inner passes. Color 1 for most lines, color 24 for the first inner pass. Called during story sequences after `placard_text()`.
 
 ---
-
 

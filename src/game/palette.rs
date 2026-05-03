@@ -37,15 +37,24 @@ impl PaletteTransition {
     pub const STEPS: u8 = 8;
 
     pub fn new(from: Palette, to: Palette) -> Self {
-        PaletteTransition { from, to, step: 0, steps: Self::STEPS }
+        PaletteTransition {
+            from,
+            to,
+            step: 0,
+            steps: Self::STEPS,
+        }
     }
 
     /// Returns true if the transition is complete.
-    pub fn is_done(&self) -> bool { self.step >= self.steps }
+    pub fn is_done(&self) -> bool {
+        self.step >= self.steps
+    }
 
     /// Advance one frame; returns the interpolated palette for this frame.
     pub fn tick(&mut self) -> Palette {
-        if self.step >= self.steps { return self.to; }
+        if self.step >= self.steps {
+            return self.to;
+        }
         self.step += 1;
         let t = self.step as u32;
         let total = self.steps as u32;

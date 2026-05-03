@@ -20,6 +20,8 @@
 
 ATTACK1 vs ATTACK2 determined by `cleverness` in `encounter_chart[]`.
 
+Unless noted otherwise, every "tick" in this section refers to the 15 Hz animation/AI gameplay tick. Rendering still presents at 30 fps, so one AI tick spans two displayed frames.
+
 ### 11.2 Tactical Modes
 
 13 tactical modes stored in `shape.tactic`:
@@ -339,27 +341,28 @@ Extents with etype 80–83 set `xtype ≥ 50`, failing the `xtype < 50` guard. T
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Frame rate | 30 fps | Gameplay ticks (NTSC) |
+| Presentation rate | 30 fps | Video refresh / presented frames |
+| Animation + AI tick | 15 Hz | One gameplay tick every two presented frames |
 | Audio VBL | 60 Hz | Audio interrupt rate |
-| Day cycle | 24000 ticks | ≈ 13.3 minutes real time at 30 fps |
-| Hunger tick | 128 ticks | ≈ 4.3 seconds |
-| Health regen | 1024 ticks | ≈ 34 seconds |
+| Day cycle | 24000 ticks | Separate world-clock counter; see §17 |
+| Hunger tick | 128 ticks | Shared world-clock cadence; see survival/day/night specs |
+| Health regen | 1024 ticks | Shared world-clock cadence; see survival/day/night specs |
 | Safe zone check | 128 ticks | Same as hunger tick |
 | Sleep advance | 64 ticks/frame | 63 extra + 1 normal |
 | Default tempo | 150 | Timeclock counts per VBL |
-| AI reconsider (base) | 1/16 per tick | 6.25% per frame via `!bitrand(15)` |
-| AI reconsider (ATTACK1/ARCHER2) | 1/4 per tick | 25% per frame via `!rand4()` |
-| Tactic execution (base) | 1/8 per tick | 12.5% per frame via `!(rand()&7)` |
-| Tactic execution (ATTACK2) | 1/4 per tick | 25% per frame via `!(rand()&3)` |
-| Encounter placement | 16 frames | ≈ 0.53 seconds |
-| Encounter generation | 32 frames | ≈ 1.07 seconds |
-| Carrier facing update | 16 ticks | Every 16 ticks for CARRIER type |
+| AI reconsider (base) | 1/16 per tick | 6.25% per AI tick via `!bitrand(15)` |
+| AI reconsider (ATTACK1/ARCHER2) | 1/4 per tick | 25% per AI tick via `!rand4()` |
+| Tactic execution (base) | 1/8 per tick | 12.5% per AI tick via `!(rand()&7)` |
+| Tactic execution (ATTACK2) | 1/4 per tick | 25% per AI tick via `!(rand()&3)` |
+| Encounter placement | 16 ticks | ≈ 1.07 seconds at 15 Hz |
+| Encounter generation | 32 ticks | ≈ 2.13 seconds at 15 Hz |
+| Carrier facing update | 16 ticks | Every 16 AI ticks for CARRIER type |
 | Death animation | 7 frames | tactic counts down 7→0 |
 | Goodfairy total | 255 frames | ≈ 8.5 seconds |
 | Goodfairy luck gate | < 200 | ~56 frames after death |
 | Goodfairy fairy visible | < 120 | ~80 frames after luck gate |
 | Timer heartbeat | 16 events | ticker 0→16 synthesizes key |
-| FALL friction | 25%/tick | `(vel * 3) / 4` per frame |
+| FALL friction | 25%/tick | `(vel * 3) / 4` per AI tick |
 | Ice velocity cap | 42 (normal), 40 (swan) | Max magnitude per axis |
 | Camera dead zone X | ±20 pixels | No scroll within zone |
 | Camera dead zone Y | ±10 pixels | No scroll within zone |
@@ -384,5 +387,4 @@ Extents with etype 80–83 set `xtype ≥ 50`, failing the `xtype < 50` guard. T
 | Monster hit rate at start | 86% | 92% | 94% |
 | Fairy rescues (from start) | 3 | 6 | 3 |
 | Starting weapon | Dirk (1) | Dirk (1) | Dirk (1) |
-
 

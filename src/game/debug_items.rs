@@ -20,34 +20,174 @@ pub struct ItemRef {
 /// Complete item reference table from DEBUG_SPECIFICATION.md §"Item Name Reference".
 /// Order and canonical names match the spec exactly.
 pub const ITEM_REFERENCE: &[ItemRef] = &[
-    ItemRef { id: 0,  stuff_index: 0,  name: "dirk",        aliases: &[] },
-    ItemRef { id: 1,  stuff_index: 1,  name: "mace",        aliases: &[] },
-    ItemRef { id: 2,  stuff_index: 2,  name: "sword",       aliases: &[] },
-    ItemRef { id: 3,  stuff_index: 3,  name: "bow",         aliases: &[] },
-    ItemRef { id: 4,  stuff_index: 4,  name: "wand",        aliases: &[] },
-    ItemRef { id: 5,  stuff_index: 5,  name: "lasso",       aliases: &[] },
-    ItemRef { id: 6,  stuff_index: 6,  name: "shell",       aliases: &[] },
-    ItemRef { id: 7,  stuff_index: 7,  name: "sunstone",    aliases: &["sun stone"] },
-    ItemRef { id: 8,  stuff_index: 8,  name: "arrows",      aliases: &["arrow"] },
-    ItemRef { id: 9,  stuff_index: 9,  name: "blue_stone",  aliases: &["blue stone", "bluestone"] },
-    ItemRef { id: 10, stuff_index: 10, name: "green_jewel", aliases: &["jewel"] },
-    ItemRef { id: 11, stuff_index: 11, name: "glass_vial",  aliases: &["vial"] },
-    ItemRef { id: 12, stuff_index: 12, name: "crystal_orb", aliases: &["orb"] },
-    ItemRef { id: 13, stuff_index: 13, name: "bird_totem",  aliases: &["totem"] },
-    ItemRef { id: 14, stuff_index: 14, name: "gold_ring",   aliases: &["ring"] },
-    ItemRef { id: 15, stuff_index: 15, name: "jade_skull",  aliases: &[] },
-    ItemRef { id: 16, stuff_index: 16, name: "gold_key",    aliases: &["key"] },
-    ItemRef { id: 17, stuff_index: 17, name: "green_key",   aliases: &[] },
-    ItemRef { id: 18, stuff_index: 18, name: "blue_key",    aliases: &[] },
-    ItemRef { id: 19, stuff_index: 19, name: "red_key",     aliases: &[] },
-    ItemRef { id: 20, stuff_index: 20, name: "grey_key",    aliases: &["gray key"] },
-    ItemRef { id: 21, stuff_index: 21, name: "white_key",   aliases: &[] },
-    ItemRef { id: 22, stuff_index: 22, name: "talisman",    aliases: &[] },
-    ItemRef { id: 23, stuff_index: 23, name: "rose",        aliases: &[] },
-    ItemRef { id: 24, stuff_index: 24, name: "apple",       aliases: &["fruit"] },
-    ItemRef { id: 25, stuff_index: 25, name: "statue",      aliases: &[] },
-    ItemRef { id: 28, stuff_index: 28, name: "writ",        aliases: &[] },
-    ItemRef { id: 29, stuff_index: 29, name: "bone",        aliases: &[] },
+    ItemRef {
+        id: 0,
+        stuff_index: 0,
+        name: "dirk",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 1,
+        stuff_index: 1,
+        name: "mace",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 2,
+        stuff_index: 2,
+        name: "sword",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 3,
+        stuff_index: 3,
+        name: "bow",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 4,
+        stuff_index: 4,
+        name: "wand",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 5,
+        stuff_index: 5,
+        name: "lasso",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 6,
+        stuff_index: 6,
+        name: "shell",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 7,
+        stuff_index: 7,
+        name: "sunstone",
+        aliases: &["sun stone"],
+    },
+    ItemRef {
+        id: 8,
+        stuff_index: 8,
+        name: "arrows",
+        aliases: &["arrow"],
+    },
+    ItemRef {
+        id: 9,
+        stuff_index: 9,
+        name: "blue_stone",
+        aliases: &["blue stone", "bluestone"],
+    },
+    ItemRef {
+        id: 10,
+        stuff_index: 10,
+        name: "green_jewel",
+        aliases: &["jewel"],
+    },
+    ItemRef {
+        id: 11,
+        stuff_index: 11,
+        name: "glass_vial",
+        aliases: &["vial"],
+    },
+    ItemRef {
+        id: 12,
+        stuff_index: 12,
+        name: "crystal_orb",
+        aliases: &["orb"],
+    },
+    ItemRef {
+        id: 13,
+        stuff_index: 13,
+        name: "bird_totem",
+        aliases: &["totem"],
+    },
+    ItemRef {
+        id: 14,
+        stuff_index: 14,
+        name: "gold_ring",
+        aliases: &["ring"],
+    },
+    ItemRef {
+        id: 15,
+        stuff_index: 15,
+        name: "jade_skull",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 16,
+        stuff_index: 16,
+        name: "gold_key",
+        aliases: &["key"],
+    },
+    ItemRef {
+        id: 17,
+        stuff_index: 17,
+        name: "green_key",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 18,
+        stuff_index: 18,
+        name: "blue_key",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 19,
+        stuff_index: 19,
+        name: "red_key",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 20,
+        stuff_index: 20,
+        name: "grey_key",
+        aliases: &["gray key"],
+    },
+    ItemRef {
+        id: 21,
+        stuff_index: 21,
+        name: "white_key",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 22,
+        stuff_index: 22,
+        name: "talisman",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 23,
+        stuff_index: 23,
+        name: "rose",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 24,
+        stuff_index: 24,
+        name: "apple",
+        aliases: &["fruit"],
+    },
+    ItemRef {
+        id: 25,
+        stuff_index: 25,
+        name: "statue",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 28,
+        stuff_index: 28,
+        name: "writ",
+        aliases: &[],
+    },
+    ItemRef {
+        id: 29,
+        stuff_index: 29,
+        name: "bone",
+        aliases: &[],
+    },
 ];
 
 /// Look up an item by name (case-insensitive) or numeric ID string.
@@ -77,7 +217,10 @@ pub fn lookup_by_name(s: &str) -> Option<&'static ItemRef> {
     // Search canonical name and aliases
     ITEM_REFERENCE.iter().find(|item| {
         item.name.eq_ignore_ascii_case(&lower)
-            || item.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(&lower))
+            || item
+                .aliases
+                .iter()
+                .any(|alias| alias.eq_ignore_ascii_case(&lower))
     })
 }
 
@@ -98,18 +241,18 @@ mod tests {
     #[test]
     fn test_table_length() {
         // Per DEBUG_SPECIFICATION.md, the table has 28 items
-        assert_eq!(ITEM_REFERENCE.len(), 28, "Item reference table should have 28 entries");
+        assert_eq!(
+            ITEM_REFERENCE.len(),
+            28,
+            "Item reference table should have 28 entries"
+        );
     }
 
     #[test]
     fn test_unique_ids() {
         let mut seen_ids = std::collections::HashSet::new();
         for item in ITEM_REFERENCE {
-            assert!(
-                seen_ids.insert(item.id),
-                "Duplicate item id: {}",
-                item.id
-            );
+            assert!(seen_ids.insert(item.id), "Duplicate item id: {}", item.id);
         }
     }
 
