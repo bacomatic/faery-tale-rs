@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use sdl2::rect::Rect;
+use sdl3::rect::Rect;
 
 use serde::Deserialize;
 

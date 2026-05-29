@@ -2,8 +2,8 @@ use crate::game::bitmap::BitMap;
 use crate::game::colors::Palette;
 use crate::game::iff_image::IffImage;
 
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget, Texture};
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, RenderTarget, Texture};
 
 use std::cell::RefCell;
 use std::rc::Weak;
@@ -14,7 +14,7 @@ use std::rc::Weak;
 /// construction time and from that point on is independent of the source
 /// asset — the `GameLibrary` lifetime does **not** propagate here.
 ///
-/// The `'tex` lifetime tracks the [`sdl2::render::TextureCreator`] that
+/// The `'tex` lifetime tracks the [`sdl3::render::TextureCreator`] that
 /// allocated the backing atlas texture.
 pub struct ImageTexture<'tex> {
     bitmap: BitMap,
@@ -106,7 +106,7 @@ impl<'tex> ImageTexture<'tex> {
             let (width, height) = self.bitmap.get_size();
             let dest_rect = Rect::new(x, y, width as u32, height as u32);
             canvas
-                .copy(&*texture, Some(src_rect), Some(dest_rect))
+                .copy(&*texture, src_rect, dest_rect)
                 .unwrap();
         } else {
             println!("Error upgrading weak reference to shared texture in ImageTexture");
@@ -118,7 +118,7 @@ impl<'tex> ImageTexture<'tex> {
         if let Some(strong_texture) = self.texture.upgrade() {
             let texture = strong_texture.borrow();
             canvas
-                .copy(&*texture, Some(self.texture_bounds), Some(dst))
+                .copy(&*texture, self.texture_bounds, dst)
                 .unwrap();
         } else {
             println!(
@@ -146,7 +146,7 @@ impl<'tex> ImageTexture<'tex> {
             );
             let dest_rect = Rect::new(x, y, region.width(), region.height());
             canvas
-                .copy(&*texture, Some(src_rect), Some(dest_rect))
+                .copy(&*texture, src_rect, dest_rect)
                 .unwrap();
         } else {
             println!(

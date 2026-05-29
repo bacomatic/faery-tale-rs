@@ -8,7 +8,7 @@
 /// # Lifetime
 ///
 /// The single `'tex` lifetime parameter ties all owned textures to the
-/// [`sdl2::render::TextureCreator`] that allocated them.  As long as the
+/// [`sdl3::render::TextureCreator`] that allocated them.  As long as the
 /// `TextureCreator` lives, `RenderResources` is valid.
 ///
 /// # Usage
@@ -26,10 +26,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Rect;
-use sdl2::render::{Texture, TextureCreator};
-use sdl2::video::WindowContext;
+use sdl3::pixels::PixelFormat;
+use sdl3::rect::Rect;
+use sdl3::render::{Texture, TextureCreator};
+use sdl3::video::WindowContext;
 
 use crate::game::audio::AudioSystem;
 use crate::game::bitblit;
@@ -84,12 +84,12 @@ impl<'tex> RenderResources<'tex> {
 
         let mut font_tex = tex_maker
             .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
+                Some(PixelFormat::RGBA32),
                 atlas_bounds.width(),
                 atlas_bounds.height(),
             )
             .unwrap();
-        font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+        font_tex.set_blend_mode(sdl3::render::BlendMode::Blend);
         let font_backing = Rc::new(RefCell::new(font_tex));
 
         let amber = FontTexture::new(amber_font, &amber_bounds, Rc::downgrade(&font_backing));
@@ -99,19 +99,19 @@ impl<'tex> RenderResources<'tex> {
         let mut amber = amber;
         let mut topaz = topaz;
         if let Ok(mut s) = tex_maker.create_texture_static(
-            Some(PixelFormatEnum::RGBA32),
+            Some(PixelFormat::RGBA32),
             amber_bounds.width(),
             amber_bounds.height(),
         ) {
-            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+            s.set_blend_mode(sdl3::render::BlendMode::Blend);
             amber.init_stencil(s);
         }
         if let Ok(mut s) = tex_maker.create_texture_static(
-            Some(PixelFormatEnum::RGBA32),
+            Some(PixelFormat::RGBA32),
             topaz_bounds.width(),
             topaz_bounds.height(),
         ) {
-            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+            s.set_blend_mode(sdl3::render::BlendMode::Blend);
             topaz.init_stencil(s);
         }
 
@@ -119,7 +119,7 @@ impl<'tex> RenderResources<'tex> {
         let image_atlas_rect = Rect::new(0, 0, IMAGE_ATLAS_W, IMAGE_ATLAS_H);
         let image_backing = Rc::new(RefCell::new(
             tex_maker
-                .create_texture_static(Some(PixelFormatEnum::RGBA32), IMAGE_ATLAS_W, IMAGE_ATLAS_H)
+                .create_texture_static(Some(PixelFormat::RGBA32), IMAGE_ATLAS_W, IMAGE_ATLAS_H)
                 .unwrap(),
         ));
 
@@ -288,12 +288,12 @@ impl<'tex> RenderResources<'tex> {
 
         // Create SDL2 textures from the RGBA buffers.
         let mut normal_tex = tex_maker
-            .create_texture_static(Some(PixelFormatEnum::RGBA32), CW as u32, CH as u32)
+            .create_texture_static(Some(PixelFormat::RGBA32), CW as u32, CH as u32)
             .ok()?;
         normal_tex.update(None, &normal_rgba, CW * 4).ok()?;
 
         let mut highlight_tex = tex_maker
-            .create_texture_static(Some(PixelFormatEnum::RGBA32), CW as u32, CH as u32)
+            .create_texture_static(Some(PixelFormat::RGBA32), CW as u32, CH as u32)
             .ok()?;
         highlight_tex.update(None, &highlight_rgba, CW * 4).ok()?;
 

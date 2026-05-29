@@ -1,7 +1,7 @@
 use crate::game::font::DiskFont;
 
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget, Texture};
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, RenderTarget, Texture};
 
 use std::cell::RefCell;
 use std::rc::Weak;
@@ -72,7 +72,7 @@ impl<'a> FontTexture<'a> {
             stencil_pixels.push(255 - alpha); // A inverted
             i += 4;
         }
-        stencil_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+        stencil_tex.set_blend_mode(sdl3::render::BlendMode::Blend);
         // Stencil is a standalone texture — upload starts at (0,0), not the atlas offset.
         let stencil_rect = Rect::new(0, 0, self.bounds.width(), self.bounds.height());
         stencil_tex
@@ -132,7 +132,7 @@ impl<'a> FontTexture<'a> {
                 Ok(ref mut tex) => {
                     let tex_info = tex.query();
                     // println!("texture info: {:?}", tex_info);
-                    assert_eq!(tex_info.format.byte_size_per_pixel(), 4); // Enforce 32 bits per pixel
+                    assert_eq!(tex_info.format.bytes_per_pixel(), 4); // Enforce 32 bits per pixel
 
                     tex.update(self.bounds, self.pixels_32.as_slice(), self.font.modulo * 4)
                         .unwrap();
@@ -200,7 +200,7 @@ impl<'a> FontTexture<'a> {
         if total_w > 0 {
             let y_top = y - self.font.baseline as i32;
             let bg_rect = Rect::new(x, y_top, total_w as u32, self.font.y_size as u32);
-            canvas.set_draw_color(sdl2::pixels::Color::RGB(bg.0, bg.1, bg.2));
+            canvas.set_draw_color(sdl3::pixels::Color::RGB(bg.0, bg.1, bg.2));
             canvas.fill_rect(bg_rect).unwrap();
         }
         // Pass 2: glyph texture with fg color mod draws glyph pixels on top.
@@ -251,7 +251,7 @@ impl<'a> FontTexture<'a> {
                         self.font.y_size as u32,
                     );
                     canvas
-                        .copy(texture, Some(src_rect), Some(glyph_rect))
+                        .copy(texture, src_rect, glyph_rect)
                         .unwrap();
                 }
                 glyph_rect.set_x(glyph_rect.x() + space);
@@ -311,7 +311,7 @@ impl<'a> FontTexture<'a> {
 
                     // copy the glyph
                     canvas
-                        .copy(texture, Some(src_rect), Some(glyph_rect))
+                        .copy(texture, src_rect, glyph_rect)
                         .unwrap();
                 }
 
@@ -375,7 +375,7 @@ impl<'a> FontTexture<'a> {
                         self.font.y_size as u32,
                     );
                     canvas
-                        .copy(texture, Some(src_rect), Some(dst_rect))
+                        .copy(texture, src_rect, dst_rect)
                         .unwrap();
                 }
                 dst_rect.set_x(dst_rect.x() + space);

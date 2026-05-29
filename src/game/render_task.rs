@@ -1,4 +1,4 @@
-use sdl2::{rect::Rect, render::Canvas, video::Window};
+use sdl3::{rect::Rect, render::Canvas, video::Window};
 
 /**
  * Render task handles periodic rendering for various game elements.

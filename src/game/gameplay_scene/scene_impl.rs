@@ -33,7 +33,7 @@ impl Scene for GameplayScene {
                 ..
             } => {
                 // ALT+F4 → immediate quit (OS convention, takes priority over everything).
-                use sdl2::keyboard::Mod;
+                use sdl3::keyboard::Mod;
                 let alt_held = keymod.intersects(Mod::LALTMOD | Mod::RALTMOD);
                 if alt_held && *kc == Keycode::F4 {
                     self.do_option(GameAction::Quit);
@@ -92,7 +92,7 @@ impl Scene for GameplayScene {
                         true
                     }
                     // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
-                    Keycode::Kp0 | Keycode::Num0 => {
+                    Keycode::Kp0 | Keycode::_0 => {
                         self.input.fight = true;
                         true
                     }
@@ -147,7 +147,7 @@ impl Scene for GameplayScene {
                     self.input.right = false;
                     true
                 }
-                Keycode::Kp0 | Keycode::Num0 => {
+                Keycode::Kp0 | Keycode::_0 => {
                     self.input.fight = false;
                     true
                 }
@@ -155,7 +155,7 @@ impl Scene for GameplayScene {
             },
             // Controller axis motion: map left stick to movement input
             Event::ControllerAxisMotion { axis, value, .. } => {
-                use sdl2::controller::Axis;
+                use sdl3::gamepad::Axis;
                 const THRESHOLD: i16 = 8000;
                 match axis {
                     Axis::LeftX => {
@@ -199,7 +199,7 @@ impl Scene for GameplayScene {
             Event::MouseButtonDown {
                 x,
                 y,
-                mouse_btn: sdl2::mouse::MouseButton::Left,
+                mouse_btn: sdl3::mouse::MouseButton::Left,
                 ..
             } => {
                 // Any click dismisses inventory or map view.
@@ -212,8 +212,8 @@ impl Scene for GameplayScene {
                 const BTN_X_LEFT: i32 = 430;
                 const BTN_X_RIGHT: i32 = 482;
                 const BTN_X_END: i32 = 530;
-                let mx = *x;
-                let my = *y;
+                let mx = *x as i32;
+                let my = *y as i32;
                 if mx >= BTN_X_LEFT
                     && mx <= BTN_X_END
                     && my >= HIBAR_Y
@@ -242,14 +242,14 @@ impl Scene for GameplayScene {
             // Compass drag: while mouse is held inside compass, follow pointer direction.
             Event::MouseMotion { x, y, .. } => {
                 if self.input.compass_held {
-                    self.apply_compass_input_from_canvas(*x, *y);
+                    self.apply_compass_input_from_canvas(*x as i32, *y as i32);
                     true
                 } else {
                     false
                 }
             }
             Event::MouseButtonUp {
-                mouse_btn: sdl2::mouse::MouseButton::Left,
+                mouse_btn: sdl3::mouse::MouseButton::Left,
                 ..
             } => {
                 if self.input.compass_held {

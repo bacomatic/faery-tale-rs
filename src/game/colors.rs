@@ -1,4 +1,4 @@
-use sdl2::pixels::Color;
+use sdl3::pixels::Color;
 use serde::Deserialize;
 
 use std::convert::From;

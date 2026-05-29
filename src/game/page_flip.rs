@@ -1,5 +1,5 @@
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget, Texture};
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, RenderTarget, Texture};
 
 /**
  * Page flip animation - port of the original flipscan() function.
@@ -78,7 +78,7 @@ fn copy_region<T: RenderTarget>(
         src.width() * scale,
         src.height() * scale,
     );
-    canvas.copy(texture, Some(src), Some(dst)).unwrap();
+    canvas.copy(texture, src, dst).unwrap();
 }
 
 /// Copy the full texture (320×200) to `canvas` with display scaling.
@@ -89,7 +89,7 @@ fn copy_full<T: RenderTarget>(
     y_offset: i32,
 ) {
     let dst = Rect::new(0, y_offset, 320 * scale, 200 * scale);
-    canvas.copy(texture, None, Some(dst)).unwrap();
+    canvas.copy(texture, None, dst).unwrap();
 }
 
 /// Manages the animated page flip sequence between two textures.

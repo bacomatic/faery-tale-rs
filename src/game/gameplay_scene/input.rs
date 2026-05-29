@@ -834,7 +834,7 @@ impl GameplayScene {
     /// | ↑ / ↓   | Teleport hero ±150 in Y                                                   |
     /// | ← / →   | Teleport hero ±280 in X                                                   |
     pub(crate) fn handle_cheat1_key(&mut self, kc: Keycode) -> bool {
-        use sdl2::keyboard::Keycode as K;
+        use sdl3::keyboard::Keycode as K;
         match kc {
             K::B => {
                 self.state.stuff_mut()[5] = 1;
