@@ -1,4 +1,4 @@
-use sdl2::rect::Point;
+use sdl3::rect::Point;
 use serde::Deserialize;
 
 use crate::game::bitmap::BitMap;

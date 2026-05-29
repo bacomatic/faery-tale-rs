@@ -1,12 +1,12 @@
 
 use std::any::Any;
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, Texture};
-use sdl2::video::Window;
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use sdl3::pixels::Color;
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, Texture};
+use sdl3::video::Window;
 
 use crate::game::palette_fader::{FadeController, FadeResult};
 use crate::game::placard::{PlacardRenderer, start_placard_renderer};
@@ -158,11 +158,11 @@ impl Scene for PlacardScene {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
                 let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                canvas.copy(play_tex, None, screen_dest).unwrap();
 
                 // Start the progressive border animation, centered horizontally
                 let renderer = if let Some(pal) = palette {
-                    start_placard_renderer(&sdl2::rect::Point::new(BORDER_X_OFFSET, 0), pal)
+                    start_placard_renderer(&sdl3::rect::Point::new(BORDER_X_OFFSET, 0), pal)
                 } else {
                     // Fallback: skip to hold if no palette
                     self.phase = PlacardPhase::Hold {
@@ -186,7 +186,7 @@ impl Scene for PlacardScene {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
                 let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                canvas.copy(play_tex, None, screen_dest).unwrap();
 
                 if done {
                     self.phase = PlacardPhase::Hold {
@@ -202,7 +202,7 @@ impl Scene for PlacardScene {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
                 let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                canvas.copy(play_tex, None, screen_dest).unwrap();
 
                 if delta_ticks >= *ticks_remaining {
                     // Fade to black before completing
@@ -228,7 +228,7 @@ impl Scene for PlacardScene {
                 canvas.set_draw_color(Color::BLACK);
                 canvas.clear();
                 let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                canvas.copy(play_tex, None, screen_dest).unwrap();
 
                 if fader.is_done() {
                     play_tex.set_color_mod(255, 255, 255);

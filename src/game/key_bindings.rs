@@ -1,5 +1,5 @@
-use sdl2::controller::Button;
-use sdl2::keyboard::Keycode;
+use sdl3::gamepad::Button;
+use sdl3::keyboard::Keycode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -230,11 +230,11 @@ impl KeyBindings {
         b.insert(GameAction::CastSpell6, vec![Keycode::F6]);     // Ring
         b.insert(GameAction::CastSpell7, vec![Keycode::F7]);     // Skull
         // Weapon selection (Use sub-menu): number keys 1-5
-        b.insert(GameAction::UseSlot1,  vec![Keycode::Num1]);    // Dirk
-        b.insert(GameAction::UseSlot2,  vec![Keycode::Num2]);    // Mace
-        b.insert(GameAction::UseSlot3,  vec![Keycode::Num3]);    // Sword
-        b.insert(GameAction::UseSlot4,  vec![Keycode::Num4]);    // Bow
-        b.insert(GameAction::UseSlot5,  vec![Keycode::Num5]);    // Wand
+        b.insert(GameAction::UseSlot1,  vec![Keycode::_1]);    // Dirk
+        b.insert(GameAction::UseSlot2,  vec![Keycode::_2]);    // Mace
+        b.insert(GameAction::UseSlot3,  vec![Keycode::_3]);    // Sword
+        b.insert(GameAction::UseSlot4,  vec![Keycode::_4]);    // Bow
+        b.insert(GameAction::UseSlot5,  vec![Keycode::_5]);    // Wand
         // Key selection: K prefix (K alone opens key sub-menu)
         b.insert(GameAction::SelectKey1, vec![]);                 // Gold  (K1 modal)
         b.insert(GameAction::SelectKey2, vec![]);                 // Green (K2 modal)
@@ -245,7 +245,7 @@ impl KeyBindings {
         // Buy menu keys (original)
         b.insert(GameAction::BuyFood,   vec![Keycode::O]);
         b.insert(GameAction::BuyArrow,  vec![Keycode::R]);
-        b.insert(GameAction::BuyVial,   vec![Keycode::Num8]);
+        b.insert(GameAction::BuyVial,   vec![Keycode::_8]);
         b.insert(GameAction::BuyMace,   vec![Keycode::C]);
         b.insert(GameAction::BuySword,  vec![Keycode::W]);
         b.insert(GameAction::BuyBow,    vec![Keycode::B]);
@@ -310,11 +310,11 @@ impl ControllerBindings {
         use Button::*;
 
         let mut gameplay = HashMap::new();
-        // Face buttons
-        gameplay.insert(A,         GameAction::Fight);
-        gameplay.insert(B,         GameAction::Take);
-        gameplay.insert(X,         GameAction::BuyFood);  // BuyFood doubles as Eat
-        gameplay.insert(Y,         GameAction::Look);
+        // Face buttons (SDL3 gamepad: South=A, East=B, West=X, North=Y)
+        gameplay.insert(South,     GameAction::Fight);
+        gameplay.insert(East,      GameAction::Take);
+        gameplay.insert(West,      GameAction::BuyFood);  // BuyFood doubles as Eat
+        gameplay.insert(North,     GameAction::Look);
         // Bumpers — weapon cycling
         gameplay.insert(LeftShoulder,  GameAction::WeaponPrev);
         gameplay.insert(RightShoulder, GameAction::WeaponNext);
@@ -329,11 +329,11 @@ impl ControllerBindings {
         gameplay.insert(LeftStick, GameAction::Inventory);
 
         let mut menu = HashMap::new();
-        // Face buttons
-        menu.insert(A,         GameAction::MenuConfirm);
-        menu.insert(B,         GameAction::MenuCancel);
-        menu.insert(X,         GameAction::BuyFood);  // Eat still works in menu
-        menu.insert(Y,         GameAction::Look);     // Look still works in menu
+        // Face buttons (SDL3 gamepad: South=A, East=B, West=X, North=Y)
+        menu.insert(South,     GameAction::MenuConfirm);
+        menu.insert(East,      GameAction::MenuCancel);
+        menu.insert(West,      GameAction::BuyFood);  // Eat still works in menu
+        menu.insert(North,     GameAction::Look);     // Look still works in menu
         // Bumpers — weapon cycling (unchanged)
         menu.insert(LeftShoulder,  GameAction::WeaponPrev);
         menu.insert(RightShoulder, GameAction::WeaponNext);
@@ -431,20 +431,21 @@ mod tests {
     #[test]
     fn test_controller_face_buttons_gameplay() {
         let cb = ControllerBindings::default_bindings();
+        // SDL3 gamepad renames: South=A, East=B, West=X, North=Y
         assert_eq!(
-            cb.action_for_button(ControllerMode::Gameplay, Button::A),
+            cb.action_for_button(ControllerMode::Gameplay, Button::South),
             Some(GameAction::Fight)
         );
         assert_eq!(
-            cb.action_for_button(ControllerMode::Gameplay, Button::B),
+            cb.action_for_button(ControllerMode::Gameplay, Button::East),
             Some(GameAction::Take)
         );
         assert_eq!(
-            cb.action_for_button(ControllerMode::Gameplay, Button::X),
+            cb.action_for_button(ControllerMode::Gameplay, Button::West),
             Some(GameAction::BuyFood) // BuyFood doubles as Eat when not near shop
         );
         assert_eq!(
-            cb.action_for_button(ControllerMode::Gameplay, Button::Y),
+            cb.action_for_button(ControllerMode::Gameplay, Button::North),
             Some(GameAction::Look)
         );
     }
@@ -475,12 +476,13 @@ mod tests {
     #[test]
     fn test_controller_menu_mode_a_b_are_confirm_cancel() {
         let cb = ControllerBindings::default_bindings();
+        // SDL3 gamepad renames: South=A, East=B
         assert_eq!(
-            cb.action_for_button(ControllerMode::Menu, Button::A),
+            cb.action_for_button(ControllerMode::Menu, Button::South),
             Some(GameAction::MenuConfirm)
         );
         assert_eq!(
-            cb.action_for_button(ControllerMode::Menu, Button::B),
+            cb.action_for_button(ControllerMode::Menu, Button::East),
             Some(GameAction::MenuCancel)
         );
     }

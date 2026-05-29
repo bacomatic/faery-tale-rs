@@ -2,12 +2,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, Texture};
-use sdl2::video::Window;
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use sdl3::pixels::Color;
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, Texture};
+use sdl3::video::Window;
 
 use crate::game::page_flip::PageFlip;
 use crate::game::palette_fader::{FadeController, FadeResult};
@@ -217,7 +217,7 @@ impl IntroScene {
 ///
 /// Free function to avoid borrow conflicts when called inside a
 /// `with_texture_canvas` closure that also matches `&mut self.phase`.
-fn draw_page_overlays<T: sdl2::render::RenderTarget>(
+fn draw_page_overlays<T: sdl3::render::RenderTarget>(
     page_index: usize,
     canvas: &mut Canvas<T>,
     resources: &SceneResources<'_, '_>,
@@ -380,7 +380,7 @@ impl Scene for IntroScene {
                         viewport.width() * 2,
                         viewport.height() * 2,
                     );
-                    canvas.copy(play_tex, Some(viewport), Some(screen_dest)).unwrap();
+                    canvas.copy(play_tex, viewport, screen_dest).unwrap();
                 }
 
                 if zoom.is_done() {
@@ -409,7 +409,7 @@ impl Scene for IntroScene {
                 canvas.clear();
 
                 let screen_dest = Rect::new(0, 40, 640, 400);
-                canvas.copy(play_tex, None, Some(screen_dest)).unwrap();
+                canvas.copy(play_tex, None, screen_dest).unwrap();
 
                 if tick_countdown(ticks_remaining, delta) {
                     self.advance(game_lib);
@@ -493,7 +493,7 @@ impl Scene for IntroScene {
                         viewport.width() * 2,
                         viewport.height() * 2,
                     );
-                    canvas.copy(play_tex, Some(viewport), Some(screen_dest)).unwrap();
+                    canvas.copy(play_tex, viewport, screen_dest).unwrap();
                 }
 
                 if zoom.is_done() {

@@ -14,12 +14,12 @@
 
 use std::any::Any;
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-use sdl2::render::{Canvas, Texture};
-use sdl2::video::Window;
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use sdl3::pixels::Color;
+use sdl3::rect::Rect;
+use sdl3::render::{Canvas, Texture};
+use sdl3::video::Window;
 
 use crate::game::game_library::GameLibrary;
 use crate::game::scene::{Scene, SceneResources, SceneResult};
@@ -114,7 +114,7 @@ impl Scene for VictoryScene {
         // Cinematic config: 312×194 inset (4/3 px border per SPEC §1.1).
         let src = Rect::new(4, 3, 312, 194);
         let dst = Rect::new(8, 46, 624, 388);
-        canvas.copy(play_tex, Some(src), Some(dst)).unwrap();
+        canvas.copy(play_tex, src, dst).unwrap();
 
         // Advance phase.
         match &mut self.phase {

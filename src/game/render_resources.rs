@@ -1,6 +1,6 @@
-/// SDL2 rendering resources for the game.
+/// SDL3 rendering resources for the game.
 ///
-/// [`RenderResources`] owns every SDL2 texture that the game creates at
+/// [`RenderResources`] owns every SDL3 texture that the game creates at
 /// startup — the shared font atlas, the shared image atlas, and the two
 /// off-screen render targets — keeping them decoupled from the raw asset
 /// data in [`GameLibrary`].
@@ -8,7 +8,7 @@
 /// # Lifetime
 ///
 /// The single `'tex` lifetime parameter ties all owned textures to the
-/// [`sdl2::render::TextureCreator`] that allocated them.  As long as the
+/// [`sdl3::render::TextureCreator`] that allocated them.  As long as the
 /// `TextureCreator` lives, `RenderResources` is valid.
 ///
 /// # Usage
@@ -27,10 +27,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Rect;
-use sdl2::render::{Texture, TextureCreator};
-use sdl2::video::WindowContext;
+use sdl3::pixels::PixelFormat;
+use sdl3::rect::Rect;
+use sdl3::render::{Texture, TextureCreator};
+use sdl3::video::WindowContext;
 
 use crate::game::audio::AudioSystem;
 use crate::game::bitmap::BitMap;
@@ -64,7 +64,7 @@ pub struct RenderResources<'tex> {
 }
 
 impl<'tex> RenderResources<'tex> {
-    /// Build all SDL2 rendering resources from the loaded game library.
+    /// Build all SDL3 rendering resources from the loaded game library.
     ///
     /// Fonts and images are uploaded to their respective atlas textures
     /// immediately; the `GameLibrary` reference is not retained.
@@ -85,12 +85,12 @@ impl<'tex> RenderResources<'tex> {
 
         let mut font_tex = tex_maker
             .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
+                Some(PixelFormat::RGBA32),
                 atlas_bounds.width(),
                 atlas_bounds.height(),
             )
             .unwrap();
-        font_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+        font_tex.set_blend_mode(sdl3::render::BlendMode::Blend);
         let font_backing = Rc::new(RefCell::new(font_tex));
 
         let amber = FontTexture::new(amber_font, &amber_bounds, Rc::downgrade(&font_backing));
@@ -99,12 +99,12 @@ impl<'tex> RenderResources<'tex> {
         // ── Stencil textures (inverted alpha for bg-color rendering) ──────
         let mut amber = amber;
         let mut topaz = topaz;
-        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), amber_bounds.width(), amber_bounds.height()) {
-            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormat::RGBA32), amber_bounds.width(), amber_bounds.height()) {
+            s.set_blend_mode(sdl3::render::BlendMode::Blend);
             amber.init_stencil(s);
         }
-        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormatEnum::RGBA32), topaz_bounds.width(), topaz_bounds.height()) {
-            s.set_blend_mode(sdl2::render::BlendMode::Blend);
+        if let Ok(mut s) = tex_maker.create_texture_static(Some(PixelFormat::RGBA32), topaz_bounds.width(), topaz_bounds.height()) {
+            s.set_blend_mode(sdl3::render::BlendMode::Blend);
             topaz.init_stencil(s);
         }
 
@@ -113,7 +113,7 @@ impl<'tex> RenderResources<'tex> {
         let image_backing = Rc::new(RefCell::new(
             tex_maker
                 .create_texture_static(
-                    Some(PixelFormatEnum::RGBA32),
+                    Some(PixelFormat::RGBA32),
                     IMAGE_ATLAS_W,
                     IMAGE_ATLAS_H,
                 )
@@ -275,10 +275,10 @@ impl<'tex> RenderResources<'tex> {
         let (normal_rgba, _) = normal_bm.generate_rgb32(textcolors, None).ok()?;
         let (highlight_rgba, _) = highlight_bm.generate_rgb32(textcolors, None).ok()?;
 
-        // Create SDL2 textures from the RGBA buffers.
+        // Create SDL3 textures from the RGBA buffers.
         let mut normal_tex = tex_maker
             .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
+                Some(PixelFormat::RGBA32),
                 CW as u32,
                 CH as u32,
             )
@@ -287,7 +287,7 @@ impl<'tex> RenderResources<'tex> {
 
         let mut highlight_tex = tex_maker
             .create_texture_static(
-                Some(PixelFormatEnum::RGBA32),
+                Some(PixelFormat::RGBA32),
                 CW as u32,
                 CH as u32,
             )

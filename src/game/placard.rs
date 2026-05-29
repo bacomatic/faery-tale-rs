@@ -3,12 +3,12 @@ use crate::game::font_texture::FontTexture;
 use crate::game::colors::Palette;
 use crate::game::render_task::RenderTask;
 
-use sdl2::pixels::Color;
-use sdl2::rect::Point;
-use sdl2::render::Canvas;
-use sdl2::render::RenderTarget;
+use sdl3::pixels::Color;
+use sdl3::rect::Point;
+use sdl3::render::Canvas;
+use sdl3::render::RenderTarget;
 
-use sdl2::video::Window;
+use sdl3::video::Window;
 use serde::Deserialize;
 
 /*
@@ -288,7 +288,7 @@ impl PlacardRenderer {
 }
 
 impl RenderTask for PlacardRenderer {
-    fn update(&mut self, canvas: &mut Canvas<Window>, delta_ticks: i32, _area: Option<sdl2::rect::Rect>) -> bool {
+    fn update(&mut self, canvas: &mut Canvas<Window>, delta_ticks: i32, _area: Option<sdl3::rect::Rect>) -> bool {
         self.draw_segments(canvas, delta_ticks)
     }
 }

@@ -12,7 +12,7 @@
 ///   4. Update the Amiga Paula hardware registers (period, waveform address,
 ///      waveform length, volume).
 ///
-/// We replicate all of this in Rust using an SDL2 audio device callback.  The
+/// We replicate all of this in Rust using an SDL3 audio stream callback.  The
 /// callback runs on a background thread and fills PCM buffers.  Sequencer
 /// state is shared with the main thread via `Arc<Mutex<SequencerState>>` so
 /// that `play_score()` / `stop_score()` are safe to call at any time.
@@ -51,7 +51,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::fs;
 
-use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use sdl3::audio::{AudioCallback, AudioFormat, AudioSpec, AudioStreamWithCallback};
 
 use super::songs::{SongLibrary, Track, TrackEvent, PTABLE, NOTE_DURATIONS, AMIGA_CLOCK_NTSC, VBL_RATE_HZ, DEFAULT_TEMPO};
 
@@ -98,7 +98,7 @@ const NOTE_GAP: u32 = 300;
 const STEREO_PRIMARY: f32 = 0.75; // primary-side weight for a voice
 const STEREO_BLEED:   f32 = 0.25; // opposite-side bleed weight
 
-/// SDL2 PCM sample rate for synthesis output.
+/// SDL3 PCM sample rate for synthesis output.
 pub const SAMPLE_RATE: u32 = 44100;
 
 /// Number of stereo frames between sequencer ticks (= SAMPLE_RATE / VBL_RATE).
@@ -686,10 +686,10 @@ impl SequencerState {
 }
 
 // ---------------------------------------------------------------------------
-// SDL2 audio callback
+// SDL3 audio callback
 // ---------------------------------------------------------------------------
 
-/// SDL2 audio callback wrapper.
+/// SDL3 audio stream callback wrapper.
 ///
 /// `instruments` lives here (owned by the callback, not behind the Mutex)
 /// so we can pass `&instruments` to both the sequencer tick and the voice
@@ -702,24 +702,31 @@ struct SynthCallback {
     no_interpolation: bool,
 }
 
-impl AudioCallback for SynthCallback {
-    type Channel = i16;
-
-    fn callback(&mut self, out: &mut [i16]) {
-        // Zero the buffer first
-        for s in out.iter_mut() {
-            *s = 0;
+impl AudioCallback<i16> for SynthCallback {
+    /// Called by SDL3 when the audio stream needs more data.
+    ///
+    /// `stream` — the `AudioStream` to push PCM into.
+    /// `requested` — number of *samples* (not bytes) SDL wants from us.
+    ///   For stereo i16 the number of frames is `requested / 2`.
+    fn callback(&mut self, stream: &mut sdl3::audio::AudioStream, requested: i32) {
+        let total_frames = (requested.max(0) as usize) / 2; // stereo: 2 samples per frame
+        if total_frames == 0 {
+            return;
         }
+
+        let mut out = vec![0i16; total_frames * 2];
 
         let mut st = match self.state.lock() {
             Ok(g) => g,
-            Err(_) => return,
+            Err(_) => {
+                let _ = stream.put_data_i16(&out);
+                return;
+            }
         };
 
         let inst = &self.instruments;
         // out is interleaved stereo: [L0, R0, L1, R1, ...]
         // Work in frames (stereo pairs) to keep VBL timing consistent.
-        let total_frames = out.len() / 2;
         let mut frame_pos = 0usize;
 
         while frame_pos < total_frames {
@@ -763,9 +770,8 @@ impl AudioCallback for SynthCallback {
                 sfx.mix_into(&mut left_buf, &mut right_buf, chunk_frames);
             }
 
-            // Interleave left/right into the stereo output buffer.
-            // Scale f32 [-1.0, 1.0] → i16 [-32767, 32767]; SDL2 converts
-            // to the device's native format if needed.
+            // Interleave left/right into the output buffer.
+            // Scale f32 [-1.0, 1.0] → i16 [-32767, 32767].
             for i in 0..chunk_frames {
                 let base = (frame_pos + i) * 2;
                 out[base]     = (left_buf[i].clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
@@ -775,6 +781,9 @@ impl AudioCallback for SynthCallback {
             frame_pos += chunk_frames;
             st.samples_to_vbl -= chunk_frames as f64;
         }
+
+        // Push the rendered PCM into the SDL3 audio stream.
+        let _ = stream.put_data_i16(&out);
     }
 }
 
@@ -788,7 +797,7 @@ pub struct AudioSystem {
     state: Arc<Mutex<SequencerState>>,
     instruments: Instruments,
     sfx: Arc<Mutex<SfxChannel>>,
-    _device: AudioDevice<SynthCallback>,
+    _stream: AudioStreamWithCallback<SynthCallback>,
     song_library: Option<SongLibrary>,
     music_enabled: Arc<Mutex<bool>>,
     sfx_enabled: Arc<Mutex<bool>>,
@@ -797,17 +806,15 @@ pub struct AudioSystem {
 impl AudioSystem {
     /// Initialise the audio system.
     ///
-    /// * `sdl_context` — the SDL2 context (used to open the audio subsystem)
+    /// * `audio_subsystem` — the SDL3 audio subsystem handle
     /// * `instruments` — loaded from `game/v6` via [`Instruments::load`]
-    pub fn new(sdl_context: &sdl2::Sdl, instruments: Instruments, no_interpolation: bool) -> Result<Self, String> {
-        let audio_subsystem = sdl_context.audio()?;
-
-        let desired = AudioSpecDesired {
+    pub fn new(audio_subsystem: &sdl3::AudioSubsystem, instruments: Instruments, no_interpolation: bool) -> Result<Self, String> {
+        let spec = AudioSpec {
             freq: Some(SAMPLE_RATE as i32),
-            // Stereo: Amiga Paula routes voices 0+1 to the left DAC and
-            // voices 2+3 to the right DAC.  SDL2 interleaves as [L, R, ...].
+            // Stereo: Amiga Paula routes voices 0+3 to the left DAC and
+            // voices 1+2 to the right DAC.  SDL3 interleaves as [L, R, ...].
             channels: Some(2),
-            samples: Some(512),
+            format: Some(AudioFormat::s16_sys()),
         };
 
         let state = Arc::new(Mutex::new(SequencerState::new()));
@@ -817,17 +824,22 @@ impl AudioSystem {
 
         let sfx = Arc::new(Mutex::new(SfxChannel::new()));
         let sfx_cb = Arc::clone(&sfx);
-        
+
         let music_enabled = Arc::new(Mutex::new(true));
         let sfx_enabled = Arc::new(Mutex::new(true));
 
-        let device = audio_subsystem.open_playback(None, &desired, |_spec| {
-            SynthCallback { state: state_cb, instruments: instruments_cb, sfx: sfx_cb, no_interpolation }
-        })?;
+        let stream = audio_subsystem
+            .open_playback_stream(&spec, SynthCallback {
+                state: state_cb,
+                instruments: instruments_cb,
+                sfx: sfx_cb,
+                no_interpolation,
+            })
+            .map_err(|e| e.to_string())?;
 
-        device.resume();
+        stream.resume().map_err(|e| e.to_string())?;
 
-        Ok(AudioSystem { state, instruments, sfx, _device: device, song_library: None, music_enabled, sfx_enabled })
+        Ok(AudioSystem { state, instruments, sfx, _stream: stream, song_library: None, music_enabled, sfx_enabled })
     }
 
     /// Start playing four tracks from the beginning (mirrors `_playscore`).

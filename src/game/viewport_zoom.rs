@@ -1,5 +1,5 @@
 
-use sdl2::rect::Rect;
+use sdl3::rect::Rect;
 
 /**
  * Viewport zoom effect - port of the original screen_size() function.

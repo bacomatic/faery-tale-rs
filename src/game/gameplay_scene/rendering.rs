@@ -33,17 +33,17 @@ impl GameplayScene {
 
         let tc = canvas.texture_creator();
         if let Ok(mut hibar_tex) = tc.create_texture_target(
-            sdl2::pixels::PixelFormatEnum::RGBA32, 640, HIBAR_NATIVE_H,
+            sdl3::pixels::PixelFormat::RGBA32, 640, HIBAR_NATIVE_H,
         ) {
             let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
-                hc.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                hc.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 hc.clear();
 
                 if let Some(hiscreen) = hiscreen_opt {
-                    hiscreen.draw_scaled(hc, sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
+                    hiscreen.draw_scaled(hc, sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
                 } else {
-                    hc.set_draw_color(sdl2::pixels::Color::RGB(80, 60, 20));
-                    hc.fill_rect(sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
+                    hc.set_draw_color(sdl3::pixels::Color::RGB(80, 60, 20));
+                    hc.fill_rect(sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
                 }
 
                 amber_font.set_color_mod(0xAA, 0x55, 0x00);
@@ -79,7 +79,7 @@ impl GameplayScene {
                 const COMPASS_SRC_Y: i32 = 15;
                 const COMPASS_SRC_W: u32 = 48;
                 const COMPASS_SRC_H: u32 = 24;
-                let compass_dest = sdl2::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
+                let compass_dest = sdl3::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
                 if let Some(normal_tex) = compass_normal {
                     hc.copy(normal_tex, None, compass_dest).ok();
                 }
@@ -87,8 +87,8 @@ impl GameplayScene {
                     let (rx, ry, rw, rh) = compass_regions[input_comptable_dir];
                     if rw > 1 || rh > 1 {
                         if let Some(highlight_tex) = compass_highlight {
-                            let src = sdl2::rect::Rect::new(rx, ry, rw as u32, rh as u32);
-                            let dst = sdl2::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
+                            let src = sdl3::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                            let dst = sdl3::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
                             hc.copy(highlight_tex, src, dst).ok();
                         }
                     }
@@ -100,16 +100,16 @@ impl GameplayScene {
                     let cursor_y = (cursor_row as i32) * 9 + 8 - topaz_baseline;
                     let cursor_w = 48u32; // button text width (6 chars × 8px)
                     let cursor_h = 9u32;  // row height
-                    hc.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
-                    hc.draw_rect(sdl2::rect::Rect::new(
+                    hc.set_draw_color(sdl3::pixels::Color::RGB(255, 255, 255));
+                    hc.draw_rect(sdl3::rect::Rect::new(
                         cursor_x - 1, cursor_y - 1, cursor_w + 2, cursor_h + 2
                     )).ok();
                 }
             });
             canvas.copy(
                 &hibar_tex,
-                sdl2::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
-                sdl2::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+                sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                sdl3::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
             ).ok();
         }; // semicolon: drops Result<Texture> temporary before tc is dropped
     }
@@ -119,7 +119,7 @@ impl GameplayScene {
         match self.state.viewstatus {
             // Normal play or forced redraw
             0 | 98 | 99 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
                 // Blit composed map framebuf to canvas (world-105).
                 if let Some(ref mr) = self.map_renderer {
@@ -136,21 +136,21 @@ impl GameplayScene {
                             rgb_buf.push(0xFF);
                         }
                         let tc = canvas.texture_creator();
-                        let surface_result = sdl2::surface::Surface::from_data(
+                        let surface_result = sdl3::surface::Surface::from_data(
                             &mut rgb_buf,
                             crate::game::map_renderer::MAP_DST_W,
                             crate::game::map_renderer::MAP_DST_H,
                             crate::game::map_renderer::MAP_DST_W * 4,
-                            sdl2::pixels::PixelFormatEnum::ARGB8888,
+                            sdl3::pixels::PixelFormat::ARGB8888,
                         );
                         if let Ok(surface) = surface_result {
                             if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                                let src = sdl2::rect::Rect::new(0, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
-                                let dst = sdl2::rect::Rect::new(
+                                let src = sdl3::rect::Rect::new(0, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
+                                let dst = sdl3::rect::Rect::new(
                                     PLAYFIELD_X, PLAYFIELD_Y,
                                     PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
                                 );
-                                let _ = canvas.copy(&tex, Some(src), Some(dst));
+                                let _ = canvas.copy(&tex, src, dst);
                             }
                         }
                     }
@@ -163,7 +163,7 @@ impl GameplayScene {
             }
             // Map view (bird totem)
             1 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
 
                 if let Some(ref world) = self.map_world {
@@ -178,39 +178,39 @@ impl GameplayScene {
                         pixels_u8.push(0xFF);
                     }
                     let tc = canvas.texture_creator();
-                    let surface_result = sdl2::surface::Surface::from_data(
+                    let surface_result = sdl3::surface::Surface::from_data(
                         &mut pixels_u8,
                         crate::game::map_view::BIGDRAW_COLS as u32,
                         crate::game::map_view::BIGDRAW_ROWS as u32,
                         (crate::game::map_view::BIGDRAW_COLS * 4) as u32,
-                        sdl2::pixels::PixelFormatEnum::ARGB8888,
+                        sdl3::pixels::PixelFormat::ARGB8888,
                     );
                     if let Ok(surface) = surface_result {
                         if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                            let dst = sdl2::rect::Rect::new(32, 40, 576, 144);
-                            let _ = canvas.copy(&tex, None, Some(dst));
+                            let dst = sdl3::rect::Rect::new(32, 40, 576, 144);
+                            let _ = canvas.copy(&tex, None, dst);
                         }
                     }
                 }
 
                 // Hero position marker (center of the map view)
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 255, 255));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(255, 255, 255));
                 let hero_px = 32 + 576 / 2;
                 let hero_py = 40 + 144 / 2;
                 let _ = canvas.draw_line(
-                    sdl2::rect::Point::new(hero_px - 4, hero_py),
-                    sdl2::rect::Point::new(hero_px + 4, hero_py),
+                    sdl3::rect::Point::new(hero_px - 4, hero_py),
+                    sdl3::rect::Point::new(hero_px + 4, hero_py),
                 );
                 let _ = canvas.draw_line(
-                    sdl2::rect::Point::new(hero_px, hero_py - 4),
-                    sdl2::rect::Point::new(hero_px, hero_py + 4),
+                    sdl3::rect::Point::new(hero_px, hero_py - 4),
+                    sdl3::rect::Point::new(hero_px, hero_py + 4),
                 );
 
                 self.render_hibar(canvas, resources);
             }
             // Message overlay
             2 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(48, 48, 48));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(48, 48, 48));
                 canvas.clear();
                 // "MESSAGE" — text rendering pending font wiring
             }
@@ -218,7 +218,7 @@ impl GameplayScene {
             // Original: do_option() ITEMS hit=5 — clears playfield to black, blits item sprites
             // from seq_list[OBJECTS] using inv_list[] layout, then stillscreen() + viewstatus=4.
             4 => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
 
                 // Build a 320×200 lores canvas with item sprites at their inv_list positions.
@@ -275,21 +275,21 @@ impl GameplayScene {
                     }
                     // Blit the lores inventory canvas to the playfield rect (clip x=16, scale 2×).
                     let tc = canvas.texture_creator();
-                    if let Ok(surface) = sdl2::surface::Surface::from_data(
+                    if let Ok(surface) = sdl3::surface::Surface::from_data(
                         &mut rgb_buf,
                         LORES_W as u32, LORES_H as u32,
                         LORES_W as u32 * 4,
-                        sdl2::pixels::PixelFormatEnum::ARGB8888,
+                        sdl3::pixels::PixelFormat::ARGB8888,
                     ) {
                         if let Ok(tex) = tc.create_texture_from_surface(&surface) {
-                            let src = sdl2::rect::Rect::new(
+                            let src = sdl3::rect::Rect::new(
                                 16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H,
                             );
-                            let dst = sdl2::rect::Rect::new(
+                            let dst = sdl3::rect::Rect::new(
                                 PLAYFIELD_X, PLAYFIELD_Y,
                                 PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
                             );
-                            let _ = canvas.copy(&tex, Some(src), Some(dst));
+                            let _ = canvas.copy(&tex, src, dst);
                         }
                     }; // semicolon: drops Result<Surface> temporary before rgb_buf is dropped
                 }
@@ -297,7 +297,7 @@ impl GameplayScene {
                 self.render_hibar(canvas, resources);
             }
             _ => {
-                canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 canvas.clear();
             }
         }

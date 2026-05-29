@@ -106,20 +106,20 @@ fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
         Keycode::L      => Some(b'L'),
         Keycode::O      => Some(b'O'),
         Keycode::R      => Some(b'R'),
-        Keycode::Num8   => Some(b'8'),  // top-row 8 only; Kp8 = MoveUp
+        Keycode::_8   => Some(b'8'),  // top-row 8 only; Kp8 = MoveUp
         Keycode::C      => Some(b'C'),
         Keycode::W      => Some(b'W'),
         Keycode::B      => Some(b'B'),
         Keycode::E      => Some(b'E'),
         Keycode::V      => Some(b'V'),
         Keycode::X      => Some(b'X'),
-        Keycode::Num1   => Some(b'1'),
-        Keycode::Num2   => Some(b'2'),
-        Keycode::Num3   => Some(b'3'),
-        Keycode::Num4   => Some(b'4'),
-        Keycode::Num5   => Some(b'5'),
-        Keycode::Num6   => Some(b'6'),
-        Keycode::Num7   => Some(b'7'),
+        Keycode::_1   => Some(b'1'),
+        Keycode::_2   => Some(b'2'),
+        Keycode::_3   => Some(b'3'),
+        Keycode::_4   => Some(b'4'),
+        Keycode::_5   => Some(b'5'),
+        Keycode::_6   => Some(b'6'),
+        Keycode::_7   => Some(b'7'),
         Keycode::K      => Some(b'K'),
         // F1-F7: magic spell shortcuts (fmain.c:537-547, key codes 10-16)
         Keycode::F1     => Some(10),
@@ -226,10 +226,10 @@ const HIBAR_NATIVE_H: u32 = 57;        // vp_text source height (HIRES rows)
 const HIBAR_H: u32 = HIBAR_NATIVE_H * 2; // 114 — 2× line-doubled on canvas
 const HIBAR_Y: i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6; // 40 + 280 + 6 = 326
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::render::{Canvas, Texture};
-use sdl2::video::Window;
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use sdl3::render::{Canvas, Texture};
+use sdl3::video::Window;
 
 use crate::game::actor::{ActorKind, ActorState, Goal};
 use crate::game::collision;

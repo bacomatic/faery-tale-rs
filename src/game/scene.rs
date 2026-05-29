@@ -1,10 +1,9 @@
-
 use std::any::Any;
 use std::collections::HashMap;
 
-use sdl2::event::Event;
-use sdl2::render::{Canvas, Texture};
-use sdl2::video::Window;
+use sdl3::event::Event;
+use sdl3::render::{Canvas, Texture};
+use sdl3::video::Window;
 
 use crate::game::audio::AudioSystem;
 use crate::game::font_texture::FontTexture;
@@ -67,7 +66,7 @@ impl<'a, 'tex> SceneResources<'a, 'tex> {
  *
  * The scene receives the canvas, offscreen texture, delta ticks, game
  * library, and rendering resources as separate parameters to avoid borrow
- * conflicts with SDL2's texture rendering patterns.
+ * conflicts with SDL3's texture rendering patterns.
  */
 pub trait Scene {
     /**
@@ -81,7 +80,7 @@ pub trait Scene {
     /**
      * Called once per frame to update state and render.
      *
-     * `canvas` - the SDL2 canvas for rendering (logical 640x480)
+     * `canvas` - the SDL3 canvas for rendering (logical 640x480)
      * `play_tex` - the 320x200 offscreen texture for Amiga-resolution rendering
      * `delta_ticks` - elapsed ticks since last frame (1/30s per tick)
      * `game_lib` - reference to all game assets

@@ -44,7 +44,7 @@ use crossterm::{
     terminal::{self, ClearType},
 };
 
-use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl3::audio::{AudioCallback, AudioFormat, AudioSpec};
 
 // ---------------------------------------------------------------------------
 // Audio constants (mirrors audio.rs)
@@ -372,7 +372,7 @@ impl SeqState {
 }
 
 // ---------------------------------------------------------------------------
-// SDL2 audio callback
+// SDL3 audio callback
 // ---------------------------------------------------------------------------
 
 struct SynthCallback {
@@ -380,14 +380,13 @@ struct SynthCallback {
     instruments: Instruments,
 }
 
-impl AudioCallback for SynthCallback {
-    type Channel = i16;
-
-    fn callback(&mut self, out: &mut [i16]) {
-        for s in out.iter_mut() { *s = 0; }
-        let mut st = match self.state.lock() { Ok(g) => g, Err(_) => return };
+impl AudioCallback<i16> for SynthCallback {
+    fn callback(&mut self, stream: &mut sdl3::audio::AudioStream, requested: i32) {
+        let total_frames = (requested.max(0) as usize) / 2;
+        if total_frames == 0 { return; }
+        let mut out = vec![0i16; total_frames * 2];
+        let mut st = match self.state.lock() { Ok(g) => g, Err(_) => { let _ = stream.put_data_i16(&out); return; } };
         let inst        = &self.instruments;
-        let total_frames = out.len() / 2;
         let mut frame_pos = 0usize;
 
         while frame_pos < total_frames {
@@ -414,6 +413,7 @@ impl AudioCallback for SynthCallback {
             frame_pos         += chunk;
             st.samples_to_vbl -= chunk as f64;
         }
+        let _ = stream.put_data_i16(&out);
     }
 }
 
@@ -862,23 +862,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(3);
 
-    // ── SDL2 audio setup ────────────────────────────────────────────────────
-    let sdl         = sdl2::init()?;
-    let audio_ss    = sdl.audio()?;
-    let desired     = AudioSpecDesired {
-        freq:    Some(SAMPLE_RATE as i32),
+    // ── SDL3 audio setup ────────────────────────────────────────────────────
+    let sdl      = sdl3::init()?;
+    let audio_ss = sdl.audio()?;
+    let spec     = AudioSpec {
+        freq:     Some(SAMPLE_RATE as i32),
         channels: Some(2),
-        samples:  Some(512),
+        format:   Some(AudioFormat::s16_sys()),
     };
 
     let audio_state = Arc::new(Mutex::new(SeqState::new()));
     let cb_state    = Arc::clone(&audio_state);
     let cb_inst     = instruments.clone();
 
-    let device = audio_ss.open_playback(None, &desired, |_spec| {
-        SynthCallback { state: cb_state, instruments: cb_inst }
-    })?;
-    device.resume();
+    let device = audio_ss.open_playback_stream(&spec, SynthCallback { state: cb_state, instruments: cb_inst })?;
+    device.resume()?;
 
     // Start playback for the initial group
     {

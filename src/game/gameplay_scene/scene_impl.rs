@@ -23,7 +23,7 @@ impl Scene for GameplayScene {
         match event {
             Event::KeyDown { keycode: Some(kc), keymod, repeat: false, .. } => {
                 // ALT+F4 → immediate quit (OS convention, takes priority over everything).
-                use sdl2::keyboard::Mod;
+                use sdl3::keyboard::Mod;
                 let alt_held = keymod.intersects(Mod::LALTMOD | Mod::RALTMOD);
                 if alt_held && *kc == Keycode::F4 {
                     self.do_option(GameAction::Quit);
@@ -54,7 +54,7 @@ impl Scene for GameplayScene {
                 Keycode::Kp1 => { self.input.down = true; self.input.left = true; true }
                 Keycode::Kp3 => { self.input.down = true; self.input.right = true; true }
                 // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
-                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = true; true }
+                Keycode::Kp0 | Keycode::_0 => { self.input.fight = true; true }
                 // All letter_list keys → route through MenuState
                 _ => {
                     if let Some(menu_key) = keycode_to_menukey(*kc) {
@@ -76,12 +76,12 @@ impl Scene for GameplayScene {
                 Keycode::Kp9 => { self.input.up = false; self.input.right = false; true }
                 Keycode::Kp1 => { self.input.down = false; self.input.left = false; true }
                 Keycode::Kp3 => { self.input.down = false; self.input.right = false; true }
-                Keycode::Kp0 | Keycode::Num0 => { self.input.fight = false; true }
+                Keycode::Kp0 | Keycode::_0 => { self.input.fight = false; true }
                 _ => false,
             },
             // Controller axis motion: map left stick to movement input
             Event::ControllerAxisMotion { axis, value, .. } => {
-                use sdl2::controller::Axis;
+                use sdl3::gamepad::Axis;
                 const THRESHOLD: i16 = 8000;
                 match axis {
                     Axis::LeftX => {
@@ -120,7 +120,7 @@ impl Scene for GameplayScene {
                 true
             }
             // Mouse click: close overlay views, or dispatch through MenuState button grid
-            Event::MouseButtonDown { x, y, mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+            Event::MouseButtonDown { x, y, mouse_btn: sdl3::mouse::MouseButton::Left, .. } => {
                 // Any click dismisses inventory or map view.
                 if self.state.viewstatus == 4 || self.state.viewstatus == 1 {
                     self.state.viewstatus = 0;
@@ -131,8 +131,9 @@ impl Scene for GameplayScene {
                 const BTN_X_LEFT: i32 = 430;
                 const BTN_X_RIGHT: i32 = 482;
                 const BTN_X_END: i32 = 530;
-                let mx = *x;
-                let my = *y;
+                // SDL3 mouse coords are f32; cast to i32 for pixel-grid comparisons.
+                let mx = *x as i32;
+                let my = *y as i32;
                 if mx >= BTN_X_LEFT && mx <= BTN_X_END
                     && my >= HIBAR_Y && my < HIBAR_Y + HIBAR_H as i32
                 {
@@ -159,13 +160,13 @@ impl Scene for GameplayScene {
             // Compass drag: while mouse is held inside compass, follow pointer direction.
             Event::MouseMotion { x, y, .. } => {
                 if self.input.compass_held {
-                    self.apply_compass_input_from_canvas(*x, *y);
+                    self.apply_compass_input_from_canvas(*x as i32, *y as i32);
                     true
                 } else {
                     false
                 }
             }
-            Event::MouseButtonUp { mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+            Event::MouseButtonUp { mouse_btn: sdl3::mouse::MouseButton::Left, .. } => {
                 if self.input.compass_held {
                     self.input.up    = false;
                     self.input.down  = false;

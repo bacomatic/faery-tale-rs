@@ -1,4 +1,4 @@
-extern crate sdl2;
+extern crate sdl3;
 
 mod game;
 
@@ -6,12 +6,12 @@ use clap::Parser;
 
 use game::game_library;
 
-use sdl2::event::{Event, WindowEvent};
-use sdl2::keyboard::{Keycode, Scancode};
-use sdl2::mouse::Cursor;
-use sdl2::pixels::{Color, PixelFormatEnum};
-use sdl2::rect::{Point, Rect};
-use sdl2::surface::Surface;
+use sdl3::event::{Event, WindowEvent};
+use sdl3::keyboard::{Keycode, Scancode};
+use sdl3::mouse::Cursor;
+use sdl3::pixels::{Color, PixelFormat};
+use sdl3::rect::{Point, Rect};
+use sdl3::surface::Surface;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -69,11 +69,13 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
         orig_w,
         orig_h,
         stride as u32,
-        PixelFormatEnum::RGBA32).unwrap();
+        PixelFormat::RGBA32).unwrap();
 
     // Scale 2× for better visual appearance (matches the 2× line-doubled canvas)
-    let mut scaled = Surface::new(orig_w * 2, orig_h * 2, PixelFormatEnum::RGBA32).unwrap();
-    surface.blit_scaled(None, &mut scaled, None).unwrap();
+    let mut scaled = Surface::new(orig_w * 2, orig_h * 2, PixelFormat::RGBA32).unwrap();
+    // SDL3: blit_scaled needs an explicit scale mode; use LINEAR for smooth cursor scaling.
+    surface.blit_scaled(None, &mut scaled, None,
+        sdl3::sys::surface::SDL_ScaleMode::LINEAR).unwrap();
 
     // create and set the cursor (hotspot also scaled 2×)
     let pointer = Cursor::from_surface(
@@ -90,22 +92,25 @@ pub fn main() -> Result<(), String> {
 
     let mut settings: GameSettings = settings::GameSettings::load();
 
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().expect("Could not initialize SDL2 video subsystem");
+    let sdl_context = sdl3::init().unwrap();
+    let video_subsystem = sdl_context.video().expect("Could not initialize SDL3 video subsystem");
 
-    // Initialize game controller subsystem so SDL2 generates ControllerButton/Axis events.
-    let game_controller_subsystem = sdl_context.game_controller()
-        .map_err(|e| format!("Could not initialize game controller subsystem: {}", e))?;
-    let mut controllers: Vec<sdl2::controller::GameController> = Vec::new();
-    // Open any controllers that are already connected at startup.
-    for i in 0..game_controller_subsystem.num_joysticks().unwrap_or(0) {
-        if game_controller_subsystem.is_game_controller(i) {
-            match game_controller_subsystem.open(i) {
-                Ok(c) => {
-                    println!("Controller connected: {}", c.name());
-                    controllers.push(c);
+    // Initialize gamepad subsystem so SDL3 generates ControllerButton/Axis events.
+    let gamepad_subsystem = sdl_context.gamepad()
+        .map_err(|e| format!("Could not initialize gamepad subsystem: {}", e))?;
+    let mut gamepads: Vec<sdl3::gamepad::Gamepad> = Vec::new();
+    // Open any gamepads that are already connected at startup.
+    if let Ok(ids) = gamepad_subsystem.gamepads() {
+        for id in ids {
+            if gamepad_subsystem.is_gamepad(id) {
+                match gamepad_subsystem.open(id) {
+                    Ok(c) => {
+                        let name = c.name().unwrap_or_else(|| "Unknown".to_string());
+                        println!("Controller connected: {}", name);
+                        gamepads.push(c);
+                    }
+                    Err(e) => println!("Warning: could not open controller {}: {}", id.0, e),
                 }
-                Err(e) => println!("Warning: could not open controller {}: {}", i, e),
             }
         }
     }
@@ -121,7 +126,7 @@ pub fn main() -> Result<(), String> {
     window_builder.resizable();
 
     if settings.fullscreen {
-        window_builder.fullscreen_desktop();
+        window_builder.fullscreen();
     } else if settings.window_position.is_some() {
         let (x, y) = settings.window_position.unwrap();
         window_builder.position(x, y);
@@ -133,13 +138,11 @@ pub fn main() -> Result<(), String> {
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas()
-        .accelerated()
-        .target_texture()
-        .present_vsync()
-        .build().unwrap();
-    // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio
-    canvas.set_logical_size(640, 480).unwrap();
+    let mut canvas = window.into_canvas();
+    // Set the logical size to 640x480 to preserve the original 4:3 aspect ratio,
+    // using LETTERBOX mode to preserve aspect ratio with black bars.
+    canvas.set_logical_size(640, 480,
+        sdl3::sys::render::SDL_RendererLogicalPresentation::LETTERBOX).unwrap();
 
     // load the game library
     let game_lib = game_library::load_game_library(Path::new("faery.toml"));
@@ -157,6 +160,7 @@ pub fn main() -> Result<(), String> {
     // Audio system — load songs and waveforms, init the software synthesizer.
     // Music playback is started by IntroScene (matching original: playscore() is
     // called mid-intro, not at startup) and stopped before gameplay begins.
+    let audio_subsystem = sdl_context.audio().ok();
     let songs_path = game_lib.audio.as_ref().map(|a| a.songs.as_str()).unwrap_or("game/songs");
     let instruments_path = game_lib.audio.as_ref().map(|a| a.instruments.as_str()).unwrap_or("game/v6");
     let song_library: Option<SongLibrary> = SongLibrary::load(Path::new(songs_path));
@@ -164,12 +168,13 @@ pub fn main() -> Result<(), String> {
         .as_ref()
         .and_then(|songs| songs.intro_tracks().map(|t| t.map(|tr| Arc::new(tr.clone()))));
     let audio_system: Option<AudioSystem> = {
-        match Instruments::load(Path::new(instruments_path)) {
-            Some(inst) => match AudioSystem::new(&sdl_context, inst, cli.no_interpolation) {
+        match (audio_subsystem.as_ref(), Instruments::load(Path::new(instruments_path))) {
+            (Some(audio_sub), Some(inst)) => match AudioSystem::new(audio_sub, inst, cli.no_interpolation) {
                 Ok(sys) => Some(sys),
                 Err(e) => { println!("Warning: could not open audio device: {}", e); None }
             },
-            None => { println!("Warning: could not load {} (instruments file missing)", instruments_path); None }
+            (None, _) => { println!("Warning: could not init SDL3 audio subsystem"); None }
+            (_, None) => { println!("Warning: could not load {} (instruments file missing)", instruments_path); None }
         }
     };
 
@@ -187,11 +192,11 @@ pub fn main() -> Result<(), String> {
         mouse_cursor = set_mouse(pointer, &bow_palette);
     }
 
-    // Build all SDL2 rendering resources (font atlas, image atlas, render targets).
+    // Build all SDL3 rendering resources (font atlas, image atlas, render targets).
     let mut render_resources = RenderResources::build(&tex_maker, &game_lib, &sys_palette);
 
-    let mut play_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
-    let mut scratch_tex = tex_maker.create_texture_target(PixelFormatEnum::RGBA32, 320, 200).unwrap();
+    let mut play_tex = tex_maker.create_texture_target(Some(PixelFormat::RGBA32), 320, 200).unwrap();
+    let mut scratch_tex = tex_maker.create_texture_target(Some(PixelFormat::RGBA32), 320, 200).unwrap();
 
     let mut dirty: bool = true;
     let mut clear_flag = true;
@@ -337,14 +342,9 @@ pub fn main() -> Result<(), String> {
                         }
 
                         Scancode::F11 => {
-                            let ft = if settings.fullscreen {
-                                settings.set_fullscreen(false);
-                                sdl2::video::FullscreenType::Off
-                            } else {
-                                settings.set_fullscreen(true);
-                                sdl2::video::FullscreenType::Desktop
-                            };
-                            let _ = canvas.window_mut().set_fullscreen(ft);
+                            let want_fs = !settings.fullscreen;
+                            settings.set_fullscreen(want_fs);
+                            let _ = canvas.window_mut().set_fullscreen(want_fs);
                         }
 
                         _ => {}
@@ -357,18 +357,21 @@ pub fn main() -> Result<(), String> {
                 },
                  */
                 Event::ControllerDeviceAdded { which, .. } => {
-                    if game_controller_subsystem.is_game_controller(which) {
-                        match game_controller_subsystem.open(which) {
+                    let jid = sdl3::sys::joystick::SDL_JoystickID(which);
+                    if gamepad_subsystem.is_gamepad(jid) {
+                        match gamepad_subsystem.open(jid) {
                             Ok(c) => {
-                                println!("Controller connected: {}", c.name());
-                                controllers.push(c);
+                                let name = c.name().unwrap_or_else(|| "Unknown".to_string());
+                                println!("Controller connected: {}", name);
+                                gamepads.push(c);
                             }
                             Err(e) => println!("Warning: could not open controller {}: {}", which, e),
                         }
                     }
                 }
                 Event::ControllerDeviceRemoved { which, .. } => {
-                    controllers.retain(|c| c.instance_id() != which);
+                    let jid = sdl3::sys::joystick::SDL_JoystickID(which);
+                    gamepads.retain(|c| c.id().ok() != Some(jid));
                     println!("Controller disconnected (id {})", which);
                 }
                 _ => {}
@@ -498,7 +501,7 @@ pub fn main() -> Result<(), String> {
             }
 
             let screen_dest = Rect::new(0, 40, 640, 400);
-            canvas.copy(&play_tex, None, Some(screen_dest)).unwrap();
+            canvas.copy(&play_tex, None, screen_dest).unwrap();
 
             // The walker indicates active rendering, when it stops, there is nothing being drawn
             if debug_console.is_some() {
