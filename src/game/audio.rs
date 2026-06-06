@@ -971,6 +971,21 @@ impl AudioSystem {
         }
     }
 
+    /// Return `true` when the score has played to its natural end.
+    ///
+    /// This differs from `!is_playing()`: a score is "finished" when all four
+    /// voices have reached their `End` event (all `trak_ptr == None`) while
+    /// `nosound` is still `false` (i.e. it wasn't manually stopped).  This
+    /// lets callers wait for the PCM already queued in the SDL3 audio buffer
+    /// to drain before transitioning, rather than cutting audio short.
+    pub fn is_score_finished(&self) -> bool {
+        if let Ok(st) = self.state.lock() {
+            !st.nosound && st.voices.iter().all(|v| v.trak_ptr.is_none())
+        } else {
+            false
+        }
+    }
+
     /// Attach a [`SongLibrary`] to enable [`set_score`](Self::set_score).
     pub fn attach_library(&mut self, library: SongLibrary) {
         self.song_library = Some(library);

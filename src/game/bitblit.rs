@@ -5,7 +5,7 @@
 // - set_plane: replace a single bitplane's data
 // - blt_copy_region: copy a sub-rectangle between two BitMaps (plane-masked)
 //
-// All operations work on bitplane data (Vec<Vec<u8>>) and are SDL2-independent.
+// All operations work on bitplane data (Vec<Vec<u8>>) and are SDL3-independent.
 
 use crate::game::bitmap::BitMap;
 

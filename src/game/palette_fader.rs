@@ -110,7 +110,7 @@ pub fn fade_page(
 /// The result of a fade operation. Determines how the fade should be applied
 /// to the rendering pipeline.
 pub enum FadeResult {
-    /// A uniform brightness scale that can be applied via SDL2 `set_color_mod()`.
+    /// A uniform brightness scale that can be applied via SDL `set_color_mod()`.
     /// The three values are the RGB modulation bytes (0–255).
     ColorMod(u8, u8, u8),
     /// A fully computed palette that must be applied via `ImageTexture::update()`.
@@ -125,7 +125,7 @@ pub enum FadeResult {
  * over a given duration.
  *
  * For uniform fades (all channels equal, no night limits), returns a
- * `FadeResult::ColorMod` that can be applied cheaply via SDL2 color modulation.
+ * `FadeResult::ColorMod` that can be applied cheaply via SDL color modulation.
  * For non-uniform fades, returns `FadeResult::PaletteUpdate` with the fully
  * computed palette.
  */
@@ -240,7 +240,7 @@ impl FadeController {
     }
 
     /// Returns true if this is a uniform fade (all channels equal, no limits).
-    /// Uniform fades can use SDL2 color modulation instead of palette regeneration.
+    /// Uniform fades can use SDL color modulation instead of palette regeneration.
     pub fn is_uniform(&self) -> bool {
         !self.limit
             && self.from_rgb.0 == self.from_rgb.1
@@ -252,7 +252,7 @@ impl FadeController {
 
     /// Advance the fade by `delta` ticks and return the appropriate fade result.
     ///
-    /// For uniform fades, returns `FadeResult::ColorMod` with SDL2 color modulation values.
+    /// For uniform fades, returns `FadeResult::ColorMod` with SDL color modulation values.
     /// For non-uniform fades, returns `FadeResult::PaletteUpdate` with a fully computed palette.
     pub fn tick(&mut self, delta: u32) -> FadeResult {
         self.elapsed_ticks = (self.elapsed_ticks + delta).min(self.total_ticks);
@@ -264,7 +264,7 @@ impl FadeController {
         let (r, g, b) = self.current_percentages();
 
         if self.is_uniform() {
-            // All channels are equal — use SDL2 color modulation
+            // All channels are equal — use SDL color modulation
             // Convert percentage (0–100) to byte (0–255)
             let mod_val = ((r as f32 / 100.0) * 255.0).round().clamp(0.0, 255.0) as u8;
             FadeResult::ColorMod(mod_val, mod_val, mod_val)

@@ -401,7 +401,7 @@ impl Default for KeyBindings {
     }
 }
 
-/// Maps SDL2 game controller buttons to game actions, with separate maps
+/// Maps SDL3 game controller buttons to game actions, with separate maps
 /// for Gameplay and Menu modes.
 #[derive(Debug, Clone)]
 pub struct ControllerBindings {

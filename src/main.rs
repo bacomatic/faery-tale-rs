@@ -316,9 +316,16 @@ pub fn main() -> Result<(), String> {
         // Apply debug tick rate override (15 by default; 30 = normal; set via /rate).
         // Accumulate fractional ticks so rates like 15 Hz work correctly
         // even though raw_delta is discrete (0 or 1 per frame at 60 fps).
-        debug_tick_accum += delta_ticks as f64 * (debug_tick_hz as f64 / 30.0);
-        let delta_ticks = debug_tick_accum as u32;
-        debug_tick_accum -= delta_ticks as f64;
+        // Only gameplay is subject to the tick-rate throttle; intro/cutscene
+        // scenes always run at the native 30 Hz tick rate.
+        let delta_ticks = if matches!(scene_phase, ScenePhase::Gameplay) {
+            debug_tick_accum += delta_ticks as f64 * (debug_tick_hz as f64 / 30.0);
+            let d = debug_tick_accum as u32;
+            debug_tick_accum -= d as f64;
+            d
+        } else {
+            delta_ticks
+        };
 
         // Update game FPS counter
         game_frame_count += 1;

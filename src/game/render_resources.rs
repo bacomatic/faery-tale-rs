@@ -1,6 +1,6 @@
-/// SDL2 rendering resources for the game.
+
 ///
-/// [`RenderResources`] owns every SDL2 texture that the game creates at
+/// [`RenderResources`] owns every SDL texture that the game creates at
 /// startup — the shared font atlas, the shared image atlas, and the two
 /// off-screen render targets — keeping them decoupled from the raw asset
 /// data in [`GameLibrary`].
@@ -63,7 +63,7 @@ pub struct RenderResources<'tex> {
 }
 
 impl<'tex> RenderResources<'tex> {
-    /// Build all SDL2 rendering resources from the loaded game library.
+    /// Build all SDL rendering resources from the loaded game library.
     ///
     /// Fonts and images are uploaded to their respective atlas textures
     /// immediately; the `GameLibrary` reference is not retained.
@@ -286,7 +286,7 @@ impl<'tex> RenderResources<'tex> {
         let (normal_rgba, _) = normal_bm.generate_rgb32(textcolors, None).ok()?;
         let (highlight_rgba, _) = highlight_bm.generate_rgb32(textcolors, None).ok()?;
 
-        // Create SDL2 textures from the RGBA buffers.
+        // Create SDL textures from the RGBA buffers.
         let mut normal_tex = tex_maker
             .create_texture_static(Some(PixelFormat::RGBA32), CW as u32, CH as u32)
             .ok()?;

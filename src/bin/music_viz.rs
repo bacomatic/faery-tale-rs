@@ -1,6 +1,6 @@
 //! Terminal music visualizer for the Faery Tale Adventure.
 //!
-//! Plays a song group through SDL2 audio while rendering a scrolling note
+//! Plays a song group through SDL3 audio while rendering a scrolling note
 //! view in the terminal.
 //!
 //! Usage:
@@ -300,7 +300,7 @@ impl Voice {
 }
 
 // ---------------------------------------------------------------------------
-// Audio sequencer (shared with SDL2 callback via Arc<Mutex>)
+// Audio sequencer (shared with SDL callback via Arc<Mutex>)
 // ---------------------------------------------------------------------------
 
 struct SeqState {

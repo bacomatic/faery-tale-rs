@@ -8,7 +8,7 @@ use sdl3::render::{Canvas, RenderTarget, Texture};
 use std::cell::RefCell;
 use std::rc::Weak;
 
-/// An image view inside a shared SDL2 texture atlas.
+/// An image view inside a shared SDL3 texture atlas.
 ///
 /// `ImageTexture` converts an [`IffImage`] into a planar [`BitMap`] at
 /// construction time and from that point on is independent of the source

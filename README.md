@@ -20,7 +20,7 @@ really. Especially do not expect updates in a timely manner.
 
 This repository is now developed **from the reference documents on the `research` branch** (see `AGENTS.md`) plus the local `docs/spec/` subsystem files. To build locally, clone the repository and run Cargo from the project root.
 
-There will be no releases, nor special efforts to ensure compatibility with every platform. Primary development is done on Linux, but Cargo and SDL2 should make other platforms workable as well.
+There will be no releases, nor special efforts to ensure compatibility with every platform. Primary development is done on Linux, but Cargo and SDL3 should make other platforms workable as well.
 
 ## Common commands
 
@@ -33,14 +33,14 @@ There will be no releases, nor special efforts to ensure compatibility with ever
 
 Install the required dependencies first (assuming an apt-based system):
 
-    $ sudo apt install rust libsdl2-dev libsdl2-gfx-dev libsdl2-mixer-dev
+    $ sudo apt install rust libsdl3-dev
     $ cargo run
 
 ## macOS
 
 This builds and runs on macOS. Install the dependencies with Homebrew:
 
-    $ brew install rust sdl2 sdl2_gfx sdl2_mixer
+    $ brew install rust sdl3
     $ export LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib"
     $ cargo run
 

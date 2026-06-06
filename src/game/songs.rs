@@ -394,6 +394,51 @@ impl SongLibrary {
             .get(pitch)
             .map(|(period, _)| AMIGA_CLOCK_NTSC as f32 / *period as f32)
     }
+
+    /// Compute the total duration of a track in timeclock units.
+    ///
+    /// Walks all events, accumulating durations for `Note` and `Rest` events.
+    /// `SetTempo` changes are applied to subsequent durations, matching actual
+    /// playback.  Stops at the first `End` event (non-looping tracks only —
+    /// looping tracks would play forever, so the loop body is counted once).
+    pub fn track_duration_ticks(track: &Track) -> u32 {
+        let mut total: u32 = 0;
+        let mut tempo: u32 = DEFAULT_TEMPO;
+        for event in track {
+            match event {
+                TrackEvent::Note { duration_idx, .. } | TrackEvent::Rest { duration_idx } => {
+                    let base = NOTE_DURATIONS[(*duration_idx as usize).min(63)] as u32;
+                    // Scale by actual tempo: durations are pre-multiplied by the default
+                    // tempo (150) in gdriver.asm, so the real wall-clock duration is
+                    // base * tempo / DEFAULT_TEMPO.  At default tempo this is 1:1.
+                    let scaled = (base as u64 * tempo as u64 / DEFAULT_TEMPO as u64) as u32;
+                    total = total.saturating_add(scaled);
+                }
+                TrackEvent::SetTempo { value } => {
+                    tempo = *value as u32;
+                }
+                TrackEvent::End { .. } => break,
+                _ => {}
+            }
+        }
+        total
+    }
+
+    /// Compute the playback duration of the intro song in timeclock units.
+    ///
+    /// Returns the maximum duration across all four intro voices (the slowest
+    /// voice determines when the song is fully done).  Returns `0` if the
+    /// intro tracks are not present in the library.
+    pub fn intro_duration_ticks(&self) -> u32 {
+        match self.intro_tracks() {
+            Some(tracks) => tracks
+                .iter()
+                .map(|t| Self::track_duration_ticks(t))
+                .max()
+                .unwrap_or(0),
+            None => 0,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -542,5 +587,33 @@ mod tests {
                 duration_idx: 63
             }
         );
+    }
+
+    #[test]
+    fn test_intro_duration_ticks() {
+        let lib = load_songs();
+        let duration_tc = lib.intro_duration_ticks();
+        assert!(duration_tc > 0, "intro song duration should be non-zero");
+        // timeclock rate = DEFAULT_TEMPO * VBL_RATE_HZ = 9000 units/sec
+        let duration_secs = duration_tc as f64 / TIMECLOCK_RATE as f64;
+        // Convert to 30Hz visual ticks for comparison with intro scene timing
+        let duration_30hz = (duration_secs * 30.0).round() as u32;
+        println!(
+            "intro song: {} timeclock units = {:.2}s = {} ticks @ 30Hz",
+            duration_tc, duration_secs, duration_30hz
+        );
+        // Per-voice breakdown
+        if let Some(tracks) = lib.intro_tracks() {
+            for (i, t) in tracks.iter().enumerate() {
+                let tc = SongLibrary::track_duration_ticks(t);
+                println!(
+                    "  voice {}: {} tc = {:.2}s = {} ticks @ 30Hz",
+                    i,
+                    tc,
+                    tc as f64 / TIMECLOCK_RATE as f64,
+                    (tc as f64 / TIMECLOCK_RATE as f64 * 30.0).round() as u32
+                );
+            }
+        }
     }
 }

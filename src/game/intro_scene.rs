@@ -66,6 +66,11 @@ enum IntroPhase {
     },
     /// Zoom out from the last page to black.
     ZoomOut { zoom: ViewportZoom },
+    /// Screen is black; hold here until the audio system reports the intro
+    /// score has played to its natural end (all voices at end-of-track).
+    /// Falls through immediately if audio is not present or if the song
+    /// already finished before the zoom-out completed.
+    WaitForMusic,
     /// Sequence complete.
     Done,
 }
@@ -214,7 +219,8 @@ impl IntroScene {
                     ticks_remaining: hold,
                 }
             }
-            IntroPhase::ZoomOut { .. } => IntroPhase::Done,
+            IntroPhase::ZoomOut { .. } => IntroPhase::WaitForMusic,
+            IntroPhase::WaitForMusic => IntroPhase::Done,
             IntroPhase::Done => IntroPhase::Done,
         };
     }
@@ -527,8 +533,29 @@ impl Scene for IntroScene {
                 SceneResult::Continue
             }
 
+            IntroPhase::WaitForMusic => {
+                // Hold on a black screen until the sequencer has consumed all
+                // events on all four voices.  The SDL3 audio stream will then
+                // drain its pre-buffered PCM and go silent naturally — matching
+                // the original where the song simply ended at this point.
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+
+                let finished = resources
+                    .audio
+                    .as_ref()
+                    .map_or(true, |a| a.is_score_finished());
+
+                if finished {
+                    self.phase = IntroPhase::Done;
+                }
+
+                SceneResult::Continue
+            }
+
             IntroPhase::Done => {
-                // Stop intro music when intro completes normally
+                // The score reached its natural end; stop_score cleans up the
+                // sequencer state.  (On skip, stop_score was already called.)
                 if let Some(audio) = resources.audio {
                     audio.stop_score();
                 }

@@ -153,7 +153,7 @@ impl GameplayScene {
                 // Blit composed map framebuf to canvas (world-105).
                 if let Some(ref mr) = self.map_renderer {
                     if !mr.framebuf.is_empty() {
-                        // Apply current_palette: indexed u8 → RGBA32 bytes for SDL2.
+                        // Apply current_palette: indexed u8 → RGBA32 bytes for SDL.
                         let pal = &self.current_palette;
                         let mut rgb_buf: Vec<u8> = Vec::with_capacity(mr.framebuf.len() * 4);
                         for &idx in &mr.framebuf {
@@ -303,7 +303,7 @@ impl GameplayScene {
                         }
                     }
 
-                    // Apply palette: indexed u8 → RGBA32 bytes for SDL2.
+                    // Apply palette: indexed u8 → RGBA32 bytes for SDL.
                     let pal = &self.current_palette;
                     let mut rgb_buf: Vec<u8> = Vec::with_capacity(LORES_W * LORES_H * 4);
                     for &idx in &inv_indices {
