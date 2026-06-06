@@ -25,6 +25,7 @@ use crate::game::magic::{
 use crate::game::map_renderer::MapRenderer;
 use crate::game::message_queue::MessageQueue;
 use std::any::Any;
+use std::collections::HashSet;
 
 mod actors;
 mod carriers;
@@ -285,6 +286,46 @@ struct InputState {
     fight: bool,
     /// True while the player is holding a compass arrow (mouse-down); cleared on mouse-up.
     compass_held: bool,
+    /// Set of movement keycodes currently physically held.
+    pressed_movement_keys: HashSet<sdl3::keyboard::Keycode>,
+    /// Gamepad left-stick contribution, each axis clamped to {-1, 0, +1}.
+    gamepad_x: i32,
+    gamepad_y: i32,
+    /// Compass mouse-hold contribution, each axis in {-1, 0, +1}.
+    compass_x: i32,
+    compass_y: i32,
+    /// True while right mouse button is held on the compass (attack-drag).
+    compass_fight_held: bool,
+}
+
+impl InputState {
+    /// Recompute up/down/left/right by summing contributions from all held
+    /// movement keys and the gamepad stick, clamping each axis to {-1, 0, +1}.
+    /// Opposite directions cancel (e.g. KP4+KP6 → no movement).
+    fn recompute(&mut self) {
+        use sdl3::keyboard::Keycode;
+        let mut x: i32 = self.gamepad_x + self.compass_x;
+        let mut y: i32 = self.gamepad_y + self.compass_y;
+        for kc in &self.pressed_movement_keys {
+            let (kx, ky): (i32, i32) = match kc {
+                Keycode::Up    | Keycode::Kp8 => ( 0, -1),
+                Keycode::Down  | Keycode::Kp2 => ( 0,  1),
+                Keycode::Left  | Keycode::Kp4 => (-1,  0),
+                Keycode::Right | Keycode::Kp6 => ( 1,  0),
+                Keycode::Kp7 => (-1, -1),
+                Keycode::Kp9 => ( 1, -1),
+                Keycode::Kp1 => (-1,  1),
+                Keycode::Kp3 => ( 1,  1),
+                _ => (0, 0),
+            };
+            x += kx;
+            y += ky;
+        }
+        self.up    = y < 0;
+        self.down  = y > 0;
+        self.left  = x < 0;
+        self.right = x > 0;
+    }
 }
 
 impl Default for InputState {
@@ -296,6 +337,12 @@ impl Default for InputState {
             right: false,
             fight: false,
             compass_held: false,
+            pressed_movement_keys: HashSet::new(),
+            gamepad_x: 0,
+            gamepad_y: 0,
+            compass_x: 0,
+            compass_y: 0,
+            compass_fight_held: false,
         }
     }
 }

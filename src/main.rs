@@ -349,7 +349,12 @@ pub fn main() -> Result<(), String> {
             }
         }
 
-        for event in event_pump.poll_iter() {
+        for mut event in event_pump.poll_iter() {
+            // Translate mouse coordinates from physical window space to the 640×480
+            // logical render space (accounting for letterbox scaling/offset).
+            // Required in SDL3: logical presentation does NOT auto-transform events.
+            event.convert_coords(&canvas);
+
             // Let the active scene consume events first
             if let Some(ref mut scene) = active_scene {
                 if scene.handle_event(&event) {

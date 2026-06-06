@@ -790,35 +790,51 @@ impl GameplayScene {
         }
     }
 
-    pub(crate) fn apply_compass_input_from_canvas(&mut self, mx: i32, my: i32) -> bool {
+    /// Return the comptable segment index (0..8) under the pointer, or `None` if outside.
+    /// comptable layout: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7.
+    pub(crate) fn compass_idx_at(&self, mx: i32, my: i32) -> Option<usize> {
         const COMPASS_X_MIN: i32 = 567;
         const COMPASS_X_MAX: i32 = 567 + 48;
-        let compass_y_min = HIBAR_Y + 30; // COMPASS_SRC_Y(15) × 2
-        let compass_y_max = HIBAR_Y + 78; // (COMPASS_SRC_Y+COMPASS_SRC_H)(39) × 2
+        let compass_y_min = HIBAR_Y + 30;
+        let compass_y_max = HIBAR_Y + 78;
         if mx >= COMPASS_X_MIN && mx < COMPASS_X_MAX && my >= compass_y_min && my < compass_y_max {
             let nx = mx - COMPASS_X_MIN;
-            let ny = (my - compass_y_min) / 2; // scale back to native 24px height
+            let ny = (my - compass_y_min) / 2;
             for (idx, &(rx, ry, rw, rh)) in self.compass_regions
                 [..8.min(self.compass_regions.len())]
                 .iter()
                 .enumerate()
             {
                 if rw > 0 && rh > 0 && nx >= rx && nx < rx + rw && ny >= ry && ny < ry + rh {
-                    // comptable: NW=0,N=1,NE=2,E=3,SE=4,S=5,SW=6,W=7
-                    self.input.up = matches!(idx, 0 | 1 | 2);
-                    self.input.down = matches!(idx, 4 | 5 | 6);
-                    self.input.left = matches!(idx, 0 | 6 | 7);
-                    self.input.right = matches!(idx, 2 | 3 | 4);
-                    return true;
+                    return Some(idx);
                 }
             }
         }
-        // Outside all hitboxes — stop movement while held
-        self.input.up = false;
-        self.input.down = false;
-        self.input.left = false;
-        self.input.right = false;
-        false
+        None
+    }
+
+    pub(crate) fn apply_compass_input_from_canvas(&mut self, mx: i32, my: i32) -> bool {
+        if let Some(idx) = self.compass_idx_at(mx, my) {
+            // comptable: NW=0,N=1,NE=2,E=3,SE=4,S=5,SW=6,W=7
+            self.input.compass_x = if matches!(idx, 2 | 3 | 4) { 1 } else if matches!(idx, 0 | 6 | 7) { -1 } else { 0 };
+            self.input.compass_y = if matches!(idx, 4 | 5 | 6) { 1 } else if matches!(idx, 0 | 1 | 2) { -1 } else { 0 };
+            self.input.recompute();
+            true
+        } else {
+            // Outside all hitboxes — remove compass contribution while held
+            self.input.compass_x = 0;
+            self.input.compass_y = 0;
+            self.input.recompute();
+            false
+        }
+    }
+
+    /// Convert a comptable segment index to a game facing value.
+    /// comptable: NW=0,N=1,NE=2,E=3,SE=4,S=5,SW=6,W=7
+    /// facing:     N=0,NE=1, E=2,SE=3, S=4,SW=5, W=6,NW=7
+    pub(crate) fn compass_idx_to_facing(idx: usize) -> u8 {
+        const TABLE: [u8; 8] = [7, 0, 1, 2, 3, 4, 5, 6];
+        TABLE[idx.min(7)]
     }
 
     /// SPEC §25.9: handle a cheat1-gated debug key. Returns true if the key was consumed.

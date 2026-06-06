@@ -53,42 +53,17 @@ impl Scene for GameplayScene {
                     return true;
                 }
                 match *kc {
-                    // Movement keys: arrow keys + numpad (no WASD — those are commands)
-                    Keycode::Up | Keycode::Kp8 => {
-                        self.input.up = true;
-                        true
-                    }
-                    Keycode::Down | Keycode::Kp2 => {
-                        self.input.down = true;
-                        true
-                    }
-                    Keycode::Left | Keycode::Kp4 => {
-                        self.input.left = true;
-                        true
-                    }
-                    Keycode::Right | Keycode::Kp6 => {
-                        self.input.right = true;
-                        true
-                    }
-                    // Diagonal movement (numpad only)
-                    Keycode::Kp7 => {
-                        self.input.up = true;
-                        self.input.left = true;
-                        true
-                    }
-                    Keycode::Kp9 => {
-                        self.input.up = true;
-                        self.input.right = true;
-                        true
-                    }
-                    Keycode::Kp1 => {
-                        self.input.down = true;
-                        self.input.left = true;
-                        true
-                    }
-                    Keycode::Kp3 => {
-                        self.input.down = true;
-                        self.input.right = true;
+                    // Movement keys: arrow keys + numpad (no WASD — those are commands).
+                    // All held keys are tracked in pressed_movement_keys; direction flags
+                    // are derived by summing axis contributions so that opposites cancel.
+                    Keycode::Up | Keycode::Kp8
+                    | Keycode::Down | Keycode::Kp2
+                    | Keycode::Left | Keycode::Kp4
+                    | Keycode::Right | Keycode::Kp6
+                    | Keycode::Kp7 | Keycode::Kp9
+                    | Keycode::Kp1 | Keycode::Kp3 => {
+                        self.input.pressed_movement_keys.insert(*kc);
+                        self.input.recompute();
                         true
                     }
                     // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
@@ -111,40 +86,14 @@ impl Scene for GameplayScene {
             Event::KeyUp {
                 keycode: Some(kc), ..
             } => match *kc {
-                Keycode::Up | Keycode::Kp8 => {
-                    self.input.up = false;
-                    true
-                }
-                Keycode::Down | Keycode::Kp2 => {
-                    self.input.down = false;
-                    true
-                }
-                Keycode::Left | Keycode::Kp4 => {
-                    self.input.left = false;
-                    true
-                }
-                Keycode::Right | Keycode::Kp6 => {
-                    self.input.right = false;
-                    true
-                }
-                Keycode::Kp7 => {
-                    self.input.up = false;
-                    self.input.left = false;
-                    true
-                }
-                Keycode::Kp9 => {
-                    self.input.up = false;
-                    self.input.right = false;
-                    true
-                }
-                Keycode::Kp1 => {
-                    self.input.down = false;
-                    self.input.left = false;
-                    true
-                }
-                Keycode::Kp3 => {
-                    self.input.down = false;
-                    self.input.right = false;
+                Keycode::Up | Keycode::Kp8
+                | Keycode::Down | Keycode::Kp2
+                | Keycode::Left | Keycode::Kp4
+                | Keycode::Right | Keycode::Kp6
+                | Keycode::Kp7 | Keycode::Kp9
+                | Keycode::Kp1 | Keycode::Kp3 => {
+                    self.input.pressed_movement_keys.remove(kc);
+                    self.input.recompute();
                     true
                 }
                 Keycode::Kp0 | Keycode::_0 => {
@@ -153,19 +102,31 @@ impl Scene for GameplayScene {
                 }
                 _ => false,
             },
-            // Controller axis motion: map left stick to movement input
+            // Controller axis motion: aggregate left stick into unified direction.
             Event::ControllerAxisMotion { axis, value, .. } => {
                 use sdl3::gamepad::Axis;
                 const THRESHOLD: i16 = 8000;
                 match axis {
                     Axis::LeftX => {
-                        self.input.left = *value < -THRESHOLD;
-                        self.input.right = *value > THRESHOLD;
+                        self.input.gamepad_x = if *value < -THRESHOLD {
+                            -1
+                        } else if *value > THRESHOLD {
+                            1
+                        } else {
+                            0
+                        };
+                        self.input.recompute();
                         true
                     }
                     Axis::LeftY => {
-                        self.input.up = *value < -THRESHOLD;
-                        self.input.down = *value > THRESHOLD;
+                        self.input.gamepad_y = if *value < -THRESHOLD {
+                            -1
+                        } else if *value > THRESHOLD {
+                            1
+                        } else {
+                            0
+                        };
+                        self.input.recompute();
                         true
                     }
                     _ => false,
@@ -231,7 +192,7 @@ impl Scene for GameplayScene {
                     }
                 }
 
-                // Compass click: activate direction under pointer and begin tracking.
+                // Compass click: add compass contribution and begin drag tracking.
                 if self.apply_compass_input_from_canvas(mx, my) {
                     self.input.compass_held = true;
                     return true;
@@ -239,9 +200,40 @@ impl Scene for GameplayScene {
 
                 false
             }
-            // Compass drag: while mouse is held inside compass, follow pointer direction.
+            // Right-click on compass: aggregate direction + attack while held.
+            Event::MouseButtonDown {
+                x,
+                y,
+                mouse_btn: sdl3::mouse::MouseButton::Right,
+                ..
+            } => {
+                let mx = *x as i32;
+                let my = *y as i32;
+                if self.apply_compass_input_from_canvas(mx, my) {
+                    self.input.fight = true;
+                    self.input.compass_fight_held = true;
+                    return true;
+                }
+                false
+            }
+            Event::MouseButtonUp {
+                mouse_btn: sdl3::mouse::MouseButton::Right,
+                ..
+            } => {
+                if self.input.compass_fight_held {
+                    self.input.compass_fight_held = false;
+                    self.input.fight = false;
+                    self.input.compass_x = 0;
+                    self.input.compass_y = 0;
+                    self.input.recompute();
+                    true
+                } else {
+                    false
+                }
+            }
+            // Compass drag: while either mouse button is held on compass, update direction.
             Event::MouseMotion { x, y, .. } => {
-                if self.input.compass_held {
+                if self.input.compass_held || self.input.compass_fight_held {
                     self.apply_compass_input_from_canvas(*x as i32, *y as i32);
                     true
                 } else {
@@ -253,11 +245,11 @@ impl Scene for GameplayScene {
                 ..
             } => {
                 if self.input.compass_held {
-                    self.input.up = false;
-                    self.input.down = false;
-                    self.input.left = false;
-                    self.input.right = false;
                     self.input.compass_held = false;
+                    // Remove compass contribution; keyboard/gamepad aggregate resumes.
+                    self.input.compass_x = 0;
+                    self.input.compass_y = 0;
+                    self.input.recompute();
                     true
                 } else {
                     false

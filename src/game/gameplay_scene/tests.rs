@@ -4157,3 +4157,296 @@ mod load_game_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod input_aggregate_tests {
+    use super::*;
+    use sdl3::keyboard::Keycode;
+
+    fn make_input() -> InputState {
+        InputState::default()
+    }
+
+    fn press(input: &mut InputState, kc: Keycode) {
+        input.pressed_movement_keys.insert(kc);
+        input.recompute();
+    }
+
+    fn release(input: &mut InputState, kc: Keycode) {
+        input.pressed_movement_keys.remove(&kc);
+        input.recompute();
+    }
+
+    fn dir(input: &InputState) -> Direction {
+        match (input.up, input.down, input.left, input.right) {
+            (true,  false, false, false) => Direction::N,
+            (true,  false, false, true)  => Direction::NE,
+            (false, false, false, true)  => Direction::E,
+            (false, true,  false, true)  => Direction::SE,
+            (false, true,  false, false) => Direction::S,
+            (false, true,  true,  false) => Direction::SW,
+            (false, false, true,  false) => Direction::W,
+            (true,  false, true,  false) => Direction::NW,
+            _                            => Direction::None,
+        }
+    }
+
+    #[test]
+    fn single_key_cardinal() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp2);
+        assert_eq!(dir(&i), Direction::S);
+        press(&mut i, Keycode::Kp8);
+        assert_eq!(dir(&i), Direction::None, "KP2+KP8 must cancel to no movement");
+        release(&mut i, Keycode::Kp8);
+        assert_eq!(dir(&i), Direction::S, "releasing KP8 while KP2 held resumes S");
+    }
+
+    #[test]
+    fn diagonal_key_press() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp1);
+        assert_eq!(dir(&i), Direction::SW, "KP1 alone is SW");
+    }
+
+    #[test]
+    fn diagonal_plus_cardinal_partial_cancel() {
+        // KP2 (S) + KP4 (W) → SW
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp2);
+        press(&mut i, Keycode::Kp4);
+        assert_eq!(dir(&i), Direction::SW);
+    }
+
+    #[test]
+    fn releasing_diagonal_restores_held_cardinal() {
+        // Hold KP2 (S), then press KP1 (SW) → SW; release KP1 → S resumes.
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp2);
+        assert_eq!(dir(&i), Direction::S);
+        press(&mut i, Keycode::Kp1);
+        assert_eq!(dir(&i), Direction::SW);
+        release(&mut i, Keycode::Kp1);
+        assert_eq!(dir(&i), Direction::S, "KP2 still held: should be S after KP1 released");
+    }
+
+    #[test]
+    fn opposite_horizontals_cancel() {
+        // KP4 (W) + KP6 (E) → no movement
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp4);
+        press(&mut i, Keycode::Kp6);
+        assert_eq!(dir(&i), Direction::None, "KP4+KP6 must cancel");
+    }
+
+    #[test]
+    fn opposite_verticals_cancel() {
+        // KP8 (N) + KP2 (S) → no movement
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8);
+        press(&mut i, Keycode::Kp2);
+        assert_eq!(dir(&i), Direction::None, "KP8+KP2 must cancel");
+    }
+
+    #[test]
+    fn north_and_sw_partial_cancel_to_west() {
+        // KP8 (N: y=-1) + KP1 (SW: x=-1,y=+1) → x=-1, y=0 → W
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8);
+        press(&mut i, Keycode::Kp1);
+        assert_eq!(dir(&i), Direction::W, "KP8+KP1 N/S cancel → W");
+    }
+
+    #[test]
+    fn all_cardinals_cancel_to_none() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp2);
+        press(&mut i, Keycode::Kp4);
+        press(&mut i, Keycode::Kp6);
+        press(&mut i, Keycode::Kp8);
+        assert_eq!(dir(&i), Direction::None, "all four cardinals must cancel");
+    }
+
+    #[test]
+    fn fight_flag_unaffected_by_movement_keys() {
+        let mut i = make_input();
+        i.fight = true;
+        press(&mut i, Keycode::Kp2);
+        press(&mut i, Keycode::Kp8);
+        assert!(i.fight, "fight flag must not be cleared by movement key aggregation");
+    }
+
+    #[test]
+    fn arrow_key_cardinals() {
+        for (kc, expected) in [
+            (Keycode::Up,    Direction::N),
+            (Keycode::Down,  Direction::S),
+            (Keycode::Left,  Direction::W),
+            (Keycode::Right, Direction::E),
+        ] {
+            let mut i = make_input();
+            press(&mut i, kc);
+            assert_eq!(dir(&i), expected, "{kc:?} should produce {expected:?}");
+        }
+    }
+
+    #[test]
+    fn arrow_opposites_cancel() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Left);
+        press(&mut i, Keycode::Right);
+        assert_eq!(dir(&i), Direction::None, "Left+Right must cancel");
+
+        let mut i = make_input();
+        press(&mut i, Keycode::Up);
+        press(&mut i, Keycode::Down);
+        assert_eq!(dir(&i), Direction::None, "Up+Down must cancel");
+    }
+
+    #[test]
+    fn arrow_diagonal_combination() {
+        // Arrow Up + Arrow Right → NE
+        let mut i = make_input();
+        press(&mut i, Keycode::Up);
+        press(&mut i, Keycode::Right);
+        assert_eq!(dir(&i), Direction::NE);
+    }
+
+    #[test]
+    fn arrow_and_numpad_same_axis_cancel() {
+        // Arrow Down (y=+1) + KP8 (y=-1) → cancel; Left still held → W
+        let mut i = make_input();
+        press(&mut i, Keycode::Down);
+        press(&mut i, Keycode::Left);
+        press(&mut i, Keycode::Kp8);
+        assert_eq!(dir(&i), Direction::W, "Down+KP8 cancel vertically, Left remains");
+    }
+
+    #[test]
+    fn arrow_release_restores_held_numpad() {
+        // Hold KP2 (S), press Down (also S → y=+2), release Down → still S
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp2);
+        press(&mut i, Keycode::Down);
+        assert_eq!(dir(&i), Direction::S);
+        release(&mut i, Keycode::Down);
+        assert_eq!(dir(&i), Direction::S, "KP2 still held after Down released");
+        release(&mut i, Keycode::Kp2);
+        assert_eq!(dir(&i), Direction::None, "no keys held → no movement");
+    }
+
+    fn set_gamepad(input: &mut InputState, gx: i32, gy: i32) {
+        input.gamepad_x = gx;
+        input.gamepad_y = gy;
+        input.recompute();
+    }
+
+    fn set_compass(input: &mut InputState, cx: i32, cy: i32) {
+        input.compass_x = cx;
+        input.compass_y = cy;
+        input.recompute();
+    }
+
+    #[test]
+    fn gamepad_stick_cardinal() {
+        let mut i = make_input();
+        set_gamepad(&mut i, 0, 1);
+        assert_eq!(dir(&i), Direction::S);
+        set_gamepad(&mut i, -1, 0);
+        assert_eq!(dir(&i), Direction::W);
+    }
+
+    #[test]
+    fn gamepad_stick_diagonal() {
+        let mut i = make_input();
+        set_gamepad(&mut i, 1, -1);
+        assert_eq!(dir(&i), Direction::NE);
+    }
+
+    #[test]
+    fn gamepad_stick_cancels_with_keyboard() {
+        // KP8 (y=-1) + gamepad down (y=+1) → cancel vertically; KP4 (x=-1) remains → W
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8);
+        press(&mut i, Keycode::Kp4);
+        set_gamepad(&mut i, 0, 1);
+        assert_eq!(dir(&i), Direction::W, "gamepad down cancels KP8, KP4 remains");
+    }
+
+    #[test]
+    fn gamepad_neutral_does_not_affect_keyboard() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp6);
+        set_gamepad(&mut i, 0, 0);
+        assert_eq!(dir(&i), Direction::E, "neutral gamepad must not suppress keyboard");
+    }
+
+    #[test]
+    fn gamepad_released_restores_keyboard() {
+        // Keyboard holds E, gamepad opposes with W → no movement; gamepad releases → E
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp6);
+        set_gamepad(&mut i, -1, 0);
+        assert_eq!(dir(&i), Direction::None, "gamepad W cancels keyboard E");
+        set_gamepad(&mut i, 0, 0);
+        assert_eq!(dir(&i), Direction::E, "gamepad neutral → keyboard E resumes");
+    }
+
+    #[test]
+    fn compass_cardinal() {
+        let mut i = make_input();
+        set_compass(&mut i, 0, -1);
+        assert_eq!(dir(&i), Direction::N);
+        set_compass(&mut i, 1, 1);
+        assert_eq!(dir(&i), Direction::SE);
+    }
+
+    #[test]
+    fn compass_cancels_keyboard() {
+        // KP8 (N, y=-1) + compass S (y=+1) → cancel; KP4 (W, x=-1) remains → W
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8);
+        press(&mut i, Keycode::Kp4);
+        set_compass(&mut i, 0, 1);
+        assert_eq!(dir(&i), Direction::W, "compass S cancels KP8, KP4 remains → W");
+    }
+
+    #[test]
+    fn compass_released_restores_keyboard() {
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8); // N
+        set_compass(&mut i, 0, 1);   // compass S cancels
+        assert_eq!(dir(&i), Direction::None);
+        set_compass(&mut i, 0, 0);   // compass released
+        assert_eq!(dir(&i), Direction::N, "keyboard N resumes after compass released");
+    }
+
+    #[test]
+    fn compass_cancels_gamepad() {
+        let mut i = make_input();
+        set_gamepad(&mut i, 1, 0); // gamepad E
+        set_compass(&mut i, -1, 0); // compass W cancels
+        assert_eq!(dir(&i), Direction::None, "compass W cancels gamepad E");
+    }
+
+    #[test]
+    fn all_three_sources_aggregate() {
+        // keyboard KP8 (y=-1) + gamepad right (x=+1) + compass SW (x=-1,y=+1)
+        // x = +1 + -1 = 0, y = -1 + +1 = 0 → None
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp8);
+        set_gamepad(&mut i, 1, 0);
+        set_compass(&mut i, -1, 1);
+        assert_eq!(dir(&i), Direction::None, "all three sources cancel");
+    }
+
+    #[test]
+    fn all_three_sources_partial_cancel() {
+        // keyboard KP6 (x=+1) + gamepad left (x=-1) cancel x; compass N (y=-1) remains → N
+        let mut i = make_input();
+        press(&mut i, Keycode::Kp6);
+        set_gamepad(&mut i, -1, 0);
+        set_compass(&mut i, 0, -1);
+        assert_eq!(dir(&i), Direction::N, "x cancels, compass N survives");
+    }
+}
