@@ -65,7 +65,7 @@ The function acts as an **animated viewport resize** — when called in a loop, 
 | `fmain.c:1187` | `0` | Reset to zero before intro animation | After setting `fp_page2.ri_page = &ri_page1`. Before `pagechange()` × 2 ("prime the pump"). Collapses viewport to invisible point. |
 | `fmain.c:1199` | `0..160` (loop, step 4) | Intro zoom-IN animation | `for (i=0; i<=160; i+=4) screen_size(i);` — 41 iterations zooming from nothing to full-screen. After loading page0 brush into both bitmaps. Before copypage slideshow. |
 | `fmain.c:1209` | `156..0` (loop, step -4) | Intro zoom-OUT animation | `for (i=156; i>=0; i-=4) screen_size(i);` — 40 iterations zooming from gameplay size to nothing. After slideshow (or skip). Before entering normal gameplay mode. |
-| `fmain.c:1220` | `156` | Normal gameplay mode establishment | After clearing both page bitmaps and loading `blackcolors`. Before loading shadow data, hiscreen, and entering game loop. This sets the standard gameplay viewport. |
+| `fmain.c:1220` | `156` | Pre-gameplay setup (asset loading, copy protection) | After clearing both page bitmaps and loading `blackcolors`. Before loading shadow data, hiscreen, copy-protection screen, and `revive()`. This viewport remains active through the copy-protection quiz at `fmain.c:1233-1238`. |
 | `fmain2.c:1613` | `156` | Win sequence (`win_colors()`) | After loading "winpic" brush and setting black colors, hiding text viewport. Before the sunrise color animation loop. |
 
 ## Computed Dimensions by Argument Value
@@ -146,7 +146,55 @@ There are **two distinct screen configurations**:
    - Status bar / narration visible below playfield
    - 16px horizontal offset (centering the 288px in 320px frame)
 
-The `screen_size(156)` call at `fmain.c:1220` sets up the full-screen mode temporarily while loading assets. After `revive()` completes, the code at `fmain.c:1250-1255` restores the standard split-screen configuration with text viewport.
+The `screen_size(156)` call at `fmain.c:1220` sets up the full-screen mode temporarily while loading assets and the copy-protection screen. After `revive()` completes, the code at `fmain.c:1250-1255` restores the standard split-screen configuration with text viewport.
+
+## Copy Protection Screen Viewport
+
+The copy protection quiz (`fmain.c:1233-1238`) displays under the same viewport set by `screen_size(156)` at `fmain.c:1220`. No viewport change occurs between that call and the quiz. The display configuration is:
+
+- **Viewport**: Config A — 312×194 visible area, 4px horizontal / 3px vertical inset
+- **Bitmap**: lo-res playfield, 320×200, 5 bitplanes (32 colors)
+- **RastPort**: `rp_map` (assigned at `fmain.c:1231-1232`)
+- **Text viewport**: hidden (DHeight ≤ 0)
+- **Palette**: colors 0 and 1 set explicitly — background dark blue `(0,0,6)`, text white `(15,15,15)` (`fmain.c:1221,1229`)
+
+### Rendering sequence (`fmain.c:1231-1238`)
+
+```c
+rp = &rp_map;
+rp_map.BitMap = fp_drawing->ri_page->BitMap;
+stillscreen();                    // zero scroll offsets, pagechange
+SetAPen(rp,1);                   // pen = white
+placard_text(19);                 // msg12 via ssp() — quiz intro text
+handler_data.laydown = handler_data.pickup = 0;
+k = TRUE;
+if (copy_protect_junk()==0) goto quit_all;
+```
+
+### Text coordinates (lo-res, via `ssp()` XY command)
+
+`placard_text(19)` displays msg12 (`narr.asm:341-347`) using `ssp()`:
+
+| X stored | X displayed (×2) | Y | Text |
+|----------|-------------------|---|------|
+| 64 (128/2) | 128 | 19 | "So..." |
+| 17 (34/2) | 34 | 65 | "You, game seeker, would guide the" |
+| 5 (10/2) | 10 | 75 | "brothers to their destiny? You would" |
+| 5 (10/2) | 10 | 85 | "aid them and give directions? Answer," |
+| 5 (10/2) | 10 | 95 | "then, these three questions and prove" |
+| 5 (10/2) | 10 | 105 | "your fitness to be their advisor:" |
+
+### Answer input coordinates (`copy_protect_junk()` at `fmain2.c:1309-1336`)
+
+Each question+answer line is positioned at:
+- Question text: `move(10, 125 + (h * 10))` where h = 0,1,2 — so Y = 125, 135, 145
+- Answer cursor: starts at `rp->cp_x` / `rp->cp_y` (immediately after the question text)
+
+These are direct pixel coordinates in the lo-res 320×200 bitmap — NOT doubled. The `move()` wrapper calls `GfxBase->Move(rp, x, y)` directly without any coordinate transformation (`fsubs.asm:477-485`).
+
+### Key point for implementation
+
+The copy protection screen is **entirely lo-res 320×200** (visible as 312×194 through the `screen_size(156)` inset). Using 640×200 would produce a half-filled screen since all text coordinates assume 320-pixel width.
 
 ## Cross-Cutting Findings
 
@@ -158,4 +206,5 @@ The `screen_size(156)` call at `fmain.c:1220` sets up the full-screen mode tempo
 None — all questions answered with direct code citations.
 
 ## Refinement Log
+- 2026-06-06: Added Copy Protection Screen Viewport section with coordinate tables, rendering sequence, and implementation note.
 - 2026-04-19: Initial complete discovery pass

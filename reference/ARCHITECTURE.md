@@ -286,7 +286,7 @@ The display operates in two distinct viewport configurations, switched at specif
 | Intro zoom-in animation | A (→full) | `screen_size(0..160)` loop, step +4 | `fmain.c:1199` |
 | Intro story pages (p1–p3) | Full-screen | 320×200 — unchanged from zoom-in peak | `fmain.c:1200-1205` |
 | Intro zoom-out animation | A | `screen_size(156..0)` loop, step −4 (snaps from 320×200 to 312×194 on first iteration) | `fmain.c:1209` |
-| Asset loading / copy protection | A | `screen_size(156)` | `fmain.c:1220` |
+| Asset loading / copy protection | A | `screen_size(156)` — viewport unchanged through `placard_text(19)` and `copy_protect_junk()`. Renders on `rp_map` (lo-res 320×200 bitmap). Text coordinates are raw lo-res pixels; `ssp()` XY doubles stored half-X back to lo-res. Question input at Y=125,135,145. | `fmain.c:1220-1238` |
 | Normal gameplay | B | Direct struct writes | `fmain.c:1250-1255` |
 | Full-screen story messages | B (modified) | `vp_text` hidden via `VP_HIDE` | `fmain2.c:604` |
 | Victory sunrise | A | `screen_size(156)` | `fmain2.c:1613` |
