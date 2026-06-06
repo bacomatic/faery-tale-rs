@@ -39,6 +39,7 @@ impl GameplayScene {
         if let Ok(mut hibar_tex) =
             tc.create_texture_target(sdl3::pixels::PixelFormat::RGBA32, 640, HIBAR_NATIVE_H)
         {
+            hibar_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
             let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
                 hc.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
                 hc.clear();
@@ -173,7 +174,8 @@ impl GameplayScene {
                             sdl3::pixels::PixelFormat::ARGB8888,
                         );
                         if let Ok(surface) = surface_result {
-                            if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                            if let Ok(mut tex) = tc.create_texture_from_surface(&surface) {
+                                tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
                                 let src = sdl3::rect::Rect::new(
                                     0,
                                     0,
@@ -221,7 +223,8 @@ impl GameplayScene {
                         sdl3::pixels::PixelFormat::ARGB8888,
                     );
                     if let Ok(surface) = surface_result {
-                        if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                        if let Ok(mut tex) = tc.create_texture_from_surface(&surface) {
+                            tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
                             let dst = sdl3::rect::Rect::new(32, 40, 576, 144);
                             let _ = canvas.copy(&tex, None, dst);
                         }
@@ -326,7 +329,8 @@ impl GameplayScene {
                         LORES_W as u32 * 4,
                         sdl3::pixels::PixelFormat::ARGB8888,
                     ) {
-                        if let Ok(tex) = tc.create_texture_from_surface(&surface) {
+                        if let Ok(mut tex) = tc.create_texture_from_surface(&surface) {
+                            tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
                             let src =
                                 sdl3::rect::Rect::new(16, 0, PLAYFIELD_LORES_W, PLAYFIELD_LORES_H);
                             let dst = sdl3::rect::Rect::new(

@@ -241,9 +241,11 @@ pub fn main() -> Result<(), String> {
     let mut play_tex = tex_maker
         .create_texture_target(Some(PixelFormat::RGBA32), 320, 200)
         .unwrap();
+    play_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
     let mut scratch_tex = tex_maker
         .create_texture_target(Some(PixelFormat::RGBA32), 320, 200)
         .unwrap();
+    scratch_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
 
     let mut dirty: bool = true;
     let mut clear_flag = true;

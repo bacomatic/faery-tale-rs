@@ -1417,26 +1417,22 @@ planes = [
 
 [placards]
 
-### hires 640x200 placards
+### All placards are lores 320x200
 
 [placards.titletext]
 lines = [
-    # {x = 56, y = 33, text = "\"The Faery Tale Adventure\""},
-    # {x = 40, y = 79, text = "Animation, Programming & Music"},
-    # {x = 152, y = 90, text = "by"},
-    # {x = 112, y = 101, text = "David Joiner"},
-    # {x = 40, y = 160, text = "Copyright 1986 MicroIllusions "}
+    {x = 56, y = 33, text = "\"The Faery Tale Adventure\""},
+    {x = 40, y = 79, text = "Animation, Programming & Music"},
+    {x = 152, y = 90, text = "by"},
+    {x = 112, y = 101, text = "David Joiner"},
+    {x = 40, y = 160, text = "Copyright 1986 MicroIllusions "}
 
-    # The below lines seem to be from an earlier version, I'm using them
-    # because they align properly when rendered to a 640x200 texture
-    # They still don't match the hero screen, notably the '&' is "and"
-    # on the screenshot <shrug>
-
-    {x = 168, y = 33, text = "\"The Faery Tale Adventure\""},
-    {x = 153, y = 74, text = "Animation, Programming & Music"},
-    {x = 292, y = 90, text = "by"},
-    {x = 250, y = 101, text = "David Joiner"},
-    {x = 168, y = 160, text = "Copyright (C) 1986 MicroIllusions "}
+    # Alternative arrangement (undecided):
+    # {x = 168, y = 33, text = "\"The Faery Tale Adventure\""},
+    # {x = 153, y = 74, text = "Animation, Programming & Music"},
+    # {x = 292, y = 90, text = "by"},
+    # {x = 250, y = 101, text = "David Joiner"},
+    # {x = 168, y = 160, text = "Copyright (C) 1986 MicroIllusions "}
 ]
 
 [placards.copy_junk]
@@ -1448,8 +1444,6 @@ lines = [
     {x = 10, y = 95, text = "then, these three questions and prove" },
     {x = 10, y = 105, text = "your fitness to be their advisor:" }
 ]
-
-### lores 320x200 placards
 
 [placards.julian_start]
 lines = [

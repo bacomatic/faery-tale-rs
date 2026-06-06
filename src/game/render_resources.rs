@@ -90,6 +90,7 @@ impl<'tex> RenderResources<'tex> {
             )
             .unwrap();
         font_tex.set_blend_mode(sdl3::render::BlendMode::Blend);
+        font_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
         let font_backing = Rc::new(RefCell::new(font_tex));
 
         let amber = FontTexture::new(amber_font, &amber_bounds, Rc::downgrade(&font_backing));
@@ -104,6 +105,7 @@ impl<'tex> RenderResources<'tex> {
             amber_bounds.height(),
         ) {
             s.set_blend_mode(sdl3::render::BlendMode::Blend);
+            s.set_scale_mode(sdl3::render::ScaleMode::Nearest);
             amber.init_stencil(s);
         }
         if let Ok(mut s) = tex_maker.create_texture_static(
@@ -112,16 +114,17 @@ impl<'tex> RenderResources<'tex> {
             topaz_bounds.height(),
         ) {
             s.set_blend_mode(sdl3::render::BlendMode::Blend);
+            s.set_scale_mode(sdl3::render::ScaleMode::Nearest);
             topaz.init_stencil(s);
         }
 
         // ── Image atlas ───────────────────────────────────────────────────
         let image_atlas_rect = Rect::new(0, 0, IMAGE_ATLAS_W, IMAGE_ATLAS_H);
-        let image_backing = Rc::new(RefCell::new(
-            tex_maker
-                .create_texture_static(Some(PixelFormat::RGBA32), IMAGE_ATLAS_W, IMAGE_ATLAS_H)
-                .unwrap(),
-        ));
+        let mut image_atlas_tex = tex_maker
+            .create_texture_static(Some(PixelFormat::RGBA32), IMAGE_ATLAS_W, IMAGE_ATLAS_H)
+            .unwrap();
+        image_atlas_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
+        let image_backing = Rc::new(RefCell::new(image_atlas_tex));
 
         let mut images: Vec<ImageTexture<'tex>> = Vec::new();
         let mut image_map: HashMap<String, usize> = HashMap::new();
@@ -290,11 +293,13 @@ impl<'tex> RenderResources<'tex> {
         let mut normal_tex = tex_maker
             .create_texture_static(Some(PixelFormat::RGBA32), CW as u32, CH as u32)
             .ok()?;
+        normal_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
         normal_tex.update(None, &normal_rgba, CW * 4).ok()?;
 
         let mut highlight_tex = tex_maker
             .create_texture_static(Some(PixelFormat::RGBA32), CW as u32, CH as u32)
             .ok()?;
+        highlight_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
         highlight_tex.update(None, &highlight_rgba, CW * 4).ok()?;
 
         Some((normal_tex, highlight_tex))

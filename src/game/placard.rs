@@ -141,10 +141,9 @@ impl Placard {
         }
     }
 
-    /// Draw the placard text at 2× glyph height (title screen).
-    /// Simulates Amiga CRT line-doubling: each glyph is rendered at normal
-    /// width but 2× height, with Y positions also doubled so line spacing
-    /// scales correctly.
+    /// Draw the placard text with all coordinates doubled and 2× glyph height.
+    /// Used for LORES 320×200 placards rendered directly to the 640×480 canvas:
+    /// both X and Y are scaled 2× and glyphs are stretched to 2× height.
     pub fn draw_line_doubled<'a, T: RenderTarget>(
         &self,
         font: &FontTexture<'a>,
@@ -153,10 +152,10 @@ impl Placard {
         y_offset: i32,
     ) {
         for line in &self.lines {
-            font.render_string_hires(
+            font.render_string(
                 &line.text,
                 canvas,
-                line.x as i32 + x_offset,
+                (line.x as i32) * 2 + x_offset,
                 (line.y as i32) * 2 + y_offset,
             );
         }
