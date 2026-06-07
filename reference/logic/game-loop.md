@@ -1223,61 +1223,87 @@ contains the `blithigh = 32` override at `fmain.c:2570`).
 ```pseudo
 def render_sprites() -> None:
     """Phase 22. Walk anim_index[] in sorted order; for every on-screen actor
-    blit the character (pass 0) and optionally the wielded weapon (pass 1)
-    with terrain-driven vertical masking."""
-    fp_drawing.obcount = 0                                # fmain.c:2510
-    fp_drawing.saveused = 0                               # fmain.c:2510
-    crack = 0                                             # fmain.c:2510 — free-slot index into planes[]
-    backalloc = fp_drawing.backsave                       # fmain.c:2511
+    blit the character body and optionally the wielded weapon with terrain-
+    driven vertical masking.
+
+    Two counters drive the per-actor inner loop (fmain.c:2389, 2395-2608):
+      pass     — raw iteration counter, 0→1→2; reset to 0 per actor.
+      passmode — semantic label, 0=body / 1=weapon; derived by
+                 resolve_pass_params from pass and facing each time through
+                 the `newpass:` label.
+
+    The loop continues (`goto newpass`) while pass==1 after
+    resolve_pass_params has incremented it.  Armed actors therefore visit
+    `newpass:` exactly twice: pass goes 0→1 on the first visit (loop
+    continues), then 1→2 on the second (loop ends).  Unarmed actors visit
+    once: needs_weapon_pass() returns False so pass stays 0, no loop-back.
+
+    IMPORTANT — each pass allocates its own shape_queue slot:
+      `shp = shape_queue[obcount]` is evaluated *before* `obcount++`
+      (fmain.c:2535,2606), so the body pass and the weapon pass write into
+      consecutive, independent slots with separate backsave buffers and
+      separate save_blit calls.  The weapon overlay is NOT composited into
+      the body's save buffer.
+
+    The `offscreen:` label (fmain.c:2608) is shared between the normal
+    off-screen reject and the save-budget exhaustion break.  In both cases
+    `obcount` is NOT incremented for the skipped pass; but if pass==1 the
+    actor still gets its second pass (which may itself be on-screen)."""
+    fp_drawing.obcount = 0                                # fmain.c:2378
+    fp_drawing.saveused = 0                               # fmain.c:2378
+    crack = 0                                             # fmain.c:2378 — free-slot index into planes[]
+    backalloc = fp_drawing.backsave                       # fmain.c:2379
 
     j = 0
     while j < anix2:
         i = anim_index[j]
         an = anim_list[i]
         an.visible = 0
+        pass = 0                                          # fmain.c:2389 — reset per actor
 
-        passmode = 0
-        pass_count = 0
-        # Two-pass loop: body (pass 0), weapon overlay (pass 1 if armed).
-        done = 0
-        while done == 0:
-            # fmain.c:2418-2432 — choose pass params based on weapon, facing, state.
-            passmode = resolve_pass_params(an, passmode, pass_count)
-            # fmain.c:2446-2498 — type/frame dispatch: hero, enemy, carrier, dragon, setfig, falling, fiery-death.
-            clip = compute_shape_clip(an, i, passmode)
-            # fmain.c:2499-2505 — off-screen reject.
-            if clip.xstart > 319 or clip.ystart > 173 or clip.xstart + 15 < 0 or clip.ystart + 15 < 0:  # fmain.c:2504, 319/173 = playfield extents; 15 = sprite half-width
-                if pass_count == 1:
-                    pass_count = 0
-                    passmode = passmode + 1
+        # newpass: label — re-entered for the weapon pass when pass==1.
+        while True:                                       # fmain.c:2395 newpass:
+            # fmain.c:2400-2409 — derive passmode from pass and facing; increment pass.
+            passmode = resolve_pass_params(an, pass)      # mutates pass in place
+            # fmain.c:2420-2465 — type/frame dispatch: hero, enemy, carrier, dragon, setfig, falling, fiery-death.
+            clip = select_atype_inum(an, i, passmode, pass)
+            if clip.offscreen:
+                if pass == 1:                             # fmain.c:2608 — offscreen: label; weapon pass pending
+                    continue                              # fmain.c:2608 — goto newpass
+                break                                     # fmain.c:2608 — done with this actor
+            # fmain.c:2468-2531 — apply map scroll bias, clip to playfield, compute blit geometry.
+            clip = compute_shape_clip(an, i, passmode, clip)
+            if clip.offscreen:
+                if pass == 1:
                     continue
-                done = 1
-                continue
-            # fmain.c:2512-2528 — reserve a save-under buffer; bail if out of room.
+                break
+            # fmain.c:2535 — each pass claims its own shape_queue slot at current obcount.
             shp = fp_drawing.shape_queue[fp_drawing.obcount]
-            if not reserve_save_slot(shp, crack, backalloc):
-                done = 1
-                continue
-            # fmain.c:2534-2583 — terrain-driven vertical mask build.
+            # fmain.c:2536-2549 — reserve backsave; break entire actor loop if budget exhausted.
+            clip = reserve_save_slot(clip, crack, backalloc)
+            if clip.offscreen:                            # fmain.c:2548 — saveused >= BACKSAVE_LIMIT_BYTES
+                break                                     # breaks j-loop entirely (fmain.c:2548 `break`)
+            crack = clip.crack_after
+            backalloc = clip.backalloc_after
+            # fmain.c:2560-2561 — clear compositing mask; start blitter ownership.
             OwnBlitter()
             WaitBlit()
-            clear_blit(bmask_mem, CBK_SIZE)
+            clear_blit(bmask_mem, CBK_SIZE)               # fmain.c:2417
             DisownBlitter()
+            # fmain.c:2563-2598 — terrain occlusion mask (skipped for carriers, swan-rider, etc.).
             if should_apply_terrain_mask(an, i, clip):
-                compute_terrain_mask(an, clip)
-            # fmain.c:2596-2599 — final blits.
+                compute_terrain_mask(an, i, clip)
+            # fmain.c:2560-2604 — save the screen region behind this pass, apply mask, blit sprite.
             OwnBlitter()
-            save_blit(shp.backsave)
-            mask_blit()
-            shape_blit()
-            DisownBlitter()
-            an.visible = True
-            fp_drawing.obcount = fp_drawing.obcount + 1
-            if pass_count == 1:
-                pass_count = 0
-                passmode = passmode + 1
-                continue
-            done = 1
+            save_blit(shp.backsave)                       # fmain.c:2561 — independent save per pass
+            mask_blit()                                   # fmain.c:2601
+            shape_blit()                                  # fmain.c:2602
+            an.visible = True                             # fmain.c:2603
+            DisownBlitter()                               # fmain.c:2604
+            fp_drawing.obcount = fp_drawing.obcount + 1   # fmain.c:2606 — advance slot; weapon will use next
+            if pass == 1:                                 # fmain.c:2608 — offscreen: label; weapon pass pending
+                continue                                  # fmain.c:2608 — goto newpass for weapon
+            break                                         # fmain.c:2608 — pass==2; done with actor
         j = j + 1
 
     WaitBlit()                                            # fmain.c:2610

@@ -187,20 +187,47 @@ Called by: `render_sprites`
 Calls: none
 
 ```pseudo
-def resolve_pass_params(an: Shape, pass_count: i8) -> i8:
-    """Compute passmode (0=body, 1=weapon) for the current pass given the
-    actor's facing and weapon class. Body and weapon are drawn in an order
-    that depends on facing so the weapon appears in front when the actor
-    faces toward the camera and behind when the actor faces away."""
-    if (an.facing - 2) & 4:                    # fmain.c:2402 — DIR_E..DIR_W (3..7) take XOR-flip
-        passmode = pass_count ^ 1               # fmain.c:2402 — 1 = invert pass order
-    else:
-        passmode = pass_count                   # fmain.c:2403
-    if an.weapon == 4 and an.state < 24:        # fmain.c:2404 — 4 = WEAPON_BOW; 24 = STATE_SHOOT1
-        if (an.facing & 4) == 0:                # fmain.c:2405 — 4 = bit 2 of facing (north half)
-            passmode = pass_count ^ 1            # fmain.c:2405 — 1 = invert
+def resolve_pass_params(an: Shape, pass: i8) -> i8:
+    """Derive passmode (0=body, 1=weapon) from the raw pass counter and the
+    actor's facing / weapon class.
+
+    `pass` is a monotone counter, initialised to 0 per actor and incremented
+    here once per call (fmain.c:2408).  `passmode` is the *semantic* label
+    produced by optionally XOR-ing `pass` with 1 before the increment:
+
+      pass=0 → incremented to 1.  XOR gives 1 if flipped, 0 if not.
+      pass=1 → incremented to 2.  XOR gives 0 if flipped, 1 if not.
+
+    The caller (`render_sprites`) loops back to this function while pass==1
+    (i.e. exactly one weapon pass was requested) and stops when pass==2.
+    The two calls therefore produce complementary passmode values — one call
+    yields passmode=0 (body) and the other passmode=1 (weapon).  Which call
+    produces which depends on facing:
+
+    * Facing toward camera (DIR_SE/S/SW/E/W — `(facing-2)&4` truthy):
+        first call:  passmode = 0 ^ 1 = 1  → weapon drawn first
+        second call: passmode = 1 ^ 1 = 0  → body drawn on top
+    * Facing away from camera (DIR_NW/N/NE — `(facing-2)&4` falsy):
+        first call:  passmode = 0          → body drawn first
+        second call: passmode = 1          → weapon drawn on top
+
+    The bow-while-walking override replaces the passmode rule with a
+    facing-bit test (fmain.c:2404-2407); see §bow-state-boundary below.
+
+    Returns passmode for this iteration; mutates pass in place."""
+    if an.needs_weapon_pass():              # fmain.c:2400-2401 — gate; see needs_weapon_pass
+        if (an.facing - 2) & 4:            # fmain.c:2402 — DIR_SE/S/SW/E/W (east-to-west arc)
+            passmode = pass ^ 1             # fmain.c:2402 — XOR flips 0→1 and 1→0
         else:
-            passmode = pass_count                # fmain.c:2406
+            passmode = pass                 # fmain.c:2403 — no flip; body then weapon
+        if an.weapon == 4 and an.state < 24:  # fmain.c:2404 — WEAPON_BOW walking (state < STATE_SHOOT1)
+            if (an.facing & 4) == 0:        # fmain.c:2405 — north-quadrant facings (NW/N/NE/E)
+                passmode = pass ^ 1         # fmain.c:2405 — weapon first for northward bow
+            else:
+                passmode = pass             # fmain.c:2406 — body first for southward bow
+        pass = pass + 1                     # fmain.c:2408 — advance counter; caller loops while pass==1
+    else:
+        passmode = 0                        # unarmed: single body-only pass
     return passmode
 ```
 
@@ -704,6 +731,60 @@ def render_inventory_items_page(bm: object) -> None:
   Y-shift on `DIR_NE`. All other weapons share the body's `statelist[inum]`
   weapon offsets via `wpn_x`, `wpn_y`, `wpn_no`.
 
+- **Bow state boundary — two distinct inum-derivation paths.** The bow
+  (`weapon == 4`) has *two* completely different weapon-overlay paths
+  depending on whether the actor is walking or shooting, gated by
+  `an.state < STATE_SHOOT1` (24):
+
+  | State | Path | Position source | Frame source |
+  |-------|------|----------------|-------------|
+  | `state < 24` (walking/fighting) | `bow_x[inum]` / `bow_y[inum]` offset; frame = one of {30, 0x51, 0x53} by `inum/8` | `bow_x/bow_y` tables | direction-quantised |
+  | `state >= 24` (shooting — SHOOT1..SHOOT3) | falls through to the hand-weapon `else` branch at `fmain.c:2439`; `k` is set to 0 (`WPN_K_BOW`); frame = `statelist[inum].wpn_no + 0` | `statelist[inum].wpn_x/y` | `statelist` table |
+
+  A port that uses only one path for both states will produce incorrect
+  bow positioning during the shoot animation. The `needs_weapon_pass`
+  guard at `fmain.c:2401` (`an.state >= STATE_SHOOT1`) ensures the bow
+  overlay is retained while shooting, but `select_atype_inum` must still
+  branch on the same `state < STATE_SHOOT1` condition internally
+  (`fmain.c:2422, 2429, 2404`).
+
+- **Weapon overlay position is relative to the actor's screen position.**
+  In `select_atype_inum` (`fmain.c:2420-2445`), `xstart` and `ystart`
+  are initialised to `an.rel_x` / `an.rel_y` (the actor's screen-space
+  position as computed by `actor_tick`) and then the weapon offset is
+  *added* to those base values:
+
+  - Hand weapons: `xstart += statelist[inum].wpn_x`; `ystart += statelist[inum].wpn_y`
+  - Bow (walking): `xstart += bow_x[inum]`; `ystart += bow_y[inum]`
+  - Wand: position is `an.rel_x/y` with optional `ystart -= 6` for NE
+
+  There is no separate, independent world-position for the weapon.  Any
+  port that computes the weapon's blit position independently of the
+  body's `rel_x/rel_y` will place the overlay at the wrong screen
+  location, especially during walk animation where `rel_x/rel_y` bounce
+  with each step.  The `compute_shape_clip` call that follows then adds
+  the map-scroll sub-tile bias (`map_x & 15`, `map_y & 31`) on top,
+  applied equally to both passes (`fmain.c:2468-2470`).
+
+- **Drowning actors suppress the weapon pass entirely.** When
+  `an.environ > 29` (deep-submersion state) the weapon-overlay pass is
+  suppressed at two sites:
+
+  1. `fmain.c:2503` — inside `compute_shape_clip` (the `else` branch for
+     `passmode != 0` or `atype == OBJECTS`): `if (an->environ > 29) goto
+     offscreen` returns an off-screen clip immediately, so no blitter
+     work is done for that pass.
+  2. `fmain.c:2496` — on the body pass the actor's type is promoted to
+     `OBJECTS` and `inum` is replaced with a drowning-bubble frame
+     (`97 + ((cycle+i)&1)`), so the body overlay is a bubble rather
+     than the character sprite.
+
+  A port must replicate both sites: the body-pass substitution and the
+  explicit weapon-pass skip. Because `render_sprites` continues to the
+  weapon pass when `pass==1` (even after an off-screen body pass), a
+  port that only handles site 1 will still attempt to render the weapon
+  overlay, producing a floating weapon sprite above the submerged actor.
+
 - **Inventory width hardcode.** The items-page render at
   [`render_inventory_items_page`](#render_inventory_items_page) blits every
   icon at literal 16 pixels wide regardless of `inv_list` row contents. The
@@ -713,16 +794,19 @@ def render_inventory_items_page(bm: object) -> None:
   A port that wants variable-width inventory icons must add a width
   field to `inv_list` and read it here.
 
-- **Two-pass coupling.** [`resolve_pass_params`](#resolve_pass_params) and
-  [`needs_weapon_pass`](#needs_weapon_pass) together govern whether and in
-  what order body and weapon are drawn. The XOR-with-pass logic at
-  `fmain.c:2402` and `fmain.c:2405` ensures that the body always renders
-  with `passmode == 0` and the weapon with `passmode == 1`, but the
-  *iteration order* depends on facing: when facing toward the camera
-  (DIR_S, DIR_SE, DIR_SW, DIR_E, DIR_W with bow shooting south) the
-  weapon iterates first so the body draws on top; when facing away the
-  body iterates first so the weapon draws on top. This produces correct
-  occlusion without per-pixel depth.
+- **Two-pass coupling — pass counter vs passmode.** The source uses two
+  separate variables at `fmain.c:2389`: `pass` (the raw iteration
+  counter, 0→1→2) and `passmode` (the semantic label, 0=body /
+  1=weapon). `resolve_pass_params` derives `passmode` from `pass` via an
+  optional XOR-1 based on facing, then increments `pass`. The
+  `goto newpass` at `fmain.c:2608` fires when `pass==1`, i.e. exactly
+  once per armed actor. The XOR ensures the two iterations always
+  produce complementary passmode values. Facing toward camera (DIR_S /
+  SE / SW / E / W): first iteration passmode=1 (weapon), second
+  passmode=0 (body) — body occludes weapon. Facing away (DIR_N / NW /
+  NE): first iteration passmode=0 (body), second passmode=1 (weapon) —
+  weapon occludes body. Each pass allocates its own `shape_queue` slot
+  and calls `save_blit` independently (`fmain.c:2535, 2561, 2606`).
 
 - **Rendering vs. logic-tier scope.** The blitter primitives
   (`save_blit`, `mask_blit`, `shape_blit`, `clear_blit`, `make_mask`,
