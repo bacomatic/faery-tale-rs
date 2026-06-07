@@ -110,14 +110,14 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x56` (86) | Bow overlay — arc I *(visual)* | 16×16 | — |
 | `0x57` (87) | Bow overlay — arc J *(visual)* | 16×16 | — |
 | `0x58` (88) | Fiery-death overlay (dying actor in lava zone) | 16×16 | `fmain.c:2454` `WPN_FIERY_DEATH_INUM` |
-| `0x59` (89) | Blue teardrop / raindrop effect A *(visual)* | 16×16 | — |
-| `0x5a` (90) | Blue teardrop / raindrop effect B *(visual)* | 16×16 | — |
-| `0x5b` (91) | Blue teardrop / raindrop effect C *(visual)* | 16×16 | — |
-| `0x5c` (92) | Blue teardrop / raindrop effect D *(visual)* | 16×16 | — |
-| `0x5d` (93) | Blue teardrop / raindrop effect E *(visual)* | 16×16 | — |
-| `0x5e` (94) | Blue teardrop / raindrop effect F *(visual)* | 16×16 | — |
-| `0x5f` (95) | Blue teardrop / raindrop effect G *(visual)* | 16×16 | — |
-| `0x60` (96) | Blue teardrop / raindrop effect H *(visual)* | 16×16 | — |
+| `0x59` (89) | Fireball projectile — facing 0 (NW) | 16×16 | `fmain.c:2322` `direction+0x59`; wand (`weapon-3=2`) and dragon (`missile_type=2`) |
+| `0x5a` (90) | Fireball projectile — facing 1 (N) | 16×16 | `fmain.c:2322` |
+| `0x5b` (91) | Fireball projectile — facing 2 (NE) | 16×16 | `fmain.c:2322` |
+| `0x5c` (92) | Fireball projectile — facing 3 (E) | 16×16 | `fmain.c:2322` |
+| `0x5d` (93) | Fireball projectile — facing 4 (SE) | 16×16 | `fmain.c:2322` |
+| `0x5e` (94) | Fireball projectile — facing 5 (S) | 16×16 | `fmain.c:2322` |
+| `0x5f` (95) | Fireball projectile — facing 6 (SW) | 16×16 | `fmain.c:2322` |
+| `0x60` (96) | Fireball projectile — facing 7 (W) | 16×16 | `fmain.c:2322` |
 | `0x61` (97) | Drowning bubble frame A | 16×16 | `fmain.c:2497` |
 | `0x62` (98) | Drowning bubble frame B | 16×16 | `fmain.c:2497` |
 | `0x63` (99) | Bottle / potion (green) *(visual)* | 16×16 | — |
@@ -170,9 +170,12 @@ these are tentative and may be revised after gameplay verification.
 
 **Remaining unresolved (1 frame):** 115 (0x73) — rainbow noise, possibly garbage/overwritten at sheet end.
 
-**Visually identified but source-unconfirmed (28 frames):**
+**Source-confirmed in this section (8 frames):**
+89–96 fireball projectiles (`fmain.c:2322`, `direction + 0x59`; fired by wand and dragon).
+
+**Visually identified but source-unconfirmed (20 frames):**
 0–2 (weapon impact scratch marks), 4–7 (bow overlays — arc variants), 24 (gem/diamond),
 28 (skull), 29 (empty open chest), 80/82/84–87 (more bow overlay arc variants surrounding
-the code-confirmed N and S bow frames at 81 and 83), 89–96 (blue teardrop/raindrop series),
+the code-confirmed N and S bow frames at 81 and 83),
 99 (green bottle/potion), 111–113 (hero silhouette falling, shrinking across three frames,
 confirmed by `fallstates[]`).
