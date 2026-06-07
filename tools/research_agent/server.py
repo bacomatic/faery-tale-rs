@@ -14,14 +14,15 @@ import asyncio
 import logging
 import sys
 import uuid
-from typing import Any, Optional
+import time
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .agent import Session, create_agent, extract_usage
+from .agent import Session, create_agent
 from .config import Settings
 
 logger = logging.getLogger(__name__)
@@ -78,18 +79,21 @@ def create_app() -> FastAPI:
     def query(req: QueryRequest):
         sid = req.session_id or str(uuid.uuid4())
         session = _get_or_create_session(sid)
+        start = time.monotonic()
         answer, sources, usage = session.query(req.query)
+        elapsed = time.monotonic() - start
         usage_info = UsageInfo(**usage) if usage else None
         if usage:
             logger.info(
-                "POST /query session=%s prompt=%d completion=%d tok/s=%.1f",
+                "POST /query session=%s latency=%.2fs prompt=%d completion=%d tok/s=%.1f",
                 sid[:8],
+                elapsed,
                 usage["prompt_tokens"],
                 usage["completion_tokens"],
                 usage["tokens_per_sec"],
             )
         else:
-            logger.info("POST /query session=%s (tokens: unavailable)", sid[:8])
+            logger.info("POST /query session=%s latency=%.2fs (tokens: unavailable)", sid[:8], elapsed)
         return QueryResponse(
             answer=answer,
             sources=sources,

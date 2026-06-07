@@ -1,5 +1,4 @@
 """Tests for tools/research_agent/."""
-import os
 import sys
 import pytest
 from pathlib import Path
