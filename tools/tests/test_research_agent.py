@@ -105,3 +105,37 @@ class TestAgentTools:
     def test_read_source_file_rejects_traversal(self):
         result = self._call("read_source_file", path="../../../etc/passwd")
         assert "error" in result.lower() or "not allowed" in result.lower()
+
+
+class TestAgentModule:
+    """Smoke-tests for agent.py — uses a mock LLM to avoid needing a live server."""
+
+    def test_create_agent_returns_graph(self, tmp_path):
+        """create_agent() returns a compiled LangGraph object."""
+        import importlib
+        import research_agent.agent as agent_mod
+        importlib.reload(agent_mod)
+        from unittest.mock import MagicMock
+        mock_llm = MagicMock()
+        mock_llm.bind_tools = MagicMock(return_value=mock_llm)
+        graph = agent_mod.create_agent(llm=mock_llm, repo_root=tmp_path)
+        # LangGraph compiled graphs have an .invoke method
+        assert hasattr(graph, "invoke")
+
+    def test_token_usage_extracted_from_response(self):
+        """extract_usage() handles present and absent usage fields gracefully."""
+        import importlib
+        import research_agent.agent as agent_mod
+        importlib.reload(agent_mod)
+        from langchain_core.messages import AIMessage
+        msg_with_usage = AIMessage(
+            content="answer",
+            response_metadata={"token_usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+        )
+        usage = agent_mod.extract_usage(msg_with_usage, elapsed=2.0)
+        assert usage["prompt_tokens"] == 10
+        assert usage["completion_tokens"] == 5
+        assert abs(usage["tokens_per_sec"] - 2.5) < 0.01
+
+        msg_no_usage = AIMessage(content="answer")
+        assert agent_mod.extract_usage(msg_no_usage, elapsed=1.0) is None
