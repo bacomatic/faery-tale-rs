@@ -10,3 +10,6 @@ tools/results/
 **/__pycache__/
 **/.mypy_cache/
 **/.pytest_cache/.devin
+
+# Local LLM config
+tools/.env
