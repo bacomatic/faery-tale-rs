@@ -16,6 +16,56 @@ tools/run.sh verify_asm.py --help
 sudo apt-get install binutils-m68k-linux-gnu
 ```
 
+## Research Agent
+
+A locally-hosted LLM agent that answers questions about the FTA codebase by reasoning over
+the reference documentation. Backed by any OpenAI-compatible server (LM Studio, Ollama, etc.).
+
+### Setup
+
+1. Copy `tools/.env.example` to `tools/.env` and fill in your model name:
+   ```bash
+   cp tools/.env.example tools/.env
+   # Edit tools/.env — set OPENAI_MODEL to whatever model you have loaded
+   ```
+
+2. Make sure your LLM server is running (LM Studio on port 1234, or Ollama on port 11434).
+
+### Running the HTTP server
+
+```bash
+tools/run.sh research_agent/server.py
+# or with a custom port:
+tools/run.sh research_agent/server.py --port 9000
+```
+
+Query it:
+```bash
+curl -s -X POST http://localhost:8765/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the combat damage formula?"}' | python3 -m json.tool
+```
+
+### Running the interactive REPL
+
+```bash
+tools/run.sh research_agent/repl.py
+```
+
+Type your question at the `>` prompt. Special commands: `/reset`, `/sources`, `/quit`.
+
+### Configuration
+
+All settings live in `tools/.env` (see `tools/.env.example`). Key variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_BASE_URL` | `http://localhost:1234/v1` | LLM server URL |
+| `OPENAI_API_KEY` | `lm-studio` | API key (any string for local servers) |
+| `OPENAI_MODEL` | *(required)* | Model name |
+| `AGENT_LOG_LEVEL` | `INFO` | Set to `DEBUG` to log every tool call |
+| `AGENT_MAX_TOOL_STEPS` | `15` | Max reasoning steps before truncating |
+
 ## Quick Start
 
 ```bash
