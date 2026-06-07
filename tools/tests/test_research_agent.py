@@ -139,3 +139,53 @@ class TestAgentModule:
 
         msg_no_usage = AIMessage(content="answer")
         assert agent_mod.extract_usage(msg_no_usage, elapsed=1.0) is None
+
+
+class TestServer:
+    """HTTP server tests using FastAPI TestClient (no live LLM required)."""
+
+    @pytest.fixture
+    def client(self, monkeypatch):
+        """Return a TestClient with a mock agent session."""
+        monkeypatch.setenv("OPENAI_MODEL", "test-model")
+        import importlib
+        import research_agent.server as server_mod
+        importlib.reload(server_mod)
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch, MagicMock
+
+        mock_session = MagicMock()
+        mock_session.query.return_value = (
+            "The damage formula is X.",
+            ["reference/RESEARCH-terrain-combat.md"],
+            {"prompt_tokens": 10, "completion_tokens": 5, "tokens_per_sec": 3.2},
+        )
+
+        with patch.object(server_mod, "_get_or_create_session", return_value=mock_session):
+            app = server_mod.create_app()
+            yield TestClient(app)
+
+    def test_health_endpoint(self, client):
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert "model" in data
+
+    def test_query_endpoint_returns_answer(self, client):
+        resp = client.post("/query", json={"query": "What is the damage formula?"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["answer"] == "The damage formula is X."
+        assert "reference/RESEARCH-terrain-combat.md" in data["sources"]
+        assert "session_id" in data
+        assert data["usage"]["prompt_tokens"] == 10
+
+    def test_query_endpoint_accepts_session_id(self, client):
+        resp = client.post("/query", json={"query": "Q", "session_id": "abc-123"})
+        assert resp.status_code == 200
+        assert resp.json()["session_id"] == "abc-123"
+
+    def test_query_missing_query_field(self, client):
+        resp = client.post("/query", json={})
+        assert resp.status_code == 422
