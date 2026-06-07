@@ -73,11 +73,18 @@ def decode_frame(raw, frame_idx, width_words, height, bytes_per_plane_per_frame,
     """
     Decode one frame from raw 5-plane data into an RGBA PIL Image.
 
-    Layout: [plane0: all frames contiguous] [plane1: ...] ... [plane4: ...]
-    For frame N, plane P: raw[P*total_per_plane + N*bytes_per_plane_per_frame ...]
-    Each frame's plane data is `height` rows of `width_words` words (2 bytes each).
+    Layout confirmed from make_mask (fsubs.asm:1619-1655):
+    Planes are stored consecutively PER FRAME:
+      [frame0_plane0][frame0_plane1][frame0_plane2][frame0_plane3][frame0_plane4]
+      [frame1_plane0][frame1_plane1]...
+
+    For frame N, plane P:
+      offset = N * (NUM_PLANES * bytes_per_plane_per_frame) + P * bytes_per_plane_per_frame
+
+    Each plane is `height` rows of `width_words` words (2 bytes each), MSB first.
     """
     width_px = width_words * 16
+    bytes_per_frame = NUM_PLANES * bytes_per_plane_per_frame
     pixels = []
 
     for y in range(height):
@@ -87,10 +94,10 @@ def decode_frame(raw, frame_idx, width_words, height, bytes_per_plane_per_frame,
 
             pixel = 0
             for plane in range(NUM_PLANES):
-                plane_base = plane * total_per_plane
-                frame_base = frame_idx * bytes_per_plane_per_frame
+                frame_base = frame_idx * bytes_per_frame
+                plane_base = plane * bytes_per_plane_per_frame
                 row_offset = y * width_words * 2 + word_idx * 2
-                byte_offset = plane_base + frame_base + row_offset
+                byte_offset = frame_base + plane_base + row_offset
 
                 if byte_offset + 1 < len(raw):
                     word = (raw[byte_offset] << 8) | raw[byte_offset + 1]

@@ -21,14 +21,14 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 
 | `inum` | Name / description | Size (px) | Source ref |
 |--------|-------------------|-----------|------------|
-| `0x00` (0) | Ground debris / floor scatter A *(visual)* | 16×16 | — |
-| `0x01` (1) | Ground debris / floor scatter B *(visual)* | 16×16 | — |
-| `0x02` (2) | Ground debris / floor scatter C *(visual)* | 16×16 | — |
+| `0x00` (0) | Weapon impact scratch / slash mark A *(visual)* | 16×16 | — |
+| `0x01` (1) | Weapon impact scratch / slash mark B *(visual)* | 16×16 | — |
+| `0x02` (2) | Weapon impact scratch / slash mark C *(visual)* | 16×16 | — |
 | `0x03` (3) | Arrows (inventory icon) | 16×8 | `fmain.c:390` `inv_list[8]` |
-| `0x04` (4) | Small ground object / scatter D *(visual)* | 16×16 | — |
-| `0x05` (5) | Small ground object / scatter E *(visual)* | 16×16 | — |
-| `0x06` (6) | Small ground object / scatter F *(visual)* | 16×16 | — |
-| `0x07` (7) | Small ground object / scatter G *(visual)* | 16×16 | — |
+| `0x04` (4) | Bow overlay — arc A *(visual)* | 16×16 | — |
+| `0x05` (5) | Bow overlay — arc B *(visual)* | 16×16 | — |
+| `0x06` (6) | Bow overlay — arc C *(visual)* | 16×16 | — |
+| `0x07` (7) | Bow overlay — arc D *(visual)* | 16×16 | — |
 | `0x08` (8) | Sword (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:383` `inv_list[2]`; `fmain.c:2478` |
 | `0x09` (9) | Mace (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:382` `inv_list[1]`; `fmain.c:2478` |
 | `0x0a` (10) | Bow (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:384` `inv_list[3]`; `fmain.c:2478` |
@@ -49,8 +49,8 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x19` (25) | Bones / scrap (half-height, upper sub-frame) | 16×8 | `fmain.c:2478` |
 | `0x1a` (26) | Bones / scrap (half-height, upper sub-frame) | 16×8 | `fmain.c:2478` |
 | `0x1b` (27) | Arrow shaft | 16×8 | `fmain.c:2478` |
-| `0x1c` (28) | Small decoration / scatter H *(visual)* | 16×16 | — |
-| `0x1d` (29) | Small decoration / scatter I *(visual)* | 16×16 | — |
+| `0x1c` (28) | Skull *(visual)* | 16×16 | — |
+| `0x1d` (29) | Empty open chest *(visual)* | 16×16 | — |
 | `0x1e` (30) | Bow overlay — E/W direction | 16×16 | `fmain.c:2431` |
 | `0x1f` (31) | Footstool (world ob_id=31) | 16×16 | `fmain2.c:977` `FOOTSTOOL` |
 | `0x20` (32) | Mace overlay — base frame 0 (walk S) | 16×16 | `fmain.c:2440` `WPN_K_MACE=32` |
@@ -101,26 +101,26 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x4d` (77) | Dirk overlay — base frame 13 | 16×16 | `fmain.c:2442` |
 | `0x4e` (78) | Dirk overlay — base frame 14 | 16×16 | `fmain.c:2442` |
 | `0x4f` (79) | Dirk overlay — base frame 15 | 16×16 | `fmain.c:2442` |
-| `0x50` (80) | Weapon/shield overlay — alternate *(visual)* | 16×16 | — |
+| `0x50` (80) | Bow overlay — arc E *(visual)* | 16×16 | — |
 | `0x51` (81) | Bow overlay — N direction | 16×16 | `fmain.c:2432` |
-| `0x52` (82) | Projectile / sparse effect A *(visual)* | 16×16 | — |
+| `0x52` (82) | Bow overlay — arc F *(visual)* | 16×16 | — |
 | `0x53` (83) | Bow overlay — S direction | 16×16 | `fmain.c:2433` |
-| `0x54` (84) | Bow/crossbow overlay frame A *(visual)* | 16×16 | — |
-| `0x55` (85) | Bow/crossbow overlay frame B *(visual)* | 16×16 | — |
-| `0x56` (86) | Bow/crossbow overlay frame C *(visual)* | 16×16 | — |
-| `0x57` (87) | Bow/crossbow overlay frame D *(visual)* | 16×16 | — |
+| `0x54` (84) | Bow overlay — arc G *(visual)* | 16×16 | — |
+| `0x55` (85) | Bow overlay — arc H *(visual)* | 16×16 | — |
+| `0x56` (86) | Bow overlay — arc I *(visual)* | 16×16 | — |
+| `0x57` (87) | Bow overlay — arc J *(visual)* | 16×16 | — |
 | `0x58` (88) | Fiery-death overlay (dying actor in lava zone) | 16×16 | `fmain.c:2454` `WPN_FIERY_DEATH_INUM` |
-| `0x59` (89) | Magic / spell effect overlay A *(visual)* | 16×16 | — |
-| `0x5a` (90) | Magic / spell effect overlay B *(visual)* | 16×16 | — |
-| `0x5b` (91) | Magic / spell effect overlay C *(visual)* | 16×16 | — |
-| `0x5c` (92) | Magic / spell effect overlay D *(visual)* | 16×16 | — |
-| `0x5d` (93) | Magic / spell effect overlay E *(visual)* | 16×16 | — |
-| `0x5e` (94) | Magic / spell effect overlay F *(visual)* | 16×16 | — |
-| `0x5f` (95) | Magic / spell effect overlay G *(visual)* | 16×16 | — |
-| `0x60` (96) | Magic / spell effect overlay H *(visual)* | 16×16 | — |
+| `0x59` (89) | Blue teardrop / raindrop effect A *(visual)* | 16×16 | — |
+| `0x5a` (90) | Blue teardrop / raindrop effect B *(visual)* | 16×16 | — |
+| `0x5b` (91) | Blue teardrop / raindrop effect C *(visual)* | 16×16 | — |
+| `0x5c` (92) | Blue teardrop / raindrop effect D *(visual)* | 16×16 | — |
+| `0x5d` (93) | Blue teardrop / raindrop effect E *(visual)* | 16×16 | — |
+| `0x5e` (94) | Blue teardrop / raindrop effect F *(visual)* | 16×16 | — |
+| `0x5f` (95) | Blue teardrop / raindrop effect G *(visual)* | 16×16 | — |
+| `0x60` (96) | Blue teardrop / raindrop effect H *(visual)* | 16×16 | — |
 | `0x61` (97) | Drowning bubble frame A | 16×16 | `fmain.c:2497` |
 | `0x62` (98) | Drowning bubble frame B | 16×16 | `fmain.c:2497` |
-| `0x63` (99) | Sparse projectile / spark *(visual)* | 16×16 | — |
+| `0x63` (99) | Bottle / potion (green) *(visual)* | 16×16 | — |
 | `0x64` (100) | Bubble / spell effect A (no terrain mask) | 16×16 | `fmain.c:2568` |
 | `0x65` (101) | Bubble / spell effect B (no terrain mask) | 16×16 | `fmain.c:2568` |
 | `0x66` (102) | Turtle eggs (world ob_id=102) | 16×16 | `fmain2.c:977` `TURTLE` |
@@ -132,9 +132,9 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x6c` (108) | Wand overlay — facing S (facing 5) | 16×16 | `fmain.c:2436` |
 | `0x6d` (109) | Wand overlay — facing SW (facing 6) | 16×16 | `fmain.c:2436` |
 | `0x6e` (110) | Wand overlay — facing W (facing 7) | 16×16 | `fmain.c:2436` |
-| `0x6f` (111) | Fall / puff explosion frame A — shared by all brothers *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[3]` |
-| `0x70` (112) | Fall / puff explosion frame B — shared by all brothers *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[4]` |
-| `0x71` (113) | Fall / puff explosion frame C — shared by all brothers *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[5]` |
+| `0x6f` (111) | Skeletal / broken figure — fall frame A *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[3]` |
+| `0x70` (112) | Scattered impact dots — fall frame B *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[4]` |
+| `0x71` (113) | Minimal dash — fall frame C *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[5]` |
 | `0x72` (114) | Blue / Red key (inventory icon, both share this row) | 16×16 | `fmain.c:402-403` `inv_list[18,19]` `BLUE_KEY` |
 | `0x73` (115) | *(unknown)* | 16×16 | — |
 
@@ -168,10 +168,10 @@ Frames with no code reference found. Visual descriptions marked *(visual)* in th
 above were identified from extracted PNG sprites (`sprite_output/objects_unknown_labeled.png`);
 these are tentative and may be revised after gameplay verification.
 
-**Remaining unresolved (1 frame):** 115 (0x73)
+**Remaining unresolved (1 frame):** 115 (0x73) — rainbow noise, possibly garbage/overwritten at sheet end.
 
 **Visually identified but source-unconfirmed (28 frames):**
-0–2 (ground debris), 4–7 (small scatter), 24 (gem/diamond), 28–29 (small scatter),
-80 (alternate weapon overlay), 82 (projectile), 84–87 (bow/crossbow overlay variants),
-89–96 (magic/spell effect series), 99 (spark), 111–113 (fall puff explosion, confirmed
-by `fallstates[]` reference).
+0–2 (weapon impact scratch marks), 4–7 (bow overlays — arc variants), 24 (gem/diamond),
+28 (skull), 29 (empty open chest), 80/82/84–87 (more bow overlay arc variants surrounding
+the code-confirmed N and S bow frames at 81 and 83), 89–96 (blue teardrop/raindrop series),
+99 (green bottle/potion), 111–113 (fall animation frames confirmed by `fallstates[]`).
