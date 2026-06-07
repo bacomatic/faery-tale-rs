@@ -179,9 +179,13 @@ def missile_step(i: int) -> None:
         yd = abs(anim_list[j].abs_y - ms.abs_y)
         if xd > yd:
             yd = xd                                       # fmain.c:2293 — Chebyshev distance
-        # fmain.c:2294 — slot 0 always rolls; higher slots gated by bitrand(512) > dodge.
-        miss_rolls = i == 0 or bitrand(512) > bv          # fmain.c:2294, 512 = bitrand range
-        if miss_rolls and yd < mt:
+        # fmain.c:2291 — missile hits when the dodge gate passes AND the target is in range.
+        # Slot 0 is the only slot where the dodge roll can block the hit:
+        #   i == 0  → gate is (bitrand(512) > bv); if this fails the missile flies through.
+        #   i != 0  → gate is always True; the missile hits unconditionally if in range.
+        # In other words: only slot-0 projectiles can be dodged; slots 1–5 always hit.
+        dodge_gate = (i != 0) or (bitrand(512) > bv)      # fmain.c:2291, 512 = bitrand range
+        if dodge_gate and yd < mt:
             if ms.missile_type == 2:                      # fmain.c:2295, 2 = fireball
                 dohit(-2, j, fc, rand(0, 7) + 4)          # fmain.c:2295, -2 = fireball source; 7 = rand8 range; 4 = base missile damage
             else:
@@ -325,11 +329,18 @@ def move_figure(fig: int, dir: int, dist: int) -> bool:
   brave` (`melee_swing`), and missile dodge gate `bitrand(512) > brave`
   (`missile_step` slot 0). Combat therefore compounds — the same stat that
   extends the hero's sword also makes monsters miss more often.
-- **Missile slot 0 dodge asymmetry.** Only slot 0 of `missile_list[]` runs
-  the dodge roll; slots 1..5 always hit if their Chebyshev test passes. The
-  original source carries a `/* really?? */` comment at `fmain.c:2286`, so
-  this is recorded as an open question — see
-  [`PROBLEMS.md`](../PROBLEMS.md).
+- **Missile slot 0 dodge asymmetry.** The hit gate at `fmain.c:2291` is
+  `(i != 0 || bitrand(512) > bv)`. When `i == 0` the left side is false, so
+  the result depends entirely on `bitrand(512) > bv` — meaning the target
+  has a chance to dodge and the missile can fly through. When `i != 0` the
+  left side is always true, so the missile hits unconditionally whenever the
+  Chebyshev distance test passes — no dodge is possible. Because missile
+  slots are assigned round-robin via `mdex`, roughly 1 in 6 projectiles
+  (slot 0) is dodge-eligible; the other five always hit. The original source
+  carries a `/* really?? */` comment at `fmain.c:2283`; P16 in
+  [`PROBLEMS.md`](../PROBLEMS.md) records this as resolved — the behaviour
+  is intentional (limiting dodge frequency, since projectiles are already
+  harder to land than melee).
 - **Race-specific loot drops**: `checkdead` does not emit the Necromancer's
   talisman or the Witch's lasso — those are produced inside
   `actor_tick`'s dying branch at `fmain.c:1751-1756`, one frame after
