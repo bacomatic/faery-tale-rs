@@ -132,9 +132,9 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x6c` (108) | Wand overlay — facing S (facing 5) | 16×16 | `fmain.c:2436` |
 | `0x6d` (109) | Wand overlay — facing SW (facing 6) | 16×16 | `fmain.c:2436` |
 | `0x6e` (110) | Wand overlay — facing W (facing 7) | 16×16 | `fmain.c:2436` |
-| `0x6f` (111) | Skeletal / broken figure — fall frame A *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[3]` |
-| `0x70` (112) | Scattered impact dots — fall frame B *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[4]` |
-| `0x71` (113) | Minimal dash — fall frame C *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[5]` |
+| `0x6f` (111) | Hero silhouette falling — large *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[3]` |
+| `0x70` (112) | Hero silhouette falling — medium *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[4]` |
+| `0x71` (113) | Hero silhouette falling — small *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[5]` |
 | `0x72` (114) | Blue / Red key (inventory icon, both share this row) | 16×16 | `fmain.c:402-403` `inv_list[18,19]` `BLUE_KEY` |
 | `0x73` (115) | *(unknown)* | 16×16 | — |
 
@@ -174,4 +174,5 @@ these are tentative and may be revised after gameplay verification.
 0–2 (weapon impact scratch marks), 4–7 (bow overlays — arc variants), 24 (gem/diamond),
 28 (skull), 29 (empty open chest), 80/82/84–87 (more bow overlay arc variants surrounding
 the code-confirmed N and S bow frames at 81 and 83), 89–96 (blue teardrop/raindrop series),
-99 (green bottle/potion), 111–113 (fall animation frames confirmed by `fallstates[]`).
+99 (green bottle/potion), 111–113 (hero silhouette falling, shrinking across three frames,
+confirmed by `fallstates[]`).
