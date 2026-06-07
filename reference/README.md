@@ -22,6 +22,7 @@ This file is the entry point for all project documentation. Copy this file to an
 | [STORYLINE.md](STORYLINE.md) | Narrative progression — **hub/index** linking to the sub-documents below. |
 | [PROBLEMS.md](PROBLEMS.md) | Open and resolved research questions that cannot be settled by straightforward source tracing. |
 | [porting/README.md](porting/README.md) | Porting guidance hub for implementation-facing instructions and subsystem checklists. |
+| [data/README.md](data/README.md) | Data tier hub — sprite atlases and other source-extracted tabular data. |
 | [world_db.json](world_db.json) | Spatial database of objects, doors, encounter extents, terrain summaries, and region grids. |
 | [quest_db.json](quest_db.json) | Machine-readable quest and progression data extracted from source analysis. |
 
