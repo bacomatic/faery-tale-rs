@@ -11,8 +11,9 @@
 > bit-7 flag). See `logic/sprite-rendering.md § compute_sprite_size`.
 
 Each frame occupies one 16-scanline row in the sheet. Half-height frames pack two
-8-scanline sub-frames into one row; the lower sub-frame is accessed by setting bit 7
-of `inum` (which also shifts the source Y by +8).
+8-scanline sub-frames into one row. The upper sub-frame is addressed by `inum` directly;
+the lower sub-frame is addressed by `inum | 0x80` (bit-7 flag), which shifts the source
+Y by +8 (`fmain.c:2524`). Both sub-frames are listed separately in the table below.
 
 `image_number` in `inv_list[]` is the OBJECTS `inum` for inventory icons (`fmain.c:3133`).  
 World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
@@ -21,36 +22,51 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 
 | `inum` | Name / description | Size (px) | Source ref |
 |--------|-------------------|-----------|------------|
-| `0x00` (0) | Weapon impact scratch / slash mark A *(visual)* | 16×16 | — |
-| `0x01` (1) | Weapon impact scratch / slash mark B *(visual)* | 16×16 | — |
-| `0x02` (2) | Weapon impact scratch / slash mark C *(visual)* | 16×16 | — |
-| `0x03` (3) | Arrows (inventory icon) | 16×8 | `fmain.c:390` `inv_list[8]` |
-| `0x04` (4) | Bow overlay — arc A *(visual)* | 16×16 | — |
-| `0x05` (5) | Bow overlay — arc B *(visual)* | 16×16 | — |
-| `0x06` (6) | Bow overlay — arc C *(visual)* | 16×16 | — |
-| `0x07` (7) | Bow overlay — arc D *(visual)* | 16×16 | — |
-| `0x08` (8) | Sword (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:383` `inv_list[2]`; `fmain.c:2478` |
-| `0x09` (9) | Mace (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:382` `inv_list[1]`; `fmain.c:2478` |
-| `0x0a` (10) | Bow (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:384` `inv_list[3]`; `fmain.c:2478` |
-| `0x0b` (11) | Talisman (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:407` `inv_list[22]`; `fmain.c:2478` |
-| `0x0c` (12) | Dirk (inventory icon, upper half) / small ground item | 16×8 | `fmain.c:381` `inv_list[0]`; `fmain.c:2478` |
+| `0x00` (0) | Arrow in flight — facing 0 (NW) | 16×16 | `fmain.c:2319` `an->index = ms->direction`; `missile_type==1` (arrow) |
+| `0x01` (1) | Arrow in flight — facing 1 (N) | 16×16 | `fmain.c:2319` |
+| `0x02` (2) | Arrow in flight — facing 2 (NE) | 16×16 | `fmain.c:2319` |
+| `0x03` (3) | Arrow in flight — facing 3 (E) / Arrows inventory icon | 16×16 | `fmain.c:2319`; `fmain.c:390` `inv_list[8]` |
+| `0x04` (4) | Arrow in flight — facing 4 (SE) | 16×16 | `fmain.c:2319` |
+| `0x05` (5) | Arrow in flight — facing 5 (S) | 16×16 | `fmain.c:2319` |
+| `0x06` (6) | Arrow in flight — facing 6 (SW) | 16×16 | `fmain.c:2319` |
+| `0x07` (7) | Arrow in flight — facing 7 (W) | 16×16 | `fmain.c:2319` |
+| `0x08` (8) | Sword — inventory icon | 16×8 upper | `fmain.c:383` `inv_list[2]` `img_off=0` |
+| `0x88` (8\|0x80) | Herb — inventory icon | 16×8 lower | `fmain.c:413` `inv_list[27]` `img_off=8` |
+| `0x09` (9) | Mace — inventory icon | 16×8 upper | `fmain.c:382` `inv_list[1]` `img_off=0` |
+| `0x89` (9\|0x80) | Writ — inventory icon | 16×8 lower | `fmain.c:414` `inv_list[28]` `img_off=8` |
+| `0x0a` (10) | Bow — inventory icon | 16×8 upper | `fmain.c:384` `inv_list[3]` `img_off=0` |
+| `0x8a` (10\|0x80) | Bone — inventory icon | 16×8 lower | `fmain.c:415` `inv_list[29]` `img_off=8` |
+| `0x0b` (11) | Quiver of arrows (world ob_id=11) | 16×8 upper | `fmain.c:344` `QUIVER` |
+| `0x8b` (11\|0x80) | Talisman — inventory icon | 16×8 lower | `fmain.c:407` `inv_list[22]` `img_off=8` |
+| `0x0c` (12) | Dirk — inventory icon | 16×8 upper | `fmain.c:381` `inv_list[0]` `img_off=0` |
+| `0x8c` (12\|0x80) | Shard — inventory icon | 16×8 lower | `fmain.c:417` `inv_list[30]` `img_off=8` |
 | `0x0d` (13) | Money / 50 gold pieces (world ob_id=13) | 16×16 | `fmain2.c:977` `MONEY` |
 | `0x0e` (14) | Brass Urn (world ob_id=14) | 16×16 | `fmain2.c:977` `URN` |
 | `0x0f` (15) | Chest (world ob_id=15) | 16×16 | `fmain2.c:977` `CHEST` |
 | `0x10` (16) | Sacks (world ob_id=16) | 16×16 | `fmain2.c:977` `SACKS` |
-| `0x11` (17) | Arrow flight frame 1 | 16×8 | `fmain.c:2479` |
-| `0x12` (18) | Arrow flight frame 2 | 16×8 | `fmain.c:2479` |
-| `0x13` (19) | Arrow flight frame 3 | 16×8 | `fmain.c:2479` |
-| `0x14` (20) | Arrow flight frame 4 | 16×8 | `fmain.c:2479` |
-| `0x15` (21) | Arrow flight frame 5 | 16×8 | `fmain.c:2479` |
-| `0x16` (22) | Arrow flight frame 6 | 16×8 | `fmain.c:2479` |
-| `0x17` (23) | Arrow flight frame 7 | 16×8 | `fmain.c:2479` |
-| `0x18` (24) | Diamond / gem decoration *(visual)* | 16×16 | — |
-| `0x19` (25) | Bones / scrap (half-height, upper sub-frame) | 16×8 | `fmain.c:2478` |
-| `0x1a` (26) | Bones / scrap (half-height, upper sub-frame) | 16×8 | `fmain.c:2478` |
-| `0x1b` (27) | Arrow shaft | 16×8 | `fmain.c:2478` |
-| `0x1c` (28) | Skull *(visual)* | 16×16 | — |
-| `0x1d` (29) | Empty open chest *(visual)* | 16×16 | — |
+| `0x11` (17) | Magic Wand — inventory icon | 16×8 upper | `fmain.c:385` `inv_list[4]` `img_off=0` |
+| `0x91` (17\|0x80) | Gold Ring — inventory icon | 16×8 lower | `fmain.c:397` `inv_list[14]` `img_off=8` |
+| `0x12` (18) | Blue Stone — inventory icon | 16×8 upper | `fmain.c:391` `inv_list[9]` `img_off=0` |
+| `0x92` (18\|0x80) | Meal / food (fish and vegetables) *(visual — no inv_list entry)* | 16×8 lower | — |
+| `0x13` (19) | Green Jewel — inventory icon | 16×8 upper | `fmain.c:393` `inv_list[10]` `img_off=0` |
+| `0x93` (19\|0x80) | Rose — inventory icon | 16×8 lower | `fmain.c:408` `inv_list[23]` `img_off=8` |
+| `0x14` (20) | Writ *(visual — no inv_list entry at this offset)* | 16×8 upper | — |
+| `0x94` (20\|0x80) | Apple — inventory icon | 16×8 lower | `fmain.c:409` `inv_list[24]` `img_off=8` |
+| `0x15` (21) | Crystal Orb — inventory icon | 16×8 upper | `fmain.c:395` `inv_list[12]` `img_off=0` |
+| `0x95` (21\|0x80) | Gold Statue — inventory icon | 16×8 lower | `fmain.c:411` `inv_list[25]` `img_off=8` |
+| `0x16` (22) | Glass Vial — inventory icon | 16×8 upper | `fmain.c:394` `inv_list[11]` `img_off=0` |
+| `0x96` (22\|0x80) | Book — inventory icon | 16×8 lower | `fmain.c:412` `inv_list[26]` `img_off=8` |
+| `0x17` (23) | Bird Totem — inventory icon | 16×8 upper | `fmain.c:396` `inv_list[13]` `img_off=0` |
+| `0x97` (23\|0x80) | Sea Shell — inventory icon | 16×8 lower | `fmain.c:388` `inv_list[6]` `img_off=8` |
+| `0x18` (24) | Jade Skull (quest item, `J_SKULL`, world ob_id=24) | 16×16 | `fmain.c` `G_RING`..`J_SKULL` range 17–24 |
+| `0x19` (25) | Gold Key — inventory icon | 16×8 upper | `fmain.c:400` `inv_list[16]` `img_off=0` |
+| `0x99` (25\|0x80) | Green Key — inventory icon | 16×8 lower | `fmain.c:401` `inv_list[17]` `img_off=8` |
+| `0x1a` (26) | Grey Key — inventory icon | 16×8 upper | `fmain.c:405` `inv_list[20]` `img_off=0` |
+| `0x9a` (26\|0x80) | White Key — inventory icon | 16×8 lower | `fmain.c:406` `inv_list[21]` `img_off=8` |
+| `0x1b` (27) | Arrow shaft (dropped/ground item) | 16×8 upper | `fmain.c:2478` |
+| `0x9b` (27\|0x80) | Sun Stone — inventory icon | 16×8 lower | `fmain.c:389` `inv_list[7]` `img_off=8` |
+| `0x1c` (28) | Dead brother's bones (world ob_id=28) | 16×16 | `fmain.c:3172-3176` |
+| `0x1d` (29) | Opened / empty chest (world ob_id=29) | 16×16 | `fmain2.c:1208`; set when CHEST(15) is looted; `fmain.c:3184` |
 | `0x1e` (30) | Bow overlay — E/W direction | 16×16 | `fmain.c:2431` |
 | `0x1f` (31) | Footstool (world ob_id=31) | 16×16 | `fmain2.c:977` `FOOTSTOOL` |
 | `0x20` (32) | Mace overlay — base frame 0 (walk S) | 16×16 | `fmain.c:2440` `WPN_K_MACE=32` |
@@ -101,15 +117,15 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x4d` (77) | Dirk overlay — base frame 13 | 16×16 | `fmain.c:2442` |
 | `0x4e` (78) | Dirk overlay — base frame 14 | 16×16 | `fmain.c:2442` |
 | `0x4f` (79) | Dirk overlay — base frame 15 | 16×16 | `fmain.c:2442` |
-| `0x50` (80) | Bow overlay — arc E *(visual)* | 16×16 | — |
-| `0x51` (81) | Bow overlay — N direction | 16×16 | `fmain.c:2432` |
-| `0x52` (82) | Bow overlay — arc F *(visual)* | 16×16 | — |
-| `0x53` (83) | Bow overlay — S direction | 16×16 | `fmain.c:2433` |
-| `0x54` (84) | Bow overlay — arc G *(visual)* | 16×16 | — |
-| `0x55` (85) | Bow overlay — arc H *(visual)* | 16×16 | — |
-| `0x56` (86) | Bow overlay — arc I *(visual)* | 16×16 | — |
-| `0x57` (87) | Bow overlay — arc J *(visual)* | 16×16 | — |
-| `0x58` (88) | Fiery-death overlay (dying actor in lava zone) | 16×16 | `fmain.c:2454` `WPN_FIERY_DEATH_INUM` |
+| `0x50` (80) | Bow draw overlay — shoot state 0 (half-height) | 16×8 | `fmain.c:2444` `statelist[shoot_state].wpn_no + WPN_K_BOW`; `wpn_no≥80` = bit-7 half-height |
+| `0x51` (81) | Bow overlay — facing N (held-at-draw) | 16×16 | `fmain.c:2433` |
+| `0x52` (82) | Bow draw overlay — shoot state 2 (half-height) | 16×8 | `fmain.c:2444` `wpn_no≥80` |
+| `0x53` (83) | Bow overlay — facing S (held-at-draw) | 16×16 | `fmain.c:2432` |
+| `0x54` (84) | Bow draw overlay — shoot state 4 (half-height) | 16×8 | `fmain.c:2444` `wpn_no≥80` |
+| `0x55` (85) | Bow draw overlay — shoot state 5 (half-height) | 16×8 | `fmain.c:2444` `wpn_no≥80` |
+| `0x56` (86) | Bow draw overlay — shoot state 6 (half-height) | 16×8 | `fmain.c:2444` `wpn_no≥80` |
+| `0x57` (87) | Bow draw overlay — shoot state 7 (half-height) | 16×8 | `fmain.c:2444` `wpn_no≥80` |
+| `0x58` (88) | Fireball impact / spent-fireball puff | 16×16 | `fmain.c:2321` `missile_type==3` → `an->index=0x58`; set at hit (`fmain.c:2330`) |
 | `0x59` (89) | Fireball projectile — facing 0 (NW) | 16×16 | `fmain.c:2322` `direction+0x59`; wand (`weapon-3=2`) and dragon (`missile_type=2`) |
 | `0x5a` (90) | Fireball projectile — facing 1 (N) | 16×16 | `fmain.c:2322` |
 | `0x5b` (91) | Fireball projectile — facing 2 (NE) | 16×16 | `fmain.c:2322` |
@@ -120,7 +136,7 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x60` (96) | Fireball projectile — facing 7 (W) | 16×16 | `fmain.c:2322` |
 | `0x61` (97) | Drowning bubble frame A | 16×16 | `fmain.c:2497` |
 | `0x62` (98) | Drowning bubble frame B | 16×16 | `fmain.c:2497` |
-| `0x63` (99) | Bottle / potion (green) *(visual)* | 16×16 | — |
+| `0x63` (99) | *(unused)* | 16×16 | — |
 | `0x64` (100) | Bubble / spell effect A (no terrain mask) | 16×16 | `fmain.c:2568` |
 | `0x65` (101) | Bubble / spell effect B (no terrain mask) | 16×16 | `fmain.c:2568` |
 | `0x66` (102) | Turtle eggs (world ob_id=102) | 16×16 | `fmain2.c:977` `TURTLE` |
@@ -132,11 +148,12 @@ World object `ob_id` IS the OBJECTS `inum` directly (`fmain2.c:1287`).
 | `0x6c` (108) | Wand overlay — facing S (facing 5) | 16×16 | `fmain.c:2436` |
 | `0x6d` (109) | Wand overlay — facing SW (facing 6) | 16×16 | `fmain.c:2436` |
 | `0x6e` (110) | Wand overlay — facing W (facing 7) | 16×16 | `fmain.c:2436` |
-| `0x6f` (111) | Hero silhouette falling — large *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[3]` |
-| `0x70` (112) | Hero silhouette falling — medium *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[4]` |
-| `0x71` (113) | Hero silhouette falling — small *(visual, fallstates)* | 16×16 | `fmain2.c:871` `fallstates[5]` |
-| `0x72` (114) | Blue / Red key (inventory icon, both share this row) | 16×16 | `fmain.c:402-403` `inv_list[18,19]` `BLUE_KEY` |
-| `0x73` (115) | *(unknown)* | 16×16 | — |
+| `0x6f` (111) | Hero silhouette falling — large | 16×16 | `fmain2.c:871` `fallstates[3]` |
+| `0x70` (112) | Hero silhouette falling — medium | 16×16 | `fmain2.c:871` `fallstates[4]` |
+| `0x71` (113) | Hero silhouette falling — small | 16×16 | `fmain2.c:871` `fallstates[5]` |
+| `0x72` (114) | Blue Key — inventory icon | 16×8 upper | `fmain.c:402` `inv_list[18]` `img_off=0` |
+| `0xf2` (114\|0x80) | Red Key — inventory icon | 16×8 lower | `fmain.c:403` `inv_list[19]` `img_off=8` |
+| `0x73` (115) | *(unused)* | 16×16 | — |
 
 ## Notes
 
@@ -168,14 +185,6 @@ Frames with no code reference found. Visual descriptions marked *(visual)* in th
 above were identified from extracted PNG sprites (`sprite_output/objects_unknown_labeled.png`);
 these are tentative and may be revised after gameplay verification.
 
-**Remaining unresolved (1 frame):** 115 (0x73) — rainbow noise, possibly garbage/overwritten at sheet end.
+**Unused frames (no code reference):** 99 (0x63), 115 (0x73)
 
-**Source-confirmed in this section (8 frames):**
-89–96 fireball projectiles (`fmain.c:2322`, `direction + 0x59`; fired by wand and dragon).
-
-**Visually identified but source-unconfirmed (20 frames):**
-0–2 (weapon impact scratch marks), 4–7 (bow overlays — arc variants), 24 (gem/diamond),
-28 (skull), 29 (empty open chest), 80/82/84–87 (more bow overlay arc variants surrounding
-the code-confirmed N and S bow frames at 81 and 83),
-99 (green bottle/potion), 111–113 (hero silhouette falling, shrinking across three frames,
-confirmed by `fallstates[]`).
+**Visually identified, source-unconfirmed:** 0x92 (meal/food), 0x14 (writ)
