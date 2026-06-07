@@ -165,6 +165,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-dotenv>=1.0
 pydantic-settings>=2.0
+httpx>=0.27
 ```
 
 ---
@@ -187,7 +188,7 @@ pydantic-settings>=2.0
 
 | File | Change |
 |------|--------|
-| `tools/requirements.txt` | Add 6 new dependencies |
+| `tools/requirements.txt` | Add 7 new dependencies |
 | `tools/README.md` | New section: Research Agent |
 | `.gitignore` | Add `tools/.env` if not already present |
 
