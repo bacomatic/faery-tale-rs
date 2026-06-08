@@ -24,6 +24,7 @@ use crate::game::debug_command::{DebugCommand, DEFAULT_TICK_RATE_HZ};
 use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
 use crate::game::game_clock::GameClock;
 use crate::game::game_state::DayPhase;
+use crate::game::ecs::scene::EcsScene;
 use crate::game::gameplay_scene::GameplayScene;
 use crate::game::intro_scene::IntroScene;
 use crate::game::placard_scene::PlacardScene;
@@ -48,6 +49,9 @@ struct Cli {
     /// Echo every story-transcript message to the console as it is generated
     #[arg(long)]
     echo_transcript: bool,
+    /// Use the ECS-based gameplay scene instead of the legacy GameplayScene
+    #[arg(long)]
+    ecs: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -266,10 +270,15 @@ pub fn main() -> Result<(), String> {
     }
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
-            let mut gs = GameplayScene::new();
-            gs.init_from_library(&game_lib);
-            gs.set_echo_transcript(cli.echo_transcript);
-            (ScenePhase::Gameplay, Some(Box::new(gs)))
+            let gs: Box<dyn Scene> = if cli.ecs {
+                Box::new(EcsScene::new(&game_lib, None))
+            } else {
+                let mut gs = GameplayScene::new();
+                gs.init_from_library(&game_lib);
+                gs.set_echo_transcript(cli.echo_transcript);
+                Box::new(gs)
+            };
+            (ScenePhase::Gameplay, Some(gs))
         } else {
             (
                 ScenePhase::Intro,
@@ -515,10 +524,15 @@ pub fn main() -> Result<(), String> {
                             if let Some(ref a) = audio_system {
                                 a.stop_score();
                             }
-                            let mut gs = GameplayScene::new();
-                            gs.init_from_library(&game_lib);
-                            gs.set_echo_transcript(cli.echo_transcript);
-                            active_scene = Some(Box::new(gs));
+                            let gs: Box<dyn Scene> = if cli.ecs {
+                                Box::new(EcsScene::new(&game_lib, None))
+                            } else {
+                                let mut gs = GameplayScene::new();
+                                gs.init_from_library(&game_lib);
+                                gs.set_echo_transcript(cli.echo_transcript);
+                                Box::new(gs)
+                            };
+                            active_scene = Some(gs);
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
                             clear_flag = true;
@@ -549,11 +563,16 @@ pub fn main() -> Result<(), String> {
                                 ));
                                 scene_phase = ScenePhase::VictoryPlacard;
                             } else {
-                                // Game over or restart — re-create GameplayScene
-                                let mut gs = GameplayScene::new();
-                                gs.init_from_library(&game_lib);
-                                gs.set_echo_transcript(cli.echo_transcript);
-                                active_scene = Some(Box::new(gs));
+                                // Game over or restart — re-create gameplay scene
+                                let gs: Box<dyn Scene> = if cli.ecs {
+                                    Box::new(EcsScene::new(&game_lib, None))
+                                } else {
+                                    let mut gs = GameplayScene::new();
+                                    gs.init_from_library(&game_lib);
+                                    gs.set_echo_transcript(cli.echo_transcript);
+                                    Box::new(gs)
+                                };
+                                active_scene = Some(gs);
                             }
                             dirty = true;
                         }
