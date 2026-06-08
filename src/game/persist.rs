@@ -303,6 +303,298 @@ pub fn load_game(slot: u8) -> anyhow::Result<GameState> {
 }
 
 // --------------------------------------------------------------------------
+// ECS save/load (Plan E): serialize directly from EcsScene World + Resources
+// --------------------------------------------------------------------------
+
+/// Serialize `EcsScene` to a `proto::SaveFile`.
+fn ecs_to_proto(scene: &crate::game::ecs::scene::EcsScene) -> proto::SaveFile {
+    use crate::game::ecs::components::{
+        BrotherKind, CarrierMount, HeroStats, Inventory, Position, SafePoint,
+    };
+    let w = &scene.world;
+    let res = &scene.res;
+    let e = res.hero_entity;
+
+    let make_stuff = |arr: &[u8; 36]| proto::BrotherStuff {
+        slots: arr[0..35].iter().map(|&v| v as u32).collect(),
+    };
+
+    // Hero components.
+    let (hero_x, hero_y) = w.get::<&Position>(e)
+        .map(|p| (p.x as u32, p.y as u32)).unwrap_or((0, 0));
+    let brother_id = w.get::<&BrotherKind>(e).map(|b| b.id as u32).unwrap_or(0);
+    let (vit, brave, luck, kind, wealth, hunger, fatigue) =
+        w.get::<&HeroStats>(e).map(|s| (
+            s.vitality as i32, s.brave as i32, s.luck as i32, s.kind as i32,
+            s.wealth as i32, s.hunger as i32, s.fatigue as i32,
+        )).unwrap_or_default();
+    let (riding, flying, swan_vx, swan_vy, active_carrier, wcarry) =
+        w.get::<&CarrierMount>(e).map(|c| (
+            c.riding as i32, c.flying as i32,
+            (c.swan_vx * 1000.0) as i32, (c.swan_vy * 1000.0) as i32,
+            c.active_carrier as i32, c.wcarry as u32,
+        )).unwrap_or_default();
+    let (safe_x, safe_y, safe_r) = w.get::<&SafePoint>(e)
+        .map(|s| (s.x as u32, s.y as u32, s.region as u32)).unwrap_or_default();
+
+    // Hero inventory.
+    let hero_inv = w.get::<&Inventory>(e)
+        .map(|inv| inv.stuff).unwrap_or([0u8; 36]);
+
+    // Inactive brother inventories live in res.brother.inactive_inventories.
+    let invs = &res.brother.inactive_inventories;
+    let julstuff  = make_stuff(&invs[0]);
+    let philstuff = make_stuff(&invs[1]);
+    let kevstuff  = make_stuff(&invs[2]);
+    // Overwrite the active brother's slot with the live inventory.
+    let active = res.brother.active_brother;
+    let (julstuff, philstuff, kevstuff) = match active {
+        0 => (make_stuff(&hero_inv), philstuff, kevstuff),
+        1 => (julstuff, make_stuff(&hero_inv), kevstuff),
+        _ => (julstuff, philstuff, make_stuff(&hero_inv)),
+    };
+
+    proto::SaveFile {
+        save_version: SAVE_VERSION,
+        hero_x,
+        hero_y,
+        hero_sector: 0,
+        hero_place:  0,
+        vitality:    vit,
+        brave,
+        luck,
+        kind,
+        wealth,
+        hunger,
+        fatigue,
+        brother:     brother_id,
+        riding,
+        flying,
+        swan_vx,
+        swan_vy,
+        light_timer:  res.clock.light_timer as i32,
+        secret_timer: res.clock.secret_timer as i32,
+        freeze_timer: res.clock.freeze_timer as i32,
+        daynight:     res.clock.daynight as u32,
+        lightlevel:   res.clock.lightlevel as u32,
+        cycle:        res.clock.cycle,
+        flasher:      res.clock.flasher,
+        battleflag:   res.region.battleflag,
+        witchflag:    res.brother.witchflag,
+        safe_flag:    res.brother.safe_flag,
+        viewstatus:   res.view.viewstatus as u32,
+        cmode:        res.view.cmode as u32,
+        safe_x,
+        safe_y,
+        safe_r,
+        region_num:       res.region.region_num as u32,
+        new_region:       res.region.new_region as u32,
+        julstuff:         Some(julstuff),
+        philstuff:        Some(philstuff),
+        kevstuff:         Some(kevstuff),
+        active_brother:   active as u32,
+        xtype:            res.region.xtype as u32,
+        encounter_type:   res.region.encounter_type as u32,
+        encounter_number: res.region.encounter_number as u32,
+        active_carrier:   active_carrier,
+        actor_file:       res.region.actor_file as i32,
+        set_file:         res.region.set_file as i32,
+        wcarry,
+        princess:         res.region.princess as u32,
+        dayperiod:        res.region.dayperiod as u32,
+        current_mood:     res.region.current_mood as u32,
+        cheat1:           res.brother.cheat1,
+        actors:           vec![],
+        world_objects:    vec![],
+    }
+}
+
+/// Apply a decoded `proto::SaveFile` back into an `EcsScene`.
+fn proto_to_ecs(
+    sf: proto::SaveFile,
+    scene: &mut crate::game::ecs::scene::EcsScene,
+) {
+    use crate::game::ecs::components::{
+        BrotherKind, CarrierMount, HeroStats, Inventory, Position, SafePoint,
+    };
+    let e = scene.res.hero_entity;
+
+    // Position.
+    if let Ok(mut p) = scene.world.get::<&mut Position>(e) {
+        p.x = sf.hero_x as f32;
+        p.y = sf.hero_y as f32;
+    }
+    // HeroStats.
+    if let Ok(mut s) = scene.world.get::<&mut HeroStats>(e) {
+        s.vitality = sf.vitality as i16;
+        s.brave    = sf.brave    as i16;
+        s.luck     = sf.luck     as i16;
+        s.kind     = sf.kind     as i16;
+        s.wealth   = sf.wealth   as i16;
+        s.hunger   = sf.hunger   as i16;
+        s.fatigue  = sf.fatigue  as i16;
+    }
+    // BrotherKind.
+    if let Ok(mut b) = scene.world.get::<&mut BrotherKind>(e) {
+        b.id = sf.brother as u8;
+    }
+    // CarrierMount.
+    if let Ok(mut c) = scene.world.get::<&mut CarrierMount>(e) {
+        c.riding         = sf.riding as i16;
+        c.flying         = sf.flying as i16;
+        c.swan_vx        = sf.swan_vx as f32 / 1000.0;
+        c.swan_vy        = sf.swan_vy as f32 / 1000.0;
+        c.active_carrier = sf.active_carrier as i16;
+        c.wcarry         = sf.wcarry as u8;
+    }
+    // SafePoint.
+    let new_sp = SafePoint { x: sf.safe_x as f32, y: sf.safe_y as f32, region: sf.safe_r as u8 };
+    let has_sp = scene.world.get::<&SafePoint>(e).is_ok();
+    if has_sp {
+        if let Ok(mut sp) = scene.world.get::<&mut SafePoint>(e) {
+            *sp = new_sp;
+        }
+    } else {
+        scene.world.insert_one(e, new_sp).ok();
+    }
+    // Inventory — active brother.
+    let active = sf.active_brother as usize;
+    let src_stuff = match active {
+        0 => sf.julstuff.as_ref(),
+        1 => sf.philstuff.as_ref(),
+        _ => sf.kevstuff.as_ref(),
+    };
+    if let Some(stuff) = src_stuff {
+        if let Ok(mut inv) = scene.world.get::<&mut Inventory>(e) {
+            for (i, &v) in stuff.slots.iter().take(35).enumerate() {
+                inv.stuff[i] = v as u8;
+            }
+        }
+    }
+    // Inactive inventories.
+    let restore = |arr: &mut [u8; 36], msg: Option<&proto::BrotherStuff>| {
+        if let Some(s) = msg {
+            for (i, &v) in s.slots.iter().take(35).enumerate() {
+                arr[i] = v as u8;
+            }
+        }
+    };
+    restore(&mut scene.res.brother.inactive_inventories[0], sf.julstuff.as_ref());
+    restore(&mut scene.res.brother.inactive_inventories[1], sf.philstuff.as_ref());
+    restore(&mut scene.res.brother.inactive_inventories[2], sf.kevstuff.as_ref());
+    // Overwrite the active brother's slot with live inventory (already set above).
+
+    // Clock.
+    scene.res.clock.light_timer  = sf.light_timer  as i16;
+    scene.res.clock.secret_timer = sf.secret_timer as i16;
+    scene.res.clock.freeze_timer = sf.freeze_timer as i16;
+    scene.res.clock.daynight     = sf.daynight     as u16;
+    scene.res.clock.lightlevel   = sf.lightlevel   as u16;
+    scene.res.clock.cycle        = sf.cycle;
+    scene.res.clock.flasher      = sf.flasher;
+
+    // Region.
+    scene.res.region.battleflag      = sf.battleflag;
+    scene.res.region.region_num      = sf.region_num      as u8;
+    scene.res.region.new_region      = sf.new_region      as u8;
+    scene.res.region.xtype           = sf.xtype           as u16;
+    scene.res.region.encounter_type  = sf.encounter_type  as u16;
+    scene.res.region.encounter_number = sf.encounter_number as u8;
+    scene.res.region.actor_file      = sf.actor_file      as i16;
+    scene.res.region.set_file        = sf.set_file        as i16;
+    scene.res.region.princess        = sf.princess        as u8;
+    scene.res.region.dayperiod       = sf.dayperiod       as u8;
+    scene.res.region.current_mood    = sf.current_mood    as u8;
+
+    // Brother roster.
+    scene.res.brother.brother        = sf.brother         as u8;
+    scene.res.brother.active_brother = active;
+    scene.res.brother.witchflag      = sf.witchflag;
+    scene.res.brother.safe_flag      = sf.safe_flag;
+    scene.res.brother.cheat1         = sf.cheat1;
+
+    // View.
+    scene.res.view.viewstatus = sf.viewstatus as u8;
+    scene.res.view.cmode      = sf.cmode      as u8;
+
+    // Post-load cleanup (SPEC §24.5).
+    scene.res.region.encounter_number = 0;
+    scene.res.region.encounter_type   = 0;
+    scene.res.view.viewstatus         = 99; // force full redraw
+}
+
+/// Save an `EcsScene` to an explicit path.  Exposed for testing.
+pub fn ecs_save_to_path(
+    scene: &crate::game::ecs::scene::EcsScene,
+    path: &Path,
+) -> anyhow::Result<()> {
+    let save = ecs_to_proto(scene);
+    let encoded = save.encode_to_vec();
+    let mut f = std::fs::File::create(path)
+        .with_context(|| format!("creating save file {}", path.display()))?;
+    f.write_all(SAVE_MAGIC)?;
+    f.write_all(&SAVE_VERSION.to_le_bytes())?;
+    f.write_all(&encoded)?;
+    Ok(())
+}
+
+/// Save `EcsScene` into slot `slot` under `~/.config/faery/saves/save{slot:02}.sav`.
+pub fn ecs_save_game(
+    scene: &crate::game::ecs::scene::EcsScene,
+    slot: u8,
+) -> anyhow::Result<()> {
+    let base = dirs::config_dir()
+        .context("could not determine config directory")?
+        .join("faery")
+        .join("saves");
+    std::fs::create_dir_all(&base)
+        .with_context(|| format!("creating save directory {}", base.display()))?;
+    let path = base.join(format!("save{slot:02}.sav"));
+    ecs_save_to_path(scene, &path)
+}
+
+/// Load a save file from an explicit path into an existing `EcsScene`.
+/// The scene must already have a hero entity spawned; only component data is patched.
+pub fn ecs_load_from_path(
+    path: &Path,
+    scene: &mut crate::game::ecs::scene::EcsScene,
+) -> anyhow::Result<()> {
+    let data = std::fs::read(path)
+        .map_err(|e| anyhow::anyhow!("failed to read save file {}: {}", path.display(), e))?;
+    if data.len() < 8 {
+        anyhow::bail!("invalid save file: too short");
+    }
+    if &data[0..4] != SAVE_MAGIC.as_ref() {
+        anyhow::bail!("invalid save file: bad magic");
+    }
+    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    if version != SAVE_VERSION {
+        anyhow::bail!(
+            "invalid save file: version mismatch (got {}, expected {})",
+            version,
+            SAVE_VERSION,
+        );
+    }
+    let sf = proto::SaveFile::decode(&data[8..])
+        .map_err(|e| anyhow::anyhow!("failed to decode save file: {}", e))?;
+    proto_to_ecs(sf, scene);
+    Ok(())
+}
+
+/// Load into `EcsScene` from slot `slot` under the platform config dir.
+pub fn ecs_load_game(
+    slot: u8,
+    scene: &mut crate::game::ecs::scene::EcsScene,
+) -> anyhow::Result<()> {
+    let base = dirs::config_dir()
+        .context("could not determine config directory")?
+        .join("faery")
+        .join("saves");
+    let path = base.join(format!("save{slot:02}.sav"));
+    ecs_load_from_path(&path, scene)
+}
+
+// --------------------------------------------------------------------------
 // Transcript helpers
 // --------------------------------------------------------------------------
 
@@ -518,5 +810,130 @@ mod tests {
         assert_eq!(loaded.world_objects[1].x, 3000);
         assert_eq!(loaded.world_objects[1].y, 4000);
         assert_eq!(loaded.world_objects[1].visible, false);
+    }
+
+    // ── ECS round-trip tests ────────────────────────────────────────────────
+
+    #[test]
+    fn ecs_save_load_roundtrip_position() {
+        use crate::game::ecs::components::Position;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ecs_pos.sav");
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        // Set a distinctive position.
+        scene.world.get::<&mut Position>(scene.res.hero_entity)
+            .map(|mut p| { p.x = 12345.0; p.y = 54321.0; }).ok();
+
+        ecs_save_to_path(&scene, &path).unwrap();
+
+        let mut loaded = crate::game::ecs::scene::new_for_test();
+        ecs_load_from_path(&path, &mut loaded).unwrap();
+
+        let pos = loaded.world.get::<&Position>(loaded.res.hero_entity).unwrap();
+        assert_eq!(pos.x as u32, 12345);
+        assert_eq!(pos.y as u32, 54321);
+    }
+
+    #[test]
+    fn ecs_save_load_roundtrip_stats() {
+        use crate::game::ecs::components::HeroStats;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ecs_stats.sav");
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        scene.world.get::<&mut HeroStats>(scene.res.hero_entity).map(|mut s| {
+            s.vitality = 77; s.brave = 50; s.luck = 33; s.kind = 66; s.wealth = 99;
+        }).ok();
+
+        ecs_save_to_path(&scene, &path).unwrap();
+
+        let mut loaded = crate::game::ecs::scene::new_for_test();
+        ecs_load_from_path(&path, &mut loaded).unwrap();
+
+        let s = loaded.world.get::<&HeroStats>(loaded.res.hero_entity).unwrap();
+        assert_eq!(s.vitality, 77);
+        assert_eq!(s.brave,    50);
+        assert_eq!(s.luck,     33);
+        assert_eq!(s.kind,     66);
+        assert_eq!(s.wealth,   99);
+    }
+
+    #[test]
+    fn ecs_save_load_roundtrip_clock() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ecs_clock.sav");
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        scene.res.clock.daynight     = 12345;
+        scene.res.clock.lightlevel   = 200;
+        scene.res.clock.cycle        = 42;
+        scene.res.clock.light_timer  = 100;
+        scene.res.clock.secret_timer = 50;
+
+        ecs_save_to_path(&scene, &path).unwrap();
+
+        let mut loaded = crate::game::ecs::scene::new_for_test();
+        ecs_load_from_path(&path, &mut loaded).unwrap();
+
+        assert_eq!(loaded.res.clock.daynight,     12345);
+        assert_eq!(loaded.res.clock.lightlevel,   200);
+        assert_eq!(loaded.res.clock.cycle,        42);
+        assert_eq!(loaded.res.clock.light_timer,  100);
+        assert_eq!(loaded.res.clock.secret_timer, 50);
+    }
+
+    #[test]
+    fn ecs_save_load_roundtrip_region() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ecs_region.sav");
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        scene.res.region.region_num = 3;
+        scene.res.region.princess   = 7;
+        scene.res.brother.cheat1    = true;
+        scene.res.brother.witchflag = true;
+
+        ecs_save_to_path(&scene, &path).unwrap();
+
+        let mut loaded = crate::game::ecs::scene::new_for_test();
+        ecs_load_from_path(&path, &mut loaded).unwrap();
+
+        assert_eq!(loaded.res.region.region_num, 3);
+        assert_eq!(loaded.res.region.princess,   7);
+        assert!(loaded.res.brother.cheat1);
+        assert!(loaded.res.brother.witchflag);
+    }
+
+    #[test]
+    fn ecs_postload_cleanup() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ecs_cleanup.sav");
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        scene.res.region.encounter_number = 42;
+        scene.res.region.encounter_type   = 99;
+
+        ecs_save_to_path(&scene, &path).unwrap();
+
+        let mut loaded = crate::game::ecs::scene::new_for_test();
+        ecs_load_from_path(&path, &mut loaded).unwrap();
+
+        assert_eq!(loaded.res.region.encounter_number, 0,   "encounter_number cleared");
+        assert_eq!(loaded.res.region.encounter_type,   0,   "encounter_type cleared");
+        assert_eq!(loaded.res.view.viewstatus,         99,  "viewstatus set to 99");
+    }
+
+    #[test]
+    fn ecs_bad_magic_rejected() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bad.sav");
+        let mut buf = b"XXXX".to_vec();
+        buf.extend_from_slice(&SAVE_VERSION.to_le_bytes());
+        std::fs::write(&path, &buf).unwrap();
+
+        let mut scene = crate::game::ecs::scene::new_for_test();
+        let err = ecs_load_from_path(&path, &mut scene).err().unwrap();
+        assert!(err.to_string().contains("bad magic"), "got: {}", err);
     }
 }

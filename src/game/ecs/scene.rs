@@ -937,9 +937,33 @@ fn compute_current_palette(
     out
 }
 
+/// Construct a minimal `EcsScene` for unit tests (no SDL, no disk assets).
+#[cfg(test)]
+pub fn new_for_test() -> EcsScene {
+    use crate::game::ecs::components::{HeroStats, Inventory};
+    use crate::game::ecs::spawn::spawn_hero;
+    let mut world = World::new();
+    let stats = HeroStats { vitality: 10, brave: 20, luck: 30, kind: 40, wealth: 50, hunger: 0, fatigue: 0, gold: 0 };
+    let hero = spawn_hero(&mut world, 100.0, 200.0, 0, stats, Inventory::empty());
+    let mut res = Resources::new(hero);
+    res.region.region_num = 0;
+    res.region.new_region = 0;
+    EcsScene {
+        world,
+        res,
+        console: None,
+        input: InputState::new(),
+        last_mood: u8::MAX,
+        mood_tick: 0,
+        adf_load_done: false,
+        base_colors: None,
+        messages: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // EcsScene::new() requires a GameLibrary loaded from disk, which is not
-    // available in unit tests.  The system-level tests live in each system's
-    // own module.  Smoke tests for debug_commands are in debug_commands.rs.
+    // available in unit tests.  System-level tests live in each system's
+    // own module; persist round-trip tests are in persist.rs.
 }
