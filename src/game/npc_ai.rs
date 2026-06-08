@@ -1453,3 +1453,72 @@ mod tests {
         );
     }
 }
+
+use crate::game::ecs::components::{AiState, Facing};
+
+/// ECS adapter for the NPC AI tick.
+/// Mirrors tick_npc() but operates on ECS component types instead of &mut Npc.
+pub fn tick_npc_ecs(
+    ai: &mut AiState,
+    facing: &mut Facing,
+    x: f32, y: f32,
+    hero_x: f32, hero_y: f32,
+    hero_dead: bool,
+    is_leader: bool,
+    leader_pos: Option<(f32, f32)>,
+    others: &[(f32, f32)],
+    tick: u32,
+    xtype: u16,
+    turtle_eggs: bool,
+    freeze: bool,
+) {
+    use crate::game::npc::Npc;
+
+    let mut tmp = Npc {
+        race: 0,
+        x: x as i16,
+        y: y as i16,
+        goal: ai.goal.clone(),
+        tactic: ai.tactic.clone(),
+        state: ai.state.clone(),
+        cleverness: ai.cleverness,
+        facing: facing.dir,
+        ..Npc::default()
+    };
+
+    let others_i32: Vec<(i32, i32)> = others.iter().map(|(ox, oy)| (*ox as i32, *oy as i32)).collect();
+    let leader_idx = if is_leader { Some(0usize) } else { None };
+
+    // leader_pos slot: if a leader exists and it's not this entity, put it at index 0
+    // of the npcs slice so leader_idx=Some(0) points to it.
+    let npcs_with_leader: Vec<(i32, i32)>;
+    let (leader_idx_final, npcs_final): (Option<usize>, &[(i32, i32)]) =
+        if let Some((lx, ly)) = leader_pos {
+            npcs_with_leader = std::iter::once((lx as i32, ly as i32))
+                .chain(others_i32.iter().cloned())
+                .collect();
+            (Some(0), &npcs_with_leader)
+        } else if is_leader {
+            (leader_idx, &others_i32)
+        } else {
+            (None, &others_i32)
+        };
+
+    tick_npc(
+        &mut tmp,
+        0,
+        hero_x as i32, hero_y as i32,
+        hero_dead,
+        leader_idx_final,
+        npcs_final,
+        tick,
+        xtype,
+        turtle_eggs,
+        freeze,
+    );
+
+    ai.goal    = tmp.goal;
+    ai.tactic  = tmp.tactic;
+    ai.state   = tmp.state;
+    facing.dir = tmp.facing;
+}
