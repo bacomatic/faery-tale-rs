@@ -77,17 +77,19 @@ fn advance_fight_state(state: u8, tick: u32) -> u8 {
 }
 
 /// Compute pixel offset for pushback in a facing direction.
+/// Facing uses Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+/// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 fn push_offset(facing: u8, distance: i32) -> (i32, i32) {
-    match facing & 7 {
-        0 => (0, -distance),
-        1 => (distance, -distance),
-        2 => (distance, 0),
-        3 => (distance, distance),
-        4 => (0, distance),
-        5 => (-distance, distance),
-        6 => (-distance, 0),
-        7 => (-distance, -distance),
-        _ => (0, 0),
+    match Direction::from(facing) {
+        Direction::NW   => (-distance, -distance),
+        Direction::N    => (0, -distance),
+        Direction::NE   => (distance, -distance),
+        Direction::E    => (distance, 0),
+        Direction::SE   => (distance, distance),
+        Direction::S    => (0, distance),
+        Direction::SW   => (-distance, distance),
+        Direction::W    => (-distance, 0),
+        Direction::None => (0, 0),
     }
 }
 
@@ -137,7 +139,9 @@ fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
     }
 }
 
-/// Return the 8-way facing direction (0=N..7=NW) from (sx,sy) toward (tx,ty).
+/// Return the 8-way facing direction from (sx,sy) toward (tx,ty).
+/// Returns Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+/// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 /// Mirrors fmain.c directional logic used when setting ms->direction.
 fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
     let dx = tx - sx;
@@ -145,23 +149,15 @@ fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
     let ax = dx.abs();
     let ay = dy.abs();
     if ax <= ay / 2 {
-        if dy > 0 {
-            4
-        } else {
-            0
-        } // S or N
+        if dy > 0 { Direction::S as u8 } else { Direction::N as u8 }
     } else if ay <= ax / 2 {
-        if dx > 0 {
-            2
-        } else {
-            6
-        } // E or W
+        if dx > 0 { Direction::E as u8 } else { Direction::W as u8 }
     } else {
         match (dx > 0, dy > 0) {
-            (true, true) => 3,   // SE
-            (true, false) => 1,  // NE
-            (false, true) => 5,  // SW
-            (false, false) => 7, // NW
+            (true, true)   => Direction::SE as u8,
+            (true, false)  => Direction::NE as u8,
+            (false, true)  => Direction::SW as u8,
+            (false, false) => Direction::NW as u8,
         }
     }
 }
@@ -174,9 +170,12 @@ fn default_brother_names() -> Vec<String> {
     ]
 }
 
+/// Map a facing value (Amiga DIR_* order: NW=0..W=7) to the compass comptable
+/// highlight index. In Amiga order these are identical, so this is an identity.
+/// Returns 9 for out-of-range values (no highlight).
 fn compass_dir_for_facing(facing: u8) -> usize {
     match facing {
-        0..=7 => ((facing as usize) + 1) % 8,
+        0..=7 => facing as usize,
         _ => 9,
     }
 }
@@ -188,17 +187,13 @@ fn compass_dir_for_facing(facing: u8) -> usize {
 /// direction this frame (`oldir`), not by persistent `facing`. When input is
 /// idle (`Direction::None`), index 9 is returned, which is a null comptable
 /// region — the base `_hinor` bitmap renders with no `_hivar` overlay.
+/// Pick the compass highlight segment (comptable index 0..=7) or 9 for
+/// "no highlight" per SPECIFICATION §25.7.
+/// Direction enum variants carry Amiga values directly (NW=0..W=7).
 fn compass_dir_for_input(dir: Direction) -> usize {
     match dir {
-        Direction::NW => 0,
-        Direction::N => 1,
-        Direction::NE => 2,
-        Direction::E => 3,
-        Direction::SE => 4,
-        Direction::S => 5,
-        Direction::SW => 6,
-        Direction::W => 7,
         Direction::None => 9,
+        d => d as usize,
     }
 }
 
@@ -263,19 +258,7 @@ pub struct RebindingState {
     pub waiting_for_action: Option<GameAction>,
 }
 
-/// 8-way movement direction decoded from input state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    N,
-    NE,
-    E,
-    SE,
-    S,
-    SW,
-    W,
-    NW,
-    None,
-}
+pub use crate::game::direction::Direction;
 
 /// Tracks which movement/action keys are currently held down.
 struct InputState {
@@ -284,6 +267,9 @@ struct InputState {
     left: bool,
     right: bool,
     fight: bool,
+    /// Edge-trigger latch: set to true when fight button pressed, cleared after consumption.
+    /// Ensures rapid taps (press+release in same frame) are visible to apply_player_input.
+    fight_pressed: bool,
     /// True while the player is holding a compass arrow (mouse-down); cleared on mouse-up.
     compass_held: bool,
     /// Set of movement keycodes currently physically held.
@@ -336,6 +322,7 @@ impl Default for InputState {
             left: false,
             right: false,
             fight: false,
+            fight_pressed: false,
             compass_held: false,
             pressed_movement_keys: HashSet::new(),
             gamepad_x: 0,
@@ -403,6 +390,15 @@ pub struct GameplayScene {
     palette_transition: Option<crate::game::palette::PaletteTransition>,
     last_indoor: bool,
     pub in_encounter_zone: bool,
+    pub arena_mode: bool, // Combat arena: immortal target dummies, no random encounters
+    /// Arena zone bounds: x1=19300, y1=15500, x2=19800, y2=16000 (500x500 area east of Tambry)
+    pub arena_zone: (i32, i32, i32, i32), // (x1, y1, x2, y2)
+    /// True when player is currently inside the arena zone
+    pub in_arena_zone: bool,
+    /// Current encounter index for arena (0-10, cycles through ENCOUNTER_CHART)
+    pub arena_encounter_idx: u8,
+    /// When true, arena dummies take normal damage (non-target mode)
+    pub arena_damage_enabled: bool,
     pub npc_table: Option<crate::game::npc::NpcTable>,
     /// RGBA32 palette for the final indexed→RGBA32 render step.
     current_palette: crate::game::palette::Palette,
@@ -424,6 +420,9 @@ pub struct GameplayScene {
     /// frame by the main loop and forwarded into `DebugConsole::log_entry`.
     /// Parallel to `log_buffer` during the DBG-LOG-04 migration.
     pub pending_log: Vec<crate::game::debug_log::DebugLogEntry>,
+    /// Sound effect IDs queued for playback. Drained each frame in update().
+    /// Combat logic pushes SFX here without direct access to audio resources.
+    pending_sfx: Vec<u8>,
     /// Set to true when the player requests to quit the game.
     quit_requested: bool,
     /// Set to true when the Talisman win condition fires (`stuff[22]` set
@@ -491,6 +490,9 @@ pub struct GameplayScene {
     /// SetFig sprite's frame index gets `+ bitrand(1)` on render
     /// (`fmain.c:1556` — `dex += rand2()`). Decremented each tick.
     talk_flicker: std::collections::HashMap<usize, u8>,
+    /// Battleflag from previous tick — used to detect the true→false falling
+    /// edge that triggers `aftermath` (fmain2.c:253, Phase 14).
+    prev_battleflag: bool,
 }
 
 /// What kind of figure was found by nearest_fig.
@@ -558,6 +560,11 @@ impl GameplayScene {
             palette_transition: None,
             last_indoor: false,
             in_encounter_zone: false,
+            arena_mode: false,
+            arena_zone: (19300, 15500, 19800, 16000), // East of Tambry village
+            in_arena_zone: false,
+            arena_encounter_idx: 0,
+            arena_damage_enabled: false,
             npc_table: None,
             current_palette: [0xFF808080_u32; crate::game::palette::PALETTE_SIZE],
             base_colors_palette: None,
@@ -569,6 +576,7 @@ impl GameplayScene {
             archer_cooldown: 0,
             log_buffer: Vec::new(),
             pending_log: Vec::new(),
+            pending_sfx: Vec::new(),
             quit_requested: false,
             victory_triggered: false,
             narrative_queue: NarrativeQueue::default(),
@@ -596,6 +604,7 @@ impl GameplayScene {
             luck_gate_fired: false,
             death_type: 0,
             talk_flicker: std::collections::HashMap::new(),
+            prev_battleflag: false,
         }
     }
 
