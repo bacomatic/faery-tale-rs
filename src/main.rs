@@ -618,12 +618,37 @@ pub fn main() -> Result<(), String> {
                         crate::game::ecs::debug_commands::handle(cmd, &mut ecs.world, &mut ecs.res);
                     }
                 }
-                // Build status snapshot
                 let song_group_count = song_library
                     .as_ref()
                     .map(|l| l.tracks.len() / SongLibrary::VOICES)
                     .unwrap_or(0);
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
+                // Derive time fields from ECS clock.
+                let ecs_daynight = ecs.res.clock.daynight;
+                let ecs_dayperiod = (ecs_daynight / 2000) as u8;
+                // daynight 0..24000 ≡ 24 h; hour = daynight * 24 / 24000
+                let ecs_hour = (ecs_daynight as u32 * 24 / 24000) as u32;
+                let ecs_minute = ((ecs_daynight as u32 * 24 * 60 / 24000) % 60) as u32;
+                let ecs_day_phase = match ecs_dayperiod {
+                    0..=3 => DayPhase::Midnight,
+                    4..=5 => DayPhase::Morning,
+                    6..=8 => DayPhase::Midday,
+                    _     => DayPhase::Evening,
+                };
+                // Hero position + stats from ECS.
+                let (hero_x, hero_y, hero_brother, hero_vit, hero_hunger, hero_fatigue,
+                     hero_brave, hero_luck, hero_kind) = {
+                    use crate::game::ecs::components::{Position, BrotherKind, HeroStats};
+                    let px = ecs.world.get::<&Position>(ecs.res.hero_entity)
+                        .map(|p| (p.x as u16, p.y as u16)).unwrap_or((0, 0));
+                    let bk = ecs.world.get::<&BrotherKind>(ecs.res.hero_entity)
+                        .map(|b| b.id).unwrap_or(0);
+                    let hs = ecs.world.get::<&HeroStats>(ecs.res.hero_entity);
+                    let (v, h, f, br, lk, ki) = hs.as_deref().map(|s| (
+                        s.vitality, s.hunger, s.fatigue, s.brave, s.luck, s.kind,
+                    )).unwrap_or_default();
+                    (px.0, px.1, bk, v, h, f, br, lk, ki)
+                };
                 let status = DebugSnapshot {
                     fps: game_fps,
                     tps: game_tps,
@@ -634,6 +659,22 @@ pub fn main() -> Result<(), String> {
                     song_group_count,
                     current_song_group,
                     cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
+                    game_day: ecs.res.clock.game_days,
+                    game_hour: ecs_hour,
+                    game_minute: ecs_minute,
+                    daynight: ecs_daynight,
+                    lightlevel: ecs.res.clock.lightlevel,
+                    day_phase: ecs_day_phase,
+                    hero_x,
+                    hero_y,
+                    brother: hero_brother,
+                    region_num: ecs.res.region.region_num,
+                    vitality: hero_vit,
+                    hunger: hero_hunger,
+                    fatigue: hero_fatigue,
+                    brave: hero_brave as u16,
+                    luck: hero_luck,
+                    kind: hero_kind,
                     ..DebugSnapshot::default()
                 };
                 dc.update_status(status);

@@ -126,6 +126,8 @@ pub struct EcsScene {
     adf_load_done:      bool,
     /// RGB4 base palette used as input to fade_page() for day/night computation.
     base_colors:        Option<crate::game::colors::Palette>,
+    /// Scroll-area message queue (up to 4 visible at once, most recent last).
+    messages:           Vec<String>,
 }
 
 impl EcsScene {
@@ -180,6 +182,26 @@ impl EcsScene {
             mood_tick: 0,
             adf_load_done: false,
             base_colors: None,
+            messages: Vec::new(),
+        }
+    }
+
+    /// Drain message and speech events from the current tick into the message queue.
+    /// Called from `update()` after each tick so `game_lib` is available for narr lookup.
+    fn drain_messages(&mut self, game_lib: &GameLibrary) {
+        // Plain text messages.
+        for ev in self.res.events.message.drain(..) {
+            self.messages.push(ev.text);
+        }
+        // Speech events resolved through narr table.
+        for ev in self.res.events.speech.drain(..) {
+            let text = crate::game::events::speak(&game_lib.narr, ev.speech_id, &ev.brother_name);
+            self.messages.push(text);
+        }
+        // Trim to 64 messages — the hibar only shows the last 4.
+        if self.messages.len() > 64 {
+            let overflow = self.messages.len() - 64;
+            self.messages.drain(0..overflow);
         }
     }
 
@@ -360,6 +382,11 @@ impl EcsScene {
                 Err(_) => return,
             };
 
+        // Last 4 messages visible in the scroll area.
+        let msg_count = self.messages.len().min(4);
+        let msg_start = self.messages.len().saturating_sub(4);
+        let msgs_visible: Vec<&str> = self.messages[msg_start..].iter().map(|s| s.as_str()).collect();
+
         let hiscreen_opt = resources.find_image("hiscreen");
         let amber_font   = resources.amber_font;
         let compass_normal    = resources.compass_normal;
@@ -368,61 +395,65 @@ impl EcsScene {
         // Current input direction → compass arrow index.
         let input_dir = self.input.to_direction();
         let compass_arrow = compass_dir_index(input_dir);
-        // Compass hit-regions from the old scene (pixel coords within hiscreen compass glyph).
         let compass_regions = compass_hit_regions();
 
+        let tc = canvas.texture_creator();
+        if let Ok(mut hibar_tex) =
+            tc.create_texture_target(sdl3::pixels::PixelFormat::RGBA32, 640, HIBAR_NATIVE_H)
         {
-            let tc = canvas.texture_creator();
-            if let Ok(mut hibar_tex) =
-                tc.create_texture_target(sdl3::pixels::PixelFormat::RGBA32, 640, HIBAR_NATIVE_H)
-            {
-                hibar_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
-                let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
-                    hc.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
-                    hc.clear();
+            hibar_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
+            let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
+                hc.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
+                hc.clear();
 
-                    if let Some(hiscreen) = hiscreen_opt {
-                        hiscreen.draw_scaled(hc, sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
-                    } else {
-                        hc.set_draw_color(sdl3::pixels::Color::RGB(80, 60, 20));
-                        hc.fill_rect(sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
-                    }
+                if let Some(hiscreen) = hiscreen_opt {
+                    hiscreen.draw_scaled(hc, sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
+                } else {
+                    hc.set_draw_color(sdl3::pixels::Color::RGB(80, 60, 20));
+                    hc.fill_rect(sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
+                }
 
-                    amber_font.set_color_mod(0xAA, 0x55, 0x00);
-                    amber_font.render_string(&format!("Brv:{:3}", brave), hc, 14, 52);
-                    amber_font.render_string(&format!("Lck:{:3}", luck), hc, 90, 52);
-                    amber_font.render_string(&format!("Knd:{:3}", kind), hc, 168, 52);
-                    amber_font.render_string(&format!("Vit:{:3}", vitality), hc, 245, 52);
-                    amber_font.render_string(&format!("Wlth:{:3}", wealth), hc, 321, 52);
-                    amber_font.set_color_mod(255, 255, 255);
+                amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                amber_font.render_string(&format!("Brv:{:3}", brave), hc, 14, 52);
+                amber_font.render_string(&format!("Lck:{:3}", luck), hc, 90, 52);
+                amber_font.render_string(&format!("Knd:{:3}", kind), hc, 168, 52);
+                amber_font.render_string(&format!("Vit:{:3}", vitality), hc, 245, 52);
+                amber_font.render_string(&format!("Wlth:{:3}", wealth), hc, 321, 52);
 
-                    // Compass.
-                    const COMPASS_X: i32 = 567;
-                    const COMPASS_SRC_Y: i32 = 15;
-                    const COMPASS_SRC_W: u32 = 48;
-                    const COMPASS_SRC_H: u32 = 24;
-                    let compass_dest = sdl3::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
-                    if let Some(normal_tex) = compass_normal {
-                        hc.copy(normal_tex, None, compass_dest).ok();
-                    }
-                    if compass_arrow < compass_regions.len() {
-                        let (rx, ry, rw, rh) = compass_regions[compass_arrow];
-                        if rw > 1 || rh > 1 {
-                            if let Some(hl_tex) = compass_highlight {
-                                let src = sdl3::rect::Rect::new(rx, ry, rw as u32, rh as u32);
-                                let dst = sdl3::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
-                                hc.copy(hl_tex, src, dst).ok();
-                            }
+                // Scroll messages (up to 4, bottom-anchored at y=42).
+                for (i, msg) in msgs_visible.iter().enumerate() {
+                    let line_from_bottom = (msg_count - 1 - i) as i32;
+                    let y = 42 - line_from_bottom * 10;
+                    amber_font.render_string(msg, hc, 16, y);
+                }
+                amber_font.set_color_mod(255, 255, 255);
+
+                // Compass.
+                const COMPASS_X: i32 = 567;
+                const COMPASS_SRC_Y: i32 = 15;
+                const COMPASS_SRC_W: u32 = 48;
+                const COMPASS_SRC_H: u32 = 24;
+                let compass_dest = sdl3::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
+                if let Some(normal_tex) = compass_normal {
+                    hc.copy(normal_tex, None, compass_dest).ok();
+                }
+                if compass_arrow < compass_regions.len() {
+                    let (rx, ry, rw, rh) = compass_regions[compass_arrow];
+                    if rw > 1 || rh > 1 {
+                        if let Some(hl_tex) = compass_highlight {
+                            let src = sdl3::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                            let dst = sdl3::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
+                            hc.copy(hl_tex, src, dst).ok();
                         }
                     }
-                });
-                canvas.copy(
-                    &hibar_tex,
-                    sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
-                    sdl3::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
-                ).ok();
-            }; // semicolon: drops Result<Texture> temporary before tc is dropped
-        }
+                }
+            });
+            canvas.copy(
+                &hibar_tex,
+                sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                sdl3::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+            ).ok();
+        }; // semicolon: drops Result<Texture> temporary before tc is dropped
     }
 
     /// Run one gameplay tick: advance all systems then drain debug commands.
@@ -605,6 +636,7 @@ impl Scene for EcsScene {
         let ticks = delta_ticks.min(4).max(1);
         for _ in 0..ticks {
             self.run_tick();
+            self.drain_messages(game_lib);
         }
 
         self.run_audio(resources);
