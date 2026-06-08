@@ -12,6 +12,7 @@ default = ["debug-tui"]
 debug-tui = ["dep:ratatui"]
 
 [dependencies]
+hecs = "0.11"
 anyhow = "1"
 bitflags = "2.11.0"
 clap = { version = "4", features = ["derive"] }
