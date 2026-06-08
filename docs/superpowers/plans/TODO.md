@@ -496,27 +496,74 @@ progress).
 
 ---
 
-## Plan W — Debug TUI Actor Watch Population
+## Plan W — Debug TUI: Eliminate DebugSnapshot + Actor Watch
 
-**Dependency:** none; standalone cleanup.
+**Dependency:** none; standalone.
 
-**What to build:**
+### Why does the debug TUI still use a snapshot?
 
-`src/main.rs` — in the ECS `DebugSnapshot` construction block, populate
-`actors: Vec<ActorSnapshot>` from the ECS world:
-- Query `(&Enemy, &Position, &Facing, &EnemyKind, Option<&AiState>)` — build one
-  `ActorSnapshot` per entity.
-- Query hero for hero slot (slot 0).
-- Cap at 20 entries to match `ActorSnapshot` spec limit.
-- Populate: `slot`, `actor_type`, `abs_x`, `abs_y`, `facing`, `weapon`,
-  `vitality`, `npc_type`, `state_name` using existing bridge helpers
-  (`actor_state_u8`, `facing_name`, etc.).
+One of the goals of moving to ECS was to eliminate the `DebugSnapshot` push
+model — instead of serializing game state into a bag-of-scalars every frame,
+the TUI could read ECS data directly.  The snapshot exists today because
+`DebugConsole` (crossterm TUI) and `EcsScene` are both owned by `main.rs` and
+both need to be mutably borrowed in the same frame: `dc.drain_commands()` takes
+`&mut DebugConsole` while the ECS tick takes `&mut EcsScene`.  Rust cannot hold
+both borrows simultaneously, so `main.rs` copies data out of the ECS into a
+`DebugSnapshot` and hands that to the console.
+
+**Is there a better architecture?**  Yes — pass a read-only view of the ECS
+*into* `DebugConsole::render()` and `DebugConsole::update_status()` at call
+sites, instead of a pre-built snapshot.  This requires refactoring
+`DebugConsole` to hold `&EcsScene` or equivalent for the duration of `render()`,
+which is possible because `render()` only reads.  However:
+
+- `DebugConsole::render()` is called after the ECS tick (no overlap).
+- The existing `DebugSnapshot` struct is only ~130 lines; the copy cost is
+  negligible.
+- The real win from ECS was eliminating `GameState` (a 400-field God Object),
+  not eliminating the TUI snapshot.
+
+**Decision for this plan:** keep `DebugSnapshot` as the bridge type — it is
+small, cheap to copy, and avoids complex lifetime threading through the TUI
+crate.  The snapshot fields that are currently missing (actors, quest state,
+hero extras) will be populated from the ECS world before `update_status()` is
+called.  If a future plan wants to refactor to a direct reference, that is a
+separate architectural decision.
+
+### What to build
+
+`src/main.rs` — in the ECS `DebugSnapshot` construction block (the block that
+calls `dc.update_status(status)`), populate the currently-empty fields:
+
+**Actor watch (`actors: Vec<ActorSnapshot>`):**
+- Query `(&Enemy, &Position, &Facing, &EnemyKind, &CombatState, &Health)` —
+  build one `ActorSnapshot` per entity (up to 19 slots; slot 0 is hero).
+- Query hero entity for slot 0 (Position, Facing, HeroStats, CombatState).
+- Cap at 20 total entries to match the spec limit.
+- Populate all `ActorSnapshot` fields using the existing bridge helpers in
+  `src/game/debug_tui/bridge.rs`: `actor_state_u8`, `actor_state_name`,
+  `facing_name`, `weapon_short_name`, `race_label`, `goal_name`, `tactic_name`.
+
+**Hero top-row extras (currently zeroed):**
+- `max_vitality`: `15 + brave/4` (from `HeroStats`).
+- `hero_weapon` / `hero_weapon_name`: from `CombatState.weapon` +
+  `weapon_short_name()`.
+- `hero_state_u8` / `hero_state_name`: from `CombatState.state`.
+- `hero_facing`: from `Facing` component.
+- `hero_environ`: from `ActorMotion.environ`.
+- `active_carrier` / `active_carrier_name`: from `CarrierMount.active_carrier`
+  + `carrier_name()`.
+- `jewel_timer`, `totem_timer`, `freeze_timer`: from `res.clock`.
+
+**Quest state (currently zeroed):** wire from `QuestState` resource once Plan V
+lands; leave zeroed until then.
 
 Reference: `docs/DEBUG_SPECIFICATION.md` §DebugSnapshot Data Model.
 
-**Files touched:** `src/main.rs`.
+**Files touched:** `src/main.rs` only.
 
-**Verify:** debug console `/actors` command lists live enemies.
+**Verify:** open debug console in-game, run `/actors` — hero and any spawned
+enemies appear with correct coordinates, facing, and weapon.
 
 ---
 
