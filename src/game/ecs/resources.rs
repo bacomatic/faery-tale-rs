@@ -220,6 +220,9 @@ pub struct Resources {
     pub vfx:       VfxState,
     pub events:    Events,
 
+    /// Current hero movement direction, derived from InputState each tick.
+    pub input_direction: crate::game::direction::Direction,
+
     /// Stable handle for the hero entity (set at spawn, never changes mid-session).
     pub hero_entity: Entity,
     /// Handle for the active carrier entity, if any.
@@ -244,6 +247,7 @@ impl Resources {
             encounter:      EncounterContext::default(),
             vfx:            VfxState::default(),
             events:         Events::default(),
+            input_direction:     crate::game::direction::Direction::None,
             hero_entity:         placeholder,
             carrier_entity:      None,
             last_speech_entity:  None,
