@@ -112,6 +112,9 @@ const PLAYFIELD_LORES_W:  u32 = 288;
 const PLAYFIELD_LORES_H:  u32 = 140;
 const PLAYFIELD_CANVAS_W: u32 = PLAYFIELD_LORES_W * 2;
 const PLAYFIELD_CANVAS_H: u32 = PLAYFIELD_LORES_H * 2;
+const HIBAR_NATIVE_H:     u32 = 57;
+const HIBAR_H:            u32 = HIBAR_NATIVE_H * 2;
+const HIBAR_Y:            i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6;
 
 pub struct EcsScene {
     pub world:          World,
@@ -268,24 +271,51 @@ impl EcsScene {
         }
     }
 
-    /// Compose the map framebuf and blit it to the SDL canvas.
+    /// Compose the map framebuf, blit sprites into it, then copy to the SDL canvas.
     fn render_map(&mut self, canvas: &mut Canvas<Window>) {
-        let (renderer, world) = match (self.res.map.renderer.as_mut(), self.res.map.world.as_ref()) {
-            (Some(r), Some(w)) => (r, w),
-            _ => return,
+        let map_x = self.res.camera.map_x as u16;
+        let map_y = self.res.camera.map_y as u16;
+
+        // Step 1: compose tiles into the indexed framebuf.
+        if let (Some(renderer), Some(world_data)) = (
+            self.res.map.renderer.as_mut(),
+            self.res.map.world.as_ref(),
+        ) {
+            renderer.compose(map_x, map_y, world_data);
+        }
+
+        if self.res.map.renderer.as_ref().map_or(true, |r| r.framebuf.is_empty()) {
+            return;
+        }
+
+        // Step 2: blit sprites.  Temporarily take the framebuf out of the renderer
+        // so we can pass both framebuf (mut) and res.sprites (immut) simultaneously.
+        let mut framebuf = if let Some(r) = self.res.map.renderer.as_mut() {
+            std::mem::take(&mut r.framebuf)
+        } else {
+            return;
         };
-
-        renderer.compose(
-            self.res.camera.map_x as u16,
-            self.res.camera.map_y as u16,
-            world,
+        let cycle        = self.res.clock.cycle as usize;
+        let hero_entity  = self.res.hero_entity;
+        blit_actors_inner(
+            &self.world,
+            hero_entity,
+            &self.res.sprites.sheets,
+            cycle,
+            map_x,
+            map_y,
+            &mut framebuf,
         );
+        // Put the framebuf back.
+        if let Some(r) = self.res.map.renderer.as_mut() {
+            r.framebuf = framebuf;
+        }
 
-        if renderer.framebuf.is_empty() { return; }
-
+        // Step 3: convert indexed framebuf to RGBA and blit to canvas.
         let pal = &self.res.palette.current_palette;
-        let mut rgb_buf: Vec<u8> = Vec::with_capacity(renderer.framebuf.len() * 4);
-        for &idx in &renderer.framebuf {
+        let framebuf = &self.res.map.renderer.as_ref().unwrap().framebuf;
+        let mut rgb_buf: Vec<u8> = Vec::with_capacity(framebuf.len() * 4);
+        for &idx in framebuf {
             let rgba = pal[(idx & 31) as usize];
             // ARGB8888 little-endian: bytes are [B, G, R, A]
             rgb_buf.push((rgba & 0xFF) as u8);
@@ -294,7 +324,6 @@ impl EcsScene {
             rgb_buf.push(0xFF);
         }
 
-        // Keep rgb_buf alive for the entire surface + texture + copy sequence.
         {
             let tc = canvas.texture_creator();
             if let Ok(surface) = sdl3::surface::Surface::from_data(
@@ -315,6 +344,85 @@ impl EcsScene {
             }
         }
         drop(rgb_buf);
+    }
+
+    /// Render the HI bar (stats, messages, compass) at the bottom of the canvas.
+    /// Port of `GameplayScene::render_hibar`.
+    fn render_hibar(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        resources: &mut SceneResources<'_, '_>,
+    ) {
+        // Gather hero stats from the ECS world.
+        let (brave, luck, kind, vitality, wealth) =
+            match self.world.get::<&crate::game::ecs::components::HeroStats>(self.res.hero_entity) {
+                Ok(s) => (s.brave, s.luck, s.kind, s.vitality, s.wealth),
+                Err(_) => return,
+            };
+
+        let hiscreen_opt = resources.find_image("hiscreen");
+        let amber_font   = resources.amber_font;
+        let compass_normal    = resources.compass_normal;
+        let compass_highlight = resources.compass_highlight;
+
+        // Current input direction → compass arrow index.
+        let input_dir = self.input.to_direction();
+        let compass_arrow = compass_dir_index(input_dir);
+        // Compass hit-regions from the old scene (pixel coords within hiscreen compass glyph).
+        let compass_regions = compass_hit_regions();
+
+        {
+            let tc = canvas.texture_creator();
+            if let Ok(mut hibar_tex) =
+                tc.create_texture_target(sdl3::pixels::PixelFormat::RGBA32, 640, HIBAR_NATIVE_H)
+            {
+                hibar_tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
+                let _ = canvas.with_texture_canvas(&mut hibar_tex, |hc| {
+                    hc.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
+                    hc.clear();
+
+                    if let Some(hiscreen) = hiscreen_opt {
+                        hiscreen.draw_scaled(hc, sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H));
+                    } else {
+                        hc.set_draw_color(sdl3::pixels::Color::RGB(80, 60, 20));
+                        hc.fill_rect(sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
+                    }
+
+                    amber_font.set_color_mod(0xAA, 0x55, 0x00);
+                    amber_font.render_string(&format!("Brv:{:3}", brave), hc, 14, 52);
+                    amber_font.render_string(&format!("Lck:{:3}", luck), hc, 90, 52);
+                    amber_font.render_string(&format!("Knd:{:3}", kind), hc, 168, 52);
+                    amber_font.render_string(&format!("Vit:{:3}", vitality), hc, 245, 52);
+                    amber_font.render_string(&format!("Wlth:{:3}", wealth), hc, 321, 52);
+                    amber_font.set_color_mod(255, 255, 255);
+
+                    // Compass.
+                    const COMPASS_X: i32 = 567;
+                    const COMPASS_SRC_Y: i32 = 15;
+                    const COMPASS_SRC_W: u32 = 48;
+                    const COMPASS_SRC_H: u32 = 24;
+                    let compass_dest = sdl3::rect::Rect::new(COMPASS_X, COMPASS_SRC_Y, COMPASS_SRC_W, COMPASS_SRC_H);
+                    if let Some(normal_tex) = compass_normal {
+                        hc.copy(normal_tex, None, compass_dest).ok();
+                    }
+                    if compass_arrow < compass_regions.len() {
+                        let (rx, ry, rw, rh) = compass_regions[compass_arrow];
+                        if rw > 1 || rh > 1 {
+                            if let Some(hl_tex) = compass_highlight {
+                                let src = sdl3::rect::Rect::new(rx, ry, rw as u32, rh as u32);
+                                let dst = sdl3::rect::Rect::new(COMPASS_X + rx, COMPASS_SRC_Y + ry, rw as u32, rh as u32);
+                                hc.copy(hl_tex, src, dst).ok();
+                            }
+                        }
+                    }
+                });
+                canvas.copy(
+                    &hibar_tex,
+                    sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H),
+                    sdl3::rect::Rect::new(0, HIBAR_Y, 640, HIBAR_H),
+                ).ok();
+            }; // semicolon: drops Result<Texture> temporary before tc is dropped
+        }
     }
 
     /// Run one gameplay tick: advance all systems then drain debug commands.
@@ -505,6 +613,7 @@ impl Scene for EcsScene {
         canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
         canvas.clear();
         self.render_map(canvas);
+        self.render_hibar(canvas, resources);
 
         // Render the debug console overlay if present.
         if let Some(console) = &mut self.console {
@@ -521,6 +630,214 @@ impl Scene for EcsScene {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+}
+
+// ── Sprite render helpers (ported from gameplay_scene/rendering.rs) ──────────
+
+/// Compute an actor's framebuf-relative position from world coords.
+/// Mirrors `GameplayScene::actor_rel_pos` (fmain.c sprite blit offset).
+fn actor_rel_pos(abs_x: f32, abs_y: f32, map_x: u16, map_y: u16) -> (i32, i32) {
+    const WRAP: i32 = 0x8000;
+    const OX: i32 = -8;
+    const OY: i32 = -26;
+    let dx = (abs_x as i32 - map_x as i32 + OX).rem_euclid(WRAP);
+    let rel_x = if dx > WRAP / 2 { dx - WRAP } else { dx };
+    let dy = (abs_y as i32 - map_y as i32 + OY).rem_euclid(WRAP);
+    let rel_y = if dy > WRAP / 2 { dy - WRAP } else { dy };
+    (rel_x, rel_y)
+}
+
+/// Blit a 16-wide sprite frame into the indexed framebuf, skipping transparent pixels (index 31).
+fn blit_sprite_to_framebuf(
+    frame_pixels: &[u8],
+    rel_x: i32,
+    rel_y: i32,
+    max_rows: usize,
+    framebuf: &mut [u8],
+    fb_w: i32,
+    fb_h: i32,
+) {
+    use crate::game::sprites::{SPRITE_H, SPRITE_W};
+    let row_limit = max_rows.min(SPRITE_H) as i32;
+    for row in 0..row_limit {
+        let dst_y = rel_y + row;
+        if dst_y < 0 || dst_y >= fb_h { continue; }
+        for col in 0..SPRITE_W as i32 {
+            let dst_x = rel_x + col;
+            if dst_x < 0 || dst_x >= fb_w { continue; }
+            let src_idx = frame_pixels[(row as usize) * SPRITE_W + col as usize];
+            if src_idx == 31 { continue; }
+            framebuf[(dst_y * fb_w + dst_x) as usize] = src_idx;
+        }
+    }
+}
+
+/// Map facing direction to walking sprite frame base (diroffs[0..7]).
+fn facing_to_frame_base(facing: Direction) -> usize {
+    const DIROFFS_WALK: [usize; 9] = [16, 16, 24, 24, 0, 0, 8, 8, 0];
+    DIROFFS_WALK[facing as usize]
+}
+
+/// Map facing direction to fighting sprite frame base (diroffs[8..15]).
+fn facing_to_fight_frame_base(facing: Direction) -> usize {
+    const DIROFFS_FIGHT: [usize; 9] = [56, 56, 68, 68, 32, 32, 44, 44, 32];
+    DIROFFS_FIGHT[facing as usize]
+}
+
+/// Map (npc_type, race) → cfile index.  Returns None for setfigs and skipped types.
+fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
+    use crate::game::npc::*;
+    match npc_type {
+        NPC_TYPE_NONE | NPC_TYPE_CONTAINER => None,
+        NPC_TYPE_HUMAN if race == RACE_ENEMY => Some(6),
+        NPC_TYPE_HUMAN => None, // SetFig — skip here
+        NPC_TYPE_SWAN   => Some(11),
+        NPC_TYPE_HORSE  => Some(5),
+        NPC_TYPE_DRAGON => Some(10),
+        NPC_TYPE_GHOST | NPC_TYPE_WRAITH | NPC_TYPE_SKELETON => Some(7),
+        NPC_TYPE_ORC    => Some(6),
+        NPC_TYPE_SNAKE | NPC_TYPE_SPIDER | NPC_TYPE_DKNIGHT => Some(8),
+        NPC_TYPE_LORAII | NPC_TYPE_NECROMANCER => Some(9),
+        NPC_TYPE_RAFT   => Some(4),
+        _ => Some(6),
+    }
+}
+
+/// Blit all visible actors (hero + enemies) into the indexed framebuf.
+/// Takes individual fields to avoid borrow conflicts with the framebuf.
+/// Must be called after `MapRenderer::compose()` and before palette conversion.
+fn blit_actors_inner(
+    world: &World,
+    hero_entity: hecs::Entity,
+    sheets: &[Option<crate::game::sprites::SpriteSheet>],
+    cycle: usize,
+    map_x: u16,
+    map_y: u16,
+    framebuf: &mut Vec<u8>,
+) {
+    use crate::game::actor::ActorState;
+    use crate::game::ecs::components::{
+        ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Position,
+    };
+    use crate::game::npc::NpcState;
+    use crate::game::sprites::{SPRITE_H, SPRITE_W, STATELIST};
+
+    let fb_w = MAP_DST_W as i32;
+    let fb_h = MAP_DST_H as i32;
+
+    // ── Hero ──────────────────────────────────────────────────────────────────
+    type HeroQuery<'a> = (
+        &'a Hero,
+        &'a Position,
+        &'a Facing,
+        Option<&'a ActorMotion>,
+        Option<&'a CombatState>,
+        Option<&'a FrustFlag>,
+        Option<&'a BrotherKind>,
+    );
+    let mut hero_q = world.query_one::<HeroQuery<'_>>(hero_entity);
+    if let Ok((_, pos, facing_c, motion_opt, combat_opt, frust_opt, brother_opt)) = hero_q.get() {
+        let cfile_idx: usize = brother_opt.map(|b: &BrotherKind| b.id as usize).unwrap_or(0).min(2);
+        if let Some(Some(ref sheet)) = sheets.get(cfile_idx) {
+            let (rel_x, mut rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
+            let environ: i8 = motion_opt.map(|m: &ActorMotion| m.environ).unwrap_or(0);
+            let body_rows: usize = if environ == 2 {
+                SPRITE_H.saturating_sub(10)
+            } else if environ > 2 {
+                rel_y += environ as i32;
+                SPRITE_H.saturating_sub(environ as usize)
+            } else {
+                SPRITE_H
+            };
+
+            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
+                && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
+            {
+                let hero_facing  = facing_c.dir;
+                let is_moving: bool  = motion_opt.map(|m: &ActorMotion| m.moving).unwrap_or(false);
+                let combat_state: Option<&ActorState> = combat_opt.map(|c: &CombatState| &c.state);
+                let frustflag: u8    = frust_opt.map(|f: &FrustFlag| f.count).unwrap_or(0);
+
+                let frame = if frustflag >= 41 {
+                    40
+                } else if frustflag >= 21 {
+                    84 + ((cycle >> 1) & 1)
+                } else if let Some(ActorState::Fighting(f)) = combat_state {
+                    let fight_base = facing_to_fight_frame_base(hero_facing);
+                    fight_base + (*f as usize).min(8)
+                } else {
+                    let frame_base = facing_to_frame_base(hero_facing);
+                    if is_moving { frame_base + cycle % 8 } else { frame_base + 1 }
+                };
+
+                let body_frame = if let Some(ActorState::Fighting(_)) = combat_state {
+                    STATELIST.get(frame).map(|e| e.figure as usize).unwrap_or(frame)
+                } else {
+                    frame
+                };
+
+                if let Some(fp) = sheet.frame_pixels(body_frame) {
+                    blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
+                }
+            }
+        }
+    }
+
+    // ── Enemies ───────────────────────────────────────────────────────────────
+    let mut enemy_q = world.query::<(
+        &Enemy,
+        &Position,
+        &Facing,
+        &crate::game::ecs::components::EnemyKind,
+        Option<&AiState>,
+    )>();
+    for (idx, (_, pos, facing_c, kind, ai_opt)) in enemy_q.iter().enumerate() {
+        let Some(cfile_idx) = npc_type_to_cfile(kind.npc_type, kind.race) else { continue; };
+        let Some(Some(ref sheet)) = sheets.get(cfile_idx) else { continue; };
+
+        let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
+        if rel_x <= -(SPRITE_W as i32) || rel_x >= fb_w
+            || rel_y <= -(SPRITE_H as i32) || rel_y >= fb_h
+        {
+            continue;
+        }
+
+        let npc_state = ai_opt.map(|a| &a.state).unwrap_or(&NpcState::Still);
+        let frame_base = facing_to_frame_base(facing_c.dir);
+        let frame = match npc_state {
+            NpcState::Walking => frame_base + ((cycle + idx) & 7),
+            NpcState::Still   => frame_base + 1,
+            _                 => frame_base,
+        } % sheet.num_frames.max(1);
+
+        if let Some(fp) = sheet.frame_pixels(frame) {
+            blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, framebuf, fb_w, fb_h);
+        }
+    }
+}
+
+// ── Compass helpers ───────────────────────────────────────────────────────────
+
+/// Map a Direction to its compass arrow index (0..9, where 9=None).
+fn compass_dir_index(dir: Direction) -> usize {
+    // Amiga order: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7, None=8
+    dir as usize
+}
+
+/// Compass hit-regions: (rx, ry, rw, rh) pixel rects within the compass glyph.
+/// Ported from `GameplayScene::compass_regions` (gameplay_scene/mod.rs).
+fn compass_hit_regions() -> [(i32, i32, i32, i32); 9] {
+    [
+        (0, 0, 16, 12),   // NW
+        (16, 0, 16, 8),   // N
+        (32, 0, 16, 12),  // NE
+        (37, 8, 11, 8),   // E
+        (32, 12, 16, 12), // SE
+        (16, 16, 16, 8),  // S
+        (0, 12, 16, 12),  // SW
+        (0, 8, 11, 8),    // W
+        (0, 0, 0, 0),     // None — no highlight
+    ]
 }
 
 // ── Palette helpers (ported from gameplay_scene/region.rs) ───────────────────
