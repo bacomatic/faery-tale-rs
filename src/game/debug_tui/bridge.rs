@@ -11,8 +11,8 @@
 //! are feature-gated.
 
 use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
-use crate::game::gameplay_scene::Direction;
-use crate::game::game_state::DayPhase;
+use crate::game::day_phase::DayPhase;
+use crate::game::direction::Direction;
 use crate::game::npc::{Npc, NpcState};
 
 // Re-export the command / log types the spec places in bridge.rs. They

@@ -2,14 +2,7 @@ use crate::game::actor::Actor;
 use crate::game::debug_command::GodModeFlags;
 use crate::game::direction::Direction;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum DayPhase {
-    #[default]
-    Midnight = 0,
-    Morning = 4,
-    Midday = 6,
-    Evening = 9,
-}
+pub use crate::game::day_phase::DayPhase;
 
 /// Lasso item index in stuff array (from original fmain.h).
 pub const ITEM_LASSO: usize = 5;

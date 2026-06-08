@@ -1,7 +1,7 @@
 //! NPC AI decision system — ports do_tactic/set_course/select_tactic from fmain.c/fmain2.c.
 
 use crate::game::actor::{Goal, Tactic};
-use crate::game::gameplay_scene::Direction;
+use crate::game::direction::Direction;
 use crate::game::npc::{Npc, NpcState};
 
 /// Simple deterministic RNG for AI decisions.

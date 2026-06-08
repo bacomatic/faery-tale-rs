@@ -2,7 +2,7 @@
 //! Ports the battle loop from original fmain.c.
 
 use crate::game::game_state::GameState;
-use crate::game::gameplay_scene::Direction;
+use crate::game::direction::Direction;
 use crate::game::npc::{Npc, RACE_GHOST, RACE_NECROMANCER, RACE_SPECTRE, RACE_WITCH};
 
 /// Maximum concurrent projectiles (missile_list[6] from fmain.c).

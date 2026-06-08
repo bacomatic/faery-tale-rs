@@ -23,9 +23,8 @@ use crate::game::cursor::CursorAsset;
 use crate::game::debug_command::{DebugCommand, DEFAULT_TICK_RATE_HZ};
 use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
 use crate::game::game_clock::GameClock;
-use crate::game::game_state::DayPhase;
+use crate::game::day_phase::DayPhase;
 use crate::game::ecs::scene::EcsScene;
-use crate::game::gameplay_scene::GameplayScene;
 use crate::game::intro_scene::IntroScene;
 use crate::game::placard_scene::PlacardScene;
 use crate::game::render_resources::RenderResources;
@@ -46,12 +45,6 @@ struct Cli {
     /// Skip the intro sequence and jump straight to gameplay (requires --debug)
     #[arg(long, requires = "debug")]
     skip_intro: bool,
-    /// Echo every story-transcript message to the console as it is generated
-    #[arg(long)]
-    echo_transcript: bool,
-    /// Use the ECS-based gameplay scene instead of the legacy GameplayScene
-    #[arg(long)]
-    ecs: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -270,14 +263,7 @@ pub fn main() -> Result<(), String> {
     }
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
-            let gs: Box<dyn Scene> = if cli.ecs {
-                Box::new(EcsScene::new(&game_lib, None))
-            } else {
-                let mut gs = GameplayScene::new();
-                gs.init_from_library(&game_lib);
-                gs.set_echo_transcript(cli.echo_transcript);
-                Box::new(gs)
-            };
+            let gs: Box<dyn Scene> = Box::new(EcsScene::new(&game_lib, None));
             (ScenePhase::Gameplay, Some(gs))
         } else {
             (
@@ -524,15 +510,7 @@ pub fn main() -> Result<(), String> {
                             if let Some(ref a) = audio_system {
                                 a.stop_score();
                             }
-                            let gs: Box<dyn Scene> = if cli.ecs {
-                                Box::new(EcsScene::new(&game_lib, None))
-                            } else {
-                                let mut gs = GameplayScene::new();
-                                gs.init_from_library(&game_lib);
-                                gs.set_echo_transcript(cli.echo_transcript);
-                                Box::new(gs)
-                            };
-                            active_scene = Some(gs);
+                            active_scene = Some(Box::new(EcsScene::new(&game_lib, None)));
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
                             clear_flag = true;
@@ -542,17 +520,9 @@ pub fn main() -> Result<(), String> {
                             // If the Talisman win condition fired, transition
                             // into the victory sequence (placard → winpic);
                             // otherwise treat as restart.
-                            let won = scene
-                                .as_any()
-                                .downcast_ref::<GameplayScene>()
-                                .map(|gs| gs.is_victory())
-                                .unwrap_or(false);
+                            let won = false; // TODO(Plan D): EcsScene victory detection
                             if won {
-                                let hero = scene
-                                    .as_any()
-                                    .downcast_ref::<GameplayScene>()
-                                    .map(|gs| gs.hero_name())
-                                    .unwrap_or("Julian");
+                                let hero = "Julian"; // TODO(Plan D): EcsScene hero name
                                 if let Some(ref a) = audio_system {
                                     a.stop_score();
                                 }
@@ -564,15 +534,7 @@ pub fn main() -> Result<(), String> {
                                 scene_phase = ScenePhase::VictoryPlacard;
                             } else {
                                 // Game over or restart — re-create gameplay scene
-                                let gs: Box<dyn Scene> = if cli.ecs {
-                                    Box::new(EcsScene::new(&game_lib, None))
-                                } else {
-                                    let mut gs = GameplayScene::new();
-                                    gs.init_from_library(&game_lib);
-                                    gs.set_echo_transcript(cli.echo_transcript);
-                                    Box::new(gs)
-                                };
-                                active_scene = Some(gs);
+                                active_scene = Some(Box::new(EcsScene::new(&game_lib, None)));
                             }
                             dirty = true;
                         }
@@ -637,13 +599,13 @@ pub fn main() -> Result<(), String> {
             dirty = false;
         }
 
-        // Feed debug commands from console into GameplayScene
+        // Feed debug commands from console into EcsScene
         // and drain gameplay debug logs back to the console.
         if let (Some(ref mut dc), Some(ref mut scene)) =
             (debug_console.as_mut(), active_scene.as_mut())
         {
             let cmds = dc.drain_commands();
-            if let Some(gs) = scene.as_any_mut().downcast_mut::<GameplayScene>() {
+            if let Some(ecs) = scene.as_any_mut().downcast_mut::<EcsScene>() {
                 for cmd in cmds {
                     if let DebugCommand::SetTickRate { hz } = cmd {
                         debug_tick_hz = hz;
@@ -653,15 +615,8 @@ pub fn main() -> Result<(), String> {
                             hz as f64 / 30.0
                         ));
                     } else {
-                        gs.apply_command(cmd);
+                        crate::game::ecs::debug_commands::handle(cmd, &mut ecs.world, &mut ecs.res);
                     }
-                }
-                for msg in gs.drain_logs() {
-                    dc.log(msg);
-                }
-                // DBG-LOG-04: drain categorized entries emitted by gameplay code.
-                for entry in gs.pending_log.drain(..) {
-                    dc.log_entry(entry);
                 }
                 // Build status snapshot
                 let song_group_count = song_library
@@ -669,168 +624,17 @@ pub fn main() -> Result<(), String> {
                     .map(|l| l.tracks.len() / SongLibrary::VOICES)
                     .unwrap_or(0);
                 let current_song_group = audio_system.as_ref().and_then(|a| a.current_group());
-                let (gday, ghour, gminute) = gs.state.daynight_to_wall_clock();
                 let status = DebugSnapshot {
                     fps: game_fps,
                     tps: game_tps,
-                    game_day: gday,
-                    game_hour: ghour,
-                    game_minute: gminute,
-                    day_phase: gs.state.get_day_phase(),
-                    daynight: gs.state.daynight,
-                    lightlevel: gs.state.lightlevel,
                     game_ticks: clock.game_ticks,
                     paused: clock.paused,
+                    is_paused: clock.paused,
                     scene_name: Some("Gameplay".to_owned()),
-                    hero_x: gs.state.hero_x,
-                    hero_y: gs.state.hero_y,
-                    brother: gs.state.brother,
-                    region_num: gs.state.region_num,
-                    vitality: gs.state.vitality,
-                    hunger: gs.state.hunger,
-                    fatigue: gs.state.fatigue,
-                    god_mode_flags: gs.state.god_mode.bits(),
-                    time_held: gs.state.freeze_sticky,
                     song_group_count,
                     current_song_group,
                     cave_mode: audio_system.as_ref().map_or(false, |a| a.is_cave_mode()),
-                    current_zone_idx: {
-                        let (idx, _) = gs.current_zone_info();
-                        idx
-                    },
-                    current_zone_label: {
-                        let (_, label) = gs.current_zone_info();
-                        label
-                    },
-                    vfx_jewel_active: gs.state.light_timer > 0,
-                    vfx_light_sticky: gs.state.light_sticky,
-                    vfx_secret_active: gs.state.region_num == 9 && gs.state.secret_timer > 0,
-                    vfx_witch_active: gs.is_witch_active(),
-                    vfx_teleport_active: gs.is_teleport_active(),
-                    vfx_palette_xfade: gs.is_palette_xfade_active(),
-                    time_period: crate::game::debug_tui::day_phase_label(gs.state.get_day_phase()),
-                    is_paused: clock.paused,
-                    princess_captive: gs
-                        .state
-                        .world_objects
-                        .get(9)
-                        .map_or(false, |o| o.ob_stat != 0),
-                    princess_rescues: gs.state.princess as u16,
-                    statues_collected: gs.state.stuff().get(25).copied().unwrap_or(0) as u8,
-                    has_writ: gs.state.stuff().get(28).copied().unwrap_or(0) != 0,
-                    has_talisman: gs.state.stuff().get(22).copied().unwrap_or(0) != 0,
-                    encounter_number: gs.state.encounter_number,
-                    encounter_type: gs.state.encounter_type as u8,
-                    active_enemy_count: gs.state.anix as u8,
-                    stuff: gs.state.stuff().to_vec(),
-                    cheat1: gs.state.cheat1,
-                    wealth: gs.state.wealth as u16,
-                    brave: gs.state.brave as u16,
-                    actors: {
-                        let mut v: Vec<crate::game::debug_tui::ActorSnapshot> = gs
-                            .state
-                            .actors
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, a)| a.is_active())
-                            .take(20)
-                            .map(|(slot, a)| {
-                                crate::game::debug_tui::ActorSnapshot::from_actor(slot as u8, a)
-                            })
-                            .collect();
-                        if let Some(ref table) = gs.npc_table {
-                            for (i, npc) in table.npcs.iter().enumerate() {
-                                if npc.active {
-                                    v.push(crate::game::debug_tui::ActorSnapshot::from_npc(i, npc));
-                                }
-                            }
-                        }
-                        v
-                    },
-                    // Hero top-row extras (DBG-LAYOUT-01)
-                    max_vitality: 15 + (gs.state.brave / 4),
-                    luck: gs.state.luck,
-                    kind: gs.state.kind,
-                    hero_weapon: gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
-                    hero_weapon_name: crate::game::debug_tui::weapon_short_name(
-                        gs.state.actors.first().map(|a| a.weapon).unwrap_or(0),
-                    )
-                    .to_string(),
-                    hero_state_u8: gs
-                        .state
-                        .actors
-                        .first()
-                        .map(|a| {
-                            use crate::game::actor::ActorState as AS;
-                            match a.state {
-                                AS::Still => 0,
-                                AS::Walking => 1,
-                                AS::Fighting(_) => 2,
-                                AS::Dying => 3,
-                                AS::Dead => 4,
-                                AS::Shooting(_) => 5,
-                                AS::Sinking => 6,
-                                AS::Falling => 7,
-                                AS::Sleeping => 8,
-                            }
-                        })
-                        .unwrap_or(0),
-                    hero_state_name: gs
-                        .state
-                        .actors
-                        .first()
-                        .map(|a| {
-                            use crate::game::actor::ActorState as AS;
-                            let discriminant: u8 = match a.state {
-                                AS::Still => 0,
-                                AS::Walking => 1,
-                                AS::Fighting(_) => 2,
-                                AS::Dying => 3,
-                                AS::Dead => 4,
-                                AS::Shooting(_) => 5,
-                                AS::Sinking => 6,
-                                AS::Falling => 7,
-                                AS::Sleeping => 8,
-                            };
-                            crate::game::debug_tui::actor_state_name(discriminant).to_string()
-                        })
-                        .unwrap_or_else(|| "—".to_string()),
-                    hero_facing: gs.state.actors.first().map(|a| a.facing as u8).unwrap_or(0),
-                    hero_environ: gs.state.actors.first().map(|a| a.environ).unwrap_or(0),
-                    active_carrier: gs.state.active_carrier,
-                    active_carrier_name: crate::game::debug_tui::carrier_name(
-                        gs.state.active_carrier,
-                    )
-                    .to_string(),
-                    jewel_timer: gs.state.light_timer.max(0) as u16,
-                    totem_timer: 0,
-                    freeze_timer: gs.state.freeze_timer.max(0) as u16,
-                    raft_xy: {
-                        use crate::game::actor::ActorKind;
-                        gs.state.actors.get(1).and_then(|a| {
-                            if a.is_active() && matches!(a.kind, ActorKind::Raft) {
-                                Some((a.abs_x, a.abs_y))
-                            } else {
-                                None
-                            }
-                        })
-                    },
-                    missile_count: gs.missiles.iter().filter(|m| m.active).count().min(255) as u8,
-                    item_count: {
-                        use crate::game::actor::ActorKind;
-                        gs.state
-                            .actors
-                            .iter()
-                            .enumerate()
-                            .filter(|(i, a)| {
-                                *i >= 7
-                                    && *i <= 19
-                                    && a.is_active()
-                                    && matches!(a.kind, ActorKind::Object)
-                            })
-                            .count()
-                            .min(255) as u8
-                    },
+                    ..DebugSnapshot::default()
                 };
                 dc.update_status(status);
             } else {

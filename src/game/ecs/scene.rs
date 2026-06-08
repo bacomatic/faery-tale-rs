@@ -1,9 +1,7 @@
 //! [`EcsScene`] — the ECS-based gameplay scene, implementing the [`Scene`] trait.
 //!
-//! This is the entry point for Plan D: a parallel gameplay implementation that
-//! runs the ECS system schedule each tick while the old `GameplayScene` is still
-//! the default. `EcsScene` will gradually absorb subsystems from `GameplayScene`
-//! over Plans D–F.
+//! This is the sole gameplay scene since `GameplayScene` was removed.
+//! Subsystems are being ported into ECS systems over Plans D–F.
 
 use std::any::Any;
 
@@ -27,8 +25,8 @@ use super::debug_commands;
 /// Owns the `hecs::World` and the singleton `Resources`. Each call to
 /// `update()` runs one or more gameplay ticks followed by a render pass.
 pub struct EcsScene {
-    world:   World,
-    res:     Resources,
+    pub world:   World,
+    pub res:     Resources,
     console: Option<DebugConsole>,
 }
 
