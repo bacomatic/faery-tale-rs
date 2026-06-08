@@ -310,13 +310,15 @@ impl Scene for EcsScene {
         _play_tex: &mut Texture,
         delta_ticks: u32,
         _game_lib: &GameLibrary,
-        _resources: &mut SceneResources<'_, '_>,
+        resources: &mut SceneResources<'_, '_>,
     ) -> SceneResult {
         // Run one tick per delta unit (capped to avoid spiral-of-death).
         let ticks = delta_ticks.min(4);
         for _ in 0..ticks.max(1) {
             self.run_tick();
         }
+
+        self.run_audio(resources);
 
         // Render the debug console overlay if present.
         if let Some(console) = &mut self.console {
