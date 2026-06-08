@@ -7,6 +7,7 @@ Endpoints:
 
 Run with:
   tools/run.sh research_agent/server.py [--port 8765]
+  python3 tools/research_agent/server.py [--port 8765]
 """
 from __future__ import annotations
 
@@ -15,7 +16,17 @@ import logging
 import sys
 import uuid
 import time
+from pathlib import Path
 from typing import Optional
+
+# Allow running as `python3 tools/research_agent/server.py` directly
+if __name__ == "__main__" and __package__ is None:
+    _tools_dir = Path(__file__).parent.parent
+    if str(_tools_dir) not in sys.path:
+        sys.path.insert(0, str(_tools_dir))
+    import runpy
+    runpy.run_module("research_agent.server", run_name="__main__", alter_sys=True)
+    sys.exit(0)
 
 import uvicorn
 from fastapi import FastAPI

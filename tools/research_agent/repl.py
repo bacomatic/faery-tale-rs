@@ -2,6 +2,7 @@
 
 Run with:
   tools/run.sh research_agent/repl.py
+  python3 tools/research_agent/repl.py
 
 Special commands:
   /reset    — clear conversation history
@@ -13,6 +14,16 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from pathlib import Path
+
+# Allow running as `python3 tools/research_agent/repl.py` directly
+if __name__ == "__main__" and __package__ is None:
+    _tools_dir = Path(__file__).parent.parent
+    if str(_tools_dir) not in sys.path:
+        sys.path.insert(0, str(_tools_dir))
+    import runpy
+    runpy.run_module("research_agent.repl", run_name="__main__", alter_sys=True)
+    sys.exit(0)
 
 from .agent import Session, create_agent
 from .config import Settings
