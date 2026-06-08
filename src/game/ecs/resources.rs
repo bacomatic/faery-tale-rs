@@ -224,6 +224,8 @@ pub struct Resources {
     pub hero_entity: Entity,
     /// Handle for the active carrier entity, if any.
     pub carrier_entity: Option<Entity>,
+    /// Last entity that triggered proximity auto-speech (dedup — same NPC only speaks once per approach).
+    pub last_speech_entity: Option<Entity>,
 }
 
 impl Resources {
@@ -242,8 +244,9 @@ impl Resources {
             encounter:      EncounterContext::default(),
             vfx:            VfxState::default(),
             events:         Events::default(),
-            hero_entity:    placeholder,
-            carrier_entity: None,
+            hero_entity:         placeholder,
+            carrier_entity:      None,
+            last_speech_entity:  None,
         }
     }
 }
