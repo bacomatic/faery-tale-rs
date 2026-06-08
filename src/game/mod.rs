@@ -20,6 +20,7 @@ pub mod debug_items;
 pub mod debug_log;
 pub mod debug_tui;
 pub mod doors;
+pub mod ecs;
 pub mod encounter;
 pub mod events;
 pub mod font;
