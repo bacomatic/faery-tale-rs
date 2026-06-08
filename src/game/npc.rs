@@ -167,7 +167,7 @@ impl Npc {
             self.y = proposed_y as i16;
         } else {
             // Wall-sliding: try clockwise then counter-clockwise deviation.
-            let dev_cw = (facing + 1) & 7;
+            let dev_cw = self.facing.rotate_cw() as u8;
             let cw_x = newx(self.x as u16, dev_cw, dist);
             let cw_y = newy(self.y as u16, dev_cw, dist);
             let cw_terrain = self.race == RACE_WRAITH || proxcheck(world, cw_x as i32, cw_y as i32);
@@ -176,7 +176,7 @@ impl Npc {
                 self.x = cw_x as i16;
                 self.y = cw_y as i16;
             } else {
-                let dev_ccw = (facing.wrapping_sub(1)) & 7;
+                let dev_ccw = self.facing.rotate_ccw() as u8;
                 let ccw_x = newx(self.x as u16, dev_ccw, dist);
                 let ccw_y = newy(self.y as u16, dev_ccw, dist);
                 let ccw_terrain =

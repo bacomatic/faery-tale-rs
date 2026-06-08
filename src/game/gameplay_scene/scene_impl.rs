@@ -654,7 +654,7 @@ impl Scene for GameplayScene {
                             .collect()
                     });
                 let mut hero_missile_damage: i16 = 0;
-                let mut npc_hits: Vec<(usize, u8, i16)> = vec![]; // (npc_idx, facing, damage)
+                let mut npc_hits: Vec<(usize, Direction, i16)> = vec![]; // (npc_idx, facing, damage)
                 for (slot, missile) in self.missiles.iter_mut().enumerate() {
                     if !missile.active {
                         continue;
@@ -944,7 +944,7 @@ impl Scene for GameplayScene {
                                     && rel_y < fb_h
                                 {
                                     let hero_facing =
-                                        self.state.actors.first().map_or(0u8, |a| a.facing as u8);
+                                        self.state.actors.first().map_or(Direction::NW, |a| a.facing);
                                     let is_moving =
                                         self.state.actors.first().map_or(false, |a| a.moving);
                                     let hero_state = self.state.actors.first().map(|a| &a.state);
@@ -971,11 +971,11 @@ impl Scene for GameplayScene {
                                         };
 
                                     // Weapon draw order (fmain.c:2907-2916 passmode):
-                                    // Original facing: 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
-                                    // Rust facing:     0=N, 1=NE,2=E, 3=SE,4=S, 5=SW,6=W, 7=NW
-                                    // (orig_facing - 2) & 4 → behind for orig 0,1,6,7 = NW,N,SW,W
-                                    // Mapped to Rust: N(0), SW(5), W(6), NW(7).
-                                    let weapon_behind = matches!(hero_facing, 0 | 5 | 6 | 7);
+                                    // (orig_facing - 2) & 4 == 0 → behind for NW,N,SW,W (Amiga 0,1,6,7).
+                                    let weapon_behind = matches!(
+                                        hero_facing,
+                                        Direction::NW | Direction::N | Direction::SW | Direction::W
+                                    );
 
                                     // Build BlittedSprite for masking
                                     let sprite_info = BlittedSprite {
@@ -1136,7 +1136,7 @@ impl Scene for GameplayScene {
                                 let wpn_blit = if npc.weapon > 0 && npc.weapon < 8 {
                                     if let Some(ref obj_sheet) = self.object_sprites {
                                         Self::compute_weapon_blit(
-                                            frame, npc.facing as u8, npc.weapon, 0, // NPCs don't use hero-style shooting counter
+                                            frame, npc.facing, npc.weapon, 0, // NPCs don't use hero-style shooting counter
                                             obj_sheet, rel_x, rel_y,
                                         )
                                     } else {

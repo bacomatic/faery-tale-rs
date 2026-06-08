@@ -165,7 +165,7 @@ fn test_necromancer_death_transforms_to_woodcutter() {
     };
     scene.npc_table = Some(table);
     // target_idx=2 → npc_idx=0 (saturating_sub(2)). damage=0 preserves vitality=0.
-    scene.apply_hit(0, 2, 0, 0);
+    scene.apply_hit(0, 2, Direction::NW, 0);
     let npc = scene.npc_table.as_ref().unwrap().npcs[0].clone();
     assert_eq!(
         npc.race, RACE_WOODCUTTER,
@@ -208,7 +208,7 @@ fn test_necromancer_death_drops_talisman_at_death_location() {
         ..Default::default()
     };
     scene.npc_table = Some(table);
-    scene.apply_hit(0, 2, 0, 0);
+    scene.apply_hit(0, 2, Direction::NW, 0);
     // Capture the NPC's position after pushback (that is where the talisman is dropped).
     let (expected_x, expected_y) = {
         let npc = &scene.npc_table.as_ref().unwrap().npcs[0];
@@ -260,7 +260,7 @@ fn test_necromancer_death_talisman_not_dropped_for_other_enemies() {
         ..Default::default()
     };
     scene.npc_table = Some(table);
-    scene.apply_hit(0, 2, 0, 0);
+    scene.apply_hit(0, 2, Direction::NW, 0);
     assert!(
         scene.state.world_objects.iter().all(|o| o.ob_id != 139),
         "talisman must NOT drop when a non-necromancer dies"
@@ -333,27 +333,27 @@ fn test_non_talisman_pickup_does_not_trigger_victory() {
 #[test]
 fn test_facing_to_frame_base() {
     // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by Amiga DIR_NW=0..DIR_W=7.
-    assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // DIR_NW → northwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(1), 16); // DIR_N  → northwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // DIR_NE → eastwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(3), 24); // DIR_E  → eastwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(4),  0); // DIR_SE → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(5),  0); // DIR_S  → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(6),  8); // DIR_SW → westwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(7),  8); // DIR_W  → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::NW), 16); // DIR_NW → northwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::N),  16); // DIR_N  → northwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::NE), 24); // DIR_NE → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::E),  24); // DIR_E  → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::SE),  0); // DIR_SE → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::S),   0); // DIR_S  → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::SW),  8); // DIR_SW → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(Direction::W),   8); // DIR_W  → westwalk
 }
 
 #[test]
 fn test_facing_to_fight_frame_base() {
     // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by Amiga DIR_NW=0..DIR_W=7.
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // DIR_NW → northfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 56); // DIR_N  → northfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // DIR_NE → eastfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 68); // DIR_E  → eastfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // DIR_SE → southfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 32); // DIR_S  → southfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // DIR_SW → westfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 44); // DIR_W  → westfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::NW), 56); // DIR_NW → northfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::N),  56); // DIR_N  → northfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::NE), 68); // DIR_NE → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::E),  68); // DIR_E  → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::SE), 32); // DIR_SE → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::S),  32); // DIR_S  → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::SW), 44); // DIR_SW → westfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::W),  44); // DIR_W  → westfight
 }
 
 #[test]
@@ -1075,20 +1075,20 @@ mod look_handler_tests {
 
 #[cfg(test)]
 mod combat_tests {
-    use super::push_offset;
+    use super::{push_offset, Direction};
 
     #[test]
     fn test_push_offset_directions() {
         // Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
         //                    DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7
-        assert_eq!(push_offset(0, 2), (-2, -2)); // DIR_NW
-        assert_eq!(push_offset(1, 2), (0, -2));  // DIR_N
-        assert_eq!(push_offset(2, 2), (2, -2));  // DIR_NE
-        assert_eq!(push_offset(3, 2), (2, 0));   // DIR_E
-        assert_eq!(push_offset(4, 2), (2, 2));   // DIR_SE
-        assert_eq!(push_offset(5, 2), (0, 2));   // DIR_S
-        assert_eq!(push_offset(6, 2), (-2, 2));  // DIR_SW
-        assert_eq!(push_offset(7, 2), (-2, 0));  // DIR_W
+        assert_eq!(push_offset(Direction::NW, 2), (-2, -2));
+        assert_eq!(push_offset(Direction::N,  2), (0,  -2));
+        assert_eq!(push_offset(Direction::NE, 2), (2,  -2));
+        assert_eq!(push_offset(Direction::E,  2), (2,   0));
+        assert_eq!(push_offset(Direction::SE, 2), (2,   2));
+        assert_eq!(push_offset(Direction::S,  2), (0,   2));
+        assert_eq!(push_offset(Direction::SW, 2), (-2,  2));
+        assert_eq!(push_offset(Direction::W,  2), (-2,  0));
     }
 }
 
@@ -2286,19 +2286,19 @@ mod t1_arena_spectre_tests {
 
 #[cfg(test)]
 mod t2_compass_tests {
-    use super::compass_dir_for_facing;
+    use super::{compass_dir_for_facing, Direction};
 
     #[test]
     fn test_compass_dir_for_facing() {
         // Amiga DIR_* order: identity mapping NW=0..W=7
-        assert_eq!(compass_dir_for_facing(0), 0); // DIR_NW → comptable[0]
-        assert_eq!(compass_dir_for_facing(1), 1); // DIR_N  → comptable[1]
-        assert_eq!(compass_dir_for_facing(2), 2); // DIR_NE → comptable[2]
-        assert_eq!(compass_dir_for_facing(3), 3); // DIR_E  → comptable[3]
-        assert_eq!(compass_dir_for_facing(4), 4); // DIR_SE → comptable[4]
-        assert_eq!(compass_dir_for_facing(5), 5); // DIR_S  → comptable[5]
-        assert_eq!(compass_dir_for_facing(6), 6); // DIR_SW → comptable[6]
-        assert_eq!(compass_dir_for_facing(7), 7); // DIR_W  → comptable[7]
+        assert_eq!(compass_dir_for_facing(Direction::NW), 0); // DIR_NW → comptable[0]
+        assert_eq!(compass_dir_for_facing(Direction::N),  1); // DIR_N  → comptable[1]
+        assert_eq!(compass_dir_for_facing(Direction::NE), 2); // DIR_NE → comptable[2]
+        assert_eq!(compass_dir_for_facing(Direction::E),  3); // DIR_E  → comptable[3]
+        assert_eq!(compass_dir_for_facing(Direction::SE), 4); // DIR_SE → comptable[4]
+        assert_eq!(compass_dir_for_facing(Direction::S),  5); // DIR_S  → comptable[5]
+        assert_eq!(compass_dir_for_facing(Direction::SW), 6); // DIR_SW → comptable[6]
+        assert_eq!(compass_dir_for_facing(Direction::W),  7); // DIR_W  → comptable[7]
     }
 }
 
@@ -2600,7 +2600,7 @@ mod quest_tests {
 
         // Simulate dragon fireball
         use crate::game::combat::fire_missile;
-        fire_missile(&mut missiles, 1000, 2000, 4, 5, false, 5); // weapon 5=fireball, speed 5
+        fire_missile(&mut missiles, 1000, 2000, Direction::SE, 5, false, 5); // weapon 5=fireball, speed 5
 
         assert!(missiles[0].active);
         assert_eq!(missiles[0].missile_type, MissileType::Fireball);
@@ -4489,14 +4489,14 @@ mod amiga_facing_tests {
 
     #[test]
     fn facing_to_frame_base_amiga_order() {
-        assert_eq!(GameplayScene::facing_to_frame_base(0), 16, "DIR_NW(0) → northwalk(16)");
-        assert_eq!(GameplayScene::facing_to_frame_base(1), 16, "DIR_N(1)  → northwalk(16)");
-        assert_eq!(GameplayScene::facing_to_frame_base(2), 24, "DIR_NE(2) → eastwalk(24)");
-        assert_eq!(GameplayScene::facing_to_frame_base(3), 24, "DIR_E(3)  → eastwalk(24)");
-        assert_eq!(GameplayScene::facing_to_frame_base(4),  0, "DIR_SE(4) → southwalk(0)");
-        assert_eq!(GameplayScene::facing_to_frame_base(5),  0, "DIR_S(5)  → southwalk(0)");
-        assert_eq!(GameplayScene::facing_to_frame_base(6),  8, "DIR_SW(6) → westwalk(8)");
-        assert_eq!(GameplayScene::facing_to_frame_base(7),  8, "DIR_W(7)  → westwalk(8)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::NW), 16, "DIR_NW(0) → northwalk(16)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::N),  16, "DIR_N(1)  → northwalk(16)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::NE), 24, "DIR_NE(2) → eastwalk(24)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::E),  24, "DIR_E(3)  → eastwalk(24)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::SE),  0, "DIR_SE(4) → southwalk(0)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::S),   0, "DIR_S(5)  → southwalk(0)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::SW),  8, "DIR_SW(6) → westwalk(8)");
+        assert_eq!(GameplayScene::facing_to_frame_base(Direction::W),   8, "DIR_W(7)  → westwalk(8)");
     }
 
     // ── 3. facing_to_fight_frame_base (diroffs[8..15]) ────────────────────
@@ -4506,14 +4506,14 @@ mod amiga_facing_tests {
 
     #[test]
     fn facing_to_fight_frame_base_amiga_order() {
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56, "DIR_NW(0) → northfight(56)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 56, "DIR_N(1)  → northfight(56)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68, "DIR_NE(2) → eastfight(68)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 68, "DIR_E(3)  → eastfight(68)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32, "DIR_SE(4) → southfight(32)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 32, "DIR_S(5)  → southfight(32)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44, "DIR_SW(6) → westfight(44)");
-        assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 44, "DIR_W(7)  → westfight(44)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::NW), 56, "DIR_NW(0) → northfight(56)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::N),  56, "DIR_N(1)  → northfight(56)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::NE), 68, "DIR_NE(2) → eastfight(68)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::E),  68, "DIR_E(3)  → eastfight(68)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::SE), 32, "DIR_SE(4) → southfight(32)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::S),  32, "DIR_S(5)  → southfight(32)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::SW), 44, "DIR_SW(6) → westfight(44)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(Direction::W),  44, "DIR_W(7)  → westfight(44)");
     }
 
     // ── 4. compass_dir_for_facing ─────────────────────────────────────────
@@ -4524,14 +4524,14 @@ mod amiga_facing_tests {
     #[test]
     fn compass_dir_for_facing_amiga_order() {
         // In Amiga order the compass highlight index equals the facing value directly.
-        assert_eq!(compass_dir_for_facing(0), 0, "DIR_NW(0) → comptable[0]");
-        assert_eq!(compass_dir_for_facing(1), 1, "DIR_N(1)  → comptable[1]");
-        assert_eq!(compass_dir_for_facing(2), 2, "DIR_NE(2) → comptable[2]");
-        assert_eq!(compass_dir_for_facing(3), 3, "DIR_E(3)  → comptable[3]");
-        assert_eq!(compass_dir_for_facing(4), 4, "DIR_SE(4) → comptable[4]");
-        assert_eq!(compass_dir_for_facing(5), 5, "DIR_S(5)  → comptable[5]");
-        assert_eq!(compass_dir_for_facing(6), 6, "DIR_SW(6) → comptable[6]");
-        assert_eq!(compass_dir_for_facing(7), 7, "DIR_W(7)  → comptable[7]");
+        assert_eq!(compass_dir_for_facing(Direction::NW), 0, "DIR_NW(0) → comptable[0]");
+        assert_eq!(compass_dir_for_facing(Direction::N),  1, "DIR_N(1)  → comptable[1]");
+        assert_eq!(compass_dir_for_facing(Direction::NE), 2, "DIR_NE(2) → comptable[2]");
+        assert_eq!(compass_dir_for_facing(Direction::E),  3, "DIR_E(3)  → comptable[3]");
+        assert_eq!(compass_dir_for_facing(Direction::SE), 4, "DIR_SE(4) → comptable[4]");
+        assert_eq!(compass_dir_for_facing(Direction::S),  5, "DIR_S(5)  → comptable[5]");
+        assert_eq!(compass_dir_for_facing(Direction::SW), 6, "DIR_SW(6) → comptable[6]");
+        assert_eq!(compass_dir_for_facing(Direction::W),  7, "DIR_W(7)  → comptable[7]");
     }
 
     // ── 5. compass_dir_for_input ──────────────────────────────────────────
@@ -4556,14 +4556,14 @@ mod amiga_facing_tests {
     #[test]
     fn push_offset_amiga_order() {
         let d = 2i32;
-        assert_eq!(push_offset(0, d), (-d, -d), "DIR_NW(0): NW push");
-        assert_eq!(push_offset(1, d), ( 0, -d), "DIR_N(1): N push");
-        assert_eq!(push_offset(2, d), ( d, -d), "DIR_NE(2): NE push");
-        assert_eq!(push_offset(3, d), ( d,  0), "DIR_E(3): E push");
-        assert_eq!(push_offset(4, d), ( d,  d), "DIR_SE(4): SE push");
-        assert_eq!(push_offset(5, d), ( 0,  d), "DIR_S(5): S push");
-        assert_eq!(push_offset(6, d), (-d,  d), "DIR_SW(6): SW push");
-        assert_eq!(push_offset(7, d), (-d,  0), "DIR_W(7): W push");
+        assert_eq!(push_offset(Direction::NW, d), (-d, -d), "DIR_NW(0): NW push");
+        assert_eq!(push_offset(Direction::N,  d), ( 0, -d), "DIR_N(1): N push");
+        assert_eq!(push_offset(Direction::NE, d), ( d, -d), "DIR_NE(2): NE push");
+        assert_eq!(push_offset(Direction::E,  d), ( d,  0), "DIR_E(3): E push");
+        assert_eq!(push_offset(Direction::SE, d), ( d,  d), "DIR_SE(4): SE push");
+        assert_eq!(push_offset(Direction::S,  d), ( 0,  d), "DIR_S(5): S push");
+        assert_eq!(push_offset(Direction::SW, d), (-d,  d), "DIR_SW(6): SW push");
+        assert_eq!(push_offset(Direction::W,  d), (-d,  0), "DIR_W(7): W push");
     }
 
     // ── 7. facing_toward ─────────────────────────────────────────────────
@@ -4574,19 +4574,19 @@ mod amiga_facing_tests {
     fn facing_toward_returns_amiga_cardinals() {
         let origin = (100i32, 100i32);
         // Pure cardinal axes
-        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 50),  1, "toward N  → DIR_N(1)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 150), 5, "toward S  → DIR_S(5)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 100), 3, "toward E  → DIR_E(3)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  100), 7, "toward W  → DIR_W(7)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 50),  Direction::N,  "toward N  → DIR_N");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 150), Direction::S,  "toward S  → DIR_S");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 100), Direction::E,  "toward E  → DIR_E");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  100), Direction::W,  "toward W  → DIR_W");
     }
 
     #[test]
     fn facing_toward_returns_amiga_diagonals() {
         let origin = (100i32, 100i32);
-        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 50),  2, "toward NE → DIR_NE(2)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 150), 4, "toward SE → DIR_SE(4)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  150), 6, "toward SW → DIR_SW(6)");
-        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  50),  0, "toward NW → DIR_NW(0)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 50),  Direction::NE, "toward NE → DIR_NE");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 150), Direction::SE, "toward SE → DIR_SE");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  150), Direction::SW, "toward SW → DIR_SW");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  50),  Direction::NW, "toward NW → DIR_NW");
     }
 
     // ── 8. fire_missile velocity ──────────────────────────────────────────
@@ -4599,7 +4599,7 @@ mod amiga_facing_tests {
         let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
 
         // DIR_N = 1
-        fire_missile(&mut missiles, 100, 100, 1, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::N, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.dx, 0,  "DIR_N: dx should be 0");
         assert_eq!(m.dy, -2, "DIR_N: dy should be -2 (northward)");
@@ -4607,21 +4607,21 @@ mod amiga_facing_tests {
 
         // Clear and test DIR_E = 3
         missiles.iter_mut().for_each(|m| m.active = false);
-        fire_missile(&mut missiles, 100, 100, 3, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::E, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.dx, 2, "DIR_E: dx should be +2 (eastward)");
         assert_eq!(m.dy, 0, "DIR_E: dy should be 0");
 
         // Clear and test DIR_S = 5
         missiles.iter_mut().for_each(|m| m.active = false);
-        fire_missile(&mut missiles, 100, 100, 5, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::S, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.dx, 0, "DIR_S: dx should be 0");
         assert_eq!(m.dy, 2, "DIR_S: dy should be +2 (southward)");
 
         // Clear and test DIR_W = 7
         missiles.iter_mut().for_each(|m| m.active = false);
-        fire_missile(&mut missiles, 100, 100, 7, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::W, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.dx, -2, "DIR_W: dx should be -2 (westward)");
         assert_eq!(m.dy, 0,  "DIR_W: dy should be 0");
@@ -4638,7 +4638,7 @@ mod amiga_facing_tests {
         use crate::game::combat::{fire_missile, Missile, MAX_MISSILES};
         let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
         // bowshotx[1]=0, bowshoty[1]=-6 → spawn at (100+0, 100-6) = (100, 94)
-        fire_missile(&mut missiles, 100, 100, 1 /*DIR_N*/, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::N, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.x, 100, "DIR_N spawn x: bowshotx[1]=0");
         assert_eq!(m.y, 94,  "DIR_N spawn y: bowshoty[1]=-6");
@@ -4649,7 +4649,7 @@ mod amiga_facing_tests {
         use crate::game::combat::{fire_missile, Missile, MAX_MISSILES};
         let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
         // bowshotx[3]=6, bowshoty[3]=0 → spawn at (106, 100)
-        fire_missile(&mut missiles, 100, 100, 3 /*DIR_E*/, 4, true, 2);
+        fire_missile(&mut missiles, 100, 100, Direction::E, 4, true, 2);
         let m = missiles.iter().find(|m| m.active).unwrap();
         assert_eq!(m.x, 106, "DIR_E spawn x: bowshotx[3]=6");
         assert_eq!(m.y, 100, "DIR_E spawn y: bowshoty[3]=0");

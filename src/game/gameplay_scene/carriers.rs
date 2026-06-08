@@ -28,14 +28,14 @@ impl GameplayScene {
             let hx = self.state.hero_x as i32;
             let hy = self.state.hero_y as i32;
             if let Some(dir) = Self::facing_toward(tx, ty, hx, hy) {
-                self.state.actors[slot].facing = Direction::from(dir);
+                self.state.actors[slot].facing = dir;
             }
         }
 
         // --- Per-tick water-direction probe. ---
         let turtle_x = self.state.actors[slot].abs_x;
         let turtle_y = self.state.actors[slot].abs_y;
-        let facing = self.state.actors[slot].facing as u8;
+        let facing = self.state.actors[slot].facing;
 
         const DIR_OFFSETS: [i8; 4] = [0, 1, -1, -2];
         const TURTLE_SPEED: i32 = 3;
@@ -43,9 +43,9 @@ impl GameplayScene {
         let result: Option<(u16, u16)> = if let Some(ref world) = self.map_world {
             let mut found = None;
             for &off in &DIR_OFFSETS {
-                let probe_dir = facing.wrapping_add(off as u8) & 7;
-                let nx = newx(turtle_x, probe_dir, TURTLE_SPEED);
-                let ny = newy(turtle_y, probe_dir, TURTLE_SPEED);
+                let probe_dir = facing.rotate_by(off);
+                let nx = newx(turtle_x, probe_dir as u8, TURTLE_SPEED);
+                let ny = newy(turtle_y, probe_dir as u8, TURTLE_SPEED);
                 // Ref carrier_tick (fmain.c:1525-1537): single-point `px_to_im(xtest, ytest) != 5`
                 // guards each probe — not the 2-foot `prox` test. Turtle may straddle a
                 // water/non-water boundary as long as its centre sits on terrain 5.
@@ -73,7 +73,7 @@ impl GameplayScene {
         }
     }
 
-    pub(crate) fn facing_toward(x0: i32, y0: i32, x1: i32, y1: i32) -> Option<u8> {
+    pub(crate) fn facing_toward(x0: i32, y0: i32, x1: i32, y1: i32) -> Option<Direction> {
         let dx = x1 - x0;
         let dy = y1 - y0;
         if dx == 0 && dy == 0 {
@@ -84,6 +84,6 @@ impl GameplayScene {
         let two_pi = std::f32::consts::TAU;
         let normalized = (angle + two_pi) % two_pi; // [0, 2π)
         let octant = ((normalized / two_pi) * 8.0 + 0.5).floor() as i32 & 7;
-        Some(octant as u8)
+        Some(Direction::from(octant as u8))
     }
 }

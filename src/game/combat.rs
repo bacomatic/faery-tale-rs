@@ -80,27 +80,23 @@ impl Missile {
     }
 
     /// Derive facing direction from velocity vector.
-    /// Returns Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
-    /// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
     /// Used for knockback direction when missile hits target.
-    pub fn facing(&self) -> u8 {
+    pub fn facing(&self) -> Direction {
         match (self.dx.signum(), self.dy.signum()) {
-            (-1, -1) => Direction::NW as u8,
-            (0, -1)  => Direction::N  as u8,
-            (1, -1)  => Direction::NE as u8,
-            (1, 0)   => Direction::E  as u8,
-            (1, 1)   => Direction::SE as u8,
-            (0, 1)   => Direction::S  as u8,
-            (-1, 1)  => Direction::SW as u8,
-            (-1, 0)  => Direction::W  as u8,
-            _        => Direction::N  as u8,
+            (-1, -1) => Direction::NW,
+            (0, -1)  => Direction::N,
+            (1, -1)  => Direction::NE,
+            (1, 0)   => Direction::E,
+            (1, 1)   => Direction::SE,
+            (0, 1)   => Direction::S,
+            (-1, 1)  => Direction::SW,
+            (-1, 0)  => Direction::W,
+            _        => Direction::N,
         }
     }
 }
 
 /// Fire a missile from origin toward target direction.
-/// dir: Amiga DIR_* order — DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
-///      DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 /// weapon: 4=bow (arrow), 5=wand (fireball).
 /// speed: projectile velocity (default 2 for arrows/wands, 5 for dragon fireballs).
 /// Returns the index of the missile slot used, or None if full.
@@ -108,14 +104,14 @@ pub fn fire_missile(
     missiles: &mut [Missile; MAX_MISSILES],
     x: i32,
     y: i32,
-    dir: u8,
+    dir: Direction,
     weapon: u8,
     is_friendly: bool,
     speed: i32,
 ) -> Option<usize> {
     let slot = missiles.iter().position(|m| !m.active)?;
-    let facing = (dir & 7) as usize;
-    let (dx, dy) = match Direction::from(dir) {
+    let facing = (dir as u8 & 7) as usize;
+    let (dx, dy) = match dir {
         Direction::NW   => (-speed, -speed),
         Direction::N    => (0, -speed),
         Direction::NE   => (speed, -speed),
@@ -204,19 +200,9 @@ pub fn bitrand_damage(weapon_index: u8) -> i16 {
 /// Compute weapon tip position with jitter (ports fmain.c newx/newy + rand8() - 3).
 /// `wt` is the weapon value (after cap).
 /// Returns (tip_x, tip_y) in world coordinates.
-pub fn weapon_tip(abs_x: i32, abs_y: i32, facing: u8, wt: i16) -> (i32, i32) {
+pub fn weapon_tip(abs_x: i32, abs_y: i32, facing: Direction, wt: i16) -> (i32, i32) {
     let offset = (wt * 2) as i32;
-    let (ox, oy): (i32, i32) = match Direction::from(facing) {
-        Direction::NW   => (-offset, -offset),
-        Direction::N    => (0, -offset),
-        Direction::NE   => (offset, -offset),
-        Direction::E    => (offset, 0),
-        Direction::SE   => (offset, offset),
-        Direction::S    => (0, offset),
-        Direction::SW   => (-offset, offset),
-        Direction::W    => (-offset, 0),
-        Direction::None => (0, -offset),
-    };
+    let (ox, oy) = facing.push_offset(offset);
     let jitter_x = (melee_rand(8) as i32) - 3;
     let jitter_y = (melee_rand(8) as i32) - 3;
     (abs_x + ox + jitter_x, abs_y + oy + jitter_y)
@@ -477,7 +463,7 @@ mod tests {
     #[test]
     fn test_fire_arrow_weapon_4() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 100, 200, 2, 4, true, 2);
+        let slot = fire_missile(&mut missiles, 100, 200, Direction::NE, 4, true, 2);
         assert!(slot.is_some());
         let m = &missiles[slot.unwrap()];
         assert_eq!(m.missile_type, MissileType::Arrow);
@@ -487,7 +473,7 @@ mod tests {
     #[test]
     fn test_fire_fireball_weapon_5() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 100, 200, 0, 5, false, 2);
+        let slot = fire_missile(&mut missiles, 100, 200, Direction::NW, 5, false, 2);
         assert!(slot.is_some());
         let m = &missiles[slot.unwrap()];
         assert_eq!(m.missile_type, MissileType::Fireball);
@@ -514,7 +500,7 @@ mod tests {
     #[test]
     fn test_fire_missile_slots() {
         let mut missiles = std::array::from_fn(|_| Missile::default());
-        let slot = fire_missile(&mut missiles, 0, 0, 2, 4, true, 2);
+        let slot = fire_missile(&mut missiles, 0, 0, Direction::NE, 4, true, 2);
         assert!(slot.is_some());
         assert!(missiles[slot.unwrap()].active);
     }
@@ -592,16 +578,14 @@ mod tests {
 
     #[test]
     fn test_weapon_tip_offset_north() {
-        // DIR_N = 1 in Amiga order
-        let (tx, ty) = weapon_tip(100, 100, 1, 3);
+        let (tx, ty) = weapon_tip(100, 100, Direction::N, 3);
         assert!(ty < 100, "north tip_y={} should be < 100", ty);
         assert!((tx - 100).abs() <= 4, "north tip_x={} too far from 100", tx);
     }
 
     #[test]
     fn test_weapon_tip_offset_east() {
-        // DIR_E = 3 in Amiga order
-        let (tx, ty) = weapon_tip(100, 100, 3, 3);
+        let (tx, ty) = weapon_tip(100, 100, Direction::E, 3);
         assert!(tx > 100, "east tip_x={} should be > 100", tx);
         assert!((ty - 100).abs() <= 4, "east tip_y={} too far from 100", ty);
     }

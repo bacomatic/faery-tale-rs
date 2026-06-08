@@ -515,7 +515,7 @@ impl GameplayScene {
                         &mut self.missiles,
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
-                        self.state.facing as u8,
+                        self.state.facing,
                         weapon,
                         true,
                         2, // Standard hero projectile speed

@@ -205,7 +205,7 @@ impl GameplayScene {
                         &mut self.missiles,
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
-                        self.state.facing as u8,
+                        self.state.facing,
                         weapon,
                         true,
                         2, // Standard hero projectile speed
@@ -250,12 +250,11 @@ impl GameplayScene {
         let dir =
             if self.state.hunger > 120 && dir != Direction::None && (self.state.cycle & 3) == 0 {
                 let r = (self.state.cycle >> 2) & 1;
-                let fb = self.state.facing as u8;
-                let f = Direction::from(if r == 0 {
-                    (fb + 1) & 7
+                let f = if r == 0 {
+                    self.state.facing.rotate_cw()
                 } else {
-                    (fb + 7) & 7
-                });
+                    self.state.facing.rotate_ccw()
+                };
                 self.state.facing = f;
                 f
             } else {
@@ -405,8 +404,8 @@ impl GameplayScene {
                 && self.state.flying == 0
                 && !self.state.on_raft
             {
-                // checkdev1: try (facing + 1) & 7
-                let dev1 = (facing as u8 + 1) & 7;
+                // checkdev1: try facing rotated clockwise by 1
+                let dev1 = facing.rotate_cw() as u8;
                 let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
                 let dev1_y = collision::newy(self.state.hero_y, dev1, speed);
                 // Deviation probes use hero lava/pit bypass but NOT crystal bypass (fmain.c:1615).
@@ -419,11 +418,11 @@ impl GameplayScene {
                 {
                     final_x = dev1_x;
                     final_y = dev1_y;
-                    final_facing = Direction::from(dev1);
+                    final_facing = facing.rotate_cw();
                     can_move = true;
                 } else {
-                    // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
-                    let dev2 = (dev1.wrapping_sub(2)) & 7;
+                    // checkdev2: try facing rotated counter-clockwise by 1
+                    let dev2 = facing.rotate_ccw() as u8;
                     let dev2_x = collision::newx(self.state.hero_x, dev2, speed);
                     let dev2_y = collision::newy(self.state.hero_y, dev2, speed);
                     if collision::hero_proxcheck(
@@ -435,7 +434,7 @@ impl GameplayScene {
                     {
                         final_x = dev2_x;
                         final_y = dev2_y;
-                        final_facing = Direction::from(dev2);
+                        final_facing = facing.rotate_ccw();
                         can_move = true;
                     }
                 }

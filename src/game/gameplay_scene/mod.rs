@@ -77,20 +77,8 @@ fn advance_fight_state(state: u8, tick: u32) -> u8 {
 }
 
 /// Compute pixel offset for pushback in a facing direction.
-/// Facing uses Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
-/// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
-fn push_offset(facing: u8, distance: i32) -> (i32, i32) {
-    match Direction::from(facing) {
-        Direction::NW   => (-distance, -distance),
-        Direction::N    => (0, -distance),
-        Direction::NE   => (distance, -distance),
-        Direction::E    => (distance, 0),
-        Direction::SE   => (distance, distance),
-        Direction::S    => (0, distance),
-        Direction::SW   => (-distance, distance),
-        Direction::W    => (-distance, 0),
-        Direction::None => (0, 0),
-    }
+fn push_offset(facing: Direction, distance: i32) -> (i32, i32) {
+    facing.push_offset(distance)
 }
 
 /// Map an SDL Keycode to the corresponding menu key byte used by LETTER_LIST.
@@ -140,24 +128,22 @@ fn keycode_to_menukey(keycode: Keycode) -> Option<u8> {
 }
 
 /// Return the 8-way facing direction from (sx,sy) toward (tx,ty).
-/// Returns Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
-/// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 /// Mirrors fmain.c directional logic used when setting ms->direction.
-fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> u8 {
+fn facing_toward(sx: i32, sy: i32, tx: i32, ty: i32) -> Direction {
     let dx = tx - sx;
     let dy = ty - sy;
     let ax = dx.abs();
     let ay = dy.abs();
     if ax <= ay / 2 {
-        if dy > 0 { Direction::S as u8 } else { Direction::N as u8 }
+        if dy > 0 { Direction::S } else { Direction::N }
     } else if ay <= ax / 2 {
-        if dx > 0 { Direction::E as u8 } else { Direction::W as u8 }
+        if dx > 0 { Direction::E } else { Direction::W }
     } else {
         match (dx > 0, dy > 0) {
-            (true, true)   => Direction::SE as u8,
-            (true, false)  => Direction::NE as u8,
-            (false, true)  => Direction::SW as u8,
-            (false, false) => Direction::NW as u8,
+            (true, true)   => Direction::SE,
+            (true, false)  => Direction::NE,
+            (false, true)  => Direction::SW,
+            (false, false) => Direction::NW,
         }
     }
 }
@@ -170,14 +156,10 @@ fn default_brother_names() -> Vec<String> {
     ]
 }
 
-/// Map a facing value (Amiga DIR_* order: NW=0..W=7) to the compass comptable
-/// highlight index. In Amiga order these are identical, so this is an identity.
-/// Returns 9 for out-of-range values (no highlight).
-fn compass_dir_for_facing(facing: u8) -> usize {
-    match facing {
-        0..=7 => facing as usize,
-        _ => 9,
-    }
+/// Map a facing direction to the compass comptable highlight index.
+/// Returns 9 for Direction::None (no highlight).
+fn compass_dir_for_facing(facing: Direction) -> usize {
+    facing as u8 as usize
 }
 
 /// Pick the compass highlight segment (comptable index 0..=7) or 9 for

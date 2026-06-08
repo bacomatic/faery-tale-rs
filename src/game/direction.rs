@@ -67,6 +67,21 @@ impl Direction {
     pub fn is_diagonal(self) -> bool {
         matches!(self, Direction::NW | Direction::NE | Direction::SW | Direction::SE)
     }
+
+    /// Returns the (dx, dy) pixel offset for one step in this direction at the given distance.
+    pub fn push_offset(self, distance: i32) -> (i32, i32) {
+        match self {
+            Direction::NW   => (-distance, -distance),
+            Direction::N    => (0, -distance),
+            Direction::NE   => (distance, -distance),
+            Direction::E    => (distance, 0),
+            Direction::SE   => (distance, distance),
+            Direction::S    => (0, distance),
+            Direction::SW   => (-distance, distance),
+            Direction::W    => (-distance, 0),
+            Direction::None => (0, 0),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +163,13 @@ mod tests {
         assert_eq!(Direction::N.rotate_by(2),  Direction::E);
         assert_eq!(Direction::N.rotate_by(-2), Direction::W);
         assert_eq!(Direction::W.rotate_by(2),  Direction::N);
+    }
+
+    #[test]
+    fn push_offset_north() {
+        assert_eq!(Direction::N.push_offset(3), (0, -3));
+        assert_eq!(Direction::SE.push_offset(2), (2, 2));
+        assert_eq!(Direction::None.push_offset(5), (0, 0));
     }
 
     #[test]

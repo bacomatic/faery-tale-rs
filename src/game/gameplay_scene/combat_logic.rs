@@ -19,7 +19,7 @@ impl GameplayScene {
         struct Combatant {
             x: i32,
             y: i32,
-            facing: u8,
+            facing: Direction,
             weapon: u8,
             fighting: bool,
             active: bool,
@@ -30,7 +30,7 @@ impl GameplayScene {
             combatants.push(Combatant {
                 x: actor.abs_x as i32,
                 y: actor.abs_y as i32,
-                facing: actor.facing as u8,
+                facing: actor.facing,
                 weapon: actor.weapon,
                 fighting,
                 active: !matches!(actor.state, ActorState::Dead | ActorState::Dying),
@@ -40,7 +40,7 @@ impl GameplayScene {
         struct HitRecord {
             attacker: usize,
             target: usize,
-            facing: u8,
+            facing: Direction,
             damage: i16,
         }
         let mut hits: Vec<HitRecord> = Vec::new();
@@ -122,7 +122,7 @@ impl GameplayScene {
         &mut self,
         attacker_idx: usize,
         target_idx: usize,
-        facing: u8,
+        facing: Direction,
         damage: i16,
     ) {
         if target_idx == 0 {
