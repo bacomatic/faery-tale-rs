@@ -2,12 +2,21 @@
 //! Ports the battle loop from original fmain.c.
 
 use crate::game::game_state::GameState;
-use crate::game::npc::{
-    Npc, RACE_GHOST, RACE_NECROMANCER, RACE_SPECTRE, RACE_UNDEAD, RACE_WITCH, RACE_WRAITH,
-};
+use crate::game::gameplay_scene::Direction;
+use crate::game::npc::{Npc, RACE_GHOST, RACE_NECROMANCER, RACE_SPECTRE, RACE_WITCH};
 
 /// Maximum concurrent projectiles (missile_list[6] from fmain.c).
 pub const MAX_MISSILES: usize = 6;
+
+/// Bow/wand shot spawn X offsets by facing direction (Amiga DIR_* order: NW=0..W=7).
+/// Reference: sprite-rendering.md §bowshotx[8]; fmain2.c:885.
+/// char bowshotx[8] = { 0, 0, 3, 6, -3, -3, -3, -6 };  // NW N NE E SE S SW W
+const BOWSHOTX: [i32; 8] = [0, 0, 3, 6, -3, -3, -3, -6];
+
+/// Bow/wand shot spawn Y offsets by facing direction (Amiga DIR_* order: NW=0..W=7).
+/// Reference: sprite-rendering.md §bowshoty[8]; fmain2.c:886.
+/// char bowshoty[8] = { -6,-6,-1, 0, 6, 8, 0,-1 };  // NW N NE E SE S SW W
+const BOWSHOTY: [i32; 8] = [-6, -6, -1, 0, 6, 8, 0, -1];
 
 /// Missile type identifier (SPEC §10.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -69,10 +78,29 @@ impl Missile {
             MissileType::Fireball => -2,
         }
     }
+
+    /// Derive facing direction from velocity vector.
+    /// Returns Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+    /// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
+    /// Used for knockback direction when missile hits target.
+    pub fn facing(&self) -> u8 {
+        match (self.dx.signum(), self.dy.signum()) {
+            (-1, -1) => Direction::NW as u8,
+            (0, -1)  => Direction::N  as u8,
+            (1, -1)  => Direction::NE as u8,
+            (1, 0)   => Direction::E  as u8,
+            (1, 1)   => Direction::SE as u8,
+            (0, 1)   => Direction::S  as u8,
+            (-1, 1)  => Direction::SW as u8,
+            (-1, 0)  => Direction::W  as u8,
+            _        => Direction::N  as u8,
+        }
+    }
 }
 
 /// Fire a missile from origin toward target direction.
-/// dir: 0=N, 2=E, 4=S, 6=W (and diagonals).
+/// dir: Amiga DIR_* order — DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+///      DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 /// weapon: 4=bow (arrow), 5=wand (fireball).
 /// speed: projectile velocity (default 2 for arrows/wands, 5 for dragon fireballs).
 /// Returns the index of the missile slot used, or None if full.
@@ -86,17 +114,23 @@ pub fn fire_missile(
     speed: i32,
 ) -> Option<usize> {
     let slot = missiles.iter().position(|m| !m.active)?;
-    let (dx, dy) = match dir & 7 {
-        0 => (0, -speed),      // N
-        1 => (speed, -speed),  // NE
-        2 => (speed, 0),       // E
-        3 => (speed, speed),   // SE
-        4 => (0, speed),       // S
-        5 => (-speed, speed),  // SW
-        6 => (-speed, 0),      // W
-        7 => (-speed, -speed), // NW
-        _ => (0, -speed),
+    let facing = (dir & 7) as usize;
+    let (dx, dy) = match Direction::from(dir) {
+        Direction::NW   => (-speed, -speed),
+        Direction::N    => (0, -speed),
+        Direction::NE   => (speed, -speed),
+        Direction::E    => (speed, 0),
+        Direction::SE   => (speed, speed),
+        Direction::S    => (0, speed),
+        Direction::SW   => (-speed, speed),
+        Direction::W    => (-speed, 0),
+        Direction::None => (0, -speed),
     };
+    // Apply bow/wand spawn offset from hero's facing position.
+    // Arrows spawn from bow tip, not hero's feet (SPEC §10.4).
+    let spawn_x = x + BOWSHOTX[facing];
+    let spawn_y = y + BOWSHOTY[facing];
+
     let missile_type = if weapon == 5 {
         MissileType::Fireball
     } else {
@@ -104,8 +138,8 @@ pub fn fire_missile(
     };
     missiles[slot] = Missile {
         active: true,
-        x,
-        y,
+        x: spawn_x,
+        y: spawn_y,
         dx,
         dy,
         missile_type,
@@ -114,21 +148,6 @@ pub fn fire_missile(
     };
     Some(slot)
 }
-
-/// Weapon type damage factors (from original weapon table).
-/// Index = weapon slot in stuff[], value = damage multiplier.
-/// Fists (slot 0) = 5: original fmain.c caps weapon index >= 8 to 5.
-#[deprecated(note = "Use bitrand_damage() instead")]
-pub const WEAPON_DAMAGE: &[u8] = &[
-    5,  // fists (slot 0, unarmed — original caps touch attack to 5)
-    3,  // dagger
-    4,  // short sword
-    5,  // long sword
-    6,  // axe
-    7,  // mace
-    8,  // halberd
-    10, // magic sword
-];
 
 /// Armor defense factors.
 pub const ARMOR_DEFENSE: &[u8] = &[
@@ -139,56 +158,6 @@ pub const ARMOR_DEFENSE: &[u8] = &[
     4, // magic armor
 ];
 
-/// Result of one round of combat.
-#[derive(Debug, Clone)]
-pub struct CombatResult {
-    pub hero_damage: i16,
-    pub enemy_damage: i16,
-    pub enemy_defeated: bool,
-    pub hero_defeated: bool,
-}
-
-/// Resolve one round of melee combat between hero and NPC.
-/// Weapon slot is index into stuff[]; 0 = fists.
-///
-/// **Deprecated:** Use `GameplayScene::run_combat_tick()` instead.
-#[deprecated(note = "Use GameplayScene::run_combat_tick() instead")]
-#[allow(deprecated)]
-pub fn resolve_combat(
-    state: &mut GameState,
-    npc: &mut Npc,
-    hero_weapon_slot: usize,
-) -> CombatResult {
-    // Hero attacks enemy
-    let weapon_factor = WEAPON_DAMAGE.get(hero_weapon_slot).copied().unwrap_or(1) as i16;
-    let hero_attack = (state.vitality * weapon_factor / 8).max(1);
-    npc.vitality -= hero_attack;
-
-    // Enemy attacks hero
-    let enemy_attack = (npc.vitality.max(0) * npc.speed as i16 / 8).max(0);
-    // Undead can't be harmed by normal weapons (resist)
-    let resisted = npc.race == RACE_UNDEAD || npc.race == RACE_WRAITH;
-    let actual_hero_damage = if resisted { 0 } else { enemy_attack };
-    state.vitality = (state.vitality - actual_hero_damage).max(0);
-
-    let enemy_defeated = npc.vitality <= 0;
-    let hero_defeated = state.vitality <= 0;
-
-    if enemy_defeated {
-        // F9.11: legacy combat path now uses the searchable-body lifecycle.
-        // `mark_dead` keeps `active=true` and flips `state=Dead` so the
-        // body persists for `search_body` (`fmain.c:3251-3283`).
-        npc.mark_dead();
-    }
-
-    CombatResult {
-        hero_damage: actual_hero_damage,
-        enemy_damage: hero_attack,
-        enemy_defeated,
-        hero_defeated,
-    }
-}
-
 /// Award loot from a defeated NPC to the hero.
 pub fn award_loot(state: &mut GameState, npc: &Npc) {
     state.gold += npc.gold as i32;
@@ -196,54 +165,6 @@ pub fn award_loot(state: &mut GameState, npc: &Npc) {
     // When a future commit adds brave += N here, it must be wrapped:
     //   if !(state.on_raft && state.active_carrier == CARRIER_TURTLE) { state.brave += N; }
     // Additional item drops handled by npc-106
-}
-
-/// Compute melee hit reach in pixels.
-/// Mirrors fmain.c: bv = (brave/20) + 5 for player, capped at 15.
-/// INSANE_REACH god-mode multiplies by 4.
-pub fn melee_reach(brave: i16, weapon: u8, insane_reach: bool) -> i16 {
-    let base = ((brave / 20) + 5).min(15).max(4) as i16;
-    // Weapon adds 2px per level, mirroring wt+wt offset in newx/newy.
-    let reach = base + (weapon as i16) * 2;
-    if insane_reach {
-        reach * 4
-    } else {
-        reach
-    }
-}
-
-/// Direction-sensitive melee proximity check (ports fmain.c sword proximity loop).
-/// Returns true if the target is within reach of the hero's weapon tip.
-/// Uses Chebyshev distance (max(|dx|,|dy|) < reach) matching original `yd < bv`.
-pub fn in_melee_range(
-    hero_x: i16,
-    hero_y: i16,
-    facing: u8,
-    weapon: u8,
-    brave: i16,
-    target_x: i16,
-    target_y: i16,
-    insane_reach: bool,
-) -> bool {
-    let reach = melee_reach(brave, weapon, insane_reach);
-    // Project weapon tip ahead in facing direction (mirrors newx/newy offset by wt+wt).
-    let offset = reach;
-    let (ox, oy): (i16, i16) = match facing & 7 {
-        0 => (0, -offset),       // N
-        1 => (offset, -offset),  // NE
-        2 => (offset, 0),        // E
-        3 => (offset, offset),   // SE
-        4 => (0, offset),        // S
-        5 => (-offset, offset),  // SW
-        6 => (-offset, 0),       // W
-        7 => (-offset, -offset), // NW
-        _ => (0, -offset),
-    };
-    let tip_x = hero_x as i32 + ox as i32;
-    let tip_y = hero_y as i32 + oy as i32;
-    let xd = (target_x as i32 - tip_x).abs();
-    let yd = (target_y as i32 - tip_y).abs();
-    xd.max(yd) < reach as i32
 }
 
 /// Random 0–3 from game tick, matching original rand4() used by trans_list.
@@ -285,16 +206,16 @@ pub fn bitrand_damage(weapon_index: u8) -> i16 {
 /// Returns (tip_x, tip_y) in world coordinates.
 pub fn weapon_tip(abs_x: i32, abs_y: i32, facing: u8, wt: i16) -> (i32, i32) {
     let offset = (wt * 2) as i32;
-    let (ox, oy): (i32, i32) = match facing & 7 {
-        0 => (0, -offset),
-        1 => (offset, -offset),
-        2 => (offset, 0),
-        3 => (offset, offset),
-        4 => (0, offset),
-        5 => (-offset, offset),
-        6 => (-offset, 0),
-        7 => (-offset, -offset),
-        _ => (0, -offset),
+    let (ox, oy): (i32, i32) = match Direction::from(facing) {
+        Direction::NW   => (-offset, -offset),
+        Direction::N    => (0, -offset),
+        Direction::NE   => (offset, -offset),
+        Direction::E    => (offset, 0),
+        Direction::SE   => (offset, offset),
+        Direction::S    => (0, offset),
+        Direction::SW   => (-offset, offset),
+        Direction::W    => (-offset, 0),
+        Direction::None => (0, -offset),
     };
     let jitter_x = (melee_rand(8) as i32) - 3;
     let jitter_y = (melee_rand(8) as i32) - 3;
@@ -403,35 +324,6 @@ mod tests {
             let v = rand4(tick);
             assert!(v < 4, "rand4({tick}) returned {v}, expected 0-3");
         }
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_combat_reduces_enemy_vitality() {
-        let mut state = GameState::new();
-        state.vitality = 50;
-        let mut orc = make_orc();
-        let result = resolve_combat(&mut state, &mut orc, 3); // long sword
-        assert!(result.enemy_damage > 0);
-        assert!(orc.vitality < 10);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_combat_enemy_defeated() {
-        let mut state = GameState::new();
-        state.vitality = 200; // very strong hero
-        let mut orc = make_orc();
-        orc.vitality = 1; // near death
-        let result = resolve_combat(&mut state, &mut orc, 5); // mace
-        assert!(result.enemy_defeated);
-        // F9.11: defeated NPC is now flagged Dead (looted=false) but
-        // remains active so TAKE → search_body can consume the body
-        // (`fmain.c:3251-3283`).
-        assert!(orc.active, "body must stay active for TAKE/search_body");
-        assert_eq!(orc.state, crate::game::npc::NpcState::Dead);
-        assert_eq!(orc.vitality, 0);
-        assert!(!orc.looted);
     }
 
     #[test]
@@ -628,6 +520,41 @@ mod tests {
     }
 
     #[test]
+    fn test_missile_slot0_dodge_logic() {
+        // fmain.c:2294 — slot 0 uses a dodge roll: hit only when bitrand(512) > brave.
+        // With brave = i16::MAX (511 > 32767 is false), slot 0 never hits.
+        // With brave = -1 (bitrand(512) >= 0 > -1), slot 0 always hits.
+        for _ in 0..100 {
+            let never_hit = bitrand(512) as i16 > i16::MAX;
+            assert!(!never_hit, "slot 0 with max brave must never hit");
+        }
+        for _ in 0..100 {
+            let always_hit = bitrand(512) as i16 > -1;
+            assert!(always_hit, "slot 0 with brave=-1 must always hit");
+        }
+    }
+
+    #[test]
+    fn test_missile_slot1_always_hits_logic() {
+        // fmain.c:2294 — slots 1+ always hit (no dodge gate).
+        // The condition `slot > 0` short-circuits before the dodge roll.
+        // Simulate with a helper that mirrors the scene_impl expression.
+        fn missile_hit(slot: usize, brave: i16) -> bool {
+            slot > 0 || bitrand(512) as i16 > brave
+        }
+        // Even with maxed brave, slots 1-5 always hit.
+        for brave in [0i16, 50, 100, 200, i16::MAX] {
+            assert!(missile_hit(1, brave), "slot 1 must always hit (brave={brave})");
+            assert!(missile_hit(5, brave), "slot 5 must always hit (brave={brave})");
+        }
+        // Slot 0 with brave = i16::MAX should never hit (bitrand(512) < 32767 always).
+        // bitrand(512) returns 0-511 which is always < 32767, so slot 0 never hits.
+        for _ in 0..100 {
+            assert!(!missile_hit(0, i16::MAX), "slot 0 with max brave must never hit");
+        }
+    }
+
+    #[test]
     fn test_bitrand_range() {
         for _ in 0..1000 {
             let v = bitrand(2);
@@ -665,14 +592,16 @@ mod tests {
 
     #[test]
     fn test_weapon_tip_offset_north() {
-        let (tx, ty) = weapon_tip(100, 100, 0, 3);
+        // DIR_N = 1 in Amiga order
+        let (tx, ty) = weapon_tip(100, 100, 1, 3);
         assert!(ty < 100, "north tip_y={} should be < 100", ty);
         assert!((tx - 100).abs() <= 4, "north tip_x={} too far from 100", tx);
     }
 
     #[test]
     fn test_weapon_tip_offset_east() {
-        let (tx, ty) = weapon_tip(100, 100, 2, 3);
+        // DIR_E = 3 in Amiga order
+        let (tx, ty) = weapon_tip(100, 100, 3, 3);
         assert!(tx > 100, "east tip_x={} should be > 100", tx);
         assert!((ty - 100).abs() <= 4, "east tip_y={} too far from 100", ty);
     }

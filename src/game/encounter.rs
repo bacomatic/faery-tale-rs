@@ -2,6 +2,7 @@
 //! Ports encounter_chart[] and encounter probability logic from fmain.c.
 
 use crate::game::actor::{Goal, Tactic};
+use crate::game::direction::Direction;
 use crate::game::npc::{
     Npc, NpcState, NPC_TYPE_DKNIGHT, NPC_TYPE_GHOST, NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER,
     NPC_TYPE_ORC, NPC_TYPE_SKELETON, NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_WRAITH, RACE_ENEMY,
@@ -252,7 +253,8 @@ pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick
         _ => RACE_ENEMY,
     };
     // Assign goal based on weapon type and cleverness.
-    let is_ranged = weapon >= 4; // bow or wand
+    // Bit 2 set indicates bow(4) or wand(5); touch(8) is melee.
+    let is_ranged = weapon & 4 != 0;
     let goal = if is_ranged {
         if stats.clever > 0 {
             Goal::Archer2
@@ -283,9 +285,11 @@ pub fn spawn_encounter(encounter_type: usize, origin_x: i16, origin_y: i16, tick
         tactic: Tactic::Pursue,
         // fmain.c:2761 `an->facing = 0` (north). Actual heading is rewritten
         // the first time the AI picks a tactic (set_course).
-        facing: 0,
+        facing: Direction::NW,
         state: NpcState::Walking,
         cleverness: stats.clever,
+        is_dummy: false,
+        is_arena_target: false,
         looted: false,
     }
 }
@@ -359,6 +363,71 @@ pub fn spawn_encounter_group(
         }
     }
     spawned
+}
+
+/// Spawn arena training encounter: 3-5 target dummies of a specific type.
+/// Dummies spawn in a semi-circle east of the hero, facing west toward the hero.
+/// These are arena targets (is_arena_target=true, is_dummy=true) with no AI.
+pub fn spawn_arena_encounter(
+    table: &mut crate::game::npc::NpcTable,
+    encounter_idx: u8,
+    hero_x: i16,
+    hero_y: i16,
+    anix: &mut usize,
+) {
+    use crate::game::actor::{Goal, Tactic};
+    use crate::game::npc::{NpcState, RACE_ENEMY, RACE_SNAKE, RACE_UNDEAD, RACE_WRAITH};
+
+    // Clamp to valid encounter range (0-10)
+    let idx = (encounter_idx as usize).min(ENCOUNTER_CHART_FULL.len() - 1);
+    let stats = &ENCOUNTER_CHART_FULL[idx];
+
+    // Get NPC type and race from encounter chart (mirrors spawn_encounter logic)
+    let npc_type = ENCOUNTER_TO_NPC_TYPE[idx];
+    let race = match idx {
+        2 => RACE_WRAITH,
+        3 | 5 => RACE_UNDEAD,
+        4 => RACE_SNAKE,
+        _ => RACE_ENEMY,
+    };
+
+    // Spawn 3-5 dummies in a semi-circle east of hero
+    let count = 3 + (idx % 3); // 3, 4, or 5 based on encounter type
+    let mut spawned = 0;
+
+    for i in 0..count {
+        // Find free NPC slot
+        if let Some(slot) = table.npcs.iter_mut().find(|n| n.slot_free()) {
+            // Position: semi-circle to the east of hero
+            // x spacing: 60 pixels apart, y variation: ±30 pixels
+            let offset_x = 100 + (i as i16 * 60);
+            let offset_y = -60 + (i as i16 * 30); // Semi-circle arc
+
+            *slot = crate::game::npc::Npc {
+                npc_type,
+                race,
+                x: hero_x + offset_x,
+                y: hero_y + offset_y,
+                vitality: stats.hp * 5, // High HP for training (5x normal)
+                gold: 0,
+                speed: 0,              // No movement
+                weapon: 0,             // No weapon (target mode - doesn't fight back)
+                active: true,
+                goal: Goal::None,
+                tactic: Tactic::None,
+                facing: Direction::SE, // SE (raw 4) — toward hero
+                state: NpcState::Still, // Don't move or fight back (target mode)
+                cleverness: stats.clever,
+                is_dummy: true,         // Immortal, skip AI
+                is_arena_target: true,  // Mark as arena target
+                looted: false,
+            };
+            spawned += 1;
+        }
+    }
+
+    // Update anix: hero (0) + raft (1) + spawned dummies
+    *anix = 2 + spawned;
 }
 
 #[cfg(test)]

@@ -11,6 +11,7 @@
 //! are feature-gated.
 
 use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
+use crate::game::gameplay_scene::Direction;
 use crate::game::game_state::DayPhase;
 use crate::game::npc::{Npc, NpcState};
 
@@ -156,7 +157,7 @@ impl ActorSnapshot {
             slot,
             actor_type: actor_kind_u8(&a.kind),
             state: actor_state_u8(&a.state),
-            facing: a.facing,
+            facing: a.facing as u8,
             abs_x: a.abs_x,
             abs_y: a.abs_y,
             vitality: a.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
@@ -174,7 +175,7 @@ impl ActorSnapshot {
             slot: idx as u8,
             actor_type: 7, // NPC (npc_table entry, distinct from combat Actor kinds 0-6)
             state: npc_state_u8(&n.state),
-            facing: n.facing,
+            facing: n.facing as u8,
             abs_x: n.x as u16,
             abs_y: n.y as u16,
             vitality: n.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
@@ -299,17 +300,19 @@ pub fn actor_state_name(state: u8) -> &'static str {
 }
 
 /// Facing direction 0..=7 → 8-point compass label.
+/// Uses Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+/// DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7.
 pub fn facing_name(facing: u8) -> &'static str {
-    match facing & 7 {
-        0 => "N",
-        1 => "NE",
-        2 => "E",
-        3 => "SE",
-        4 => "S",
-        5 => "SW",
-        6 => "W",
-        7 => "NW",
-        _ => "?",
+    match Direction::from(facing) {
+        Direction::NW   => "NW",
+        Direction::N    => "N",
+        Direction::NE   => "NE",
+        Direction::E    => "E",
+        Direction::SE   => "SE",
+        Direction::S    => "S",
+        Direction::SW   => "SW",
+        Direction::W    => "W",
+        Direction::None => "?",
     }
 }
 
@@ -389,38 +392,43 @@ pub fn tactic_name(t: u8) -> &'static str {
     }
 }
 
-/// Short race/NPC-type label. Tries NPC type byte first, then known race constants; otherwise
-/// falls back to a hex representation so the panel remains informative.
+/// Short race label. Maps RACE_* constants to display names.
+/// Uses RACE_* constants (not NPC_TYPE_* which have different values).
 pub fn race_label(race: u8) -> String {
     use crate::game::npc::{
-        NPC_TYPE_DKNIGHT, NPC_TYPE_DRAGON, NPC_TYPE_GHOST, NPC_TYPE_HORSE, NPC_TYPE_HUMAN,
-        NPC_TYPE_LORAII, NPC_TYPE_NECROMANCER, NPC_TYPE_ORC, NPC_TYPE_RAFT, NPC_TYPE_SKELETON,
-        NPC_TYPE_SNAKE, NPC_TYPE_SPIDER, NPC_TYPE_SWAN, NPC_TYPE_WRAITH, RACE_BEGGAR, RACE_GHOST,
-        RACE_NECROMANCER, RACE_SHOPKEEPER, RACE_SPECTRE, RACE_WITCH, RACE_WOODCUTTER,
+        RACE_BEGGAR, RACE_ENEMY, RACE_GHOST, RACE_NECROMANCER, RACE_NORMAL, RACE_SNAKE,
+        RACE_SPECTRE, RACE_UNDEAD, RACE_WITCH, RACE_WOODCUTTER, RACE_WRAITH,
     };
     match race {
-        0 => "Normal".into(),
-        x if x == NPC_TYPE_HUMAN => "Human".into(),
-        x if x == NPC_TYPE_SWAN => "Swan".into(),
-        x if x == NPC_TYPE_HORSE => "Horse".into(),
-        x if x == NPC_TYPE_DRAGON => "Dragon".into(),
-        x if x == NPC_TYPE_GHOST => "Ghost".into(),
-        x if x == NPC_TYPE_ORC => "Orc".into(),
-        x if x == NPC_TYPE_WRAITH => "Wraith".into(),
-        x if x == NPC_TYPE_SKELETON => "Skel".into(),
-        x if x == NPC_TYPE_RAFT => "Raft".into(),
-        x if x == NPC_TYPE_SNAKE => "Snake".into(),
-        x if x == NPC_TYPE_SPIDER => "Spider".into(),
-        x if x == NPC_TYPE_DKNIGHT => "DKnight".into(),
-        x if x == NPC_TYPE_LORAII => "Loraii".into(),
-        x if x == NPC_TYPE_NECROMANCER => "Necro".into(),
+        x if x == RACE_NORMAL => "Normal".into(),
+        x if x == RACE_UNDEAD => "Undead".into(),
+        x if x == RACE_WRAITH => "Wraith".into(),
+        x if x == RACE_ENEMY => "Enemy".into(),
+        x if x == RACE_SNAKE => "Snake".into(),
         x if x == RACE_WOODCUTTER => "Woodctr".into(),
-        x if x == RACE_SHOPKEEPER => "Shop".into(),
-        x if x == RACE_BEGGAR => "Beggar".into(),
-        x if x == RACE_WITCH => "Witch".into(),
-        x if x == RACE_SPECTRE => "Spectre".into(),
         x if x == RACE_GHOST => "Ghost".into(),
         x if x == RACE_NECROMANCER => "Necro".into(),
+        x if x == RACE_WITCH => "Witch".into(),
+        x if x == RACE_SPECTRE => "Spectre".into(),
+        x if x == RACE_BEGGAR => "Beggar".into(),
+        // Shopkeeper and other high-byte races
+        0x88 => "Shop".into(),
+        0x89 => "Witch".into(),
+        0x8a => "Spectre".into(),
+        0x8b => "Ghost".into(),
+        0x8d => "Beggar".into(),
         _ => format!("r:0x{:02X}", race),
     }
+}
+
+/// Atomic stderr logging — prevents interleaved output when multiple threads write.
+/// Use this instead of `eprintln!` for high-frequency debug logging.
+#[allow(dead_code)]
+pub fn debug_log_atomic(msg: impl AsRef<str>) {
+    use std::io::{self, Write};
+    let msg = msg.as_ref();
+    let stderr = io::stderr();
+    let mut lock = stderr.lock();
+    let _ = writeln!(lock, "{}", msg);
+    // Lock released when `lock` goes out of scope
 }

@@ -1,5 +1,6 @@
 use crate::game::actor::Actor;
 use crate::game::debug_command::GodModeFlags;
+use crate::game::direction::Direction;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum DayPhase {
@@ -156,8 +157,8 @@ pub struct GameState {
     pub princess: u8,
     pub dayperiod: u8,
 
-    // Hero facing direction (0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW)
-    pub facing: u8,
+    // Hero facing direction
+    pub facing: Direction,
     // Gold carried by the active brother
     pub gold: i32,
 
@@ -271,7 +272,7 @@ impl GameState {
 
             current_mood: 0,
 
-            facing: 0,
+            facing: Direction::NW,
             gold: 0,
 
             god_mode: GodModeFlags::empty(),

@@ -91,6 +91,13 @@ pub enum DebugCommand {
     TriggerPaletteTransition {
         to_black: bool,
     },
+    SetArenaMode {
+        enabled: bool,
+    },
+    /// Toggle arena damage mode (dummies take damage and fight back).
+    ToggleArenaDamage,
+    /// Reset arena encounter index to 0 (Ogre).
+    ResetArena,
     /// Request actor list; gameplay scene will push to log buffer.
     QueryActors,
     /// Request song list; gameplay scene will push to log buffer.

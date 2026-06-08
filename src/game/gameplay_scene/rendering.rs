@@ -416,16 +416,20 @@ impl GameplayScene {
     }
 
     /// Compute the hero's weapon-overlay blit parameters for the current body
-    /// `frame` and `hero_facing`. Mirrors `select_atype_inum` and the bow
+    /// `inum` and `hero_facing`. Mirrors `select_atype_inum` and the bow
     /// special-case in `reference/logic/sprite-rendering.md` (`fmain.c:2412-2425`).
+    ///
+    /// `inum` is the animation state index (0-86) into STATELIST.
+    /// `shooting_counter` is the counter value when in Shooting state (0 if not shooting).
     ///
     /// Returns `(frame_pixels_slice, wx, wy, height)` where the slice has been
     /// pre-trimmed to the correct OBJECTS half/full-height row band and bit-7
     /// has been stripped from the source `inum`.
     pub(super) fn compute_weapon_blit<'a>(
-        frame: usize,
+        inum: usize,
         hero_facing: u8,
         weapon_type: u8,
+        shooting_counter: u8,
         obj_sheet: &'a crate::game::sprites::SpriteSheet,
         rel_x: i32,
         rel_y: i32,
@@ -437,14 +441,16 @@ impl GameplayScene {
         if !(weapon_type > 0 && weapon_type <= 5) {
             return None;
         }
-        let entry = STATELIST.get(frame)?;
+        let entry = STATELIST.get(inum)?;
 
         // Resolve (x_off, y_off, raw_inum) per weapon class.
         // Weapon-class k offsets (fmain.c:2412-2418):
         //   bow=0 (special-cased), mace=32, sword=48, dirk=64.
         let (x_off, y_off, raw_inum): (i32, i32, u8) = if weapon_type == 5 {
-            // Wand: inum = facing + 103; DIR_NE (=2) shifts Y by -6 (fmain.c:2418).
-            let wy = if hero_facing == 2 {
+            // Wand: inum = facing + 103 (fmain.c:2436).
+            // Facing is now in Amiga order so no conversion needed.
+            // DIR_NE shifts Y by -6 (fmain.c:2437).
+            let wy = if hero_facing == Direction::NE as u8 {
                 entry.wpn_y as i32 - 6
             } else {
                 entry.wpn_y as i32
@@ -452,20 +458,21 @@ impl GameplayScene {
             (
                 entry.wpn_x as i32,
                 wy,
-                (hero_facing as u8).wrapping_add(103),
+                hero_facing.wrapping_add(103),
             )
-        } else if weapon_type == 4 && frame < 32 {
-            // Bow walking pose: per-frame BOW_X/BOW_Y offsets and direction-dependent
-            // bow inum derived from walk-cycle group (frame / 8) — fmain.c:2429-2433:
-            //   group & 1 → 30 (east-west bow); group & 2 → 0x53 (north bow); else → 0x51 (south bow).
+        } else if weapon_type == 4 && shooting_counter < 24 {
+            // Bow walking/fighting pose (state < STATE_SHOOT1 = 24): per-frame BOW_X/BOW_Y
+            // offsets and direction-dependent bow inum derived from walk-cycle group.
+            // Reference: fmain.c:2422-2433 — bow has two distinct paths gated by state < 24.
+            // inum ranges 0-31 for walking cycles; group by direction via inum/8:
             //   0 = south(0..7)→0x51, 1 = west(8..15)→30, 2 = north(16..23)→0x53, 3 = east(24..31)→30.
-            let bow_inum: u8 = match frame / 8 {
+            let bow_inum: u8 = match inum / 8 {
                 0 => 0x51,
                 1 => 30,
                 2 => 0x53,
                 _ => 30,
             };
-            (BOW_X[frame] as i32, BOW_Y[frame] as i32, bow_inum)
+            (BOW_X[inum] as i32, BOW_Y[inum] as i32, bow_inum)
         } else {
             // Hand weapons (and bow on non-walking frames): wpn_no + k.
             let k: u8 = match weapon_type {
@@ -496,41 +503,24 @@ impl GameplayScene {
         Some((&fp_full[start..end], rel_x + x_off, rel_y + y_off, h))
     }
 
-    /// Map a facing direction (0=N…7=NW) to the sprite sheet frame base.
-    /// Mirrors the diroffs[] group mapping from fmain.c:
-    ///   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31.
+    /// Map a facing direction (Amiga DIR_* order) to the sprite sheet walk frame base.
+    /// Directly indexes diroffs[0..7] from fmain.c:1010.
+    /// Reference: sprite-rendering.md §diroffs[16]
+    ///   char diroffs[16] = { 16,16,24,24, 0, 0, 8, 8, … };
+    ///   Index: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7
     pub(super) fn facing_to_frame_base(facing: u8) -> usize {
-        // diroffs[0..7] from fmain.c:1010 with original facing DIR_NW=0..DIR_W=7:
-        //   [16,16,24,24,0,0,8,8] → NW=16,N=16,NE=24,E=24,SE=0,S=0,SW=8,W=8.
-        // Mapped to Rust facing (0=N..7=NW): NE→east, SE→south, SW→west, NW→north.
-        match facing {
-            0 => 16, // N  → northwalk
-            1 => 24, // NE → eastwalk
-            2 => 24, // E  → eastwalk
-            3 => 0,  // SE → southwalk
-            4 => 0,  // S  → southwalk
-            5 => 8,  // SW → westwalk
-            6 => 8,  // W  → westwalk
-            _ => 16, // NW → northwalk
-        }
+        const DIROFFS_WALK: [usize; 8] = [16, 16, 24, 24, 0, 0, 8, 8];
+        DIROFFS_WALK[(facing & 7) as usize]
     }
 
-    /// Map facing direction to fighting sprite frame base.
-    /// diroffs[d+8] from fmain.c:1010 with original facing DIR_NW=0..DIR_W=7:
-    ///   [56,56,68,68,32,32,44,44] → NW=56,N=56,NE=68,E=68,SE=32,S=32,SW=44,W=44.
-    /// Mapped to Rust facing (0=N..7=NW): NE→east, SE→south, SW→west, NW→north.
-    /// Frame ranges: southfight=32-43, westfight=44-55, northfight=56-67, eastfight=68-79.
+    /// Map a facing direction (Amiga DIR_* order) to the fighting sprite frame base.
+    /// Directly indexes diroffs[8..15] from fmain.c:1010.
+    /// Reference: sprite-rendering.md §diroffs[16]
+    ///   char diroffs[16] = { …, 56,56,68,68,32,32,44,44 };
+    ///   Index: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7
     pub(super) fn facing_to_fight_frame_base(facing: u8) -> usize {
-        match facing {
-            0 => 56, // N  → northfight
-            1 => 68, // NE → eastfight
-            2 => 68, // E  → eastfight
-            3 => 32, // SE → southfight
-            4 => 32, // S  → southfight
-            5 => 44, // SW → westfight
-            6 => 44, // W  → westfight
-            _ => 56, // NW → northfight
-        }
+        const DIROFFS_FIGHT: [usize; 8] = [56, 56, 68, 68, 32, 32, 44, 44];
+        DIROFFS_FIGHT[(facing & 7) as usize]
     }
 
     /// Map (npc_type, race) → cfile index for enemy sprite rendering.
@@ -604,7 +594,7 @@ impl GameplayScene {
     ) -> usize {
         use crate::game::npc::{NpcState, RACE_SNAKE, RACE_WRAITH};
 
-        let frame_base = Self::facing_to_frame_base(npc.facing);
+        let frame_base = Self::facing_to_frame_base(npc.facing as u8);
 
         let raw = match npc.state {
             NpcState::Walking => {
@@ -671,7 +661,7 @@ impl GameplayScene {
                 && rel_y > -(SPRITE_H as i32)
                 && rel_y < fb_h
             {
-                let hero_facing = state.actors.first().map_or(0u8, |a| a.facing);
+                let hero_facing = state.actors.first().map_or(Direction::NW as u8, |a| a.facing as u8);
                 let is_moving = state.actors.first().map_or(false, |a| a.moving);
                 // Sprite sheet layout (from fmain.c statelist[] and diroffs[]):
                 //   southwalk=0-7, westwalk=8-15, northwalk=16-23, eastwalk=24-31
@@ -713,13 +703,17 @@ impl GameplayScene {
                     frame
                 };
                 // Weapon overlay (fmain.c passmode weapon blit).
-                // Draw order depends on facing: weapon behind body for N,SW,W,NW.
                 let weapon_type = state.actors.first().map_or(0u8, |a| a.weapon);
+                let hero_shooting_counter = match hero_state {
+                    Some(ActorState::Shooting(c)) => *c,
+                    _ => 0,
+                };
                 let wpn_blit = if let Some(ref obj_sheet) = obj_sprites {
                     Self::compute_weapon_blit(
                         frame,
                         hero_facing,
                         weapon_type,
+                        hero_shooting_counter,
                         obj_sheet,
                         rel_x,
                         rel_y,
@@ -728,8 +722,20 @@ impl GameplayScene {
                     None
                 };
 
-                // Weapon behind body for N(0), SW(5), W(6), NW(7)
-                let weapon_behind = matches!(hero_facing, 0 | 5 | 6 | 7);
+                // resolve_pass_params (fmain.c:2400-2409) — reference exact implementation.
+                // Step 1: Base passmode from (facing - 2) & 4.
+                // When (facing-2)&4 != 0 (DIR_E..DIR_W = 3,4,5,6,7), weapon is in FRONT.
+                // Otherwise (DIR_NW,N,NE = 0,1,2), weapon is BEHIND.
+                let base_weapon_behind = ((hero_facing.wrapping_sub(2)) & 4) == 0;
+                // Step 2: Bow special case (fmain.c:2404-2406).
+                // When bow + walking/fighting (state < 24) + north half (facing & 4 == 0), flip.
+                let is_bow_walking = weapon_type == 4 && hero_shooting_counter < 24;
+                let weapon_behind = if is_bow_walking && (hero_facing & 4) == 0 {
+                    !base_weapon_behind // flip for bow in north half
+                } else {
+                    base_weapon_behind
+                };
+
                 if weapon_behind {
                     if let Some((wfp, wx, wy, oh)) = wpn_blit {
                         Self::blit_obj_to_framebuf(wfp, wx, wy, oh, framebuf, fb_w, fb_h);

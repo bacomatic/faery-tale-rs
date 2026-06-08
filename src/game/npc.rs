@@ -3,6 +3,7 @@
 
 use crate::game::actor::{Goal, Tactic};
 use crate::game::adf::AdfDisk;
+use crate::game::direction::Direction;
 
 /// Maximum number of NPCs in any region (original limit).
 pub const MAX_NPCS: usize = 16;
@@ -74,9 +75,13 @@ pub struct Npc {
     pub active: bool,
     pub goal: Goal,
     pub tactic: Tactic,
-    pub facing: u8,
+    pub facing: Direction,
     pub state: NpcState,
     pub cleverness: u8,
+    pub is_dummy: bool, // Combat arena target dummy: immortal, no AI
+    /// Arena target mode: true for training ground dummies that don't fight back.
+    /// Distinguishes arena training targets from normal combat encounters.
+    pub is_arena_target: bool,
     /// True after `search_body` consumes the body. Mirrors original
     /// `weapon = -1` sentinel (`fmain.c:3265`). Once set, repeated TAKE
     /// on the same body is a silent no-op (`fmain.c:3251`).
@@ -90,7 +95,7 @@ impl Npc {
         if data.len() < 16 {
             return Npc::default();
         }
-        Npc {
+        let npc = Npc {
             npc_type: data[0],
             race: data[1],
             x: i16::from_be_bytes([data[2], data[3]]),
@@ -102,11 +107,14 @@ impl Npc {
             active: data[0] != NPC_TYPE_NONE,
             goal: Goal::None,
             tactic: Tactic::None,
-            facing: 0,
+            facing: Direction::NW,
             state: NpcState::Still,
             cleverness: 0,
+            is_dummy: false,
+            is_arena_target: false,
             looted: false,
-        }
+        };
+        npc
     }
 
     /// Execute one frame of movement (terrain-only collision).
@@ -136,7 +144,7 @@ impl Npc {
             return;
         }
 
-        let facing = self.facing;
+        let facing = self.facing as u8;
         // Terrain-based speed (SPEC §9.5 / R-INPUT-009): all actors share the
         // same speed-by-terrain chain. Wraiths (race 2) and Snakes (race 4)
         // bypass the chain per fmain.c:1639 — always normal speed 2.
@@ -294,7 +302,7 @@ mod tests {
             gold: 5,
             speed: 2,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -313,7 +321,7 @@ mod tests {
             gold: 0,
             speed: 2,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -340,7 +348,7 @@ mod tests {
         let npc = Npc::default();
         assert_eq!(npc.goal, Goal::None);
         assert_eq!(npc.tactic, Tactic::None);
-        assert_eq!(npc.facing, 0);
+        assert_eq!(npc.facing, Direction::N); // Default is Direction::N (the #[default] variant)
         assert_eq!(npc.state, NpcState::Still);
         assert_eq!(npc.cleverness, 0);
     }
@@ -354,7 +362,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -372,7 +380,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,
+            facing: Direction::NE,
             state: NpcState::Still,
             ..Default::default()
         };
@@ -392,7 +400,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,
+            facing: Direction::NE,
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -411,7 +419,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -435,7 +443,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -454,7 +462,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,
+            facing: Direction::NE,
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -476,7 +484,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2, // East
+            facing: Direction::NE, // NE (was raw 2)
             state: NpcState::Walking,
             ..Default::default()
         };
@@ -506,7 +514,7 @@ mod tests {
             y: 1000,
             vitality: 10,
             active: true,
-            facing: 2,
+            facing: Direction::NE,
             state: NpcState::Walking,
             tactic: crate::game::actor::Tactic::Frust,
             ..Default::default()

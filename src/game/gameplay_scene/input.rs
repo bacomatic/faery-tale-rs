@@ -83,6 +83,11 @@ impl GameplayScene {
         if self.sleeping {
             return;
         }
+        // Latch fight_pressed edge trigger and consume it immediately.
+        // This ensures rapid taps (press+release in same SDL frame) are visible.
+        let fight_was_pressed = self.input.fight_pressed;
+        self.input.fight_pressed = false;
+
         let dir = self.current_direction();
 
         // Swan dismount — fire button while flying.
@@ -129,20 +134,11 @@ impl GameplayScene {
 
         // Exclusive fight branch — matches fmain.c where fighting is a separate
         // branch above walking. Movement is suppressed; only facing updates.
-        if self.input.fight {
+        // Edge latch allows rapid taps to work even when press+release arrive in one frame.
+        if self.input.fight || fight_was_pressed {
             use crate::game::game_state::ITEM_ARROWS;
 
-            let facing = match dir {
-                Direction::N => 0u8,
-                Direction::NE => 1,
-                Direction::E => 2,
-                Direction::SE => 3,
-                Direction::S => 4,
-                Direction::SW => 5,
-                Direction::W => 6,
-                Direction::NW => 7,
-                Direction::None => self.state.facing,
-            };
+            let facing = if dir != Direction::None { dir } else { self.state.facing };
             self.state.facing = facing;
 
             let hero_weapon = self.state.actors.first().map_or(1, |a| a.weapon);
@@ -152,10 +148,17 @@ impl GameplayScene {
 
             if (has_bow && has_arrows) || has_wand {
                 // SHOOT1: aiming. Stay in Shooting state while button held.
+                // Increment counter during hold for pullback animation.
                 if let Some(player) = self.state.actors.first_mut() {
                     player.facing = facing;
                     player.moving = false;
-                    player.state = ActorState::Shooting(0);
+                    // Transition into Shooting: reset counter to 0
+                    // Already in Shooting: increment counter for animation
+                    let new_counter = match player.state {
+                        ActorState::Shooting(c) => c.saturating_add(1),
+                        _ => 0,
+                    };
+                    player.state = ActorState::Shooting(new_counter);
                 }
             } else {
                 // Melee fighting
@@ -202,7 +205,7 @@ impl GameplayScene {
                         &mut self.missiles,
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
-                        self.state.facing,
+                        self.state.facing as u8,
                         weapon,
                         true,
                         2, // Standard hero projectile speed
@@ -247,24 +250,14 @@ impl GameplayScene {
         let dir =
             if self.state.hunger > 120 && dir != Direction::None && (self.state.cycle & 3) == 0 {
                 let r = (self.state.cycle >> 2) & 1;
-                let f = if r == 0 {
-                    (self.state.facing + 1) & 7
+                let fb = self.state.facing as u8;
+                let f = Direction::from(if r == 0 {
+                    (fb + 1) & 7
                 } else {
-                    (self.state.facing + 7) & 7
-                };
-                let facing_to_dir = |f: u8| match f {
-                    0 => Direction::N,
-                    1 => Direction::NE,
-                    2 => Direction::E,
-                    3 => Direction::SE,
-                    4 => Direction::S,
-                    5 => Direction::SW,
-                    6 => Direction::W,
-                    7 => Direction::NW,
-                    _ => Direction::None,
-                };
+                    (fb + 7) & 7
+                });
                 self.state.facing = f;
-                facing_to_dir(f)
+                f
             } else {
                 dir
             };
@@ -285,7 +278,7 @@ impl GameplayScene {
                 hero_speed_for_env(environ, self.state.on_raft) as i32
             };
 
-            let (dx, dy, facing): (i32, i32, u8) = if self.state.flying != 0 {
+            let (dx, dy, facing): (i32, i32, Direction) = if self.state.flying != 0 {
                 // Swan flight: apply velocity impulse from directional input.
                 // xdir/ydir from collision module match the base_dx/base_dy values.
                 let (xdir, ydir): (i16, i16) = match dir {
@@ -319,19 +312,18 @@ impl GameplayScene {
                     // Find closest cardinal/diagonal direction.
                     let angle = (nvy as f32).atan2(nvx as f32);
                     let octant = ((angle / std::f32::consts::PI * 4.0 + 4.5) as i32).rem_euclid(8);
-                    // Map octant to facing (0=N, 1=NE, 2=E, etc.)
-                    // East=0°, North=90°, West=180°, South=270° in standard coords
-                    // But our facing: 0=N, 2=E, 4=S, 6=W
-                    // octant 0 = East (2), 2 = North (0), 4 = West (6), 6 = South (4)
+                    // Map octant to Amiga facing (DIR_NW=0..DIR_W=7).
+                    // East=0°, North=90°, West=180°, South=270° in standard coords.
+                    // octant 0=E(3), 1=NE(2), 2=N(1), 3=NW(0), 4=W(7), 5=SW(6), 6=S(5), 7=SE(4)
                     match octant {
-                        0 => 2, // E
-                        1 => 1, // NE
-                        2 => 0, // N
-                        3 => 7, // NW
-                        4 => 6, // W
-                        5 => 5, // SW
-                        6 => 4, // S
-                        7 => 3, // SE
+                        0 => Direction::E,
+                        1 => Direction::NE,
+                        2 => Direction::N,
+                        3 => Direction::NW,
+                        4 => Direction::W,
+                        5 => Direction::SW,
+                        6 => Direction::S,
+                        7 => Direction::SE,
                         _ => self.state.facing,
                     }
                 };
@@ -341,17 +333,7 @@ impl GameplayScene {
                 let dx = base_dx * speed / 2;
                 let dy = base_dy * speed / 2;
 
-                let facing: u8 = match dir {
-                    Direction::N => 0,
-                    Direction::NE => 1,
-                    Direction::E => 2,
-                    Direction::SE => 3,
-                    Direction::S => 4,
-                    Direction::SW => 5,
-                    Direction::W => 6,
-                    Direction::NW => 7,
-                    Direction::None => 0,
-                };
+                let facing = if dir != Direction::None { dir } else { self.state.facing };
                 (dx, dy, facing)
             };
 
@@ -424,7 +406,7 @@ impl GameplayScene {
                 && !self.state.on_raft
             {
                 // checkdev1: try (facing + 1) & 7
-                let dev1 = (facing + 1) & 7;
+                let dev1 = (facing as u8 + 1) & 7;
                 let dev1_x = collision::newx(self.state.hero_x, dev1, speed);
                 let dev1_y = collision::newy(self.state.hero_y, dev1, speed);
                 // Deviation probes use hero lava/pit bypass but NOT crystal bypass (fmain.c:1615).
@@ -437,7 +419,7 @@ impl GameplayScene {
                 {
                     final_x = dev1_x;
                     final_y = dev1_y;
-                    final_facing = dev1;
+                    final_facing = Direction::from(dev1);
                     can_move = true;
                 } else {
                     // checkdev2: try (dev1 - 2) & 7 = (facing - 1) & 7
@@ -453,7 +435,7 @@ impl GameplayScene {
                     {
                         final_x = dev2_x;
                         final_y = dev2_y;
-                        final_facing = dev2;
+                        final_facing = Direction::from(dev2);
                         can_move = true;
                     }
                 }

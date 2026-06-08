@@ -62,6 +62,8 @@ pub enum Tactic {
     None,
 }
 
+use crate::game::direction::Direction;
+
 #[derive(Debug, Clone, Default)]
 pub struct Actor {
     pub abs_x: u16,
@@ -73,7 +75,7 @@ pub struct Actor {
     pub state: ActorState,
     pub goal: Goal,
     pub tactic: Tactic,
-    pub facing: u8, // 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
+    pub facing: Direction,
     pub vitality: i16,
     pub weapon: u8,
     pub environ: i8,

@@ -25,17 +25,13 @@ impl GameplayScene {
             active: bool,
         }
         let mut combatants: Vec<Combatant> = Vec::with_capacity(anix);
-        for (i, actor) in self.state.actors.iter().take(anix).enumerate() {
+        for (_i, actor) in self.state.actors.iter().take(anix).enumerate() {
             let fighting = matches!(actor.state, ActorState::Fighting(_));
             combatants.push(Combatant {
                 x: actor.abs_x as i32,
                 y: actor.abs_y as i32,
-                facing: actor.facing,
-                weapon: if i == 0 {
-                    actor.weapon.max(1)
-                } else {
-                    actor.weapon
-                },
+                facing: actor.facing as u8,
+                weapon: actor.weapon,
                 fighting,
                 active: !matches!(actor.state, ActorState::Dead | ActorState::Dying),
             });
@@ -89,17 +85,29 @@ impl GameplayScene {
                 let yd = (target.y - tip_y).abs();
                 let dist = xd.max(yd);
 
-                // Hit check: hero always hits, NPCs must pass brave dodge
+                // Hit check per fmain.c:2252-2254 — the rand(0,255) > brave dodge roll
+                // gates only NPC-hits-hero (defender j==0). Hero attacking NPC has no miss
+                // gate; i==0 (hero) short-circuits to always-hit. This matches the reference.
                 let hit_roll = i == 0 || rand256() > brave;
-                if hit_roll && dist < reach as i32 {
-                    let damage = if one_hit_kill && i == 0 { 999 } else { wt_dmg };
-                    hits.push(HitRecord {
-                        attacker: i,
-                        target: j,
-                        facing: attacker.facing,
-                        damage,
-                    });
-                    break; // one hit per swing
+                if dist < reach as i32 {
+                    if hit_roll {
+                        let damage = if one_hit_kill && i == 0 { 999 } else { wt_dmg };
+                        hits.push(HitRecord {
+                            attacker: i,
+                            target: j,
+                            facing: attacker.facing,
+                            damage,
+                        });
+                        break; // one hit per swing
+                    } else {
+                        // Near-miss: in reach but hit roll failed — emit clang sound
+                        // SPEC §10.2: near-miss clang on melee swing
+                        // Near-miss margin = reach + 2; wand (weapon 5) is silent
+                        if dist < (reach as i32 + 2) && wt != 5 {
+                            self.dlog("near-miss clang".to_string());
+                            self.pending_sfx.push(1); // Sample 1: weapon swing / near-miss clang
+                        }
+                    }
                 }
             }
         }
@@ -121,6 +129,7 @@ impl GameplayScene {
             // NPC hitting hero
             self.state.vitality = (self.state.vitality - damage).max(0);
             self.dlog(format!("enemy hit hero for {}", damage));
+            self.pending_sfx.push(0); // Sample 0: hero injured
 
             // Pushback: hero pushed 2px in attacker's facing direction
             let (px, py) = push_offset(facing, 2);
@@ -138,11 +147,6 @@ impl GameplayScene {
             }
         } else {
             // Hero (or NPC) hitting an NPC
-            let attacker_weapon = if attacker_idx == 0 {
-                self.state.actors.first().map_or(1, |a| a.weapon)
-            } else {
-                self.state.actors.get(attacker_idx).map_or(1, |a| a.weapon)
-            };
 
             // Work inside the npc_table borrow, collect results to act on after.
             let mut logs: Vec<String> = Vec::new();
@@ -163,9 +167,12 @@ impl GameplayScene {
                     // AND skip knockback, follow-through, and checkdead —
                     // the original `dohit` returns immediately before the
                     // damage/SFX/move_figure block.
+                    // IMPORTANT: immunity check uses anim_list[0].weapon (hero's weapon),
+                    // not the attacker's weapon — see combat.md#dohit.
                     use crate::game::combat::{check_immunity, ImmunityResult};
                     let has_sun_stone = self.state.stuff()[7] != 0;
-                    let immunity = check_immunity(npc.race, attacker_weapon, has_sun_stone);
+                    let hero_weapon = self.state.actors.first().map_or(0, |a| a.weapon);
+                    let immunity = check_immunity(npc.race, hero_weapon, has_sun_stone);
 
                     let immune = match immunity {
                         ImmunityResult::Vulnerable => false,
@@ -177,15 +184,20 @@ impl GameplayScene {
                     };
 
                     if !immune {
-                        npc.vitality -= damage;
-                        if npc.vitality < 0 {
-                            npc.vitality = 0;
+                        // Arena dummies are immortal: skip damage but allow knockback/SFX
+                        if !npc.is_dummy {
+                            npc.vitality -= damage;
+                            if npc.vitality < 0 {
+                                npc.vitality = 0;
+                            }
                         }
+                        self.pending_sfx.push(3); // Sample 3: enemy hit
 
                         // Pushback on target: 2px in attacker facing, but
-                        // DRAGON and SETFIG races refuse to move (fmain2.c:243).
+                        // DRAGON and SETFIG types refuse to move (fmain2.c:243).
+                        // SETFIG is identified by npc_type == NPC_TYPE_HUMAN (non-enemy humans).
                         let target_pushable = npc.npc_type != crate::game::npc::NPC_TYPE_DRAGON
-                            && (npc.race & 0x80) == 0;
+                            && npc.npc_type != crate::game::npc::NPC_TYPE_HUMAN;
                         let target_moved = if target_pushable {
                             let (px, py) = push_offset(facing, 2);
                             npc.x = (npc.x as i32 + px).clamp(0, 32767) as i16;
@@ -196,16 +208,21 @@ impl GameplayScene {
                         };
 
                         // Attacker follow-through: only if the target moved
-                        // successfully AND attacker is a real melee source
-                        // (i >= 0; arrows/fireballs use i = -1/-2 and don't
-                        // recoil). apply_hit is never called for projectiles
-                        // so the i>=0 guard is implicit here.
-                        if target_moved && attacker_idx == 0 {
+                        // successfully. Projectiles never call apply_hit in this
+                        // codebase, so all callers here are melee sources.
+                        if target_moved {
                             let (rx, ry) = push_offset(facing, 2);
-                            self.state.hero_x =
-                                (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
-                            self.state.hero_y =
-                                (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                            if attacker_idx == 0 {
+                                // Hero follow-through
+                                self.state.hero_x =
+                                    (self.state.hero_x as i32 + rx).clamp(0, 32767) as u16;
+                                self.state.hero_y =
+                                    (self.state.hero_y as i32 + ry).clamp(0, 32767) as u16;
+                            } else if let Some(actor) = self.state.actors.get_mut(attacker_idx) {
+                                // NPC follow-through
+                                actor.abs_x = (actor.abs_x as i32 + rx).clamp(0, 32767) as u16;
+                                actor.abs_y = (actor.abs_y as i32 + ry).clamp(0, 32767) as u16;
+                            }
                         }
 
                         if damage > 0 {
@@ -217,7 +234,8 @@ impl GameplayScene {
                     // Reference: vitality<1 triggers transition; brave+1 for
                     // any enemy (i!=0); kind-=3 for SETFIG non-witch kills;
                     // speak(42) on dark-knight race 7.
-                    if npc.vitality == 0 {
+                    // Arena dummies are immortal and never trigger death logic.
+                    if npc.vitality == 0 && !npc.is_dummy {
                         use crate::game::npc::{
                             NpcState, RACE_NECROMANCER, RACE_WITCH, RACE_WOODCUTTER,
                         };
@@ -319,5 +337,55 @@ impl GameplayScene {
                 );
             }
         }
+    }
+
+    /// Port of fmain2.c:253-276 `aftermath()`.
+    /// Called when `battleflag` transitions true→false (end of an encounter).
+    /// Tallies dead and fled enemies, emits the battle-summary scroll messages.
+    /// Text strings are hardcoded originals per `reference/logic/dialog_system.md`.
+    pub(crate) fn run_aftermath(&mut self) {
+        use crate::game::actor::{ActorKind, ActorState, Goal};
+
+        // Dead hero: no message at all (fmain2.c:262).
+        if self.state.vitality < 1 {
+            return;
+        }
+
+        // Arena mode: suppress aftermath messages for training encounters.
+        // Dummies are cleared on exit; no "foes defeated" message needed.
+        if self.in_arena_zone {
+            return;
+        }
+
+        // Scan actors[2..anix] — skip slot 0 (hero) and slot 1 (raft).
+        let anix = self.state.anix;
+        let mut dead: u32 = 0;
+        let mut fled: u32 = 0;
+        for actor in self.state.actors.get(2..anix).unwrap_or(&[]).iter() {
+            if actor.kind != ActorKind::Enemy {
+                continue;
+            }
+            if actor.state == ActorState::Dead {
+                dead += 1;
+            } else if actor.goal == Goal::Flee {
+                fled += 1;
+            }
+        }
+
+        // fmain2.c:263 — wounded hero with at least one kill: "Bravely done!"
+        if self.state.vitality < 5 && dead > 0 {
+            self.messages.push("Bravely done!");
+        } else if self.state.xtype < 50 {
+            // fmain2.c:264 — normal encounters only (xtype >= 50 = special extent).
+            if dead > 0 {
+                self.messages
+                    .push(format!("{dead} foes were defeated in battle."));
+            }
+            if fled > 0 {
+                self.messages
+                    .push(format!("{fled} foes fled in retreat."));
+            }
+        }
+        // turtle-egg delivery: get_turtle() is tracked separately (SPEC-GAP actors.rs:45).
     }
 }

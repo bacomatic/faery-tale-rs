@@ -63,7 +63,7 @@ pub fn do_tactic(
             }
         }
         Tactic::Random => {
-            npc.facing = ((r >> 4) & 7) as u8;
+            npc.facing = Direction::from(((r >> 4) & 7) as u8);
             npc.state = NpcState::Walking;
         }
         Tactic::BumbleSeek => {
@@ -78,11 +78,11 @@ pub fn do_tactic(
                     let (lx, ly) = npcs[li];
                     set_course(npc, lx, ly + 20, SetCourseMode::Smart);
                 } else {
-                    npc.facing = ((r >> 4) & 7) as u8;
+                    npc.facing = Direction::from(((r >> 4) & 7) as u8);
                     npc.state = NpcState::Walking;
                 }
             } else {
-                npc.facing = ((r >> 4) & 7) as u8;
+                npc.facing = Direction::from(((r >> 4) & 7) as u8);
                 npc.state = NpcState::Walking;
             }
         }
@@ -185,7 +185,7 @@ pub fn set_course(npc: &mut Npc, target_x: i32, target_y: i32, mode: SetCourseMo
         facing = if coin == 0 { facing.rotate_by(2) } else { facing.rotate_by(-2) };
     }
 
-    npc.facing = facing as u8;
+    npc.facing = facing;
     if mode != Aim {
         npc.state = NpcState::Walking;
     }
@@ -377,7 +377,7 @@ pub fn select_tactic(
         // Living dark knight outside melee reach: stand_guard — state = STILL,
         // facing = DIR_S (south). Ref ai-system.md:110-112 (fmain.c:2168-2169).
         npc.state = NpcState::Still;
-        npc.facing = Direction::S as u8;
+        npc.facing = Direction::S;
         return;
     }
 
@@ -405,7 +405,7 @@ pub fn select_tactic(
     if npc.weapon == 0 {
         npc.goal = Goal::Confused;
         npc.tactic = Tactic::Random;
-        npc.facing = ((r >> 4) & 7) as u8;
+        npc.facing = Direction::from(((r >> 4) & 7) as u8);
         npc.state = NpcState::Walking;
         return;
     }
@@ -457,7 +457,7 @@ mod tests {
     fn test_set_course_smart_east() {
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 200, 100, SetCourseMode::Smart);
-        assert_eq!(npc.facing, 3); // DIR_E = 3 in Amiga order
+        assert_eq!(npc.facing, Direction::E); // DIR_E = 3 in Amiga order
         assert_eq!(npc.state, NpcState::Walking);
     }
 
@@ -465,7 +465,7 @@ mod tests {
     fn test_set_course_smart_north() {
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 100, 50, SetCourseMode::Smart);
-        assert_eq!(npc.facing, 1); // DIR_N = 1 in Amiga order
+        assert_eq!(npc.facing, Direction::N); // DIR_N = 1 in Amiga order
         assert_eq!(npc.state, NpcState::Walking);
     }
 
@@ -474,7 +474,7 @@ mod tests {
         // Target far east, slightly south — should suppress Y axis → pure East.
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 300, 110, SetCourseMode::Smart);
-        assert_eq!(npc.facing, 3); // DIR_E = 3, Y suppressed
+        assert_eq!(npc.facing, Direction::E); // DIR_E = 3, Y suppressed
     }
 
     #[test]
@@ -482,7 +482,7 @@ mod tests {
         // Target equally far NE — should get NE.
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 200, 0, SetCourseMode::Smart);
-        assert_eq!(npc.facing, 2); // DIR_NE = 2 in Amiga order
+        assert_eq!(npc.facing, Direction::NE); // DIR_NE = 2 in Amiga order
     }
 
     #[test]
@@ -490,7 +490,7 @@ mod tests {
         // Flee mode: target east → NPC should face west.
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 200, 100, SetCourseMode::Flee);
-        assert_eq!(npc.facing, 7); // DIR_W = 7 in Amiga order (flee from east)
+        assert_eq!(npc.facing, Direction::W); // DIR_W = 7 in Amiga order (flee from east)
         assert_eq!(npc.state, NpcState::Walking);
     }
 
@@ -500,7 +500,7 @@ mod tests {
         let mut npc = make_npc(100, 100);
         npc.state = NpcState::Still;
         set_course(&mut npc, 200, 100, SetCourseMode::Aim);
-        assert_eq!(npc.facing, 3); // DIR_E = 3 in Amiga order
+        assert_eq!(npc.facing, Direction::E); // DIR_E = 3 in Amiga order
         assert_eq!(npc.state, NpcState::Still); // NOT Walking
     }
 
@@ -509,7 +509,7 @@ mod tests {
         // Direct mode: target_x/y are raw deltas, not world positions.
         let mut npc = make_npc(100, 100);
         set_course(&mut npc, 1, 0, SetCourseMode::Direct); // raw delta: +X, 0Y → East
-        assert_eq!(npc.facing, 3); // DIR_E = 3 in Amiga order
+        assert_eq!(npc.facing, Direction::E); // DIR_E = 3 in Amiga order
     }
 
     #[test]
@@ -527,7 +527,7 @@ mod tests {
         // Far east, slightly south — in SMART mode this suppresses Y.
         // In BUMBLE mode it should keep the diagonal.
         set_course(&mut npc, 300, 130, SetCourseMode::Bumble);
-        assert_eq!(npc.facing, 4); // DIR_SE = 4 in Amiga order (not suppressed to E)
+        assert_eq!(npc.facing, Direction::SE); // DIR_SE = 4 in Amiga order (not suppressed to E)
     }
 
     #[test]
@@ -539,9 +539,9 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.tactic = Tactic::Pursue;
             npc.goal = Goal::Attack1;
-            npc.facing = 1; // DIR_N = 1, facing North
+            npc.facing = Direction::N; // DIR_N = 1, facing North
             do_tactic(&mut npc, 200, 100, None, &[], tick);
-            if npc.facing != 1 {
+            if npc.facing != Direction::N {
                 reaim_count += 1;
             }
         }
@@ -574,9 +574,9 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.tactic = Tactic::Backup;
             npc.goal = Goal::Archer1;
-            npc.facing = 3; // DIR_E = 3 (toward hero)
+            npc.facing = Direction::E; // DIR_E = 3 (toward hero)
             do_tactic(&mut npc, 200, 100, None, &[], tick);
-            if npc.facing == 7 {
+            if npc.facing == Direction::W {
                 // DIR_W = 7 = away from hero at (200,100)
                 triggered_away = true;
                 break;
@@ -596,18 +596,18 @@ mod tests {
             let mut npc1 = make_npc(100, 100);
             npc1.tactic = Tactic::Pursue;
             npc1.goal = Goal::Attack1;
-            npc1.facing = 1; // DIR_N
+            npc1.facing = Direction::N; // DIR_N
             do_tactic(&mut npc1, 200, 100, None, &[], tick);
-            if npc1.facing != 1 {
+            if npc1.facing != Direction::N {
                 reaim_a1 += 1;
             }
 
             let mut npc2 = make_npc(100, 100);
             npc2.tactic = Tactic::Pursue;
             npc2.goal = Goal::Attack2;
-            npc2.facing = 1; // DIR_N
+            npc2.facing = Direction::N; // DIR_N
             do_tactic(&mut npc2, 200, 100, None, &[], tick);
-            if npc2.facing != 1 {
+            if npc2.facing != Direction::N {
                 reaim_a2 += 1;
             }
         }
@@ -898,14 +898,14 @@ mod tests {
             vitality: 10,
             active: true,
             goal: Goal::Stand,
-            facing: 4, // spawn facing south
+            facing: Direction::SE, // spawn facing south-east (raw 4)
             ..Default::default()
         };
         // SETFIG short-circuit: state/facing/goal must not be touched, even with freeze=true.
         tick_npc(&mut npc, 0, 200, 100, false, None, &[], 0, 0, false, true);
         assert_eq!(npc.state, NpcState::Still);
         assert_eq!(
-            npc.facing, 4,
+            npc.facing, Direction::SE,
             "SETFIG shopkeeper spawn facing must be preserved"
         );
     }
@@ -919,7 +919,7 @@ mod tests {
             npc.goal = Goal::Attack1;
             npc.tactic = Tactic::Pursue;
             npc.weapon = 1;
-            npc.facing = 0;
+            npc.facing = Direction::NW;
             npc.state = NpcState::Still;
             tick_npc(
                 &mut npc,
@@ -934,7 +934,7 @@ mod tests {
                 false,
                 false,
             );
-            if npc.state != NpcState::Still || npc.facing != 0 {
+            if npc.state != NpcState::Still || npc.facing != Direction::NW {
                 acted = true;
                 break;
             }
@@ -1017,7 +1017,7 @@ mod tests {
                     NpcState::Walking,
                     "first CONFUSED tick must set Walking"
                 );
-                assert!(npc.facing <= 7, "facing must be 0–7, got {}", npc.facing);
+                assert!(npc.facing != Direction::None, "facing must be a valid direction, got {:?}", npc.facing);
                 // do_tactic must be a no-op for Confused — confirm it doesn't touch state.
                 let facing_before = npc.facing;
                 do_tactic(&mut npc, 200, 100, None, &[], tick);
@@ -1138,7 +1138,7 @@ mod tests {
             goal: Goal::Attack1, // hostile goal — must be suppressed
             tactic: Tactic::Pursue,
             state: NpcState::Still,
-            facing: 0,
+            facing: Direction::NW,
             ..Default::default()
         };
         for tick in 0..200u32 {
@@ -1183,7 +1183,7 @@ mod tests {
             npc.goal = Goal::Attack1;
             npc.weapon = 1;
             npc.state = NpcState::Still;
-            npc.facing = 0;
+            npc.facing = Direction::NW;
             tick_npc(
                 &mut npc,
                 0,
@@ -1197,7 +1197,7 @@ mod tests {
                 false,
                 false,
             );
-            if npc.state != NpcState::Still || npc.facing != 0 {
+            if npc.state != NpcState::Still || npc.facing != Direction::NW {
                 acted = true;
                 break;
             }
@@ -1219,7 +1219,7 @@ mod tests {
             vitality: 10,
             active: true,
             goal: Goal::Stand,
-            facing: 4, // spawn facing south
+            facing: Direction::SE, // spawn facing south-east (raw 4)
             state: NpcState::Still,
             ..Default::default()
         };
@@ -1231,7 +1231,7 @@ mod tests {
             "SETFIG shopkeeper must stay Still"
         );
         assert_eq!(
-            npc.facing, 4,
+            npc.facing, Direction::SE,
             "SETFIG shopkeeper spawn facing must be preserved (ref short-circuits AI)"
         );
     }
@@ -1253,13 +1253,13 @@ mod tests {
             goal: Goal::Attack1,
             tactic: Tactic::Pursue,
             state: NpcState::Walking,
-            facing: 2, // east before tick
+            facing: Direction::NE, // NE (was raw 2) before tick
             ..Default::default()
         };
         // Hero far away (300 away) — beyond DKnight thresh of 16.
         select_tactic(&mut npc, 0, 400, 100, false, None, 0, false, 42);
         assert_eq!(npc.state, NpcState::Still, "DKnight out of reach → STILL");
-        assert_eq!(npc.facing, 5, "DKnight stand_guard faces south (DIR_S = 5)");
+        assert_eq!(npc.facing, Direction::S, "DKnight stand_guard faces south (DIR_S = 5)");
     }
 
     /// F3.4: a dead dark knight (vitality == 0) does NOT stand_guard — falls
@@ -1392,9 +1392,9 @@ mod tests {
             let mut npc = make_npc(100, 100);
             npc.tactic = Tactic::Shoot;
             npc.goal = Goal::Archer1;
-            npc.facing = 7; // starting facing DIR_W; hero east → should change
+            npc.facing = Direction::W; // starting facing DIR_W; hero east → should change
             do_tactic(&mut npc, 200, 100, None, &[], tick);
-            if npc.facing != 7 {
+            if npc.facing != Direction::W {
                 updates += 1;
             }
         }

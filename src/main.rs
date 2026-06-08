@@ -708,7 +708,6 @@ pub fn main() -> Result<(), String> {
                     wealth: gs.state.wealth as u16,
                     brave: gs.state.brave as u16,
                     actors: {
-                        use crate::game::npc::NPC_TYPE_NONE;
                         let mut v: Vec<crate::game::debug_tui::ActorSnapshot> = gs
                             .state
                             .actors
@@ -722,7 +721,7 @@ pub fn main() -> Result<(), String> {
                             .collect();
                         if let Some(ref table) = gs.npc_table {
                             for (i, npc) in table.npcs.iter().enumerate() {
-                                if npc.npc_type != NPC_TYPE_NONE {
+                                if npc.active {
                                     v.push(crate::game::debug_tui::ActorSnapshot::from_npc(i, npc));
                                 }
                             }
@@ -777,7 +776,7 @@ pub fn main() -> Result<(), String> {
                             crate::game::debug_tui::actor_state_name(discriminant).to_string()
                         })
                         .unwrap_or_else(|| "—".to_string()),
-                    hero_facing: gs.state.actors.first().map(|a| a.facing).unwrap_or(0),
+                    hero_facing: gs.state.actors.first().map(|a| a.facing as u8).unwrap_or(0),
                     hero_environ: gs.state.actors.first().map(|a| a.environ).unwrap_or(0),
                     active_carrier: gs.state.active_carrier,
                     active_carrier_name: crate::game::debug_tui::carrier_name(

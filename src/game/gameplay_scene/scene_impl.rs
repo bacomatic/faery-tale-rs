@@ -69,6 +69,7 @@ impl Scene for GameplayScene {
                     // Fight: numpad 0 and top-row 0 (keytrans: scancode $0F and $0A both → '0' = KEY_FIGHT_DOWN=48)
                     Keycode::Kp0 | Keycode::_0 => {
                         self.input.fight = true;
+                        self.input.fight_pressed = true;
                         true
                     }
                     // All letter_list keys → route through MenuState
@@ -139,6 +140,7 @@ impl Scene for GameplayScene {
                 {
                     if action == GameAction::Fight {
                         self.input.fight = true;
+                        self.input.fight_pressed = true;
                     } else {
                         self.do_option(action);
                     }
@@ -211,6 +213,7 @@ impl Scene for GameplayScene {
                 let my = *y as i32;
                 if self.apply_compass_input_from_canvas(mx, my) {
                     self.input.fight = true;
+                    self.input.fight_pressed = true;
                     self.input.compass_fight_held = true;
                     return true;
                 }
@@ -282,6 +285,13 @@ impl Scene for GameplayScene {
         if let Some(on) = self.pending_sound_toggle.take() {
             if let Some(audio) = resources.audio {
                 audio.set_sfx_enabled(on);
+            }
+        }
+
+        // Drain queued combat sound effects.
+        for sfx_id in self.pending_sfx.drain(..) {
+            if let Some(audio) = resources.audio {
+                audio.play_sfx(sfx_id);
             }
         }
 
@@ -526,9 +536,54 @@ impl Scene for GameplayScene {
             self.enqueue_princess_rescue_sequence();
         }
 
+        // Arena zone entry/exit detection
+        if self.arena_mode {
+            let (x1, y1, x2, y2) = self.arena_zone;
+            let hx = self.state.hero_x as i32;
+            let hy = self.state.hero_y as i32;
+            let in_zone = hx >= x1 && hx <= x2 && hy >= y1 && hy <= y2;
+
+            // Entry: spawn arena encounter
+            if in_zone && !self.in_arena_zone {
+                self.in_arena_zone = true;
+                self.dlog("Entered the training grounds.".to_string());
+                // Spawn next encounter type
+                let idx = self.arena_encounter_idx;
+                if let Some(ref mut table) = self.npc_table {
+                    crate::game::encounter::spawn_arena_encounter(
+                        table,
+                        idx,
+                        hx as i16,
+                        hy as i16,
+                        &mut self.state.anix,
+                    );
+                    // Cycle to next encounter type (0-10)
+                    self.arena_encounter_idx = (idx + 1) % 11;
+                }
+            }
+            // Exit: clear arena dummies
+            else if !in_zone && self.in_arena_zone {
+                self.in_arena_zone = false;
+                self.dlog("Left the training grounds.".to_string());
+                if let Some(ref mut table) = self.npc_table {
+                    let mut cleared = 0;
+                    for npc in table.npcs.iter_mut() {
+                        if npc.is_arena_target {
+                            npc.active = false;
+                            npc.is_arena_target = false;
+                            npc.is_dummy = false;
+                            cleared += 1;
+                        }
+                    }
+                    self.state.anix = 2; // reset to hero + raft
+                    self.dlog(format!("Cleared {} training dummies", cleared));
+                }
+            }
+        }
+
         // Encounter spawning (npc-104): trigger random encounter when in encounter zone.
-        // SPEC §19.3: suppressed while freeze_timer > 0.
-        if self.in_encounter_zone && self.state.freeze_timer == 0 {
+        // SPEC §19.3: suppressed while freeze_timer > 0 or arena_mode is active.
+        if self.in_encounter_zone && self.state.freeze_timer == 0 && !self.arena_mode {
             let trigger = self.npc_table.as_ref().and_then(|table| {
                 crate::game::encounter::try_trigger_encounter(
                     self.state.tick_counter,
@@ -599,8 +654,8 @@ impl Scene for GameplayScene {
                             .collect()
                     });
                 let mut hero_missile_damage: i16 = 0;
-                let mut npc_hits: Vec<(usize, i16)> = vec![];
-                for missile in self.missiles.iter_mut() {
+                let mut npc_hits: Vec<(usize, u8, i16)> = vec![]; // (npc_idx, facing, damage)
+                for (slot, missile) in self.missiles.iter_mut().enumerate() {
                     if !missile.active {
                         continue;
                     }
@@ -624,31 +679,41 @@ impl Scene for GameplayScene {
                     };
                     if missile.is_friendly {
                         for &(npc_idx, nx, ny) in &npc_positions {
-                            if (missile.x - nx).abs() < radius && (missile.y - ny).abs() < radius {
+                            // Chebyshev distance: max(dx, dy) < radius
+                            let dx = (missile.x - nx).abs();
+                            let dy = (missile.y - ny).abs();
+                            if dx.max(dy) < radius {
                                 missile.active = false;
-                                npc_hits.push((npc_idx, missile.damage()));
+                                npc_hits.push((npc_idx, missile.facing(), missile.damage()));
+                                self.pending_sfx.push(2); // Sample 2: ranged hit
                                 break;
                             }
                         }
-                    } else if (missile.x - hero_x).abs() < radius
-                        && (missile.y - hero_y).abs() < radius
-                    {
-                        missile.active = false;
-                        hero_missile_damage += missile.damage();
-                    }
-                }
-                if let Some(ref mut table) = self.npc_table {
-                    for (npc_idx, dmg) in npc_hits {
-                        table.npcs[npc_idx].vitality -= dmg;
-                        if table.npcs[npc_idx].vitality <= 0 {
-                            // F9.11: missile kill leaves a searchable body.
-                            // SPEC §10.4 / `fmain.c:2334`. The original sets
-                            // `vitality = 0` and runs the same checkdead
-                            // path; here we route through `mark_dead` to
-                            // keep `active=true` for TAKE → search_body.
-                            table.npcs[npc_idx].mark_dead();
+                    } else {
+                        // Chebyshev distance: max(dx, dy) < radius
+                        let dx = (missile.x - hero_x).abs();
+                        let dy = (missile.y - hero_y).abs();
+                        if dx.max(dy) < radius {
+                            // SPEC §10.4 / fmain.c:2294 — slot 0 rolls dodge: hit if bitrand(512) > brave.
+                            // Slots 1–5 always hit (no dodge gate). Higher brave → bitrand(512) > brave
+                            // is harder → more dodges. Reference: combat.md#missile_step.
+                            let hit = slot > 0
+                                || crate::game::combat::bitrand(512) as i16 > self.state.brave;
+                            if hit {
+                                missile.active = false;
+                                hero_missile_damage += missile.damage();
+                                self.pending_sfx.push(2); // Sample 2: ranged hit
+                            }
                         }
                     }
+                }
+                // Apply missile hits through apply_hit to ensure checkdead path runs
+                // for special death drops (talisman, lasso) and bravery increment.
+                // Pass attacker_idx = 0 (hero) for friendly missiles, use missile's facing.
+                for (npc_idx, facing, dmg) in npc_hits {
+                    // Convert npc table index to actor index (npc_idx + 2)
+                    let target_actor_idx = npc_idx + 2;
+                    self.apply_hit(0, target_actor_idx, facing, dmg);
                 }
                 self.state.vitality -= hero_missile_damage;
             }
@@ -708,9 +773,7 @@ impl Scene for GameplayScene {
                 // Build render list for ALL visible entities, sort by Y, render in order.
                 use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
                 use crate::game::sprite_mask::{apply_sprite_mask, BlittedSprite};
-                use crate::game::sprites::{
-                    OBJ_SPRITE_H, SETFIG_TABLE, SPRITE_H, SPRITE_W, STATELIST,
-                };
+                use crate::game::sprites::{SETFIG_TABLE, SPRITE_H, SPRITE_W, STATELIST};
 
                 let fb_w = MAP_DST_W as i32;
                 let fb_h = MAP_DST_H as i32;
@@ -881,7 +944,7 @@ impl Scene for GameplayScene {
                                     && rel_y < fb_h
                                 {
                                     let hero_facing =
-                                        self.state.actors.first().map_or(0u8, |a| a.facing);
+                                        self.state.actors.first().map_or(0u8, |a| a.facing as u8);
                                     let is_moving =
                                         self.state.actors.first().map_or(false, |a| a.moving);
                                     let hero_state = self.state.actors.first().map(|a| &a.state);
@@ -933,6 +996,7 @@ impl Scene for GameplayScene {
                                             frame,
                                             hero_facing,
                                             weapon_type,
+                                            0, // NPCs don't use hero-style shooting counter
                                             obj_sheet,
                                             rel_x,
                                             rel_y,
@@ -1068,11 +1132,12 @@ impl Scene for GameplayScene {
                                 };
 
                                 // Weapon draw order: same (facing - 2) & 4 rule as hero.
-                                let weapon_behind = matches!(npc.facing, 0 | 5 | 6 | 7);
+                                let weapon_behind = matches!(npc.facing, Direction::NW | Direction::S | Direction::SW | Direction::W);
                                 let wpn_blit = if npc.weapon > 0 && npc.weapon < 8 {
                                     if let Some(ref obj_sheet) = self.object_sprites {
                                         Self::compute_weapon_blit(
-                                            frame, npc.facing, npc.weapon, obj_sheet, rel_x, rel_y,
+                                            frame, npc.facing as u8, npc.weapon, 0, // NPCs don't use hero-style shooting counter
+                                            obj_sheet, rel_x, rel_y,
                                         )
                                     } else {
                                         None
@@ -1143,25 +1208,14 @@ impl Scene for GameplayScene {
                         RenderKind::WorldObj(idx) => {
                             let obj = &self.state.world_objects[idx];
                             if let Some(ref obj_sheet) = self.object_sprites {
-                                // Resolve sprite display attrs from ob_id.
-                                // Many cfile-3 frames are shared between two items
-                                // (top half rows 0..7, bottom half rows 8..15) — INV_LIST
-                                // describes each item's exact (frame, img_off, img_height)
-                                // sub-rectangle. Items lacking an INV_LIST entry
-                                // (containers, money, fruit, etc.) use the full 16-row
-                                // frame at ob_id.
-                                use crate::game::sprites::INV_LIST;
-                                use crate::game::world_objects::ob_id_to_stuff_index;
-                                let (frame, img_off, img_height) = ob_id_to_stuff_index(obj.ob_id)
-                                    .and_then(|s| INV_LIST.get(s))
-                                    .map(|it| {
-                                        (
-                                            it.image_number as usize,
-                                            it.img_off as usize,
-                                            it.img_height as usize,
-                                        )
-                                    })
-                                    .unwrap_or((obj.ob_id as usize, 0, OBJ_SPRITE_H));
+                                // World ob_id IS the OBJECTS inum directly (fmain2.c:1287).
+                                // Size is determined by compute_sprite_size (obj_frame_height),
+                                // not by INV_LIST (which is only for the inventory items page).
+                                use crate::game::sprites::{obj_frame_height, obj_frame_y_offset};
+                                let inum = obj.ob_id;
+                                let frame = inum as usize;
+                                let img_height = obj_frame_height(inum) as usize;
+                                let img_off = obj_frame_y_offset(inum) as usize;
                                 if let Some(pix) = obj_sheet.frame_pixels(frame) {
                                     // Use actor_rel_pos_offset so indoor coords (bit 15 set)
                                     // wrap correctly against the indoor map_y origin.

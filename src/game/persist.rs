@@ -263,7 +263,7 @@ pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<GameState> {
                 state: actor_state,
                 vitality: sa.vitality as i16,
                 weapon: sa.weapon as u8,
-                facing: sa.facing as u8,
+                facing: crate::game::direction::Direction::from(sa.facing as u8),
                 ..Actor::default()
             });
         }

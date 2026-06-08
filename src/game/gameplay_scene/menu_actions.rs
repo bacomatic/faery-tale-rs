@@ -470,45 +470,6 @@ impl GameplayScene {
                 // Talk is the same as Ask/Speak: range 50, nearest NPC (fmain.c:4167).
                 self.do_option(GameAction::Speak);
             }
-            GameAction::Attack => {
-                // Legacy menu-driven attack path — real combat runs through
-                // `run_combat_tick` via `input.fight`. This branch predates
-                // the proximity/swing state machine and is retained only so
-                // the menu action doesn't panic. Scroll-area strings here
-                // were invented (not in `faery.toml [narr]` nor
-                // `dialog_system.md`) and have been removed.
-                //
-                // F9.11: auto-loot removed from this path too — bodies must
-                // be TAKEn via `search_body`. Turtle-egg shell rescue stays
-                // because it is a quest hook, not treasure.
-                if let Some(ref mut table) = self.npc_table {
-                    for npc in table
-                        .npcs
-                        .iter_mut()
-                        .filter(|n| n.active && n.state != crate::game::npc::NpcState::Dead)
-                    {
-                        let dx = (npc.x - self.state.hero_x as i16).abs();
-                        let dy = (npc.y - self.state.hero_y as i16).abs();
-                        if dx < 32 && dy < 32 {
-                            #[allow(deprecated)]
-                            let result =
-                                crate::game::combat::resolve_combat(&mut self.state, npc, 0);
-                            if result.enemy_defeated {
-                                // Turtle egg rescue: killing a snake near eggs awards a Sea Shell (player-108).
-                                if self
-                                    .state
-                                    .check_turtle_eggs(npc.race == crate::game::npc::RACE_SNAKE)
-                                {
-                                    self.dlog("check_turtle_eggs: shell awarded for snake kill");
-                                }
-                                let wealth = self.state.wealth;
-                                self.menu.set_options(self.state.stuff(), wealth);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
             GameAction::Fight => {
                 self.input.fight = true;
             }
@@ -554,7 +515,7 @@ impl GameplayScene {
                         &mut self.missiles,
                         self.state.hero_x as i32,
                         self.state.hero_y as i32,
-                        self.state.facing,
+                        self.state.facing as u8,
                         weapon,
                         true,
                         2, // Standard hero projectile speed

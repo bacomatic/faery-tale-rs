@@ -230,6 +230,7 @@ fn apply_vial_heal(state: &mut GameState) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::direction::Direction;
     use crate::game::game_state::GameState;
 
     #[test]
@@ -518,7 +519,7 @@ mod tests {
         state.hero_x = (54u16 << 8) | 85;
         state.hero_y = (43u16 << 8) | 64;
         state.hero_sector = STONE_RING_SECTOR;
-        state.facing = 0;
+        state.facing = Direction::NW;
         state.stuff_mut()[ITEM_STONE_RING] = 1;
         state
     }

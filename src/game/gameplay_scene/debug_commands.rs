@@ -137,9 +137,11 @@ impl GameplayScene {
                             active: true,
                             goal: Goal::None,
                             tactic: Tactic::None,
-                            facing: 0,
+                            facing: Direction::NW,
                             state: NpcState::Still,
                             cleverness: 0,
+                            is_dummy: false,
+                            is_arena_target: false,
                             looted: false,
                         };
                         self.dlog(
@@ -152,6 +154,43 @@ impl GameplayScene {
                 } else {
                     self.dlog("summon swan: no npc_table loaded".to_string());
                 }
+            }
+            SetArenaMode { enabled } => {
+                self.arena_mode = enabled;
+                if enabled {
+                    self.dlog("Arena mode enabled. Enter zone east of Tambry to spawn dummies.".to_string());
+                } else {
+                    // Clear any active arena dummies
+                    if let Some(ref mut table) = self.npc_table {
+                        let mut cleared = 0;
+                        for npc in table.npcs.iter_mut() {
+                            if npc.is_arena_target {
+                                npc.active = false;
+                                npc.is_arena_target = false;
+                                npc.is_dummy = false;
+                                cleared += 1;
+                            }
+                        }
+                        if self.in_arena_zone {
+                            self.state.anix = 2; // reset to hero + raft
+                            self.in_arena_zone = false;
+                        }
+                        self.dlog(format!("Arena mode disabled. Cleared {} training dummies.", cleared));
+                    }
+                }
+            }
+            ToggleArenaDamage => {
+                self.arena_damage_enabled = !self.arena_damage_enabled;
+                let status = if self.arena_damage_enabled {
+                    "ON: dummies take damage and fight back"
+                } else {
+                    "OFF: dummies are immortal targets"
+                };
+                self.dlog(format!("Arena damage mode: {}", status));
+            }
+            ResetArena => {
+                self.arena_encounter_idx = 0;
+                self.dlog("Arena encounter index reset to 0 (Ogre).".to_string());
             }
             RestartAsBrother { brother } => {
                 let b = match brother {
@@ -223,7 +262,7 @@ impl GameplayScene {
                 let npc_lines: Vec<String> = if let Some(ref table) = self.npc_table {
                     let mut v = vec![format!("NpcTable ({} slots):", table.npcs.len())];
                     for (i, npc) in table.npcs.iter().enumerate() {
-                        if npc.npc_type != crate::game::npc::NPC_TYPE_NONE {
+                        if npc.active {
                             v.push(format!(
                                 "  [npc{:2}] type={} race={} vit={} @({},{}) {:?} goal:{:?} tac:{:?}",
                                 i, npc.npc_type, npc.race, npc.vitality,

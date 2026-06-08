@@ -50,6 +50,10 @@ impl GameplayScene {
                 if !npc.active || npc.state == NpcState::Dead {
                     continue;
                 }
+                // Arena dummies have no AI - skip tick_npc entirely
+                if npc.is_dummy {
+                    continue;
+                }
                 tick_npc(
                     npc,
                     npc_idx,
@@ -104,9 +108,12 @@ impl GameplayScene {
                 }
                 let old_x = table.npcs[i].x;
                 let old_y = table.npcs[i].y;
-                table.npcs[i].tick_with_actors(self.map_world.as_ref(), &others);
-                if table.npcs[i].x != old_x || table.npcs[i].y != old_y {
-                    any_npc_moved = true;
+                // Arena dummies have no AI - skip tick entirely
+                if !table.npcs[i].is_dummy {
+                    table.npcs[i].tick_with_actors(self.map_world.as_ref(), &others);
+                    if table.npcs[i].x != old_x || table.npcs[i].y != old_y {
+                        any_npc_moved = true;
+                    }
                 }
             }
             // fmain.c:1650 (NPC branch): any NPC's successful walk step resets
@@ -126,7 +133,7 @@ impl GameplayScene {
 
             // 4. Sync NPC positions → Actor array for rendering.
             let anix = self.state.anix;
-            let mut actor_idx = 1; // Skip actor 0 (player).
+            let mut actor_idx = 2; // Skip actor 0 (player) and 1 (raft).
             for npc in &table.npcs {
                 if !npc.active {
                     continue;
@@ -138,6 +145,9 @@ impl GameplayScene {
                 actor.abs_x = npc.x as u16;
                 actor.abs_y = npc.y as u16;
                 actor.facing = npc.facing;
+                actor.weapon = npc.weapon;
+                actor.kind = crate::game::actor::ActorKind::Enemy;
+                actor.race = npc.race;
                 actor.moving = npc.state == NpcState::Walking;
                 actor.state = match npc.state {
                     NpcState::Walking => crate::game::actor::ActorState::Walking,
@@ -150,6 +160,13 @@ impl GameplayScene {
                 };
                 actor_idx += 1;
             }
+        }
+
+        // Aftermath: fire when battleflag transitions true→false (fmain2.c:253, Phase 14).
+        let battle_just_ended = self.prev_battleflag && !self.state.battleflag;
+        self.prev_battleflag = self.state.battleflag;
+        if battle_just_ended {
+            self.run_aftermath();
         }
 
         // 5. Dragon fireball firing (SPEC §21.5: 25% per frame, speed 5, always south-facing).
@@ -169,7 +186,7 @@ impl GameplayScene {
                 }
 
                 // Dragon always faces south (SPEC §21.5).
-                npc.facing = 4;
+                npc.facing = Direction::SE; // SE = raw 4 in Amiga encoding
                 npc.state = NpcState::Still;
 
                 // 25% per-frame firing chance (SPEC §21.5: rand4() == 0).

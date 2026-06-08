@@ -50,6 +50,7 @@ impl DebugConsole {
             "/doors" => self.push_cmd(DebugCommand::QueryDoors),
             "/extent" => self.push_cmd(DebugCommand::QueryExtent),
             "/encounter" => self.cmd_encounter(args),
+            "/arena" => self.cmd_arena(args),
             "/items" => self.cmd_items(args),
             "/songs" => self.cmd_songs(args),
             "/adf" => self.cmd_adf(args),
@@ -740,6 +741,14 @@ impl DebugConsole {
                     )),
                 }
             }
+        }
+    }
+
+    fn cmd_arena(&mut self, args: &[&str]) {
+        match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
+            None | Some("on") => self.push_cmd(DebugCommand::SetArenaMode { enabled: true }),
+            Some("off") => self.push_cmd(DebugCommand::SetArenaMode { enabled: false }),
+            Some(arg) => self.log(format!("Usage: /arena [on|off]  (got: {})", arg)),
         }
     }
 

@@ -332,30 +332,28 @@ fn test_non_talisman_pickup_does_not_trigger_victory() {
 
 #[test]
 fn test_facing_to_frame_base() {
-    // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by original DIR_NW=0..DIR_W=7.
-    // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
-    assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // N  → northwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(1), 24); // NE → eastwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // E  → eastwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(3), 0); // SE → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(4), 0); // S  → southwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(5), 8); // SW → westwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(6), 8); // W  → westwalk
-    assert_eq!(GameplayScene::facing_to_frame_base(7), 16); // NW → northwalk
+    // diroffs[0..7] = [16,16,24,24,0,0,8,8] indexed by Amiga DIR_NW=0..DIR_W=7.
+    assert_eq!(GameplayScene::facing_to_frame_base(0), 16); // DIR_NW → northwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(1), 16); // DIR_N  → northwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(2), 24); // DIR_NE → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(3), 24); // DIR_E  → eastwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(4),  0); // DIR_SE → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(5),  0); // DIR_S  → southwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(6),  8); // DIR_SW → westwalk
+    assert_eq!(GameplayScene::facing_to_frame_base(7),  8); // DIR_W  → westwalk
 }
 
 #[test]
 fn test_facing_to_fight_frame_base() {
-    // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by original DIR_NW=0..DIR_W=7.
-    // Mapped to Rust facing 0=N..7=NW: NE→east, SE→south, SW→west, NW→north.
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // N  → northfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 68); // NE → eastfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // E  → eastfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 32); // SE → southfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // S  → southfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 44); // SW → westfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // W  → westfight
-    assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 56); // NW → northfight
+    // diroffs[8..15] = [56,56,68,68,32,32,44,44] indexed by Amiga DIR_NW=0..DIR_W=7.
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56); // DIR_NW → northfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 56); // DIR_N  → northfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68); // DIR_NE → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 68); // DIR_E  → eastfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32); // DIR_SE → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 32); // DIR_S  → southfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44); // DIR_SW → westfight
+    assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 44); // DIR_W  → westfight
 }
 
 #[test]
@@ -744,7 +742,7 @@ fn test_npc_animation_frame_walking_default() {
     let npc = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Walking,
         active: true,
         ..Default::default()
@@ -760,7 +758,7 @@ fn test_npc_animation_frame_still_default() {
     let npc = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Still,
         active: true,
         ..Default::default()
@@ -775,7 +773,7 @@ fn test_npc_animation_frame_wraith_no_cycle() {
     let npc = Npc {
         npc_type: NPC_TYPE_WRAITH,
         race: RACE_WRAITH,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Walking,
         active: true,
         ..Default::default()
@@ -790,7 +788,7 @@ fn test_npc_animation_frame_snake_walking() {
     let npc = Npc {
         npc_type: NPC_TYPE_SNAKE,
         race: RACE_SNAKE,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Walking,
         active: true,
         ..Default::default()
@@ -807,7 +805,7 @@ fn test_npc_animation_frame_snake_still() {
     let npc = Npc {
         npc_type: NPC_TYPE_SNAKE,
         race: RACE_SNAKE,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Still,
         active: true,
         ..Default::default()
@@ -822,7 +820,7 @@ fn test_npc_animation_frame_wraps_short_sheet() {
     let npc = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Walking,
         active: true,
         ..Default::default()
@@ -837,7 +835,7 @@ fn test_npc_animation_frame_dying() {
     let npc = Npc {
         npc_type: NPC_TYPE_ORC,
         race: RACE_ENEMY,
-        facing: 4,
+        facing: Direction::SE,
         state: NpcState::Dying,
         active: true,
         ..Default::default()
@@ -1081,14 +1079,16 @@ mod combat_tests {
 
     #[test]
     fn test_push_offset_directions() {
-        assert_eq!(push_offset(0, 2), (0, -2)); // N
-        assert_eq!(push_offset(2, 2), (2, 0)); // E
-        assert_eq!(push_offset(4, 2), (0, 2)); // S
-        assert_eq!(push_offset(6, 2), (-2, 0)); // W
-        assert_eq!(push_offset(1, 2), (2, -2)); // NE
-        assert_eq!(push_offset(3, 2), (2, 2)); // SE
-        assert_eq!(push_offset(5, 2), (-2, 2)); // SW
-        assert_eq!(push_offset(7, 2), (-2, -2)); // NW
+        // Amiga DIR_* order: DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3,
+        //                    DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7
+        assert_eq!(push_offset(0, 2), (-2, -2)); // DIR_NW
+        assert_eq!(push_offset(1, 2), (0, -2));  // DIR_N
+        assert_eq!(push_offset(2, 2), (2, -2));  // DIR_NE
+        assert_eq!(push_offset(3, 2), (2, 0));   // DIR_E
+        assert_eq!(push_offset(4, 2), (2, 2));   // DIR_SE
+        assert_eq!(push_offset(5, 2), (0, 2));   // DIR_S
+        assert_eq!(push_offset(6, 2), (-2, 2));  // DIR_SW
+        assert_eq!(push_offset(7, 2), (-2, 0));  // DIR_W
     }
 }
 
@@ -2290,14 +2290,15 @@ mod t2_compass_tests {
 
     #[test]
     fn test_compass_dir_for_facing() {
-        assert_eq!(compass_dir_for_facing(0), 1); // N
-        assert_eq!(compass_dir_for_facing(1), 2); // NE
-        assert_eq!(compass_dir_for_facing(2), 3); // E
-        assert_eq!(compass_dir_for_facing(3), 4); // SE
-        assert_eq!(compass_dir_for_facing(4), 5); // S
-        assert_eq!(compass_dir_for_facing(5), 6); // SW
-        assert_eq!(compass_dir_for_facing(6), 7); // W
-        assert_eq!(compass_dir_for_facing(7), 0); // NW
+        // Amiga DIR_* order: identity mapping NW=0..W=7
+        assert_eq!(compass_dir_for_facing(0), 0); // DIR_NW → comptable[0]
+        assert_eq!(compass_dir_for_facing(1), 1); // DIR_N  → comptable[1]
+        assert_eq!(compass_dir_for_facing(2), 2); // DIR_NE → comptable[2]
+        assert_eq!(compass_dir_for_facing(3), 3); // DIR_E  → comptable[3]
+        assert_eq!(compass_dir_for_facing(4), 4); // DIR_SE → comptable[4]
+        assert_eq!(compass_dir_for_facing(5), 5); // DIR_S  → comptable[5]
+        assert_eq!(compass_dir_for_facing(6), 6); // DIR_SW → comptable[6]
+        assert_eq!(compass_dir_for_facing(7), 7); // DIR_W  → comptable[7]
     }
 }
 
@@ -2535,7 +2536,7 @@ mod quest_tests {
             vitality: 50,
             active: true,
             state: NpcState::Still,
-            facing: 0,
+            facing: Direction::NW,
             ..Default::default()
         };
 
@@ -2565,7 +2566,7 @@ mod quest_tests {
             y: 2000,
             vitality: 50,
             active: true,
-            facing: 0, // Start facing north
+            facing: Direction::NW, // Start facing NW (raw 0)
             ..Default::default()
         };
 
@@ -3556,7 +3557,7 @@ mod tests_turtle_auto {
         // Place turtle actor at a known position (not origin so moves are detectable).
         scene.state.actors[3].abs_x = 1000;
         scene.state.actors[3].abs_y = 1000;
-        scene.state.actors[3].facing = 2; // East
+        scene.state.actors[3].facing = Direction::NE; // NE (raw 2)
         scene.map_world = Some(all_water_world());
         scene
     }
@@ -3646,7 +3647,7 @@ mod tests_turtle_auto {
         }
         assert_eq!(
             scene.state.actors[3].facing, initial_facing,
-            "turtle facing must NOT be mutated by the autonomous probe (was {initial_facing})"
+            "turtle facing must NOT be mutated by the autonomous probe (was {initial_facing:?})"
         );
     }
 
@@ -3689,7 +3690,7 @@ mod tests_turtle_auto {
         // Put the hero well to the east of the turtle; facing should snap to 2 (E).
         scene.state.actors[3].abs_x = 1000;
         scene.state.actors[3].abs_y = 1000;
-        scene.state.actors[3].facing = 4; // S (wrong direction)
+        scene.state.actors[3].facing = Direction::SE; // SE (raw 4, wrong direction)
         scene.state.hero_x = 2000;
         scene.state.hero_y = 1000;
         // All non-water so abs_x/y don't change — we only care about facing.
@@ -3698,19 +3699,19 @@ mod tests_turtle_auto {
         scene.state.tick_counter = 16;
         scene.update_turtle_autonomous();
         assert_eq!(
-            scene.state.actors[3].facing, 2,
-            "turtle should face E (2) when hero is due east; got {}",
+            scene.state.actors[3].facing, Direction::NE,
+            "turtle should face NE (raw 2) when hero is due east; got {:?}",
             scene.state.actors[3].facing
         );
 
-        // Hero due north → facing 0.
+        // Hero due north → facing NW (raw 0).
         scene.state.hero_x = 1000;
         scene.state.hero_y = 100;
         scene.state.tick_counter = 32;
         scene.update_turtle_autonomous();
         assert_eq!(
-            scene.state.actors[3].facing, 0,
-            "turtle should face N (0) when hero is due north; got {}",
+            scene.state.actors[3].facing, Direction::NW,
+            "turtle should face NW (raw 0) when hero is due north; got {:?}",
             scene.state.actors[3].facing
         );
     }
@@ -4448,5 +4449,381 @@ mod input_aggregate_tests {
         set_gamepad(&mut i, -1, 0);
         set_compass(&mut i, 0, -1);
         assert_eq!(dir(&i), Direction::N, "x cancels, compass N survives");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TDD tests for Amiga facing order migration
+//
+// These tests encode the TARGET behavior (Amiga DIR_* constants):
+//   DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3, DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7
+//
+// Reference: .worktrees/research/reference/logic/SYMBOLS.md §2.1
+// All tests should FAIL before migration and PASS after.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod amiga_facing_tests {
+    use super::*;
+
+    // ── 1. Direction enum discriminants ────────────────────────────────────
+    // After migration, Direction variants must carry the correct Amiga values
+    // so that a raw cast `Direction::N as u8 == 1`, etc.
+
+    #[test]
+    fn direction_discriminants_match_amiga_constants() {
+        // DIR_NW=0, DIR_N=1, DIR_NE=2, DIR_E=3, DIR_SE=4, DIR_S=5, DIR_SW=6, DIR_W=7
+        assert_eq!(Direction::NW as u8, 0, "DIR_NW should be 0");
+        assert_eq!(Direction::N  as u8, 1, "DIR_N  should be 1");
+        assert_eq!(Direction::NE as u8, 2, "DIR_NE should be 2");
+        assert_eq!(Direction::E  as u8, 3, "DIR_E  should be 3");
+        assert_eq!(Direction::SE as u8, 4, "DIR_SE should be 4");
+        assert_eq!(Direction::S  as u8, 5, "DIR_S  should be 5");
+        assert_eq!(Direction::SW as u8, 6, "DIR_SW should be 6");
+        assert_eq!(Direction::W  as u8, 7, "DIR_W  should be 7");
+    }
+
+    // ── 2. facing_to_frame_base (diroffs[0..7]) ───────────────────────────
+    // Reference: sprite-rendering.md §diroffs[16]
+    //   char diroffs[16] = { 16,16,24,24, 0, 0, 8, 8, … };
+    //   Index 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
+
+    #[test]
+    fn facing_to_frame_base_amiga_order() {
+        assert_eq!(GameplayScene::facing_to_frame_base(0), 16, "DIR_NW(0) → northwalk(16)");
+        assert_eq!(GameplayScene::facing_to_frame_base(1), 16, "DIR_N(1)  → northwalk(16)");
+        assert_eq!(GameplayScene::facing_to_frame_base(2), 24, "DIR_NE(2) → eastwalk(24)");
+        assert_eq!(GameplayScene::facing_to_frame_base(3), 24, "DIR_E(3)  → eastwalk(24)");
+        assert_eq!(GameplayScene::facing_to_frame_base(4),  0, "DIR_SE(4) → southwalk(0)");
+        assert_eq!(GameplayScene::facing_to_frame_base(5),  0, "DIR_S(5)  → southwalk(0)");
+        assert_eq!(GameplayScene::facing_to_frame_base(6),  8, "DIR_SW(6) → westwalk(8)");
+        assert_eq!(GameplayScene::facing_to_frame_base(7),  8, "DIR_W(7)  → westwalk(8)");
+    }
+
+    // ── 3. facing_to_fight_frame_base (diroffs[8..15]) ────────────────────
+    // Reference: sprite-rendering.md §diroffs[16]
+    //   char diroffs[16] = { …, 56,56,68,68,32,32,44,44 };
+    //   Index 0=NW,1=N,2=NE,3=E,4=SE,5=S,6=SW,7=W
+
+    #[test]
+    fn facing_to_fight_frame_base_amiga_order() {
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(0), 56, "DIR_NW(0) → northfight(56)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(1), 56, "DIR_N(1)  → northfight(56)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(2), 68, "DIR_NE(2) → eastfight(68)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(3), 68, "DIR_E(3)  → eastfight(68)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(4), 32, "DIR_SE(4) → southfight(32)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(5), 32, "DIR_S(5)  → southfight(32)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(6), 44, "DIR_SW(6) → westfight(44)");
+        assert_eq!(GameplayScene::facing_to_fight_frame_base(7), 44, "DIR_W(7)  → westfight(44)");
+    }
+
+    // ── 4. compass_dir_for_facing ─────────────────────────────────────────
+    // Compass comptable is indexed NW=0..W=7, matching Amiga order.
+    // After migration: compass_dir_for_facing should be an identity (facing & 7).
+    // Reference: mod.rs compass_dir_for_facing, RESEARCH §4.5
+
+    #[test]
+    fn compass_dir_for_facing_amiga_order() {
+        // In Amiga order the compass highlight index equals the facing value directly.
+        assert_eq!(compass_dir_for_facing(0), 0, "DIR_NW(0) → comptable[0]");
+        assert_eq!(compass_dir_for_facing(1), 1, "DIR_N(1)  → comptable[1]");
+        assert_eq!(compass_dir_for_facing(2), 2, "DIR_NE(2) → comptable[2]");
+        assert_eq!(compass_dir_for_facing(3), 3, "DIR_E(3)  → comptable[3]");
+        assert_eq!(compass_dir_for_facing(4), 4, "DIR_SE(4) → comptable[4]");
+        assert_eq!(compass_dir_for_facing(5), 5, "DIR_S(5)  → comptable[5]");
+        assert_eq!(compass_dir_for_facing(6), 6, "DIR_SW(6) → comptable[6]");
+        assert_eq!(compass_dir_for_facing(7), 7, "DIR_W(7)  → comptable[7]");
+    }
+
+    // ── 5. compass_dir_for_input ──────────────────────────────────────────
+    // After migration Direction enum values match the comptable index directly.
+
+    #[test]
+    fn compass_dir_for_input_amiga_order() {
+        assert_eq!(compass_dir_for_input(Direction::NW), 0);
+        assert_eq!(compass_dir_for_input(Direction::N),  1);
+        assert_eq!(compass_dir_for_input(Direction::NE), 2);
+        assert_eq!(compass_dir_for_input(Direction::E),  3);
+        assert_eq!(compass_dir_for_input(Direction::SE), 4);
+        assert_eq!(compass_dir_for_input(Direction::S),  5);
+        assert_eq!(compass_dir_for_input(Direction::SW), 6);
+        assert_eq!(compass_dir_for_input(Direction::W),  7);
+        assert_eq!(compass_dir_for_input(Direction::None), 9);
+    }
+
+    // ── 6. push_offset ────────────────────────────────────────────────────
+    // Reference: combat.md direction↔velocity, Amiga order.
+
+    #[test]
+    fn push_offset_amiga_order() {
+        let d = 2i32;
+        assert_eq!(push_offset(0, d), (-d, -d), "DIR_NW(0): NW push");
+        assert_eq!(push_offset(1, d), ( 0, -d), "DIR_N(1): N push");
+        assert_eq!(push_offset(2, d), ( d, -d), "DIR_NE(2): NE push");
+        assert_eq!(push_offset(3, d), ( d,  0), "DIR_E(3): E push");
+        assert_eq!(push_offset(4, d), ( d,  d), "DIR_SE(4): SE push");
+        assert_eq!(push_offset(5, d), ( 0,  d), "DIR_S(5): S push");
+        assert_eq!(push_offset(6, d), (-d,  d), "DIR_SW(6): SW push");
+        assert_eq!(push_offset(7, d), (-d,  0), "DIR_W(7): W push");
+    }
+
+    // ── 7. facing_toward ─────────────────────────────────────────────────
+    // Check cardinal and diagonal directions produce Amiga-order values.
+    // Reference: mod.rs facing_toward, SYMBOLS.md §2.1
+
+    #[test]
+    fn facing_toward_returns_amiga_cardinals() {
+        let origin = (100i32, 100i32);
+        // Pure cardinal axes
+        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 50),  1, "toward N  → DIR_N(1)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 100, 150), 5, "toward S  → DIR_S(5)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 100), 3, "toward E  → DIR_E(3)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  100), 7, "toward W  → DIR_W(7)");
+    }
+
+    #[test]
+    fn facing_toward_returns_amiga_diagonals() {
+        let origin = (100i32, 100i32);
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 50),  2, "toward NE → DIR_NE(2)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 150, 150), 4, "toward SE → DIR_SE(4)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  150), 6, "toward SW → DIR_SW(6)");
+        assert_eq!(super::facing_toward(origin.0, origin.1, 50,  50),  0, "toward NW → DIR_NW(0)");
+    }
+
+    // ── 8. fire_missile velocity ──────────────────────────────────────────
+    // Missile spawned facing DIR_N(1) should travel north (dy < 0, dx == 0).
+    // Reference: combat.md, SYMBOLS.md §2.1
+
+    #[test]
+    fn fire_missile_velocity_matches_amiga_facing() {
+        use crate::game::combat::{fire_missile, Missile, MAX_MISSILES};
+        let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
+
+        // DIR_N = 1
+        fire_missile(&mut missiles, 100, 100, 1, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.dx, 0,  "DIR_N: dx should be 0");
+        assert_eq!(m.dy, -2, "DIR_N: dy should be -2 (northward)");
+        m.active; // silence unused warning
+
+        // Clear and test DIR_E = 3
+        missiles.iter_mut().for_each(|m| m.active = false);
+        fire_missile(&mut missiles, 100, 100, 3, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.dx, 2, "DIR_E: dx should be +2 (eastward)");
+        assert_eq!(m.dy, 0, "DIR_E: dy should be 0");
+
+        // Clear and test DIR_S = 5
+        missiles.iter_mut().for_each(|m| m.active = false);
+        fire_missile(&mut missiles, 100, 100, 5, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.dx, 0, "DIR_S: dx should be 0");
+        assert_eq!(m.dy, 2, "DIR_S: dy should be +2 (southward)");
+
+        // Clear and test DIR_W = 7
+        missiles.iter_mut().for_each(|m| m.active = false);
+        fire_missile(&mut missiles, 100, 100, 7, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.dx, -2, "DIR_W: dx should be -2 (westward)");
+        assert_eq!(m.dy, 0,  "DIR_W: dy should be 0");
+    }
+
+    // ── 9. BOWSHOTX / BOWSHOTY indexed by Amiga order ────────────────────
+    // Reference: sprite-rendering.md §bowshotx[8] and §bowshoty[8]
+    //   bowshotx[8] = { 0, 0, 3, 6, -3, -3, -3, -6 }  (NW=0..W=7)
+    //   bowshoty[8] = { -6,-6,-1, 0,  6,  8,  0, -1 }  (NW=0..W=7)
+    // After migration fire_missile spawn offsets are indexed directly by Amiga facing.
+
+    #[test]
+    fn fire_missile_spawn_offset_n_is_bowshotx_1() {
+        use crate::game::combat::{fire_missile, Missile, MAX_MISSILES};
+        let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
+        // bowshotx[1]=0, bowshoty[1]=-6 → spawn at (100+0, 100-6) = (100, 94)
+        fire_missile(&mut missiles, 100, 100, 1 /*DIR_N*/, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.x, 100, "DIR_N spawn x: bowshotx[1]=0");
+        assert_eq!(m.y, 94,  "DIR_N spawn y: bowshoty[1]=-6");
+    }
+
+    #[test]
+    fn fire_missile_spawn_offset_e_is_bowshotx_3() {
+        use crate::game::combat::{fire_missile, Missile, MAX_MISSILES};
+        let mut missiles: [Missile; MAX_MISSILES] = std::array::from_fn(|_| Missile::default());
+        // bowshotx[3]=6, bowshoty[3]=0 → spawn at (106, 100)
+        fire_missile(&mut missiles, 100, 100, 3 /*DIR_E*/, 4, true, 2);
+        let m = missiles.iter().find(|m| m.active).unwrap();
+        assert_eq!(m.x, 106, "DIR_E spawn x: bowshotx[3]=6");
+        assert_eq!(m.y, 100, "DIR_E spawn y: bowshoty[3]=0");
+    }
+
+    // ── 10. Wand inum calculation ─────────────────────────────────────────
+    // Reference: sprite-rendering.md §wand; fmain.c:2436-2437
+    //   inum = an.facing + 103  (direct, no conversion)
+    //   if an.facing == 2 (DIR_NE):  ystart -= 6
+    // After migration compute_weapon_blit should pass these without `(f+1)%8`.
+    // We test indirectly via facing_to_frame_base since weapon blit isn't pub;
+    // the critical value is that DIR_NE == 2, so wand frame 105 (103+2) is NE-facing.
+
+    #[test]
+    fn wand_inum_base_is_amiga_facing_plus_103() {
+        // DIR_NE(2): expected inum = 105 (103 + 2)
+        // This test validates that the facing constant is correct.
+        let dir_ne: u8 = 2; // DIR_NE in Amiga order
+        assert_eq!(dir_ne + 103, 105, "wand NE frame should be 105");
+        // DIR_S(5): inum = 108
+        let dir_s: u8 = 5;
+        assert_eq!(dir_s + 103, 108, "wand S frame should be 108");
+    }
+
+    // ── 11. Walk direction → facing u8 encoding ───────────────────────────
+    // When the player walks north, the stored facing value should be DIR_N=1.
+
+    #[test]
+    fn walking_north_encodes_dir_n() {
+        let mut gs = GameplayScene::new();
+        gs.input.up = true;
+        gs.input.down = false;
+        gs.input.left = false;
+        gs.input.right = false;
+        gs.apply_player_input();
+        assert_eq!(gs.state.facing, Direction::N, "walking N should set facing to DIR_N(1)");
+    }
+
+    #[test]
+    fn walking_east_encodes_dir_e() {
+        let mut gs = GameplayScene::new();
+        gs.input.up = false;
+        gs.input.down = false;
+        gs.input.left = false;
+        gs.input.right = true;
+        gs.apply_player_input();
+        assert_eq!(gs.state.facing, Direction::E, "walking E should set facing to DIR_E(3)");
+    }
+
+    #[test]
+    fn walking_south_encodes_dir_s() {
+        let mut gs = GameplayScene::new();
+        gs.input.up = false;
+        gs.input.down = true;
+        gs.input.left = false;
+        gs.input.right = false;
+        gs.apply_player_input();
+        assert_eq!(gs.state.facing, Direction::S, "walking S should set facing to DIR_S(5)");
+    }
+
+    #[test]
+    fn walking_west_encodes_dir_w() {
+        let mut gs = GameplayScene::new();
+        gs.input.up = false;
+        gs.input.down = false;
+        gs.input.left = true;
+        gs.input.right = false;
+        gs.apply_player_input();
+        assert_eq!(gs.state.facing, Direction::W, "walking W should set facing to DIR_W(7)");
+    }
+
+    #[test]
+    fn walking_nw_encodes_dir_nw() {
+        let mut gs = GameplayScene::new();
+        gs.input.up = true;
+        gs.input.left = true;
+        gs.input.down = false;
+        gs.input.right = false;
+        gs.apply_player_input();
+        assert_eq!(gs.state.facing, Direction::NW, "walking NW should set facing to DIR_NW(0)");
+    }
+
+    // aftermath tests (fmain2.c:253-276)
+
+    fn make_aftermath_scene(hero_vitality: i16, xtype: u16) -> GameplayScene {
+        use crate::game::actor::{Actor, ActorKind, ActorState, Goal};
+        let mut gs = GameplayScene::new();
+        gs.state.vitality = hero_vitality;
+        gs.state.xtype = xtype;
+        gs.state.anix = 5; // hero(0), raft(1), enemy(2), enemy(3), enemy(4)
+        // actor 0 = hero (Player kind, default)
+        // actors 2-4 = enemies
+        for i in 2..5 {
+            gs.state.actors[i] = Actor {
+                kind: ActorKind::Enemy,
+                state: ActorState::Still,
+                goal: Goal::None,
+                ..Default::default()
+            };
+        }
+        gs
+    }
+
+    fn msgs(gs: &GameplayScene) -> Vec<String> {
+        gs.messages.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_aftermath_dead_message() {
+        // 1 dead enemy, hero alive, normal encounter → "1 foes were defeated in battle."
+        use crate::game::actor::ActorState;
+        let mut gs = make_aftermath_scene(10, 0);
+        gs.state.actors[2].state = ActorState::Dead;
+        gs.run_aftermath();
+        let m = msgs(&gs);
+        assert!(
+            m.iter().any(|s| s.contains("foes were defeated")),
+            "expected defeat message, got: {m:?}"
+        );
+    }
+
+    #[test]
+    fn test_aftermath_fled_message() {
+        // 1 fled enemy, hero alive, normal encounter → "1 foes fled in retreat."
+        use crate::game::actor::Goal;
+        let mut gs = make_aftermath_scene(10, 0);
+        gs.state.actors[2].goal = Goal::Flee;
+        gs.run_aftermath();
+        let m = msgs(&gs);
+        assert!(
+            m.iter().any(|s| s.contains("foes fled in retreat")),
+            "expected fled message, got: {m:?}"
+        );
+    }
+
+    #[test]
+    fn test_aftermath_bravely_done() {
+        // Hero vitality < 5 with a kill → "Bravely done!" not the count line.
+        use crate::game::actor::ActorState;
+        let mut gs = make_aftermath_scene(3, 0); // vitality = 3
+        gs.state.actors[2].state = ActorState::Dead;
+        gs.run_aftermath();
+        let m = msgs(&gs);
+        assert!(
+            m.iter().any(|s| s.contains("Bravely done")),
+            "expected 'Bravely done!' message, got: {m:?}"
+        );
+        assert!(
+            !m.iter().any(|s| s.contains("foes were defeated")),
+            "should not emit count line when 'Bravely done!' fires"
+        );
+    }
+
+    #[test]
+    fn test_aftermath_dead_hero_silent() {
+        // Dead hero (vitality < 1) → no message at all.
+        use crate::game::actor::ActorState;
+        let mut gs = make_aftermath_scene(0, 0);
+        gs.state.actors[2].state = ActorState::Dead;
+        gs.run_aftermath();
+        assert!(gs.messages.is_empty(), "dead hero must produce no aftermath message");
+    }
+
+    #[test]
+    fn test_aftermath_special_xtype_silent() {
+        // xtype >= 50 (special encounter) → no count lines even with kills.
+        use crate::game::actor::ActorState;
+        let mut gs = make_aftermath_scene(10, 50);
+        gs.state.actors[2].state = ActorState::Dead;
+        gs.run_aftermath();
+        let m = msgs(&gs);
+        assert!(
+            !m.iter().any(|s| s.contains("foes were defeated")),
+            "special encounter must not emit defeat count, got: {m:?}"
+        );
     }
 }

@@ -26,7 +26,7 @@ pub fn format_hiscreen(state: &GameState) -> String {
         "VIT:{:3} GOLD:{:4} DIR:{} REGION:{:2} LIGHT:{:3}",
         state.vitality,
         state.gold,
-        facing_char(state.facing),
+        facing_char(state.facing as u8),
         state.region_num,
         state.lightlevel,
     )

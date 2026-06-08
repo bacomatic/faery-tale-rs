@@ -28,14 +28,14 @@ impl GameplayScene {
             let hx = self.state.hero_x as i32;
             let hy = self.state.hero_y as i32;
             if let Some(dir) = Self::facing_toward(tx, ty, hx, hy) {
-                self.state.actors[slot].facing = dir;
+                self.state.actors[slot].facing = Direction::from(dir);
             }
         }
 
         // --- Per-tick water-direction probe. ---
         let turtle_x = self.state.actors[slot].abs_x;
         let turtle_y = self.state.actors[slot].abs_y;
-        let facing = self.state.actors[slot].facing;
+        let facing = self.state.actors[slot].facing as u8;
 
         const DIR_OFFSETS: [i8; 4] = [0, 1, -1, -2];
         const TURTLE_SPEED: i32 = 3;
