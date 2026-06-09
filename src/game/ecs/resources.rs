@@ -235,8 +235,11 @@ impl Resources {
     /// Construct with a placeholder hero_entity. Replace with the real handle
     /// immediately after spawning the hero in World.
     pub fn new(placeholder: Entity) -> Self {
+        // daynight initialized to 8000 (morning) per fmain.c:2905 (revive()).
+        let mut clock = GameClock::default();
+        clock.daynight = 8000;
         Self {
-            clock:          GameClock::default(),
+            clock,
             region:         RegionState::default(),
             brother:        BrotherRoster::default(),
             view:           ViewState::default(),
@@ -267,6 +270,15 @@ mod tests {
         assert!(c.is_frozen());
         c.freeze_timer = 0;
         assert!(!c.is_frozen());
+    }
+
+    #[test]
+    fn resources_daynight_initializes_to_morning() {
+        let mut world = hecs::World::new();
+        let hero = world.spawn((crate::game::ecs::components::Hero,));
+        let res = Resources::new(hero);
+        // fmain.c:2905: daynight initialized to 8000 (morning) during revive().
+        assert_eq!(res.clock.daynight, 8000, "game should start at morning (daynight=8000)");
     }
 
     #[test]

@@ -82,6 +82,26 @@ impl Direction {
             Direction::None => (0, 0),
         }
     }
+
+    /// Per-tick pixel displacement for open-ground walking (environ=0, speed=2).
+    ///
+    /// Implements the xdir[]/ydir[] tables from fsubs.asm:1276:
+    ///   step = (xdir[dir] * speed) >> 1, where speed=2.
+    /// Cardinal entries have magnitude 3; diagonal entries have magnitude 2.
+    /// (Reference: movement.md, fsubs.asm:1276, "Cardinal px/tick = 3".)
+    pub fn walk_step_open(self) -> (i32, i32) {
+        match self {
+            Direction::NW   => (-2, -2),
+            Direction::N    => (0, -3),
+            Direction::NE   => (2, -2),
+            Direction::E    => (3, 0),
+            Direction::SE   => (2, 2),
+            Direction::S    => (0, 3),
+            Direction::SW   => (-2, 2),
+            Direction::W    => (-3, 0),
+            Direction::None => (0, 0),
+        }
+    }
 }
 
 #[cfg(test)]

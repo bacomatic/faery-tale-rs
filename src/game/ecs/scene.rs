@@ -144,11 +144,12 @@ impl EcsScene {
             .map(|loc| (loc.x as f32, loc.y as f32, loc.region))
             .unwrap_or((100.0, 100.0, 0));
 
-        // Build default hero stats (overridden by library values below).
+        // Build hero stats from library data.
+        // Vitality formula: 15 + brave/4 (fmain.c revive(), RESEARCH §14).
         let stats = game_lib
             .get_brother(0)
             .map(|bro| HeroStats {
-                vitality: 100,
+                vitality: 15 + bro.brave / 4,
                 brave:    bro.brave,
                 luck:     bro.luck,
                 kind:     bro.kind,
@@ -158,11 +159,11 @@ impl EcsScene {
                 gold:     0,
             })
             .unwrap_or(HeroStats {
-                vitality: 100,
-                brave:    50,
-                luck:     50,
-                kind:     50,
-                wealth:   50,
+                vitality: 23, // Julian default: 15 + 35/4 = 23
+                brave:    35,
+                luck:     20,
+                kind:     15,
+                wealth:   20,
                 hunger:   0,
                 fatigue:  0,
                 gold:     0,
@@ -319,7 +320,7 @@ impl EcsScene {
         };
         let cycle        = self.res.clock.cycle as usize;
         let hero_entity  = self.res.hero_entity;
-        blit_actors_inner(
+        let blitted_sprites = blit_actors_inner(
             &self.world,
             hero_entity,
             &self.res.sprites.sheets,
@@ -331,6 +332,14 @@ impl EcsScene {
         // Put the framebuf back.
         if let Some(r) = self.res.map.renderer.as_mut() {
             r.framebuf = framebuf;
+        }
+
+        // Step 2b: apply depth masking — re-stamp tile pixels over each sprite
+        // where shadow_mem says the actor is behind terrain (walls, trees, etc.).
+        if let Some(renderer) = self.res.map.renderer.as_mut() {
+            for sprite in &blitted_sprites {
+                crate::game::sprite_mask::apply_sprite_mask(renderer, sprite, 0, 0);
+            }
         }
 
         // Step 3: convert indexed framebuf to RGBA and blit to canvas.
@@ -633,7 +642,9 @@ impl Scene for EcsScene {
         }
 
         // Run gameplay ticks (capped to avoid spiral-of-death).
-        let ticks = delta_ticks.min(4).max(1);
+        // No .max(1) — when delta_ticks is 0 (e.g. at 15 Hz every other 30fps
+        // frame), we skip the tick entirely rather than running at double speed.
+        let ticks = delta_ticks.min(4);
         for _ in 0..ticks {
             self.run_tick();
             self.drain_messages(game_lib);
@@ -738,6 +749,7 @@ fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
 /// Blit all visible actors (hero + enemies) into the indexed framebuf.
 /// Takes individual fields to avoid borrow conflicts with the framebuf.
 /// Must be called after `MapRenderer::compose()` and before palette conversion.
+/// Returns the list of blitted sprites so the caller can apply depth masking.
 fn blit_actors_inner(
     world: &World,
     hero_entity: hecs::Entity,
@@ -746,16 +758,18 @@ fn blit_actors_inner(
     map_x: u16,
     map_y: u16,
     framebuf: &mut Vec<u8>,
-) {
+) -> Vec<crate::game::sprite_mask::BlittedSprite> {
     use crate::game::actor::ActorState;
     use crate::game::ecs::components::{
         ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Position,
     };
     use crate::game::npc::NpcState;
+    use crate::game::sprite_mask::BlittedSprite;
     use crate::game::sprites::{SPRITE_H, SPRITE_W, STATELIST};
 
     let fb_w = MAP_DST_W as i32;
     let fb_h = MAP_DST_H as i32;
+    let mut blitted: Vec<BlittedSprite> = Vec::new();
 
     // ── Hero ──────────────────────────────────────────────────────────────────
     type HeroQuery<'a> = (
@@ -810,6 +824,14 @@ fn blit_actors_inner(
 
                 if let Some(fp) = sheet.frame_pixels(body_frame) {
                     blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
+                    blitted.push(BlittedSprite {
+                        screen_x: rel_x,
+                        screen_y: rel_y,
+                        width:    SPRITE_W,
+                        height:   body_rows,
+                        ground:   rel_y + SPRITE_H as i32,
+                        is_falling: false,
+                    });
                 }
             }
         }
@@ -844,8 +866,18 @@ fn blit_actors_inner(
 
         if let Some(fp) = sheet.frame_pixels(frame) {
             blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, framebuf, fb_w, fb_h);
+            blitted.push(BlittedSprite {
+                screen_x: rel_x,
+                screen_y: rel_y,
+                width:    SPRITE_W,
+                height:   SPRITE_H,
+                ground:   rel_y + SPRITE_H as i32,
+                is_falling: false,
+            });
         }
     }
+
+    blitted
 }
 
 // ── Compass helpers ───────────────────────────────────────────────────────────

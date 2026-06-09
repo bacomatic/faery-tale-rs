@@ -4,18 +4,26 @@
 
 use hecs::World;
 use crate::game::direction::Direction;
-use crate::game::ecs::components::{Facing, Position};
+use crate::game::ecs::components::{ActorMotion, Facing, Position};
 use crate::game::ecs::resources::Resources;
 
 pub fn run(world: &mut World, res: &mut Resources) {
     if res.clock.is_frozen() { return; }
 
     let dir = res.input_direction;
-    if dir == Direction::None { return; }
 
-    // fmain.c: hero moves 3px per tick.
-    let speed = 3i32;
-    let (dx, dy) = dir.push_offset(speed);
+    // Clear moving flag when no input.
+    if dir == Direction::None {
+        if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+            motion.moving = false;
+        }
+        return;
+    }
+
+    // xdir[]/ydir[] from fsubs.asm:1276 — cardinal magnitude 3, diagonal magnitude 2.
+    // For open ground (environ=0) speed=2: step = (xdir[dir] * 2) >> 1 = xdir[dir].
+    // Cardinal: ±3 px/tick. Diagonal: ±2 px/tick per axis (fsubs.asm:1276, movement.md).
+    let (dx, dy) = dir.walk_step_open();
 
     let (old_x, old_y) = match world.get::<&Position>(res.hero_entity) {
         Ok(p) => (p.x, p.y),
@@ -38,6 +46,9 @@ pub fn run(world: &mut World, res: &mut Resources) {
         }
         if let Ok(mut facing) = world.get::<&mut Facing>(res.hero_entity) {
             facing.dir = dir;
+        }
+        if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+            motion.moving = true;
         }
         // Basic camera follow: keep hero centred at (144, 70) in the viewport.
         res.camera.map_x = (new_x - 144.0).max(0.0);
@@ -71,7 +82,7 @@ mod tests {
         res.input_direction = Direction::N;
         super::run(&mut world, &mut res);
         let pos = world.get::<&Position>(res.hero_entity).unwrap();
-        assert_eq!(pos.y, 197.0, "hero should move 3px north");
+        assert_eq!(pos.y, 197.0, "cardinal N: 3px north");
         assert_eq!(pos.x, 200.0);
     }
 
@@ -81,8 +92,42 @@ mod tests {
         res.input_direction = Direction::E;
         super::run(&mut world, &mut res);
         let pos = world.get::<&Position>(res.hero_entity).unwrap();
-        assert_eq!(pos.x, 203.0);
+        assert_eq!(pos.x, 203.0, "cardinal E: 3px east");
         assert_eq!(pos.y, 200.0);
+    }
+
+    #[test]
+    fn hero_moves_diagonal_nw() {
+        let (mut world, mut res) = make_world_and_res();
+        res.input_direction = Direction::NW;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.x, 198.0, "diagonal NW: 2px west");
+        assert_eq!(pos.y, 198.0, "diagonal NW: 2px north");
+    }
+
+    #[test]
+    fn moving_flag_set_on_move() {
+        use crate::game::ecs::components::ActorMotion;
+        let (mut world, mut res) = make_world_and_res();
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert!(motion.moving, "moving flag should be true after successful move");
+    }
+
+    #[test]
+    fn moving_flag_cleared_on_no_input() {
+        use crate::game::ecs::components::ActorMotion;
+        let (mut world, mut res) = make_world_and_res();
+        // First set moving true by moving
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        // Then stop
+        res.input_direction = Direction::None;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert!(!motion.moving, "moving flag should be false when no input");
     }
 
     #[test]
