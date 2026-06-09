@@ -9,7 +9,9 @@ use crate::game::ecs::resources::Resources;
 pub const FB_WIDTH:  usize = 320;
 pub const FB_HEIGHT: usize = 200;
 
-pub fn run(_world: &World, res: &mut Resources, framebuf: &mut [u32]) {
+// TODO: wire this into the ECS scene render pipeline; framebuf parameter
+// will be used once map rendering is fully moved out of scene.rs.
+pub fn run(_world: &World, res: &mut Resources, _framebuf: &mut [u32]) {
     let renderer = match res.map.renderer.as_mut() {
         Some(r) => r,
         None => return, // no map loaded

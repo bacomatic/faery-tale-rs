@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 pub mod direction;
-pub use direction::Direction;
 
 pub mod actor;
 pub mod adf;

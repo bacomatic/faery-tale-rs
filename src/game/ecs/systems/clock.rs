@@ -11,7 +11,9 @@ const DAYLEN: u16 = 24000;
 /// Number of time periods per day.
 const PERIODS_PER_DAY: u8 = 12;
 
-pub fn run(world: &mut World, res: &mut Resources) {
+// TODO: _world will be used when sleep-tick logic queries actor STATE_SLEEP
+// (advance daynight 64× per tick while the hero is sleeping).
+pub fn run(_world: &mut World, res: &mut Resources) {
     let clock = &mut res.clock;
 
     // Advance day/night counter.
