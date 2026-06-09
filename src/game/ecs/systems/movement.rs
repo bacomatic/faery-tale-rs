@@ -31,7 +31,9 @@ pub fn run(world: &mut World, res: &mut Resources) {
     //   (Deviates on cardinals would try diagonals/opposites, which is wrong.)
     // Mirrors fmain.c:1603-1626 (movement.md walk_step).
     let map_ref = res.map.world.as_ref();
-    let offsets: &[i8] = if dir.is_diagonal() { &[0, 1, -2] } else { &[0] };
+    // Deviates are symmetric ±1 from the original direction (fmain.c:1615/1620).
+    // The source does d=(d+1) then d=(d-2), but d was already +1, so net is -1.
+    let offsets: &[i8] = if dir.is_diagonal() { &[0, 1, -1] } else { &[0] };
     let committed = offsets.iter().find_map(|offset| {
         let d = Direction::from(((dir as i8).wrapping_add(*offset)).rem_euclid(8) as u8);
         let (dx, dy) = d.walk_step_open();
