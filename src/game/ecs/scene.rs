@@ -816,7 +816,11 @@ fn blit_actors_inner(
                     if is_moving { frame_base + cycle % 8 } else { frame_base + 1 }
                 };
 
-                let body_frame = if let Some(ActorState::Fighting(_)) = combat_state {
+                // Frustration and fighting frames are statelist indices; normal
+                // walk/stand frames are direct cfile indices and skip the lookup.
+                let needs_statelist = frustflag >= 21
+                    || matches!(combat_state, Some(ActorState::Fighting(_)));
+                let body_frame = if needs_statelist {
                     STATELIST.get(frame).map(|e| e.figure as usize).unwrap_or(frame)
                 } else {
                     frame
