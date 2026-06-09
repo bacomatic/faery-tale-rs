@@ -25,11 +25,14 @@ pub fn run(world: &mut World, res: &mut Resources) {
         Err(_) => return,
     };
 
-    // Try primary direction, then CW deviate (+1), then CCW deviate (-2).
-    // This produces wall-sliding for diagonals: NW blocked → try N or W.
+    // Diagonal input: try primary direction, then CW deviate (+1), then CCW (-2).
+    //   NW blocked → try N or W; produces wall-sliding along the free axis.
+    // Cardinal input: no deviates — blocked means stopped, no steering.
+    //   (Deviates on cardinals would try diagonals/opposites, which is wrong.)
     // Mirrors fmain.c:1603-1626 (movement.md walk_step).
     let map_ref = res.map.world.as_ref();
-    let committed = [0i8, 1, -2].iter().find_map(|offset| {
+    let offsets: &[i8] = if dir.is_diagonal() { &[0, 1, -2] } else { &[0] };
+    let committed = offsets.iter().find_map(|offset| {
         let d = Direction::from(((dir as i8).wrapping_add(*offset)).rem_euclid(8) as u8);
         let (dx, dy) = d.walk_step_open();
         let nx = old_x + dx as f32;
@@ -213,12 +216,9 @@ mod tests {
     }
 
     #[test]
-    fn diagonal_blocked_primary_slides_to_cardinal() {
-        // Fully-blocked world: all three probes fail → frustflag incremented, moving=false.
-        // But first test that in an open world the slide path is never needed.
-        // Real slide test: hero tries NW on a world that blocks NW+N but allows W.
-        // Since we can't easily make a position-specific block without the full game
-        // data, we test the "all blocked" fallback which exercises the None branch.
+    fn cardinal_blocked_no_slide_frustflag_increments() {
+        // Cardinal input against a fully-blocked world: no deviates attempted,
+        // position unchanged, walk anim stops, frustflag increments.
         use crate::game::ecs::components::{ActorMotion, FrustFlag};
         let (mut world, mut res) = make_world_and_res();
         res.map.world = Some(make_blocked_world());
@@ -226,12 +226,11 @@ mod tests {
         super::run(&mut world, &mut res);
 
         let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
-        assert!(!motion.moving, "fully blocked: walk anim should stop");
+        assert!(!motion.moving, "blocked cardinal: walk anim should stop");
 
         let frust = world.get::<&FrustFlag>(res.hero_entity).unwrap();
-        assert_eq!(frust.count, 1, "fully blocked: frustflag should increment");
+        assert_eq!(frust.count, 1, "blocked cardinal: frustflag should increment");
 
-        // Position unchanged
         let pos = world.get::<&Position>(res.hero_entity).unwrap();
         assert_eq!(pos.x, 200.0);
         assert_eq!(pos.y, 200.0);
