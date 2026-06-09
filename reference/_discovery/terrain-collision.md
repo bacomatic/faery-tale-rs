@@ -90,8 +90,8 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]` (fsubs.asm:61
 |-------|---------|----------------|
 | 0 | Open/passable | No effect — walkable ground |
 | 1 | Impassable | Blocked — cannot walk through (fmain.c:685). `_prox` returns it as blocking (fsubs.asm:1601-1602) |
-| 2 | Water/sink (slow) | environ increments to 2, no sinking yet (fmain.c:1773) |
-| 3 | Water (medium) | environ increments to 5 (fmain.c:1774) |
+| 2 | Brush/marsh (source comment "sink" is wrong) | environ set to 2 directly (fmain.c:1773); sprite bottom clipped 10px (`ystop -= 10`) — legs hidden behind foliage, position unchanged; slow speed (e=1); no damage; tile dominant color is dark green |
+| 3 | Shallow water (source comment "slow/brush" is wrong) | environ set to 5 directly (fmain.c:1774); sprite shifted 5px down (`ystart += 5`) — hero sinks into water surface; normal walk speed; no damage; tile dominant color is navy blue |
 | 4 | Water (deep) | environ increments toward 10; sinking begins at 15 (fmain.c:1775-1795) |
 | 5 | Water (very deep) | environ increments toward 30; at 30 player enters SINK state → death; special sector 181 teleports to region 9 (fmain.c:1775-1793) |
 | 6 | Slippery (ice/slide) | environ = -1, speed becomes 4 (fmain.c:1771, 1601) |
@@ -569,10 +569,10 @@ if (fiery_death)
 
 **stuff[23] (Rose)**: "Rose" item (fmain.c:408: `{ 19, 0, 90,0, 8,8, 1, "Rose" }`). Protects the player (i==0 only) from ALL fiery_death-zone environ damage by forcing environ to 0. NPCs/enemies get no protection.
 
-**Damage tiers**:
-- environ > 15: instant death (vitality = 0) — deep water/lava
-- environ > 2: lose 1 vitality per tick — shallow water/lava
-- environ ≤ 2: no damage (shallow water or slippery surfaces)
+**Damage tiers** (all gated by `fiery_death`; terrain 2 brush saturates at environ=2 which is not above the threshold — no damage):
+- environ > 15: instant death (vitality = 0) — deep/very-deep water in volcanic zone
+- environ > 2: lose 1 vitality per tick — shallow water (terrain 3, environ=5) or deeper in volcanic zone
+- environ ≤ 2: no damage (brush environ=2 is exactly at threshold, not above; slippery/ice environ is negative)
 
 ### Lava-Specific Environ Damage (fmain.c:1849-1851)
 

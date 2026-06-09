@@ -228,7 +228,7 @@ def walk_step(i: int, an: Shape, d: int, k: int) -> int:
     # decrement environ but do NOT commit position (ramp-out delay).
     if k > 2:
         drier = j == 0
-        ramp_from_med = j == 3 and k > 5                  # fmain.c:1642, 3 = medium water, 5 = medium environ
+        ramp_from_med = j == 3 and k > 5                  # fmain.c:1642, 3 = shallow water terrain, 5 = shallow-water environ target
         ramp_from_deep = j == 4 and k > 10                # fmain.c:1642, 4 = deep water, 10 = deep environ
         if drier or ramp_from_med or ramp_from_deep:
             if hero_sector != 181:                        # fmain.c:1643, 181 = special drain-sink sector
@@ -321,9 +321,9 @@ def update_environ(i: int, an: Shape, j: int, s: int, k: int) -> None:
             setmood(True)
         k = -2                                            # fmain.c:1774 — falling uses ice momentum
     elif j == 2:
-        k = 2                                             # fmain.c:1776 — shallow-water environ (direct)
-    elif j == 3:                                          # fmain.c:1777, 3 = medium water terrain
-        k = 5                                             # fmain.c:1777, 5 = medium-water environ (direct jump)
+        k = 2                                             # fmain.c:1776 — brush/marsh environ (direct); source comment "2=sink" is incorrect
+    elif j == 3:                                          # fmain.c:1777, 3 = shallow water (source comment "slow/brush" is incorrect)
+        k = 5                                             # fmain.c:1777, 5 = shallow-water environ (direct assign)
     elif j == 4 or j == 5:                                # fmain.c:1778, 4/5 = deep-water terrain codes
         # fmain.c:1779-1797 — deep-water ramp. j=4 ramps toward 10; j=5 ramps toward 30 (death).
         if j == 4:                                        # fmain.c:1779, 4 = medium-deep terrain
@@ -356,18 +356,88 @@ def update_environ(i: int, an: Shape, j: int, s: int, k: int) -> None:
 ```
 
 Notes:
+
+### Ramp mechanics — complete description
+
+**How `environ` changes** is split across two functions that both run every tick:
+
+1. **`update_environ`** — runs once per actor per tick regardless of whether the
+   actor moved. It reads the terrain under the actor's *current* position (`j`)
+   and applies the target:
+   - Terrain 0/6/7/8/9: snap directly to the sentinel value (0, −1, −2, −3, −2).
+   - Terrain 2 (brush): snap to 2 every tick. No ramp, no hysteresis — standing
+     still in brush always holds `environ == 2`.
+   - Terrain 3 (shallow water): snap to 5 every tick. Same: no ramp, instant.
+   - Terrain 4 (deep water): target = 10; increment or decrement `k` by 1 per
+     tick toward 10. Ramp-up and ramp-down both at rate 1/tick.
+   - Terrain 5 (very deep water): target = 30; same ±1/tick logic toward 30.
+
+2. **`walk_step`** — runs only when the actor *attempts to move*. When the
+   destination terrain `j` is drier than the current environ (`k > 2`), and the
+   move would be toward open ground (`j==0`), toward shallow water while in deeper
+   (`j==3, k>5`), or toward deep water while in very deep (`j==4, k>10`):
+   - Decrement `k` by 1 (`goto raise` at `fmain.c:1644`).
+   - **Do not commit the new position** — the actor stays put this tick.
+   - Jump to `raise:` (`fmain.c:1799`), which is the label *after* the entire
+     `update_environ` block (lines 1760–1798). **`update_environ` does not run
+     this tick** — `goto raise` completely skips it.
+   - Only the writeback `an->environ = k` at `fmain.c:1800` executes.
+
+**Net effect per tick** for an actor walking out of deep water toward dry land:
+- `walk_step` fires: `k--`, position not committed.
+- `goto raise` skips `update_environ`. Net this tick: environ decremented by 1,
+  actor stays put.
+- Each subsequent tick where the actor keeps trying to move toward land:
+  another `k--`, no position commit, no `update_environ`.
+- When `k` finally drops to the "safe" threshold for the destination terrain
+  (`k <= 2` for dry ground, `k <= 5` for shallow water, `k <= 10` for deep),
+  the ramp-out condition in `walk_step` no longer fires, the position is
+  committed, and the actor steps onto the new tile. `update_environ` then snaps
+  `k` to the new terrain's value on the following tick.
+- **Rate**: 1 environ unit per movement tick. Walking continuously, exit from
+  terrain 5 at full depth (environ=30) to dry ground takes 28 movement ticks
+  (30 → 2, one per step attempt, then the step at `k=2` commits normally since
+  `k > 2` is false).
+
+**Exit from brush/shallow water is instant**: because terrain 2 snaps to exactly 2
+and terrain 3 snaps to exactly 5 in `update_environ`, there is no ramp-out path
+for them — once the actor steps onto dry ground, `update_environ` snaps `k = 0`
+immediately. The `walk_step` ramp-out guard (`k > 2`) also means brush (environ=2)
+never triggers the ramp-out delay at all; only shallow water (environ=5) and deeper
+are subject to it.
+
+**Stepping from very deep (terrain 5) onto terrain 4** does *not* trigger the
+`walk_step` ramp-out (condition is `j==4 and k>10`) — if environ is exactly 10
+or below and you step to terrain 4, you commit the position normally and
+`update_environ` holds you at 10.
+
 - The direct `j==3 → k=5` assignment (no ramp) is asymmetric with the
-  ramped deep-water branches. The recorded consequence is that a first
-  step onto medium water immediately incurs the environ=5 wading speed
-  penalty, whereas deep water ramps up over many ticks.
+  ramped deep-water branches. Terrain 3 is shallow water (navy/blue tiles —
+  confirmed by tile dominant color from the binary; the source comment
+  `"3 = slow/brush"` is incorrect). A step onto it immediately snaps
+  environ to 5, which shifts the sprite 5px down into the water surface
+  at normal walk speed. Deep water ramps up over many ticks.
+- Terrain 2 is brush/marsh (dark-green tiles — confirmed by tile dominant
+  color; the source comment `"2 = sink"` is incorrect). Environ 2 clips
+  the bottom 10px of the sprite (`ystop -= 10`), hiding legs behind
+  foliage with no downward position shift.
 - The `hero_sector == 181` clause combines two effects: a water-hazard
   teleport to region 9 (swamp-to-dungeon drain) for the hero, and an
   instant-kill for any NPC following. Cross-reference:
   [_discovery/astral-plane.md](../_discovery/astral-plane.md) and
   [_discovery/terrain-collision.md](../_discovery/terrain-collision.md).
-- Water-damage application (the `fiery_death` branch at `fmain.c:1843-1849`)
-  is not part of `update_environ`; it runs one block later in
-  `actor_tick` and will be documented with the damage-tick owner.
+- Water-damage application runs in `actor_tick` immediately after
+  `update_environ`, not inside `update_environ` itself. Two independent
+  damage blocks fire at `fmain.c:1843-1851`:
+  1. **Fiery-death environ damage** (`fmain.c:1843-1847`): gated by the
+     `fiery_death` coordinate-box flag (volcanic region only). Thresholds:
+     `environ > 15` → instant kill; `environ > 2` → `vitality--` per tick.
+     The Rose item (`stuff[23]`) suppresses this for the hero.
+  2. **Deep-water drowning tick** (`fmain.c:1849-1851`): fires in **all
+     regions** when `actor.environ == 30` and `(cycle & 7) == 0` (every
+     8 game cycles). Immune races: wraith (race 2) and skeleton (race 3).
+     This is independent of `fiery_death`. See
+     [game-loop.md §actor_tick](game-loop.md#actor_tick).
 
 ## set_course
 

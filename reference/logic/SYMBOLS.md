@@ -135,8 +135,8 @@ ENVIRON_NORMAL    = 0
 ENVIRON_SLIP      = -1      # terrain 6
 ENVIRON_ICE       = -2      # terrain 7 / pit fall
 ENVIRON_REVERSED  = -3      # terrain 8 (research name — no symbolic name in source)
-ENVIRON_WADE      = 2       # terrain 2
-ENVIRON_BRUSH     = 5       # terrain 3
+ENVIRON_BRUSH     = 2       # terrain 2 (brush/marsh — dark green tiles; source comment "2=sink" is wrong)
+ENVIRON_WADE      = 5       # terrain 3 (shallow water — navy tiles; source comment "3=slow/brush" is wrong)
 ENVIRON_DEEP_SAT  = 10      # ramp target for terrain 4
 ENVIRON_SINK      = 15      # threshold for STATE_SINK
 ENVIRON_DROWN     = 30      # death-depth threshold

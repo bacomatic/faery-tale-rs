@@ -413,9 +413,9 @@ def compute_shape_clip(an: Shape, i: i16, passmode: i8, atype: i8, inum: i16, xs
         if i == 0 and riding == 11:             # fmain.c:2490 — 11 = RIDING_SWAN
             ystop = ystart + clip.ysize - 1
             ystop = ystop - 16                  # fmain.c:2490 — 16 = swan-mount feet shift
-        elif an.environ == 2:                   # fmain.c:2491 — 2 = ENVIRON_WADE
+        elif an.environ == 2:                   # fmain.c:2491 — 2 = ENVIRON_BRUSH (terrain 2 = brush/marsh, dark-green tiles)
             ystop = ystart + clip.ysize - 1
-            ystop = ystop - 10                  # fmain.c:2491 — 10 = wading hide-legs amount
+            ystop = ystop - 10                  # fmain.c:2491 — 10 = brush leg-hide amount; clips bottom of sprite, position unchanged
         elif an.environ > 29:                   # fmain.c:2492 — 29 just above ENVIRON_DROWN-1
             if an.state == 15:                  # fmain.c:2493 — 15 = STATE_DEAD
                 clip.offscreen = True
@@ -426,8 +426,8 @@ def compute_shape_clip(an: Shape, i: i16, passmode: i8, atype: i8, inum: i16, xs
             clip.inum = 97 + ((cycle + i) & 1)  # fmain.c:2497 — 97 = first drowning bubble frame
             atype = OBJECTS
             inum = clip.inum
-        elif an.environ > 2:                    # fmain.c:2499 — sinking ramp
-            ystart = ystart + an.environ        # fmain.c:2500
+        elif an.environ > 2:                    # fmain.c:2499 — shallow water + sinking ramp (environ 5 = terrain 3 shallow water, 7-30 = deep)
+            ystart = ystart + an.environ        # fmain.c:2500 — pushes sprite down into water surface
             ystop = ystart + clip.ysize - 1
         else:
             ystop = ystart + clip.ysize - 1     # fmain.c:2487

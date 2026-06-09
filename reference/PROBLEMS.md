@@ -56,10 +56,10 @@ These problems have been conclusively answered from the source code.
 | Terrain Type | Environ Value | Speed | Effect |
 |---|---|---|---|
 | 0 (normal) | 0 | 2 | Safe ground |
-| 2 (shallow water) | 2 | 1 | Wading, sprite raised 10px |
-| 3 (medium water) | 5 | 1 | Deeper wading |
-| 4 (deep water) | increments to 10→15 | 1 | SINK state at environ>15 |
-| 5 (very deep) | increments to 30 | 1 | Death at 30; quicksand teleport in sector 181 |
+| 2 (brush/marsh) | 2 | 1 | Dark-green marsh/brush tiles; sprite bottom clipped 10px (`ystop -= 10`, `fmain.c:2491`) — legs hidden behind foliage, hero Y position unchanged; no damage. **Source comment "2=sink" is wrong** — confirmed by tile dominant color (dark green, not blue). |
+| 3 (shallow water) | 5 | 2 | Blue/navy water tiles; sprite shifted 5px down (`ystart += 5`, `fmain.c:2500`) — hero sinks slightly into the water surface; normal walk speed (environ 5 is not `== 2` nor `> 6`); no damage. **Source comment "3=slow/brush" is wrong** — confirmed by tile dominant color (navy blue). |
+| 4 (deep water) | increments to 10 | 1 | Deeper wading; SINK state unreachable from terrain 4 alone (saturation target is 10, below the 15 threshold) |
+| 5 (very deep) | increments to 30 | 1 | SINK state at environ>15; death tick at environ==30 every 8 cycles; quicksand teleport in sector 181 at environ==30 |
 | 6 (slippery) | −1 | 4 | Fast walking |
 | 7 (ice) | −2 | 40–42 | Velocity-based momentum physics |
 | 8 (lava) | −3 | −2 | Walk backwards |
@@ -139,7 +139,7 @@ When TRUE: environ-based water/fire damage applies (`fmain.c:1843-1847`), swan d
 **Source**: `fmain.c:1600` — `e = -2` when `environ == -3` (terrain type 8)
 **Resolution**: Terrain type 8 is a direction-reversal zone used on the **astral plane floor** (region 9, `xtype == 52`), not a volcanic lava tile. The mechanic simply reverses player input — negative speed (`e = -2`) combined with facing flip (`dex ^= 7` at `fmain.c:1654`) causes the actor to walk opposite to the commanded direction. There is no damage-over-time effect from this terrain; it is purely a navigation obstacle. The mechanic applies to both player and NPCs equally (no actor-type check). The terrain assignment at `fmain.c:1765` sets `k = -3` for terrain type 8, and the inline comment reads "walk backwards".
 
-Volcanic lava is a separate system entirely: the visible lava tiles in region 6 (F7, terra sets 7 and 4) use **water terrain types 2–5**, which cause `environ` to ramp up identically to deep water. The actual damage (`vitality--` at environ > 2, instant death at environ > 15) is gated by the `fiery_death` coordinate box (`fmain.c:1384-1385`, `1843-1847`) — not by any special terrain type. This is why lava feels identical to deep water until the death threshold: it literally is water terrain with a lethal overlay. See also [P17](PROBLEMS.md#p17-fiery_death-flag--gating-mechanism--resolved).
+Volcanic lava is a separate system entirely: the visible lava tiles in region 6 (F7, terra sets 7 and 4) use terrain types that drive `environ` upward (types 2, 4, 5 — the water/sink types), causing `environ` to ramp up identically to deep water. The actual damage (`vitality--` at environ > 2, instant death at environ > 15) is gated by the `fiery_death` coordinate box (`fmain.c:1384-1385`, `1843-1847`) — not by any special terrain type. This is why lava feels identical to deep water until the death threshold: it literally is water terrain with a lethal overlay. See also [P17](PROBLEMS.md#p17-fiery_death-flag--gating-mechanism--resolved).
 
 ---
 

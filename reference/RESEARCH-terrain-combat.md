@@ -37,10 +37,10 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source c
 |-------|---------|---------------|-----------------|
 | 0 | Open/passable | 0 | No effect — walkable ground |
 | 1 | Impassable | — | Blocked by `_prox` at both probes (`fsubs.asm:1596-1597`, `1606-1607`) |
-| 2 | Shallow water | 2 | Slow (speed 1, `fmain.c:1603`); gradual drowning if no turtle item (`fmain.c:1844-1846`) |
-| 3 | Medium water | 5 | Same as type 2 with deeper `environ` |
-| 4 | Deep water | 10 | Sinking begins at environ 15 (`fmain.c:1795`) |
-| 5 | Very deep water | 30 | Death at environ 30 (`fmain.c:1784-1793`); sector 181 triggers underwater teleport to region 9 instead (`fmain.c:1784-1791`) |
+| 2 | Brush/marsh | 2 | Dark-green marsh tiles; slow (speed 1, `k==2`); sprite bottom clipped 10px (`ystop -= 10`, `fmain.c:2491`) — legs hidden behind foliage; no damage. Note: source comment "2=sink" is incorrect — tile dominant color is dark green, not blue. |
+| 3 | Shallow water | 5 | Navy/blue water tiles; normal speed (environ 5 is neither `== 2` nor `> 6`); sprite shifted 5px down (`ystart += 5`, `fmain.c:2500`) — hero sinks slightly into water; no damage. Note: source comment "3=slow/brush" is incorrect — tile dominant color is navy blue. |
+| 4 | Deep water | 10 | Environ saturates at 10; wading only — terrain 4 alone cannot reach the STATE_SINK threshold (>15) |
+| 5 | Very deep water | 30 | Environ ramps to 30; STATE_SINK at environ>15 (`fmain.c:1795`); death tick at environ==30 every 8 cycles (`fmain.c:1849`); sector 181 triggers teleport to region 9 instead (`fmain.c:1784-1791`) |
 | 6 | Slippery | −1 | Speed becomes 4 (`fmain.c:1601`, `1771`) |
 | 7 | Velocity ice | −2 | Momentum-based physics with directional impulse (`fmain.c:1580-1595`) |
 | 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); found on astral plane floor tiles (region 9). **Not** the volcanic lava tile — volcanic lava uses water terrain types 2–5 with the `fiery_death` coordinate box (see Environ Effects below). |

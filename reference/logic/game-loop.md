@@ -236,9 +236,9 @@ def resolve_player_state() -> None:
 
 ## actor_tick
 
-Source: `fmain.c:1476-1826`
+Source: `fmain.c:1476-1851`
 Called by: `game_tick`
-Calls: `actor_type_dispatch`, `walk_step`, `still_step`, `shoot_step`, `fighting_step`, `death_step`, `checkdead`, `update_environ`, `update_actor_index`, `wrap_player_coords`, `map_adjust`, `compute_rel_coords`, `freeze_timer`, `STATE_SINK`
+Calls: `actor_type_dispatch`, `walk_step`, `still_step`, `shoot_step`, `fighting_step`, `death_step`, `checkdead`, `update_environ`, `update_actor_index`, `wrap_player_coords`, `map_adjust`, `compute_rel_coords`, `freeze_timer`, `fiery_death`, `stuff`, `STATE_SINK`
 
 ```pseudo
 def actor_tick(i: int) -> None:
@@ -278,10 +278,37 @@ def actor_tick(i: int) -> None:
     # fmain.c:1798-1820 — race-specific animation frame overrides (rabbit hop, swarm bug, dead dark knight).
     update_actor_index(i)
 
-    # fmain.c:1821-1838 — hero-only world-wrap, safe_flag capture, fiery-death damage, lava-pool sink damage.
+    # fmain.c:1826-1841 — hero-only world-wrap + safe_flag.
     if i == 0:
         wrap_player_coords()                              # fmain.c:1828-1838
         map_adjust(player.abs_x, player.abs_y)            # fmain.c:1839
+
+    # fmain.c:1842 — skip damage when vitality already 0.
+    if actor.vitality == 0:
+        pass                                              # goto statc
+    else:
+        # fmain.c:1843-1847 — fiery-death environ damage (volcanic zone only).
+        # fiery_death is a coordinate-box flag recomputed each tick at fmain.c:1384-1385.
+        # Inside the volcanic region (map_x 8802-13562, map_y 24744-29544) the same
+        # water environ values that cause slow wading everywhere else become lethal.
+        if fiery_death:                                   # fmain.c:1843, coordinate-box flag
+            if i == 0 and stuff[23]:                      # fmain.c:1844, 23 = Rose item slot
+                actor.environ = 0                         # Rose forces dry — hero only
+            elif actor.environ > 15:                      # fmain.c:1845, 15 = instant-kill threshold
+                actor.vitality = 0
+            elif actor.environ > 2:                       # fmain.c:1846, 2 = gradual-damage threshold
+                actor.vitality = actor.vitality - 1
+            checkdead(i, 27)                              # fmain.c:1847, 27 = fiery-death dtype
+
+        # fmain.c:1849-1851 — deep-water drowning tick (all regions, every 8 cycles).
+        # NOTE: at this point the local k has been repurposed to an->race at fmain.c:1802,
+        # so the condition "k != 2 && k != 3" tests race, NOT environ.
+        # Race 2 (wraith) and race 3 (skeleton) are immune to this damage tick.
+        # This damage fires in all regions — it is NOT gated by fiery_death.
+        if actor.environ == 30 and (cycle & 7) == 0:      # fmain.c:1849, 30 = ENVIRON_DROWN; 7 = 8-cycle rate gate
+            if actor.race != 2 and actor.race != 3:       # fmain.c:1850, 2 = wraith race, 3 = skeleton race
+                actor.vitality = actor.vitality - 1
+                checkdead(i, 6)                           # fmain.c:1850, 6 = drown dtype
 
     # fmain.c:1755-1768 — statc label: compute rel_x/rel_y for rendering.
     compute_rel_coords(actor, i)
