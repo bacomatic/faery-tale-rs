@@ -39,7 +39,7 @@
 
 **Mounted movement (`riding == 5`)** — `fmain.c:1599`:
 
-- Hero's WALKING step is forced to speed 3 (`fmain.c:1599`); checked before terrain effects, so riding also neutralizes lava push-back (terrain 8, `e = −2`).
+- Hero's WALKING step is forced to speed 3 (`fmain.c:1599`); checked before terrain effects, so riding also neutralizes astral reverse-field push-back (terrain 8, `e = −2`).
 - Movement uses the hero's standard `proxcheck()` — **the rider can walk onto any non-blocked terrain**, including land.
 - The turtle's actual position (`abs_x`/`abs_y`) only updates when the hero stands on terrain 5 (`fmain.c:1541`); when the hero walks onto land, the turtle sprite stays at the water's edge.
 - The `raftprox` flag forces `environ = 0` while riding (`fmain.c:1768`), preventing drowning. When the hero moves >16px away, `raftprox` drops to 0 and the rider dismounts automatically.

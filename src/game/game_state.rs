@@ -837,7 +837,8 @@ impl GameState {
     }
 
     /// Check if raft can be boarded at the given terrain (SPEC §21.2).
-    /// Returns true if wcarry == 1 AND terrain is water/shore (codes 3..=5).
+    /// Returns true if wcarry == 1 AND terrain is shallow/deep water (codes 3..=5).
+    /// Terrain 2 is brush/marsh (not water), so it is correctly excluded.
     pub fn can_board_raft(&self, terrain: u8) -> bool {
         self.wcarry == 1 && (3..=5).contains(&terrain)
     }
@@ -1184,7 +1185,8 @@ impl GameState {
     }
 
     /// Update safe spawn point if conditions match original fmain.c:
-    /// outdoors (region < 8), not in battle, and passable non-water terrain.
+    /// outdoors (region < 8), not in battle, and open ground (terrain 0 only).
+    /// Terrain 1 = blocked (unreachable), terrain 2 = brush/marsh (not a safe spawn).
     pub fn update_safe_spawn(&mut self, terrain_type: u8) {
         if self.region_num < 8 && !self.battleflag && terrain_type < 2 {
             self.safe_x = self.hero_x;

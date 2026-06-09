@@ -225,7 +225,7 @@ The Stargate is the narrative name for the bidirectional door pair at `doorlist[
 - Loraii-type encounters forced via encounter_type 8 (§12.7).
 - Pit-fall trap: `j == 9 && i == 0 && xtype == 52` → `STATE_FALL`, `luck -= 2`, goodfairy revive to `(safe_x, safe_y)`.
 - Quicksand drain (sector 181): teleport to `(0x1080, 34950)` in region 9 rather than killing (§16.7).
-- Velocity-ice (terrain 7) and backwards-walk lava (terrain 8) environ effects within the astral extent.
+- Velocity-ice (terrain 7) and astral reverse-field (terrain 8) environ effects within the astral extent.
 
 The Stargate is the only door pair whose outdoor endpoint sits inside the fiery_death rectangle, and the only door pair whose indoor destination is region 9 via the `secs == 2` flag (§16.1).
 

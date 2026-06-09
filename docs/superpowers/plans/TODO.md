@@ -22,7 +22,31 @@
 | HI bar (stats + scroll messages + compass) | ✅ Complete |
 | Save / load round-trip (ECS path) | ✅ Complete |
 | Debug snapshot feeds real ECS data | ✅ Complete |
+| **Implementation plans G–X written** | ✅ Complete (see plan files below) |
 | **Everything below this line** | ❌ Missing or stubbed |
+
+## Plan files written
+
+| Plan | File | Status |
+|------|------|--------|
+| G | `2025-01-01-ecs-plan-g-region-transitions.md` | ✅ Written |
+| H | `2025-01-01-ecs-plan-h-door-system.md` | ✅ Written |
+| I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Written |
+| J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Written |
+| K | `2025-01-01-ecs-plan-k-magic-system.md` | ✅ Written |
+| L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Written |
+| M | `2025-01-01-ecs-plan-m-shop-system.md` | ✅ Written |
+| N | `2025-01-01-ecs-plan-n-combat-melee.md` | ✅ Written |
+| O | `2025-01-01-ecs-plan-o-encounter-system.md` | ✅ Written |
+| P | `2025-01-01-ecs-plan-p-carrier-system.md` | ✅ Written |
+| Q | `2025-01-01-ecs-plan-q-sleep-system.md` | ✅ Written |
+| R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Written |
+| S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Written |
+| T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Written |
+| U | `2025-01-01-ecs-plan-u-save-load-keys.md` | ✅ Written |
+| V | `2025-01-01-ecs-plan-v-quest-state.md` | ✅ Written |
+| W | `2025-01-01-ecs-plan-w-debug-tui-extras.md` | ✅ Written |
+| X | `2025-01-01-ecs-plan-x-parity-and-cleanup.md` | ✅ Written |
 
 ---
 

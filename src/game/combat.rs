@@ -238,7 +238,7 @@ pub fn npc_speed_for_terrain(terrain: u8, race_ignores_terrain: bool) -> i8 {
     }
     match terrain {
         6 => 4,          // slippery (ice / smooth) → fast
-        2 | 3 => 1,      // shallow/deep water → slow
+        2 | 3 => 1,      // brush/marsh (2) / shallow water (3) → slow
         t if t > 6 => 1, // any deeper water bands → slow
         _ => 2,          // default walking speed
     }
@@ -252,9 +252,9 @@ pub fn hero_speed_for_env(environ: i8, riding_raft: bool) -> i8 {
         return 3;
     }
     match environ {
-        -3 => -2,        // reversal tile (backward movement)
+        -3 => -2,        // astral reverse-field (backward movement)
         -1 => 4,         // slippery (fast)
-        2 => 1,          // wading (slow)
+        2 => 1,          // brush/marsh (slow)
         e if e > 6 => 1, // deep water (slow)
         _ => 2,          // default walking speed
     }

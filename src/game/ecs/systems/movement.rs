@@ -3,26 +3,29 @@
 //! See docs/spec/movement-input.md.
 
 use hecs::World;
+use crate::game::actor::ActorState;
 use crate::game::direction::Direction;
-use crate::game::ecs::components::{ActorMotion, Facing, FrustFlag, Position};
+use crate::game::ecs::components::{ActorMotion, CombatState, Facing, FrustFlag, Position};
 use crate::game::ecs::resources::Resources;
 
 /// Map terrain type j to environ code k (fmain.c:1762-1797, partial).
-/// Handles open ground, water types 2–3, slippery (6), ice (7), lava (8).
+/// Handles open ground, brush (2), shallow water (3), slippery (6), ice (7), astral reverse-field (8).
 /// Deep-water ramp (j=4/5) and pit/fall transitions (j=9) are not yet
 /// implemented — see docs/spec/movement-input.md §9.5.
 fn terrain_to_environ(j: u8, old_k: i8) -> i8 {
     match j {
         0 => 0,     // open ground (fmain.c:1763)
-        2 => 2,     // shallow water (fmain.c:1776)
-        3 => 5,     // medium water, direct jump (fmain.c:1777)
-        4 | 5 => {  // deep water — ramp toward 10/30 (fmain.c:1779–1797); step by 1 per tick
+        2 => 2,     // brush/marsh — clips bottom 10px of sprite (fmain.c:1776)
+        3 => 5,     // shallow water — direct jump to environ 5 (fmain.c:1777)
+        4 | 5 => {  // deep water — ramp toward 10/30 (fmain.c:1779–1797); ±1 per tick
             let target: i8 = if j == 4 { 10 } else { 30 };
-            if old_k < target { old_k.saturating_add(1) } else { old_k }
+            if old_k < target { old_k.saturating_add(1) }
+            else if old_k > target { old_k.saturating_sub(1) }
+            else { old_k }
         }
         6 => -1,    // slippery (fmain.c:1764)
         7 => -2,    // ice (fmain.c:1765)
-        8 => -3,    // lava reversal (fmain.c:1766)
+        8 => -3,    // astral reverse-field — reverses walk direction (fmain.c:1766)
         _ => 0,     // default: treat as open ground
     }
 }
@@ -37,18 +40,30 @@ fn step_pos(old_x: f32, old_y: f32, d: Direction, speed: i8) -> (f32, f32) {
     (old_x + dx as f32, old_y + dy as f32)
 }
 
+/// Apply update_environ (fmain.c:1759-1801, partial) for the given terrain j and old k.
+/// Returns (new_k, new_state) — caller must write both back to the components.
+/// `current_state` is needed to apply the Sinking/Still transition rules.
+fn apply_update_environ(j: u8, old_k: i8, current_state: &ActorState) -> (i8, Option<ActorState>) {
+    let new_k = terrain_to_environ(j, old_k);
+    // fmain.c:1784 — k reaches 30 (death depth) → STATE_STILL (drowning complete / teleport).
+    // fmain.c:1796 — k > 15 while not dying → enter STATE_SINK.
+    // fmain.c:1799 — k == 0 while in STATE_SINK → return to STATE_STILL (walked onto dry land).
+    let is_dying = matches!(current_state, ActorState::Dying | ActorState::Dead);
+    let new_state = if new_k == 30 && !is_dying {
+        // Fully drowned — release from Sinking back to Still (sector-181 teleport handled elsewhere).
+        Some(ActorState::Still)
+    } else if new_k > 15 && !is_dying && !matches!(current_state, ActorState::Sinking) {
+        Some(ActorState::Sinking)
+    } else if new_k == 0 && matches!(current_state, ActorState::Sinking) {
+        Some(ActorState::Still)
+    } else {
+        None
+    };
+    (new_k, new_state)
+}
+
 pub fn run(world: &mut World, res: &mut Resources) {
     if res.clock.is_frozen() { return; }
-
-    let dir = res.input_direction;
-
-    // Clear moving flag when no input.
-    if dir == Direction::None {
-        if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
-            motion.moving = false;
-        }
-        return;
-    }
 
     let (old_x, old_y) = match world.get::<&Position>(res.hero_entity) {
         Ok(p) => (p.x, p.y),
@@ -57,6 +72,38 @@ pub fn run(world: &mut World, res: &mut Resources) {
     let environ = world.get::<&ActorMotion>(res.hero_entity)
         .map(|m| m.environ)
         .unwrap_or(0i8);
+    let current_state = world.get::<&CombatState>(res.hero_entity)
+        .map(|c| c.state.clone())
+        .unwrap_or_default();
+
+    let map_ref = res.map.world.as_ref();
+
+    // Sample terrain at CURRENT position — used by update_environ every tick
+    // (fmain.c:1741 / still_step, fmain.c:1636 / walk_step both read j here).
+    let j_current = map_ref.map(|w| {
+        crate::game::collision::px_to_terrain_type(w, old_x as i32, old_y as i32)
+    }).unwrap_or(0);
+
+    let dir = res.input_direction;
+
+    // Sinking actors cannot move — input is suppressed (fmain.c:1796 STATE_SINK).
+    // update_environ still runs every tick so k continues ramping.
+    if dir == Direction::None || matches!(current_state, ActorState::Sinking) {
+        if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+            motion.moving = false;
+        }
+        // update_environ runs every tick regardless of movement (fmain.c actor_tick Phase 9).
+        let (new_k, new_state) = apply_update_environ(j_current, environ, &current_state);
+        if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+            motion.environ = new_k;
+        }
+        if let Some(state) = new_state {
+            if let Ok(mut combat) = world.get::<&mut CombatState>(res.hero_entity) {
+                combat.state = state;
+            }
+        }
+        return;
+    }
 
     // Speed from current terrain environ (fmain.c:1599-1602).
     let speed = crate::game::combat::hero_speed_for_env(environ, false);
@@ -66,9 +113,6 @@ pub fn run(world: &mut World, res: &mut Resources) {
     // Cardinal input: no deviates — blocked means stopped, no steering.
     //   (Deviates on cardinals would try diagonals/opposites, which is wrong.)
     // Mirrors fmain.c:1603-1626 (movement.md walk_step).
-    let map_ref = res.map.world.as_ref();
-    // Deviates are symmetric ±1 from the original direction (fmain.c:1615/1620).
-    // The source does d=(d+1) then d=(d-2), but d was already +1, so net is -1.
     let offsets: &[i8] = if dir.is_diagonal() { &[0, 1, -1] } else { &[0] };
     let committed = offsets.iter().find_map(|offset| {
         let d = Direction::from(((dir as i8).wrapping_add(*offset)).rem_euclid(8) as u8);
@@ -82,35 +126,65 @@ pub fn run(world: &mut World, res: &mut Resources) {
 
     match committed {
         Some((new_x, new_y, committed_dir)) => {
-            if let Ok(mut pos) = world.get::<&mut Position>(res.hero_entity) {
-                pos.x = new_x;
-                pos.y = new_y;
+            // Walk-step ramp-out (fmain.c:1641-1644): when wading (k > 2) and destination
+            // terrain is drier, decrement k by 1 and skip the position commit entirely.
+            // update_environ is also skipped this tick ("goto raise" in the original).
+            let j_dest = map_ref.map(|w| {
+                crate::game::collision::px_to_terrain_type(w, new_x as i32, new_y as i32)
+            }).unwrap_or(0);
+            let ramp_out = environ > 2 && (
+                j_dest == 0
+                || (j_dest == 3 && environ > 5)
+                || (j_dest == 4 && environ > 10)
+            );
+
+            if ramp_out {
+                // Decrement environ, hold position, skip update_environ.
+                if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+                    motion.environ = environ.saturating_sub(1);
+                    motion.moving = true;
+                }
+            } else {
+                // Normal commit: update position and facing, then run update_environ on new pos.
+                if let Ok(mut pos) = world.get::<&mut Position>(res.hero_entity) {
+                    pos.x = new_x;
+                    pos.y = new_y;
+                }
+                if let Ok(mut facing) = world.get::<&mut Facing>(res.hero_entity) {
+                    facing.dir = committed_dir;
+                }
+                let (new_k, new_state) = apply_update_environ(j_dest, environ, &current_state);
+                if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+                    motion.moving = true;
+                    motion.environ = new_k;
+                }
+                if let Some(state) = new_state {
+                    if let Ok(mut combat) = world.get::<&mut CombatState>(res.hero_entity) {
+                        combat.state = state;
+                    }
+                }
+                if let Ok(mut frust) = world.get::<&mut FrustFlag>(res.hero_entity) {
+                    frust.count = 0;
+                }
+                // Basic camera follow: keep hero centred at (144, 70) in the viewport.
+                res.camera.map_x = (new_x - 144.0).max(0.0);
+                res.camera.map_y = (new_y - 70.0).max(0.0);
             }
-            if let Ok(mut facing) = world.get::<&mut Facing>(res.hero_entity) {
-                facing.dir = committed_dir;
-            }
-            if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
-                motion.moving = true;
-                // Sample terrain at new position and update environ (fmain.c:update_environ).
-                let j = map_ref.map(|w| {
-                    crate::game::collision::px_to_terrain_type(w, new_x as i32, new_y as i32)
-                }).unwrap_or(0);
-                motion.environ = terrain_to_environ(j, motion.environ);
-            }
-            if let Ok(mut frust) = world.get::<&mut FrustFlag>(res.hero_entity) {
-                frust.count = 0;
-            }
-            // Basic camera follow: keep hero centred at (144, 70) in the viewport.
-            res.camera.map_x = (new_x - 144.0).max(0.0);
-            res.camera.map_y = (new_y - 70.0).max(0.0);
         }
         None => {
-            // All three probes blocked — increment frustration, stop walk anim.
+            // All probes blocked — run update_environ on current pos, increment frustration.
+            let (new_k, new_state) = apply_update_environ(j_current, environ, &current_state);
+            if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
+                motion.environ = new_k;
+                motion.moving = false;
+            }
+            if let Some(state) = new_state {
+                if let Ok(mut combat) = world.get::<&mut CombatState>(res.hero_entity) {
+                    combat.state = state;
+                }
+            }
             if let Ok(mut frust) = world.get::<&mut FrustFlag>(res.hero_entity) {
                 frust.count = frust.count.saturating_add(1);
-            }
-            if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
-                motion.moving = false;
             }
         }
     }
@@ -325,16 +399,16 @@ mod tests {
         assert_eq!(motion.environ, -1, "slippery terrain (type 6) should set environ to -1");
     }
 
-    /// After stepping onto wading terrain (type 2), environ should be set to 2.
+    /// After stepping onto brush terrain (type 2), environ should be set to 2.
     #[test]
-    fn environ_updated_to_wading_after_move() {
+    fn environ_updated_to_brush_after_move() {
         use crate::game::ecs::components::ActorMotion;
         let (mut world, mut res) = make_world_and_res();
-        res.map.world = Some(make_terrain_world(2)); // terrain 2 = shallow water
+        res.map.world = Some(make_terrain_world(2)); // terrain 2 = brush/marsh
         res.input_direction = Direction::N;
         super::run(&mut world, &mut res);
         let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
-        assert_eq!(motion.environ, 2, "wading terrain (type 2) should set environ to 2");
+        assert_eq!(motion.environ, 2, "brush terrain (type 2) should set environ to 2");
     }
 
     /// After stepping onto open terrain (type 0), environ should be 0.
@@ -367,14 +441,196 @@ mod tests {
         assert_eq!(old_y - new_y, 6.0, "slippery cardinal N should advance 6px (speed 4)");
     }
 
-    /// On wading terrain (environ 2, speed 1) a cardinal step is 1px, not 3px.
+    // --- update_environ idle tests ---
+
+    /// update_environ must run every tick, even when no input is given.
+    /// Standing still on terrain-4 (deep water) should ramp k up by 1 per tick.
+    #[test]
+    fn environ_ramps_while_standing_still() {
+        use crate::game::ecs::components::ActorMotion;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_terrain_world(4)); // deep water everywhere
+        // Start at k=5: should ramp toward 10 each tick regardless of input.
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 5;
+        res.input_direction = Direction::None;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert_eq!(motion.environ, 6, "k should increment by 1 per idle tick on terrain-4");
+    }
+
+    /// Sinking state (k > 15) must be set by update_environ and block movement.
+    #[test]
+    fn sinking_state_set_when_k_exceeds_15() {
+        use crate::game::ecs::components::{ActorMotion, CombatState};
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_terrain_world(5)); // very deep water → ramp toward 30
+        // Pre-set k=15: next tick ramps to 16, which triggers STATE_SINK.
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 15;
+        res.input_direction = Direction::None;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert_eq!(motion.environ, 16);
+        let combat = world.get::<&CombatState>(res.hero_entity).unwrap();
+        assert_eq!(combat.state, ActorState::Sinking, "k=16 > 15 should set Sinking state");
+    }
+
+    /// While Sinking, movement input must be ignored (position unchanged).
+    #[test]
+    fn movement_blocked_while_sinking() {
+        use crate::game::ecs::components::{ActorMotion, CombatState};
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        // Set sinking state manually and give valid terrain so movement would otherwise work.
+        world.get::<&mut CombatState>(res.hero_entity).unwrap().state = ActorState::Sinking;
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 20;
+        let old_pos = {
+            let p = world.get::<&Position>(res.hero_entity).unwrap();
+            (p.x, p.y)
+        };
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let p = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!((p.x, p.y), old_pos, "position must not change while Sinking");
+    }
+
+    /// At k=30 (death depth), state must return to Still regardless of terrain (fmain.c:1784).
+    #[test]
+    fn sinking_releases_at_k30() {
+        use crate::game::ecs::components::{ActorMotion, CombatState};
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_terrain_world(5)); // terrain-5 ramps toward 30
+        world.get::<&mut CombatState>(res.hero_entity).unwrap().state = ActorState::Sinking;
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 29;
+        res.input_direction = Direction::None;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert_eq!(motion.environ, 30);
+        let combat = world.get::<&CombatState>(res.hero_entity).unwrap();
+        assert_eq!(combat.state, ActorState::Still, "k=30 should release Sinking back to Still");
+    }
+
+    /// When k drops to 0 from Sinking (stepped back onto dry ground), state returns to Still.
+    #[test]
+    fn sinking_state_cleared_when_k_reaches_0() {
+        use crate::game::ecs::components::{ActorMotion, CombatState};
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        // Open ground world (terrain 0) → k snaps to 0.
+        // Pre-set Sinking + k=3; next tick update_environ snaps k=0 → state → Still.
+        world.get::<&mut CombatState>(res.hero_entity).unwrap().state = ActorState::Sinking;
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 3;
+        res.input_direction = Direction::None;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert_eq!(motion.environ, 0);
+        let combat = world.get::<&CombatState>(res.hero_entity).unwrap();
+        assert_eq!(combat.state, ActorState::Still, "Sinking should clear to Still when k reaches 0");
+    }
+
+    // --- Ramp mechanics tests ---
+
+    /// terrain_to_environ: j=4 ramps environ UP toward 10 (one step per tick).
+    #[test]
+    fn deep_water_ramps_up_toward_10() {
+        assert_eq!(super::terrain_to_environ(4, 0), 1);
+        assert_eq!(super::terrain_to_environ(4, 9), 10);
+        assert_eq!(super::terrain_to_environ(4, 10), 10); // clamped at target
+    }
+
+    /// terrain_to_environ: j=4 ramps environ DOWN toward 10 when k > 10.
+    #[test]
+    fn deep_water_ramps_down_toward_10() {
+        // Hero was in terrain-5 (k ramped past 10) and stepped onto terrain-4.
+        assert_eq!(super::terrain_to_environ(4, 25), 24);
+        assert_eq!(super::terrain_to_environ(4, 11), 10);
+        assert_eq!(super::terrain_to_environ(4, 10), 10); // already at target
+    }
+
+    /// terrain_to_environ: j=5 ramps environ UP toward 30.
+    #[test]
+    fn very_deep_water_ramps_up_toward_30() {
+        assert_eq!(super::terrain_to_environ(5, 0), 1);
+        assert_eq!(super::terrain_to_environ(5, 29), 30);
+        assert_eq!(super::terrain_to_environ(5, 30), 30); // clamped
+    }
+
+    /// Ramp-out: when hero (k=10, terrain-4 underfoot) steps toward open ground,
+    /// position must NOT be committed and k must decrement by 1.
+    /// This verifies the walk_step ramp-out (fmain.c:1641-1644):
+    ///   k > 2, destination j == 0 → k--, no position commit.
+    ///
+    /// Layout: hero at (200, 192) — current tile (imy=6, slot 108) → tile 1 (terrain 4).
+    /// Destination at speed=1 N step is (200, 191) — tile (imy=5, slot 92) → tile 0 (terrain 0).
+    /// Tile boundary is at y=192/191 (imy=6→5), so a 1px north step crosses into terrain-0.
+    #[test]
+    fn ramp_out_holds_position_and_decrements_environ() {
+        use crate::game::ecs::components::ActorMotion;
+        let (mut world, mut res) = make_world_and_res();
+
+        // Build a split-terrain world: current pos = terrain 4, dest pos = terrain 0.
+        // px_to_terrain_type: tile_idx = sector_mem[sec_num*128 + ly*16 + lx].
+        // Hero at (200, 192): xs=0, ys=0, lx=12, ly=6 → slot=108 → tile_idx=1
+        //   terra_mem[1*4+1]=4<<4 (terrain 4), terra_mem[1*4+2]=0x08 (d4 bit for y=192)
+        // Dest at (200, 191): imy=5, ly=5, slot=92 → tile_idx=0 → all zeros → terrain 0, passable
+        let mut w = crate::game::world_data::WorldData::empty();
+        w.sector_mem[108] = 1;          // current pos → tile index 1
+        w.terra_mem[5] = 4 << 4;        // tile 1, byte 1: terrain type 4
+        w.terra_mem[6] = 0x08;          // tile 1, byte 2: bitmask d4=0x08 for y=192
+        res.map.world = Some(w);
+
+        // Place hero at (200, 192) — on terrain-4 tile, 1px north of tile boundary.
+        if let Ok(mut pos) = world.get::<&mut Position>(res.hero_entity) {
+            pos.x = 200.0;
+            pos.y = 192.0;
+        }
+        // Pre-set environ to 10 (deep-water saturation) so ramp-out fires (k > 2, j_dest == 0).
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 10;
+
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+
+        // Position must NOT have advanced — ramp-out holds the actor in place.
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 192.0, "ramp-out: position must not be committed");
+        // Environ must have decremented by 1.
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        assert_eq!(motion.environ, 9, "ramp-out: environ must decrement by 1");
+    }
+
+    /// update_environ samples terrain at the CURRENT (pre-move) position, not the
+    /// destination. On a normal (non-ramp-out) step onto open ground from deep water,
+    /// the hero is still over terrain-4 this tick → update_environ runs on j=4
+    /// (which would increment k), but the ramp-out check fires first when k > 2.
+    /// Conversely, when k <= 2 (brush), a step onto open ground commits position
+    /// and update_environ reads j at the NEW (open) position → k snaps to 0.
+    #[test]
+    fn update_environ_uses_current_position_terrain() {
+        use crate::game::ecs::components::ActorMotion;
+        let (mut world, mut res) = make_world_and_res();
+        // World is all open ground (terrain 0).
+        // Pre-set environ to 2 (brush) — k > 2 is false, so ramp-out doesn't fire.
+        // After moving, update_environ reads j=0 at new pos → k snaps to 0.
+        world.get::<&mut ActorMotion>(res.hero_entity).unwrap().environ = 2;
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let motion = world.get::<&ActorMotion>(res.hero_entity).unwrap();
+        // k == 2 → ramp-out guard (k > 2) is false → position committed, environ → 0.
+        assert_eq!(motion.environ, 0, "environ 2 stepping onto open ground: snaps to 0");
+        // speed=1 at environ=2 → 1px north step → y=199 (not 197 which would be speed=2).
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 199.0, "position should be committed (no ramp-out at k=2); speed=1 so 1px step");
+    }
+
+    /// On brush terrain (environ 2, speed 1) a cardinal step is 1px, not 3px.
     /// Assembly: ydir[N]=-2, speed=1; prod=-2 → as u16=0xFFFE; lsr.w → 0x7FFF;
     /// y(200)+0x7FFF=33167 masked to 15-bit = 33167-32768 = 399... wrong. Actually:
     /// (200 + 0x7FFF) & 0x7FFF = (32967) & 0x7FFF = 32967 - 32768 = 199. So y=199, delta=-1.
     #[test]
-    fn wading_terrain_halves_cardinal_speed() {
+    fn brush_terrain_halves_cardinal_speed() {
         let (mut world, mut res) = make_world_and_res();
-        res.map.world = Some(make_terrain_world(2)); // wading
+        res.map.world = Some(make_terrain_world(2)); // brush/marsh
         // Pre-set environ so speed applies on first tick.
         world.get::<&mut crate::game::ecs::components::ActorMotion>(res.hero_entity)
             .unwrap().environ = 2;
@@ -383,6 +639,6 @@ mod tests {
         super::run(&mut world, &mut res);
         let new_y = world.get::<&Position>(res.hero_entity).unwrap().y;
         // Per spec §9.5: cardinal speed 1 → 1px north.
-        assert_eq!(old_y - new_y, 1.0, "wading cardinal N should advance 1px (speed 1)");
+        assert_eq!(old_y - new_y, 1.0, "brush/marsh cardinal N should advance 1px (speed 1)");
     }
 }

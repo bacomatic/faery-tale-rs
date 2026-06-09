@@ -151,7 +151,7 @@ pub fn newy(y: u16, dir: u8, dist: i32) -> u16 {
 }
 
 /// Hero-specific terrain passability check.
-/// Hero can walk into lava (8) and pit (9) tiles — environ effects applied later by
+/// Hero can walk into astral reverse-field (8) and pit (9) tiles — environ effects applied later by
 /// `update_environ`. Per fmain2.c:282: `if i == 0 and (t == 8 or t == 9): t = 0`.
 /// Pass `has_crystal = stuff[30] != 0` to also bypass terrain-12 (crystal wall) for
 /// the primary-direction probe. Per fmain.c:1611 — crystal bypass is primary-only.

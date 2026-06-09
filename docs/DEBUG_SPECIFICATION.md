@@ -59,7 +59,7 @@ DebugSnapshot {
     region_loading: bool,           // MAP_FLUX flag
     extent_index: Option<u8>,       // which extent zone hero is in (0–22), None if none
     extent_type: Option<u8>,        // etype of matched extent
-    environ: i8,                    // terrain depth (-2=flying, 0=normal, 1-15=water, >15=fire)
+    environ: i8,                    // terrain state: -3=astral reverse-field, -2=ice/fall, -1=slippery, 0=normal, 2=brush, 5=shallow water, >6=deep water (ramps to 30)
     carrier_state: u8,              // 0=none, 1=raft, 5=turtle, 11=bird
 
     // Visual effects panel

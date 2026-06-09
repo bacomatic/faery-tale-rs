@@ -67,10 +67,10 @@ Speed value `e` passed to `newx`/`newy` during WALKING. The if/else chain applie
 | Condition | Speed | Scope | Effect |
 |-----------|-------|-------|--------|
 | `i == 0 && riding == 5` | 3 | Hero only | Turtle mount (fast overland) |
-| `environ == −3` (terrain 8) | −2 | All actors | Direction reversal. NPCs are blocked from terrain 8 by `proxcheck` (`fmain2.c:282`), so in practice this is hero-only. |
+| `environ == −3` (terrain 8, astral reverse-field) | −2 | All actors | Direction reversal. NPCs are blocked from terrain 8 by `proxcheck` (`fmain2.c:282`), so in practice this is hero-only. Terrain 8 only appears in the Spirit Plane (astral extent). |
 | `environ == −2` (terrain 7, ice) | velocity | All actors | Velocity-based physics — no `i == 0` guard |
 | `environ == −1` (terrain 6) | 4 | All actors | Fast/slippery, 2× normal |
-| `environ == 2` or `> 6` | 1 | All actors | Wading / deep water, half speed |
+| `environ == 2` or `> 6` | 1 | All actors | Brush/marsh (environ 2) or deep water (environ > 6), half speed |
 | Default | 2 | All actors | Normal walking |
 
 Per-speed pixel displacement per frame:
@@ -88,18 +88,18 @@ Negative speed (−2) causes backward movement — the signed multiply in `newx`
 **Hero-only movement rules:**
 - Turtle mount (`riding == 5`) forces speed 3 regardless of terrain.
 - Crystal shard (`stuff[30]`) passes through terrain type 12 barriers (`fmain.c:1611`).
-- Terrain types 8 and 9 are passable for the hero but cause effects (reversal / pit fall).
+- Terrain types 8 (astral reverse-field) and 9 (pit) are passable for the hero but cause effects (direction reversal / pit fall).
 
 **NPC-only movement rules:**
 - `freeze_timer > 0` → all non-hero actors skip movement entirely (`fmain.c:1473`, `goto statc`).
 - Terrain ≥ 10 always blocks (no crystal-shard exception).
-- Terrain 8 and 9 are blocked by `proxcheck`'s second probe (threshold ≥ 8).
+- Terrain 8 (astral reverse-field) and 9 (pit) are blocked by `proxcheck`'s second probe (threshold ≥ 8).
 
 **Race-based terrain immunity (NPCs):**
 - Wraiths (`race == 2`) skip terrain collision entirely (`fmain2.c:279-280`) and have terrain forced to 0 at `fmain.c:1639` (normal speed everywhere).
 - Snakes (`race == 4`) have terrain forced to 0 (same mechanism), normal speed everywhere.
 
-**Wading speed gap:** The `environ == 2 || environ > 6` condition creates a brief normal-speed window at environ 3–6 during water-depth ramping. Affects hero and NPCs identically.
+**Speed gap during water-depth ramping:** The `environ == 2 || environ > 6` condition means environ values 3–6 use default speed 2 (normal walking). Environ 2 is brush/marsh (terrain 2, always speed 1 — no ramp). Environ 3–6 only arise transiently as deep-water environ ramps upward from 0 toward its target; during that ramp the actor briefly walks at normal speed. Environ 7 and above is consistently speed 1. Affects hero and NPCs identically.
 
 ### 9.6 Position Update — `newx` / `newy`
 

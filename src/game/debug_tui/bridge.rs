@@ -320,11 +320,12 @@ pub fn facing_name(facing: u8) -> &'static str {
 pub fn environ_label(env: i8) -> &'static str {
     match env {
         -3 => "reverse",
-        -2 => "swamp",
+        -2 => "ice",
         -1 => "slippery",
         0 => "normal",
-        1 => "wading",
-        2 => "fire",
+        2 => "brush",
+        5 => "shallow water",
+        e if e > 6 => "deep water",
         _ => "?",
     }
 }

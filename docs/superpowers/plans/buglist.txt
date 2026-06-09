@@ -1,0 +1,19 @@
+Bugs that need to be fixed:
+1. Player movement speed is completely wrong.
+  - Check the reference docs for player movement mechanics
+
+2. The game starts at the wrong time of day. It starts at midnight, it should be morning.
+
+3. There are no player animations. Movement just changes to face the direction of movement and there is no animation.
+
+4. The masking isn't working. Actors should disappear behind walls, objects, or other actors.
+  - Check the reference docs for masking mechanics
+
+5. Player stats don't seem to match the reference docs. Particularly vitality which has a cap based on BRV.
+
+6. The day/night cycle runs WAY too fast. Check the reference docs for the correct cycle length.
+
+
+Ignore issues with features that have not been implemented yet.
+These issues need to be fixed before we proceed.
+Some of these could be due to issues in the game clock, look there for problems.

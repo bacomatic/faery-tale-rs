@@ -530,10 +530,10 @@ mod tests {
     #[test]
     fn test_npc_speed_for_terrain_chain() {
         use crate::game::combat::npc_speed_for_terrain;
-        // SPEC §9.5: slippery (terrain 6) → fast, water (2,3) → slow, else → normal.
+        // SPEC §9.5: slippery (terrain 6) → fast, brush (2) / shallow water (3) → slow, else → normal.
         assert_eq!(npc_speed_for_terrain(6, false), 4, "slippery = fast");
-        assert_eq!(npc_speed_for_terrain(2, false), 1, "shallow water = slow");
-        assert_eq!(npc_speed_for_terrain(3, false), 1, "deep water = slow");
+        assert_eq!(npc_speed_for_terrain(2, false), 1, "brush = slow");
+        assert_eq!(npc_speed_for_terrain(3, false), 1, "shallow water = slow");
         assert_eq!(npc_speed_for_terrain(0, false), 2, "grass = normal");
         assert_eq!(npc_speed_for_terrain(1, false), 2, "default = normal");
     }
@@ -545,7 +545,7 @@ mod tests {
         assert_eq!(
             npc_speed_for_terrain(2, true),
             2,
-            "wraith/snake in water = normal speed"
+            "wraith/snake in brush = normal speed"
         );
         assert_eq!(
             npc_speed_for_terrain(6, true),
@@ -555,7 +555,7 @@ mod tests {
         assert_eq!(
             npc_speed_for_terrain(3, true),
             2,
-            "wraith/snake in deep water = normal speed"
+            "wraith/snake in shallow water = normal speed"
         );
     }
 }

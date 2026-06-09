@@ -174,6 +174,16 @@ impl EcsScene {
         let mut res = Resources::new(hero);
         res.region.region_num = start_region;
 
+        // Populate compass hit-regions from the library data (comptable).
+        if let Some(cfg) = game_lib.get_compass() {
+            res.palette.compass_regions = cfg
+                .comptable
+                .regions
+                .iter()
+                .map(|r| (r.x, r.y, r.w, r.h))
+                .collect();
+        }
+
         Self {
             world,
             res,
@@ -324,6 +334,7 @@ impl EcsScene {
             &self.world,
             hero_entity,
             &self.res.sprites.sheets,
+            self.res.sprites.object_sprites.as_ref(),
             cycle,
             map_x,
             map_y,
@@ -404,7 +415,7 @@ impl EcsScene {
         // Current input direction → compass arrow index.
         let input_dir = self.input.to_direction();
         let compass_arrow = compass_dir_index(input_dir);
-        let compass_regions = compass_hit_regions();
+        let compass_regions = &self.res.palette.compass_regions;
 
         let tc = canvas.texture_creator();
         if let Ok(mut hibar_tex) =
@@ -754,6 +765,7 @@ fn blit_actors_inner(
     world: &World,
     hero_entity: hecs::Entity,
     sheets: &[Option<crate::game::sprites::SpriteSheet>],
+    object_sprites: Option<&crate::game::sprites::SpriteSheet>,
     cycle: usize,
     map_x: u16,
     map_y: u16,
@@ -785,57 +797,96 @@ fn blit_actors_inner(
     if let Ok((_, pos, facing_c, motion_opt, combat_opt, frust_opt, brother_opt)) = hero_q.get() {
         let cfile_idx: usize = brother_opt.map(|b: &BrotherKind| b.id as usize).unwrap_or(0).min(2);
         if let Some(Some(ref sheet)) = sheets.get(cfile_idx) {
-            let (rel_x, mut rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
+            let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
             let environ: i8 = motion_opt.map(|m: &ActorMotion| m.environ).unwrap_or(0);
-            let body_rows: usize = if environ == 2 {
-                SPRITE_H.saturating_sub(10)
-            } else if environ > 2 {
-                rel_y += environ as i32;
-                SPRITE_H.saturating_sub(environ as usize)
+            let combat_state: Option<&ActorState> = combat_opt.map(|c: &CombatState| &c.state);
+
+            // compute_shape_clip (sprite-rendering.md): environ drives Y-shift and frame swap.
+            // environ > 29 (k=30, fully submerged): replace sprite with bubble from OBJECTS sheet.
+            // environ > 2 (wading/sinking): push ystart down by environ px (sprite sinks into water).
+            // environ == 2 (brush): clip bottom 10px from sprite.
+            let fully_submerged = environ > 29;
+            let is_dead = matches!(combat_state, Some(ActorState::Dead));
+
+            if fully_submerged && is_dead {
+                // fmain.c:2493 — dead actor fully submerged: hidden entirely.
+            } else if fully_submerged {
+                // fmain.c:2494-2497 — draw alternating bubble frames from OBJECTS sheet.
+                // Bubble inum = 97 + ((cycle + actor_index) & 1); actor index 0 for hero.
+                let bubble_inum = 97 + (cycle & 1); // i==0 for hero
+                let bub_y = rel_y + 27; // fmain.c:2494 — 27 = drowning bubble Y-anchor
+                let bub_rows: usize = 8; // fmain.c:2495 — ystop = ystart + 7 → 8 rows
+                if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
+                    && bub_y > -(bub_rows as i32) && bub_y < fb_h
+                {
+                    if let Some(obj_sheet) = object_sprites {
+                        if let Some(fp) = obj_sheet.frame_pixels(bubble_inum) {
+                            blit_sprite_to_framebuf(fp, rel_x, bub_y, bub_rows, framebuf, fb_w, fb_h);
+                            blitted.push(BlittedSprite {
+                                screen_x: rel_x,
+                                screen_y: bub_y,
+                                width:    SPRITE_W,
+                                height:   bub_rows,
+                                ground:   rel_y + SPRITE_H as i32,
+                                is_falling: false,
+                            });
+                        }
+                    }
+                }
             } else {
-                SPRITE_H
-            };
-
-            if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
-                && rel_y > -(SPRITE_H as i32) && rel_y < fb_h
-            {
-                let hero_facing  = facing_c.dir;
-                let is_moving: bool  = motion_opt.map(|m: &ActorMotion| m.moving).unwrap_or(false);
-                let combat_state: Option<&ActorState> = combat_opt.map(|c: &CombatState| &c.state);
-                let frustflag: u8    = frust_opt.map(|f: &FrustFlag| f.count).unwrap_or(0);
-
-                let frame = if frustflag >= 41 {
-                    40
-                } else if frustflag >= 21 {
-                    84 + ((cycle >> 1) & 1)
-                } else if let Some(ActorState::Fighting(f)) = combat_state {
-                    let fight_base = facing_to_fight_frame_base(hero_facing);
-                    fight_base + (*f as usize).min(8)
+                // Normal actor render with optional environ Y-shift.
+                let (draw_y, body_rows) = if environ == 2 {
+                    // fmain.c:2491 — brush: clip bottom 10px, no Y shift.
+                    (rel_y, SPRITE_H.saturating_sub(10))
+                } else if environ > 2 {
+                    // fmain.c:2500 — wading/sinking: push sprite down by environ px.
+                    (rel_y + environ as i32, SPRITE_H.saturating_sub(environ as usize))
                 } else {
-                    let frame_base = facing_to_frame_base(hero_facing);
-                    if is_moving { frame_base + cycle % 8 } else { frame_base + 1 }
+                    (rel_y, SPRITE_H)
                 };
 
-                // Frustration and fighting frames are statelist indices; normal
-                // walk/stand frames are direct cfile indices and skip the lookup.
-                let needs_statelist = frustflag >= 21
-                    || matches!(combat_state, Some(ActorState::Fighting(_)));
-                let body_frame = if needs_statelist {
-                    STATELIST.get(frame).map(|e| e.figure as usize).unwrap_or(frame)
-                } else {
-                    frame
-                };
+                if rel_x > -(SPRITE_W as i32) && rel_x < fb_w
+                    && draw_y > -(SPRITE_H as i32) && draw_y < fb_h
+                {
+                    let hero_facing = facing_c.dir;
+                    let is_moving   = motion_opt.map(|m: &ActorMotion| m.moving).unwrap_or(false);
+                    let frustflag   = frust_opt.map(|f: &FrustFlag| f.count).unwrap_or(0);
 
-                if let Some(fp) = sheet.frame_pixels(body_frame) {
-                    blit_sprite_to_framebuf(fp, rel_x, rel_y, body_rows, framebuf, fb_w, fb_h);
-                    blitted.push(BlittedSprite {
-                        screen_x: rel_x,
-                        screen_y: rel_y,
-                        width:    SPRITE_W,
-                        height:   body_rows,
-                        ground:   rel_y + SPRITE_H as i32,
-                        is_falling: false,
-                    });
+                    let frame = if frustflag >= 41 {
+                        40
+                    } else if frustflag >= 21 {
+                        84 + ((cycle >> 1) & 1)
+                    } else if matches!(combat_state, Some(ActorState::Sinking)) {
+                        // fmain.c:1576 — death_step pins STATE_SINK to statelist index 83.
+                        83
+                    } else if let Some(ActorState::Fighting(f)) = combat_state {
+                        let fight_base = facing_to_fight_frame_base(hero_facing);
+                        fight_base + (*f as usize).min(8)
+                    } else {
+                        let frame_base = facing_to_frame_base(hero_facing);
+                        if is_moving { frame_base + cycle % 8 } else { frame_base + 1 }
+                    };
+
+                    // Frustration, fighting, and sinking frames are statelist indices.
+                    let needs_statelist = frustflag >= 21
+                        || matches!(combat_state, Some(ActorState::Fighting(_)) | Some(ActorState::Sinking));
+                    let body_frame = if needs_statelist {
+                        STATELIST.get(frame).map(|e| e.figure as usize).unwrap_or(frame)
+                    } else {
+                        frame
+                    };
+
+                    if let Some(fp) = sheet.frame_pixels(body_frame) {
+                        blit_sprite_to_framebuf(fp, rel_x, draw_y, body_rows, framebuf, fb_w, fb_h);
+                        blitted.push(BlittedSprite {
+                            screen_x: rel_x,
+                            screen_y: draw_y,
+                            width:    SPRITE_W,
+                            height:   body_rows,
+                            ground:   rel_y + SPRITE_H as i32,
+                            is_falling: false,
+                        });
+                    }
                 }
             }
         }
@@ -892,21 +943,6 @@ fn compass_dir_index(dir: Direction) -> usize {
     dir as usize
 }
 
-/// Compass hit-regions: (rx, ry, rw, rh) pixel rects within the compass glyph.
-/// Ported from `GameplayScene::compass_regions` (gameplay_scene/mod.rs).
-fn compass_hit_regions() -> [(i32, i32, i32, i32); 9] {
-    [
-        (0, 0, 16, 12),   // NW
-        (16, 0, 16, 8),   // N
-        (32, 0, 16, 12),  // NE
-        (37, 8, 11, 8),   // E
-        (32, 12, 16, 12), // SE
-        (16, 16, 16, 8),  // S
-        (0, 12, 16, 12),  // SW
-        (0, 8, 11, 8),    // W
-        (0, 0, 0, 0),     // None — no highlight
-    ]
-}
 
 // ── Palette helpers (ported from gameplay_scene/region.rs) ───────────────────
 
