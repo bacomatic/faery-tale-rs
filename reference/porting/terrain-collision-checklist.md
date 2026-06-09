@@ -38,7 +38,7 @@ Purpose:
 - [ ] Type 5: Very deep water — `environ` increments toward 30; at 30 player enters SINK → death; sector 181 teleports to region 9 (`fmain.c:1775-1793`).
 - [ ] Type 6: Ice (slippery) — `environ = -1`, speed forced to 4 (`fmain.c:1771`, `fmain.c:1601`).
 - [ ] Type 7: Ice (velocity) — `environ = -2`, momentum-based physics (`fmain.c:1772`, `fmain.c:1580-1595`).
-- [ ] Type 8: Lava/fire — `environ = -3`, player walks backwards at speed -2 (`fmain.c:1770`, `fmain.c:1600`).
+- [ ] Type 8: Astral reverse field — `environ = -3`, player walks backwards at speed -2 (`fmain.c:1770`, `fmain.c:1600`); found on astral plane floor (region 9).
 - [ ] Type 15: Door tile — handled as passable by `_prox`; triggers door interaction from `proxcheck` return.
 
 ## D. `environ` Field — State Accumulator
@@ -46,7 +46,7 @@ Purpose:
 - [ ] Each actor has its own `environ` field tracking water depth or slide state.
 - [ ] For water types (2–5): `environ` accumulates each tick the player stands in water; cleared when leaving water.
 - [ ] For ice types (6,7): `environ` set to fixed negative sentinel each tick on ice; cleared when leaving ice.
-- [ ] For fire type (8): `environ = -3` each tick; player pushed backward at speed -2 (`fmain.c:1600`).
+- [ ] For astral reverse-field type (8): `environ = -3` each tick; player pushed backward at speed -2 (`fmain.c:1600`).
 - [ ] Drowning thresholds (`fmain.c:1780-1795`):
   - `environ > 2`: `vitality--` (gradual drowning)
   - `environ > 15`: instant death (`vitality = 0`)
@@ -58,7 +58,7 @@ Purpose:
 - [ ] Normal (`environ >= 0` and not ice): speed from stats formula.
 - [ ] Ice slippery (`environ == -1`): speed = 4 — `fmain.c:1601`.
 - [ ] Ice velocity (`environ == -2`): momentum-based — `fmain.c:1580-1595`.
-- [ ] Fire/lava (`environ == -3`): speed = -2 (backwards push) — `fmain.c:1600`.
+- [ ] Astral reverse field (`environ == -3`): speed = -2 (backwards push) — `fmain.c:1600`.
 - [ ] Ice momentum: velocity preserved across ticks; direction only adjustable at edges of inertia (`fmain.c:1580-1595`).
 
 ## F. Movement Collision Loop (`fmain.c:1560-1665`)

@@ -126,7 +126,7 @@ The turtle CANNOT autonomously move onto:
 - Type 2: shallow water
 - Type 3: medium water
 - Type 4: deep water
-- Types 6-15: ice, lava, pits, etc.
+- Types 6-15: ice, astral reverse field, pits, etc.
 
 **Only terrain type 5 (deepest water) is valid for autonomous turtle movement.**
 
@@ -157,7 +157,7 @@ There is no explicit fire-button dismount for the turtle (unlike swan at `fmain.
 | Open ground | 2 | 3 |
 | Deep water | 1 | 3 |
 | Ice (slippery) | 4 | 3 |
-| Lava | -2 (backwards) | 3 (forward!) |
+| Astral reverse field | -2 (backwards) | 3 (forward!) |
 
 ## Extent System
 
@@ -340,7 +340,7 @@ Turtle (CARRIER, not riding==11): offset (-16, -16) from map position. Swan whil
 
 - `fmain.c:2150` — Snake AI interacts with turtle eggs: `if (an->race==4 && turtle_eggs) tactic = EGG_SEEK` — snakes near turtle eggs use the EGG_SEEK tactic, targeting coordinates (23087, 5667) per `fmain2.c:1698`.
 - `fmain.c:1768` — `raftprox` protects hero from drowning on ANY carrier (comment says "raft" but applies to turtle too): `if (i==0 && raftprox) k = 0`.
-- `fmain.c:1599` — Riding turtle speed (3) overrides lava push-back (would be -2), effectively neutralizing lava's backward push while mounted.
+- `fmain.c:1599` — Riding turtle speed (3) overrides astral reverse-field push-back (would be -2), effectively neutralizing the backward push while mounted.
 - `fmain.c:1900` — `if (riding) goto nodoor3` — hero cannot enter doors while riding ANY carrier, including turtle.
 - `fmain.c:3308` — `if (riding > 1) return` — freeze spell has no effect while riding turtle or swan.
 - `fmain.c:3338` — `if (riding)` check in blue stone teleport handler — blocks teleport while riding.

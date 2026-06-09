@@ -80,7 +80,7 @@ Two terrain probes at offset positions from the actor's feet:
 **Probe 2** (`fsubs.asm:1601-1609`): `(x−4, y+2)`
 - Blocks if terrain type == 1 or terrain type ≥ 8
 
-The probes have **asymmetric thresholds**: the right probe blocks at ≥10 while the left blocks at ≥8. This means terrain types 8–9 (lava, pit) block only at the left probe. The original source has a comment error at `fsubs.asm:1603` — the comment says `; x + 4` but the instruction is `subq #4,d0` (x − 4).
+The probes have **asymmetric thresholds**: the right probe blocks at ≥10 while the left blocks at ≥8. This means terrain types 8–9 (astral reverse field, pit) block only at the left probe. The original source has a comment error at `fsubs.asm:1603` — the comment says `; x + 4` but the instruction is `subq #4,d0` (x − 4).
 
 Returns the blocking terrain code, or 0 if both probes pass.
 
@@ -89,7 +89,7 @@ Returns the blocking terrain code, or 0 if both probes pass.
 Wraps `_prox` with three additional layers:
 
 1. **Wraith bypass** (`fmain2.c:279-280`): Actors with `race == 2` (wraith) skip terrain collision entirely.
-2. **Player override** (`fmain2.c:281-283`): For the hero (`i==0`), terrain types 8 and 9 are treated as passable — the player walks *into* lava and pits (they cause effects but don't block).
+2. **Player override** (`fmain2.c:281-283`): For the hero (`i==0`), terrain types 8 and 9 are treated as passable — the player walks *into* astral reverse-field tiles and pits (they cause effects but don't block).
 3. **Actor collision** (`fmain2.c:285-292`): Checks all active actors for bounding-box overlap (22×18 pixels: `|dx| < 11`, `|dy| < 9`). Skips self, slot 1 (raft/companion), CARRIER type (type 5), and DEAD actors. Returns 16 on actor collision.
 
 #### Collision Deviation (`fmain.c:1612-1626`)
@@ -107,7 +107,7 @@ Speed value `e` for `newx`/`newy` during WALKING, elaborating [§5.8](RESEARCH-i
 | Condition | Speed | Source | Applies To |
 |-----------|-------|--------|------------|
 | `i==0 && riding==5` | 3 | `fmain.c:1599` | Hero only (turtle mount) |
-| `environ == −3` (lava) | −2 | `fmain.c:1600` | All actors (but NPCs blocked from terrain 8 by `proxcheck`) |
+| `environ == −3` (astral reverse field) | −2 | `fmain.c:1600` | All actors (but NPCs blocked from terrain 8 by `proxcheck`) |
 | `environ == −1` (slippery) | 4 | `fmain.c:1601` | All actors |
 | `environ == 2` or `> 6` | 1 | `fmain.c:1602` | All actors |
 | Default | 2 | `fmain.c:1602` | All actors |

@@ -62,7 +62,7 @@ These problems have been conclusively answered from the source code.
 | 5 (very deep) | increments to 30 | 1 | SINK state at environ>15; death tick at environ==30 every 8 cycles; quicksand teleport in sector 181 at environ==30 |
 | 6 (slippery) | −1 | 4 | Fast walking |
 | 7 (ice) | −2 | 40–42 | Velocity-based momentum physics |
-| 8 (lava) | −3 | −2 | Walk backwards |
+| 8 (astral reverse field) | −3 | −2 | Walk backwards |
 
 Additional behaviors gated by environ: submersion sprite offset (`fmain.c:2491-2506`), depth-sort adjustment (`fmain.c:2352-2353`), safe zone qualification (`fmain.c:2191`), and weapon hiding at environ>29 (`fmain.c:2503`). Raft proximity (`raftprox==1||2`) overrides environ to 0. The Rose item (`stuff[23]`) clears environ to 0 in the volcanic zone (`fmain.c:1844`).
 

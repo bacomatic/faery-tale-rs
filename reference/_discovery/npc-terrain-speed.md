@@ -69,7 +69,7 @@ The `if/else` chain is evaluated in order. For NPCs (`i > 0`):
 
 | Environ (k) | Terrain Source | Speed (e) | Pixels/frame (diagonal) | Notes |
 |---|---|---|---|---|
-| -3 | Terrain 8 (lava/fire) | -2 | ~2-3 reversed | Walks opposite to facing. **But NPCs are blocked from terrain 8 by proxcheck** (see Collision section) |
+| -3 | Terrain 8 (astral reverse field) | -2 | ~2-3 reversed | Walks opposite to facing. **But NPCs are blocked from terrain 8 by proxcheck** (see Collision section) |
 | -2 | Terrain 7 (ice) | velocity-based | 0 to ~10 | Momentum physics; no fixed speed. Cap: vel_x < 34, vel_y < 42. Effective speed: vel/4 px/frame |
 | -1 | Terrain 6 (slippery) | 4 | ~4-6 | 2× normal speed |
 | 0 | Terrain 0 (normal) | 2 | ~2-3 | Standard walking speed |
@@ -129,7 +129,7 @@ if (i==0 && raftprox) k = 0;                           // hero on raft: immune
 else if (j == 0) k = 0;                                 // normal ground
 else if (j == 6) k = -1;                                // fast/slippery
 else if (j == 7) k = -2;                                // ice
-else if (j == 8) k = -3;                                // backwards/lava
+else if (j == 8) k = -3;                                // backwards/astral-reverse-field
 else if (j == 9 && i==0 && xtype == 52) { FALL; k=-2; } // pit (hero only)
 else if (j == 2) k = 2;                                 // shallow water
 else if (j == 3) k = 5;                                 // medium water
@@ -163,7 +163,7 @@ if (i==0 && (x1 == 8 || x1 == 9)) x1 = 0;    // fmain2.c:282
 
 For the hero only, terrain types 8 and 9 returned by `prox()` are zeroed → passable.
 For NPCs, terrain 8 and 9 remain blocking. This means:
-- **NPCs cannot walk onto terrain 8** (backwards/lava) — blocked by prox's second point check
+- **NPCs cannot walk onto terrain 8** (backwards/astral reverse field) — blocked by prox's second point check
 - **NPCs cannot walk onto terrain 9** (pits) — blocked by prox's second point check
 - Therefore environ=-3 (backwards) is effectively unreachable for NPCs in normal gameplay
 

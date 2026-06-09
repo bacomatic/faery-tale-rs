@@ -96,7 +96,7 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]` (fsubs.asm:61
 | 5 | Water (very deep) | environ increments toward 30; at 30 player enters SINK state → death; special sector 181 teleports to region 9 (fmain.c:1775-1793) |
 | 6 | Slippery (ice/slide) | environ = -1, speed becomes 4 (fmain.c:1771, 1601) |
 | 7 | Velocity-based (ice) | environ = -2, velocity-based physics with momentum (fmain.c:1772, 1580-1595) |
-| 8 | Lava/fire | environ = -3, player walks backwards at speed -2 (fmain.c:1770, 1600) |
+| 8 | Astral reverse field | environ = -3, player walks backwards at speed -2 (fmain.c:1770, 1600); found on astral plane floor (region 9) |
 | 9 | Pit/fall | If hero (i==0) and xtype==52: triggers FALL state, luck -= 2 (fmain.c:1776-1783) |
 | 10+ | N/A (blocked by prox) | `_prox` treats 10+ as blocked at second probe point (fsubs.asm:1608-1609). First probe blocks at 8+ (fsubs.asm:1603-1604). |
 | 12 | Crystal shard pass | `stuff[30]` (crystal shard) allows passage through type 12 terrain (fmain.c:1611) |
@@ -108,7 +108,7 @@ The `environ` field on each actor tracks depth/slide state (fmain.c:1474, 1760-1
 - `k = 0`: normal ground
 - `k = -1`: slippery (speed 4)
 - `k = -2`: velocity-based sliding/flying (momentum physics)
-- `k = -3`: repulsive/lava (walk backwards)
+- `k = -3`: astral reverse field (walk backwards)
 - `k = 2`: shallow water
 - `k = 5`: brush/medium depth
 - `k = 10`: deep water
@@ -157,7 +157,7 @@ The C wrapper adds two layers to `_prox`:
    if (i==0 && (x1 == 8 || x1 == 9)) x1 = 0;  // player ignores types 8,9
    if (x1) return x1;
    ```
-   For the player character only (i==0), terrain types 8 and 9 are treated as passable (not blocking). This means the player can walk into lava/fire and pit areas — they cause effects but don't block movement.
+   For the player character only (i==0), terrain types 8 and 9 are treated as passable (not blocking). This means the player can walk into astral reverse-field and pit areas — they cause effects but don't block movement.
 
 3. **Actor collision** (fmain2.c:285-292): Iterates all active actors checking bounding box overlap:
    ```c
@@ -183,7 +183,7 @@ Walking actors compute test positions using `newx`/`newy`, then call proxcheck. 
 
 The speed `e` varies by environ (fmain.c:1599-1603):
 - Riding raft (i==0, riding==5): e=3
-- Lava (k==-3): e=-2 (walk backwards!)
+- Astral reverse field (k==-3): e=-2 (walk backwards!)
 - Slippery (k==-1): e=4
 - Shallow water (k==2) or deep (k>6): e=1 (slow)
 - Normal: e=2
@@ -594,7 +594,7 @@ The "sinker" label block handles terrain-to-environ mapping:
 | 0 | k = 0 | Normal ground |
 | 6 | k = -1 | Slippery (ice/slide) |
 | 7 | k = -2 | Velocity-based sliding (momentum) |
-| 8 | k = -3 | Repulsive (lava push backwards) |
+| 8 | k = -3 | Astral reverse field (walk backwards) |
 | 9 (+ i==0 + xtype==52) | k = -2 + FALL state | Pit trap: triggers FALL, luck -= 2 |
 | 2 | k = 2 | Shallow water |
 | 3 | k = 5 | Medium depth |

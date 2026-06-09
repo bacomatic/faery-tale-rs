@@ -13,7 +13,7 @@ through `proxcheck`. When the state is `STATE_STILL`, `still_step` holds the
 position (but still lets residual ice momentum slide the actor). Both paths
 end by sampling the terrain at the actor's new position and calling
 `update_environ`, which maps the terrain code `j` to the environ code `k`
-and applies water-sink / lava / fall-pit transitions.
+and applies water-sink / astral-reverse-field / fall-pit transitions.
 
 The primitives `newx` / `newy` (in `fsubs.asm`) translate a `(dir, speed)`
 pair into a position delta using the compass vector tables `xdir[]` /
@@ -182,8 +182,8 @@ def walk_step(i: int, an: Shape, d: int, k: int) -> int:
     # --- Speed selection (fmain.c:1599-1602) ----------------------------------
     if i == 0 and riding == 5:                            # fmain.c:1599, 5 = RAFT/turtle type (hero mount)
         e = 3                                             # fmain.c:1599, 3 = hero-on-raft speed
-    elif k == -3:                                         # fmain.c:1600, -3 = lava environ
-        e = -2                                            # fmain.c:1600, -2 = lava reversed-walk speed
+    elif k == -3:                                         # fmain.c:1600, -3 = astral reverse-field environ
+        e = -2                                            # fmain.c:1600, -2 = reverse-field walk-backwards speed
     elif k == -1:                                         # fmain.c:1601, -1 = slippery environ
         e = 4                                             # fmain.c:1601, 4 = slippery-terrain speed
     elif k == 2 or k > 6:                                 # fmain.c:1602, 6 = boundary between medium-water and deep (wade)
@@ -310,8 +310,8 @@ def update_environ(i: int, an: Shape, j: int, s: int, k: int) -> None:
         k = -1                                            # fmain.c:1764, -1 = slippery environ
     elif j == 7:                                          # fmain.c:1765, 7 = ice terrain code
         k = -2                                            # fmain.c:1765, -2 = ice environ
-    elif j == 8:                                          # fmain.c:1766, 8 = lava terrain code
-        k = -3                                            # fmain.c:1766, -3 = lava environ
+    elif j == 8:                                          # fmain.c:1766, 8 = astral reverse-field terrain code
+        k = -3                                            # fmain.c:1766, -3 = astral reverse-field environ
     elif j == 9 and i == 0 and xtype == 52:               # fmain.c:1767, 9 = pit terrain, 52 = pit xtype
         if an.state != STATE_FALL:
             an.index = fallstates[brother * 6]            # fmain.c:1769, 6 = entries-per-brother in fallstates
@@ -543,7 +543,7 @@ following effective per-tick displacement for cardinal directions
 
 | Environ `k` | Source terrain (j) | Speed `e` | Cardinal px/tick |
 |---|---|---|---|
-| `-3` | 8 (lava) | `-2` | 3 (reversed facing) |
+| `-3` | 8 (astral reverse field) | `-2` | 3 (reversed facing) |
 | `-2` | 7 (ice) | velocity-based | `vel/4`, capped 34 X / 42 Y |
 | `-1` | 6 (slippery) | `4` | 6 |
 |  `0` | 0 (open) | `2` | 3 |

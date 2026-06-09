@@ -160,12 +160,12 @@ Terra set 9 indices 64-127 (the "astral" half), corresponding to game tile IDs 1
 | 92 | 9 | Pit/fall |
 | 93 | 1 | Impassable wall |
 | 94 | 6 | Slippery (ice/slide) |
-| 100 | 8 | Lava/fire (walk backwards) |
+| 100 | 8 | Astral reverse field (walk backwards) |
 | 101-108 | 7 | Velocity-based ice (momentum physics) |
 
-The astral landscape is a hazardous environment: pits, ice, lava, and momentum-based physics. This matches the cleric's warning at speak(36): "It is hazardous in the extreme. Space may twist, and time itself may run backwards!" — narr.asm:446-448
+The astral landscape is a hazardous environment: pits, ice, reverse-field tiles, and momentum-based physics. This matches the cleric's warning at speak(36): "It is hazardous in the extreme. Space may twist, and time itself may run backwards!" — narr.asm:446-448
 
-The "time running backwards" likely refers to terrain type 8 (lava, k=-3) which makes the player walk backwards at speed -2.
+The "time running backwards" likely refers to terrain type 8 (astral reverse field, k=-3) which makes the player walk backwards at speed -2.
 
 ### Astral Plane Encounter Extent — fmain.c:351
 

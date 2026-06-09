@@ -131,13 +131,13 @@ def prox(x: u16, y: u16) -> u8:
     if t >= 10:                                         # fsubs.asm:1598-1599 — 10 = threshold for codes 10..15
         return t
     # Left probe at (x-4, y+2). Same wall test, plus a stricter >= 8 gate
-    # that catches lava (8) and pit (9) at the far-foot sample. Types 2..7
+    # that catches astral-reverse-field (8) and pit (9) at the far-foot sample. Types 2..7
     # (water / slip / ice) never block here — they are walk-through with
     # environ side effects. fsubs.asm:1601-1609.
     t = px_to_im(x - 4, y + 2)                          # fsubs.asm:1601-1604 — -4,2 = foot left offsets
     if t == TERRAIN_BLOCKED:                            # fsubs.asm:1606-1607 — hard wall
         return t
-    if t >= 8:                                          # fsubs.asm:1608-1609 — 8 = includes lava (8) and pit (9)
+    if t >= 8:                                          # fsubs.asm:1608-1609 — 8 = includes astral-reverse-field (8) and pit (9)
         return t
     return 0                                            # fsubs.asm:1611 — both probes clear
 ```
@@ -145,10 +145,10 @@ def prox(x: u16, y: u16) -> u8:
 `prox` never returns codes 2..7 (water, ice, slippery): those are
 walk-through terrains whose effects are applied separately by
 `update_environ`. The asymmetry between the two probes (right blocks on
-≥ 10, left blocks on ≥ 8) means lava-edge and pit-edge tiles are caught
+≥ 10, left blocks on ≥ 8) means astral-reverse-field-edge and pit-edge tiles are caught
 only when the hero's left foot overlaps them, which produces the expected
 sprite-centred "corner of the sprite bumps into danger first" behavior.
-The per-actor lava/pit exception ("hero walks into lava; NPCs don't") is
+The per-actor astral-reverse-field/pit exception ("hero walks into them; NPCs don't") is
 applied by [`proxcheck`](movement.md#proxcheck) one layer up, not here.
 
 ## mapxy
