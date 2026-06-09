@@ -15,11 +15,8 @@ pub fn run(world: &World, res: &mut Resources) {
         Err(_) => return,
     };
 
-    // Zone rectangles are loaded from the region data.
-    // TODO(Plan D): populate zone list in Resources from WorldData on region load.
-    // For now, MapData.world carries the loaded WorldData but zones are not yet
-    // extracted into Resources. This system is a no-op until that plumbing exists.
-    let zones_list: &[ZoneConfig] = &[];
+    // Zone rectangles populated on region load by EcsScene::load_world / reload_region.
+    let zones_list: &[ZoneConfig] = &res.zones;
 
     let hx = hero_pos.x as u16;
     let hy = hero_pos.y as u16;

@@ -229,6 +229,13 @@ pub struct Resources {
     pub carrier_entity: Option<Entity>,
     /// Last entity that triggered proximity auto-speech (dedup — same NPC only speaks once per approach).
     pub last_speech_entity: Option<Entity>,
+
+    /// ADF disk image — kept alive so region transitions can reload world data.
+    pub adf: Option<std::sync::Arc<crate::game::adf::AdfDisk>>,
+    /// Zone rectangles for the current region (populated on region load).
+    pub zones: Vec<crate::game::game_library::ZoneConfig>,
+    /// Pending region transition — set by RegionSystem, consumed by EcsScene.
+    pub pending_transition: Option<crate::game::ecs::events::RegionTransitionEvent>,
 }
 
 impl Resources {
@@ -254,6 +261,9 @@ impl Resources {
             hero_entity:         placeholder,
             carrier_entity:      None,
             last_speech_entity:  None,
+            adf:                 None,
+            zones:               Vec::new(),
+            pending_transition:  None,
         }
     }
 }
