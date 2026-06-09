@@ -380,7 +380,7 @@ Speed is passed directly to `newx`/`newy`. Negative speed (-2 for terrain 8) cau
 
 When the player hits a wall during WALKING:
 1. Try `d+1` (clockwise deviation) — if clear, go there (`fmain.c:1613-1617`)
-2. If still blocked, try `d-2` (counterclockwise from original) (`fmain.c:1620-1624`)
+2. If still blocked, try `d-1` (counterclockwise from original) (`fmain.c:1620-1624`) — source reads `d = (d-2)&7` but `d` was already incremented by `+1` in step 1, so the net offset from the original is `−1`
 3. If all three blocked: go to `blocked` label → `frustflag++` (`fmain.c:1654-1660`)
 
 The frustflag counter triggers animations: >20 = scratching head, >40 = special animation index 40.

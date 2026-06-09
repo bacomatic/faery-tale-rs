@@ -331,9 +331,11 @@ Returns: 0 = clear, terrain code = terrain-blocked, 16 = actor-blocked.
 #### Player Collision Deviation (`fmain.c:1612-1626`)
 
 When any actor walks into a wall, the game auto-deviates before declaring a block (`fmain.c:1612-1626`):
-1. Try `dir + 1` (clockwise) — if clear, commit (`fmain.c:1614-1618`)
-2. Try `dir − 2` (counterclockwise from original) — if clear, commit (`fmain.c:1621-1625`)
+1. Try `dir + 1` (one step clockwise) — if clear, commit (`fmain.c:1614-1618`)
+2. Try `dir − 1` (one step counterclockwise) — if clear, commit (`fmain.c:1621-1625`)
 3. All three blocked → `goto blocked` (`fmain.c:1626`)
+
+Note: `checkdev2` reads `d = (d-2)&7` in the source, but at that point `d` has already been incremented by `+1` in `checkdev1`. The net result relative to the original direction is `−1`, not `−2`. The assembly encoding is an optimization artifact; the intended behavior is symmetric ±1 rotation.
 
 This deviation logic runs for **all actors** (player and NPCs alike). At the `blocked:` label (`fmain.c:1654`), the paths diverge:
 

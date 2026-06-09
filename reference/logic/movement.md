@@ -191,7 +191,7 @@ def walk_step(i: int, an: Shape, d: int, k: int) -> int:
     else:
         e = 2                                             # fmain.c:1602, 2 = normal walking speed
 
-    # --- Try primary direction, then +1 deviate, then -2 deviate (fmain.c:1603-1626) ---
+    # --- Try primary direction, then +1 deviate, then -1 deviate (fmain.c:1603-1626) ---
     xtest = newx(an.abs_x, d, e)
     ytest = newy(an.abs_y, d, e)
     j = proxcheck(xtest, ytest, i)
@@ -203,11 +203,11 @@ def walk_step(i: int, an: Shape, d: int, k: int) -> int:
         if stuff[30] != 0 and j == 12:                    # fmain.c:1611, 30 = crystal-shard stuff slot, 12 = crystal wall
             j = 0                                         # crystal-shard pass: proceed as clear
     if j != 0:
-        d = (d + 1) & 7                                   # fmain.c:1615, 7 = 8-direction mask; +1 = CW deviate
+        d = (d + 1) & 7                                   # fmain.c:1615, 7 = 8-direction mask; +1 = one step CW
         xtest = newx(an.abs_x, d, e)
         ytest = newy(an.abs_y, d, e)
         if proxcheck(xtest, ytest, i) != 0:
-            d = (d - 2) & 7                               # fmain.c:1620, 7 = 8-direction mask; -2 = CCW from original
+            d = (d - 2) & 7                               # fmain.c:1620, 7 = 8-direction mask; net -1 from original (d already +1)
             xtest = newx(an.abs_x, d, e)
             ytest = newy(an.abs_y, d, e)
             if proxcheck(xtest, ytest, i) != 0:
@@ -253,8 +253,10 @@ Notes:
   the terrain sample for wraiths (`race == 2`) and snakes (`race == 4`)
   so that `update_environ` treats them as always on dry ground. The same
   zeroing is applied in every return path that exposes a terrain sample.
-- The `+1` / `-2` deviation sequence means an actor blocked on a wall
-  tries CW then CCW from the original heading; three-of-three blocked
+- The deviation sequence tries `original+1` (CW) then `original−1` (CCW),
+  i.e. symmetric ±1 neighbors. The source reads `d = (d-2)&7` at `checkdev2`
+  but `d` was already incremented by `+1` at `checkdev1`, so the net offset
+  from the original direction is `−1`, not `−2`. Three-of-three blocked
   drops into the "blocked" handling (hero frustration anim, NPC goes to
   `TACTIC_FRUST`).
 - The swan-on-ice commit path short-circuits `proxcheck` — the swan does
