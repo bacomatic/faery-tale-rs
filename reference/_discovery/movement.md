@@ -421,7 +421,7 @@ FLYING (21) is defined in `ftale.h:21` and `fmain.c:99` but never assigned to an
 - **FLYING state (21)**: Defined but no code path assigns it. May be vestigial or used in an unreachable code path.
 - **HIDE (7), DOOR_SEEK (11), DOOR_LET (12) tactics**: Defined in `ftale.h:49-54` but never dispatched by any NPC AI logic found in the source. May be vestigial/planned features.
 - **_newx lsr.w asymmetry**: The logical shift on negative products creates a +1 pixel bias for negative-direction movement. This appears to be an oversight rather than intentional, but cannot be confirmed without author intent.
-- **Terrain types 6, 7, 8 semantic names**: The code maps terrain 6→environ -1 (fast), 7→environ -2 (ice), 8→environ -3 (backwards). What in-game terrains these correspond to is not clear from code alone (would need map data analysis).
+- **Terrain types 6, 7, 8 semantic names**: RESOLVED. Terrain 6 = slippery ground (fast), terrain 7 = ice (velocity physics), terrain 8 = direction-reversal tiles on the astral plane floor (region 9). Volcanic lava tiles in region 6 use water terrain types 2–5, not type 8; lava damage is produced by the `fiery_death` coordinate-box overlay (`fmain.c:1384-1385`, `1843-1847`), not by terrain type.
 
 ## Refinement Log
 - 2026-04-05: Initial comprehensive discovery pass. All code paths traced with citations.

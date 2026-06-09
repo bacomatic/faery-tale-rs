@@ -95,11 +95,11 @@ Calls: `prox`, `anim_list`, `anix`, `ENEMY`
 def proxcheck(x: int, y: int, i: int) -> int:
     """Return 0 if (x, y) is clear for actor i, else the blocking terrain code (or 16 for actor)."""
     # fmain2.c:278-283 — wraiths (ENEMY race 2) bypass terrain entirely; the hero
-    # treats terrain codes 8 (lava) and 9 (pit) as passable.
+    # treats terrain codes 8 (direction-reversal) and 9 (pit) as passable.
     is_wraith = anim_list[i].type == ENEMY and anim_list[i].race == 2   # fmain2.c:279, 2 = wraith race
     if not is_wraith:
         t = prox(x, y)
-        if i == 0 and (t == 8 or t == 9):                 # fmain2.c:282, 8 = lava, 9 = pit
+        if i == 0 and (t == 8 or t == 9):                 # fmain2.c:282, 8 = direction-reversal, 9 = pit
             t = 0
         if t != 0:
             return t

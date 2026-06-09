@@ -43,7 +43,7 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source c
 | 5 | Very deep water | 30 | Death at environ 30 (`fmain.c:1784-1793`); sector 181 triggers underwater teleport to region 9 instead (`fmain.c:1784-1791`) |
 | 6 | Slippery | −1 | Speed becomes 4 (`fmain.c:1601`, `1771`) |
 | 7 | Velocity ice | −2 | Momentum-based physics with directional impulse (`fmain.c:1580-1595`) |
-| 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); reverses player input near Necromancer area |
+| 8 | Direction reversal | −3 | Walk backwards at speed −2 (`fmain.c:1600`, `1770`); found on astral plane floor tiles (region 9). **Not** the volcanic lava tile — volcanic lava uses water terrain types 2–5 with the `fiery_death` coordinate box (see Environ Effects below). |
 | 9 | Pit/fall | — | If hero (i==0) and `xtype==52`: triggers FALL state, `luck -= 2` (`fmain.c:1766-1774`) |
 | 10+ | Blocked | — | `_prox` blocks at second probe point (`fsubs.asm:1608-1609`); first probe blocks at ≥10 (`fsubs.asm:1598-1599`) |
 | 12 | Crystal wall | — | Blocked unless `stuff[30]` (crystal shard) is held (`fmain.c:1611`). Exists only in terra set 8 (under+furnish, Region 8 building interiors) — tile index 93, found in 12 sectors: small chambers, twisting tunnels, forked intersections, and doom tower. **Not present** in the spirit world or dungeons (terra set 10 maps tile 93 to type 1/impassable). |
@@ -54,10 +54,10 @@ Terrain types are the high nibble of `terra_mem[image_id * 4 + 1]`. The source c
 The `environ` field on each actor tracks terrain depth/slide state (`fmain.c:1760-1800`). When the actor stands on a non-zero terrain type, `environ` is adjusted toward the target value. The sinker section applies to **all actors** — both hero and NPCs get environ updates identically (except where noted). Key thresholds:
 
 - `environ > 15`: instant death — `vitality = 0` (`fmain.c:1845`)
-- `environ > 2`: gradual drowning — `vitality--` per tick (`fmain.c:1846`)
-- `stuff[23]` (turtle item) forces `environ = 0`, preventing all water damage (`fmain.c:1844`) — hero only
+- `environ > 2`: gradual damage — `vitality--` per tick (`fmain.c:1846`)
+- `stuff[23]` (Rose item) forces `environ = 0`, preventing all damage (`fmain.c:1844`) — hero only
 
-Water damage is gated by the `fiery_death` flag (`fmain.c:1843`); see [P17](PROBLEMS.md).
+**Important**: these damage thresholds are **not** applied purely by terrain type. They are gated by the `fiery_death` flag (`fmain.c:1843`), which is a coordinate-based bounding box covering the volcanic region (map_x 8802–13562, map_y 24744–29544), evaluated every tick (`fmain.c:1384-1385`). Outside that box, water terrain types 2–5 still set `environ` but deal no damage. Inside the box, the same environ thresholds cause gradual then instant death — visually appearing as "lava damage" even though the tiles use water terrain codes. This is why volcanic lava behaves identically to deep water until the death threshold: it literally **is** water terrain, with `fiery_death` acting as an overlay. See [P17](PROBLEMS.md).
 
 **NPC drowning immunity by race**: The drowning damage check at `fmain.c:1849-1851` uses the local variable `k`, which is repurposed from environ to `an->race` at `fmain.c:1802`. The condition `k != 2 && k != 3` therefore checks **race**, not environ — race 2 (wraith) and race 3 (skeleton) are immune to drowning damage. Additionally, wraiths (`race == 2`) and snakes (`race == 4`) have their terrain forced to 0 at `fmain.c:1639`, preventing them from entering water environ at all.
 

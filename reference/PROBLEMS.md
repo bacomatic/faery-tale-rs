@@ -134,10 +134,12 @@ When TRUE: environ-based water/fire damage applies (`fmain.c:1843-1847`), swan d
 
 ---
 
-### P13. Backward walking in terrain type 8 — RESOLVED (intentional direction reversal)
+### P13. Backward walking in terrain type 8 — RESOLVED (intentional direction reversal; astral plane only)
 
 **Source**: `fmain.c:1600` — `e = -2` when `environ == -3` (terrain type 8)
-**Resolution**: Terrain type 8 is a direction-reversal zone near the Necromancer's area, not lava. The mechanic simply reverses player input — negative speed (`e = -2`) combined with facing flip (`dex ^= 7` at `fmain.c:1654`) causes the actor to walk opposite to the commanded direction. There is no damage-over-time effect from this terrain; it is purely a navigation obstacle. The mechanic applies to both player and NPCs equally (no actor-type check). The terrain assignment at `fmain.c:1765` sets `k = -3` for terrain type 8, and the inline comment reads "walk backwards".
+**Resolution**: Terrain type 8 is a direction-reversal zone used on the **astral plane floor** (region 9, `xtype == 52`), not a volcanic lava tile. The mechanic simply reverses player input — negative speed (`e = -2`) combined with facing flip (`dex ^= 7` at `fmain.c:1654`) causes the actor to walk opposite to the commanded direction. There is no damage-over-time effect from this terrain; it is purely a navigation obstacle. The mechanic applies to both player and NPCs equally (no actor-type check). The terrain assignment at `fmain.c:1765` sets `k = -3` for terrain type 8, and the inline comment reads "walk backwards".
+
+Volcanic lava is a separate system entirely: the visible lava tiles in region 6 (F7, terra sets 7 and 4) use **water terrain types 2–5**, which cause `environ` to ramp up identically to deep water. The actual damage (`vitality--` at environ > 2, instant death at environ > 15) is gated by the `fiery_death` coordinate box (`fmain.c:1384-1385`, `1843-1847`) — not by any special terrain type. This is why lava feels identical to deep water until the death threshold: it literally is water terrain with a lethal overlay. See also [P17](PROBLEMS.md#p17-fiery_death-flag--gating-mechanism--resolved).
 
 ---
 

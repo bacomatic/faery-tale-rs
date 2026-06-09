@@ -81,13 +81,13 @@ DOOR_DESERT = 17   # fmain.c:227 — #define DESERT 17
 # Region / stat offsets
 STATBASE = 25   # fmain.c:428 — #define STATBASE 25; stuff[25..30] = Gold Statues / Rose / Turtle Shell / Shard-group stats-range
 
-# Movement / terrain physics (fmain.c walking/ice/lava blocks)
+# Movement / terrain physics (fmain.c walking/ice/direction-reversal blocks)
 ICE_VEL_CAP_DEFAULT = 42    # fmain.c:1582 — max |vel_y| on ice
 ICE_VEL_CAP_SWAN    = 40    # fmain.c:1582 — swan terminal velocity
 SPEED_NORMAL        = 2     # fmain.c:1602 — default walking speed
 SPEED_SLOW          = 1     # fmain.c:1602 — wading/deep-water speed
 SPEED_FAST          = 4     # fmain.c:1601 — slippery-terrain speed
-SPEED_BACKWARDS     = -2    # fmain.c:1600 — lava walk-backward speed
+SPEED_BACKWARDS     = -2    # fmain.c:1600 — direction-reversal terrain (type 8) walk-backward speed; astral plane floor tiles
 SPEED_TURTLE        = 3     # fmain.c:1599 — hero riding turtle (also turtle autonomous swim speed)
 VEL_DISPL_MUL       = 4     # fmain.c:1646-1647 — vel stored as displacement*4
 WORLD_COORD_MASK    = 0x7fff # fsubs.asm:1295 — 15-bit world coordinate mask
@@ -125,7 +125,7 @@ TERRAIN_WATER_DEEP  = 4     # ramps environ toward 10
 TERRAIN_WATER_VDEEP = 5     # ramps toward 30, can drown
 TERRAIN_SLIPPERY    = 6     # environ -1
 TERRAIN_ICE         = 7     # environ -2, velocity-based
-TERRAIN_LAVA        = 8     # environ -3, walk-backwards; NPCs blocked
+TERRAIN_REVERSED    = 8     # environ -3, walk-backwards; NPCs blocked; used in astral plane (research name — no symbolic name in source)
 TERRAIN_PIT         = 9     # fall trigger if xtype==52 & i==0
 TERRAIN_CRYSTAL     = 12    # fmain.c:1611 — passable with stuff[30] shard
 TERRAIN_DOOR        = 15    # fmain.c:1609 — triggers doorfind()
@@ -134,7 +134,7 @@ TERRAIN_DOOR        = 15    # fmain.c:1609 — triggers doorfind()
 ENVIRON_NORMAL    = 0
 ENVIRON_SLIP      = -1      # terrain 6
 ENVIRON_ICE       = -2      # terrain 7 / pit fall
-ENVIRON_LAVA      = -3      # terrain 8
+ENVIRON_REVERSED  = -3      # terrain 8 (research name — no symbolic name in source)
 ENVIRON_WADE      = 2       # terrain 2
 ENVIRON_BRUSH     = 5       # terrain 3
 ENVIRON_DEEP_SAT  = 10      # ramp target for terrain 4
