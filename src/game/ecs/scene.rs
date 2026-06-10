@@ -193,6 +193,13 @@ impl EcsScene {
                 .collect();
         }
 
+        // Load textcolors palette for menu button rendering (spec §25.8).
+        if let Some(tc_pal) = game_lib.find_palette("textcolors") {
+            for (i, entry) in tc_pal.colors.iter().enumerate().take(PALETTE_SIZE) {
+                res.palette.textcolors[i] = amiga_color_to_rgba(entry.color);
+            }
+        }
+
         Self {
             world,
             res,
@@ -658,6 +665,7 @@ impl EcsScene {
 
         let hiscreen_opt = resources.find_image("hiscreen");
         let amber_font   = resources.amber_font;
+        let topaz_font   = resources.topaz_font;
         let compass_normal    = resources.compass_normal;
         let compass_highlight = resources.compass_highlight;
 
@@ -687,28 +695,35 @@ impl EcsScene {
                     hc.fill_rect(sdl3::rect::Rect::new(0, 0, 640, HIBAR_NATIVE_H)).ok();
                 }
 
-                // Draw menu button row (12 slots across top of HI bar).
-                const SLOT_W: i32 = 53;
-                const SLOT_H: i32 = 9;
-                const SLOT_Y: i32 = 2;
+                // Draw menu buttons: 2 columns × 6 rows in the right side
+                // of the HI bar (spec §25.3, _discovery/menu-system.md).
+                // Even slots at x=430, odd at x=482; y = (j/2)*9 + 8 (baseline).
+                // Pixel-perfect: two JAM2 Text() calls per entry —
+                //   1) 6-space background field at (x, y)
+                //   2) 5-char label at (x+4, y) with 4px left margin
                 for btn in &buttons {
-                    let slot_x = btn.display_slot as i32 * SLOT_W;
+                    let j = btn.display_slot;
+                    let col_x = if j % 2 == 0 { 430 } else { 482 };
+                    let baseline_y = (j / 2) as i32 * 9 + 8;
+
                     let bg_rgba = textcolors.get(btn.bg_color as usize).copied().unwrap_or(0xFF000000);
-                    let bg_r = ((bg_rgba >> 16) & 0xFF) as u8;
-                    let bg_g = ((bg_rgba >> 8)  & 0xFF) as u8;
-                    let bg_b = (bg_rgba & 0xFF)          as u8;
-                    hc.set_draw_color(sdl3::pixels::Color::RGB(bg_r, bg_g, bg_b));
-                    hc.fill_rect(sdl3::rect::Rect::new(slot_x, SLOT_Y, (SLOT_W - 1) as u32, SLOT_H as u32)).ok();
-                    if btn.menu_index >= 0 {
-                        let fg_rgba = textcolors.get(btn.fg_color as usize).copied().unwrap_or(0xFFFFFFFF);
-                        let fg_r = ((fg_rgba >> 16) & 0xFF) as u8;
-                        let fg_g = ((fg_rgba >> 8)  & 0xFF) as u8;
-                        let fg_b = (fg_rgba & 0xFF)          as u8;
-                        amber_font.set_color_mod(fg_r, fg_g, fg_b);
-                        amber_font.render_string(btn.text.trim_end(), hc, slot_x + 6, SLOT_Y);
-                    }
+                    let bg = (
+                        ((bg_rgba >> 16) & 0xFF) as u8,
+                        ((bg_rgba >> 8)  & 0xFF) as u8,
+                        (bg_rgba & 0xFF)          as u8,
+                    );
+                    let fg_rgba = textcolors.get(btn.fg_color as usize).copied().unwrap_or(0xFFFFFFFF);
+                    let fg = (
+                        ((fg_rgba >> 16) & 0xFF) as u8,
+                        ((fg_rgba >> 8)  & 0xFF) as u8,
+                        (fg_rgba & 0xFF)          as u8,
+                    );
+
+                    // Background field: 6 spaces at (x, y) — fills 6×char_w × y_size.
+                    topaz_font.render_string_with_bg("      ", hc, col_x, baseline_y, bg, fg);
+                    // Label text: 5 chars at (x+4, y) — 4px left margin.
+                    topaz_font.render_string_with_bg(&btn.text, hc, col_x + 4, baseline_y, bg, fg);
                 }
-                amber_font.set_color_mod(255, 255, 255);
 
                 amber_font.set_color_mod(0xAA, 0x55, 0x00);
                 amber_font.render_string(&format!("Brv:{:3}", brave), hc, 14, 52);
@@ -957,12 +972,20 @@ impl Scene for EcsScene {
                 }
             }
             Event::MouseButtonDown { x, y, .. } => {
-                let menu_row_bottom = HIBAR_Y as f32 + 18.0; // 9 native rows × 2 scale
-                if *y >= HIBAR_Y as f32 && *y < menu_row_bottom && *x >= 0.0 && *x < 640.0 {
-                    let display_slot = (*x as usize) * 12 / 640;
-                    let action = self.menu.handle_click(display_slot);
-                    self.pending_menu_actions.push(action);
-                    return true;
+                // Menu buttons occupy 2 columns × 6 rows in the right side of the
+                // hibar (native x 430..534, native y 2..55).  Canvas → native:
+                // native_x = canvas_x (both 640 wide), native_y = (canvas_y - HIBAR_Y) / 2.
+                let nx = *x as i32;
+                let ny = (*y as i32 - HIBAR_Y) / 2; // native y within hibar
+                if nx >= 430 && nx < 534 && ny >= 2 && ny < 55 {
+                    let col = if nx < 482 { 0 } else { 1 };
+                    let row = (ny - 2) / 9; // rows 0..5
+                    let display_slot = (row as usize) * 2 + col;
+                    if display_slot < 12 {
+                        let action = self.menu.handle_click(display_slot);
+                        self.pending_menu_actions.push(action);
+                        return true;
+                    }
                 }
                 false
             }
