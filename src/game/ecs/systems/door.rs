@@ -59,9 +59,8 @@ pub fn run(world: &World, res: &mut Resources, _game_lib: &crate::game::game_lib
         dest_x: spawn_x as f32,
         dest_y: spawn_y as f32,
     });
-
-    // 7. Emit door-open SFX
-    res.events.sfx.push(crate::game::ecs::events::SfxEvent { sfx_id: 12 });
+    // NOTE: the original check_door() emits no SFX on a door straddle transition
+    // (it calls xfer + find_place + fade_page only — reference/logic/game-loop.md §check_door).
 }
 
 #[cfg(test)]
@@ -154,19 +153,6 @@ mod tests {
         res.map.opened_doors.insert(0usize);
         run(&world, &mut res, &game_lib);
         assert!(res.events.region.is_empty(), "no event for already-opened door");
-    }
-
-    #[test]
-    fn test_door_emits_sfx() {
-        let game_lib = load_game_library(std::path::Path::new("faery.toml")).unwrap();
-        let mut world = World::new();
-        let hero = spawn_hero(&mut world, 0x60 as f32, 0x60 as f32, 0, hero_stats(), Inventory::empty());
-        let mut res = Resources::new(hero);
-        res.region.region_num = 0;
-        res.map.doors.push(make_outdoor_door());
-        run(&world, &mut res, &game_lib);
-        assert_eq!(res.events.sfx.len(), 1, "expected one SfxEvent");
-        assert_eq!(res.events.sfx[0].sfx_id, 12);
     }
 
     #[test]
