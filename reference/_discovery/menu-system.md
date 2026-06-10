@@ -237,27 +237,51 @@ This is an indirection array mapping visible screen positions (0-11) to actual `
 
 Iterates all entries `0..menus[cmode].num-1`. For each entry where `(enabled[i] & 2) != 0` (visible), assigns `real_options[j] = i` and calls `propt(j, x & 1)` to draw. Fills remaining slots (up to 12) with blanks and sets `real_options[j] = -1`.
 
-Layout: Two columns, 6 rows.
-- Odd j → x=482, Even j → x=430
-- y = (j/2) * 9 + 8
+**Pixel-Perfect Layout:**
+- Two columns, 6 rows (12 total slots)
+- Column positions: Left column x=430, Right column x=482
+- Row positions: y = (j/2) * 9 + 8 (9-pixel line spacing, starting at y=8)
+- Each menu entry occupies a 6-character field (approximately 36-48 pixels wide depending on font)
+- Blank slots filled with 6-space string `"      "` using background pen 0
 
 ### `propt(j, pena)` — fmain.c:3070-3090
 
-Draws a single menu entry at screen position `j`.
+Draws a single menu entry at screen position `j` using pixel-perfect rendering.
 
-- `pena`: foreground pen (0=off, 1=on)
-- `penb`: background pen, determined by:
-  - `cmode == USE`: penb = 14
-  - `cmode == FILE`: penb = 13
-  - `k < 5` (top bar): penb = 4
-  - `cmode == KEYS`: penb = `keycolors[k-5]` where `keycolors = {8, 6, 4, 2, 14, 1}` — fmain.c:519
+**Rendering Process:**
+1. Calculate background pen (`penb`) based on menu mode and entry index
+2. Set foreground/background pens: `SetAPen(&rp_text2,pena); SetBPen(&rp_text2,penb);`
+3. Position at calculated coordinates, draw 6-space background field
+4. Move 4 pixels right, draw 5-character label text
+
+**Pixel-Perfect Details:**
+- **Foreground pen (`pena`)**: 0 = unselected (normal), 1 = selected (highlighted)
+- **Background pen (`penb`)** determination:
+  - `cmode == USE`: penb = 14 (light grey)
+  - `cmode == FILE`: penb = 13 (medium grey)  
+  - `k < 5` (top bar): penb = 4 (blue)
+  - `cmode == KEYS`: penb = `keycolors[k-5]` where `keycolors = {8, 6, 4, 2, 14, 1}`
   - `cmode == SAVEX`: penb = k (entry index as color)
   - otherwise: penb = `menus[cmode].color`
 
-Label text source:
-- `cmode >= USE`: uses `menus[cmode].label_list + k*5` directly (no label1 prefix)
-- `k < 25` (i.e., k*5 < 125): uses `label1 + k*5` (top-bar items from label1)
-- `k >= 25`: uses `menus[cmode].label_list + (k-25)*5` (submenu items)
+**Text Rendering:**
+- Uses raster port `rp_text2` for all text operations
+- Background field: `Text(&rp_text2,"      ",6)` at position (x, y)
+- Label text: `Text(&rp_text2, source, 5)` at position (x+4, y)
+- 4-pixel left margin within the 6-character field
+- All labels are exactly 5 characters (padded with spaces if needed)
+
+**Label text source calculation:**
+- `k = real_options[j] * 5` (byte offset into label arrays)
+- `cmode >= USE`: uses `menus[cmode].label_list + k` directly (no label1 prefix)
+- `k < 25` (i.e., k*5 < 125): uses `label1 + k` (top-bar items from label1)
+- `k >= 25`: uses `menus[cmode].label_list + (k-25)` (submenu items)
+
+**Coordinate Calculation:**
+- `k = real_options[j]` (actual menu index)
+- `if (j & 1) x = 482; else x = 430;` (column selection)
+- `y = ((j/2) * 9) + 8;` (row calculation with 9-pixel spacing)
+- Text rendered at `(x+4, y)` after background field
 
 This means for menus ITEMS through GAME (cmode 0-4), the first 5 entries (indices 0-4) are drawn from `label1` ("Items Magic Talk Buy  Game") and entries 5+ from the menu's own `label_list`.
 
@@ -566,6 +590,137 @@ Maps key indices 0-5 (Gold/Green/Blue/Red/Grey/White) to background pen colors i
 | 5         | Call `print_options()` (redraw menu) | fmain2.c:459 |
 | 7         | Refresh stats bar (Brv/Lck/Knd/Wlth) | fmain2.c:460 |
 | 10        | Print "Take What?" | fmain2.c:465 |
+
+## Pixel-Perfect Menu Reproduction Guide
+
+### Complete Rendering Algorithm
+
+To achieve pixel-perfect menu reproduction, follow this exact sequence:
+
+#### 1. Initialize Menu State
+```c
+// Set up menu mode and calculate visible entries
+cmode = target_mode;  // 0=ITEMS, 1=MAGIC, 2=TALK, 3=BUY, 4=GAME, 5=SAVEX, 6=KEYS, 7=GIVE, 8=USE, 9=FILE
+print_options();      // Populates real_options[] and draws initial state
+```
+
+#### 2. Calculate Screen Layout
+```
+Screen coordinates are absolute pixel positions:
+- Left column: x = 430
+- Right column: x = 482  
+- Row spacing: 9 pixels per row
+- Starting Y: y = 8 (first row)
+- Formula: y = (row_index * 9) + 8
+```
+
+#### 3. Render Each Menu Entry
+For each visible entry `j` (0-11):
+
+```c
+k = real_options[j];  // Get actual menu index
+if (k == -1) continue; // Skip empty slots
+
+// Calculate position
+if (j & 1) x = 482; else x = 430;  // Column selection
+y = ((j/2) * 9) + 8;               // Row position
+
+// Determine colors
+pena = (menus[cmode].enabled[k] & 1);  // 0=normal, 1=highlighted
+if (cmode == USE) penb = 14;
+else if (cmode == FILE) penb = 13;
+else if (k < 5) penb = 4;
+else if (cmode == KEYS) penb = keycolors[k-5];
+else if (cmode == SAVEX) penb = k;
+else penb = menus[cmode].color;
+
+// Render background field
+SetAPen(rp_text2, pena);
+SetBPen(rp_text2, penb);
+Move(rp_text2, x, y);
+Text(rp_text2, "      ", 6);  // 6-space background
+
+// Render label text
+Move(rp_text2, x + 4, y);     // 4-pixel left margin
+text_offset = k * 5;
+if (cmode >= USE) 
+    Text(rp_text2, menus[cmode].label_list + text_offset, 5);
+else if (text_offset < 25)
+    Text(rp_text2, label1 + text_offset, 5);
+else
+    Text(rp_text2, menus[cmode].label_list + (text_offset - 25), 5);
+```
+
+#### 4. Handle State Changes
+```c
+// For selection changes (mouse hover, keyboard navigation)
+propt(j, new_pena_value);  // Updates foreground pen only
+
+// For menu mode switches
+gomenu(new_mode);  // Blocked if paused, calls print_options()
+```
+
+### Critical Implementation Details
+
+#### Font and Text Rendering
+- All text uses the same monospace font via `rp_text2` raster port
+- Character width: approximately 6-8 pixels (depends on Amiga font)
+- Line height: exactly 9 pixels between row baselines
+- Text is left-aligned within 6-character fields with 4-pixel margin
+
+#### Color Mapping
+The pen values map to Amiga hardware colors (palette indices) with RGB4 values (4-bit per channel, 0x0RGB):
+
+| Pen | Color Name | RGB4 Hex | RGB4 Decimal | Usage |
+|-----|------------|----------|--------------|-------|
+| 0   | Black      | 0x0000   | (0,0,0)      | Blank slot backgrounds |
+| 1   | White      | 0x0FFF   | (15,15,15)   | Highlighted text |
+| 2   | Dark Grey  | 0x0888   | (8,8,8)      | Normal text/background |
+| 4   | Blue       | 0x00FF   | (0,15,15)    | Top-bar background |
+| 5   | Red/Brown  | 0x0F00   | (15,0,0)     | Menu backgrounds |
+| 6   | Orange/Cyan| 0x0F0F   | (15,0,15)    | Menu backgrounds |
+| 8   | Dark Orange| 0x0A00   | (10,0,0)     | Menu backgrounds |
+| 9   | Light Blue | 0x00AA   | (0,10,10)    | Menu backgrounds |
+| 10  | Light Green| 0x00F0   | (0,15,0)     | Menu backgrounds |
+| 13  | Medium Grey| 0x0AAA   | (10,10,10)   | FILE menu background |
+| 14  | Light Grey | 0x0CCC   | (12,12,12)   | USE menu background |
+
+**RGB4 Format Notes:**
+- Each channel uses 4 bits (0-15 intensity)
+- Format: 0x0RGB where R=Red, G=Green, B=Blue
+- 0x0 = upper nibble unused in standard Amiga palette
+- Example: 0x0F00 = pure red (15,0,0), 0x00FF = cyan (0,15,15)
+
+#### Label String Format
+All label strings are exactly 5 characters per entry, stored contiguously:
+```c
+char label1[] = "ItemsMagicTalk Buy  Game ";  // 5 chars × 5 entries = 25 bytes
+char label2[] = "List Take Look Use  Give ";  // 5 chars × 6 entries = 30 bytes
+```
+
+#### Mouse Click Processing
+Mouse events generate keycodes `0x61 + j` where `j` is the screen slot (0-11):
+```c
+inum = (key & 0x7f) - 0x61;  // Extract screen position
+hit = real_options[inum];    // Map to actual menu index
+```
+
+### Common Pitfalls to Avoid
+
+1. **Incorrect coordinate calculation**: Use integer division for rows: `j/2`, not floating point
+2. **Wrong text offsets**: Remember `k * 5` gives byte offset, not character offset
+3. **Missing background field**: Always draw the 6-space background before text
+4. **Incorrect pen handling**: Foreground pen indicates selection state, background indicates menu type
+5. **Off-by-one errors**: `real_options[j]` can be -1 for empty slots
+
+### Verification Checklist
+
+- [ ] Menu entries appear at exact coordinates (430/482, y = row*9 + 8)
+- [ ] Text has 4-pixel left margin within 6-character fields
+- [ ] Background colors match menu mode (blue for top-bar, etc.)
+- [ ] Highlighted text uses foreground pen 1, normal uses pen 0
+- [ ] Empty slots show 6-space background with pen 0
+- [ ] Mouse clicks map correctly to menu indices via `real_options[]`
 
 ## Cross-Cutting Findings
 
