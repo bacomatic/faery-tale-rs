@@ -153,8 +153,11 @@ pub struct PaletteTransition {
 pub struct MapData {
     pub world:        Option<crate::game::world_data::WorldData>,
     pub renderer:     Option<crate::game::map_renderer::MapRenderer>,
-    pub doors:        Vec<crate::game::doors::DoorEntry>,
-    pub opened_doors: std::collections::HashSet<usize>,
+    pub doors:             Vec<crate::game::doors::DoorEntry>,
+    pub opened_doors:      std::collections::HashSet<usize>,
+    pub transitioned_doors: std::collections::HashSet<usize>,
+    /// One-frame latch: suppresses repeated "It's locked." messages (mirrors `bumped` in fmain.c).
+    pub bumped:       bool,
 }
 
 // ── Sprite sheets ─────────────────────────────────────────────────────────────

@@ -186,6 +186,42 @@ pub fn run(world: &mut World, res: &mut Resources) {
             if let Ok(mut frust) = world.get::<&mut FrustFlag>(res.hero_entity) {
                 frust.count = frust.count.saturating_add(1);
             }
+
+            // Bump-open (fmain.c:1607-1609): mirrors doorfind's three-probe search
+            // (fmain.c:1085-1088): centre, then right foot (+4,+2), then left foot (-4,+2).
+            // Vertical doors are only 16px wide; the centre probe can miss them when the
+            // hero's foot probe is the one that triggered the block.
+            let (px, py) = step_pos(old_x, old_y, dir, speed);
+            let door_probe = map_ref.and_then(|w| {
+                let cx = px as i32; let cy = py as i32;
+                if crate::game::collision::px_to_terrain_type(w, cx, cy) == 15 { Some((cx, cy)) }
+                else if crate::game::collision::px_to_terrain_type(w, cx + 4, cy + 2) == 15 { Some((cx + 4, cy + 2)) }
+                else if crate::game::collision::px_to_terrain_type(w, cx - 4, cy + 2) == 15 { Some((cx - 4, cy + 2)) }
+                else { None }
+            });
+            if let Some((dpx, dpy)) = door_probe {
+                let idx = res.map.doors.iter().position(|d| {
+                    d.src_region == res.region.region_num
+                        && (d.src_x as i32 - dpx).abs() < crate::game::doors::BUMP_PROX_X
+                        && (d.src_y as i32 - dpy).abs() < crate::game::doors::BUMP_PROX_Y
+                });
+                if let Some(i) = idx {
+                    if !res.map.opened_doors.contains(&i) {
+                        res.map.opened_doors.insert(i);
+                        let door_type = res.map.doors[i].door_type;
+                        if let Some(w) = res.map.world.as_mut() {
+                            crate::game::doors::apply_door_tile_replacement(
+                                w, door_type, dpx, dpy,
+                            );
+                        }
+                        res.map.bumped = false;
+                    }
+                } else {
+                    res.map.bumped = false;
+                }
+            } else {
+                res.map.bumped = false;
+            }
         }
     }
 }
@@ -623,7 +659,112 @@ mod tests {
         assert_eq!(pos.y, 199.0, "position should be committed (no ramp-out at k=2); speed=1 so 1px step");
     }
 
-    /// On brush terrain (environ 2, speed 1) a cardinal step is 1px, not 3px.
+    /// Build a WorldData where every position returns terrain type 15 (door) and is blocked.
+    fn make_door_world() -> crate::game::world_data::WorldData {
+        let mut w = crate::game::world_data::WorldData::empty();
+        w.terra_mem[1] = 0xF0; // terrain type 15 (door)
+        w.terra_mem[2] = 0xFF; // all sub-tile bits set → always blocked
+        w
+    }
+
+    #[test]
+    fn bump_into_door_opens_tiles() {
+        // Hero walks N into terrain-15. The door should be opened in sector_mem
+        // (tile replacement) and added to opened_doors.
+        use crate::game::doors::DoorEntry;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_door_world());
+        res.region.region_num = 0;
+        // Place a VWOOD door at approximately the probe position (200, 197 → grid 192 after &0xFFE0).
+        res.map.doors.push(DoorEntry {
+            src_region: 0,
+            src_x: 200,
+            src_y: 192,
+            dst_region: 8,
+            dst_x: 0x0bd0,
+            dst_y: 0x84c0,
+            door_type: crate::game::doors::VWOOD,
+        });
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        assert_eq!(res.map.opened_doors.len(), 1, "door should be marked opened after bump");
+    }
+
+    #[test]
+    fn bump_into_door_does_not_reopen() {
+        // Bumping the same door twice should not double-insert into opened_doors.
+        use crate::game::doors::DoorEntry;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_door_world());
+        res.region.region_num = 0;
+        res.map.doors.push(DoorEntry {
+            src_region: 0,
+            src_x: 200,
+            src_y: 192,
+            dst_region: 8,
+            dst_x: 0x0bd0,
+            dst_y: 0x84c0,
+            door_type: crate::game::doors::VWOOD,
+        });
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        super::run(&mut world, &mut res);
+        assert_eq!(res.map.opened_doors.len(), 1, "door should only be in opened_doors once");
+    }
+
+    #[test]
+    fn bump_non_door_terrain_does_not_open() {
+        // Hero blocked by terrain type 1 (wall) — no door open should occur.
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_blocked_world()); // terrain type 1
+        res.region.region_num = 0;
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        assert!(res.map.opened_doors.is_empty(), "non-door terrain should not open doors");
+    }
+
+    /// World where the right-foot probe (cx+4, cy+2) is terrain-15 but the center is not.
+    /// Hero at (193, 200) stepping E (speed=2): px=196, py=200.
+    ///   center  (196, 200): d4=0x40, tile1 bitmask=0x04 → 0x40 & 0x04 = 0 → passable
+    ///   right foot (200, 202): d4=0x04, tile1 bitmask=0x04 → blocked (terrain 15)
+    ///   left foot  (192, 202): d4=0x40, tile1 bitmask=0x04 → 0x40 & 0x04 = 0 → passable
+    /// All three positions map to sector_mem[108] (imx=12, imy=6, local_x=12, local_y=6).
+    fn make_vdoor_east_world() -> crate::game::world_data::WorldData {
+        let mut w = crate::game::world_data::WorldData::empty();
+        w.sector_mem[108] = 1;  // tile index 1
+        w.terra_mem[5] = 0xF0;  // tile 1, byte 1: terrain type 15 (door)
+        w.terra_mem[6] = 0x04;  // tile 1, byte 2: only d4=0x04 sub-tile blocked
+        w
+    }
+
+    #[test]
+    fn bump_vertical_door_from_east() {
+        // Hero walking E into a vertical door tile that only appears at the right-foot
+        // probe offset (+4, +2), not at the hero's centre. Without the three-probe fix
+        // the centre check returns terrain-0 and bump-open never fires.
+        use crate::game::doors::DoorEntry;
+        let (mut world, mut res) = make_world_and_res();
+        res.map.world = Some(make_vdoor_east_world());
+        res.region.region_num = 0;
+        if let Ok(mut pos) = world.get::<&mut Position>(res.hero_entity) {
+            pos.x = 193.0;
+            pos.y = 200.0;
+        }
+        // Door entry near the right-foot probe position (200, 202).
+        res.map.doors.push(DoorEntry {
+            src_region: 0,
+            src_x: 200,
+            src_y: 192,
+            dst_region: 8,
+            dst_x: 0x0bd0,
+            dst_y: 0x84c0,
+            door_type: crate::game::doors::VWOOD,
+        });
+        res.input_direction = Direction::E;
+        super::run(&mut world, &mut res);
+        assert_eq!(res.map.opened_doors.len(), 1, "vertical door should open when bumped from east");
+    }
+
     /// Assembly: ydir[N]=-2, speed=1; prod=-2 → as u16=0xFFFE; lsr.w → 0x7FFF;
     /// y(200)+0x7FFF=33167 masked to 15-bit = 33167-32768 = 399... wrong. Actually:
     /// (200 + 0x7FFF) & 0x7FFF = (32967) & 0x7FFF = 32967 - 32768 = 199. So y=199, delta=-1.

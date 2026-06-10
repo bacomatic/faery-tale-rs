@@ -119,6 +119,37 @@ Player selects a key from the KEYS submenu. All 9 directions (0–8) at 16-pixel
 
 When the player bumps terrain type 15, `doorfind(xtest, ytest, 0)` is called automatically. This opens only NOKEY doors (keytype match requires `keytype == 0`).
 
+The bump-open path is inside `walk_step` (`fmain.c:1607–1609`), after `proxcheck` returns terrain code 15 for the candidate position:
+
+```
+j = proxcheck(xtest, ytest, i)   # fmain.c:1607 — terrain at candidate position
+if i == 0:                        # hero only
+    if j == 15:                   # TERRAIN_DOOR — bump-open
+        doorfind(xtest, ytest, 0)
+    else:
+        bumped = 0                # reset latch if no door
+```
+
+The move is then **blocked** (`j != 0`), so the hero stays in place with the door now open in `sector_mem`.
+
+### 16.4a Two-Phase Door Interaction
+
+Visible closed doors (terrain type 15) use a two-phase sequence. The two phases run in separate parts of the game loop and are completely independent:
+
+**Phase 1 — Bump-open** (`walk_step`, actor_tick Phase 9):
+- Hero walks into terrain type 15.
+- `proxcheck` blocks the move and returns `j = 15`.
+- `doorfind(xtest, ytest, 0)` is called for the hero only.
+- If the door is in `open_list` with `keytype == NOKEY`: tiles are rewritten in `sector_mem` to the open graphic. The hero does not advance.
+- If the door requires a key: prints "It's locked." (once, suppressed by `bumped` flag). No tile change.
+
+**Phase 2 — Region transition** (`check_door`, Phase 12):
+- Runs every tick regardless of movement.
+- Now that the door tile is gone (terrain ≠ 15), the hero can walk through the doorway on the next move.
+- When the hero's grid-aligned position matches a `doorlist[]` entry, `xfer()` teleports them to the indoor destination.
+
+**Key consequence**: the hero cannot transition through a closed visible door in a single frame. The bump-open must happen first (removing terrain type 15), and only then can `check_door` match the `doorlist` coordinates on a subsequent tick.
+
 ### 16.5 Region Transitions
 
 #### Outdoor → Indoor (binary search)

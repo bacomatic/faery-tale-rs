@@ -441,10 +441,17 @@ impl EcsScene {
     }
 
     /// Reload `res.map.doors` and clear `opened_doors` for the given region.
+    /// Outdoor regions (< 8): load only doors whose src_region matches.
+    /// Indoor regions (>= 8): load all doors — doorfind_exit matches by dst coords,
+    /// so the full table is needed (original uses a single global doorlist for both).
     fn reload_doors(&mut self, region: u8, game_lib: &GameLibrary) {
         self.res.map.doors.clear();
         self.res.map.opened_doors.clear();
-        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
+        self.res.map.transitioned_doors.clear();
+        let iter = game_lib.doors.iter().filter(|d| {
+            region < 8 && d.src_region == region || region >= 8
+        });
+        for door_cfg in iter {
             self.res.map.doors.push(crate::game::doors::DoorEntry {
                 src_region: door_cfg.src_region,
                 src_x: door_cfg.src_x, src_y: door_cfg.src_y,
@@ -639,6 +646,8 @@ impl EcsScene {
 
     /// Run one gameplay tick: advance all systems then drain debug commands.
     fn run_tick(&mut self, game_lib: &GameLibrary) {
+        self.res.events.clear();
+
         // ── System schedule (mirrors order in systems/mod.rs) ────────────────
         systems::clock::run(&mut self.world, &mut self.res);
 
@@ -1208,7 +1217,7 @@ mod tests {
 
     use super::*;
     use crate::game::ecs::components::WorldObj;
-    use crate::game::ecs::spawn::{spawn_enemy, spawn_setfig};
+    use crate::game::ecs::spawn::{spawn_enemy, spawn_ground_item, spawn_setfig};
 
     fn load_game_lib() -> GameLibrary {
         let config = std::fs::read_to_string("faery.toml")
@@ -1232,25 +1241,25 @@ mod tests {
         let mut scene = new_for_test();
         let game_lib = load_game_lib();
 
-        // Spawn an enemy and a setfig.
-        let enemy = spawn_enemy(&mut scene.world, 200.0, 200.0, 1, 0, 10, 0, 0, 3, 0, 0);
+        let enemy  = spawn_enemy(&mut scene.world, 200.0, 200.0, 1, 0, 10, 0, 0, 3, 0, 0);
         let setfig = spawn_setfig(&mut scene.world, 300.0, 300.0, make_test_obj(0), 13);
+        let item   = spawn_ground_item(&mut scene.world, 400.0, 400.0, make_test_obj(0));
 
         let hero = scene.res.hero_entity;
         assert!(scene.world.contains(hero));
         assert!(scene.world.contains(enemy));
         assert!(scene.world.contains(setfig));
+        assert!(scene.world.contains(item));
 
-        // Attach a fake ADF so reload_region doesn't return at the None check.
         scene.adf = Some(make_fake_adf());
         scene.res.adf = scene.adf.clone();
 
-        // Run transition — WorldData::load will fail on zero data but entities
-        // are despawned before that point.
+        // WorldData::load will fail on zero data but despawn happens before that.
         scene.reload_region(1, 500.0, 600.0, &game_lib);
 
         assert!(!scene.world.contains(enemy),  "enemy should be despawned");
         assert!(!scene.world.contains(setfig), "setfig should be despawned");
+        assert!(!scene.world.contains(item),   "ground item should be despawned");
         assert!(scene.world.contains(hero),    "hero must survive");
     }
 

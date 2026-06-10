@@ -265,6 +265,48 @@ pub fn doorfind_nearest_by_bump_radius(
         .map(|(i, d)| (i, *d))
 }
 
+/// Find a door at the outdoor position using binary search (O(log n)).
+/// Mirrors fmain.c:1861-1899. Requires `table` sorted by `src_x` ascending, which
+/// `faery.toml` guarantees. Falls back to None when no entry matches all conditions.
+pub fn doorfind_binary(
+    table: &[DoorEntry],
+    region_num: u8,
+    hero_x: u16,
+    hero_y: u16,
+) -> Option<DoorEntry> {
+    let xtest = hero_x & 0xFFF0;
+    let ytest = hero_y & 0xFFE0;
+
+    if table.is_empty() {
+        return None;
+    }
+    let mut lo: isize = 0;
+    let mut hi: isize = table.len() as isize - 1;
+
+    while hi >= lo {
+        let j = ((lo + hi) / 2) as usize;
+        let d = &table[j];
+
+        if d.src_x > xtest {
+            hi = j as isize - 1;
+        } else if d.src_x.saturating_add(16) < xtest {
+            lo = j as isize + 1;
+        } else if d.src_x < xtest && (d.door_type & 1) == 0 {
+            // Vertical door requires exact x — advance past entries at smaller x.
+            lo = j as isize + 1;
+        } else if d.src_y > ytest {
+            hi = j as isize - 1;
+        } else if d.src_y < ytest {
+            lo = j as isize + 1;
+        } else if d.src_region == region_num {
+            return Some(*d);
+        } else {
+            lo = j as isize + 1;
+        }
+    }
+    None
+}
+
 /// Find a door at the outdoor position using the original's exact grid-aligned matching.
 /// Mirrors fmain.c binary-search Phase-2 match conditions:
 ///   xtest = hero_x & 0xFFF0, ytest = hero_y & 0xFFE0
@@ -511,6 +553,29 @@ mod tests {
         let (x, y) = entry_spawn(&door);
         assert_eq!(x, 0x0bd0u16.wrapping_sub(1));
         assert_eq!(y, 0x84c0 + 16);
+    }
+
+    #[test]
+    fn test_binary_search_finds_door() {
+        // Three entries sorted by src_x; ensure binary search returns the same door as linear scan.
+        let table = [
+            DoorEntry { src_region: 0, src_x: 0x60,   src_y: 0x60,   dst_region: 8,  dst_x: 100, dst_y: 100, door_type: VWOOD },
+            DoorEntry { src_region: 0, src_x: 0x1390, src_y: 0x1B60, dst_region: 9,  dst_x: 200, dst_y: 200, door_type: CAVE  },
+            DoorEntry { src_region: 2, src_x: 0x49d0, src_y: 0x3dc0, dst_region: 10, dst_x: 300, dst_y: 300, door_type: VWOOD },
+        ];
+        // Hit middle entry
+        let linear = doorfind(&table, 0, 0x1390, 0x1B60);
+        let binary = doorfind_binary(&table, 0, 0x1390, 0x1B60);
+        assert_eq!(linear.map(|d| d.dst_region), binary.map(|d| d.dst_region));
+        assert!(binary.is_some());
+        // Hit first entry
+        let b2 = doorfind_binary(&table, 0, 0x60, 0x60);
+        assert!(b2.is_some());
+        assert_eq!(b2.unwrap().dst_region, 8);
+        // Miss (wrong region)
+        assert!(doorfind_binary(&table, 5, 0x60, 0x60).is_none());
+        // Miss (out of range x)
+        assert!(doorfind_binary(&table, 0, 0x10, 0x60).is_none());
     }
 
     #[test]

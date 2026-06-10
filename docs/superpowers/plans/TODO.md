@@ -1,6 +1,6 @@
 # Faery Tale Adventure — ECS Port: Remaining Work
 
-> Generated after Plans A–F landed (commit `787d5db`).  
+> Generated after Plans A–F landed (commit `787d5db`).
 > Each plan below is **independent**: it can be executed in a fresh context
 > without reading the other plans.  Plans are sequenced so earlier ones unblock
 > later ones where a dependency exists; otherwise order is arbitrary.
@@ -23,14 +23,16 @@
 | Save / load round-trip (ECS path) | ✅ Complete |
 | Debug snapshot feeds real ECS data | ✅ Complete |
 | **Implementation plans G–X written** | ✅ Complete (see plan files below) |
+| Region transitions (Plan G) | ✅ Complete |
+| Door system (Plan H) | ✅ Complete |
 | **Everything below this line** | ❌ Missing or stubbed |
 
 ## Plan files written
 
 | Plan | File | Status |
 |------|------|--------|
-| G | `2025-01-01-ecs-plan-g-region-transitions.md` | ✅ Written |
-| H | `2025-01-01-ecs-plan-h-door-system.md` | ✅ Written |
+| G | `2025-01-01-ecs-plan-g-region-transitions.md` | ✅ Done |
+| H | `2025-01-01-ecs-plan-h-door-system.md` | ✅ Done |
 | I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Written |
 | J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Written |
 | K | `2025-01-01-ecs-plan-k-magic-system.md` | ✅ Written |
