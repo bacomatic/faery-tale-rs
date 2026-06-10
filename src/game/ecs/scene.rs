@@ -297,17 +297,7 @@ impl EcsScene {
         self.res.map.world    = Some(world);
 
         // Populate door table for this region.
-        self.res.map.doors.clear();
-        self.res.map.opened_doors.clear();
-        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
-            self.res.map.doors.push(crate::game::doors::DoorEntry {
-                src_region: door_cfg.src_region,
-                src_x: door_cfg.src_x, src_y: door_cfg.src_y,
-                dst_region: door_cfg.dst_region,
-                dst_x: door_cfg.dst_x, dst_y: door_cfg.dst_y,
-                door_type: door_cfg.door_type,
-            });
-        }
+        self.reload_doors(region, game_lib);
 
         // Snap camera to hero's spawn position.
         self.snap_camera();
@@ -433,17 +423,7 @@ impl EcsScene {
         self.res.map.world    = Some(world_data);
 
         // Populate door table for this region.
-        self.res.map.doors.clear();
-        self.res.map.opened_doors.clear();
-        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
-            self.res.map.doors.push(crate::game::doors::DoorEntry {
-                src_region: door_cfg.src_region,
-                src_x: door_cfg.src_x, src_y: door_cfg.src_y,
-                dst_region: door_cfg.dst_region,
-                dst_x: door_cfg.dst_x, dst_y: door_cfg.dst_y,
-                door_type: door_cfg.door_type,
-            });
-        }
+        self.reload_doors(region, game_lib);
 
         self.res.region.region_num = region;
 
@@ -460,7 +440,21 @@ impl EcsScene {
         eprintln!("EcsScene: region transition to {region} at ({dest_x}, {dest_y})");
     }
 
-    /// Center the camera on the hero's current world position.
+    /// Reload `res.map.doors` and clear `opened_doors` for the given region.
+    fn reload_doors(&mut self, region: u8, game_lib: &GameLibrary) {
+        self.res.map.doors.clear();
+        self.res.map.opened_doors.clear();
+        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
+            self.res.map.doors.push(crate::game::doors::DoorEntry {
+                src_region: door_cfg.src_region,
+                src_x: door_cfg.src_x, src_y: door_cfg.src_y,
+                dst_region: door_cfg.dst_region,
+                dst_x: door_cfg.dst_x, dst_y: door_cfg.dst_y,
+                door_type: door_cfg.door_type,
+            });
+        }
+    }
+
     fn snap_camera(&mut self) {
         if let Ok(pos) = self.world.get::<&crate::game::ecs::components::Position>(self.res.hero_entity) {
             const CX: f32 = 144.0;
