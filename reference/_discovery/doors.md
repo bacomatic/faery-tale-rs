@@ -365,8 +365,8 @@ Triggered in main loop when `region_num < 8` and player position matches a doorl
 2. **Riding check** — fmain.c:1901: `if (riding) goto nodoor3;` — cannot enter doors while mounted
 3. **Binary search** on doorlist by xc1 — fmain.c:1903-1913
 4. **Orientation check** — fmain.c:1914-1916:
-   - Horizontal doors (`type & 1`): skip if `hero_y & 0x10` is set (player not at door's Y position precisely)
-   - Vertical doors: skip if `(hero_x & 15) > 6` (player not close enough to left edge)
+   - Horizontal doors (`type & 1`): skip if `hero_y & 0x10` is set — transition fires only in the **upper** half of the 32-px row (`hero_y & 0x10 == 0`). The door opening is at the top of the tile; being in the lower half means the hero hasn't stepped into the doorway yet.
+   - Vertical doors: skip if `(hero_x & 15) > 6` — transition fires when the hero is within the first 7 px of the 16-px column. This is a relatively strict threshold; the hero must approach from a nearly centered X position. Note the asymmetry: the **indoor** exit only requires `>= 2 px` into the column.
 5. **DESERT restriction** — fmain.c:1919: `if (d->type == DESERT && (stuff[STATBASE]<5)) break;` — need ≥5 Gold Statues to enter oasis doors
 6. **Destination offset by type** — fmain.c:1920-1923:
    - CAVE/VLOG (type==18): `xtest = xc2 + 24; ytest = yc2 + 16`
@@ -385,8 +385,9 @@ Triggered when `region_num >= 8` and player position matches a doorlist entry's 
 2. **Match on xc2/yc2** — fmain.c:1938-1939: `d->yc2==ytest && (d->xc2==xtest || (d->xc2==xtest-16 && d->type & 1))`
    - Horizontal doors match xc2 or xc2-16 (wider hit zone)
 3. **Orientation check** — fmain.c:1940-1941:
-   - Horizontal: skip if `(hero_y & 0x10) == 0`
-   - Vertical: skip if `(hero_x & 15) < 2`
+   - Horizontal: skip if `(hero_y & 0x10) == 0` — transition fires only in the **lower** half of the 32-px row (`hero_y & 0x10 != 0`). This is the **opposite** polarity from the outdoor entry check, which requires the upper half. The indoor exit is near the bottom of the room; the hero must walk into the lower tile row to trigger it.
+   - Vertical: skip if `(hero_x & 15) < 2` — transition fires when the hero is at least 2 px into the 16-px column (`hero_x & 15 >= 2`). Much more lenient than the outdoor entry threshold of `<= 6 px`; the hero can be almost anywhere in the column and still exit.
+   - **Summary of asymmetry:** horizontal doors invert `hero_y & 0x10` polarity between entry and exit. Vertical doors are more permissive on exit (14 of 16 px match) than on entry (7 of 16 px match). Both asymmetries are intentional: you need to walk into the door more deliberately from outside than from inside.
 4. **Destination offset by type** — fmain.c:1943-1946:
    - CAVE/VLOG: `xtest = xc1 - 4; ytest = yc1 + 16`
    - Horizontal: `xtest = xc1 + 16; ytest = yc1 + 34`
@@ -494,11 +495,13 @@ Source: fmain.c:1784-1791. This teleports the player to fixed coordinates (0x108
 
 6. **Indoor→outdoor linear scan is O(86)** — fmain.c:1937-1953. Unlike the outdoor→indoor binary search, the indoor exit uses a linear scan of all 86 entries every frame the player stands on a door tile. This is less efficient but works because there are fewer indoor door positions.
 
-7. **open_list vs doorlist are independent systems** — doorlist handles coordinate-based teleportation between outdoor/indoor maps. open_list handles tile modification for locked doors within maps. They operate on different data and serve different purposes, despite both being called "door" related.
+7. **open_list vs doorlist are independent systems** — doorlist handles coordinate-based teleportation between outdoor/indoor maps. open_list handles tile modification for locked doors within maps. They operate on different data and serve different purposes, despite both being called "door" related. Specifically: exterior building entrances (visible HWOOD/VWOOD door frames on outdoor map) trigger `check_door` via coordinate match — the outdoor tile is passable (not terrain-15) and `doorfind` is never called. Interior doors within buildings/dungeons that have terrain code 15 trigger `doorfind` via `walk_step` — the hero is blocked and bumps the tile open. The hero never needs to `doorfind` an exterior door to enter a building.
 
-8. **Defined but unused door types** — VSTONE (4), HCITY (5), VCITY (6) are defined at fmain.c:216-218 but never appear in doorlist[]. SECRET (8) appears only in open_list (idx 10), not in doorlist.
+8. **`doorfind` blocks movement even on success** — fmain.c:1607. When `proxcheck` returns `j==15`, `doorfind` is called, but because `j != 0` the hero does not advance this frame (execution falls to `goto checkdev1`). The tile rewrite happens immediately, but the hero remains in place. On the next frame the tile is no longer terrain-15 (or is passable), and movement resumes normally. This means a `doorfind`-opened door always costs exactly one frame of blocked movement.
 
-9. **viewstatus = 99** — set both in doorfind (fmain.c:1115) and xfer (fmain.c:2642). Value 99 means "corrupt display, needs full redraw" per fmain.c:583 comment. Ensures the screen is redrawn after door state changes or teleportation.
+9. **Defined but unused door types** — VSTONE (4), HCITY (5), VCITY (6) are defined at fmain.c:216-218 but never appear in doorlist[]. SECRET (8) appears only in open_list (idx 10), not in doorlist.
+
+10. **viewstatus = 99** — set both in doorfind (fmain.c:1115) and xfer (fmain.c:2642). Value 99 means "corrupt display, needs full redraw" per fmain.c:583 comment. Ensures the screen is redrawn after door state changes or teleportation.
 
 ## Unresolved
 
@@ -515,3 +518,4 @@ Source: fmain.c:1784-1791. This teleports the player to fixed coordinates (0x108
 ## Refinement Log
 
 - 2026-04-05: Initial comprehensive discovery pass. All doorlist entries decoded, doorfind algorithm traced, open_list fully documented, region transition mechanism traced, indoor/outdoor display differences catalogued.
+- 2026-06-09: Expanded orientation-check descriptions to clarify the opposite polarity between outdoor entry and indoor exit for horizontal doors, and the asymmetric vertical thresholds (7 px entry vs 14 px exit). Added cross-cutting findings #7 expansion (exterior vs interior door systems) and #8 (doorfind blocks movement even on success).

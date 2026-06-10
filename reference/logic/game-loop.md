@@ -762,7 +762,13 @@ Calls: `xfer`, `find_place`, `fade_page`, `DOORCOUNT`, `doorlist`, `riding`, `re
 
 ```pseudo
 def check_door() -> None:
-    """Phase 12. Detect a door/stair/cave straddle and transfer the hero to the other side."""
+    """Phase 12. Detect a door/stair/cave straddle and transfer the hero to the other side.
+
+    This function runs every frame (Phase 12), AFTER walk_step (Phase 9). It operates on
+    doorlist[] coordinate pairs — NOT on terrain codes. It is completely independent of
+    doorfind/open_list. Outdoor building door tiles do not need terrain code 15 to trigger
+    a transition; the hero just needs to be grid-aligned at the right (xc1, yc1) coordinates.
+    """
     # fmain.c:1853-1856 — grid-aligned hero position used as the search key.
     xtest = hero_x & 0xfff0                               # fmain.c:1856, 0xfff0 = 16-pixel grid mask (x)
     ytest = hero_y & 0xffe0                               # fmain.c:1857, 0xffe0 = 32-pixel grid mask (y)
@@ -778,29 +784,37 @@ def check_door() -> None:
             d = doorlist[j]
             if d.xc1 > xtest:
                 hi = j - 1
-            elif d.xc1 + 16 < xtest:                      # fmain.c:1869, 16 = one-grid-cell tolerance
+            elif d.xc1 + 16 < xtest:                      # fmain.c:1869 — hero is past the rightmost column of this door; 16 = one tile width
                 lo = j + 1
-            elif d.xc1 < xtest and (d.type & 1) == 0:     # fmain.c:1870, bit 0 = horizontal door
-                lo = j + 1
+            elif d.xc1 < xtest and (d.type & 1) == 0:     # fmain.c:1870 — vertical door: xc1 must match exactly (no right-offset allowance)
+                lo = j + 1                                # horizontal doors accept hero at xc1 OR xc1+16 (two-tile-wide entrance)
             elif d.yc1 > ytest:
                 hi = j - 1
             elif d.yc1 < ytest:
                 lo = j + 1
             else:
-                # fmain.c:1876-1895 — straddle confirmed.
-                if (d.type & 1) != 0:                     # fmain.c:1877 — horizontal door
-                    if (hero_y & 16) != 0:                # fmain.c:1878, 16 = low-row bit inside a 32-px cell
-                        break
+                # fmain.c:1876-1895 — coordinate match confirmed; now check sub-tile precision.
+                # These checks gate whether the hero has crossed into the door opening far enough.
+                # The two halves use OPPOSITE polarity: outdoor uses upper-row; indoor uses lower-row.
+                if (d.type & 1) != 0:                     # fmain.c:1877 — horizontal door (type bit 0 set)
+                    # fmain.c:1878 — transition requires hero in the UPPER half of the 32-px row
+                    # (hero_y bit 4 == 0). If bit 4 is set, hero is in the lower half — too far south
+                    # relative to the door opening. `goto nodoor` falls through to `break` without xfer.
+                    if (hero_y & 16) != 0:                # fmain.c:1878, 16 = low-row bit (bit 4 of y within 32-px cell)
+                        break                             # nodoor: coordinate matched but hero not yet in doorway — no transition
                 else:
-                    if (hero_x & 15) > 6:                 # fmain.c:1879, 15 = sub-cell mask; 6 = north-side threshold
-                        break
+                    # fmain.c:1879 — vertical door: transition requires hero within first 6 px of
+                    # the 16-px tile column (x & 15 in 0..6). Values 7..15 abort with no transition.
+                    # This is asymmetric with the indoor exit (which only requires >= 2 px).
+                    if (hero_x & 15) > 6:                 # fmain.c:1879, 15 = sub-cell mask; 6 = outdoor entry threshold
+                        break                             # nodoor: hero not close enough to door center — no transition
                 if d.type == DOOR_DESERT and stuff[STATBASE] < 5:  # fmain.c:1881, 5 = desert-gate stats wall
                     break
                 if d.type == DOOR_CAVE:                   # fmain.c:1882
                     xtest = d.xc2 + 24                    # fmain.c:1882, 24 = cave landing x-offset
                     ytest = d.yc2 + 16                    # fmain.c:1882, 16 = cave landing y-offset
                 elif (d.type & 1) != 0:                   # fmain.c:1884 — horizontal landing
-                    xtest = d.xc2 + 16                    # fmain.c:1884, 16 = landing x-offset
+                    xtest = d.xc2 + 16                    # fmain.c:1884, 16 = landing x-offset (matches indoor xc2+16 exit position)
                     ytest = d.yc2
                 else:
                     xtest = d.xc2 - 1
@@ -818,23 +832,30 @@ def check_door() -> None:
         return
 
     # fmain.c:1900-1954 — indoor regions (region_num >= 8): linear scan, xc2/yc2 are the inside endpoint.
+    # For horizontal doors the player lands at xc2+16 (inbound), so the exit match checks xc2 OR xc2+16-16=xc2.
+    # The horiz_match arm handles the case where the player is standing at xc2+16 (one tile right of anchor).
     j = 0
     while j < DOORCOUNT:
         d = doorlist[j]
-        horiz_match = (d.xc2 == xtest - 16 and (d.type & 1) != 0)  # fmain.c:1906, 16 = landing offset
+        horiz_match = (d.xc2 == xtest - 16 and (d.type & 1) != 0)  # fmain.c:1906, 16 = inbound landing offset; hero at xc2+16
         if d.yc2 == ytest and (d.xc2 == xtest or horiz_match):
-            if (d.type & 1) != 0:                         # fmain.c:1908
-                if (hero_y & 16) == 0:                    # fmain.c:1909, 16 = low-row bit
-                    break
+            if (d.type & 1) != 0:                         # fmain.c:1908 — horizontal door
+                # fmain.c:1909 — transition requires hero in the LOWER half of the 32-px row
+                # (hero_y bit 4 == 1). Opposite polarity from outdoor entry (which needs upper half).
+                # If bit 4 is clear, hero is in the upper half — too far north. `goto nodoor2; break`.
+                if (hero_y & 16) == 0:                    # fmain.c:1909, 16 = low-row bit; 0 = upper half — too early
+                    break                                 # nodoor2: coordinate matched but hero not yet at exit row — no transition
             else:
-                if (hero_x & 15) < 2:                     # fmain.c:1910, 15 = sub-cell mask; 2 = south-side threshold
-                    break
+                # fmain.c:1910 — vertical door: transition requires hero at least 2 px into the 16-px column
+                # (x & 15 >= 2). Values 0..1 abort. Less strict than outdoor entry (which requires <= 6 px).
+                if (hero_x & 15) < 2:                     # fmain.c:1910, 15 = sub-cell mask; 2 = indoor exit threshold
+                    break                                 # nodoor2: hero right at column boundary — no transition
             if d.type == DOOR_CAVE:                       # fmain.c:1912
                 xtest = d.xc1 - 4                         # fmain.c:1912, 4 = cave exit x-offset
                 ytest = d.yc1 + 16                        # fmain.c:1912, 16 = cave exit y-offset
             elif (d.type & 1) != 0:                       # fmain.c:1914
                 xtest = d.xc1 + 16                        # fmain.c:1914, 16 = horizontal exit x-offset
-                ytest = d.yc1 + 34                        # fmain.c:1914, 34 = horizontal exit y-offset
+                ytest = d.yc1 + 34                        # fmain.c:1914, 34 = horizontal exit y-offset (1 tile below door row)
             else:
                 xtest = d.xc1 + 20                        # fmain.c:1915, 20 = vertical exit x-offset
                 ytest = d.yc1 + 16                        # fmain.c:1915, 16 = vertical exit y-offset
@@ -843,6 +864,20 @@ def check_door() -> None:
             break
         j = j + 1
 ```
+
+### Notes
+
+- **Bump-to-open vs. region transition are completely separate mechanisms.** `check_door` (this function) handles coordinate-based teleportation via `doorlist[]`. It never looks at tile terrain codes. `doorfind` (in [`doors.md`](doors.md)) handles tile-level door opening via `open_list[]` and terrain code 15. A hero walking into a building entrance does NOT need to `doorfind` anything — `check_door` fires on the coordinate match alone.
+
+- **Outdoor entrance tile terrain ≠ 15.** The outdoor tile at a building entrance (HWOOD, HSTONE, etc.) is passable — its terrain code allows movement. `check_door` fires purely on the `(hero_x & 0xfff0, hero_y & 0xffe0)` match against `doorlist[j].xc1/yc1`. No tile terrain code 15 is involved.
+
+- **Asymmetric sub-tile thresholds (outdoor entry vs. indoor exit):**
+  - Horizontal doors: outdoor entry fires when `hero_y & 16 == 0` (upper half of 32-px cell); indoor exit fires when `hero_y & 16 != 0` (lower half). These are opposite because entering happens at the row above the threshold, exiting happens at the row below it.
+  - Vertical doors: outdoor entry fires when `hero_x & 15 <= 6` (first 7 px of 16-px column); indoor exit fires when `hero_x & 15 >= 2` (last 14 px of column). The wider exit window (14 vs. 7 px) makes it easier to leave than to enter.
+
+- **`nodoor` / `nodoor2` are not recoverable.** When the orientation check fails (coordinate matched, threshold not met), the source executes `goto nodoor; break` (outdoor) or `goto nodoor2; break` (indoor), which exits the loop entirely. No other door entries are checked. The next frame may fire correctly once the hero has moved further into the tile.
+
+- **Indoor scan is O(DOORCOUNT=86) every frame.** Unlike the outdoor binary search, the indoor exit uses a linear scan of all 86 entries on every frame the player is in region ≥ 8, regardless of match. This is cheap in practice because the inner loop body is simple.
 
 ## redraw_or_scroll
 
