@@ -296,6 +296,19 @@ impl EcsScene {
         self.res.map.renderer = Some(renderer);
         self.res.map.world    = Some(world);
 
+        // Populate door table for this region.
+        self.res.map.doors.clear();
+        self.res.map.opened_doors.clear();
+        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
+            self.res.map.doors.push(crate::game::doors::DoorEntry {
+                src_region: door_cfg.src_region,
+                src_x: door_cfg.src_x, src_y: door_cfg.src_y,
+                dst_region: door_cfg.dst_region,
+                dst_x: door_cfg.dst_x, dst_y: door_cfg.dst_y,
+                door_type: door_cfg.door_type,
+            });
+        }
+
         // Snap camera to hero's spawn position.
         self.snap_camera();
 
@@ -418,6 +431,19 @@ impl EcsScene {
         // Store map data.
         self.res.map.renderer = Some(renderer);
         self.res.map.world    = Some(world_data);
+
+        // Populate door table for this region.
+        self.res.map.doors.clear();
+        self.res.map.opened_doors.clear();
+        for door_cfg in game_lib.doors.iter().filter(|d| d.src_region == region) {
+            self.res.map.doors.push(crate::game::doors::DoorEntry {
+                src_region: door_cfg.src_region,
+                src_x: door_cfg.src_x, src_y: door_cfg.src_y,
+                dst_region: door_cfg.dst_region,
+                dst_x: door_cfg.dst_x, dst_y: door_cfg.dst_y,
+                door_type: door_cfg.door_type,
+            });
+        }
 
         self.res.region.region_num = region;
 
@@ -642,7 +668,7 @@ impl EcsScene {
         systems::movement::run(&mut self.world, &mut self.res);
         systems::carrier::run(&mut self.world, &mut self.res);
         systems::collision::run(&self.world, &mut self.res);
-        systems::door::run(&self.world, &mut self.res);
+        systems::door::run(&self.world, &mut self.res, game_lib);
         systems::zone::run(&self.world, &mut self.res);
         systems::npc_ai::run(&mut self.world, &mut self.res);
         systems::npc_movement::run(&mut self.world, &mut self.res);

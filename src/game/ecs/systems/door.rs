@@ -6,7 +6,7 @@ use hecs::World;
 use crate::game::ecs::components::Position;
 use crate::game::ecs::resources::Resources;
 
-pub fn run(world: &World, res: &mut Resources) {
+pub fn run(world: &World, res: &mut Resources, _game_lib: &crate::game::game_library::GameLibrary) {
     let _hero_pos = match world.get::<&Position>(res.hero_entity) {
         Ok(p) => *p,
         Err(_) => return,
@@ -29,6 +29,7 @@ mod tests {
     use crate::game::ecs::components::*;
     use crate::game::ecs::resources::Resources;
     use crate::game::ecs::spawn::spawn_hero;
+    use crate::game::game_library::load_game_library;
     use super::run;
 
     fn hero_stats() -> HeroStats {
@@ -38,19 +39,21 @@ mod tests {
 
     #[test]
     fn door_system_no_panic_empty_world() {
+        let game_lib = load_game_library(std::path::Path::new("faery.toml")).unwrap();
         let mut world = World::new();
         let hero = spawn_hero(&mut world, 100.0, 100.0, 0, hero_stats(), Inventory::empty());
         let mut res = Resources::new(hero);
-        run(&world, &mut res);
+        run(&world, &mut res, &game_lib);
         assert!(res.events.region.is_empty());
     }
 
     #[test]
     fn door_system_no_transition_without_doors() {
+        let game_lib = load_game_library(std::path::Path::new("faery.toml")).unwrap();
         let mut world = World::new();
         let hero = spawn_hero(&mut world, 5000.0, 5000.0, 0, hero_stats(), Inventory::empty());
         let mut res = Resources::new(hero);
-        run(&world, &mut res);
+        run(&world, &mut res, &game_lib);
         assert!(res.events.region.is_empty());
     }
 }

@@ -151,8 +151,10 @@ pub struct PaletteTransition {
 /// The real WorldData and MapRenderer types are imported from their modules.
 #[derive(Default)]
 pub struct MapData {
-    pub world:    Option<crate::game::world_data::WorldData>,
-    pub renderer: Option<crate::game::map_renderer::MapRenderer>,
+    pub world:        Option<crate::game::world_data::WorldData>,
+    pub renderer:     Option<crate::game::map_renderer::MapRenderer>,
+    pub doors:        Vec<crate::game::doors::DoorEntry>,
+    pub opened_doors: std::collections::HashSet<usize>,
 }
 
 // ── Sprite sheets ─────────────────────────────────────────────────────────────
