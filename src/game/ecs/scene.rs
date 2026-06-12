@@ -117,6 +117,9 @@ const HIBAR_NATIVE_H:     u32 = 57;
 const HIBAR_H:            u32 = HIBAR_NATIVE_H * 2;
 const HIBAR_Y:            i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6;
 
+/// Satiation amount per food slot (stuff[22..=27]). Source: docs/spec/survival.md §18.3.
+const FOOD_SATIATION: [i16; 6] = [25, 35, 45, 55, 65, 80];
+
 pub struct EcsScene {
     pub world:          World,
     pub res:            Resources,
@@ -247,26 +250,36 @@ impl EcsScene {
             }
 
             MenuAction::Take => {
-                use crate::game::ecs::components::{Position, WorldObj};
+                use crate::game::ecs::components::{Loot, Position, WorldObj};
                 use crate::game::ecs::events::ItemEvent;
                 let hero_pos = self.world
                     .get::<&Position>(self.res.hero_entity)
                     .map(|p| (p.x, p.y))
                     .unwrap_or((0.0, 0.0));
-                let mut best: Option<(hecs::Entity, f32)> = None;
+                let mut best_item:   Option<(hecs::Entity, f32)> = None;
+                let mut best_corpse: Option<(hecs::Entity, f32)> = None;
                 for (entity, obj, pos) in self.world.query::<(hecs::Entity, &WorldObj, &Position)>().iter() {
                     if obj.ob_stat != 1 || !obj.visible { continue; }
                     let dx = pos.x - hero_pos.0;
                     let dy = pos.y - hero_pos.1;
                     let dist = (dx * dx + dy * dy).sqrt();
-                    if dist <= 16.0 {
-                        if best.map_or(true, |(_, d)| dist < d) {
-                            best = Some((entity, dist));
-                        }
+                    if dist <= 16.0 && best_item.map_or(true, |(_, d)| dist < d) {
+                        best_item = Some((entity, dist));
                     }
                 }
-                if let Some((entity, _)) = best {
+                for (entity, loot, pos) in self.world.query::<(hecs::Entity, &Loot, &Position)>().iter() {
+                    if loot.looted { continue; }
+                    let dx = pos.x - hero_pos.0;
+                    let dy = pos.y - hero_pos.1;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    if dist <= 16.0 && best_corpse.map_or(true, |(_, d)| dist < d) {
+                        best_corpse = Some((entity, dist));
+                    }
+                }
+                if let Some((entity, _)) = best_item {
                     self.res.events.item.push(ItemEvent::TakeItem { entity });
+                } else if let Some((entity, _)) = best_corpse {
+                    self.res.events.item.push(ItemEvent::SearchBody { entity });
                 }
             }
 
@@ -295,7 +308,28 @@ impl EcsScene {
             }
 
             MenuAction::Yell | MenuAction::Say | MenuAction::Ask => {}
-            MenuAction::BuyItem(_) => {}
+            MenuAction::BuyItem(n) => {
+                // When no active shop, treat BuyItem(n) as "eat food item in slot (22 + n)".
+                // Shop context will be wired in Plan M; for now all BuyItem routes to eat.
+                use crate::game::ecs::components::{HeroStats, Inventory};
+                let food_slot = 22usize + (n as usize).min(5);
+                let satiation = FOOD_SATIATION[(n as usize).min(5)];
+                let mut ate = false;
+                if let Ok(mut inv) = self.world.get::<&mut Inventory>(self.res.hero_entity) {
+                    if inv.stuff[food_slot] > 0 {
+                        inv.stuff[food_slot] -= 1;
+                        ate = true;
+                    }
+                }
+                if ate {
+                    if let Ok(mut stats) = self.world.get::<&mut HeroStats>(self.res.hero_entity) {
+                        stats.hunger = (stats.hunger - satiation).max(0);
+                    }
+                    self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                        text: "Eaten.".to_string(),
+                    });
+                }
+            }
             MenuAction::GiveGold | MenuAction::GiveWrit | MenuAction::GiveBone => {}
             MenuAction::TryKey(_) => {}
             MenuAction::CastSpell(_) => {}
@@ -644,6 +678,77 @@ impl EcsScene {
         drop(rgb_buf);
     }
 
+    /// Render the inventory overlay (viewstatus == 1).
+    /// Shows all 35 inventory slots in a 7-column grid over the map area.
+    /// Pressing any key (handled in handle_event) dismisses it.
+    fn render_inventory(&mut self, canvas: &mut Canvas<Window>) {
+        use crate::game::ecs::components::Inventory;
+
+        let stuff = match self.world.get::<&Inventory>(self.res.hero_entity) {
+            Ok(inv) => inv.stuff,
+            Err(_) => return,
+        };
+
+        canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
+        canvas.fill_rect(sdl3::rect::Rect::new(
+            PLAYFIELD_X, PLAYFIELD_Y, PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
+        )).ok();
+
+        const COLS: usize = 7;
+        const CELL_W: u32 = 40;
+        const CELL_H: u32 = 40;
+
+        for slot in 0..35usize {
+            let count = stuff[slot];
+            let col = (slot % COLS) as i32;
+            let row = (slot / COLS) as i32;
+            let cell_x = PLAYFIELD_X + col * CELL_W as i32;
+            let cell_y = PLAYFIELD_Y + row * CELL_H as i32;
+
+            if count > 0 {
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(40, 30, 10));
+            } else {
+                canvas.set_draw_color(sdl3::pixels::Color::RGB(15, 10, 5));
+            }
+            canvas.fill_rect(sdl3::rect::Rect::new(
+                cell_x + 1, cell_y + 1, CELL_W - 2, CELL_H - 2,
+            )).ok();
+
+            if count == 0 { continue; }
+
+            // Build a 16×16 ARGB pixel buffer for the object sprite.
+            let mut rgba_buf: Vec<u8> = Vec::with_capacity(16 * 16 * 4);
+            let have_sprite = if let Some(ref obj_sheet) = self.res.sprites.object_sprites {
+                if let Some(fp) = obj_sheet.frame_pixels(slot) {
+                    let pal = &self.res.palette.current_palette;
+                    for &idx in fp.iter().take(16 * 16) {
+                        let color = if idx == 31 { 0u32 } else { pal[(idx & 31) as usize] };
+                        rgba_buf.push((color & 0xFF) as u8);
+                        rgba_buf.push(((color >> 8) & 0xFF) as u8);
+                        rgba_buf.push(((color >> 16) & 0xFF) as u8);
+                        rgba_buf.push(if idx == 31 { 0 } else { 0xFF });
+                    }
+                    true
+                } else { false }
+            } else { false };
+
+            if have_sprite && rgba_buf.len() == 16 * 16 * 4 {
+                let tc = canvas.texture_creator();
+                if let Ok(surface) = sdl3::surface::Surface::from_data(
+                    &mut rgba_buf, 16, 16, 16 * 4,
+                    sdl3::pixels::PixelFormat::ARGB8888,
+                ) {
+                    if let Ok(mut tex) = tc.create_texture_from_surface(&surface) {
+                        tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
+                        let dst = sdl3::rect::Rect::new(cell_x + 4, cell_y + 2, 32, 32);
+                        let _ = canvas.copy(&tex, None, dst);
+                    }
+                }
+            }
+            // TODO(Plan J render): wire topaz font for item labels per spec §14.x.
+        }
+    }
+
     /// Render the HI bar (stats, messages, compass) at the bottom of the canvas.
     /// Port of `GameplayScene::render_hibar`.
     fn render_hibar(
@@ -896,6 +1001,10 @@ impl Scene for EcsScene {
         use sdl3::keyboard::Keycode;
         match event {
             Event::KeyDown { keycode: Some(kc), repeat: false, .. } => {
+                if self.res.view.viewstatus == 1 {
+                    self.res.view.viewstatus = 0;
+                    return true;
+                }
                 match kc {
                     Keycode::Up    | Keycode::Kp8
                     | Keycode::Down  | Keycode::Kp2
@@ -1028,7 +1137,11 @@ impl Scene for EcsScene {
         // ── Render ────────────────────────────────────────────────────────────
         canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
         canvas.clear();
-        self.render_map(canvas);
+        if self.res.view.viewstatus == 1 {
+            self.render_inventory(canvas);
+        } else {
+            self.render_map(canvas);
+        }
         self.render_hibar(canvas, resources);
 
         // Render the debug console overlay if present.
