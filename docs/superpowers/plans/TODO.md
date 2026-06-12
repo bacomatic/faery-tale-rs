@@ -33,8 +33,8 @@
 |------|------|--------|
 | G | `2025-01-01-ecs-plan-g-region-transitions.md` | ✅ Done |
 | H | `2025-01-01-ecs-plan-h-door-system.md` | ✅ Done |
-| I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Written |
-| J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Written |
+| I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Done |
+| J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Done |
 | K | `2025-01-01-ecs-plan-k-magic-system.md` | ✅ Written |
 | L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Written |
 | M | `2025-01-01-ecs-plan-m-shop-system.md` | ✅ Written |
