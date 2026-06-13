@@ -170,12 +170,23 @@ The placard messages are sequenced by callers in `fmain2.c:1586–1607` and `fma
 - `placard_text(17)`, `name()`, `placard_text(18)` — quest resumption.
 
 **Brother-intro / death sequence** (`fmain.c:2862–2877`):
-- `placard_text(0)` — Julian intro (brother 1, first game start).
-- `placard_text(1)` — Julian failure (brother 1 death).
-- `placard_text(2)` — Phillip intro (shown after Julian's card is cleared).
-- `placard_text(3)` — Phillip failure (brother 2 death).
-- `placard_text(4)` — Kevin intro.
-- `placard_text(5)` — all-dead final card.
+
+Each brother's gameplay is bookended by a start placard and a death placard.
+Both placards for a *transition* are shown in the single `revive(True)` call
+that fires when the **preceding** brother dies — so the death card of the
+outgoing brother and the start card of the incoming brother appear back-to-back
+inside the same call, before the new brother ever takes control.
+
+| Brother | Start placard | … plays … | Death placard | Where shown |
+|---------|---------------|------------|---------------|-------------|
+| Julian  | `placard_text(0)` msg1 — "Rescue the Talisman!" intro | Julian plays | `placard_text(1)` msg2 — "his luck had run out" | Death card shown at start of Phillip's `revive` call |
+| Phillip | `placard_text(2)` msg3 — "So Phillip set out" | Phillip plays | `placard_text(3)` msg4 — "Phillip's cleverness could not save him" | Death card shown at start of Kevin's `revive` call |
+| Kevin   | `placard_text(4)` msg5 — "So Kevin took up the quest" | Kevin plays | `placard_text(5)` msg6 — "And so ends our sad tale" (game over) | Death card shown in game-over branch of Kevin's `revive` |
+
+Within each `revive(True)` call the pair is rendered as:
+1. First card (death of outgoing brother **or** intro for Julian): `placard_text(N)` → `placard()` → `Delay(120)`.
+2. Gap + clear inner rectangle: `Delay(80)` → `RectFill` → `Delay(10)` (skipped for Julian and game-over).
+3. Second card (start of incoming brother): `placard_text(N+1)` → `Delay(120)` (skipped for Julian and game-over).
 
 **Win sequence / game-over** (`fmain2.c:1607`):
 - `placard_text(6)`, `name()`, `placard_text(7)`, `placard()` — victory ending.

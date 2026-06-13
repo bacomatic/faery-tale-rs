@@ -218,24 +218,35 @@ safe_x = 19036; safe_y = 15755; region_num = safe_r = 3;
 
 #### Step 5: Display placard text
 
-The placard sequence depends on which brother is starting:
+Each brother's gameplay is bookended: a **start placard** is shown before the
+brother takes control, and a **death placard** is shown when he dies.
+Because `revive(True)` is the single function that handles both "start next
+brother" and "show previous brother's death card", both the outgoing brother's
+death card and the incoming brother's start card are displayed back-to-back
+inside the *same call* — before the new brother ever plays.
 
-| `brother` value (after ++) | First placard | Second placard | Meaning |
-|---------------------------|---------------|----------------|---------|
-| 1 (Julian) | `placard_text(0)` | — | "Rescue the Talisman!" intro story |
-| 2 (Phillip) | `placard_text(1)` | `placard_text(2)` | Julian's luck ran out / Phillip sets out |
-| 3 (Kevin) | `placard_text(3)` | `placard_text(4)` | Phillip failed / Kevin takes up quest |
-| >3 (game over) | `placard_text(5)` | — | "And so ends our sad tale" / "Stay at Home!" |
+Per-brother lifecycle:
 
-Placard text content (from `narr.asm:252-308`):
-- **placard_text(0)** (msg1): `"Rescue the Talisman!" was the Mayor's plea...And so Julian set out on his quest to recover it.`
-- **placard_text(1)** (msg2): `Unfortunately for Julian, his luck had run out. Many months passed and Julian did not return...`
-- **placard_text(2)** (msg3): `So Phillip set out, determined to find his brother and complete the quest.`
-- **placard_text(3)** (msg4): `But sadly, Phillip's cleverness could not save him from the same fate as his older brother.`
-- **placard_text(4)** (msg5): `So Kevin took up the quest, risking all...Young and inexperienced, his chances did not look good.`
-- **placard_text(5)** (msg6): `And so ends our sad tale. The Lesson of the Story: Stay at Home!`
+| Brother | Start placard (shown at top of *this* `revive` call) | … plays … | Death placard (shown at top of *next* `revive` call) |
+|---------|------------------------------------------------------|------------|------------------------------------------------------|
+| Julian  | `placard_text(0)` msg1 — "Rescue the Talisman!" | Julian plays | `placard_text(1)` msg2 — "his luck had run out" |
+| Phillip | `placard_text(2)` msg3 — "So Phillip set out" | Phillip plays | `placard_text(3)` msg4 — "Phillip's cleverness could not save him" |
+| Kevin   | `placard_text(4)` msg5 — "So Kevin took up the quest" | Kevin plays | `placard_text(5)` msg6 — "And so ends our sad tale" (game over) |
 
-The first placard displays for 120 ticks (≈2.4 seconds at 50Hz). For brothers 2 and 3, a second placard follows after 80 more ticks.
+What each `revive(True)` call actually renders (`brother` value is *after* the
+`brother++` increment at `fmain.c:2847`):
+
+| `brother` after ++ | First card shown | Second card shown | Interpretation |
+|--------------------|------------------|-------------------|----------------|
+| 1 (Julian) | `placard_text(0)` — Julian start | — | Game start; no preceding brother to eulogise |
+| 2 (Phillip) | `placard_text(1)` — Julian death | `placard_text(2)` — Phillip start | Outgoing + incoming cards back-to-back |
+| 3 (Kevin) | `placard_text(3)` — Phillip death | `placard_text(4)` — Kevin start | Outgoing + incoming cards back-to-back |
+| >3 (game over) | `placard_text(5)` — all-dead final | — | Kevin death + game-over message combined |
+
+Timing: the first placard displays for 120 ticks (~2.4 s at 50 Hz), then for
+brothers 2 and 3 a gap of 80 ticks elapses, the inner text rectangle is erased
+(`RectFill(rp, 13,13, 271,107)`), and the second placard displays for another
+120 ticks.
 
 #### Step 6: Load shape data and start
 

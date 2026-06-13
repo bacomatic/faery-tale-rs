@@ -151,23 +151,27 @@ def revive(new: bool) -> None:
         actors_on_screen = True
         actors_loading = False
 
-        # -------- First placard: who is setting out, or "stay at home".     fmain.c:2860-2869
+        # -------- First placard: outgoing brother's death card (or Julian's start card on first play).
+        #          Each brother's lifecycle is: <start placard> → <plays> → <death placard>.
+        #          Both placards for a transition are shown here, back-to-back, before the new
+        #          brother takes control.  For brother==1 (Julian) there is no preceding death
+        #          to announce, so msg1 is a pure start card.                fmain.c:2860-2869
         map_message()
         SetFont(rp, afont)
         if brother == 1:
-            placard_text(0)                                                  # fmain.c:2862, msg1 — Julian
+            placard_text(0)                                                  # fmain.c:2862, msg1 — Julian start card
             # Clear drawing page bitmap then restore viewing page.           fmain.c:2863-2864
             SetRast(rp, 0)                                                   # fmain.c:2863 — paraphrase of rp_map.BitMap swap+clear
         elif brother == 2:
-            placard_text(1)                                                  # fmain.c:2866, msg2 — Julian lost
+            placard_text(1)                                                  # fmain.c:2866, msg2 — Julian death card
         elif brother == GAME_OVER_THRESHOLD:                                 # brother == 3 — Kevin
-            placard_text(3)                                                  # fmain.c:2867, msg4 — Phillip lost
+            placard_text(3)                                                  # fmain.c:2867, msg4 — Phillip death card
         else:
-            placard_text(5)                                                  # fmain.c:2868, msg6 — end of tale
+            placard_text(5)                                                  # fmain.c:2868, msg6 — all-dead / game-over card
         placard()
         Delay(PLACARD_HOLD_TICKS)
 
-        # -------- Game over (all three dead) OR second placard.             fmain.c:2871-2878
+        # -------- Game over (all three dead) OR incoming brother's start card.  fmain.c:2871-2878
         if brother > GAME_OVER_THRESHOLD:
             quitflag = True
             Delay(GAME_OVER_DELAY)
@@ -178,9 +182,9 @@ def revive(new: bool) -> None:
             Delay(PLACARD_CLEAR_TICKS)
             SetAPen(rp, 24)                                                  # fmain.c:2874, 24 = placard ink colour
             if brother == 2:
-                placard_text(2)                                              # fmain.c:2875, msg3 — Phillip sets out
+                placard_text(2)                                              # fmain.c:2875, msg3 — Phillip start card
             else:
-                placard_text(4)                                              # fmain.c:2875, msg5 — Kevin sets out
+                placard_text(4)                                              # fmain.c:2875, msg5 — Kevin start card
             Delay(PLACARD_HOLD_TICKS)
 
         # -------- Restore text font + load brother sprites.                 fmain.c:2880-2882
