@@ -241,9 +241,9 @@ pub enum NarrEvent {
 pub struct NarrativeQueue {
     pending: Vec<NarrEvent>,
     /// Currently active event, if any.
-    pub active: Option<NarrEvent>,
+    pub(crate) active: Option<NarrEvent>,
     /// Ticks remaining for active event.
-    pub active_ticks: u32,
+    active_ticks: u32,
 }
 
 impl NarrativeQueue {
@@ -258,7 +258,8 @@ impl NarrativeQueue {
 
     /// Activate next pending event. Returns false if queue was empty.
     pub fn activate_next(&mut self) -> bool {
-        if let Some(event) = self.pending.pop() {
+        if !self.pending.is_empty() {
+            let event = self.pending.remove(0);
             let ticks = match &event {
                 NarrEvent::Placard { hold_ticks, .. } => *hold_ticks,
                 NarrEvent::WaitTicks(ticks) => *ticks,
@@ -313,6 +314,9 @@ pub struct Resources {
     pub vfx:       VfxState,
     pub events:    Events,
     pub narrative: NarrativeQueue,
+    /// Diagnostic messages from systems/scene — drained by main.rs into the debug console
+    /// (or to stderr if the console is not active).
+    pub diag_log:  Vec<String>,
 
     /// Current hero movement direction, derived from InputState each tick.
     pub input_direction: crate::game::direction::Direction,
@@ -352,6 +356,7 @@ impl Resources {
             vfx:            VfxState::default(),
             events:         Events::default(),
             narrative:      NarrativeQueue::new(),
+            diag_log:            Vec::new(),
             input_direction:     crate::game::direction::Direction::None,
             hero_entity:         placeholder,
             carrier_entity:      None,

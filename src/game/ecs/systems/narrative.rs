@@ -49,10 +49,10 @@ fn execute_event(world: &mut World, res: &mut Resources) {
                 res.region.new_region = region;
             }
             NarrEvent::SwapObjectId { object_index, new_id } => {
-                eprintln!("SwapObjectId not yet implemented: obj={object_index}, id={new_id}");
+                res.diag_log.push(format!("SwapObjectId not yet implemented: obj={object_index}, id={new_id}"));
             }
             NarrEvent::ApplyRewards => {
-                eprintln!("ApplyRewards not yet implemented");
+                res.diag_log.push("ApplyRewards not yet implemented".to_string());
             }
         }
     }
@@ -129,14 +129,25 @@ mod tests {
         res.narrative.push(NarrEvent::WaitTicks(1));
         res.narrative.push(NarrEvent::Placard {
             text: "Second".to_string(),
-            hold_ticks: 1,
+            hold_ticks: 2,
         });
         res.narrative.push(NarrEvent::WaitTicks(1));
 
-        for _ in 0..3 {
-            run(&mut world, &mut res);
-        }
+        // Tick 1: WaitTicks(1) activates and expires; Placard becomes active but
+        // viewstatus is not yet set (set on next tick's else branch).
+        run(&mut world, &mut res);
+        assert_eq!(res.view.viewstatus, 0, "WaitTicks should be active first (FIFO)");
 
+        // Tick 2: Placard still alive (hold_ticks=2, ticked to 1); viewstatus=2
+        run(&mut world, &mut res);
+        assert_eq!(res.view.viewstatus, 2, "Placard should be second");
+
+        // Tick 3: Placard expires; WaitTicks(1) becomes active (not yet expired)
+        run(&mut world, &mut res);
+
+        // Tick 4: WaitTicks(1) expires; queue idle; viewstatus cleared
+        run(&mut world, &mut res);
+        assert_eq!(res.view.viewstatus, 0);
         assert!(res.narrative.is_idle());
     }
 

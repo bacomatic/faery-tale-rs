@@ -51,7 +51,7 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
     // build RGBA32 pixel data from cursor and palette
     let result = cursor.bitmap.generate_rgb32(color, Some(0));
     if result.is_err() {
-        println!(
+        eprintln!(
             "Error generating RGB32 data for cursor: {}",
             result.err().unwrap()
         );
@@ -92,10 +92,19 @@ fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
     Some(pointer)
 }
 
+fn diag(dc: &mut Option<crate::game::debug_tui::DebugConsole>, msg: impl Into<String>) {
+    let msg = msg.into();
+    match dc {
+        Some(ref mut c) => c.log(msg),
+        None => eprintln!("{msg}"),
+    }
+}
+
 pub fn main() -> Result<(), String> {
     let cli = Cli::parse();
 
     let mut settings: GameSettings = settings::GameSettings::load();
+    let mut pre_console_log: Vec<String> = Vec::new();
 
     let sdl_context = sdl3::init().unwrap();
     let video_subsystem = sdl_context
@@ -114,10 +123,10 @@ pub fn main() -> Result<(), String> {
                 match gamepad_subsystem.open(id) {
                     Ok(c) => {
                         let name = c.name().unwrap_or_else(|| "Unknown".to_string());
-                        println!("Controller connected: {}", name);
+                        pre_console_log.push(format!("Controller connected: {}", name));
                         gamepads.push(c);
                     }
-                    Err(e) => println!("Warning: could not open controller {}: {}", id.0, e),
+                    Err(e) => pre_console_log.push(format!("Warning: could not open controller {}: {}", id.0, e)),
                 }
             }
         }
@@ -199,20 +208,20 @@ pub fn main() -> Result<(), String> {
                 match AudioSystem::new(audio_sub, inst, cli.no_interpolation) {
                     Ok(sys) => Some(sys),
                     Err(e) => {
-                        println!("Warning: could not open audio device: {}", e);
+                        pre_console_log.push(format!("Warning: could not open audio device: {}", e));
                         None
                     }
                 }
             }
             (None, _) => {
-                println!("Warning: could not init SDL3 audio subsystem");
+                pre_console_log.push("Warning: could not init SDL3 audio subsystem".to_string());
                 None
             }
             (_, None) => {
-                println!(
+                pre_console_log.push(format!(
                     "Warning: could not load {} (instruments file missing)",
                     instruments_path
-                );
+                ));
                 None
             }
         }
@@ -251,19 +260,24 @@ pub fn main() -> Result<(), String> {
 
     let mut clock: GameClock = GameClock::new();
 
-    // Scene system — scenes chain: Intro → CopyProtect → PlacardStart → (gameplay)
+    // Scene system — scenes chain: Intro → CopyProtect → EcsScene → BrotherPlacard → EcsScene
     // The scene_phase tracks what to start next when a scene completes.
     enum ScenePhase {
         Intro,
         CopyProtect,
-        PlacardStart,
         Gameplay,
+        /// Sequencing brother placards: show dead placard (if any), then start placard (if any).
+        BrotherPlacard { dead: Option<String>, start: Option<String> },
+        /// Game over: kevin_dead placard displayed, then exit.
+        GameOverPlacard,
         VictoryPlacard,
         VictoryImage,
     }
+    // Holds the EcsScene while brother-succession placards are shown.
+    let mut stashed_scene: Option<Box<dyn Scene>> = None;
     let (mut scene_phase, mut active_scene): (ScenePhase, Option<Box<dyn Scene>>) =
         if cli.skip_intro {
-            let gs: Box<dyn Scene> = Box::new(EcsScene::new(&game_lib, None));
+            let gs: Box<dyn Scene> = Box::new(EcsScene::new(&game_lib, None, false));
             (ScenePhase::Gameplay, Some(gs))
         } else {
             (
@@ -284,6 +298,9 @@ pub fn main() -> Result<(), String> {
     } else {
         None
     };
+    for msg in pre_console_log.drain(..) {
+        diag(&mut debug_console, msg);
+    }
 
     // Game-side FPS tracking
     let mut game_frame_count: u64 = 0;
@@ -438,11 +455,11 @@ pub fn main() -> Result<(), String> {
                         match gamepad_subsystem.open(jid) {
                             Ok(c) => {
                                 let name = c.name().unwrap_or_else(|| "Unknown".to_string());
-                                println!("Controller connected: {}", name);
+                                diag(&mut debug_console, format!("Controller connected: {}", name));
                                 gamepads.push(c);
                             }
                             Err(e) => {
-                                println!("Warning: could not open controller {}: {}", which, e)
+                                diag(&mut debug_console, format!("Warning: could not open controller {}: {}", which, e));
                             }
                         }
                     }
@@ -450,7 +467,7 @@ pub fn main() -> Result<(), String> {
                 Event::ControllerDeviceRemoved { which, .. } => {
                     let jid = sdl3::sys::joystick::SDL_JoystickID(which);
                     gamepads.retain(|c| c.id().ok() != Some(jid));
-                    println!("Controller disconnected (id {})", which);
+                    diag(&mut debug_console, format!("Controller disconnected (id {})", which));
                 }
                 _ => {}
             }
@@ -459,7 +476,7 @@ pub fn main() -> Result<(), String> {
         if settings.dirty {
             let result = settings.save();
             if result.is_err() {
-                println!("Error saving settings: {}", result.err().unwrap());
+                diag(&mut debug_console, format!("Error saving settings: {}", result.err().unwrap()));
             }
         }
 
@@ -489,28 +506,24 @@ pub fn main() -> Result<(), String> {
                             scene_phase = ScenePhase::CopyProtect;
                         }
                         ScenePhase::CopyProtect => {
-                            // Copy protection finished — quit if failed
+                            // Copy protection finished — quit if failed.
                             let passed = scene
                                 .as_any()
                                 .downcast_ref::<CopyProtectScene>()
                                 .map_or(false, |cp| cp.passed());
                             if !passed {
-                                println!("Copy protection failed — exiting.");
+                                diag(&mut debug_console, "Copy protection failed — exiting.");
                                 break 'running;
                             }
-                            active_scene = Some(Box::new(
-                                PlacardScene::new("julian_start", "pagecolors")
-                                    .with_hold_ticks(300),
-                            )); // 10s at 30Hz
-                            scene_phase = ScenePhase::PlacardStart;
-                        }
-                        ScenePhase::PlacardStart => {
-                            // Placard shown — stop music before gameplay begins.
-                            // Original: stopscore() called after copy protection, before main loop.
+                            // Stop intro music before gameplay begins.
                             if let Some(ref a) = audio_system {
                                 a.stop_score();
                             }
-                            active_scene = Some(Box::new(EcsScene::new(&game_lib, None)));
+                            active_scene = Some(Box::new(EcsScene::new(
+                                &game_lib,
+                                None,
+                                true,
+                            )));
                             scene_phase = ScenePhase::Gameplay;
                             dirty = true;
                             clear_flag = true;
@@ -534,9 +547,39 @@ pub fn main() -> Result<(), String> {
                                 scene_phase = ScenePhase::VictoryPlacard;
                             } else {
                                 // Game over or restart — re-create gameplay scene
-                                active_scene = Some(Box::new(EcsScene::new(&game_lib, None)));
+                                active_scene = Some(Box::new(EcsScene::new(&game_lib, None, true)));
                             }
                             dirty = true;
+                        }
+                        ScenePhase::BrotherPlacard { ref mut dead, ref mut start } => {
+                            // Sequence: show dead placard first (if any), then start placard.
+                            if let Some(dead_name) = dead.take() {
+                                let remaining_start = start.take();
+                                active_scene = Some(Box::new(
+                                    PlacardScene::new(&dead_name, "pagecolors")
+                                ));
+                                scene_phase = ScenePhase::BrotherPlacard {
+                                    dead: None,
+                                    start: remaining_start,
+                                };
+                            } else if let Some(start_name) = start.take() {
+                                active_scene = Some(Box::new(
+                                    PlacardScene::new(&start_name, "pagecolors")
+                                ));
+                                scene_phase = ScenePhase::BrotherPlacard {
+                                    dead: None,
+                                    start: None,
+                                };
+                            } else {
+                                // Both placards shown — restore the stashed EcsScene.
+                                active_scene = stashed_scene.take();
+                                scene_phase = ScenePhase::Gameplay;
+                                dirty = true;
+                            }
+                        }
+                        ScenePhase::GameOverPlacard => {
+                            // kevin_dead placard done — exit.
+                            break 'running;
                         }
                         ScenePhase::VictoryPlacard => {
                             // Victory placard done → show the winpic image.
@@ -557,6 +600,42 @@ pub fn main() -> Result<(), String> {
                 }
                 SceneResult::Continue => {
                     canvas.present();
+                }
+                SceneResult::BrotherSuccession { dead_placard, start_placard } => {
+                    // EcsScene has already swapped the hero entity internally.
+                    // Stash the EcsScene and immediately launch the first placard.
+                    stashed_scene = active_scene.take();
+                    if let Some(ref dead_name) = dead_placard {
+                        let remaining_start = start_placard;
+                        active_scene = Some(Box::new(
+                            PlacardScene::new(dead_name, "pagecolors")
+                        ));
+                        scene_phase = ScenePhase::BrotherPlacard {
+                            dead:  None,
+                            start: remaining_start,
+                        };
+                    } else if let Some(ref start_name) = start_placard {
+                        active_scene = Some(Box::new(
+                            PlacardScene::new(start_name, "pagecolors")
+                        ));
+                        scene_phase = ScenePhase::BrotherPlacard {
+                            dead:  None,
+                            start: None,
+                        };
+                    } else {
+                        // No placards — restore EcsScene immediately.
+                        active_scene = stashed_scene.take();
+                        scene_phase = ScenePhase::Gameplay;
+                    }
+                    dirty = true;
+                }
+                SceneResult::GameOver => {
+                    // All brothers dead — show kevin_dead placard then exit.
+                    active_scene = Some(Box::new(
+                        PlacardScene::new("kevin_dead", "pagecolors")
+                    ));
+                    scene_phase = ScenePhase::GameOverPlacard;
+                    dirty = true;
                 }
             }
         } else if dirty {
@@ -617,6 +696,9 @@ pub fn main() -> Result<(), String> {
                     } else {
                         crate::game::ecs::debug_commands::handle(cmd, &mut ecs.world, &mut ecs.res);
                     }
+                }
+                for msg in ecs.res.diag_log.drain(..) {
+                    dc.log(msg);
                 }
                 let song_group_count = song_library
                     .as_ref()
@@ -770,6 +852,17 @@ pub fn main() -> Result<(), String> {
             };
             dc.update_status(status);
             dc.render();
+        }
+
+        // Drain any diag_log entries not consumed by the debug console (no-console path).
+        if debug_console.is_none() {
+            if let Some(ref mut scene) = active_scene {
+                if let Some(ecs) = scene.as_any_mut().downcast_mut::<EcsScene>() {
+                    for msg in ecs.res.diag_log.drain(..) {
+                        eprintln!("{msg}");
+                    }
+                }
+            }
         }
 
         if kill_flag {

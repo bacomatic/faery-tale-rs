@@ -68,6 +68,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Do not intentionally "fix" bugs in the original game unless reproducing them would require extra work.
 - Some bugs will be fixed and quality of life improvements will be added where it makes sense, and **always** at the direction of the user.
 - **This project is specification-driven** - rely on the reference docs hosted on the `research` branch (see "Reference documentation" below) and the implementation specifications and requirements in `docs/`.
+- Fix warnings when they happen, do not consider code to be clean or a task complete if it's emitting warnings.
 
 ## Timing invariant (critical)
 
