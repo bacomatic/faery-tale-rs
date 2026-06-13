@@ -14,9 +14,9 @@ use sdl3::video::Window;
 use crate::game::colors::RGB4;
 use crate::game::debug_tui::DebugConsole;
 use crate::game::direction::Direction;
-use crate::game::ecs::components::{HeroStats, Inventory};
+use crate::game::ecs::components::{Bones, BrotherKind, HeroStats, Inventory};
 use crate::game::ecs::resources::Resources;
-use crate::game::ecs::spawn::spawn_hero;
+use crate::game::ecs::spawn::{spawn_bones, spawn_hero};
 use crate::game::ecs::systems;
 use crate::game::game_library::GameLibrary;
 use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
@@ -140,13 +140,18 @@ pub struct EcsScene {
     quit_requested:     bool,
     /// Menu actions queued from handle_event() (runs outside ECS borrow).
     pending_menu_actions: Vec<MenuAction>,
+    /// If true, emit BrotherSuccession on the first update() call to trigger julian_start placard.
+    /// Set to false when launched with --skip-intro.
+    show_start_placard: bool,
+    /// True until the first update() call has been processed.
+    first_update: bool,
 }
 
 impl EcsScene {
     /// Construct a new `EcsScene`, spawning the hero at the location specified
     /// in `faery.toml` for brother 0 (Julian).  Falls back to `(100, 100)` if
     /// the library has no brother or location data.
-    pub fn new(game_lib: &GameLibrary, console: Option<DebugConsole>) -> Self {
+    pub fn new(game_lib: &GameLibrary, console: Option<DebugConsole>, show_start_placard: bool) -> Self {
         let mut world = World::new();
 
         // Resolve hero starting position from the library.
@@ -217,7 +222,104 @@ impl EcsScene {
             menu: MenuState::new(),
             quit_requested: false,
             pending_menu_actions: Vec::new(),
+            show_start_placard,
+            first_update: true,
         }
+    }
+
+
+    /// Return the id of the next living brother after `dead_id` in succession order
+    /// (0→1→2), skipping any brother already represented by a Bones entity in the world.
+    /// Returns `None` when all brothers are dead.
+    fn next_living_brother(&self, dead_id: u8) -> Option<u8> {
+        let bones_ids: std::collections::HashSet<u8> = self.world
+            .query::<&BrotherKind>()
+            .with::<&Bones>()
+            .iter()
+            .map(|bk| bk.id)
+            .collect();
+        for candidate in (dead_id + 1)..3 {
+            if !bones_ids.contains(&candidate) {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
+    /// Consume all `BrotherDiedEvent`s from this tick.
+    /// Spawns a Bones entity, selects successor, and swaps the hero entity.
+    /// Returns `Some(SceneResult)` when a placard sequence should be shown,
+    /// or `None` if the event queue was empty.
+    fn drain_brother_deaths(&mut self, game_lib: &GameLibrary) -> Option<SceneResult> {
+        let events: Vec<_> = self.res.events.brother.drain(..).collect();
+        if events.is_empty() {
+            return None;
+        }
+        let mut result = None;
+        for ev in events {
+            spawn_bones(
+                &mut self.world,
+                ev.x,
+                ev.y,
+                self.res.region.region_num,
+                ev.brother_id,
+                ev.stuff,
+            );
+            self.res.brother.inactive_inventories[ev.brother_id as usize] = ev.stuff;
+
+            match self.next_living_brother(ev.brother_id) {
+                Some(successor) => {
+                    let cfg = game_lib.get_brother(successor as usize);
+                    let stats = cfg.map(|b| HeroStats {
+                        vitality: 15 + b.brave / 4,
+                        brave:    b.brave,
+                        luck:     b.luck,
+                        kind:     b.kind,
+                        wealth:   b.wealth,
+                        hunger:   0,
+                        fatigue:  0,
+                        gold:     0,
+                    }).unwrap_or(HeroStats {
+                        vitality: 10,
+                        brave: 0, luck: 0, kind: 0, wealth: 0,
+                        hunger: 0, fatigue: 0, gold: 0,
+                    });
+                    let inv = Inventory {
+                        stuff: self.res.brother.inactive_inventories[successor as usize],
+                    };
+                    let _ = self.world.despawn(self.res.hero_entity);
+                    let new_hero = spawn_hero(
+                        &mut self.world,
+                        19036.0, 15755.0,
+                        successor,
+                        stats,
+                        inv,
+                    );
+                    self.res.hero_entity = new_hero;
+                    self.res.brother.active_brother = successor as usize;
+                    self.res.brother.brother = successor + 1;
+                    self.res.region.new_region = 3;
+                    self.res.clock.daynight = 8000;
+
+                    let dead_name = game_lib
+                        .get_brother(ev.brother_id as usize)
+                        .map(|b| b.name.to_lowercase())
+                        .unwrap_or_else(|| "julian".to_string());
+                    let succ_name = game_lib
+                        .get_brother(successor as usize)
+                        .map(|b| b.name.to_lowercase())
+                        .unwrap_or_else(|| "phillip".to_string());
+                    result = Some(SceneResult::BrotherSuccession {
+                        dead_placard:  Some(format!("{}_dead", dead_name)),
+                        start_placard: Some(format!("{}_start", succ_name)),
+                    });
+                }
+                None => {
+                    result = Some(SceneResult::GameOver);
+                }
+            }
+        }
+        result
     }
 
     /// Drain message and speech events from the current tick into the message queue.
@@ -362,7 +464,7 @@ impl EcsScene {
 
         let adf_raw = match crate::game::adf::AdfDisk::open(std::path::Path::new(adf_path)) {
             Ok(a) => a,
-            Err(e) => { eprintln!("EcsScene: AdfDisk::open failed: {e}"); return; }
+            Err(e) => { self.res.diag_log.push(format!("EcsScene: AdfDisk::open failed: {e}")); return; }
         };
         let adf = std::sync::Arc::new(adf_raw);
         self.adf = Some(adf.clone());
@@ -392,8 +494,8 @@ impl EcsScene {
 
         let world = match world_result {
             Some(Ok(w)) => w,
-            Some(Err(e)) => { eprintln!("EcsScene: WorldData::load failed: {e}"); return; }
-            None => { eprintln!("EcsScene: no region config for region {region}"); return; }
+            Some(Err(e)) => { self.res.diag_log.push(format!("EcsScene: WorldData::load failed: {e}")); return; }
+            None => { self.res.diag_log.push(format!("EcsScene: no region config for region {region}")); return; }
         };
 
         // Shadow memory bitmask for sprite depth masking.
@@ -432,7 +534,7 @@ impl EcsScene {
         // Snap camera to hero's spawn position.
         self.snap_camera();
 
-        eprintln!("EcsScene: world loaded for region {region}");
+        self.res.diag_log.push(format!("EcsScene: world loaded for region {region}"));
     }
 
     /// Perform a full region transition: despawn old actors, load new world data,
@@ -468,7 +570,7 @@ impl EcsScene {
         // 2. Load WorldData + MapRenderer.
         let adf = match self.adf.as_ref() {
             Some(a) => a.clone(),
-            None => { eprintln!("reload_region: no ADF loaded"); return; }
+            None => { self.res.diag_log.push("reload_region: no ADF loaded".to_string()); return; }
         };
 
         let world_result = game_lib.find_region_config(region).map(|cfg| {
@@ -494,8 +596,8 @@ impl EcsScene {
 
         let world_data = match world_result {
             Some(Ok(w)) => w,
-            Some(Err(e)) => { eprintln!("reload_region: WorldData::load failed: {e}"); return; }
-            None => { eprintln!("reload_region: no region config for {region}"); return; }
+            Some(Err(e)) => { self.res.diag_log.push(format!("reload_region: WorldData::load failed: {e}")); return; }
+            None => { self.res.diag_log.push(format!("reload_region: no region config for {region}")); return; }
         };
 
         let shadow_mem = game_lib.disk.as_ref()
@@ -567,7 +669,7 @@ impl EcsScene {
         self.res.camera.map_x = (dest_x - 144.0).rem_euclid(0x8000 as f32);
         self.res.camera.map_y = (dest_y - 70.0).rem_euclid(0x8000 as f32);
 
-        eprintln!("EcsScene: region transition to {region} at ({dest_x}, {dest_y})");
+        self.res.diag_log.push(format!("EcsScene: region transition to {region} at ({dest_x}, {dest_y})"));
     }
 
     /// Reload `res.map.doors` and clear `opened_doors` for the given region.
@@ -1215,6 +1317,21 @@ impl Scene for EcsScene {
             }
         }
 
+        // On the first update, trigger the brother start placard if requested.
+        if self.first_update {
+            self.first_update = false;
+            if self.show_start_placard {
+                let name = game_lib
+                    .get_brother(self.res.brother.active_brother)
+                    .map(|b| b.name.to_lowercase())
+                    .unwrap_or_else(|| "julian".to_string());
+                return SceneResult::BrotherSuccession {
+                    dead_placard:  None,
+                    start_placard: Some(format!("{}_start", name)),
+                };
+            }
+        }
+
         // Lazy-load world data on first frame.
         if !self.adf_load_done {
             self.load_world(game_lib);
@@ -1227,6 +1344,10 @@ impl Scene for EcsScene {
         for _ in 0..ticks {
             self.run_tick(game_lib);
             self.drain_messages(game_lib);
+        }
+
+        if let Some(result) = self.drain_brother_deaths(game_lib) {
+            return result;
         }
 
         self.run_audio(resources);
@@ -1614,6 +1735,8 @@ pub fn new_for_test() -> EcsScene {
         menu: MenuState::new(),
         quit_requested: false,
         pending_menu_actions: Vec::new(),
+        show_start_placard: false,
+        first_update: false,
     }
 }
 

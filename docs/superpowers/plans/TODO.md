@@ -9,25 +9,7 @@
 
 ---
 
-## Status snapshot (as of this writing)
-
-| Area | State |
-|------|-------|
-| ECS foundation (World, components, resources) | ✅ Complete |
-| System stubs wired into run_tick | ✅ Complete |
-| Map / palette rendering | ✅ Complete |
-| Hero + enemy sprite blitting | ✅ Complete |
-| Input (movement keys / gamepad) | ✅ Complete |
-| Audio (music mood + SFX) | ✅ Complete |
-| HI bar (stats + scroll messages + compass) | ✅ Complete |
-| Save / load round-trip (ECS path) | ✅ Complete |
-| Debug snapshot feeds real ECS data | ✅ Complete |
-| **Implementation plans G–X written** | ✅ Complete (see plan files below) |
-| Region transitions (Plan G) | ✅ Complete |
-| Door system (Plan H) | ✅ Complete |
-| **Everything below this line** | ❌ Missing or stubbed |
-
-## Plan files written
+## Plans
 
 | Plan | File | Status |
 |------|------|--------|
@@ -36,13 +18,13 @@
 | I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Done |
 | J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Done |
 | K | `2025-01-01-ecs-plan-k-magic-system.md` | ✅ Written |
-| L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Written |
+| L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Done |
 | M | `2025-01-01-ecs-plan-m-shop-system.md` | ✅ Written |
 | N | `2025-01-01-ecs-plan-n-combat-melee.md` | ✅ Written |
 | O | `2025-01-01-ecs-plan-o-encounter-system.md` | ✅ Written |
 | P | `2025-01-01-ecs-plan-p-carrier-system.md` | ✅ Written |
 | Q | `2025-01-01-ecs-plan-q-sleep-system.md` | ✅ Written |
-| R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Written |
+| R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Done |
 | S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Written |
 | T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Written |
 | U | `2025-01-01-ecs-plan-u-save-load-keys.md` | ✅ Written |

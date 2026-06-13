@@ -20,6 +20,14 @@ pub enum SceneResult {
     Done,
     /// Player requested to quit the application.
     Quit,
+    /// Brother succession: show dead-brother placard (if any) then start-brother placard (if any),
+    /// then resume gameplay. `EcsScene` has already swapped the hero entity internally.
+    BrotherSuccession {
+        dead_placard:  Option<String>,
+        start_placard: Option<String>,
+    },
+    /// All three brothers are dead — show kevin_dead placard then exit.
+    GameOver,
 }
 
 /**
