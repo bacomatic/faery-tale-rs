@@ -1,7 +1,7 @@
 # REQUIREMENTS — Index
 
-This directory replaces the monolithic `docs/REQUIREMENTS.md`.
-Read only the file relevant to your current task.
+This directory contains the requirements for the Faery Tale project.
+Read only the files relevant to your current task.
 
 ## Subsystem map
 

@@ -1,7 +1,7 @@
 # SPECIFICATION — Index
 
-This directory replaces the monolithic `docs/SPECIFICATION.md`.
-Read only the file relevant to your current task.
+The files in this directory are the authoritative specification for the Faery Tale Adventure Rust port.
+Read only the files relevant to your current task.
 
 ## Subsystem map
 

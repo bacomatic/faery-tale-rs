@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file is the compact agent contract for this repository. Keep it stable and concise.
+This file is the agent contract for this repository. Keep it stable and concise.
 
 ## Behavioral Guidelines
 
@@ -63,123 +63,60 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## Project constraints
 
 - Rust port of "The Faery Tale Adventure" (1987 Amiga game by MicroIllusions).
-- Personal learning project; PRs are not accepted.
 - **Fidelity first**: be true to the original game. Do not add enhancements or modernizations.
 - Fidelity means matching the documented original behavior and player experience, even if the implementation structure differs.
-- Do not intentionally "fix" original behavior unless reproducing the original bug would require extra work.
-- This repository is now **specification-driven**: rely on the reference docs hosted on the `research` branch (see "Reference docs (remote)" below) and the owned specs in `docs/`, not on any historical source dump.
+- Do not intentionally "fix" bugs in the original game unless reproducing them would require extra work.
+- Some bugs will be fixed and quality of life improvements will be added where it makes sense, and **always** at the direction of the user.
+- **This project is specification-driven** - rely on the reference docs hosted on the `research` branch (see "Reference documentation" below) and the implementation specifications and requirements in `docs/`.
 
 ## Timing invariant (critical)
 
 - **NTSC-only at 30 fps for presentation**; the audio VBL interrupt is 60 Hz.
 - **Animation and AI advance on a 15 Hz gameplay tick** (one gameplay tick every two presented frames).
-- There was no PAL release; treat all gameplay, audio, and animation timing as NTSC.
 
 ## Agent working rules
 
-- **At session start, invoke the `context-mode:context-mode` skill if context-mode is installed.** This activates context-mode tool routing for all large-output commands. If the skill is unavailable, proceed without it.
-- **Reference docs on the `research` branch are pre-indexed in context-mode — use `ctx_search` first.** Only fall back to `ctx_fetch_and_index` for content not yet in the index. `reference/README.md` on that branch is the entry point for the full inventory.
-- **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, follow `AGENTS.md` and the project reference docs first.
-- Make minimal, surgical changes consistent with existing code style.
-- Prefer root-cause fixes over surface patches.
+- **use context-mode to read large documents or perform semantic searches** Reference docs on the `research` branch are pre-indexed in context-mode — use `ctx_search` first, then fall back to `ctx_fetch_and_index` for content not yet in the index. `reference/README.md` on that branch is the entry point for the reference documentation.
+- **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, stop and ask for clarification. **NEVER MAKE ASSUMPTIONS**
 - Avoid unrelated refactors while touching gameplay-critical code.
-- Prefer the reference documents over guesswork; if the docs disagree, align implementation with the relevant `docs/spec/` file and note the discrepancy.
-- **Use test-driven development for new feature work**: start by writing tests that fail based on the relevant `docs/spec/` and `docs/reqs/` subsystem files, then implement the code against those tests.
-- **Use test-driven development for bug fixes**: start by writing a test that reproduces the bug, then implement the fix.
-- **Do not modify tests just to make them pass** unless there is a strong project reason, such as a real change in the specification or requirements.
+- **Use test-driven development for substantial work**: start by writing tests that fail based on the relevant `docs/spec/` and `docs/reqs/` subsystem files, then implement the code against those tests. This is applicable to both new features and bug fixes.
+- **Do not modify tests just to make them pass** unless there is a strong project reason, such as a change in the specification or requirements.
 - Validate changed behavior with targeted commands/tests when feasible.
-- Always call `font.set_color_mod(r, g, b)` before every `render_string()` call. The canonical white/default is `set_color_mod(255, 255, 255)`. SDL color mod is stateful; failing to reset it causes text to render in the previous scene's tint color.
-- When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
-- **Fail Fast** If you cannot find an answer, say you don't know rather than guessing. This gives the user the opportunity to clarify or provide more information, and prevents implementation errors. Often this indicates a gap in the reference documentation that should be filled.
 - **Do not invent player-facing strings.** Any message shown to the user must come from one of two authoritative sources: (1) `faery.toml` (`[narr]` tables such as `event_msg`, `speeches`, `place_msg`, `inside_msg`) via `crate::game::events`, or (2) the hardcoded string literals exhaustively enumerated in `reference/logic/dialog_system.md` on the research branch ("Hardcoded scroll messages — complete reference"). No other source of scroll-area text is permitted — never hardcode new narrative prose in Rust code. See `docs/spec/intro-narrative.md` §23.6 and `docs/reqs/intro-narrative.md` R-INTRO-012/013/014.
 
 ## Spec & requirements file map
 
-**Never read `docs/SPECIFICATION.md` or `docs/REQUIREMENTS.md` directly** — they are redirect stubs.
-Read only the relevant subsystem file. Use `ctx_execute_file` for analysis (keeps content out of context window); use `read` only when editing.
+Specifications for this implementation are in docs/spec/ and requirements are in docs/reqs/. Use the README.md in each directory for more information.
 
-| Topic | Spec file | Requirements file |
-|-------|-----------|-------------------|
-| Display, tiles, scrolling, sprites, terrain masking, special effects | `docs/spec/display-rendering.md` | `docs/reqs/display-rendering.md` |
-| World regions & map structure | `docs/spec/world-structure.md` | `docs/reqs/world-map.md` |
-| Color palettes & day/night visuals | `docs/spec/palettes-daynight-visuals.md` | `docs/reqs/daynight-visuals.md` |
-| Characters & animation | `docs/spec/characters-animation.md` | — |
-| Player movement & input | `docs/spec/movement-input.md` | `docs/reqs/movement-input.md` |
-| Combat | `docs/spec/combat.md` | `docs/reqs/combat.md` |
-| AI, behavior & encounter generation | `docs/spec/ai-encounters.md` | `docs/reqs/ai-encounters.md` |
-| NPCs & dialogue | `docs/spec/npcs-dialogue.md` | `docs/reqs/npcs-dialogue.md` |
-| Inventory & items | `docs/spec/inventory-items.md` | `docs/reqs/inventory-items.md` |
-| Quests | `docs/spec/quests.md` | `docs/reqs/quests.md` |
-| Doors & buildings | `docs/spec/doors-buildings.md` | `docs/reqs/doors-buildings.md` |
-| Day/night cycle & clock | `docs/spec/daynight-cycle.md` | `docs/reqs/daynight-cycle.md` |
-| Survival (hunger, fatigue, health) | `docs/spec/survival.md` | `docs/reqs/survival.md` |
-| Magic | `docs/spec/magic.md` | `docs/reqs/magic.md` |
-| Death & revival | `docs/spec/death-revival.md` | `docs/reqs/death-revival.md` |
-| Carriers (raft, turtle, bird) | `docs/spec/carriers.md` | `docs/reqs/carriers.md` |
-| Audio | `docs/spec/audio.md` | `docs/reqs/audio.md` |
-| Intro & narrative | `docs/spec/intro-narrative.md` | `docs/reqs/intro-narrative.md` |
-| Save/load | `docs/spec/save-load.md` | `docs/reqs/save-load.md` |
-| UI & menus | `docs/spec/ui-menus.md` | `docs/reqs/ui-menus.md` |
-| Asset formats & data loading | `docs/spec/asset-formats.md` | `docs/reqs/asset-loading.md` |
+The specification for the debug TUI is in docs/DEBUG_SPECIFICATION.md.
 
-## Document ownership
+## Reference documentation
 
-- **Owned by this project (editable with user approval), checked in here:** `docs/spec/` (split from `SPECIFICATION.md`), `docs/reqs/` (split from `REQUIREMENTS.md`), `docs/DEBUG_SPECIFICATION.md`, `docs/GUIDELINES.md`.
-- **READ-ONLY reference docs (live on the `research` branch; agents must NEVER modify):** everything under `reference/` on that branch, including `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, all files under `reference/logic/` and `reference/_discovery/`, plus `world_db.json`, `quest_db.json`, and the `region_*.png` / `overworld.png` map images.
-- Always ask the user before editing any owned doc. Reference docs cannot be edited from this branch at all — surface desired changes to the user so they can update the `research` branch directly.
-
-## Reference docs (remote)
-
-Reference material lives on the `research` branch of this same repo. Agents fetch and index it on demand via `ctx_fetch_and_index`; it is not checked into the porting branches.
-
-**Pinning policy:** track HEAD of `research` branch (always latest). Do not pin to commit SHAs unless the user explicitly requests it for a specific task.
-
-**URL prefixes:**
-
-- Raw (for indexing / fetching content):
-  `https://raw.githubusercontent.com/bacomatic/faery-tale-rs/research/reference/`
-- Browse (for human-readable links in markdown):
-  `https://github.com/bacomatic/faery-tale-rs/blob/research/reference/`
-
-**Search-first workflow:**
-
-The `research` branch is pre-indexed in context-mode. Always search first:
-```
-ctx_search(queries: ["<topic>"], source: "research:reference/<path-prefix>")
-```
-
-**Fallback fetch recipe (markdown / JSON)** — use only when `ctx_search` returns no relevant results:
-
-```
-ctx_fetch_and_index(
-  url: "https://raw.githubusercontent.com/bacomatic/faery-tale-rs/research/reference/<path>",
-  source: "research:reference/<path>"
-)
-```
-Then use `ctx_search` against the newly indexed content. Reuse the same `source:` label for follow-ups across many docs so results can be filtered cleanly.
-
-**Binary assets (PNG region maps, `overworld.png`):** cannot be FTS-indexed. Fetch with `web_fetch` (raw URL) or `gh api` only when an image is genuinely needed.
-
-**Reference doc inventory (paths under `reference/` on the research branch):**
-
-- Top-level: `README.md`, `RESEARCH.md`, `ARCHITECTURE.md`, `STORYLINE.md`, `PROBLEMS.md`, `world_db.json`, `quest_db.json`, `overworld.png`, `region_0.png` … `region_9.png`
-- `logic/`: `README.md`, `STYLE.md`, `SYMBOLS.md`, `messages.md`, `dialog_system.md`, `placard.md`, `magic.md`, `game-loop.md`, `input-handling.md`, `movement.md`, `terrain-collision.md`, `encounters.md`, `ai-system.md`, `combat.md`, `inventory.md`, `menu-system.md`, `doors.md`, `day-night.md`, `carrier-transport.md`, `astral-plane.md`, `quests.md`, `npc-dialogue.md`, `shops.md`, `save-load.md`, `brother-succession.md`, `frustration.md`, `visual-effects.md`
-- `_discovery/`: raw trace artifacts (supporting context only, not authoritative). See `reference/README.md` on the research branch for the full list when needed.
-
-When this list drifts (research branch adds/removes files), update it here in the same change that introduces a new dependency, or fetch `reference/README.md` from the research branch to re-derive it.
+Refer to docs/REFERENCE.md for information about the reference documentation.
 
 ## Canonical sources by topic
 
-- Entry point for reference documentation: `reference/README.md` on the `research` branch (fetch via the recipe above).
 - Build/run commands and developer setup: `README.md` (repo root).
-- **Authoritative reference docs (READ-ONLY, remote — see "Reference docs (remote)" above):** `reference/RESEARCH.md`, `reference/ARCHITECTURE.md`, `reference/STORYLINE.md`, `reference/PROBLEMS.md`, `reference/logic/**`, `reference/_discovery/**` on the `research` branch.
-- **Project-owned docs (editable with user approval, local):** `docs/spec/` and `docs/reqs/` (split subsystem files), `docs/DEBUG_SPECIFICATION.md`, `docs/GUIDELINES.md`.
-- Current Rust implementation details: source under `src/` (especially `src/main.rs` and `src/game/`). Doc comments in `src/` that mention `reference/...` paths refer to files on the research branch — prepend the URL prefix above to view them.
+- Current Rust implementation details: source under `src/` (especially `src/main.rs` and `src/game/`).
 
 ## Game mechanics research order
 
 When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
-1. **First**: search via `ctx_search` — the research branch is pre-indexed. `reference/RESEARCH.md` is the authoritative source of truth for verified mechanics.
+1. **First**: the research is the authoritative source of truth for verified mechanics.
 2. Search `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
 3. Use the relevant `docs/spec/` subsystem file (local) to resolve implementation details and keep the port internally consistent.
 4. Do not create competing source-of-truth documents unless the user explicitly requests it.
+5. If any information is missing, unclear, ambiguous or contradictory, stop immediately and ask for clarification.
+
+## Commit Rules
+
+- Do not commit without user consent. Always ask, never assume, even if permission has been given for other changes in a session.
+- Follow the conventional commit format: `<type>(<scope>): <subject>`
+- Use the following types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
+- Keep the subject line under 50 characters
+- Use the imperative mood in the subject line
+- Add a blank line before the body
+- The body must list the changes made in the commit using **short and concise bullet points**
+- Prefer short summarization over long rambling descriptions
+- When creating a commit to fix a bug, add `Closes: #<issue>` on its own line at the end of the commit message (e.g. `Closes: #111`).
+- **NEVER add Co-authored-by or "generated by" attributions** to commit messages
