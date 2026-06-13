@@ -71,6 +71,7 @@ pub struct ButtonRender {
     pub bg_color: u8,   // textcolors palette index
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     // Handled entirely within MenuState:
     SwitchMode(MenuMode),
@@ -150,6 +151,14 @@ pub struct MenuState {
     pub real_options: [i8; 12], // display slot → menu index (-1 = empty)
     /// When true, the File sub-menu is being used for saving (not loading).
     save_pending: bool,
+    /// Track which display slot is currently pressed (mouse held down).
+    /// Used for click-and-hold behavior where action triggers on release.
+    pressed_slot: Option<usize>,
+    /// For toggle items, remember original selected state to restore on cancel.
+    pressed_was_selected: bool,
+    /// The slot where the mouse was originally pressed (valid while mouse button is held).
+    /// Used to re-activate the press when moving back into this slot region.
+    committed_slot: Option<usize>,
 }
 
 impl MenuState {
@@ -159,6 +168,9 @@ impl MenuState {
             cmode: MenuMode::Items,
             real_options: [-1; 12],
             save_pending: false,
+            pressed_slot: None,
+            pressed_was_selected: false,
+            committed_slot: None,
             menus: [
                 // ITEMS
                 MenuDef {
@@ -290,7 +302,8 @@ impl MenuState {
             }
             self.real_options[j] = i as i8;
             let selected = (x & FLAG_SELECTED) != 0;
-            result.push(self.propt(j, selected));
+            let pressed = self.is_pressed(j);
+            result.push(self.propt(j, selected, pressed));
             j += 1;
             if j > 11 {
                 break;
@@ -311,9 +324,19 @@ impl MenuState {
     }
 
     /// Compute render info for one button (fmain.c:3785-3828).
-    pub fn propt(&self, j: usize, selected: bool) -> ButtonRender {
+    /// `selected` is the button's selected/toggled state.
+    /// `pressed` is true when the user is holding the mouse down on this button.
+    pub fn propt(&self, j: usize, selected: bool, pressed: bool) -> ButtonRender {
         let k = self.real_options[j] as usize; // menu index
-        let fg_color = if selected { 1 } else { 0 };
+        // When pressed (mouse held down), highlight non-toggle items visually.
+        // Toggle items already show their toggled state from handle_mouse_down.
+        let atype = if k < self.menus[self.cmode as usize].num as usize {
+            self.menus[self.cmode as usize].enabled[k] & TYPE_MASK
+        } else {
+            TYPE_IMMEDIATE
+        };
+        let is_toggle = atype == TYPE_TOGGLE;
+        let fg_color = if selected || (pressed && !is_toggle) { 1 } else { 0 };
         let bg_color = if self.cmode == MenuMode::Use {
             14
         } else if self.cmode == MenuMode::File {
@@ -348,6 +371,7 @@ impl MenuState {
     }
 
     /// Handle a button click at the given display slot (fmain.c:1447-1474).
+    /// DEPRECATED: Use handle_mouse_down + handle_mouse_up for click-and-hold behavior.
     pub fn handle_click(&mut self, display_slot: usize) -> MenuAction {
         if display_slot >= 12 {
             return MenuAction::None;
@@ -374,6 +398,129 @@ impl MenuState {
         } else {
             MenuAction::None
         }
+    }
+
+    /// Start a mouse press on a menu item. Returns true if the slot is a valid clickable item.
+    /// For toggle items, this shows the toggle state visually but doesn't commit it yet.
+    pub fn handle_mouse_down(&mut self, display_slot: usize) -> bool {
+        if display_slot >= 12 {
+            return false;
+        }
+        let hit = self.real_options[display_slot];
+        if hit < 0 || hit as u8 >= self.menus[self.cmode as usize].num {
+            return false;
+        }
+        let hit = hit as u8;
+        let atype = self.menus[self.cmode as usize].enabled[hit as usize] & TYPE_MASK;
+        // Only track press for actionable items
+        if atype == TYPE_TOGGLE || atype == TYPE_IMMEDIATE || atype == TYPE_RADIO || atype == TYPE_TAB {
+            // Record where the mouse button was first pressed (held until mouse up)
+            self.committed_slot = Some(display_slot);
+            self.pressed_slot = Some(display_slot);
+            // For toggle items, remember the original state so we can restore on cancel
+            if atype == TYPE_TOGGLE {
+                self.pressed_was_selected = self.menus[self.cmode as usize].enabled[hit as usize] & FLAG_SELECTED != 0;
+                // Preview the toggle state visually
+                self.menus[self.cmode as usize].enabled[hit as usize] ^= FLAG_SELECTED;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Handle mouse moving while button is held. If moving into the committed slot,
+    /// re-activate the press (highlight for non-toggle, restore toggle preview for toggle items).
+    /// Returns true if the slot is now active (either re-activated or was already active).
+    pub fn handle_mouse_move_while_held(&mut self, display_slot: usize) -> bool {
+        // If we're already in the pressed slot, nothing to do
+        if self.pressed_slot == Some(display_slot) {
+            return true;
+        }
+        // If we moved back into the committed slot, re-activate
+        if self.committed_slot == Some(display_slot) {
+            let hit = self.real_options[display_slot];
+            if hit >= 0 && (hit as u8) < self.menus[self.cmode as usize].num {
+                let hit = hit as u8;
+                let atype = self.menus[self.cmode as usize].enabled[hit as usize] & TYPE_MASK;
+                if atype == TYPE_TOGGLE {
+                    // Re-apply the toggle preview (it was cancelled when we moved out)
+                    let currently_selected = self.menus[self.cmode as usize].enabled[hit as usize] & FLAG_SELECTED != 0;
+                    if currently_selected != self.pressed_was_selected {
+                        self.menus[self.cmode as usize].enabled[hit as usize] ^= FLAG_SELECTED;
+                    }
+                }
+                self.pressed_slot = Some(display_slot);
+            }
+            return true;
+        }
+        // Not in the committed slot - cancel current press if any
+        self.cancel_press();
+        false
+    }
+
+    /// End a mouse press. If the mouse is over the same slot that was pressed,
+    /// execute the action. Returns the action to dispatch, or None if cancelled/moved out.
+    pub fn handle_mouse_up(&mut self, display_slot: usize) -> MenuAction {
+        // Clear committed slot - mouse button is no longer held
+        self.committed_slot = None;
+        if self.pressed_slot != Some(display_slot) {
+            // Mouse released over a different slot - cancel the press
+            self.cancel_press();
+            return MenuAction::None;
+        }
+        // Valid release over the pressed slot - execute the action
+        self.pressed_slot = None;
+        let hit = self.real_options[display_slot];
+        // hit was validated in handle_mouse_down, but double-check
+        if hit < 0 || hit as u8 >= self.menus[self.cmode as usize].num {
+            return MenuAction::None;
+        }
+        let hit = hit as u8;
+        let atype = self.menus[self.cmode as usize].enabled[hit as usize] & TYPE_MASK;
+        if atype == TYPE_TOGGLE {
+            // Toggle state was already flipped in handle_mouse_down as preview,
+            // so just dispatch the action
+            self.dispatch_do_option(hit)
+        } else if atype == TYPE_IMMEDIATE {
+            self.dispatch_do_option(hit)
+        } else if atype == TYPE_RADIO {
+            self.menus[self.cmode as usize].enabled[hit as usize] |= FLAG_SELECTED;
+            self.dispatch_do_option(hit)
+        } else if atype == TYPE_TAB && (hit as usize) < 5 {
+            if !self.is_paused() {
+                self.gomenu(MenuMode::from(hit as usize));
+            }
+            MenuAction::SwitchMode(self.cmode)
+        } else {
+            MenuAction::None
+        }
+    }
+
+    /// Cancel the current press (e.g., mouse moved out of the item region).
+    /// For toggle items, this restores the original state.
+    pub fn cancel_press(&mut self) {
+        if let Some(display_slot) = self.pressed_slot {
+            // Restore toggle state if this was a toggle item
+            let hit = self.real_options[display_slot];
+            if hit >= 0 && (hit as u8) < self.menus[self.cmode as usize].num {
+                let hit = hit as u8;
+                let atype = self.menus[self.cmode as usize].enabled[hit as usize] & TYPE_MASK;
+                if atype == TYPE_TOGGLE {
+                    // Restore original selected state
+                    let currently_selected = self.menus[self.cmode as usize].enabled[hit as usize] & FLAG_SELECTED != 0;
+                    if currently_selected != self.pressed_was_selected {
+                        self.menus[self.cmode as usize].enabled[hit as usize] ^= FLAG_SELECTED;
+                    }
+                }
+            }
+        }
+        self.pressed_slot = None;
+    }
+
+    /// Check if a display slot is currently being pressed (for visual feedback).
+    pub fn is_pressed(&self, display_slot: usize) -> bool {
+        self.pressed_slot == Some(display_slot)
     }
 
     /// Handle a keyboard shortcut (fmain.c:1499-1520).
@@ -567,7 +714,7 @@ mod tests {
         let mut ms = MenuState::new();
         ms.print_options(); // populate real_options
                             // Slot 0 → menu_index 0 (tab, k < 5) → bg_color = 4
-        let btn = ms.propt(0, false);
+        let btn = ms.propt(0, false, false);
         assert_eq!(btn.bg_color, 4);
     }
 
@@ -582,7 +729,7 @@ mod tests {
             .iter()
             .position(|&x| x == 6)
             .expect("Music button not found");
-        let btn = ms.propt(music_slot, true);
+        let btn = ms.propt(music_slot, true, false);
         // cmode == Game, k=6 >= 5, not Keys/SaveX → bg_color = menus[Game].color = 2
         assert_eq!(btn.bg_color, 2);
     }
@@ -648,21 +795,21 @@ mod tests {
         ms.gomenu(MenuMode::Use);
         ms.print_options();
         let dirk_slot = ms.real_options.iter().position(|&x| x == 0).unwrap();
-        assert_eq!(ms.propt(dirk_slot, false).bg_color, 14);
+        assert_eq!(ms.propt(dirk_slot, false, false).bg_color, 14);
 
         ms.gomenu(MenuMode::File);
         ms.print_options();
         let file_slot = ms.real_options.iter().position(|&x| x == 0).unwrap();
-        assert_eq!(ms.propt(file_slot, false).bg_color, 13);
+        assert_eq!(ms.propt(file_slot, false, false).bg_color, 13);
 
         ms.gomenu(MenuMode::Keys);
         ms.print_options();
         let gold_slot = ms.real_options.iter().position(|&x| x == 5).unwrap();
-        assert_eq!(ms.propt(gold_slot, false).bg_color, KEYCOLORS[0]);
+        assert_eq!(ms.propt(gold_slot, false, false).bg_color, KEYCOLORS[0]);
 
         ms.gomenu(MenuMode::SaveX);
         ms.print_options();
         let save_slot = ms.real_options.iter().position(|&x| x == 5).unwrap();
-        assert_eq!(ms.propt(save_slot, false).bg_color, 5);
+        assert_eq!(ms.propt(save_slot, false, false).bg_color, 5);
     }
 }

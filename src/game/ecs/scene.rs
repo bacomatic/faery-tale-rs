@@ -1062,6 +1062,11 @@ impl Scene for EcsScene {
             }
             // Gamepad left stick → aggregate into direction.
             Event::ControllerAxisMotion { axis, value, .. } => {
+                // Clear inventory view on any interaction
+                if self.res.view.viewstatus == 1 {
+                    self.res.view.viewstatus = 0;
+                    return true;
+                }
                 use sdl3::gamepad::Axis;
                 const THRESHOLD: i16 = 8000;
                 match axis {
@@ -1081,6 +1086,11 @@ impl Scene for EcsScene {
                 }
             }
             Event::MouseButtonDown { x, y, .. } => {
+                // Clear inventory view on any interaction
+                if self.res.view.viewstatus == 1 {
+                    self.res.view.viewstatus = 0;
+                    return true;
+                }
                 // Menu buttons occupy 2 columns × 6 rows in the right side of the
                 // hibar (native x 430..534, native y 2..55).  Canvas → native:
                 // native_x = canvas_x (both 640 wide), native_y = (canvas_y - HIBAR_Y) / 2.
@@ -1091,12 +1101,54 @@ impl Scene for EcsScene {
                     let row = (ny - 2) / 9; // rows 0..5
                     let display_slot = (row as usize) * 2 + col;
                     if display_slot < 12 {
-                        let action = self.menu.handle_click(display_slot);
-                        self.pending_menu_actions.push(action);
+                        // Start tracking press for click-and-hold behavior
+                        self.menu.handle_mouse_down(display_slot);
                         return true;
                     }
                 }
                 false
+            }
+            Event::MouseButtonUp { x, y, .. } => {
+                // Clear inventory view on any interaction
+                if self.res.view.viewstatus == 1 {
+                    self.res.view.viewstatus = 0;
+                    return true;
+                }
+                // End of click - execute action if over the same slot
+                let nx = *x as i32;
+                let ny = (*y as i32 - HIBAR_Y) / 2;
+                if nx >= 430 && nx < 534 && ny >= 2 && ny < 55 {
+                    let col = if nx < 482 { 0 } else { 1 };
+                    let row = (ny - 2) / 9;
+                    let display_slot = (row as usize) * 2 + col;
+                    if display_slot < 12 {
+                        let action = self.menu.handle_mouse_up(display_slot);
+                        if action != MenuAction::None {
+                            self.pending_menu_actions.push(action);
+                        }
+                        return true;
+                    }
+                }
+                // Released outside menu region - cancel any pending press
+                self.menu.cancel_press();
+                false
+            }
+            Event::MouseMotion { x, y, .. } => {
+                // Handle mouse movement while button is held
+                let nx = *x as i32;
+                let ny = (*y as i32 - HIBAR_Y) / 2;
+                if nx >= 430 && nx < 534 && ny >= 2 && ny < 55 {
+                    let col = if nx < 482 { 0 } else { 1 };
+                    let row = (ny - 2) / 9;
+                    let display_slot = (row as usize) * 2 + col;
+                    // Let menu handle re-hover logic (re-activate committed slot, cancel if different)
+                    self.menu.handle_mouse_move_while_held(display_slot);
+                    return true;
+                } else {
+                    // Mouse moved completely out of menu region - cancel any press
+                    self.menu.cancel_press();
+                    return true;
+                }
             }
             _ => false,
         }
