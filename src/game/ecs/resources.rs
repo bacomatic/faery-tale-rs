@@ -209,6 +209,94 @@ pub struct VfxState {
     pub teleport_effect: TeleportEffectPlaceholder,
 }
 
+// ── Narrative ─────────────────────────────────────────────────────────────────
+
+/// Narrative events for scripted sequences and dialogue.
+#[derive(Debug, Clone)]
+pub enum NarrEvent {
+    /// Display centered placard text for specified duration.
+    Placard {
+        text: String,
+        hold_ticks: u32,
+    },
+    /// Wait for specified number of gameplay ticks.
+    WaitTicks(u32),
+    /// Teleport hero to new position/region.
+    TeleportHero {
+        x: f32,
+        y: f32,
+        region: u8,
+    },
+    /// Swap an object's sprite ID (used for transformations).
+    SwapObjectId {
+        object_index: usize,
+        new_id: u8,
+    },
+    /// Apply quest rewards (experience, items, etc.).
+    ApplyRewards,
+}
+
+/// FIFO queue for narrative events with timer management.
+#[derive(Debug, Default)]
+pub struct NarrativeQueue {
+    pending: Vec<NarrEvent>,
+    /// Currently active event, if any.
+    pub active: Option<NarrEvent>,
+    /// Ticks remaining for active event.
+    pub active_ticks: u32,
+}
+
+impl NarrativeQueue {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Push event to the back of the queue.
+    pub fn push(&mut self, event: NarrEvent) {
+        self.pending.push(event);
+    }
+
+    /// Activate next pending event. Returns false if queue was empty.
+    pub fn activate_next(&mut self) -> bool {
+        if let Some(event) = self.pending.pop() {
+            let ticks = match &event {
+                NarrEvent::Placard { hold_ticks, .. } => *hold_ticks,
+                NarrEvent::WaitTicks(ticks) => *ticks,
+                _ => 0,
+            };
+            self.active = Some(event);
+            self.active_ticks = ticks;
+            true
+        } else {
+            self.active = None;
+            self.active_ticks = 0;
+            false
+        }
+    }
+
+    /// Check if queue is idle (no active event and no pending events).
+    pub fn is_idle(&self) -> bool {
+        self.active.is_none() && self.pending.is_empty()
+    }
+
+    /// Clear all events.
+    pub fn clear(&mut self) {
+        self.pending.clear();
+        self.active = None;
+        self.active_ticks = 0;
+    }
+
+    /// Decrement active timer. Returns true if the event has expired.
+    pub fn tick(&mut self) -> bool {
+        if self.active_ticks > 0 {
+            self.active_ticks -= 1;
+            self.active_ticks == 0
+        } else {
+            true
+        }
+    }
+}
+
 // ── Top-level Resources container ─────────────────────────────────────────────
 
 /// All global singleton state, passed to every system.
@@ -224,6 +312,7 @@ pub struct Resources {
     pub encounter: EncounterContext,
     pub vfx:       VfxState,
     pub events:    Events,
+    pub narrative: NarrativeQueue,
 
     /// Current hero movement direction, derived from InputState each tick.
     pub input_direction: crate::game::direction::Direction,
@@ -262,6 +351,7 @@ impl Resources {
             encounter:      EncounterContext::default(),
             vfx:            VfxState::default(),
             events:         Events::default(),
+            narrative:      NarrativeQueue::new(),
             input_direction:     crate::game::direction::Direction::None,
             hero_entity:         placeholder,
             carrier_entity:      None,

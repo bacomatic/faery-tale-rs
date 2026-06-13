@@ -231,12 +231,20 @@ impl EcsScene {
         for ev in self.res.events.speech.drain(..) {
             let text = crate::game::events::speak(&game_lib.narr, ev.speech_id, &ev.brother_name);
             self.messages.push(text);
+            // TODO(Plan I): Route Talk-action speech to narrative.push(Placard{..})
+            // Proximity-triggered speech should continue using scroll messages.
         }
         // Trim to 64 messages — the hibar only shows the last 4.
         if self.messages.len() > 64 {
             let overflow = self.messages.len() - 64;
             self.messages.drain(0..overflow);
         }
+    }
+
+    /// Queue a placard event from a Talk action (Plan I integration point).
+    pub fn add_talk_placard(&mut self, text: String, hold_ticks: u32) {
+        use crate::game::ecs::resources::NarrEvent;
+        self.res.narrative.push(NarrEvent::Placard { text, hold_ticks });
     }
 
     /// Route a MenuAction emitted by MenuState to the appropriate ECS operation.
@@ -749,6 +757,43 @@ impl EcsScene {
         }
     }
 
+    /// Render centered placard overlay for narrative events (viewstatus == 2).
+    fn render_placard(&self, canvas: &mut Canvas<Window>, resources: &SceneResources<'_, '_>) {
+        use crate::game::ecs::resources::NarrEvent;
+
+        let text = if let Some(NarrEvent::Placard { text, .. }) = &self.res.narrative.active {
+            text.clone()
+        } else {
+            return;
+        };
+
+        const PW: u32 = 400;
+        const PH: u32 = 120;
+        let px = PLAYFIELD_X + (PLAYFIELD_CANVAS_W as i32 - PW as i32) / 2;
+        let py = PLAYFIELD_Y + (PLAYFIELD_CANVAS_H as i32 - PH as i32) / 2;
+
+        let rect = sdl3::rect::Rect::new(px, py, PW, PH);
+        canvas.set_draw_color(sdl3::pixels::Color::RGBA(0, 0, 0, 200));
+        canvas.fill_rect(rect).ok();
+        canvas.set_draw_color(sdl3::pixels::Color::RGB(255, 255, 255));
+        canvas.draw_rect(rect).ok();
+
+        let font = resources.topaz_font;
+        font.set_color_mod(255, 255, 255);
+
+        let line_height = 14i32;
+        let lines: Vec<&str> = text.lines().collect();
+        let total_h = lines.len() as i32 * line_height;
+        let start_y = py + (PH as i32 - total_h) / 2;
+
+        for (i, line) in lines.iter().enumerate() {
+            let text_w = (line.len() as i32) * 8;
+            let lx = px + (PW as i32 - text_w) / 2;
+            let ly = start_y + i as i32 * line_height;
+            font.render_string(line, canvas, lx, ly);
+        }
+    }
+
     /// Render the HI bar (stats, messages, compass) at the bottom of the canvas.
     /// Port of `GameplayScene::render_hibar`.
     fn render_hibar(
@@ -1195,6 +1240,11 @@ impl Scene for EcsScene {
             self.render_map(canvas);
         }
         self.render_hibar(canvas, resources);
+
+        // Render narrative placard overlay if active.
+        if self.res.view.viewstatus == 2 {
+            self.render_placard(canvas, resources);
+        }
 
         // Render the debug console overlay if present.
         if let Some(console) = &mut self.console {
