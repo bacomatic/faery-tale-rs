@@ -37,6 +37,51 @@ impl GameClock {
     pub fn is_frozen(&self) -> bool { self.freeze_timer > 0 }
 }
 
+// ── Quest State ──────────────────────────────────────────────────────────────
+
+/// Tracks overall quest progress across the game world
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct QuestState {
+    /// Number of princesses rescued (0-3)
+    pub princess_rescues: u8,
+    /// Number of statues collected for Azal gate (0-5)
+    pub statues_collected: u8,
+    /// Whether the Writ from the King has been obtained
+    pub writ_obtained: bool,
+    /// Whether the Rose has been obtained
+    pub rose_obtained: bool,
+    /// Whether the Crystal Shard has been obtained
+    pub crystal_shard_obtained: bool,
+    /// Whether the Sun Stone (Witch vulnerability) has been obtained
+    pub sun_stone_obtained: bool,
+    /// Whether the Golden Lasso (swan flight) has been obtained
+    pub golden_lasso_obtained: bool,
+    /// Whether the Talisman (win condition) has been obtained
+    pub talisman_obtained: bool,
+    /// Whether the King's Bone has been obtained
+    pub king_bone_obtained: bool,
+}
+
+impl QuestState {
+    /// Check if player can enter Azal (requires 5 statues)
+    pub fn can_enter_azal(&self) -> bool {
+        self.statues_collected >= 5
+    }
+
+    /// Check if player has won the game (talisman obtained)
+    pub fn has_won(&self) -> bool {
+        self.talisman_obtained
+    }
+
+    /// Get progress percentage for debug display
+    pub fn progress_percent(&self) -> u8 {
+        let major_items = self.statues_collected as u16 +
+                         (self.talisman_obtained as u16);
+        // Major items: 5 statues + 1 talisman = 6 total (princess rescues optional)
+        ((major_items * 100) / 6) as u8
+    }
+}
+
 // ── Region ───────────────────────────────────────────────────────────────────
 
 /// Current region and in-progress encounter state.
@@ -317,6 +362,8 @@ pub struct Resources {
     /// Diagnostic messages from systems/scene — drained by main.rs into the debug console
     /// (or to stderr if the console is not active).
     pub diag_log:  Vec<String>,
+    /// Current quest progress tracking (Plan V)
+    pub quest:     QuestState,
 
     /// Current hero movement direction, derived from InputState each tick.
     pub input_direction: crate::game::direction::Direction,
@@ -357,6 +404,7 @@ impl Resources {
             events:         Events::default(),
             narrative:      NarrativeQueue::new(),
             diag_log:            Vec::new(),
+            quest:          QuestState::default(),
             input_direction:     crate::game::direction::Direction::None,
             hero_entity:         placeholder,
             carrier_entity:      None,
@@ -395,5 +443,118 @@ mod tests {
     fn health_check() {
         let h = crate::game::ecs::components::Health::new(10);
         assert!(!h.is_dead());
+    }
+
+    // QuestState tests (Plan V)
+    #[test]
+    fn quest_state_defaults_to_zero() {
+        let quest = QuestState::default();
+        assert_eq!(quest.princess_rescues, 0);
+        assert_eq!(quest.statues_collected, 0);
+        assert!(!quest.writ_obtained);
+        assert!(!quest.rose_obtained);
+        assert!(!quest.crystal_shard_obtained);
+        assert!(!quest.sun_stone_obtained);
+        assert!(!quest.golden_lasso_obtained);
+        assert!(!quest.talisman_obtained);
+        assert!(!quest.king_bone_obtained);
+    }
+
+    #[test]
+    fn quest_can_enter_azal_requires_5_statues() {
+        let mut quest = QuestState::default();
+
+        // Should not be able to enter with 4 statues
+        quest.statues_collected = 4;
+        assert!(!quest.can_enter_azal());
+
+        // Should be able to enter with 5 statues
+        quest.statues_collected = 5;
+        assert!(quest.can_enter_azal());
+
+        // Should still be able with more than 5 (capped)
+        quest.statues_collected = 10;
+        assert!(quest.can_enter_azal());
+    }
+
+    #[test]
+    fn quest_has_won_requires_talisman_only() {
+        let mut quest = QuestState::default();
+
+        // Should not win without talisman (even with princesses)
+        quest.princess_rescues = 3;
+        assert!(!quest.has_won());
+
+        // Should win with just talisman (princess rescues optional)
+        quest.princess_rescues = 0;
+        quest.talisman_obtained = true;
+        assert!(quest.has_won());
+    }
+
+    #[test]
+    fn quest_progress_percent_calculation() {
+        let mut quest = QuestState::default();
+        assert_eq!(quest.progress_percent(), 0);
+
+        // Princess rescues not counted in progress (optional side content)
+        quest.princess_rescues = 3;
+        assert_eq!(quest.progress_percent(), 0);
+
+        // 1 statue = 16% (1/6 * 100)
+        quest.statues_collected = 1;
+        assert_eq!(quest.progress_percent(), 16);
+
+        // 5 statues = 83% (5/6 * 100)
+        quest.statues_collected = 5;
+        assert_eq!(quest.progress_percent(), 83);
+
+        // All required items = 100%
+        quest.talisman_obtained = true;
+        assert_eq!(quest.progress_percent(), 100);
+    }
+
+    #[test]
+    fn quest_state_equality() {
+        let quest1 = QuestState {
+            princess_rescues: 2,
+            statues_collected: 3,
+            talisman_obtained: true,
+            ..Default::default()
+        };
+
+        let quest2 = QuestState {
+            princess_rescues: 2,
+            statues_collected: 3,
+            talisman_obtained: true,
+            ..Default::default()
+        };
+
+        let quest3 = QuestState {
+            princess_rescues: 1,
+            statues_collected: 3,
+            talisman_obtained: true,
+            ..Default::default()
+        };
+
+        assert_eq!(quest1, quest2);
+        assert_ne!(quest1, quest3);
+    }
+
+    #[test]
+    fn quest_state_clone() {
+        let quest1 = QuestState {
+            princess_rescues: 2,
+            statues_collected: 3,
+            writ_obtained: true,
+            ..Default::default()
+        };
+
+        let quest2 = quest1.clone();
+        assert_eq!(quest1, quest2);
+
+        // Verify independence
+        let mut quest2_mut = quest2;
+        quest2_mut.princess_rescues = 3;
+        assert_ne!(quest1, quest2_mut);
     }
 }

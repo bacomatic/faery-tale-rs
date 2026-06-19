@@ -114,4 +114,14 @@ message SaveFile {
 
     // cheat1 persists across save/load (fmain.c:562, fmain2.c:1508 block-1 offset 18)
     bool cheat1 = 160;
+
+    // Quest state fields (Plan V)
+    uint32 statues_collected = 161;
+    bool writ_obtained = 162;
+    bool rose_obtained = 163;
+    bool crystal_shard_obtained = 164;
+    bool sun_stone_obtained = 165;
+    bool golden_lasso_obtained = 166;
+    bool talisman_obtained = 167;
+    bool king_bone_obtained = 168;
 }

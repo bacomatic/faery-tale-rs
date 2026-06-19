@@ -40,6 +40,25 @@ fn handle_take(world: &mut World, res: &mut Resources, entity: hecs::Entity) {
         }
     }
 
+    // Quest state updates (Plan V)
+    match ob_id {
+        22 => {
+            // Talisman (win condition)
+            res.quest.talisman_obtained = true;
+        }
+        7 => {
+            // Sun Stone (Witch vulnerability)
+            res.quest.sun_stone_obtained = true;
+        }
+        5 => {
+            // Golden Lasso (swan flight)
+            res.quest.golden_lasso_obtained = true;
+        }
+        _ => {
+            // Non-quest item, no quest state update
+        }
+    }
+
     res.events.sfx.push(SfxEvent { sfx_id: 5 });
     res.events.message.push(MessageEvent {
         text: "Taken.".to_string(),

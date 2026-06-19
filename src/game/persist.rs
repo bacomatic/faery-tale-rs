@@ -104,6 +104,15 @@ fn state_to_proto(state: &GameState) -> proto::SaveFile {
         actors: vec![],
         world_objects,
         cheat1: state.cheat1,
+        // Quest state (Plan V) - legacy GameState doesn't track these, use defaults
+        statues_collected: 0,
+        writ_obtained: false,
+        rose_obtained: false,
+        crystal_shard_obtained: false,
+        sun_stone_obtained: false,
+        golden_lasso_obtained: false,
+        talisman_obtained: false,
+        king_bone_obtained: false,
     }
 }
 
@@ -404,6 +413,15 @@ fn ecs_to_proto(scene: &crate::game::ecs::scene::EcsScene) -> proto::SaveFile {
         dayperiod:        res.region.dayperiod as u32,
         current_mood:     res.region.current_mood as u32,
         cheat1:           res.brother.cheat1,
+        // Quest state (Plan V)
+        statues_collected: res.quest.statues_collected as u32,
+        writ_obtained:     res.quest.writ_obtained,
+        rose_obtained:     res.quest.rose_obtained,
+        crystal_shard_obtained: res.quest.crystal_shard_obtained,
+        sun_stone_obtained:     res.quest.sun_stone_obtained,
+        golden_lasso_obtained:  res.quest.golden_lasso_obtained,
+        talisman_obtained:      res.quest.talisman_obtained,
+        king_bone_obtained:     res.quest.king_bone_obtained,
         actors:           vec![],
         world_objects:    vec![],
     }
@@ -512,6 +530,16 @@ fn proto_to_ecs(
     scene.res.brother.witchflag      = sf.witchflag;
     scene.res.brother.safe_flag      = sf.safe_flag;
     scene.res.brother.cheat1         = sf.cheat1;
+
+    // Quest state (Plan V).
+    scene.res.quest.statues_collected      = sf.statues_collected as u8;
+    scene.res.quest.writ_obtained          = sf.writ_obtained;
+    scene.res.quest.rose_obtained          = sf.rose_obtained;
+    scene.res.quest.crystal_shard_obtained = sf.crystal_shard_obtained;
+    scene.res.quest.sun_stone_obtained     = sf.sun_stone_obtained;
+    scene.res.quest.golden_lasso_obtained  = sf.golden_lasso_obtained;
+    scene.res.quest.talisman_obtained      = sf.talisman_obtained;
+    scene.res.quest.king_bone_obtained     = sf.king_bone_obtained;
 
     // View.
     scene.res.view.viewstatus = sf.viewstatus as u8;
