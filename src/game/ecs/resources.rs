@@ -284,11 +284,11 @@ pub enum NarrEvent {
 /// FIFO queue for narrative events with timer management.
 #[derive(Debug, Default)]
 pub struct NarrativeQueue {
-    pending: Vec<NarrEvent>,
+    pub pending: Vec<NarrEvent>,
     /// Currently active event, if any.
-    pub(crate) active: Option<NarrEvent>,
+    pub active: Option<NarrEvent>,
     /// Ticks remaining for active event.
-    active_ticks: u32,
+    pub active_ticks: u32,
 }
 
 impl NarrativeQueue {

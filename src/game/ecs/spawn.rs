@@ -187,7 +187,6 @@ pub fn spawn_carrier(
 mod tests {
     use super::*;
     use hecs::World;
-    use crate::game::ecs::components::*;
     use crate::game::combat::MissileType;
 
     fn make_stats() -> HeroStats {

@@ -21,6 +21,7 @@ use crate::game::colors::Palette;
 use crate::game::copy_protect_scene::CopyProtectScene;
 use crate::game::cursor::CursorAsset;
 use crate::game::debug_command::{DebugCommand, DEFAULT_TICK_RATE_HZ};
+use crate::game::debug_tui::bridge::{build_ecs_actor_snapshots, build_ecs_hero_extras, build_ecs_narrative_preview};
 use crate::game::debug_tui::{DebugConsole, DebugSnapshot};
 use crate::game::game_clock::GameClock;
 use crate::game::day_phase::DayPhase;
@@ -719,18 +720,19 @@ pub fn main() -> Result<(), String> {
                 };
                 // Hero position + stats from ECS.
                 let (hero_x, hero_y, hero_brother, hero_vit, hero_hunger, hero_fatigue,
-                     hero_brave, hero_luck, hero_kind) = {
+                     hero_brave, hero_luck, hero_kind, hero_wealth) = {
                     use crate::game::ecs::components::{Position, BrotherKind, HeroStats};
                     let px = ecs.world.get::<&Position>(ecs.res.hero_entity)
                         .map(|p| (p.x as u16, p.y as u16)).unwrap_or((0, 0));
                     let bk = ecs.world.get::<&BrotherKind>(ecs.res.hero_entity)
                         .map(|b| b.id).unwrap_or(0);
                     let hs = ecs.world.get::<&HeroStats>(ecs.res.hero_entity);
-                    let (v, h, f, br, lk, ki) = hs.as_deref().map(|s| (
-                        s.vitality, s.hunger, s.fatigue, s.brave, s.luck, s.kind,
+                    let (v, h, f, br, lk, ki, we) = hs.as_deref().map(|s| (
+                        s.vitality, s.hunger, s.fatigue, s.brave, s.luck, s.kind, s.wealth,
                     )).unwrap_or_default();
-                    (px.0, px.1, bk, v, h, f, br, lk, ki)
+                    (px.0, px.1, bk, v, h, f, br, lk, ki, we)
                 };
+                let hero_extras = build_ecs_hero_extras(&ecs.world, ecs.res.hero_entity, &ecs.res);
                 let status = DebugSnapshot {
                     fps: game_fps,
                     tps: game_tps,
@@ -757,6 +759,29 @@ pub fn main() -> Result<(), String> {
                     brave: hero_brave as u16,
                     luck: hero_luck,
                     kind: hero_kind,
+                    wealth: hero_wealth as u16,
+                    max_vitality: hero_extras.max_vitality,
+                    hero_weapon: hero_extras.hero_weapon,
+                    hero_weapon_name: hero_extras.hero_weapon_name,
+                    hero_state_u8: hero_extras.hero_state_u8,
+                    hero_state_name: hero_extras.hero_state_name,
+                    hero_facing: hero_extras.hero_facing,
+                    hero_environ: hero_extras.hero_environ,
+                    active_carrier: hero_extras.active_carrier,
+                    active_carrier_name: hero_extras.active_carrier_name,
+                    jewel_timer: hero_extras.jewel_timer,
+                    totem_timer: hero_extras.totem_timer,
+                    freeze_timer: hero_extras.freeze_timer,
+                    actors: build_ecs_actor_snapshots(&ecs.world, ecs.res.hero_entity, 20),
+                    princess_captive: ecs.res.quest.princess_rescues < 3,
+                    princess_rescues: ecs.res.quest.princess_rescues as u16,
+                    statues_collected: ecs.res.quest.statues_collected,
+                    has_writ: ecs.res.quest.writ_obtained,
+                    has_talisman: ecs.res.quest.talisman_obtained,
+                    narrative_pending_count: ecs.res.narrative.pending.len() as u32,
+                    narrative_active: ecs.res.narrative.active.is_some(),
+                    narrative_timer: ecs.res.narrative.active_ticks,
+                    narrative_preview: build_ecs_narrative_preview(&ecs.res.narrative, 3),
                     ..DebugSnapshot::default()
                 };
                 dc.update_status(status);

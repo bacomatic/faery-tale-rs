@@ -35,7 +35,6 @@ pub fn handle(cmd: DebugCommand, world: &mut World, res: &mut Resources) {
 mod tests {
     use super::*;
     use hecs::World;
-    use crate::game::ecs::components::{Hero, Position};
     use crate::game::ecs::resources::Resources;
     use crate::game::ecs::spawn::spawn_hero;
     use crate::game::ecs::components::{HeroStats, Inventory};

@@ -28,9 +28,10 @@
 | S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Written |
 | T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Written |
 | U | `2025-01-01-ecs-plan-u-save-load-keys.md` | ✅ Written |
-| V | `2025-01-01-ecs-plan-v-quest-state.md` | ✅ Written |
-| W | `2025-01-01-ecs-plan-w-debug-tui-extras.md` | ✅ Written |
+| V | `2025-01-01-ecs-plan-v-quest-state.md` | ✅ Done |
+| W | `2025-01-01-ecs-plan-w-debug-tui-extras.md` | ✅ Done |
 | X | `2025-01-01-ecs-plan-x-parity-and-cleanup.md` | ✅ Written |
+| Y | `2025-01-01-ecs-plan-y-debug-tui-ecs-integration.md` | ✅ Written |
 
 ---
 

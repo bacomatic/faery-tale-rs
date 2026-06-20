@@ -848,7 +848,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("ecs_pos.sav");
 
-        let mut scene = crate::game::ecs::scene::new_for_test();
+        let scene = crate::game::ecs::scene::new_for_test();
         // Set a distinctive position.
         scene.world.get::<&mut Position>(scene.res.hero_entity)
             .map(|mut p| { p.x = 12345.0; p.y = 54321.0; }).ok();
@@ -869,7 +869,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("ecs_stats.sav");
 
-        let mut scene = crate::game::ecs::scene::new_for_test();
+        let scene = crate::game::ecs::scene::new_for_test();
         scene.world.get::<&mut HeroStats>(scene.res.hero_entity).map(|mut s| {
             s.vitality = 77; s.brave = 50; s.luck = 33; s.kind = 66; s.wealth = 99;
         }).ok();

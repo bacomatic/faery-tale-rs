@@ -13,6 +13,11 @@
 use crate::game::actor::{Actor, ActorKind, ActorState, Goal, Tactic};
 use crate::game::day_phase::DayPhase;
 use crate::game::direction::Direction;
+use crate::game::ecs::components::{
+    ActorMotion, AiState, CarrierMount, CombatState, EnemyKind, Facing, Health, HeroStats, Loot,
+    Position,
+};
+use crate::game::ecs::resources::{NarrEvent, NarrativeQueue, Resources};
 use crate::game::npc::{Npc, NpcState};
 
 // Re-export the command / log types the spec places in bridge.rs. They
@@ -123,6 +128,12 @@ pub struct DebugSnapshot {
     /// Freeze (Gold Ring) timer tick count.
     pub freeze_timer: u16,
 
+    // ── Narrative queue (debug preview) ───────────────────────────────
+    pub narrative_pending_count: u32,
+    pub narrative_active: bool,
+    pub narrative_timer: u32,
+    pub narrative_preview: Vec<String>,
+
     // ── Actor Watch (DBG-LAYOUT-06) ────────────────────────────────────
     /// Raft (slot 1) world coords when active+visible, otherwise `None`.
     pub raft_xy: Option<(u16, u16)>,
@@ -130,6 +141,35 @@ pub struct DebugSnapshot {
     pub missile_count: u8,
     /// Count of visible ground-item actors (slots 7..=19).
     pub item_count: u8,
+}
+
+/// Hero-specific extras for the top-row debug panels.
+#[derive(Debug, Clone, Default)]
+pub struct HeroExtras {
+    /// `15 + brave/4` — current cap for hero HP.
+    pub max_vitality: i16,
+    /// Weapon slot currently equipped on the hero.
+    pub hero_weapon: u8,
+    /// Human-readable name of the hero's weapon (Dirk/Mace/Sword/Bow/Wand/…).
+    pub hero_weapon_name: String,
+    /// Hero ActorState encoded (see `actor_state_u8`).
+    pub hero_state_u8: u8,
+    /// Human-readable hero state (WALKING, FIGHT, …).
+    pub hero_state_name: String,
+    /// Hero facing direction 0..=7 (0=N, clockwise).
+    pub hero_facing: u8,
+    /// Hero environ value (−3..=2); see SPEC §9.5.
+    pub hero_environ: i8,
+    /// Carrier index currently ridden (0 none / 1 raft / 2 turtle / 3 swan / 4 dragon).
+    pub active_carrier: i16,
+    /// Active carrier human-readable label.
+    pub active_carrier_name: String,
+    /// Light-timer tick count (Green Jewel spell).
+    pub jewel_timer: u16,
+    /// Totem (Bird Totem / map) active indicator tick count.
+    pub totem_timer: u16,
+    /// Freeze (Gold Ring) timer tick count.
+    pub freeze_timer: u16,
 }
 
 /// Per-actor snapshot for the Actor Watch panel and `/actors` dump.
@@ -187,6 +227,129 @@ impl ActorSnapshot {
             visible: n.active,
         }
     }
+}
+
+// ── ECS → DebugSnapshot conversion helpers ──────────────────────────────────
+
+/// Build a vector of `ActorSnapshot` values from the ECS world.
+///
+/// Slot 0 is always the hero.  Slots 1.. are active enemies.  The total is
+/// capped at `max_actors` (the DEBUG_SPEC limit is 20).
+pub fn build_ecs_actor_snapshots(
+    world: &hecs::World,
+    hero_entity: hecs::Entity,
+    max_actors: usize,
+) -> Vec<ActorSnapshot> {
+    let mut actors = Vec::with_capacity(max_actors.min(20));
+
+    // Hero as slot 0.
+    let hero_ok = (
+        world.get::<&Position>(hero_entity).ok(),
+        world.get::<&Facing>(hero_entity).ok(),
+        world.get::<&HeroStats>(hero_entity).ok(),
+        world.get::<&CombatState>(hero_entity).ok(),
+        world.get::<&ActorMotion>(hero_entity).ok(),
+    );
+    if let (Some(pos), Some(facing), Some(stats), Some(combat), Some(motion)) = hero_ok {
+        actors.push(ActorSnapshot {
+            slot: 0,
+            actor_type: 0, // PLAYER
+            state: actor_state_u8(&combat.state),
+            facing: facing.dir as u8,
+            abs_x: pos.x as u16,
+            abs_y: pos.y as u16,
+            vitality: stats.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            weapon: combat.weapon,
+            race: crate::game::npc::RACE_NORMAL,
+            goal: goal_u8(&Goal::User),
+            tactic: tactic_u8(&Tactic::None),
+            environ: motion.environ,
+            visible: true,
+        });
+    }
+
+    // Enemies fill the remaining slots.
+    let mut slot = 1;
+    for (pos, facing, kind, ai, health, loot) in world
+        .query::<(&Position, &Facing, &EnemyKind, &AiState, &Health, &Loot)>()
+        .iter()
+    {
+        if actors.len() >= max_actors {
+            break;
+        }
+        actors.push(ActorSnapshot {
+            slot: slot as u8,
+            actor_type: 1, // ENEMY
+            state: npc_state_u8(&ai.state),
+            facing: facing.dir as u8,
+            abs_x: pos.x as u16,
+            abs_y: pos.y as u16,
+            vitality: health.vitality.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            weapon: loot.weapon,
+            race: kind.race,
+            goal: goal_u8(&ai.goal),
+            tactic: tactic_u8(&ai.tactic),
+            environ: 0,
+            visible: true,
+        });
+        slot += 1;
+    }
+
+    actors
+}
+
+/// Extract hero-specific extras for the debug top-row panels.
+pub fn build_ecs_hero_extras(
+    world: &hecs::World,
+    hero_entity: hecs::Entity,
+    res: &Resources,
+) -> HeroExtras {
+    let mut extras = HeroExtras::default();
+
+    let hero_ok = (
+        world.get::<&HeroStats>(hero_entity).ok(),
+        world.get::<&CombatState>(hero_entity).ok(),
+        world.get::<&Facing>(hero_entity).ok(),
+        world.get::<&ActorMotion>(hero_entity).ok(),
+        world.get::<&CarrierMount>(hero_entity).ok(),
+    );
+    if let (Some(stats), Some(combat), Some(facing), Some(motion), Some(carrier)) = hero_ok {
+        extras.max_vitality = 15 + (stats.brave / 4);
+        extras.hero_weapon = combat.weapon;
+        extras.hero_weapon_name = weapon_short_name(combat.weapon).to_string();
+        extras.hero_state_u8 = actor_state_u8(&combat.state);
+        extras.hero_state_name = actor_state_name(extras.hero_state_u8).to_string();
+        extras.hero_facing = facing.dir as u8;
+        extras.hero_environ = motion.environ;
+        extras.active_carrier = carrier.active_carrier;
+        extras.active_carrier_name = carrier_name(carrier.active_carrier).to_string();
+    }
+
+    extras.jewel_timer = res.clock.light_timer.max(0) as u16;
+    extras.totem_timer = res.clock.secret_timer.max(0) as u16;
+    extras.freeze_timer = res.clock.freeze_timer.max(0) as u16;
+
+    extras
+}
+
+/// Build a short text preview of the next `count` pending narrative events.
+pub fn build_ecs_narrative_preview(queue: &NarrativeQueue, count: usize) -> Vec<String> {
+    queue
+        .pending
+        .iter()
+        .take(count)
+        .map(|event| match event {
+            NarrEvent::Placard { text, .. } => format!("PLACARD: {}", text),
+            NarrEvent::WaitTicks(t) => format!("WAIT: {} ticks", t),
+            NarrEvent::TeleportHero { x, y, region } => {
+                format!("TELEPORT: ({},{}) region {}", x, y, region)
+            }
+            NarrEvent::SwapObjectId { object_index, new_id } => {
+                format!("SWAP: object {} -> {}", object_index, new_id)
+            }
+            NarrEvent::ApplyRewards => "REWARDS".to_string(),
+        })
+        .collect()
 }
 
 fn actor_kind_u8(k: &ActorKind) -> u8 {
@@ -432,4 +595,182 @@ pub fn debug_log_atomic(msg: impl AsRef<str>) {
     let mut lock = stderr.lock();
     let _ = writeln!(lock, "{}", msg);
     // Lock released when `lock` goes out of scope
+}
+
+#[cfg(test)]
+mod tests {
+    use hecs::World;
+    use crate::game::actor::{ActorState, Goal, Tactic};
+    use crate::game::direction::Direction;
+    use crate::game::ecs::components::{
+        ActorMotion, AiState, CarrierMount, CombatState, EnemyKind, Facing, Health, HeroStats,
+        Loot, Position,
+    };
+    use crate::game::ecs::resources::{NarrativeQueue, NarrEvent, Resources};
+    use crate::game::npc::{NpcState, RACE_ENEMY, RACE_NORMAL};
+
+    use super::{
+        actor_state_u8, build_ecs_actor_snapshots, build_ecs_hero_extras,
+        build_ecs_narrative_preview, carrier_name, weapon_short_name,
+    };
+
+    fn hero_stats() -> HeroStats {
+        HeroStats {
+            vitality: 80,
+            brave: 16,
+            luck: 8,
+            kind: 12,
+            wealth: 5,
+            hunger: 0,
+            fatigue: 0,
+            gold: 0,
+        }
+    }
+
+    #[test]
+    fn test_build_ecs_actor_snapshots_includes_hero() {
+        let mut world = World::new();
+        let hero = world.spawn((
+            Position::new(100.0, 200.0),
+            Facing::new(Direction::S),
+            hero_stats(),
+            CombatState { state: ActorState::Still, weapon: 1 },
+            ActorMotion::default(),
+            CarrierMount::default(),
+        ));
+
+        let actors = build_ecs_actor_snapshots(&world, hero, 10);
+        assert_eq!(actors.len(), 1);
+        assert_eq!(actors[0].slot, 0);
+        assert_eq!(actors[0].actor_type, 0);
+        assert_eq!(actors[0].state, 0);
+        assert_eq!(actors[0].facing, 5);
+        assert_eq!(actors[0].abs_x, 100);
+        assert_eq!(actors[0].abs_y, 200);
+        assert_eq!(actors[0].vitality, 80);
+        assert_eq!(actors[0].weapon, 1);
+        assert_eq!(actors[0].race, RACE_NORMAL);
+        assert_eq!(actors[0].goal, 0);
+        assert_eq!(actors[0].tactic, 255);
+        assert_eq!(actors[0].environ, 0);
+    }
+
+    #[test]
+    fn test_build_ecs_actor_snapshots_includes_enemies() {
+        let mut world = World::new();
+        let hero = world.spawn((
+            Position::new(0.0, 0.0),
+            Facing::new(Direction::N),
+            hero_stats(),
+            CombatState::default(),
+            ActorMotion::default(),
+            CarrierMount::default(),
+        ));
+        for i in 0..3 {
+            world.spawn((
+                Position::new((i * 50) as f32, 100.0),
+                Facing::new(Direction::E),
+                EnemyKind { npc_type: 1, race: RACE_ENEMY },
+                AiState {
+                    state: NpcState::Walking,
+                    goal: Goal::Attack1,
+                    tactic: Tactic::Pursue,
+                    cleverness: 0,
+                },
+                Health::new(30),
+                Loot { weapon: 2, gold: 0, looted: false },
+            ));
+        }
+
+        let actors = build_ecs_actor_snapshots(&world, hero, 10);
+        assert_eq!(actors.len(), 4);
+        assert_eq!(actors[0].slot, 0);
+        for i in 1..=3 {
+            assert_eq!(actors[i].slot, i as u8);
+            assert_eq!(actors[i].actor_type, 1);
+            assert_eq!(actors[i].vitality, 30);
+            assert_eq!(actors[i].weapon, 2);
+            assert_eq!(actors[i].race, RACE_ENEMY);
+            assert_eq!(actors[i].goal, 1); // Attack1
+            assert_eq!(actors[i].tactic, 0); // Pursue
+            assert_eq!(actors[i].abs_y, 100);
+        }
+        assert_eq!(actors[1].abs_x, 0);
+        assert_eq!(actors[2].abs_x, 50);
+        assert_eq!(actors[3].abs_x, 100);
+    }
+
+    #[test]
+    fn test_build_ecs_actor_snapshots_respects_max_limit() {
+        let mut world = World::new();
+        let hero = world.spawn((
+            Position::new(0.0, 0.0),
+            Facing::new(Direction::N),
+            hero_stats(),
+            CombatState::default(),
+            ActorMotion::default(),
+            CarrierMount::default(),
+        ));
+        for i in 0..15 {
+            world.spawn((
+                Position::new((i * 10) as f32, 100.0),
+                Facing::new(Direction::E),
+                EnemyKind { npc_type: 1, race: RACE_ENEMY },
+                AiState::default(),
+                Health::new(10),
+                Loot::default(),
+            ));
+        }
+
+        let actors = build_ecs_actor_snapshots(&world, hero, 5);
+        assert_eq!(actors.len(), 5);
+    }
+
+    #[test]
+    fn test_build_ecs_hero_extras() {
+        let mut world = World::new();
+        let hero = world.spawn((
+            hero_stats(),
+            CombatState { state: ActorState::Fighting(10), weapon: 2 },
+            Facing::new(Direction::W),
+            ActorMotion { environ: 3, ..Default::default() },
+            CarrierMount { active_carrier: 1, ..Default::default() },
+        ));
+        let mut res = Resources::new(hero);
+        res.clock.light_timer = 100;
+        res.clock.secret_timer = 200;
+        res.clock.freeze_timer = 300;
+
+        let extras = build_ecs_hero_extras(&world, hero, &res);
+        assert_eq!(extras.max_vitality, 15 + (16 / 4));
+        assert_eq!(extras.hero_weapon, 2);
+        assert_eq!(extras.hero_weapon_name, weapon_short_name(2));
+        assert_eq!(extras.hero_state_u8, actor_state_u8(&ActorState::Fighting(10)));
+        assert_eq!(extras.hero_state_name, "FIGHT");
+        assert_eq!(extras.hero_facing, 7);
+        assert_eq!(extras.hero_environ, 3);
+        assert_eq!(extras.active_carrier, 1);
+        assert_eq!(extras.active_carrier_name, carrier_name(1));
+        assert_eq!(extras.jewel_timer, 100);
+        assert_eq!(extras.totem_timer, 200);
+        assert_eq!(extras.freeze_timer, 300);
+    }
+
+    #[test]
+    fn test_build_ecs_narrative_preview() {
+        let mut queue = NarrativeQueue::new();
+        queue.push(NarrEvent::Placard {
+            text: "Hello".to_string(),
+            hold_ticks: 10,
+        });
+        queue.push(NarrEvent::WaitTicks(5));
+        queue.push(NarrEvent::TeleportHero { x: 7.0, y: 8.0, region: 9 });
+        queue.push(NarrEvent::ApplyRewards);
+
+        let preview = build_ecs_narrative_preview(&queue, 3);
+        assert_eq!(preview.len(), 3);
+        assert_eq!(preview[0], "PLACARD: Hello");
+        assert_eq!(preview[1], "WAIT: 5 ticks");
+        assert_eq!(preview[2], "TELEPORT: (7,8) region 9");
+    }
 }
