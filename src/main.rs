@@ -46,6 +46,9 @@ struct Cli {
     /// Skip the intro sequence and jump straight to gameplay (requires --debug)
     #[arg(long, requires = "debug")]
     skip_intro: bool,
+    /// Print diagnostic log messages to stderr (no-console path only)
+    #[arg(long, short)]
+    verbose: bool,
 }
 
 fn set_mouse(cursor: &CursorAsset, color: &Palette) -> Option<Cursor> {
@@ -101,11 +104,57 @@ fn diag(dc: &mut Option<crate::game::debug_tui::DebugConsole>, msg: impl Into<St
     }
 }
 
+/// On Linux, SDL3's compiled-in default audio driver may not be available at
+/// runtime (e.g. a PipeWire build on a PulseAudio-only system). If the user
+/// has not already selected a driver, pick one that actually exists before SDL3
+/// initializes its audio subsystem, because SDL3 reads the driver selection
+/// once and cannot switch drivers after the first failed audio init.
+#[cfg(target_os = "linux")]
+fn ensure_linux_audio_driver() {
+    if std::env::var("SDL_AUDIODRIVER").is_ok() {
+        return;
+    }
+
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| {
+        let uid = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|line| line.starts_with("Uid:"))?
+                    .split_whitespace()
+                    .nth(1)?
+                    .parse::<u32>()
+                    .ok()
+            })
+            .unwrap_or_else(std::process::id);
+        format!("/run/user/{}", uid)
+    });
+
+    let candidates = [
+        ("pulse", format!("{}/pulse/native", runtime_dir)),
+        ("pipewire", format!("{}/pipewire-0", runtime_dir)),
+        ("alsa", String::from("/dev/snd")),
+    ];
+
+    for (driver, path) in &candidates {
+        if std::path::Path::new(path).exists() {
+            println!("SDL audio driver auto-selected: {} ({})", driver, path);
+            std::env::set_var("SDL_AUDIODRIVER", driver);
+            return;
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn ensure_linux_audio_driver() {}
+
 pub fn main() -> Result<(), String> {
     let cli = Cli::parse();
 
     let mut settings: GameSettings = settings::GameSettings::load();
     let mut pre_console_log: Vec<String> = Vec::new();
+
+    ensure_linux_audio_driver();
 
     let sdl_context = sdl3::init().unwrap();
     let video_subsystem = sdl_context
@@ -884,7 +933,9 @@ pub fn main() -> Result<(), String> {
             if let Some(ref mut scene) = active_scene {
                 if let Some(ecs) = scene.as_any_mut().downcast_mut::<EcsScene>() {
                     for msg in ecs.res.diag_log.drain(..) {
-                        eprintln!("{msg}");
+                        if cli.verbose {
+                            eprintln!("{msg}");
+                        }
                     }
                 }
             }
