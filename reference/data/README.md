@@ -30,3 +30,4 @@ explicitly marked `*(unknown)*` rather than omitted.
 | [sprites/objects.md](sprites/objects.md) | OBJECTS sheet — 116 frames (items, overlays, effects) |
 | [sprites/actors.md](sprites/actors.md) | PHIL + ENEMY sheets — actor animation body frames |
 | [sprites/carriers.md](sprites/carriers.md) | RAFT, CARRIER, DRAGON, SETFIG sheets |
+| [sprites/actor-animation-catalog.md](sprites/actor-animation-catalog.md) | Per-actor state-to-frame catalog (sprite sheet + image indices) |

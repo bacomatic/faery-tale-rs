@@ -220,8 +220,21 @@ def walk_step(i: int, an: Shape, d: int, k: int) -> int:
 
     # --- newloc: commit (fmain.c:1628-1650) -----------------------------------
     an.facing = d
+
+    # --- Walk animation frame selection (fmain.c:1629-1640) --------------------
+    # The local `dex` will be finalized by update_actor_index and written to
+    # an.index at the end of actor_tick (fmain.c:1824).
+    inum = diroffs[d]                                     # fmain.c:1630 — base statelist index for facing
+    dex = inum                                            # fmain.c:1631 — default: base frame
+    if not (riding and i == 0) and an.race != 2:           # fmain.c:1632, 2 = wraith race
+        dex = dex + ((cycle + i) & 7)                     # fmain.c:1632 — cycle through 8 walk frames
+    if k == -3:                                           # fmain.c:1635, -3 = reverse-field environ
+        dex = dex ^ 7                                     # fmain.c:1635 — reverse walk frames
+    if an.race == 4:                                      # fmain.c:1640, 4 = snake race
+        dex = (cycle & 2) + ((d & 0xfe) << 2) + 0x24      # fmain.c:1640 — snake slither cycle
+
     j = px_to_im(xtest, ytest)                            # fmain.c:1636 — terrain at new pos
-    if an.race == 2 or an.race == 4:                      # fmain.c:1640, 2 = wraith race, 4 = snake race
+    if an.race == 2 or an.race == 4:                      # fmain.c:1638, 2 = wraith race, 4 = snake race
         j = 0
 
     # fmain.c:1641-1644 — if deeper-than-shallow and stepping toward drier terrain,
@@ -253,6 +266,13 @@ Notes:
   the terrain sample for wraiths (`race == 2`) and snakes (`race == 4`)
   so that `update_environ` treats them as always on dry ground. The same
   zeroing is applied in every return path that exposes a terrain sample.
+- **Walk animation frame math.** The walk cycle uses `diroffs[d]` plus an
+  `((cycle + i) & 7)` frame offset. The offset is skipped for the hero
+  while mounted and for **wraiths (race 2)**, so wraiths glide on a
+  single base frame instead of cycling through the 8-frame walk sequence.
+  Snakes (race 4) replace the whole calculation with a custom slither
+  table. This logic is the source of the wraith's ghostly non-animated
+  movement.
 - The deviation sequence tries `original+1` (CW) then `original−1` (CCW),
   i.e. symmetric ±1 neighbors. The source reads `d = (d-2)&7` at `checkdev2`
   but `d` was already incremented by `+1` at `checkdev1`, so the net offset
@@ -290,6 +310,10 @@ Notes:
   is the responsibility of `actor_tick`'s state dispatcher; the
   race-specific frame overrides applied afterwards live in
   [`update_actor_index`](game-loop.md#update_actor_index).
+- **Wraith still-frame.** Because wraiths skip the `((cycle+i)&7)` walk
+  offset, their idle pose is `diroffs[d] + 1` (frame 1/9/17/25) while
+  their walk pose is `diroffs[d]` (frame 0/8/16/24). The two-frame toggle
+  between walking and pausing is the only animation they display.
 
 ## update_environ
 

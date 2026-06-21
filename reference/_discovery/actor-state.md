@@ -231,7 +231,7 @@ Idx  fig  wpn   wpn_x  wpn_y   (fmain.c line)
  86:  66,  10,     5,    11    (203 — asleep)
 ```
 
-How indexing works: For walking, `state = WALKING (12)`, the walk frame counter (0-7) is added to a direction base: S=0, W=8, N=16, E=24. For fighting, `state` is 0-11 (the transition state), added to a direction base: S=32, W=44, N=56, E=68. Special states use fixed indices: DYING=80+frame, SINK=83, OSCIL=84/85, SLEEP=86.
+How indexing works: For walking, `state = WALKING (12)`, the walk frame counter (0-7) is added to a direction base: S=0, W=8, N=16, E=24. The running frame counter is `((cycle + i) & 7)`, except for the hero while mounted and for wraiths (race 2), which freeze on the base frame and do not animate. Snakes (race 4) replace the walk cycle entirely with a custom slither table. For fighting, `state` is 0-11 (the transition state), added to a direction base: S=32, W=44, N=56, E=68. Special states use fixed indices: DYING=80+frame, SINK=83, OSCIL=84/85, SLEEP=86.
 
 ## trans_list[]
 

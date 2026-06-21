@@ -88,11 +88,18 @@ selected by `diroffs[16]` (`fmain.c:1010`). Full `statelist` table in
 
 ## ENEMY Sheet — Frame Table
 
-All ENEMY files (`cfiles[6-9, 12]`) share the same 64-frame layout. The snake/salamander
-(`cfiles[12]`) is special: its frames are accessed as `inum + 0x24` (= inum + 36) when
-`an->race == 4` (RACE_SNAKE) and `an->state < 14` (`fmain.c:2459`). The snake walk-S
-base is therefore at physical frame 36, walk-W at 44, etc. — they reuse the same
-8-frame-per-direction layout but starting 36 frames into the sheet.
+The runtime loads one ENEMY sheet per encounter based on `encounter_chart[encounter_type].file_id`:
+`cfiles[6]` (ogre), `cfiles[7]` (ghost/wraith/skeleton/salamander), `cfiles[8]`
+(dark knight/spider/snake), and `cfiles[9]` (necromancer/loraii/woodcutter).
+`cfiles[12]` is a separate table entry that shares disk blocks with Julian but is
+not used by the encounter loading path.
+
+All loaded ENEMY sheets share the same 64-frame layout. Two races apply offsets
+at render time:
+- **Snake (race 4):** `inum + 0x24` (= +36) when `an->state < DYING`
+  (`fmain.c:2459`). The snake walk-S base is therefore physical frame 36.
+- **Wraith (race 2):** the walk-frame counter `((cycle+i)&7)` is skipped in
+  `walk_step` (`fmain.c:1632`), so wraiths glide on the base frame only.
 
 | Frame | Name / description | Size (px) | Source ref |
 |-------|--------------------|-----------|------------|
@@ -109,21 +116,20 @@ base is therefore at physical frame 36, walk-W at 44, etc. — they reuse the sa
 
 ### Snake / Salamander offset
 
-For `cfiles[12]` (snake/salamander, `actor_file=12`), frames are accessed as
-`inum + 0x24` (= inum + 36) when `an->race == 4` (RACE_SNAKE) and `an->state < 14`
-(`fmain.c:2459`). The snake walk-S base is therefore at physical frame 36, walk-W at 44,
-etc. — they reuse the same 8-frame-per-direction layout but starting 36 frames into the
-sheet.
+For `an->race == 4` (snake), the renderer adds `0x24` (= 36) to `inum` when
+`an->state < DYING` (`fmain.c:2459`). The snake walk-S base is therefore at physical
+frame 36, walk-W at 44, etc. — the same 8-frame-per-direction layout shifted 36 frames
+into whichever ENEMY sheet is currently loaded.
 
 ### Per-enemy file summary
 
-| `actor_file` | Identity | `cfiles` index |
+| `encounter_chart.file_id` | Identity | `cfiles` index |
 |---|---|---|
-| 6 | Ogre | 6 |
-| 7 | Ghost / Wraith / Skeleton | 7 |
-| 8 | Dark Knight / Spider | 8 |
-| 9 | Necromancer / Farmer / Loraii | 9 |
-| 12 | Snake / Salamander | 12 |
+| 6 | Ogre / Orcs | 6 |
+| 7 | Ghost / Wraith / Skeleton / Salamander | 7 |
+| 8 | Dark Knight / Spider / Snake | 8 |
+| 9 | Necromancer / Loraii / Woodcutter | 9 |
+| 12 | Snake / Salamander (unused at runtime; shares Julian blocks) | 12 |
 
 ## Notes
 

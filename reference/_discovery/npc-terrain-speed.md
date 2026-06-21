@@ -182,6 +182,13 @@ if (an->race == 2 || an->race == 4) j = 0;
 ```
 So wraiths always have environ=0 (normal speed e=2).
 
+**Wraith animation freeze.** In the walk animation frame selection at
+`fmain.c:1632`, the `((cycle + i) & 7)` walk-frame offset is skipped for
+wraiths (`an->race == 2`). Wraiths therefore stay on the base
+`diroffs[d]` frame while walking and only switch to `diroffs[d] + 1`
+when entering `STATE_STILL` (`fmain.c:1662`). This gives them the
+characteristic ghostly glide rather than the normal 8-frame walk cycle.
+
 ### Crystal shard passthrough (hero only)
 
 ```c
