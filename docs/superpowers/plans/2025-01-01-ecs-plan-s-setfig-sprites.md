@@ -10,11 +10,13 @@ touches: [src/game/ecs/scene.rs]
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement SetFig (stationary NPC) sprite rendering in `blit_actors_inner()` by adding a third query pass for `(&SetFig, &Position, &SpriteRef)` entities, mirroring the existing Enemy blit pattern and using the SetFig sprite sheets (cfiles 13–17) indexed via `SpriteRef.cfile_idx`.
+**Goal:** Implement SetFig (stationary NPC) sprite rendering in `blit_actors_inner()` by adding a third query pass for `(&SetFig, &Position, &WorldObj)` entities, mirroring the existing Enemy blit pattern and selecting the sheet + frame from `SETFIG_TABLE` (cfiles 13–17).
 
-**Architecture:** SetFigs are stationary NPCs — Wizards, Priests, Guards, Bartenders, and similar townspeople. They carry a `SpriteRef` component populated at spawn time by Plan G's RegionSystem. The render pass reads `SpriteRef.cfile_idx` directly and always blits frame 0 (idle standing pose), since SetFigs are never animated. No STATELIST lookup and no facing logic is needed.
+**Architecture:** SetFigs are stationary NPCs — Wizards, Priests, Guards, Bartenders, and similar townspeople. The setfig type index is derived from the stored race byte: `k = obj.ob_id & 0x7f` (fmain.c:3374 strips the 0x80 setfig bit). `crate::game::sprites::SETFIG_TABLE[k]` then yields both `cfile_entry` (the sheet) and `image_base` (the base/idle frame for that type). The render pass blits `sheets[cfile_entry]` at frame `image_base`. No STATELIST lookup and no facing logic is needed for the idle pose.
 
-**Prerequisites:** Plans A, B, C, D complete. Plan G complete (RegionSystem spawns SetFig entities with valid SpriteRef).
+> **Important:** do NOT read the frame from `SpriteRef`. `SpriteRef.cfile_idx` is currently hardcoded to `13` for every setfig by the merged Plan G `reload_region` (a bug — it ignores `SETFIG_TABLE`), and `SpriteRef` carries no `image_base`. Deriving sheet + frame from `WorldObj.ob_id & 0x7f` via `SETFIG_TABLE` is the authoritative path and is immune to that bug. (Track the Plan G `cfile_idx` hardcode as a separate cleanup; once this plan lands, `SpriteRef` is unused by setfigs.)
+
+**Prerequisites:** Plans A, B, C, D complete. Plan G complete (RegionSystem spawns SetFig entities with a `WorldObj` whose `ob_id` is the race byte).
 
 **Tech Stack:** Rust 2021, `hecs = "0.11"`, SDL3.
 
@@ -40,9 +42,18 @@ SetFigs are the stationary human NPCs found in towns, castles, and inns. Unlike 
 | 16 | Witch (9), Spectre (10), Ghost (11) | 8 frames |
 | 17 | Ranger (12), Beggar (13) | 8 frames |
 
-All SetFigs display **frame 0** only — the idle standing pose. There is no walk cycle or animation for stationary NPCs.
+Each SetFig type displays its **`image_base` frame** — the idle standing pose for that type. Types share a sheet and are distinguished *only* by `image_base` (e.g. on cfile 13, Wizard=frame 0 but Priest=frame 4; on cfile 14, Guard=0, Guard-back=1, Princess=2, King=4, Noble=6, Sorceress=7). Rendering frame 0 for all of them would show the wrong NPC. There is no walk cycle for the idle render. (The five `can_talk` setfigs animate only during TALK; that talk animation is out of scope here — the idle frame is `image_base`.)
 
-The mapping from NPC type to cfile is resolved at spawn time. `spawn_setfig()` receives `cfile_idx: u8` from the RegionSystem and stores it in `SpriteRef { cfile_idx }`. At render time, the pass reads `SpriteRef.cfile_idx` directly without consulting `npc_type_to_cfile()` — that helper is used only by the Enemy pass and explicitly skips SetFig types (the `NPC_TYPE_HUMAN => None // SetFig — skip` branch).
+The sheet and frame are resolved at render time from the stored race byte:
+
+```
+k          = (obj.ob_id & 0x7f) as usize     // strip 0x80 setfig bit (fmain.c:3374)
+entry      = SETFIG_TABLE[k]                  // crate::game::sprites::SETFIG_TABLE
+cfile_idx  = entry.cfile_entry
+frame      = entry.image_base
+```
+
+`obj` is the `WorldObj` component on the setfig entity (`spawn_setfig` stores it with `ob_id = race`). The Enemy pass's `npc_type_to_cfile()` is not used here — it explicitly skips SetFig types (`NPC_TYPE_HUMAN => None`).
 
 ---
 
@@ -52,7 +63,7 @@ The mapping from NPC type to cfile is resolved at spawn time. `spawn_setfig()` r
 
 1. **Hero pass** — queries `(&Hero, &Position, &Facing, Option<&ActorMotion>, Option<&CombatState>, ...)`. Determines the body sprite frame from motion state and facing direction, then blits from the hero's dedicated character sheet.
 2. **Enemy pass** — queries `(&Enemy, &Position, &Facing, &EnemyKind, Option<&AiState>)`. Calls `npc_type_to_cfile(npc_type, race)` to resolve the cfile index, then blits the appropriate frame based on AI walk cycle.
-3. **SetFig pass** *(this plan)* — queries `(&SetFig, &Position, &SpriteRef)`. Reads `SpriteRef.cfile_idx` to index directly into `sheets[]`, always blits frame 0.
+3. **SetFig pass** *(this plan)* — queries `(&SetFig, &Position, &WorldObj)`. Computes `k = obj.ob_id & 0x7f`, looks up `SETFIG_TABLE[k]`, and blits `sheets[entry.cfile_entry]` at frame `entry.image_base`.
 
 The SetFig pass is intentionally the simplest of the three: no motion state, no facing direction, no STATELIST lookup.
 
@@ -73,9 +84,12 @@ After the Enemy pass, add:
 
 ```rust
 // ── SetFigs ──────────────────────────────────────────────────────────────
-let mut setfig_q = world.query::<(&SetFig, &Position, &SpriteRef)>();
-for (_, pos, sprite_ref) in setfig_q.iter() {
-    let cfile_idx = sprite_ref.cfile_idx as usize;
+let mut setfig_q = world.query::<(&SetFig, &Position, &WorldObj)>();
+for (_, (_, pos, obj)) in setfig_q.iter() {
+    // Setfig type index = race byte with the 0x80 setfig bit stripped (fmain.c:3374).
+    let k = (obj.ob_id & 0x7f) as usize;
+    let Some(entry) = crate::game::sprites::SETFIG_TABLE.get(k) else { continue; };
+    let cfile_idx = entry.cfile_entry as usize;
     let Some(Some(ref sheet)) = sheets.get(cfile_idx) else { continue; };
     let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
     if rel_x <= -(SPRITE_W as i32) || rel_x >= fb_w
@@ -83,8 +97,8 @@ for (_, pos, sprite_ref) in setfig_q.iter() {
     {
         continue;
     }
-    // SetFigs use frame 0 (idle standing pose — never animated).
-    if let Some(fp) = sheet.frame_pixels(0) {
+    // Idle pose for this setfig type is SETFIG_TABLE[k].image_base.
+    if let Some(fp) = sheet.frame_pixels(entry.image_base as usize) {
         blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, framebuf, fb_w, fb_h);
     }
 }
@@ -96,10 +110,11 @@ Notes:
 - `SPRITE_W` and `SPRITE_H` are already imported by the surrounding function.
 - The out-of-bounds check (`rel_x <= -(SPRITE_W as i32) || ...`) mirrors the Enemy pass guard exactly. Do not alter its logic.
 - `SPRITE_H` is passed to `blit_sprite_to_framebuf` as the frame height — SetFig sprites are the standard character height (32 px), not the object-sheet height (16 px). This mirrors the Enemy pass.
+- `SpriteRef` is intentionally NOT used (see the Important note at the top): its `cfile_idx` is hardcoded to 13 by Plan G and it has no `image_base`.
 
 - [ ] **Step 3: Verify imports**
 
-Confirm that `SetFig` and `SpriteRef` are already imported in the function's `use` block or at the top of the module. Both are defined in `src/game/ecs/components.rs`. No new imports are needed if the Enemy pass already brings in `src::game::ecs::components::*` or names them explicitly. If they are missing, add them to the existing component import line — do not add a new `use` line.
+Confirm that `SetFig` and `WorldObj` are imported in the function's `use` block (both in `src/game/ecs/components.rs`), and that `SETFIG_TABLE` is reachable via `crate::game::sprites::SETFIG_TABLE` (used fully-qualified above, so no new `use` is required). If `SetFig`/`WorldObj` are missing, add them to the existing component import line — do not add a new `use` line.
 
 - [ ] **Step 4: Compile check**
 
@@ -126,17 +141,9 @@ This task is read-only verification. No source changes should be needed if Plan 
 - Read: `src/game/ecs/components.rs`
 - Read: `src/game/ecs/spawn.rs`
 
-- [ ] **Step 1: Verify `SpriteRef` component structure**
+- [ ] **Step 1: Verify `WorldObj` component carries the race byte**
 
-Open `src/game/ecs/components.rs`. Confirm the definition reads:
-
-```rust
-pub struct SpriteRef {
-    pub cfile_idx: u8,
-}
-```
-
-If the field name or type differs (e.g. `cfile: usize`), update the render pass in Task 1 Step 2 to match — do not change `components.rs` unless it conflicts with Plan G's documented interface.
+Open `src/game/ecs/components.rs`. Confirm `WorldObj` has a `pub ob_id: u8` field. Confirm `spawn_setfig()` in `src/game/ecs/spawn.rs` attaches the `WorldObj` (it does today: `world.spawn((SetFig, Position, Facing, obj, SpriteRef { .. }))`, and `reload_region` sets `obj.ob_id = npc.race`). The render pass derives sheet + frame from `obj.ob_id & 0x7f`, so a present `WorldObj` is the only precondition.
 
 - [ ] **Step 2: Verify `SetFig` marker component**
 
@@ -148,15 +155,9 @@ pub struct SetFig;
 
 is present. If it is missing, this plan cannot proceed — Plan G must define it first. Report the gap; do not add the struct here.
 
-- [ ] **Step 3: Verify `spawn_setfig()` populates `SpriteRef`**
+- [ ] **Step 3: Verify `SETFIG_TABLE` and note the Plan G spawn bug**
 
-Open `src/game/ecs/spawn.rs`. Find `spawn_setfig()`. Confirm its signature accepts `cfile_idx: u8` and that the entity builder includes:
-
-```rust
-.with(SpriteRef { cfile_idx })
-```
-
-If `SpriteRef` is missing from the spawned entity, the query pass in Task 1 will produce no results at runtime, but will not panic. Report the gap to Plan G; do not add `SpriteRef` insertion here as that is Plan G's responsibility.
+Confirm `crate::game::sprites::SETFIG_TABLE: [SetfigEntry; 14]` exists with `cfile_entry` and `image_base` fields. Then note (do not fix here) that `reload_region` in `scene.rs` currently calls `spawn_setfig(.., cfile_idx = 13)` for every setfig, ignoring `SETFIG_TABLE`. This render pass does not depend on that hardcoded value, but the `SpriteRef.cfile_idx=13` hardcode should be tracked as a separate Plan G cleanup (and `SpriteRef` becomes unused for setfigs).
 
 - [ ] **Step 4: Record findings**
 
@@ -169,26 +170,25 @@ No commit needed for this task. Note any discrepancies in the PR description or 
 **Files:**
 - Modify: `src/game/ecs/scene.rs` (or a dedicated `#[cfg(test)]` block within it)
 
-Three targeted tests covering spawn correctness, query iteration, and offscreen culling. Tests use `hecs::World` directly — no SDL context required.
+Three targeted tests covering the table lookup, query iteration, and offscreen culling. Tests use `hecs::World` directly — no SDL context required. Use the existing `make_test_obj(ob_id)` helper from the `scene.rs` test module (or a local equivalent that builds a `WorldObj` with the given `ob_id` and default remaining fields).
 
-- [ ] **Step 1: `setfig_has_correct_cfile_idx`**
+- [ ] **Step 1: `setfig_race_resolves_to_table_entry`**
 
-Spawns a SetFig entity with `cfile_idx = 13` and asserts that the component value round-trips correctly:
+Spawns a SetFig with the Priest race byte (`0x81` = `0x80` setfig bit | index 1) and asserts the table lookup yields the Priest's sheet **and a non-zero frame** — proving the pass does not collapse to frame 0:
 
 ```rust
 #[test]
-fn setfig_has_correct_cfile_idx() {
-    use crate::game::ecs::components::{SetFig, Position, SpriteRef};
+fn setfig_race_resolves_to_table_entry() {
+    use crate::game::ecs::components::{SetFig, Position, WorldObj};
+    use crate::game::sprites::SETFIG_TABLE;
     let mut world = hecs::World::new();
-    world.spawn((
-        SetFig,
-        Position { x: 100.0, y: 200.0 },
-        SpriteRef { cfile_idx: 13 },
-    ));
-    let mut q = world.query::<(&SetFig, &SpriteRef)>();
-    let results: Vec<_> = q.iter().collect();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].1.1.cfile_idx, 13);
+    // Priest = setfig index 1 → race byte 0x81.
+    world.spawn((SetFig, Position { x: 100.0, y: 200.0 }, make_test_obj(0x81)));
+    let mut q = world.query::<(&SetFig, &WorldObj)>();
+    let (_, (_, obj)) = q.iter().next().unwrap();
+    let entry = SETFIG_TABLE[(obj.ob_id & 0x7f) as usize];
+    assert_eq!(entry.cfile_entry, 13, "priest is on cfile 13");
+    assert_eq!(entry.image_base, 4, "priest idle frame is 4, not 0");
 }
 ```
 
@@ -199,19 +199,19 @@ Spawns exactly one SetFig entity and asserts the query returns exactly one resul
 ```rust
 #[test]
 fn setfig_query_finds_entity() {
-    use crate::game::ecs::components::{SetFig, Enemy, Position, SpriteRef, EnemyKind};
+    use crate::game::ecs::components::{SetFig, Enemy, Position, WorldObj, EnemyKind};
     let mut world = hecs::World::new();
     world.spawn((
         SetFig,
         Position { x: 10.0, y: 10.0 },
-        SpriteRef { cfile_idx: 14 },
+        make_test_obj(0x82), // guard
     ));
     world.spawn((
         Enemy,
         Position { x: 20.0, y: 20.0 },
         EnemyKind { npc_type: 0, race: 0 },
     ));
-    let mut setfig_q = world.query::<(&SetFig, &Position, &SpriteRef)>();
+    let mut setfig_q = world.query::<(&SetFig, &Position, &WorldObj)>();
     assert_eq!(setfig_q.iter().count(), 1);
 }
 ```
@@ -282,4 +282,4 @@ Both succeed. In a running game with Plan G active, SetFig NPCs (Wizards, Priest
 | B | System infrastructure in place |
 | C | System schedule wired |
 | D | `EcsScene` and `blit_actors_inner()` exist |
-| G | RegionSystem spawns SetFig entities with valid `SpriteRef` |
+| G | RegionSystem spawns SetFig entities with a `WorldObj` (`ob_id` = race byte) |

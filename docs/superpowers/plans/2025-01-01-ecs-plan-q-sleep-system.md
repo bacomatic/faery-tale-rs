@@ -69,16 +69,19 @@ Sleep mode: +64/tick at 15 Hz = 24000 / (64 * 15) = 25 seconds for a full day cy
 
 ## Background: lightlevel triangle wave
 
-The daynight counter drives a triangle wave for ambient lighting:
+The daynight counter drives a triangle wave for ambient lighting (spec
+`daynight-cycle.md §17.2`; matches `game_state.rs`):
 
 ```
-if daynight < 12000:
-    lightlevel = daynight / 12       // ramp up: 0 → 999
-else:
-    lightlevel = (24000 - daynight) / 12  // ramp down: 999 → 0
+lightlevel = daynight / 40
+if lightlevel >= 300:
+    lightlevel = 600 - lightlevel
 ```
 
-The sleep system must refresh this after each +63 increment so that the palette system sees smooth day/night progression during sleep.
+This ramps up to a peak of 300 at `daynight == 12000`, then back down — NOT a
+`daynight / 12` ramp to 999. The sleep system must refresh this after each +63
+increment so that the palette system sees smooth day/night progression during
+sleep.
 
 ---
 
@@ -127,12 +130,12 @@ The sleep system must refresh this after each +63 increment so that the palette 
       let dn = &mut res.clock.daynight;
       *dn = (*dn + 63) % 24000;
 
-      // Refresh lightlevel triangle wave.
-      res.clock.lightlevel = if *dn < 12000 {
-          *dn / 12
-      } else {
-          (24000 - *dn) / 12
-      };
+      // Refresh lightlevel (daynight-cycle.md §17.2; matches game_state.rs).
+      let mut ll = *dn / 40;
+      if ll >= 300 {
+          ll = 600 - ll;
+      }
+      res.clock.lightlevel = ll;
   }
   ```
 

@@ -41,7 +41,7 @@ pub struct CarrierMount {
     pub flying:          i16,  // 1=flying (swan only)
     pub swan_vx:         f32,
     pub swan_vy:         f32,
-    pub active_carrier:  i16,  // 0=none, 1=raft, 5=turtle, 6=swan
+    pub active_carrier:  i16,  // 0=none, 5=raft, 6=turtle, 1=swan (CARRIER_* in game_state.rs)
     pub on_raft:         bool,
     pub raftprox:        i16,
     pub wcarry:          u8,   // actor slot: 1=raft, 3=turtle/swan
@@ -115,7 +115,7 @@ fn update_raft(world: &mut World, res: &mut Resources) {
             let dist = dist2(hero_pos, raft_pos).sqrt();
             if dist <= 9.0 {
                 mount.riding         = 1;
-                mount.active_carrier = 1;
+                mount.active_carrier = 5;  // CARRIER_RAFT
                 mount.on_raft        = true;
                 mount.wcarry         = 1;
                 res.carrier_entity   = Some(raft_ent);
@@ -205,7 +205,7 @@ fn update_turtle(world: &mut World, res: &mut Resources) {
             .get_mut::<CarrierMount>(res.hero_entity)
             .expect("hero must have CarrierMount");
         mount.riding         = 5;
-        mount.active_carrier = 5;
+        mount.active_carrier = 6;  // CARRIER_TURTLE
         mount.wcarry         = 3;
         res.carrier_entity   = Some(turtle);
         return;
@@ -237,7 +237,7 @@ fn update_turtle(world: &mut World, res: &mut Resources) {
                         .get_mut::<CarrierMount>(res.hero_entity)
                         .expect("hero must have CarrierMount");
                     mount.riding         = 5;
-                    mount.active_carrier = 5;
+                    mount.active_carrier = 6;  // CARRIER_TURTLE
                     mount.wcarry         = 3;
                 }
             }
@@ -251,8 +251,9 @@ fn update_turtle(world: &mut World, res: &mut Resources) {
 ```rust
 /// Move the turtle one step per tick toward terrain-5 (deep water).
 /// Probes 4 cardinal directions; moves to the first valid deep-water position.
+/// Turtle speed is always 3 px (spec §21.3 / fmain.c:1521-1522).
 fn autonomous_turtle_move(world: &mut World, res: &Resources, turtle: Entity) {
-    const DIRS: [(f32, f32); 4] = [(0.0, -8.0), (0.0, 8.0), (-8.0, 0.0), (8.0, 0.0)];
+    const DIRS: [(f32, f32); 4] = [(0.0, -3.0), (0.0, 3.0), (-3.0, 0.0), (3.0, 0.0)];
     let current = world
         .get::<Position>(turtle)
         .map(|p| (p.x, p.y))
@@ -311,7 +312,7 @@ fn update_swan(world: &mut World, res: &mut Resources) {
             if dist2(hero_pos, swan_pos).sqrt() <= 16.0 {
                 let mut mount = world.get_mut::<CarrierMount>(res.hero_entity).expect("CarrierMount");
                 mount.riding         = 11;
-                mount.active_carrier = 6;
+                mount.active_carrier = 1;  // CARRIER_SWAN
                 mount.flying         = 1;
                 mount.swan_vx        = 0.0;
                 mount.swan_vy        = 0.0;
@@ -559,12 +560,13 @@ fn raft_snaps_to_hero_each_tick() {
 #[test]
 fn turtle_moves_only_to_deep_water() {
     let (mut world, mut res) = test_fixtures::with_turtle_at(0.0, 0.0);
-    // Mark (0, 8) as terrain 5 (deep water), all others as terrain 0.
-    res.region.set_terrain_at(0, 8, 5);
+    // Mark (0, 3) as terrain 5 (deep water), all others as terrain 0.
+    // Turtle steps 3 px per tick, so the deep-water probe lands at (0, 3).
+    res.region.set_terrain_at(0, 3, 5);
     let turtle_ent = res.carrier_entity.unwrap();
     autonomous_turtle_move(&mut world, &res, turtle_ent);
     let pos = world.get::<Position>(turtle_ent).unwrap();
-    assert_eq!((pos.x as i32, pos.y as i32), (0, 8));
+    assert_eq!((pos.x as i32, pos.y as i32), (0, 3));
 }
 ```
 

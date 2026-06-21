@@ -42,14 +42,12 @@ Find the existing scancode handling in `main.rs` (around line 520-530 based on T
 
 ```rust
 Event::KeyDown { scancode: Scancode::F5, .. } => {
+    // Fidelity: save/load produces NO player-facing scroll message. The
+    // original saved to disk silently. Feedback goes only to the debug log
+    // (diag_log → drained by main.rs into the debug console, else stderr).
     match ecs_save_game(&ecs_scene, 0) {
-        Ok(()) => {
-            // Emit save confirmation message
-            println!("Game saved to slot 0");
-        }
-        Err(e) => {
-            eprintln!("Failed to save game: {}", e);
-        }
+        Ok(())  => ecs_scene.res.diag_log.push("save: slot 0 ok".to_string()),
+        Err(e)  => ecs_scene.res.diag_log.push(format!("save: slot 0 failed: {e}")),
     }
 }
 ```
@@ -73,14 +71,10 @@ Expected: no errors. The `ecs_save_game` function should already be imported fro
 
 ```rust
 Event::KeyDown { scancode: Scancode::F9, .. } => {
+    // No player-facing scroll message — debug log only (see F5 above).
     match ecs_load_game(0, &mut ecs_scene) {
-        Ok(()) => {
-            // Emit load confirmation message
-            println!("Game loaded from slot 0");
-        }
-        Err(e) => {
-            eprintln!("Failed to load game: {}", e);
-        }
+        Ok(())  => ecs_scene.res.diag_log.push("load: slot 0 ok".to_string()),
+        Err(e)  => ecs_scene.res.diag_log.push(format!("load: slot 0 failed: {e}")),
     }
 }
 ```
@@ -184,25 +178,17 @@ pub fn dispatch_menu_action(&mut self, action: crate::game::menu::MenuAction) ->
     
     match action {
         MenuAction::SaveGame(slot) => {
+            // Debug-log only — no player-facing scroll text (fidelity).
             match ecs_save_game(self, slot) {
-                Ok(()) => {
-                    // Save confirmation could be added to message queue
-                    self.res.messages.push("Game saved".to_string());
-                }
-                Err(e) => {
-                    self.res.messages.push(format!("Save failed: {}", e));
-                }
+                Ok(())  => self.res.diag_log.push(format!("save: slot {slot} ok")),
+                Err(e)  => self.res.diag_log.push(format!("save: slot {slot} failed: {e}")),
             }
             crate::game::scene::SceneResult::Continue
         }
         MenuAction::LoadGame(slot) => {
             match ecs_load_game(slot, self) {
-                Ok(()) => {
-                    self.res.messages.push("Game loaded".to_string());
-                }
-                Err(e) => {
-                    self.res.messages.push(format!("Load failed: {}", e));
-                }
+                Ok(())  => self.res.diag_log.push(format!("load: slot {slot} ok")),
+                Err(e)  => self.res.diag_log.push(format!("load: slot {slot} failed: {e}")),
             }
             crate::game::scene::SceneResult::Continue
         }
@@ -338,9 +324,9 @@ cargo run -- --ecs
 ```
 
 1. Start game, move hero to a specific position
-2. Press F5 - should see "Game saved" message
+2. Press F5 - save file written; "save: slot 0 ok" appears in the debug log only (no scroll message)
 3. Move hero to different position
-4. Press F9 - should see "Game loaded" message and hero returns to saved position
+4. Press F9 - "load: slot 0 ok" in debug log and hero returns to saved position (no scroll message)
 
 - [ ] **Step 2: Test Game menu save/load**
 
@@ -391,7 +377,7 @@ git commit -m "feat(ecs): implement F5/F9 save/load hotkeys and menu action disp
 - Fix victory detection TODO with inventory talisman check
 - Fix hero name TODO with BrotherKind lookup
 - Add EcsScene::dispatch_menu_action() for Game menu actions
-- Wire save/load confirmation messages to message queue"
+- Route save/load feedback to debug log (no player-facing scroll text)"
 ```
 
 ---

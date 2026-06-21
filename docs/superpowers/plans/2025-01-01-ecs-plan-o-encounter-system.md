@@ -87,18 +87,19 @@ if xtype == 49:
 
 - **Origin**: 150–213 px from hero in a random direction (uniformly sampled angle, radius = `150 + rand64() % 64`).
 - **Per-enemy scatter**: ±31 px around origin. Up to 15 position retries per enemy.
-- **Collision rejection**: reject if new position is within 32 px of the hero or within 32 px of any already-placed enemy in this group. Also reject out-of-bounds positions.
+- **Collision rejection**: reject using the original game's actor bounding box (`collision.rs::actor_collides`): a position collides when `|dx| < 11` AND `|dy| < 9` relative to the hero or any already-placed enemy. (NOT a 32 px radius.) Also reject out-of-bounds positions.
 - Spawn at most 4 enemies per encounter event regardless of group composition.
 
 ### `EnemyTypeStats` fields (for reference)
 
 ```rust
+// Actual struct in src/game/encounter.rs — note field names `clever` and `cfile`.
 pub struct EnemyTypeStats {
-    pub hp:          i16,
-    pub arms:        u8,
-    pub cleverness:  i16,
-    pub treasure:    u8,
-    pub cfile_idx:   u8,
+    pub hp:        i16,
+    pub arms:      u8,
+    pub clever:    u8,
+    pub treasure:  u8,
+    pub cfile:     u8,
 }
 ```
 
@@ -295,21 +296,30 @@ fn spawn_encounter_group(
     let mut spawned = 0usize;
 
     for _ in 0..4 {
-        if let Some(pos) = find_spawn_position(origin, &occupied, 15, 31.0, 32.0) {
+        if let Some(pos) = find_spawn_position(origin, &occupied, 15, 31.0) {
             let weapon = tables.weapon_probs
                 [(stats.arms as usize * 4)
                  + crate::game::rng::rand4() as usize % 4];
+            // Race is derived from the encounter type, NOT hardcoded to 0.
+            // Matches src/game/encounter.rs::spawn_encounter (combat immunity
+            // logic in Plan N depends on the correct race).
+            let race = match encounter_type {
+                2     => crate::game::npc::RACE_WRAITH, // wraith
+                3 | 5 => crate::game::npc::RACE_UNDEAD, // skeleton / salamander
+                4     => crate::game::npc::RACE_SNAKE,  // snake
+                _     => crate::game::npc::RACE_ENEMY,
+            };
             crate::game::ecs::spawn::spawn_enemy(
                 world,
                 pos.0, pos.1,
                 npc_type,
-                0,                  // race
+                race,
                 stats.hp,
                 weapon,
                 stats.treasure,
                 4,                  // speed (default)
-                stats.cleverness,
-                stats.cfile_idx,
+                stats.clever,
+                stats.cfile,
             );
             occupied.push(pos);
             spawned += 1;
@@ -356,24 +366,23 @@ fn occupied_positions(
 }
 
 /// Try up to `max_tries` scatter positions around `origin` (±`scatter` px).
-/// Accept the first position that is more than `min_dist` px from all occupied slots.
+/// Accept the first position that does not collide (per the original game's
+/// actor bounding box: |dx| < 11 AND |dy| < 9) with any occupied slot.
 fn find_spawn_position(
     origin: (f32, f32),
     occupied: &[(f32, f32)],
     max_tries: u32,
     scatter: f32,
-    min_dist: f32,
 ) -> Option<(f32, f32)> {
     let scatter_range = scatter as i32 * 2 + 1;
     for _ in 0..max_tries {
         let dx = (crate::game::rng::rand64() as i32 % scatter_range) - scatter as i32;
         let dy = (crate::game::rng::rand64() as i32 % scatter_range) - scatter as i32;
         let pos = (origin.0 + dx as f32, origin.1 + dy as f32);
-        let clear = occupied.iter().all(|&occ| {
-            let d2 = (pos.0 - occ.0).powi(2) + (pos.1 - occ.1).powi(2);
-            d2 >= min_dist * min_dist
-        });
-        if clear {
+        // Reuse the canonical actor bounding-box check from collision.rs.
+        let others: Vec<(i32, i32)> =
+            occupied.iter().map(|&(ox, oy)| (ox as i32, oy as i32)).collect();
+        if !crate::game::collision::actor_collides(pos.0 as i32, pos.1 as i32, &others) {
             return Some(pos);
         }
     }

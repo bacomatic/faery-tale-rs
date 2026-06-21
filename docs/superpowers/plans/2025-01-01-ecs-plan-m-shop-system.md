@@ -62,7 +62,7 @@ The menu `hit` value passed by `MenuAction::BuyItem(hit)` is 0–6, matching the
 
 | Variant | Delivery |
 |---------|----------|
-| `BuyOutcome::Food` | No increment to `stuff[0]`; caller pushes food narrative |
+| `BuyOutcome::Food` | No increment to `stuff[0]`; applies `eat(50)` (hunger −50, clamped at 0) per `reference/logic/shops.md` / fmain.c:3433; caller pushes food narrative. |
 | `BuyOutcome::Arrows` | `stuff[8] = stuff[8].saturating_add(10)` |
 | `BuyOutcome::Item { inv_idx }` | `stuff[inv_idx] = stuff[inv_idx].saturating_add(1)` |
 
@@ -131,23 +131,32 @@ If no bartender is within range, `dispatch_menu_action()` returns silently — n
           stats.wealth -= price;
       }
 
-      // 4. Deliver item into Inventory.
-      let mut inv = world
-          .get_mut::<Inventory>(res.hero_entity)
-          .expect("hero entity must have Inventory");
-
+      // 4. Deliver item.
       match inv_idx {
-          // Food: sentinel slot — no inventory increment.
-          0 => BuyResult::Bought(BuyOutcome::Food),
+          // Food: sentinel slot — no inventory grant. Applies eat(50): hunger
+          // is reduced by 50, clamped at 0 (fmain.c:3433 → eat(50), fmain2.c:1706).
+          0 => {
+              let mut stats = world
+                  .get_mut::<HeroStats>(res.hero_entity)
+                  .expect("hero entity must have HeroStats");
+              stats.hunger = (stats.hunger - 50).max(0);
+              BuyResult::Bought(BuyOutcome::Food)
+          }
 
           // Arrows: bundle of 10.
           8 => {
+              let mut inv = world
+                  .get_mut::<Inventory>(res.hero_entity)
+                  .expect("hero entity must have Inventory");
               inv.stuff[8] = inv.stuff[8].saturating_add(10);
               BuyResult::Bought(BuyOutcome::Arrows)
           }
 
           // Generic item: increment by 1.
           _ => {
+              let mut inv = world
+                  .get_mut::<Inventory>(res.hero_entity)
+                  .expect("hero entity must have Inventory");
               inv.stuff[inv_idx] = inv.stuff[inv_idx].saturating_add(1);
               BuyResult::Bought(BuyOutcome::Item { inv_idx })
           }
@@ -196,21 +205,37 @@ Five tests cover all `BuyResult` variants and the saturation-safe delivery paths
       // --- slot 0: Food ---
 
       #[test]
-      fn food_deducts_wealth_does_not_increment_stuff() {
+      fn food_deducts_wealth_eats_does_not_increment_stuff() {
           let (mut world, mut res) = setup(10);
+          // Pre-set hunger so eat(50) has something to reduce.
+          world.get_mut::<HeroStats>(res.hero_entity).unwrap().hunger = 80;
 
           let result = buy_slot_ecs(0, &mut world, &mut res);
 
           assert!(matches!(result, BuyResult::Bought(BuyOutcome::Food)),
               "expected Bought(Food), got {:?}", result);
 
-          // wealth was 10, Food costs 3 → 7 remaining
           let stats = world.get::<HeroStats>(res.hero_entity).unwrap();
+          // wealth was 10, Food costs 3 → 7 remaining
           assert_eq!(stats.wealth, 7);
+          // eat(50): hunger 80 → 30
+          assert_eq!(stats.hunger, 30, "Food must reduce hunger by 50 (eat(50))");
 
           // stuff[0] must remain 0 — Food does NOT increment inventory
           let inv = world.get::<Inventory>(res.hero_entity).unwrap();
           assert_eq!(inv.stuff[0], 0, "Food must not increment stuff[0]");
+      }
+
+      #[test]
+      fn food_hunger_clamps_at_zero() {
+          let (mut world, mut res) = setup(10);
+          world.get_mut::<HeroStats>(res.hero_entity).unwrap().hunger = 20;
+
+          buy_slot_ecs(0, &mut world, &mut res);
+
+          // eat(50) on hunger 20 clamps at 0 (not negative).
+          let stats = world.get::<HeroStats>(res.hero_entity).unwrap();
+          assert_eq!(stats.hunger, 0, "hunger must clamp at 0");
       }
 
       // --- slot 1: Arrows ---
@@ -298,7 +323,7 @@ Five tests cover all `BuyResult` variants and the saturation-safe delivery paths
   cargo test shop::ecs_tests 2>&1 | grep -E "^test result|FAILED"
   ```
 
-  Expected: `test result: ok. 5 passed`.
+  Expected: `test result: ok. 6 passed`.
 
 - [ ] **Step 3: Commit**
 
@@ -386,44 +411,39 @@ Five tests cover all `BuyResult` variants and the saturation-safe delivery paths
           return;
       }
 
+      let name = self.res.brother.active_name.clone();
       let slot = hit as usize;
-      match buy_slot_ecs(slot, &mut self.world, &mut self.res) {
-          BuyResult::Silent => {
-              // Slot out of range — no message.
-          }
-          BuyResult::NotEnough => {
-              // Emit via the standard narrative/scroll message path.
-              self.res.events.message.push(crate::game::ecs::events::MessageEvent {
-                  text: crate::game::events::speak(
-                      &self.res.narr,
-                      // speech_id 60 = "You don't have enough money." (ui-menus.md §25.5)
-                      60,
-                      &self.res.brother.active_name,
-                  ),
-              });
-          }
-          BuyResult::Bought(outcome) => {
-              let speech_id = match outcome {
-                  // speech_id 61 = food purchase confirmation
-                  BuyOutcome::Food    => 61,
-                  // speech_id 62 = arrow bundle confirmation
-                  BuyOutcome::Arrows  => 62,
-                  // speech_id 63 = generic item confirmation
-                  BuyOutcome::Item { .. } => 63,
-              };
-              self.res.events.message.push(crate::game::ecs::events::MessageEvent {
-                  text: crate::game::events::speak(
-                      &self.res.narr,
-                      speech_id,
-                      &self.res.brother.active_name,
-                  ),
-              });
-          }
+      let text = match buy_slot_ecs(slot, &mut self.world, &mut self.res) {
+          // Slot out of range — silent (fmain.c `hit > 11` returns, no message).
+          BuyResult::Silent => None,
+          // Hardcoded denial string — sanctioned in dialog_system.md
+          // ("Hardcoded scroll messages", fmain.c:3440). NOT a speak()/event id.
+          BuyResult::NotEnough => Some("Not enough money!".to_string()),
+          // Food → event_msg[22]; Arrows → event_msg[23]
+          // (faery.toml [narr].event_msg, via events::event_msg; `%` → hero name).
+          BuyResult::Bought(BuyOutcome::Food) =>
+              Some(crate::game::events::event_msg(&self.res.narr, 22, &name)),
+          BuyResult::Bought(BuyOutcome::Arrows) =>
+              Some(crate::game::events::event_msg(&self.res.narr, 23, &name)),
+          // Generic item → hardcoded "% bought a {item}." (dialog_system.md,
+          // fmain.c:3436-3437). Item name from inv_list[].name.
+          BuyResult::Bought(BuyOutcome::Item { inv_idx }) => Some(format!(
+              "{name} bought a {}.",
+              crate::game::world_objects::stuff_index_name(inv_idx)
+          )),
+      };
+      if let Some(text) = text {
+          self.res.events.message.push(crate::game::ecs::events::MessageEvent { text });
       }
   }
   ```
 
-  > **Note on speech IDs:** The exact IDs for shop confirmation messages must be verified against `docs/spec/ui-menus.md` §25.5 and `reference/logic/shops.md` on the research branch before final implementation. The values 60–63 above are placeholders pending that verification. Do not ship hardcoded prose — all scroll-area text must route through `crate::game::events::speak()`.
+  > **Message sourcing (authoritative — `reference/logic/shops.md`, `dialog_system.md`):**
+  > shop messages are NOT `speak()` speeches. Food/Arrows use `event_msg[22]`/`[23]`
+  > from `faery.toml [narr].event_msg`; the "Not enough money!" denial and the
+  > `"% bought a {item}."` purchase line are hardcoded literals explicitly
+  > enumerated in `reference/logic/dialog_system.md` (lines 301–302), so they are
+  > permitted. Do not invent any other prose.
 
 - [ ] **Step 3: Verify compile**
 
@@ -458,7 +478,7 @@ Five tests cover all `BuyResult` variants and the saturation-safe delivery paths
   cargo test shop 2>&1 | grep -E "^test result|FAILED"
   ```
 
-  Expected: all 5 tests pass.
+  Expected: all 6 tests pass.
 
 - [ ] **Step 3: Manual smoke test**
 
@@ -495,12 +515,14 @@ Both succeed. `buy_slot_ecs()` is implemented and tested. `BuyItem` dispatches t
 
 ## Spec references
 
-- `docs/spec/ui-menus.md` §25.5 — BUY mode dispatch table, speech IDs for shop messages
-- `reference/logic/shops.md` (research branch) — original `buy_slot()` implementation, JTRANS table, wealth check semantics
+- `docs/spec/ui-menus.md` §25.5 — BUY mode dispatch table
+- `reference/logic/shops.md` (research branch) — original `buy_dispatch` implementation, JTRANS table, wealth check, and message behavior (event_msg[22]/[23], hardcoded strings)
+- `reference/logic/dialog_system.md` (research branch) — sanctioned hardcoded scroll messages ("Not enough money!", "% bought a {item}.")
 
 ## Test plan
 
-- `food_deducts_wealth_does_not_increment_stuff` — wealth decrements by 3, `stuff[0]` unchanged
+- `food_deducts_wealth_eats_does_not_increment_stuff` — wealth −3, hunger −50 (eat), `stuff[0]` unchanged
+- `food_hunger_clamps_at_zero` — eat(50) on low hunger clamps at 0
 - `arrows_add_ten_to_stuff_8` — `stuff[8]` increases by 10, wealth decrements by 10
 - `exact_wealth_returns_not_enough` — `wealth == price` returns `NotEnough`, wealth unchanged
 - `generic_item_increments_inv_idx` — `stuff[inv_idx]` increments by 1, wealth decrements by price
@@ -510,5 +532,5 @@ Both succeed. `buy_slot_ecs()` is implemented and tested. `BuyItem` dispatches t
 
 | File | Change |
 |------|--------|
-| `src/game/shop.rs` | Add `buy_slot_ecs()` + 5 unit tests |
+| `src/game/shop.rs` | Add `buy_slot_ecs()` + 6 unit tests |
 | `src/game/ecs/scene.rs` | Add `has_shopkeeper_nearby()`, wire `BuyItem` arm in `dispatch_menu_action()` |

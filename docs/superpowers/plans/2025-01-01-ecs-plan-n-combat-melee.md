@@ -80,17 +80,22 @@ An attack lands when:
 damage = weapon_code + rand3()    // rand3() = bitrand(2) = 0, 1, or 2
 ```
 
-Touch attacks (weapon_code == 0) are capped at 5 total damage.
+Touch attacks (weapon_code == 8) clamp `wt` to 5 before the bonus is added (spec §10.2 / R-COMBAT-004). Note: code 8 is the *touch* weapon, not unarmed (0).
 
 ### Enemy counter-attack
 
-After processing all hero-to-enemy hits, each enemy in `NpcState::Fighting` rolls a counter:
+`attack()` in the original (fmain.c:2240+) is the **same routine** for hero and
+enemies — it reads the *attacker's own* `weapon`. After processing all
+hero-to-enemy hits, each enemy in `NpcState::Fighting` rolls a counter:
 
 ```
 hits = rand256() > hero_brave
 ```
 
-If `hits`, emit `DamageEvent` targeting the hero entity.
+If `hits`, emit `DamageEvent` targeting the hero, with the **enemy's own weapon**
+(from the `Loot.weapon` component) and damage computed by the same formula:
+`amount = (if enemy_weapon >= 8 { 5 } else { enemy_weapon }) + bitrand(2)`.
+Do NOT use a flat `1` or `weapon: 0`.
 
 ---
 
@@ -140,7 +145,7 @@ res.events.damage.push(DamageEvent {
   use crate::game::ecs::resources::Resources;
   use crate::game::ecs::components::{
       Position, Facing, CombatState, HeroStats, Inventory,
-      AiState, EnemyKind, Health,
+      AiState, EnemyKind, Health, Loot,
   };
   use crate::game::ecs::events::DamageEvent;
   use crate::game::actor::ActorState;
@@ -228,8 +233,9 @@ res.events.damage.push(DamageEvent {
               // Damage roll.
               let base   = weapon_code as i16;
               let bonus  = crate::game::rng::bitrand(2) as i16; // 0–2
-              let amount = if weapon_code == 0 {
-                  (base + bonus).min(5)
+              // Touch attack (code >= 8): clamp wt to 5 *before* the bonus (fmain.c:2244).
+              let amount = if weapon_code >= 8 {
+                  5 + bonus
               } else {
                   base + bonus
               };
@@ -249,16 +255,17 @@ res.events.damage.push(DamageEvent {
           .map(|s| s.brave)
           .unwrap_or(0);
 
-      let enemy_attackers: Vec<(hecs::Entity, f32, f32)> = world
-          .query::<(&AiState, &Position)>()
+      // Collect each fighting enemy with its OWN weapon (Loot.weapon).
+      let enemy_attackers: Vec<(hecs::Entity, f32, f32, u8)> = world
+          .query::<(&AiState, &Position, &Loot)>()
           .iter()
-          .filter(|(_, (ai, _))| matches!(ai.state, NpcState::Fighting))
-          .map(|(e, (_, p))| (e, p.x, p.y))
+          .filter(|(_, (ai, _, _))| matches!(ai.state, NpcState::Fighting))
+          .map(|(e, (_, p, loot))| (e, p.x, p.y, loot.weapon))
           .collect();
 
       let hero_pos = world.get::<Position>(hero).map(|p| (p.x, p.y)).unwrap_or((0.0, 0.0));
 
-      for (_enemy, ex, ey) in enemy_attackers {
+      for (_enemy, ex, ey, enemy_weapon) in enemy_attackers {
           // Only enemies within their own reach can counter.
           let reach = combat_reach(false, 0, res.clock.tick);
           let dist  = (ex - hero_pos.0).abs().max((ey - hero_pos.1).abs());
@@ -268,10 +275,14 @@ res.events.damage.push(DamageEvent {
 
           // Roll: hits if rand256() > hero brave.
           if crate::game::rng::rand256() > brave as u8 {
+              // Same shared attack() formula, using the ENEMY's weapon:
+              // touch clamp (>= 8 → 5), then + bitrand(2).
+              let base   = if enemy_weapon >= 8 { 5 } else { enemy_weapon as i16 };
+              let amount = base + crate::game::rng::bitrand(2) as i16;
               res.events.damage.push(DamageEvent {
                   target:           hero,
-                  amount:           1, // Enemy touch damage; exact value from spec §10.2
-                  weapon:           0,
+                  amount,
+                  weapon:           enemy_weapon,
                   is_friendly_fire: false,
               });
           }
