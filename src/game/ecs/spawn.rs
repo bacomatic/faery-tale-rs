@@ -5,7 +5,7 @@
 
 use hecs::World;
 use crate::game::direction::Direction;
-use crate::game::actor::{Goal, Tactic};
+use crate::game::actor::{ActorState, Goal, Tactic};
 use crate::game::npc::NpcState;
 use crate::game::ecs::components::*;
 
@@ -29,7 +29,7 @@ pub fn spawn_hero(
         stats,
         inventory,
         ActorMotion::default(),
-        CombatState::default(),
+        CombatState { state: ActorState::Still, weapon: 1 }, // dirk always equipped at spawn
         CarrierMount::default(),
         FrustFlag::default(),
     ))

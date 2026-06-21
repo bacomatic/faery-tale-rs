@@ -59,7 +59,7 @@ pub fn do_tactic(
                 set_course(npc, hero_x, hero_y, SetCourseMode::Aim);
                 npc.state = NpcState::Shooting;
             } else {
-                set_course(npc, hero_x, hero_y, SetCourseMode::Smart);
+                set_course(npc, hero_x, hero_y, SetCourseMode::Aim);
             }
         }
         Tactic::Random => {

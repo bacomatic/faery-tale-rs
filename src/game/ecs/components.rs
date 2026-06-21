@@ -119,6 +119,13 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn empty() -> Self { Self { stuff: [0; 36] } }
+
+    /// Starting inventory for a new brother: one Dirk in slot 0 (fmain.c:3501 `stuff[0]=1`).
+    pub fn with_dirk() -> Self {
+        let mut s = [0u8; 36];
+        s[0] = 1;
+        Self { stuff: s }
+    }
 }
 
 impl Default for Inventory {

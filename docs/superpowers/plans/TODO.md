@@ -27,7 +27,7 @@
 | Q | `2025-01-01-ecs-plan-q-sleep-system.md` | ✅ Written |
 | R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Done |
 | S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Done |
-| T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Written |
+| T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Done |
 | U | `2025-01-01-ecs-plan-u-save-load-keys.md` | ✅ Written |
 | V | `2025-01-01-ecs-plan-v-quest-state.md` | ✅ Done |
 | W | `2025-01-01-ecs-plan-w-debug-tui-extras.md` | ✅ Done |

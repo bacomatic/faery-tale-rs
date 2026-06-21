@@ -185,7 +185,7 @@ impl EcsScene {
                 gold:     0,
             });
 
-        let hero = spawn_hero(&mut world, start_x, start_y, 0, stats, Inventory::empty());
+        let hero = spawn_hero(&mut world, start_x, start_y, 0, stats, Inventory::with_dirk());
 
         let mut res = Resources::new(hero);
         res.region.region_num = start_region;
@@ -287,9 +287,10 @@ impl EcsScene {
                         brave: 0, luck: 0, kind: 0, wealth: 0,
                         hunger: 0, fatigue: 0, gold: 0,
                     });
-                    let inv = Inventory {
-                        stuff: self.res.brother.inactive_inventories[successor as usize],
-                    };
+                    // Spec §15.12: new brother always starts with only a Dirk.
+                    // inactive_inventories[successor] holds the dead brother's items for
+                    // bones pickup — it is not the successor's starting loadout.
+                    let inv = Inventory::with_dirk();
                     let _ = self.world.despawn(self.res.hero_entity);
                     let new_hero = spawn_hero(
                         &mut self.world,
@@ -1648,12 +1649,12 @@ fn blit_actors_inner(
 ) {
     use crate::game::actor::ActorState;
     use crate::game::ecs::components::{
-        ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Position,
-        SetFig, WorldObj,
+        ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Loot,
+        Position, SetFig, WorldObj,
     };
     use crate::game::npc::NpcState;
     use crate::game::sprite_mask::BlittedSprite;
-    use crate::game::sprites::{SPRITE_H, SPRITE_W, STATELIST};
+    use crate::game::sprites::{BOW_X, BOW_Y, SPRITE_H, SPRITE_W, STATELIST};
 
     let fb_w = MAP_DST_W as i32;
     let fb_h = MAP_DST_H as i32;
@@ -1756,6 +1757,62 @@ fn blit_actors_inner(
                         frame
                     };
 
+                    // Weapon overlay — port of select_atype_inum (fmain.c:2420-2446)
+                    // and resolve_pass_params (fmain.c:2400-2409).
+                    // `frame` is the STATELIST index (inum); `body_frame` is the body sprite frame.
+                    let weapon: u8 = combat_opt.map(|c| c.weapon).unwrap_or(0);
+                    let facing_dir: usize = hero_facing as usize;
+                    let entry = STATELIST.get(frame).copied().unwrap_or(STATELIST[0]);
+
+                    // Pixel offset (fmain.c:2422-2426).
+                    let (wpn_dx, mut wpn_dy): (i32, i32) = if weapon == 4 && frame < 32 {
+                        (BOW_X[frame] as i32, BOW_Y[frame] as i32)
+                    } else {
+                        (entry.wpn_x as i32, entry.wpn_y as i32)
+                    };
+
+                    // OBJECTS-sheet frame (fmain.c:2429-2444).
+                    let wpn_frame: usize = if weapon == 4 && frame < 32 {
+                        let q = frame / 8;
+                        if q & 1 != 0 { 30 }
+                        else if q & 2 != 0 { 0x53 }
+                        else { 0x51 }
+                    } else if weapon == 5 {
+                        if facing_dir == 2 { wpn_dy -= 6; } // NE: nudge up 6 px
+                        facing_dir + 103
+                    } else {
+                        let k: usize = match weapon { 2 => 32, 3 => 48, 1 => 64, _ => 0 };
+                        entry.wpn_no as usize + k
+                    };
+
+                    // Gate (fmain.c:2400-2401): 0 < weapon < 8, hero alive (frame < 80).
+                    let draw_weapon = weapon > 0 && weapon < 8 && frame < 80;
+
+                    // Facing-dependent draw order (resolve_pass_params, fmain.c:2402-2407).
+                    // `true` = weapon behind body (drawn first in pending).
+                    let weapon_behind = if weapon == 4 && frame < 32 {
+                        (facing_dir & 4) == 0
+                    } else {
+                        ((facing_dir as i32 - 2) & 4) != 0
+                    };
+
+                    // Weapon behind body: push weapon first so it renders under the body.
+                    // Uses same ground value — stable sort preserves insertion order.
+                    if draw_weapon && weapon_behind {
+                        if let Some(obj_sheet) = object_sprites {
+                            if let Some(wp) = obj_sheet.frame_pixels(wpn_frame) {
+                                pending.push((BlittedSprite {
+                                    screen_x: rel_x + wpn_dx,
+                                    screen_y: draw_y + wpn_dy,
+                                    width:    SPRITE_W,
+                                    height:   obj_sheet.frame_h,
+                                    ground:   rel_y + SPRITE_H as i32,
+                                    is_falling: false,
+                                }, wp.to_vec()));
+                            }
+                        }
+                    }
+
                     if let Some(fp) = sheet.frame_pixels(body_frame) {
                         pending.push((BlittedSprite {
                             screen_x: rel_x,
@@ -1765,6 +1822,22 @@ fn blit_actors_inner(
                             ground:   rel_y + SPRITE_H as i32,
                             is_falling: false,
                         }, fp.to_vec()));
+                    }
+
+                    // Weapon on top: push weapon after body so it renders over it.
+                    if draw_weapon && !weapon_behind {
+                        if let Some(obj_sheet) = object_sprites {
+                            if let Some(wp) = obj_sheet.frame_pixels(wpn_frame) {
+                                pending.push((BlittedSprite {
+                                    screen_x: rel_x + wpn_dx,
+                                    screen_y: draw_y + wpn_dy,
+                                    width:    SPRITE_W,
+                                    height:   obj_sheet.frame_h,
+                                    ground:   rel_y + SPRITE_H as i32,
+                                    is_falling: false,
+                                }, wp.to_vec()));
+                            }
+                        }
                     }
                 }
             }
@@ -1781,8 +1854,9 @@ fn blit_actors_inner(
         Option<&AiState>,
         Option<&crate::game::ecs::components::Health>,
         Option<&ActorMotion>,
+        Option<&Loot>,
     )>();
-    for (idx, (_, pos, facing_c, kind, ai_opt, health_opt, motion_opt)) in enemy_q.iter().enumerate() {
+    for (idx, (_, pos, facing_c, kind, ai_opt, health_opt, motion_opt, loot_opt)) in enemy_q.iter().enumerate() {
         let race = kind.race;
 
         // Dead Loraii are parked off-screen (fmain.c:1807 — abs_x = 0).
@@ -1815,6 +1889,51 @@ fn blit_actors_inner(
 
         let frame = enemy_frame(race, npc_state, vitality, facing_c.dir, cycle, idx, sheet.num_frames);
 
+        // Weapon overlay — same logic as hero (fmain.c:2400-2446).
+        // Enemies with weapon >= 8 (WEAPON_TOUCH) are excluded by the gate.
+        let weapon: u8 = loot_opt.map(|l| l.weapon).unwrap_or(0);
+        let facing_dir: usize = facing_c.dir as usize;
+        let entry = STATELIST.get(frame).copied().unwrap_or(STATELIST[0]);
+
+        let (wpn_dx, mut wpn_dy): (i32, i32) = if weapon == 4 && frame < 32 {
+            (BOW_X[frame] as i32, BOW_Y[frame] as i32)
+        } else {
+            (entry.wpn_x as i32, entry.wpn_y as i32)
+        };
+
+        let wpn_frame: usize = if weapon == 4 && frame < 32 {
+            let q = frame / 8;
+            if q & 1 != 0 { 30 } else if q & 2 != 0 { 0x53 } else { 0x51 }
+        } else if weapon == 5 {
+            if facing_dir == 2 { wpn_dy -= 6; }
+            facing_dir + 103
+        } else {
+            let k: usize = match weapon { 2 => 32, 3 => 48, 1 => 64, _ => 0 };
+            entry.wpn_no as usize + k
+        };
+
+        let draw_weapon = weapon > 0 && weapon < 8 && frame < 80;
+        let weapon_behind = if weapon == 4 && frame < 32 {
+            (facing_dir & 4) == 0
+        } else {
+            ((facing_dir as i32 - 2) & 4) != 0
+        };
+
+        if draw_weapon && weapon_behind {
+            if let Some(obj_sheet) = object_sprites {
+                if let Some(wp) = obj_sheet.frame_pixels(wpn_frame) {
+                    pending.push((BlittedSprite {
+                        screen_x: rel_x + wpn_dx,
+                        screen_y: draw_y + wpn_dy,
+                        width:    SPRITE_W,
+                        height:   obj_sheet.frame_h,
+                        ground:   rel_y + SPRITE_H as i32,
+                        is_falling: false,
+                    }, wp.to_vec()));
+                }
+            }
+        }
+
         if let Some(fp) = sheet.frame_pixels(frame) {
             pending.push((BlittedSprite {
                 screen_x: rel_x,
@@ -1824,6 +1943,21 @@ fn blit_actors_inner(
                 ground:   rel_y + SPRITE_H as i32,
                 is_falling: false,
             }, fp.to_vec()));
+        }
+
+        if draw_weapon && !weapon_behind {
+            if let Some(obj_sheet) = object_sprites {
+                if let Some(wp) = obj_sheet.frame_pixels(wpn_frame) {
+                    pending.push((BlittedSprite {
+                        screen_x: rel_x + wpn_dx,
+                        screen_y: draw_y + wpn_dy,
+                        width:    SPRITE_W,
+                        height:   obj_sheet.frame_h,
+                        ground:   rel_y + SPRITE_H as i32,
+                        is_falling: false,
+                    }, wp.to_vec()));
+                }
+            }
         }
     }
 
@@ -1979,7 +2113,7 @@ mod tests {
     // own module; persist round-trip tests are in persist.rs.
 
     use super::*;
-    use crate::game::ecs::components::WorldObj;
+    use crate::game::ecs::components::{CombatState, WorldObj};
     use crate::game::ecs::spawn::{spawn_enemy, spawn_ground_item, spawn_setfig};
 
     fn load_game_lib() -> GameLibrary {
@@ -2346,5 +2480,21 @@ mod tests {
     fn orcs_odd_parity() {
         let f = enemy_frame(1, &NpcState::Walking, 10, Direction::S, 0, 0, N);
         assert_eq!(f % 2, 1, "orcs (race 1) walk frame must be odd");
+    }
+
+    // Spec §15.12: every brother begins play with only a Dirk (stuff[0] = 1), equipped (weapon=1).
+    #[test]
+    fn julian_starts_with_dirk() {
+        let lib = load_game_lib();
+        let scene = EcsScene::new(&lib, None, false);
+        let inv = scene.world.get::<&Inventory>(scene.res.hero_entity)
+            .expect("hero must have Inventory component");
+        assert_eq!(inv.stuff[0], 1, "Julian should start with 1 Dirk in slot 0");
+        for i in 1..35 {
+            assert_eq!(inv.stuff[i], 0, "inventory slot {i} should be empty at game start");
+        }
+        let cs = scene.world.get::<&CombatState>(scene.res.hero_entity)
+            .expect("hero must have CombatState component");
+        assert_eq!(cs.weapon, 1, "Dirk (weapon=1) must be equipped at game start");
     }
 }

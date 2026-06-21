@@ -5,7 +5,7 @@
 use hecs::World;
 use crate::game::actor::ActorState;
 use crate::game::direction::Direction;
-use crate::game::ecs::components::{ActorMotion, CombatState, Facing, FrustFlag, Position};
+use crate::game::ecs::components::{ActorMotion, CombatState, Enemy, Facing, FrustFlag, Health, Position, SetFig};
 use crate::game::ecs::resources::Resources;
 
 /// Compute candidate position from (old_x, old_y) for direction d at the given speed.
@@ -79,6 +79,27 @@ pub fn run(world: &mut World, res: &mut Resources) {
     // Speed from current terrain environ (fmain.c:1599-1602).
     let speed = crate::game::combat::hero_speed_for_env(environ, false);
 
+    // Collect positions of solid NPCs: living enemies and all stationary SetFig characters.
+    // Queried once per tick and passed into the probe closure to avoid re-borrowing world.
+    let npc_positions: Vec<(f32, f32)> = {
+        let mut v: Vec<(f32, f32)> = world
+            .query::<(&Position, &Health)>()
+            .with::<&Enemy>()
+            .iter()
+            .filter_map(|(pos, hp)| {
+                if hp.vitality > 0 { Some((pos.x, pos.y)) } else { None }
+            })
+            .collect();
+        v.extend(
+            world
+                .query::<&Position>()
+                .with::<&SetFig>()
+                .iter()
+                .map(|pos| (pos.x, pos.y)),
+        );
+        v
+    };
+
     // Diagonal input: try primary direction, then CW deviate (+1), then CCW (-1).
     //   NW blocked → try N or W; produces wall-sliding along the free axis.
     // Cardinal input: no deviates — blocked means stopped, no steering.
@@ -88,11 +109,13 @@ pub fn run(world: &mut World, res: &mut Resources) {
     let committed = offsets.iter().find_map(|offset| {
         let d = Direction::from(((dir as i8).wrapping_add(*offset)).rem_euclid(8) as u8);
         let (nx, ny) = step_pos(old_x, old_y, d, speed);
-        if crate::game::collision::proxcheck(map_ref, nx as i32, ny as i32) {
-            Some((nx, ny, d))
-        } else {
-            None
+        if !crate::game::collision::proxcheck(map_ref, nx as i32, ny as i32) {
+            return None;
         }
+        let npc_blocked = npc_positions.iter().any(|(ex, ey)| {
+            (nx - ex).abs() <= 8.0 && (ny - ey).abs() <= 8.0
+        });
+        if npc_blocked { None } else { Some((nx, ny, d)) }
     });
 
     match committed {
@@ -201,7 +224,7 @@ pub fn run(world: &mut World, res: &mut Resources) {
 mod tests {
     use hecs::World;
     use crate::game::direction::Direction;
-    use crate::game::ecs::components::{Facing, Position};
+    use crate::game::ecs::components::{Facing, Position, SpriteRef};
     use crate::game::ecs::resources::Resources;
     use crate::game::ecs::spawn::spawn_hero;
     use crate::game::ecs::components::{HeroStats, Inventory};
@@ -752,5 +775,96 @@ mod tests {
         let new_y = world.get::<&Position>(res.hero_entity).unwrap().y;
         // Per spec §9.5: cardinal speed 1 → 1px north.
         assert_eq!(old_y - new_y, 1.0, "brush/marsh cardinal N should advance 1px (speed 1)");
+    }
+
+    // ── NPC collision tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn hero_blocked_by_living_enemy() {
+        use crate::game::ecs::components::{Enemy, EnemyKind, AiState, Health, Speed, Loot,
+                                            Facing as FacingComp};
+        let (mut world, mut res) = make_world_and_res();
+        // Spawn a living enemy directly north of the hero (hero at 200,200; N step lands at 200,197).
+        // Place it at y=196 so Chebyshev dy=1 from destination — within the 8px threshold.
+        world.spawn((
+            Enemy,
+            Position::new(200.0, 196.0),
+            Health::new(10),
+            EnemyKind { npc_type: 1, race: 1 },
+            AiState::default(),
+            Speed { speed: 2 },
+            Loot { weapon: 0, gold: 0, looted: false },
+            SpriteRef { cfile_idx: 0 },
+            FacingComp::default(),
+            crate::game::ecs::components::ActorMotion::default(),
+        ));
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 200.0, "hero should be blocked by living enemy to the north");
+    }
+
+    #[test]
+    fn hero_not_blocked_by_dead_enemy() {
+        use crate::game::ecs::components::{Enemy, EnemyKind, AiState, Health, Speed, Loot,
+                                            Facing as FacingComp};
+        let (mut world, mut res) = make_world_and_res();
+        // Same position but enemy is dead (vitality = 0).
+        world.spawn((
+            Enemy,
+            Position::new(200.0, 196.0),
+            Health::new(0),
+            EnemyKind { npc_type: 1, race: 1 },
+            AiState::default(),
+            Speed { speed: 2 },
+            Loot { weapon: 0, gold: 0, looted: false },
+            SpriteRef { cfile_idx: 0 },
+            FacingComp::default(),
+            crate::game::ecs::components::ActorMotion::default(),
+        ));
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 197.0, "hero should walk through dead enemy");
+    }
+
+    #[test]
+    fn hero_blocked_by_setfig() {
+        use crate::game::ecs::components::SetFig;
+        let (mut world, mut res) = make_world_and_res();
+        // Place a SetFig NPC directly in the hero's northward path.
+        world.spawn((
+            SetFig,
+            Position::new(200.0, 196.0),
+            SpriteRef { cfile_idx: 0 },
+        ));
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 200.0, "hero should be blocked by SetFig NPC");
+    }
+
+    #[test]
+    fn enemy_far_away_does_not_block() {
+        use crate::game::ecs::components::{Enemy, EnemyKind, AiState, Health, Speed, Loot,
+                                            Facing as FacingComp};
+        let (mut world, mut res) = make_world_and_res();
+        // Enemy 17px from destination — beyond the 8px Chebyshev threshold.
+        world.spawn((
+            Enemy,
+            Position::new(200.0, 180.0),
+            Health::new(10),
+            EnemyKind { npc_type: 1, race: 1 },
+            AiState::default(),
+            Speed { speed: 2 },
+            Loot { weapon: 0, gold: 0, looted: false },
+            SpriteRef { cfile_idx: 0 },
+            FacingComp::default(),
+            crate::game::ecs::components::ActorMotion::default(),
+        ));
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 197.0, "distant enemy must not block hero movement");
     }
 }
