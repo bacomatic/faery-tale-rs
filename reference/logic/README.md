@@ -41,7 +41,7 @@ Every documented function appears here with a link to its canonical definition. 
 | `shoot_step` | [game-loop.md#shoot_step](game-loop.md#shoot_step) | fmain.c:1667-1717 — bow/wand attack body: pose select, missile spawn, SHOOT1↔SHOOT3 transition |
 | `fighting_step` | [game-loop.md#fighting_step](game-loop.md#fighting_step) | fmain.c:1710-1716 — melee swing animation step via trans_list rolls |
 | `death_step` | [game-loop.md#death_step](game-loop.md#death_step) | fmain.c:1573-1576, 1718-1746 — pose for SINK/DYING/DEAD/FROZEN/OSCIL/SLEEP/FALL |
-| `update_actor_index` | [game-loop.md#update_actor_index](game-loop.md#update_actor_index) | fmain.c:1799-1824 — race-specific frame overrides (snake idle, bug-swarm cycle, dead dark knight) |
+| `update_actor_index` | [game-loop.md#update_actor_index](game-loop.md#update_actor_index) | fmain.c:1799-1824 — race-specific frame overrides (snake idle, Loraii cycle, dead dark knight) |
 | `compute_rel_coords` | [game-loop.md#compute_rel_coords](game-loop.md#compute_rel_coords) | fmain.c:1852-1864 — write per-actor screen-relative anchor for render_sprites |
 | `wrap_player_coords` | [game-loop.md#wrap_player_coords](game-loop.md#wrap_player_coords) | fmain.c:1826-1841 — hero-only world-edge wrap + carrier drag + map_adjust refresh |
 | `check_door` | [game-loop.md#check_door](game-loop.md#check_door) | Phase 12: door straddle + transfer |

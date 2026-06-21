@@ -275,7 +275,7 @@ def actor_tick(i: int) -> None:
     # fmain.c:1761-1797 — terrain ↔ environ mapping (water wading, flight, backwards-walk, fall, drowning teleport).
     update_environ(i)
 
-    # fmain.c:1798-1820 — race-specific animation frame overrides (rabbit hop, swarm bug, dead dark knight).
+    # fmain.c:1798-1820 — race-specific animation frame overrides (snake wiggle, Loraii cycle, dead dark knight).
     update_actor_index(i)
 
     # fmain.c:1826-1841 — hero-only world-wrap + safe_flag.
@@ -623,7 +623,7 @@ Calls: `diroffs`, `cycle`
 def update_actor_index(i: i16, an: Shape, d: i8, dex: i16) -> None:
     """fmain.c:1799-1824 — race-specific frame overrides applied after
     the state-step has set `dex`. Some races animate at their own
-    cadence regardless of state (the swarming bug, the rabbit's hop,
+    cadence regardless of state (the snake wiggle, the Loraii cycle,
     the dead dark knight). The final value is written through
     an.index so render_sprites and select_atype_inum read the
     overridden frame."""
@@ -633,22 +633,22 @@ def update_actor_index(i: i16, an: Shape, d: i8, dex: i16) -> None:
             dex = (cycle & 1) + diroffs[d]                # fmain.c:1804 — snake idle: 2-frame body wiggle on walk-base
         elif k == 4 and an.state < STATE_DYING:           # fmain.c:1805 — snake while alive
             dex = ((cycle / 2) & 1) + diroffs[d]          # fmain.c:1805 — half-rate wiggle
-        elif k == 8:                                      # fmain.c:1806, 8 = RACE_BUG_SWARM
+        elif k == 8:                                      # fmain.c:1806, 8 = race 8 (Loraii)
             if an.state == STATE_DEAD:                    # fmain.c:1807
-                an.abs_x = 0                              # fmain.c:1807 — kill swarm: park off-screen
+                an.abs_x = 0                              # fmain.c:1807 — dead Loraii: park off-screen
             elif an.state == STATE_DYING:                 # fmain.c:1808
-                dex = 0x3f                                # fmain.c:1808, 0x3f = swarm-dying frame
+                dex = 0x3f                                # fmain.c:1808, 0x3f = Loraii dying frame
             else:
-                dex = (cycle & 3) * 2                     # fmain.c:1810 — 4-phase swarm cycle, doubled
+                dex = (cycle & 3) * 2                     # fmain.c:1810 — 4-phase Loraii cycle, doubled
                 if dex > 4:                               # fmain.c:1811
                     dex = dex - 1                         # fmain.c:1811 — collapse 6 → 5
-                slot = i % 3                              # fmain.c:1812 — three swarm-instances per cluster
+                slot = i % 3                              # fmain.c:1812 — three Loraii instances per cluster
                 if slot == 0:                             # fmain.c:1813
-                    dex = 0x25                            # fmain.c:1813, 0x25 = swarm body A (static)
+                    dex = 0x25                            # fmain.c:1813, 0x25 = Loraii body A (static)
                 elif slot == 1:                           # fmain.c:1814
-                    dex = dex + 0x28                      # fmain.c:1814, 0x28 = swarm body B base
+                    dex = dex + 0x28                      # fmain.c:1814, 0x28 = Loraii body B base
                 else:
-                    dex = dex + 0x30                      # fmain.c:1815, 0x30 = swarm body C base
+                    dex = dex + 0x30                      # fmain.c:1815, 0x30 = Loraii body C base
         elif k == 7 and an.vitality == 0:                 # fmain.c:1819, 7 = RACE_DARK_KNIGHT (zero-HP undead)
             an.state = STATE_STILL                        # fmain.c:1820 — note: source has bug `an->state == STILL` (no-op compare); spec follows the *intended* assignment
             dex = 1                                       # fmain.c:1821, 1 = dark-knight reanimation pose
@@ -664,9 +664,9 @@ Notes:
   reproduce the no-op or write the assignment; the difference is only
   observable on the rare frame where a race-7 actor has just hit
   vitality 0 but is still in WALKING/FIGHTING. See [PROBLEMS.md](../PROBLEMS.md).
-- The bug-swarm logic at `fmain.c:1812-1816` is the only animation
+- The Loraii logic at `fmain.c:1812-1816` is the only animation
   path that uses `i % 3` — it lets three sequential anim_list slots
-  (i, i+1, i+2) display three different swarm body frames, producing
+  (i, i+1, i+2) display three different Loraii body frames, producing
   the appearance of a milling cluster from three independent actors.
 - Race overrides run *after* update_environ, which means a race-4
   snake that just stepped onto water still gets the snake-idle frame
