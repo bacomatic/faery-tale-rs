@@ -103,7 +103,7 @@ pub const ENCOUNTER_CHART_FULL: [EnemyTypeStats; 11] = [
 /// Map encounter_chart index → NPC type constant for sprite rendering.
 /// In the original game, all enemies had type=ENEMY and race=encounter_index;
 /// the Rust port uses npc_type for cfile lookup, so we need this translation.
-const ENCOUNTER_TO_NPC_TYPE: [u8; 11] = [
+pub const ENCOUNTER_TO_NPC_TYPE: [u8; 11] = [
     NPC_TYPE_ORC,         // 0: Ogre
     NPC_TYPE_ORC,         // 1: Orcs
     NPC_TYPE_WRAITH,      // 2: Wraith

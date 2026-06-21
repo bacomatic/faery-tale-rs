@@ -7,7 +7,7 @@
 
 use hecs::{Entity, World};
 use crate::game::ecs::components::{
-    Enemy, ArenaDummy, Position, Facing, AiState, EnemyKind, HeroStats,
+    Enemy, ArenaDummy, Position, Facing, AiState, EnemyKind, Health, HeroStats, Loot,
 };
 use crate::game::ecs::resources::Resources;
 use crate::game::actor::Goal;
@@ -61,11 +61,13 @@ pub fn run(world: &mut World, res: &mut Resources) {
         .collect();
 
     for entity in enemies {
-        // Read race and state without holding a borrow.
-        let (race, state) = {
-            let mut q = world.query_one::<(&EnemyKind, &AiState)>(entity);
+        // Read race, state, health, and weapon without holding a borrow.
+        let (race, state, vitality, weapon) = {
+            let mut q = world.query_one::<(&EnemyKind, &AiState, &Health, &Loot)>(entity);
             match q.get() {
-                Ok((k, ai)) => (k.race, ai.state.clone()),
+                Ok((k, ai, health, loot)) => {
+                    (k.race, ai.state.clone(), health.vitality, loot.weapon)
+                }
                 Err(_) => continue,
             }
         };
@@ -112,6 +114,9 @@ pub fn run(world: &mut World, res: &mut Resources) {
                 xtype,
                 turtle_eggs,
                 freeze,
+                vitality,
+                weapon,
+                race,
             );
         }
     }
@@ -120,10 +125,11 @@ pub fn run(world: &mut World, res: &mut Resources) {
 #[cfg(test)]
 mod tests {
     use hecs::World;
+    use crate::game::actor::Goal;
     use crate::game::ecs::components::*;
     use crate::game::ecs::resources::Resources;
     use crate::game::ecs::spawn::*;
-    use crate::game::npc::NpcState;
+    use crate::game::npc::{NpcState, RACE_ENEMY};
     use super::run;
 
     fn hero_stats() -> HeroStats {
@@ -155,5 +161,23 @@ mod tests {
         res.clock.freeze_timer = 0;
         spawn_enemy(&mut world, 100.0, 100.0, 1, 0, 20, 0, 0, 3, 5, 0);
         run(&mut world, &mut res); // should not panic
+    }
+
+    #[test]
+    fn healthy_enemy_does_not_flee() {
+        // Regression: tick_npc_ecs defaulted vitality to 0, so every healthy
+        // enemy got Goal::Flee from select_tactic's low-vitality override.
+        let mut world = World::new();
+        let hero = spawn_hero(&mut world, 200.0, 200.0, 0, hero_stats(), Inventory::empty());
+        let mut res = Resources::new(hero);
+        res.clock.freeze_timer = 0;
+        res.region.xtype = 3; // normal terrain, not a special zone
+        let enemy = spawn_enemy(&mut world, 100.0, 100.0, 1,
+            RACE_ENEMY, 20, 1, 0, 2, 0, 0);
+        world.get::<&mut AiState>(enemy).unwrap().goal = Goal::Attack1;
+        run(&mut world, &mut res);
+        let goal = world.get::<&AiState>(enemy).unwrap().goal.clone();
+        assert_eq!(goal, Goal::Attack1,
+            "healthy armed enemy outside a special zone should keep attacking");
     }
 }

@@ -8,28 +8,6 @@ use crate::game::direction::Direction;
 use crate::game::ecs::components::{ActorMotion, CombatState, Facing, FrustFlag, Position};
 use crate::game::ecs::resources::Resources;
 
-/// Map terrain type j to environ code k (fmain.c:1762-1797, partial).
-/// Handles open ground, brush (2), shallow water (3), slippery (6), ice (7), astral reverse-field (8).
-/// Deep-water ramp (j=4/5) and pit/fall transitions (j=9) are not yet
-/// implemented — see docs/spec/movement-input.md §9.5.
-fn terrain_to_environ(j: u8, old_k: i8) -> i8 {
-    match j {
-        0 => 0,     // open ground (fmain.c:1763)
-        2 => 2,     // brush/marsh — clips bottom 10px of sprite (fmain.c:1776)
-        3 => 5,     // shallow water — direct jump to environ 5 (fmain.c:1777)
-        4 | 5 => {  // deep water — ramp toward 10/30 (fmain.c:1779–1797); ±1 per tick
-            let target: i8 = if j == 4 { 10 } else { 30 };
-            if old_k < target { old_k.saturating_add(1) }
-            else if old_k > target { old_k.saturating_sub(1) }
-            else { old_k }
-        }
-        6 => -1,    // slippery (fmain.c:1764)
-        7 => -2,    // ice (fmain.c:1765)
-        8 => -3,    // astral reverse-field — reverses walk direction (fmain.c:1766)
-        _ => 0,     // default: treat as open ground
-    }
-}
-
 /// Compute candidate position from (old_x, old_y) for direction d at the given speed.
 /// Scales walk_step_open() by speed/2 using integer truncation, matching the assembly
 /// `xdir[dir]*speed >> 1` formula (SPEC §9.6). Speed=2 is the open-ground baseline.
@@ -40,24 +18,17 @@ fn step_pos(old_x: f32, old_y: f32, d: Direction, speed: i8) -> (f32, f32) {
     (old_x + dx as f32, old_y + dy as f32)
 }
 
-/// Apply update_environ (fmain.c:1759-1801, partial) for the given terrain j and old k.
-/// Returns (new_k, new_state) — caller must write both back to the components.
-/// `current_state` is needed to apply the Sinking/Still transition rules.
-fn apply_update_environ(j: u8, old_k: i8, current_state: &ActorState) -> (i8, Option<ActorState>) {
-    let new_k = terrain_to_environ(j, old_k);
-    // fmain.c:1784 — k reaches 30 (death depth) → STATE_STILL (drowning complete / teleport).
-    // fmain.c:1796 — k > 15 while not dying → enter STATE_SINK.
-    // fmain.c:1799 — k == 0 while in STATE_SINK → return to STATE_STILL (walked onto dry land).
-    let is_dying = matches!(current_state, ActorState::Dying | ActorState::Dead);
-    let new_state = if new_k == 30 && !is_dying {
-        // Fully drowned — release from Sinking back to Still (sector-181 teleport handled elsewhere).
-        Some(ActorState::Still)
-    } else if new_k > 15 && !is_dying && !matches!(current_state, ActorState::Sinking) {
-        Some(ActorState::Sinking)
-    } else if new_k == 0 && matches!(current_state, ActorState::Sinking) {
-        Some(ActorState::Still)
-    } else {
-        None
+/// Apply update_environ and translate the EnvironTransition into an ActorState change.
+fn apply_environ_hero(j: u8, old_k: i8, current_state: &ActorState) -> (i8, Option<ActorState>) {
+    use crate::game::collision::{apply_update_environ, EnvironTransition};
+    let is_dying   = matches!(current_state, ActorState::Dying | ActorState::Dead);
+    let is_sinking = matches!(current_state, ActorState::Sinking);
+    let (new_k, transition) = apply_update_environ(j, old_k, is_dying, is_sinking);
+    let new_state = match transition {
+        EnvironTransition::Drown    => Some(ActorState::Still),
+        EnvironTransition::EnterSink => Some(ActorState::Sinking),
+        EnvironTransition::ExitSink  => Some(ActorState::Still),
+        EnvironTransition::None      => None,
     };
     (new_k, new_state)
 }
@@ -93,7 +64,7 @@ pub fn run(world: &mut World, res: &mut Resources) {
             motion.moving = false;
         }
         // update_environ runs every tick regardless of movement (fmain.c actor_tick Phase 9).
-        let (new_k, new_state) = apply_update_environ(j_current, environ, &current_state);
+        let (new_k, new_state) = apply_environ_hero(j_current, environ, &current_state);
         if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
             motion.environ = new_k;
         }
@@ -153,7 +124,7 @@ pub fn run(world: &mut World, res: &mut Resources) {
                 if let Ok(mut facing) = world.get::<&mut Facing>(res.hero_entity) {
                     facing.dir = committed_dir;
                 }
-                let (new_k, new_state) = apply_update_environ(j_dest, environ, &current_state);
+                let (new_k, new_state) = apply_environ_hero(j_dest, environ, &current_state);
                 if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
                     motion.moving = true;
                     motion.environ = new_k;
@@ -173,7 +144,7 @@ pub fn run(world: &mut World, res: &mut Resources) {
         }
         None => {
             // All probes blocked — run update_environ on current pos, increment frustration.
-            let (new_k, new_state) = apply_update_environ(j_current, environ, &current_state);
+            let (new_k, new_state) = apply_environ_hero(j_current, environ, &current_state);
             if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
                 motion.environ = new_k;
                 motion.moving = false;
@@ -570,26 +541,26 @@ mod tests {
     /// terrain_to_environ: j=4 ramps environ UP toward 10 (one step per tick).
     #[test]
     fn deep_water_ramps_up_toward_10() {
-        assert_eq!(super::terrain_to_environ(4, 0), 1);
-        assert_eq!(super::terrain_to_environ(4, 9), 10);
-        assert_eq!(super::terrain_to_environ(4, 10), 10); // clamped at target
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 0), 1);
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 9), 10);
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 10), 10); // clamped at target
     }
 
     /// terrain_to_environ: j=4 ramps environ DOWN toward 10 when k > 10.
     #[test]
     fn deep_water_ramps_down_toward_10() {
         // Hero was in terrain-5 (k ramped past 10) and stepped onto terrain-4.
-        assert_eq!(super::terrain_to_environ(4, 25), 24);
-        assert_eq!(super::terrain_to_environ(4, 11), 10);
-        assert_eq!(super::terrain_to_environ(4, 10), 10); // already at target
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 25), 24);
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 11), 10);
+        assert_eq!(crate::game::collision::terrain_to_environ(4, 10), 10); // already at target
     }
 
     /// terrain_to_environ: j=5 ramps environ UP toward 30.
     #[test]
     fn very_deep_water_ramps_up_toward_30() {
-        assert_eq!(super::terrain_to_environ(5, 0), 1);
-        assert_eq!(super::terrain_to_environ(5, 29), 30);
-        assert_eq!(super::terrain_to_environ(5, 30), 30); // clamped
+        assert_eq!(crate::game::collision::terrain_to_environ(5, 0), 1);
+        assert_eq!(crate::game::collision::terrain_to_environ(5, 29), 30);
+        assert_eq!(crate::game::collision::terrain_to_environ(5, 30), 30); // clamped
     }
 
     /// Ramp-out: when hero (k=10, terrain-4 underfoot) steps toward open ground,

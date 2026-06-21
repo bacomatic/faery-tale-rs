@@ -22,7 +22,7 @@
 | L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Done |
 | M | `2025-01-01-ecs-plan-m-shop-system.md` | ✅ Done |
 | N | `2025-01-01-ecs-plan-n-combat-melee.md` | ✅ Written |
-| O | `2025-01-01-ecs-plan-o-encounter-system.md` | ✅ Written |
+| O | `2025-01-01-ecs-plan-o-encounter-system.md` | ✅ Done |
 | P | `2025-01-01-ecs-plan-p-carrier-system.md` | ✅ Written |
 | Q | `2025-01-01-ecs-plan-q-sleep-system.md` | ✅ Written |
 | R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Done |

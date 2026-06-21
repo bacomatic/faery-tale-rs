@@ -34,6 +34,14 @@ pub const RACE_UNDEAD: u8 = 1;
 pub const RACE_WRAITH: u8 = 2;
 pub const RACE_ENEMY: u8 = 3;
 pub const RACE_SNAKE: u8 = 4;
+/// Race 5: Salamander.
+pub const RACE_SALAMANDER: u8 = 5;
+/// Race 6: Spider.
+pub const RACE_SPIDER: u8 = 6;
+/// Race 7: Dark Knight — zero-HP reanimation pose (fmain.c:1819-1821).
+pub const RACE_DARK_KNIGHT: u8 = 7;
+/// Race 8: Loraii — custom cluster animation cycle (fmain.c:1806-1816).
+pub const RACE_LORAII: u8 = 8;
 /// Shopkeeper race code.
 pub const RACE_SHOPKEEPER: u8 = 0x88;
 /// Beggar race code (from fmain.c do_option GIVE case: race 0x8d).

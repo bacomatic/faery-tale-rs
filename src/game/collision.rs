@@ -476,4 +476,182 @@ mod actor_collision_tests {
         assert!(actor_collides(55, 55, &others));
         assert!(!actor_collides(100, 100, &others));
     }
+
+    // ── terrain_to_environ ───────────────────────────────────────────────────
+
+    #[test]
+    fn terrain_to_environ_open_ground() {
+        assert_eq!(terrain_to_environ(0, 10), 0); // snaps to 0 regardless of old_k
+    }
+
+    #[test]
+    fn terrain_to_environ_brush_and_shallow() {
+        assert_eq!(terrain_to_environ(2, 0), 2);   // brush: direct snap
+        assert_eq!(terrain_to_environ(3, 0), 5);   // shallow water: direct snap to 5
+    }
+
+    #[test]
+    fn terrain_to_environ_deep_water_ramps() {
+        // j=4 ramps toward 10
+        assert_eq!(terrain_to_environ(4, 0),  1);
+        assert_eq!(terrain_to_environ(4, 9),  10);
+        assert_eq!(terrain_to_environ(4, 10), 10); // clamped
+        assert_eq!(terrain_to_environ(4, 11), 10); // ramp down
+        // j=5 ramps toward 30
+        assert_eq!(terrain_to_environ(5, 0),  1);
+        assert_eq!(terrain_to_environ(5, 29), 30);
+        assert_eq!(terrain_to_environ(5, 30), 30); // clamped
+    }
+
+    #[test]
+    fn terrain_to_environ_special_sentinels() {
+        assert_eq!(terrain_to_environ(6, 0), -1); // slippery
+        assert_eq!(terrain_to_environ(7, 0), -2); // ice
+        assert_eq!(terrain_to_environ(8, 0), -3); // astral reverse-field
+    }
+
+    // ── apply_update_environ ─────────────────────────────────────────────────
+
+    #[test]
+    fn apply_environ_enter_sink() {
+        // k ramps from 0 over deep terrain until it crosses 15 → EnterSink.
+        let (k, t) = apply_update_environ(5, 15, false, false);
+        assert_eq!(k, 16);
+        assert_eq!(t, EnvironTransition::EnterSink);
+    }
+
+    #[test]
+    fn apply_environ_drown() {
+        let (k, t) = apply_update_environ(5, 29, false, true);
+        assert_eq!(k, 30);
+        assert_eq!(t, EnvironTransition::Drown);
+    }
+
+    #[test]
+    fn apply_environ_exit_sink() {
+        // Stepping onto dry ground while sinking
+        let (k, t) = apply_update_environ(0, 0, false, true);
+        assert_eq!(k, 0);
+        assert_eq!(t, EnvironTransition::ExitSink);
+    }
+
+    #[test]
+    fn apply_environ_dying_no_sink_transition() {
+        // Dying actors must not transition into sinking (fmain.c:1796 gate).
+        let (k, t) = apply_update_environ(5, 15, true, false);
+        assert_eq!(k, 16);
+        assert_eq!(t, EnvironTransition::None);
+    }
+
+    // ── wraith and skeleton terrain immunity ─────────────────────────────────
+    //
+    // Wraith (race 2) and snake (race 4): walk_step zeros j before calling
+    // update_environ (fmain.c:1638). The caller (npc_movement::run) is
+    // responsible for this — apply_update_environ itself is race-agnostic.
+    // These tests verify the contract: passing j=0 keeps environ at 0.
+
+    #[test]
+    fn wraith_zeroed_terrain_keeps_environ_dry() {
+        // Wraith over deep water: caller passes j=0, environ stays 0.
+        let (k, t) = apply_update_environ(0, 0, false, false);
+        assert_eq!(k, 0);
+        assert_eq!(t, EnvironTransition::None);
+    }
+
+    #[test]
+    fn wraith_already_sinking_exits_on_zeroed_terrain() {
+        // If somehow a wraith has environ > 0 (shouldn't happen in normal play),
+        // passing j=0 snaps k=0 → ExitSink.
+        let (k, t) = apply_update_environ(0, 0, false, true);
+        assert_eq!(k, 0);
+        assert_eq!(t, EnvironTransition::ExitSink);
+    }
+
+    // Skeleton (race 3 = RACE_ENEMY) has NO terrain immunity —
+    // it sinks and drowns normally. Only the drowning damage tick is immune.
+    #[test]
+    fn skeleton_sinks_in_deep_water() {
+        // Skeleton in terrain-5 at k=15 → should EnterSink.
+        let (k, t) = apply_update_environ(5, 15, false, false);
+        assert_eq!(k, 16);
+        assert_eq!(t, EnvironTransition::EnterSink);
+    }
+
+    // ── speed_for_environ ────────────────────────────────────────────────────
+
+    #[test]
+    fn speed_for_environ_values() {
+        assert_eq!(speed_for_environ(0),   2); // open ground: normal
+        assert_eq!(speed_for_environ(2),   1); // brush: slow
+        assert_eq!(speed_for_environ(5),   2); // shallow water: normal speed (k=5 ≤ 6)
+        assert_eq!(speed_for_environ(7),   1); // deep water (k>6): slow
+        assert_eq!(speed_for_environ(-1),  4); // slippery: fast
+        assert_eq!(speed_for_environ(-3), -2); // astral: reverse
+    }
+}
+
+// ── Terrain environ logic ─────────────────────────────────────────────────────
+
+/// State transition outcome from `apply_update_environ`.
+/// Callers map this to their own state type (ActorState / NpcState).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvironTransition {
+    /// Actor enters sinking (k > 15, not dying). (fmain.c:1796)
+    EnterSink,
+    /// Actor exits sinking onto dry ground (k == 0 while sinking). (fmain.c:1799)
+    ExitSink,
+    /// Actor reaches full drown depth (k == 30). (fmain.c:1784)
+    Drown,
+    /// No state change needed.
+    None,
+}
+
+/// Map terrain type `j` to environ code `k` (fmain.c:1762-1797).
+/// Mirrors `update_environ`'s k-assignment block, shared by all actors.
+pub fn terrain_to_environ(j: u8, old_k: i8) -> i8 {
+    match j {
+        0 => 0,          // open ground (fmain.c:1763)
+        2 => 2,          // brush/marsh (fmain.c:1776)
+        3 => 5,          // shallow water (fmain.c:1777)
+        4 | 5 => {       // deep water — ramp toward 10/30 (fmain.c:1779-1797)
+            let target: i8 = if j == 4 { 10 } else { 30 };
+            if old_k < target { old_k.saturating_add(1) }
+            else if old_k > target { old_k.saturating_sub(1) }
+            else { old_k }
+        }
+        6 => -1,         // slippery (fmain.c:1764)
+        7 => -2,         // ice (fmain.c:1765)
+        8 => -3,         // astral reverse-field (fmain.c:1766)
+        _ => 0,          // unknown / lava — treat as open
+    }
+}
+
+/// Apply `update_environ` state-transition rules and return `(new_k, transition)`.
+/// `is_dying`: actor is currently dying/dead. `is_sinking`: actor is in STATE_SINK.
+pub fn apply_update_environ(j: u8, old_k: i8, is_dying: bool, is_sinking: bool)
+    -> (i8, EnvironTransition)
+{
+    let new_k = terrain_to_environ(j, old_k);
+    let transition = if new_k == 30 && !is_dying {
+        EnvironTransition::Drown       // fmain.c:1784
+    } else if new_k > 15 && !is_dying && !is_sinking {
+        EnvironTransition::EnterSink   // fmain.c:1796
+    } else if new_k == 0 && is_sinking {
+        EnvironTransition::ExitSink    // fmain.c:1799
+    } else {
+        EnvironTransition::None
+    };
+    (new_k, transition)
+}
+
+/// Speed value from environ code `k` for walking actors (fmain.c:1599-1602).
+/// Shared by hero and all NPCs.
+pub fn speed_for_environ(k: i8) -> i8 {
+    match k {
+        -3       => -2,  // astral reverse-field: move backward
+        -1       => 4,   // slippery: fast
+        2        => 1,   // brush/marsh: slow
+        k if k > 6 => 1, // deep water (wading): slow
+        _        => 2,   // default
+    }
 }

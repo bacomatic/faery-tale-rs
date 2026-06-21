@@ -222,7 +222,10 @@ pub fn tick_npc(
     if freeze && npc.race < 7 {
         return;
     }
-    select_tactic(
+    // advance_goal (fmain.c:2162-2170): do_tactic is the *else* branch of the
+    // melee-range shortcut; it must NOT run when select_tactic already committed
+    // a state (enter_melee → FIGHTING, stand_guard → STILL, etc.).
+    let tactic_handled = select_tactic(
         npc,
         npc_idx,
         hero_x,
@@ -233,7 +236,9 @@ pub fn tick_npc(
         turtle_eggs,
         tick,
     );
-    do_tactic(npc, hero_x, hero_y, leader_idx, npcs, tick);
+    if !tactic_handled {
+        do_tactic(npc, hero_x, hero_y, leader_idx, npcs, tick);
+    }
 }
 
 /// Numeric GOAL_* value matching SYMBOLS.md:275-286. Used for melee-reach
@@ -267,6 +272,9 @@ fn goal_numeric(goal: &Goal) -> i32 {
 /// `turtle_eggs`: true when the global turtle-eggs counter is non-zero (ref
 ///   ai-system.md:84). When false, snake race falls through to the normal AI.
 /// `tick`: current game tick for RNG.
+/// Returns `true` when the tactic has been fully handled (enter_melee,
+/// stand_guard, stop_motion) — `tick_npc` must skip `do_tactic` in that case.
+/// Mirrors the if/elif/else structure of fmain.c:2162-2170.
 pub fn select_tactic(
     npc: &mut Npc,
     npc_idx: usize,
@@ -277,7 +285,7 @@ pub fn select_tactic(
     xtype: u16,
     turtle_eggs: bool,
     tick: u32,
-) {
+) -> bool {
     let r = ai_rand(tick, npc.x as u32 ^ (npc.y as u32).wrapping_mul(3));
 
     // === Forced mode overrides (ref ai-system.md:58-67) ===
@@ -326,33 +334,31 @@ pub fn select_tactic(
                 Tactic::Random
             }
         };
-        return;
+        return false; // do_tactic will execute the new tactic
     }
 
     // === Non-hostile goal modes (bypass tactic tree) ===
     match npc.goal {
         Goal::Flee => {
             npc.tactic = Tactic::Backup;
-            return;
+            return false; // do_tactic executes BACKUP
         }
         Goal::Follower => {
             npc.tactic = Tactic::Follow;
-            return;
+            return false; // do_tactic executes FOLLOW
         }
         Goal::Stand => {
-            // Ref ai-system.md:121-122: set_course(mode=0 smart seek) + stop_motion.
-            // SetCourseMode::Smart applies axis suppression; then state is forced Still.
+            // Ref ai-system.md:121-122: set_course(mode=0) + stop_motion.
             set_course(npc, hero_x, hero_y, SetCourseMode::Smart);
             npc.state = NpcState::Still;
-            return;
+            return true; // fully handled
         }
         Goal::None | Goal::User | Goal::Leader => {
             npc.state = NpcState::Still;
-            return;
+            return true; // fully handled
         }
-        // CONFUSED: goal already set on first tick (with random walk executed). Subsequent
-        // ticks bypass all tactic processing — actor continues last trajectory (§11.9).
-        Goal::Confused => return,
+        // CONFUSED: tactic+state were set on first tick; continue last trajectory.
+        Goal::Confused => return false,
         _ => {} // Attack/Archer goals continue to tactic tree.
     }
 
@@ -368,17 +374,16 @@ pub fn select_tactic(
     // Ref: `(weapon & 4) == 0` — bit 2 clear means melee (non-bow/wand).
     let is_melee = (npc.weapon & 4) == 0;
     if is_melee && xd < thresh && yd < thresh {
-        // Inside melee range with a non-bow weapon: aim directly and fight.
-        set_course(npc, hero_x, hero_y, SetCourseMode::Direct);
+        // enter_melee (fmain.c:2165-2166): set_course mode 0 (Smart) then FIGHTING.
+        set_course(npc, hero_x, hero_y, SetCourseMode::Smart);
         npc.state = NpcState::Fighting;
-        return;
+        return true; // do_tactic must not overwrite state or facing
     }
     if npc.race == 7 && npc.vitality > 0 {
-        // Living dark knight outside melee reach: stand_guard — state = STILL,
-        // facing = DIR_S (south). Ref ai-system.md:110-112 (fmain.c:2168-2169).
+        // stand_guard (fmain.c:2168-2169): state = STILL, facing = DIR_S.
         npc.state = NpcState::Still;
         npc.facing = Direction::S;
-        return;
+        return true; // fully handled
     }
 
     // === Re-plan gate (ref ai-system.md:80-81, fmain.c:2132, 2148) ===
@@ -390,7 +395,7 @@ pub fn select_tactic(
         _ => 15,                            // ~6.25%
     };
     if (r & gate_mask) != 0 {
-        return; // Keep current tactic this tick.
+        return false; // Keep current tactic; do_tactic will re-execute it.
     }
 
     // === Tactic decision tree (ref ai-system.md:83-101) ===
@@ -398,7 +403,7 @@ pub fn select_tactic(
     // Snake + turtle_eggs global: march to nest coords (ref line 84).
     if npc.race == 4 && turtle_eggs {
         npc.tactic = Tactic::EggSeek;
-        return;
+        return false;
     }
 
     // Disarmed → CONFUSED + first-tick random walk.
@@ -407,13 +412,13 @@ pub fn select_tactic(
         npc.tactic = Tactic::Random;
         npc.facing = Direction::from(((r >> 4) & 7) as u8);
         npc.state = NpcState::Walking;
-        return;
+        return true; // state fully committed; no further tactic execution needed
     }
 
     // Wounded evade: vitality < 6 AND coin flip (ref line 90).
     if npc.vitality < 6 && (r >> 8) & 1 == 0 {
         npc.tactic = Tactic::Evade;
-        return;
+        return false;
     }
 
     // Archer range bands (ref lines 94-99).
@@ -421,18 +426,17 @@ pub fn select_tactic(
     if is_archer {
         if xd < 40 && yd < 30 {
             npc.tactic = Tactic::Backup;
-            return;
-        }
-        if xd < 70 && yd < 70 {
+        } else if xd < 70 && yd < 70 {
             npc.tactic = Tactic::Shoot;
-            return;
+        } else {
+            npc.tactic = Tactic::Pursue;
         }
-        npc.tactic = Tactic::Pursue;
-        return;
+        return false;
     }
 
     // Default melee → pursue.
     npc.tactic = Tactic::Pursue;
+    false
 }
 
 #[cfg(test)]
@@ -683,6 +687,43 @@ mod tests {
             }
         }
         assert!(fighting, "Melee NPC should enter Fighting at close range");
+    }
+
+    #[test]
+    fn fight_state_held_while_in_melee_range() {
+        // tick_npc must not revert FIGHTING to WALKING while xd/yd < thresh.
+        // thresh for Attack1 (goal_numeric=1) = 14-1 = 13.
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.weapon = 1;
+        npc.state = NpcState::Fighting;
+        // Hero at (105, 105): xd=5, yd=5, both < 13 → stays in melee range.
+        tick_npc(&mut npc, 0, 105, 105, false, None, &[], 0, 0, false, false);
+        assert_eq!(npc.state, NpcState::Fighting,
+            "NPC must stay FIGHTING while player is in melee range");
+    }
+
+    #[test]
+    fn fight_state_clears_when_player_moves_away() {
+        // Once xd/yd >= thresh the melee shortcut doesn't fire; do_tactic runs
+        // and sets Walking via PURSUE → set_course.
+        let mut npc = make_npc(100, 100);
+        npc.goal = Goal::Attack1;
+        npc.weapon = 1;
+        npc.state = NpcState::Fighting;
+        // Hero at (200, 200): xd=100, yd=100 — well outside thresh=13.
+        // tick_npc runs select_tactic (returns false, sets tactic=Pursue) then
+        // do_tactic (set_course → Walking).
+        let mut walked = false;
+        for tick in 0..200u32 {
+            let mut tmp = npc.clone();
+            tick_npc(&mut tmp, 0, 200, 200, false, None, &[], tick, 0, false, false);
+            if tmp.state == NpcState::Walking {
+                walked = true;
+                break;
+            }
+        }
+        assert!(walked, "NPC should resume Walking once player is out of melee range");
     }
 
     #[test]
@@ -1471,13 +1512,18 @@ pub fn tick_npc_ecs(
     xtype: u16,
     turtle_eggs: bool,
     freeze: bool,
+    vitality: i16,
+    weapon: u8,
+    race: u8,
 ) {
     use crate::game::npc::Npc;
 
     let mut tmp = Npc {
-        race: 0,
+        race,
         x: x as i16,
         y: y as i16,
+        vitality,
+        weapon,
         goal: ai.goal.clone(),
         tactic: ai.tactic.clone(),
         state: ai.state.clone(),

@@ -220,6 +220,25 @@ pub struct SpriteSheets {
 
 // ── Encounter context ─────────────────────────────────────────────────────────
 
+/// Static lookup tables used by EncounterSystem.
+/// All fields are references to statics in `src/game/encounter.rs`.
+#[derive(Debug, Clone)]
+pub struct EncounterTables {
+    pub chart:        &'static [crate::game::encounter::EnemyTypeStats; 11],
+    pub npc_type_map: &'static [u8; 11],
+    pub weapon_probs: &'static [u8; 32],
+}
+
+impl Default for EncounterTables {
+    fn default() -> Self {
+        Self {
+            chart:        &crate::game::encounter::ENCOUNTER_CHART_FULL,
+            npc_type_map: &crate::game::encounter::ENCOUNTER_TO_NPC_TYPE,
+            weapon_probs: &crate::game::encounter::WEAPON_PROBS,
+        }
+    }
+}
+
 /// Encounter, arena, and death-sequence state.
 #[derive(Debug, Clone, Default)]
 pub struct EncounterContext {
@@ -358,6 +377,9 @@ pub struct Resources {
     /// Current quest progress tracking (Plan V)
     pub quest:     QuestState,
 
+    /// Static encounter tables used by EncounterSystem.
+    pub encounter_tables: EncounterTables,
+
     /// Current hero movement direction, derived from InputState each tick.
     pub input_direction: crate::game::direction::Direction,
 
@@ -398,6 +420,7 @@ impl Resources {
             narrative:      NarrativeQueue::new(),
             diag_log:            Vec::new(),
             quest:          QuestState::default(),
+            encounter_tables:    EncounterTables::default(),
             input_direction:     crate::game::direction::Direction::None,
             hero_entity:         placeholder,
             carrier_entity:      None,

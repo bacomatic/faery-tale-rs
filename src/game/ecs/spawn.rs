@@ -64,6 +64,7 @@ pub fn spawn_enemy(
         Speed { speed },
         Loot { weapon, gold, looted: false },
         SpriteRef { cfile_idx },
+        ActorMotion::default(),
     ))
 }
 

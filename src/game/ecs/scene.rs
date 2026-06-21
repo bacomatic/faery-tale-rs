@@ -1546,6 +1546,72 @@ fn facing_to_fight_frame_base(facing: Direction) -> usize {
     DIROFFS_FIGHT[facing as usize]
 }
 
+/// Compute the final enemy sprite frame index from race, state, and cycle.
+///
+/// Implements `update_actor_index` (fmain.c:1799-1824) + `select_atype_inum`
+/// parity/offset adjustments (fmain.c:2459-2460).
+///
+/// `idx` is the actor's slot index within the current enemy batch (used for
+/// the Loraii `i%3` cluster and the standard `(cycle+i)&7` walk spread).
+/// `num_frames` is the sheet frame count for bounds clamping.
+pub(super) fn enemy_frame(
+    race: u8,
+    state: &crate::game::npc::NpcState,
+    vitality: i16,
+    facing: crate::game::direction::Direction,
+    cycle: usize,
+    idx: usize,
+    num_frames: usize,
+) -> usize {
+    use crate::game::npc::{NpcState, RACE_DARK_KNIGHT, RACE_LORAII, RACE_SNAKE, RACE_WRAITH};
+    let frame_base = facing_to_frame_base(facing);
+    let n = num_frames.max(1);
+
+    // update_actor_index: race-specific logical index.
+    let logical: usize = if race == RACE_SNAKE {
+        match state {
+            NpcState::Still    => frame_base + (cycle & 1),
+            NpcState::Walking  => frame_base + ((cycle / 2) & 1),
+            _                  => frame_base,
+        }
+    } else if race == RACE_DARK_KNIGHT && vitality <= 0 {
+        1
+    } else if race == RACE_LORAII {
+        match state {
+            NpcState::Dying => 0x3f,
+            _ => {
+                let phase = (cycle & 3) * 2;
+                let phase = if phase > 4 { phase - 1 } else { phase };
+                match idx % 3 {
+                    0 => 0x25,
+                    1 => 0x28 + phase,
+                    _ => 0x30 + phase,
+                }
+            }
+        }
+    } else if race == RACE_WRAITH {
+        match state {
+            NpcState::Still => frame_base + 1,
+            _               => frame_base,
+        }
+    } else {
+        match state {
+            NpcState::Walking => frame_base + ((cycle + idx) & 7),
+            NpcState::Still   => frame_base + 1,
+            _                 => frame_base,
+        }
+    };
+
+    // select_atype_inum: snake +0x24 offset; all others get race parity LSB.
+    if race == RACE_SNAKE && !matches!(state, NpcState::Dying | NpcState::Dead) {
+        (logical + 0x24) % n
+    } else if race & 1 != 0 {
+        (logical | 1) % n
+    } else {
+        (logical & !1usize) % n
+    }
+}
+
 /// Map (npc_type, race) → cfile index.  Returns None for setfigs and skipped types.
 fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
     use crate::game::npc::*;
@@ -1706,15 +1772,26 @@ fn blit_actors_inner(
     }
 
     // ── Enemies ───────────────────────────────────────────────────────────────
+    use crate::game::npc::RACE_LORAII;
     let mut enemy_q = world.query::<(
         &Enemy,
         &Position,
         &Facing,
         &crate::game::ecs::components::EnemyKind,
         Option<&AiState>,
+        Option<&crate::game::ecs::components::Health>,
+        Option<&ActorMotion>,
     )>();
-    for (idx, (_, pos, facing_c, kind, ai_opt)) in enemy_q.iter().enumerate() {
-        let Some(cfile_idx) = npc_type_to_cfile(kind.npc_type, kind.race) else { continue; };
+    for (idx, (_, pos, facing_c, kind, ai_opt, health_opt, motion_opt)) in enemy_q.iter().enumerate() {
+        let race = kind.race;
+
+        // Dead Loraii are parked off-screen (fmain.c:1807 — abs_x = 0).
+        let vitality = health_opt.map(|h| h.vitality).unwrap_or(1);
+        if race == RACE_LORAII && vitality <= 0 {
+            continue;
+        }
+
+        let Some(cfile_idx) = npc_type_to_cfile(kind.npc_type, race) else { continue; };
         let Some(Some(ref sheet)) = sheets.get(cfile_idx) else { continue; };
 
         let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
@@ -1724,20 +1801,26 @@ fn blit_actors_inner(
             continue;
         }
 
+        let environ: i8 = motion_opt.map(|m: &ActorMotion| m.environ).unwrap_or(0);
         let npc_state = ai_opt.map(|a| &a.state).unwrap_or(&NpcState::Still);
-        let frame_base = facing_to_frame_base(facing_c.dir);
-        let frame = match npc_state {
-            NpcState::Walking => frame_base + ((cycle + idx) & 7),
-            NpcState::Still   => frame_base + 1,
-            _                 => frame_base,
-        } % sheet.num_frames.max(1);
+
+        // fmain.c:2491-2500 — environ drives Y-shift and height clip, same as hero.
+        let (draw_y, body_rows) = if environ == 2 {
+            (rel_y, SPRITE_H.saturating_sub(10))
+        } else if environ > 2 {
+            (rel_y + environ as i32, SPRITE_H.saturating_sub(environ as usize))
+        } else {
+            (rel_y, SPRITE_H)
+        };
+
+        let frame = enemy_frame(race, npc_state, vitality, facing_c.dir, cycle, idx, sheet.num_frames);
 
         if let Some(fp) = sheet.frame_pixels(frame) {
             pending.push((BlittedSprite {
                 screen_x: rel_x,
-                screen_y: rel_y,
+                screen_y: draw_y,
                 width:    SPRITE_W,
-                height:   SPRITE_H,
+                height:   body_rows,
                 ground:   rel_y + SPRITE_H as i32,
                 is_falling: false,
             }, fp.to_vec()));
@@ -2139,5 +2222,129 @@ mod tests {
             || rel_y <= -(SPRITE_H as i32)
             || rel_y >= fb_h;
         assert!(culled, "SetFig outside framebuffer bounds must be culled");
+    }
+
+    // ── enemy_frame tests ─────────────────────────────────────────────────────
+    // All frame numbers are verified against actor-animation-catalog.md.
+
+    use crate::game::direction::Direction;
+    use crate::game::npc::{NpcState, RACE_DARK_KNIGHT, RACE_LORAII, RACE_SNAKE, RACE_WRAITH};
+    use crate::game::ecs::scene::enemy_frame;
+
+    const N: usize = 64; // typical ENEMY sheet frame count
+
+    // Wraith (race 2, even): walk frame frozen at diroffs[d], same as Still after
+    // parity clears LSB.  South facing: diroffs[4] = 0.
+    #[test]
+    fn wraith_walk_frozen_south() {
+        // Walking at any cycle must stay on frame 0 (diroffs[S]=0, LSB cleared).
+        for cycle in 0..16 {
+            let f = enemy_frame(RACE_WRAITH, &NpcState::Walking, 10, Direction::S, cycle, 0, N);
+            assert_eq!(f, 0, "wraith walking S cycle {cycle}: expected 0, got {f}");
+        }
+    }
+
+    #[test]
+    fn wraith_still_and_walk_same_frame() {
+        // Still computes diroffs[S]+1 = 1, then even parity clears LSB → 0.
+        // Walking computes diroffs[S] = 0, parity clears → 0.
+        // Both should land on the same physical frame.
+        let walk = enemy_frame(RACE_WRAITH, &NpcState::Walking, 10, Direction::S, 0, 0, N);
+        let still = enemy_frame(RACE_WRAITH, &NpcState::Still,   10, Direction::S, 0, 0, N);
+        assert_eq!(walk, still, "wraith walk and still must render the same frame");
+    }
+
+    #[test]
+    fn wraith_walk_frozen_west() {
+        // West facing: diroffs[6] = 8, parity clears LSB → 8.
+        for cycle in 0..16 {
+            let f = enemy_frame(RACE_WRAITH, &NpcState::Walking, 10, Direction::W, cycle, 0, N);
+            assert_eq!(f, 8, "wraith walking W cycle {cycle}: expected 8, got {f}");
+        }
+    }
+
+    // Snake (race 4, even after +0x24 offset): half-rate 2-frame wiggle, offset into
+    // second half of ENEMY sheet.  South facing: diroffs[4] = 0.
+    #[test]
+    fn snake_walk_half_rate_south() {
+        // Walking: logical = 0 + ((cycle/2)&1), then +0x24 = 36.
+        // cycle 0,1 → index 0 → frame 36; cycle 2,3 → index 1 → frame 37.
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Walking, 10, Direction::S, 0, 0, N), 36);
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Walking, 10, Direction::S, 1, 0, N), 36);
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Walking, 10, Direction::S, 2, 0, N), 37);
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Walking, 10, Direction::S, 3, 0, N), 37);
+    }
+
+    #[test]
+    fn snake_still_full_rate_south() {
+        // Still: logical = 0 + (cycle&1), then +0x24 = 36 or 37.
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Still, 10, Direction::S, 0, 0, N), 36);
+        assert_eq!(enemy_frame(RACE_SNAKE, &NpcState::Still, 10, Direction::S, 1, 0, N), 37);
+    }
+
+    #[test]
+    fn snake_uses_second_sheet_half() {
+        // In any walk/still state, frame must be >= 0x24 (36).
+        for cycle in 0..8 {
+            let f = enemy_frame(RACE_SNAKE, &NpcState::Walking, 10, Direction::S, cycle, 0, N);
+            assert!(f >= 0x24, "snake walking S should use second sheet half, got {f}");
+        }
+    }
+
+    // Dark Knight (race 7, odd): zero-HP pins to frame 1 (odd parity preserves LSB).
+    #[test]
+    fn dark_knight_zero_hp_reanimation() {
+        let f = enemy_frame(RACE_DARK_KNIGHT, &NpcState::Walking, 0, Direction::S, 0, 0, N);
+        assert_eq!(f, 1, "dark knight at vitality 0 should pin to frame 1");
+    }
+
+    #[test]
+    fn dark_knight_alive_walks_normally() {
+        // Alive dark knight (race 7, odd) uses standard walk + odd parity → frame must be odd.
+        let f = enemy_frame(RACE_DARK_KNIGHT, &NpcState::Walking, 10, Direction::S, 0, 0, N);
+        assert_eq!(f % 2, 1, "living dark knight walk frame must be odd (race 7 is odd-race)");
+    }
+
+    // Loraii (race 8, even): cluster cycle across three slots.
+    #[test]
+    fn loraii_slot0_is_static() {
+        // Slot 0 always returns 0x25, parity clears LSB → 0x24.
+        for cycle in 0..16 {
+            let f = enemy_frame(RACE_LORAII, &NpcState::Walking, 10, Direction::S, cycle, 0, N);
+            assert_eq!(f, 0x24, "Loraii slot 0 should be static frame 0x24, got {f} at cycle {cycle}");
+        }
+    }
+
+    #[test]
+    fn loraii_slot1_cycles() {
+        // Slot 1: logical = 0x28 + phase; even parity clears LSB.
+        // phase per cycle: 0→0, 1→2, 2→4, 3→5, 4→0, 5→2, 6→4, 7→5.
+        // After even parity (&!1): 0x28,0x2a,0x2c,0x2c, 0x28,0x2a,0x2c,0x2c.
+        let expected = [0x28, 0x2a, 0x2c, 0x2c, 0x28, 0x2a, 0x2c, 0x2c];
+        for (cycle, &exp) in expected.iter().enumerate() {
+            let f = enemy_frame(RACE_LORAII, &NpcState::Walking, 10, Direction::S, cycle, 1, N);
+            assert_eq!(f, exp, "Loraii slot 1 cycle {cycle}: expected {exp:#x}, got {f:#x}");
+        }
+    }
+
+    #[test]
+    fn loraii_dying_frame() {
+        // Dying: logical 0x3f, even parity → 0x3e.
+        let f = enemy_frame(RACE_LORAII, &NpcState::Dying, 10, Direction::S, 0, 0, N);
+        assert_eq!(f, 0x3e, "Loraii dying should be frame 0x3e");
+    }
+
+    // Parity: standard even-race enemy (race 0, Ogre) gets even frames.
+    #[test]
+    fn ogre_even_parity() {
+        let f = enemy_frame(0, &NpcState::Walking, 10, Direction::S, 0, 0, N);
+        assert_eq!(f % 2, 0, "ogre (race 0) walk frame must be even");
+    }
+
+    // Parity: standard odd-race enemy (race 1, Orcs) gets odd frames.
+    #[test]
+    fn orcs_odd_parity() {
+        let f = enemy_frame(1, &NpcState::Walking, 10, Direction::S, 0, 0, N);
+        assert_eq!(f % 2, 1, "orcs (race 1) walk frame must be odd");
     }
 }
