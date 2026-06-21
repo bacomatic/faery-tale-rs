@@ -782,6 +782,12 @@ pub fn main() -> Result<(), String> {
                     (px.0, px.1, bk, v, h, f, br, lk, ki, we)
                 };
                 let hero_extras = build_ecs_hero_extras(&ecs.world, ecs.res.hero_entity, &ecs.res);
+                let hero_stuff: Vec<u8> = {
+                    use crate::game::ecs::components::Inventory;
+                    ecs.world.get::<&Inventory>(ecs.res.hero_entity)
+                        .map(|inv| inv.stuff.to_vec())
+                        .unwrap_or_default()
+                };
                 let status = DebugSnapshot {
                     fps: game_fps,
                     tps: game_tps,
@@ -831,6 +837,7 @@ pub fn main() -> Result<(), String> {
                     narrative_active: ecs.res.narrative.active.is_some(),
                     narrative_timer: ecs.res.narrative.active_ticks,
                     narrative_preview: build_ecs_narrative_preview(&ecs.res.narrative, 3),
+                    stuff: hero_stuff,
                     ..DebugSnapshot::default()
                 };
                 dc.update_status(status);

@@ -5,8 +5,8 @@
 
 use hecs::World;
 
-use crate::game::debug_command::{DebugCommand, MagicEffect};
-use crate::game::ecs::components::Position;
+use crate::game::debug_command::{DebugCommand, MagicEffect, StatId};
+use crate::game::ecs::components::{HeroStats, Inventory, Position};
 use crate::game::ecs::resources::Resources;
 
 /// Dispatch a single debug command against the ECS world and resources.
@@ -47,12 +47,104 @@ pub fn handle(cmd: DebugCommand, world: &mut World, res: &mut Resources) {
             }
         }
 
-        // ── Commands not yet wired in Plan D — will be added incrementally ──
-        // SetStat, AdjustStat, InstaKill, HeroPack, TeleportSafe, etc.
-        // For now they are silently consumed so we don't panic on unknown input.
-        _ => {
-            // TODO(Plan D/F): implement remaining debug commands
+        DebugCommand::SetStat { stat, value } => {
+            if let Ok(mut stats) = world.get::<&mut HeroStats>(res.hero_entity) {
+                apply_stat_set(&mut stats, stat, value);
+            }
         }
+
+        DebugCommand::AdjustStat { stat, delta } => {
+            if let Ok(mut stats) = world.get::<&mut HeroStats>(res.hero_entity) {
+                apply_stat_adjust(&mut stats, stat, delta);
+            }
+        }
+
+        DebugCommand::SetInventory { index, value } => {
+            if let Ok(mut inv) = world.get::<&mut Inventory>(res.hero_entity) {
+                if let Some(slot) = inv.stuff.get_mut(index as usize) {
+                    *slot = value;
+                }
+            }
+        }
+
+        DebugCommand::AdjustInventory { index, delta } => {
+            if let Ok(mut inv) = world.get::<&mut Inventory>(res.hero_entity) {
+                if let Some(slot) = inv.stuff.get_mut(index as usize) {
+                    *slot = (*slot as i16 + delta as i16).clamp(0, 255) as u8;
+                }
+            }
+        }
+
+        DebugCommand::HeroPack => {
+            // Full test loadout per DEBUG_SPECIFICATION.md §/pack.
+            const PACK: &[(usize, u8)] = &[
+                (0, 1),   // Dirk
+                (1, 1),   // Mace
+                (2, 1),   // Sword
+                (3, 1),   // Bow
+                (4, 1),   // Magic Wand
+                (5, 1),   // Golden Lasso
+                (6, 1),   // Sea Shell
+                (7, 1),   // Sun Stone
+                (8, 255), // Arrows (full quiver)
+                (9, 3),   // Blue Stone
+                (10, 3),  // Green Jewel
+                (11, 3),  // Glass Vial
+                (12, 3),  // Crystal Orb
+                (13, 3),  // Bird Totem
+                (14, 3),  // Gold Ring
+                (15, 3),  // Jade Skull
+                (16, 5),  // Gold Key
+                (17, 5),  // Green Key
+                (18, 5),  // Blue Key
+                (19, 5),  // Red Key
+                (20, 5),  // Grey Key
+                (21, 5),  // White Key
+                (23, 1),  // Rose
+                (24, 255), // Apple
+            ];
+            if let Ok(mut inv) = world.get::<&mut Inventory>(res.hero_entity) {
+                for &(idx, val) in PACK {
+                    if let Some(slot) = inv.stuff.get_mut(idx) {
+                        *slot = val;
+                    }
+                }
+            }
+            // Also heal: vitality to 15 + brave/4, hunger=0, fatigue=0.
+            if let Ok(mut stats) = world.get::<&mut HeroStats>(res.hero_entity) {
+                let cap = 15i16.saturating_add(stats.brave / 4);
+                stats.vitality = cap;
+                stats.hunger = 0;
+                stats.fatigue = 0;
+            }
+        }
+
+        // ── Remaining commands not yet implemented ──
+        _ => {}
+    }
+}
+
+fn apply_stat_set(stats: &mut HeroStats, stat: StatId, value: i16) {
+    match stat {
+        StatId::Vitality => stats.vitality = value,
+        StatId::Brave    => stats.brave    = value,
+        StatId::Luck     => stats.luck     = value,
+        StatId::Kind     => stats.kind     = value,
+        StatId::Wealth   => stats.wealth   = value,
+        StatId::Hunger   => stats.hunger   = value,
+        StatId::Fatigue  => stats.fatigue  = value,
+    }
+}
+
+fn apply_stat_adjust(stats: &mut HeroStats, stat: StatId, delta: i16) {
+    match stat {
+        StatId::Vitality => stats.vitality = stats.vitality.saturating_add(delta),
+        StatId::Brave    => stats.brave    = stats.brave.saturating_add(delta),
+        StatId::Luck     => stats.luck     = stats.luck.saturating_add(delta),
+        StatId::Kind     => stats.kind     = stats.kind.saturating_add(delta),
+        StatId::Wealth   => stats.wealth   = stats.wealth.saturating_add(delta),
+        StatId::Hunger   => stats.hunger   = stats.hunger.saturating_add(delta),
+        StatId::Fatigue  => stats.fatigue  = stats.fatigue.saturating_add(delta),
     }
 }
 
@@ -143,5 +235,51 @@ mod tests {
         assert!(res.clock.secret_sticky);
         handle(cmd, &mut world, &mut res);
         assert!(!res.clock.secret_sticky);
+    }
+
+    #[test]
+    fn set_stat_vitality() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::SetStat { stat: StatId::Vitality, value: 42 }, &mut world, &mut res);
+        assert_eq!(world.get::<&HeroStats>(res.hero_entity).unwrap().vitality, 42);
+    }
+
+    #[test]
+    fn adjust_stat_wealth() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::AdjustStat { stat: StatId::Wealth, delta: 50 }, &mut world, &mut res);
+        assert_eq!(world.get::<&HeroStats>(res.hero_entity).unwrap().wealth, 100);
+    }
+
+    #[test]
+    fn set_inventory_slot() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::SetInventory { index: 2, value: 7 }, &mut world, &mut res);
+        assert_eq!(world.get::<&Inventory>(res.hero_entity).unwrap().stuff[2], 7);
+    }
+
+    #[test]
+    fn adjust_inventory_slot() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::SetInventory { index: 8, value: 10 }, &mut world, &mut res);
+        handle(DebugCommand::AdjustInventory { index: 8, delta: 5 }, &mut world, &mut res);
+        assert_eq!(world.get::<&Inventory>(res.hero_entity).unwrap().stuff[8], 15);
+    }
+
+    #[test]
+    fn hero_pack_fills_inventory_and_heals() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::HeroPack, &mut world, &mut res);
+        let inv = world.get::<&Inventory>(res.hero_entity).unwrap();
+        assert_eq!(inv.stuff[0], 1,   "Dirk");
+        assert_eq!(inv.stuff[8], 255, "Arrows");
+        assert_eq!(inv.stuff[9], 3,   "Blue Stone");
+        assert_eq!(inv.stuff[16], 5,  "Gold Key");
+        assert_eq!(inv.stuff[24], 255, "Apple");
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.hunger, 0);
+        assert_eq!(stats.fatigue, 0);
+        // vitality should be 15 + brave/4 = 15 + 50/4 = 15 + 12 = 27
+        assert_eq!(stats.vitality, 27);
     }
 }

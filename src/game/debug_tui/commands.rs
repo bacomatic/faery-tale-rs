@@ -321,7 +321,7 @@ impl DebugConsole {
                 get(15)
             ),
             format!(
-                "  Keys    : gold={} silver={} ruby={} skull={} iron={} crystal={}",
+                "  Keys    : gold={} green={} blue={} red={} grey={} white={}",
                 get(16),
                 get(17),
                 get(18),
