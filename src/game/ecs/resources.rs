@@ -3,6 +3,7 @@
 use hecs::Entity;
 use crate::game::debug_command::GodModeFlags;
 use crate::game::ecs::events::Events;
+use crate::game::gfx_effects::{WitchEffect, TeleportEffect};
 
 // ── Clock ────────────────────────────────────────────────────────────────────
 
@@ -236,22 +237,11 @@ pub struct EncounterContext {
 
 // ── VFX ───────────────────────────────────────────────────────────────────────
 
-// TODO(Plan D): move WitchEffect and TeleportEffect here from gfx_effects module.
-// For now we use placeholder types so resources.rs compiles independently.
-
-/// Placeholder — real type will be moved from gfx_effects in Plan D.
-#[derive(Debug, Clone, Default)]
-pub struct WitchEffectPlaceholder;
-
-/// Placeholder — real type will be moved from gfx_effects in Plan D.
-#[derive(Debug, Clone, Default)]
-pub struct TeleportEffectPlaceholder;
-
 /// Active visual effects.
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct VfxState {
-    pub witch_effect:    WitchEffectPlaceholder,
-    pub teleport_effect: TeleportEffectPlaceholder,
+    pub witch_effect:    WitchEffect,
+    pub teleport_effect: TeleportEffect,
 }
 
 // ── Narrative ─────────────────────────────────────────────────────────────────

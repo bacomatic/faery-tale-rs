@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Port the complete magic item system from `src/game/magic.rs` (legacy GameState-based) to the ECS architecture, enabling the MAGIC menu to dispatch spell casts through `magic_dispatch_ecs()`, which reads/writes hero inventory and spell timers from ECS components and resources, emits appropriate events, and triggers visual effects.
+**Goal:** Port the complete magic item system from `src/game/magic.rs` (legacy `GameState`-based) to the ECS architecture, enabling the MAGIC menu to dispatch spell casts through `magic_dispatch_ecs()`, which reads/writes hero inventory and spell timers from ECS components and resources, emits appropriate events, and triggers visual effects.
 
-**Architecture:** The legacy `magic.rs` contains a complete, correct implementation that operates on `GameState` fields. Plan K creates `magic_dispatch_ecs()` that performs the same logic using ECS components (Inventory, HeroStats, Position, CarrierMount) and Resources (clock timers, region data, event queues). The MAGIC menu (Plan I) calls this function via `MenuAction::CastSpell`.
+**Architecture:** The legacy `magic.rs` already contains a spec-faithful `use_magic()` implementation (`docs/spec/magic.md` §19). Plan K adds `magic_dispatch_ecs()` that performs the same logic using ECS components (`Inventory`, `HeroStats`, `Position`, `Facing`, `CarrierMount`, `Health`, `EnemyKind`, `ArenaDummy`) and resources (`GameClock`, `RegionState`, `ViewState`, `BrotherRoster`). The MAGIC menu (already wired in Plan I) calls this function via `MenuAction::CastSpell`. Scroll messages are emitted by the caller from `faery.toml` `[narr]` tables or the documented hardcoded literal in `reference/logic/dialog_system.md`.
 
 **Prerequisites:** Plans I (menu dispatch) and J (inventory). Plans A-D complete.
 
@@ -17,9 +17,9 @@
 | File | Change |
 |---|---|
 | `src/game/ecs/resources.rs` | Replace VFX placeholders with real types |
-| `src/game/magic.rs` | Add `magic_dispatch_ecs()` + unit tests |
-| `src/game/ecs/scene.rs` | Wire CastSpell in dispatch_menu_action |
-| `src/game/world_data.rs` | Add `compute_sector()` helper |
+| `src/game/world_data.rs` | Add `WorldData::sector_at_pos()` helper |
+| `src/game/magic.rs` | Add `magic_dispatch_ecs()` + ECS unit tests |
+| `src/game/ecs/scene.rs` | Wire `CastSpell` in `dispatch_menu_action()` |
 
 ---
 
@@ -28,12 +28,16 @@
 **Files:**
 - Modify: `src/game/ecs/resources.rs`
 
-- [ ] **Step 1: Remove placeholder types (lines 192–198)**
+- [ ] **Step 1: Remove placeholder types (lines 242–248)**
 
 Remove these lines:
 ```rust
-// Placeholder types until gfx_effects are ported
+// Placeholder — real type will be moved from gfx_effects in Plan D.
+#[derive(Debug, Clone, Default)]
 pub struct WitchEffectPlaceholder;
+
+/// Placeholder — real type will be moved from gfx_effects in Plan D.
+#[derive(Debug, Clone, Default)]
 pub struct TeleportEffectPlaceholder;
 ```
 
@@ -46,8 +50,10 @@ use crate::game::gfx_effects::{WitchEffect, TeleportEffect};
 
 - [ ] **Step 3: Update VfxState struct**
 
-Replace the placeholder fields with real types:
+Replace the struct with:
 ```rust
+/// Active visual effects.
+#[derive(Default)]
 pub struct VfxState {
     pub witch_effect: WitchEffect,
     pub teleport_effect: TeleportEffect,
@@ -56,7 +62,7 @@ pub struct VfxState {
 
 - [ ] **Step 4: Update VfxState::default()**
 
-Replace placeholder construction with real type construction (may need Default implementations or new() methods).
+`WitchEffect` and `TeleportEffect` both implement `Default`, so the derived `Default` on `VfxState` remains valid. No further change is needed.
 
 - [ ] **Step 5: Verify compile**
 
@@ -68,267 +74,323 @@ Expected: no errors related to VfxState.
 
 ---
 
-## Task 2: Add compute_sector() helper
+## Task 2: Add hero-sector lookup helper to world_data.rs
+
+The original `use_magic()` reads `state.hero_sector` to gate the Blue Stone. In ECS, the sector is stored in the loaded `WorldData` map, so we add a helper that computes the sector index at the hero’s world pixel position.
 
 **Files:**
-- Modify: `src/game/world_data.rs` (or create `src/game/ecs/geometry.rs`)
+- Modify: `src/game/world_data.rs`
 
-- [ ] **Step 1: Add compute_sector function**
+- [ ] **Step 1: Add `WorldData::sector_at_pos()`**
+
+Insert after `sector_at()`:
 
 ```rust
-/// Compute sector ID from world coordinates.
-/// Matches fmain.c sector calculation: (y << 8) | x, where x/y are 8-bit sector coordinates.
-pub fn compute_sector(x: f32, y: f32) -> u16 {
-    let sx = (x as u16) >> 8;
-    let sy = (y as u16) >> 8;
-    (sy << 8) | sx
+impl WorldData {
+    /// Sector index at absolute world pixel coordinates.
+    /// Mirrors the original `hero_sector` update: `mapxy[hero_x / 256][hero_y / 256]`.
+    pub fn sector_at_pos(&self, x: f32, y: f32) -> u16 {
+        let mx = (x as u16 >> 8) as usize;
+        let my = (y as u16 >> 8) as usize;
+        self.sector_at(mx, my) as u16
+    }
 }
 ```
 
 - [ ] **Step 2: Add unit test**
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+Append to the existing `#[cfg(test)]` module in `src/game/world_data.rs`:
 
-    #[test]
-    fn compute_sector_matches_legacy() {
-        // Test origin
-        assert_eq!(compute_sector(0.0, 0.0), 0);
-        // Test sector (1, 2) -> 0x0201
-        assert_eq!(compute_sector(300.0, 600.0), 0x0201);
-        // Test sector (255, 255) -> 0xFFFF
-        assert_eq!(compute_sector(65535.0, 65535.0), 0xFFFF);
-    }
+```rust
+#[test]
+fn sector_at_pos_reads_map_mem() {
+    let mut w = WorldData::empty();
+    // Set sector (54, 43) to index 144.
+    w.map_mem[43 * 128 + 54] = 144;
+    let x = ((54u16 << 8) | 85) as f32;
+    let y = ((43u16 << 8) | 64) as f32;
+    assert_eq!(w.sector_at_pos(x, y), 144);
 }
 ```
 
-- [ ] **Step 3: Add to module exports**
+- [ ] **Step 3: Verify compile**
 
-If created in new file, add to `src/game/ecs/mod.rs`:
-```rust
-pub mod geometry;
-pub use geometry::compute_sector;
+```bash
+cargo test world_data::tests::sector_at_pos 2>&1 | grep "^test result"
 ```
+
+Expected: test passes.
 
 ---
 
-## Task 3: Implement magic_dispatch_ecs()
+## Task 3: Implement `magic_dispatch_ecs()`
 
 **Files:**
 - Modify: `src/game/magic.rs`
 
 - [ ] **Step 1: Add ECS imports**
 
+Add with the other imports at the top of the file:
+
 ```rust
 use hecs::World;
 use crate::game::ecs::resources::Resources;
-use crate::game::ecs::components::{Inventory, HeroStats, Position, Facing, CarrierMount};
-use crate::game::world_data::compute_sector;
+use crate::game::ecs::components::{ArenaDummy, CarrierMount, Enemy, EnemyKind, Facing, Health, HeroStats, Inventory, Position};
 ```
 
-- [ ] **Step 2: Implement magic_dispatch_ecs function**
+- [ ] **Step 2: Implement `magic_dispatch_ecs()`**
+
+Add after the existing `use_magic()` function:
 
 ```rust
-/// Dispatch magic item effect using ECS architecture.
-/// Returns MagicResult indicating outcome.
-pub fn magic_dispatch_ecs(item_slot: usize, world: &mut hecs::World, res: &mut Resources) -> MagicResult {
-    // Validate slot range
-    if item_slot < 9 || item_slot > 15 {
+/// Dispatch a MAGIC menu cast using ECS components/resources.
+/// Mirrors `use_magic()` (fmain.c:3300-3365) and `docs/spec/magic.md` §19.
+/// Scroll messages are the caller's responsibility.
+pub fn magic_dispatch_ecs(item_idx: usize, world: &mut World, res: &mut Resources) -> MagicResult {
+    if item_idx < ITEM_STONE_RING || item_idx > ITEM_SKULL {
         return MagicResult::NoOwned;
     }
 
-    // Get hero components
-    let hero_entity = res.hero_entity;
-    let (inventory, stats, position, _facing, carrier_mount) = match world.query_one::<(&Inventory, &HeroStats, &Position, &Facing, &CarrierMount)>(hero_entity) {
-        Ok(q) => match q.get() {
-            Ok(components) => components,
-            Err(_) => return MagicResult::NoOwned,
-        },
+    let hero = res.hero_entity;
+    let inventory = match world.get::<&Inventory>(hero) {
+        Ok(inv) => inv,
         Err(_) => return MagicResult::NoOwned,
     };
-
-    // Check ownership
-    if inventory.stuff[item_slot] == 0 {
+    if inventory.stuff[item_idx] == 0 {
         return MagicResult::NoOwned;
     }
+    drop(inventory);
 
-    // Map slot to effect
-    let result = match item_slot {
-        9 => lantern_effect(world, res, hero_entity),
-        10 => vial_effect(world, res, hero_entity),
-        11 => orb_effect(world, res, hero_entity),
-        12 => totem_effect(world, res, hero_entity),
-        13 => ring_effect(world, res, hero_entity, carrier_mount.riding),
-        14 => skull_effect(world, res, hero_entity),
-        15 => stone_ring_effect(world, res, hero_entity, position.x, position.y),
-        _ => MagicResult::NoOwned,
+    let result = match item_idx {
+        ITEM_STONE_RING => stone_ring_effect_ecs(world, res, hero),
+        ITEM_LANTERN => {
+            res.clock.light_timer = res.clock.light_timer.saturating_add(LIGHT_TIMER_INCREMENT);
+            MagicResult::Applied
+        }
+        ITEM_VIAL => {
+            let capped = apply_vial_heal_ecs(world, hero);
+            MagicResult::Healed { capped }
+        }
+        ITEM_ORB => {
+            res.clock.secret_timer = res.clock.secret_timer.saturating_add(SECRET_TIMER_INCREMENT);
+            MagicResult::Applied
+        }
+        ITEM_TOTEM => {
+            if res.region.region_num > 7 && !res.brother.cheat1 {
+                return MagicResult::Suppressed;
+            }
+            res.view.viewstatus = 1;
+            MagicResult::Applied
+        }
+        ITEM_RING => {
+            if let Ok(cm) = world.get::<&CarrierMount>(hero) {
+                if cm.riding > 1 {
+                    return MagicResult::Suppressed;
+                }
+            }
+            res.clock.freeze_timer = res.clock.freeze_timer.saturating_add(FREEZE_TIMER_INCREMENT);
+            MagicResult::Applied
+        }
+        ITEM_SKULL => skull_effect_ecs(world, res, hero),
+        _ => return MagicResult::NoOwned,
     };
 
-    // Decrement inventory on successful use
     if matches!(result, MagicResult::Applied | MagicResult::Healed { .. } | MagicResult::StoneTeleport { .. } | MagicResult::MassKill { .. }) {
-        if let Ok(mut inv) = world.get_mut::<Inventory>(hero_entity) {
-            inv.stuff[item_slot] -= 1;
+        if let Ok(mut inv) = world.get::<&mut Inventory>(hero) {
+            inv.stuff[item_idx] -= 1;
         }
     }
-
     result
 }
 ```
 
-- [ ] **Step 3: Implement effect helpers**
+- [ ] **Step 3: Implement ECS effect helpers**
+
+Add after `magic_dispatch_ecs()`:
 
 ```rust
-fn lantern_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity) -> MagicResult {
-    res.clock.light_timer += 760;
-    MagicResult::Applied
-}
+fn stone_ring_effect_ecs(world: &mut World, res: &mut Resources, hero: hecs::Entity) -> MagicResult {
+    let mut q = world.query_one::<(&Position, &Facing)>(hero);
+    let (hero_x, hero_y, facing_dir) = match q.get() {
+        Ok((pos, facing)) => (pos.x as u16, pos.y as u16, facing.dir),
+        Err(_) => return MagicResult::Suppressed,
+    };
+    drop(q);
 
-fn vial_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity) -> MagicResult {
-    if let Ok(mut stats) = world.get_mut::<HeroStats>(hero_entity) {
-        let old_vitality = stats.vitality;
-        stats.vitality = (stats.vitality + 50).min(100);
-        let healed = stats.vitality - old_vitality;
-        if healed > 0 {
-            res.events.message.push(MessageEvent { text: format!("Healed {} vitality", healed) });
-            return MagicResult::Healed { capped: healed < 50 };
-        }
-    }
-    MagicResult::Suppressed
-}
-
-fn orb_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity) -> MagicResult {
-    res.clock.secret_timer += 360;
-    MagicResult::Applied
-}
-
-fn totem_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity) -> MagicResult {
-    if res.region.region_num > 7 && res.brother.cheat1 == 0 {
+    let hero_sector = res.map.world.as_ref()
+        .map(|w| w.sector_at_pos(hero_x as f32, hero_y as f32))
+        .unwrap_or(0);
+    if hero_sector != STONE_RING_SECTOR {
         return MagicResult::Suppressed;
     }
-    res.view.viewstatus = 1; // Map view
-    MagicResult::Applied
-}
 
-fn ring_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity, riding: u8) -> MagicResult {
-    if riding > 1 {
+    let hx_frac = (hero_x & 255) / 85;
+    let hy_frac = (hero_y & 255) / 64;
+    if hx_frac != 1 || hy_frac != 1 {
         return MagicResult::Suppressed;
     }
-    res.clock.freeze_timer += 100;
-    MagicResult::Applied
+
+    let current = match find_current_ring(hero_x, hero_y) {
+        Some(c) => c,
+        None => return MagicResult::Suppressed,
+    };
+
+    let dest = (current + facing_dir as usize + 1) % STONE_RINGS.len();
+    let (dx, dy) = STONE_RINGS[dest];
+    let new_x = ((dx as u16) << 8) | (hero_x & 255);
+    let new_y = ((dy as u16) << 8) | (hero_y & 255);
+
+    if let Ok(mut pos) = world.get::<&mut Position>(hero) {
+        pos.x = new_x as f32;
+        pos.y = new_y as f32;
+    }
+
+    // TODO: drag the active carrier along with the hero (SPEC §21.7).
+    // `res.carrier_entity` is not yet wired by the carrier system.
+
+    let capped = apply_vial_heal_ecs(world, hero);
+    MagicResult::StoneTeleport { capped }
 }
 
-fn skull_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity) -> MagicResult {
-    let mut slain = 0;
-    let in_battle = res.encounter.battleflag;
-    
-    // Query all enemy entities
-    for (entity, (health, enemy_kind)) in world.query::<(&mut Health, &EnemyKind)>().iter() {
-        if enemy_kind.race < 7 {
-            health.current = 0; // Kill enemy
-            slain += 1;
-            if let Ok(mut stats) = world.get_mut::<HeroStats>(hero_entity) {
-                stats.brave -= 1;
-            }
+fn apply_vial_heal_ecs(world: &mut World, hero: hecs::Entity) -> bool {
+    let heal = rand8() + 4;
+    if let Ok(mut stats) = world.get::<&mut HeroStats>(hero) {
+        let cap = heal_cap(stats.brave);
+        let raw = stats.vitality + heal;
+        if raw > cap {
+            stats.vitality = cap;
+            true
+        } else {
+            stats.vitality = raw;
+            false
         }
-    }
-    
-    if slain > 0 {
-        res.events.message.push(MessageEvent { text: format!("Mass kill: {} enemies slain", slain) });
-        MagicResult::MassKill { slain, in_battle }
     } else {
+        false
+    }
+}
+
+fn skull_effect_ecs(world: &mut World, res: &mut Resources, _hero: hecs::Entity) -> MagicResult {
+    let in_battle = res.region.battleflag;
+    let mut slain: Vec<usize> = Vec::new();
+
+    for (entity, health, enemy_kind) in world
+        .query::<(hecs::Entity, &mut Health, &EnemyKind)>()
+        .with::<&Enemy>()
+        .without::<&ArenaDummy>()
+        .iter()
+    {
+        if health.vitality > 0 && enemy_kind.race < 7 {
+            health.vitality = 0;
+            slain.push(entity.id() as usize);
+        }
+    }
+
+    if slain.is_empty() {
         MagicResult::Suppressed
-    }
-}
-
-fn stone_ring_effect(world: &mut World, res: &mut Resources, hero_entity: hecs::Entity, x: f32, y: f32) -> MagicResult {
-    let sector = compute_sector(x, y);
-    if sector != 144 {
-        return MagicResult::Suppressed;
-    }
-    
-    // Check if centered on stone (approximate)
-    let stone_x = ((x as u16) & 0xFF00) + 128; // Center of sector
-    let stone_y = ((y as u16) & 0xFF00) + 128;
-    let dx = (x - stone_x as f32).abs();
-    let dy = (y - stone_y as f32).abs();
-    
-    if dx > 20.0 || dy > 20.0 {
-        return MagicResult::Suppressed;
-    }
-    
-    // Teleport to next stone and heal
-    if let Ok(mut pos) = world.get_mut::<Position>(hero_entity) {
-        pos.set(stone_x as f32 + 256.0, stone_y as f32); // Next stone
-    }
-    
-    if let Ok(mut stats) = world.get_mut::<HeroStats>(hero_entity) {
-        let old_vitality = stats.vitality;
-        stats.vitality = (stats.vitality + 25).min(100);
-        let healed = stats.vitality - old_vitality;
-        res.events.message.push(MessageEvent { text: format!("Teleported! Healed {} vitality", healed) });
-        MagicResult::StoneTeleport { capped: healed < 25 }
     } else {
-        MagicResult::Applied
+        MagicResult::MassKill { slain, in_battle }
     }
 }
 ```
 
-- [ ] **Step 4: Add missing component imports**
+- [ ] **Step 4: Verify compile**
 
-Add to `src/game/ecs/components.rs` if missing:
-```rust
-pub struct EnemyKind {
-    pub race: u8,
-}
-
-pub struct Health {
-    pub current: i16,
-    pub max: i16,
-}
+```bash
+cargo check 2>&1 | grep "^error"
 ```
+
+Expected: no errors.
 
 ---
 
-## Task 4: Wire into dispatch_menu_action()
+## Task 4: Wire `CastSpell` into `dispatch_menu_action()`
 
 **Files:**
 - Modify: `src/game/ecs/scene.rs`
 
-- [ ] **Step 1: Add magic import**
+- [ ] **Step 1: Add magic imports**
+
+Near the top of the file, add:
 
 ```rust
-use crate::game::magic::magic_dispatch_ecs;
+use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_STONE_RING};
 ```
 
-- [ ] **Step 2: Add CastSpell branch**
+- [ ] **Step 2: Add `game_lib` parameter to `dispatch_menu_action()`**
 
-In `dispatch_menu_action()` method, add:
+Change the signature from:
+
+```rust
+fn dispatch_menu_action(&mut self, action: MenuAction, _resources: &mut SceneResources<'_, '_>) -> bool {
+```
+
+to:
+
+```rust
+fn dispatch_menu_action(&mut self, action: MenuAction, game_lib: &GameLibrary, _resources: &mut SceneResources<'_, '_>) -> bool {
+```
+
+- [ ] **Step 3: Update the call site in `update()`**
+
+Change:
+
+```rust
+if self.dispatch_menu_action(action, resources) {
+```
+
+to:
+
+```rust
+if self.dispatch_menu_action(action, game_lib, resources) {
+```
+
+- [ ] **Step 4: Add the `CastSpell` branch**
+
+Replace:
+
+```rust
+MenuAction::CastSpell(_) => {}
+```
+
+with:
+
 ```rust
 MenuAction::CastSpell(hit) => {
-    let item_slot = 9 + hit as usize;
-    let result = magic_dispatch_ecs(item_slot, &mut self.world, &mut self.res);
+    let item_idx = ITEM_STONE_RING + hit as usize;
+    let result = magic_dispatch_ecs(item_idx, &mut self.world, &mut self.res);
+    let name = game_lib
+        .get_brother(self.res.brother.active_brother)
+        .map(|b| b.name.as_str())
+        .unwrap_or("Hero");
+
     match result {
         MagicResult::NoOwned => {
-            self.messages.push("if only I had some Magic!".into());
+            self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                text: crate::game::events::event_msg(&game_lib.narr, 21, name),
+            });
         }
-        MagicResult::Applied | MagicResult::Suppressed => {
-            // No message needed
+        MagicResult::Healed { capped: false } | MagicResult::StoneTeleport { capped: false } => {
+            self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                text: "That feels a lot better!".to_string(),
+            });
         }
-        MagicResult::Healed { .. } | MagicResult::StoneTeleport { .. } |
-        MagicResult::MassKill { .. } => {
-            // Events already emitted by magic_dispatch_ecs
+        MagicResult::MassKill { in_battle: true, .. } => {
+            self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                text: crate::game::events::event_msg(&game_lib.narr, 34, name),
+            });
         }
+        _ => {}
     }
 }
 ```
 
-- [ ] **Step 3: Add MagicResult import**
+- [ ] **Step 5: Verify compile**
 
-```rust
-use crate::game::magic::MagicResult;
+```bash
+cargo check 2>&1 | grep "^error"
 ```
+
+Expected: no errors.
 
 ---
 
@@ -337,7 +399,9 @@ use crate::game::magic::MagicResult;
 **Files:**
 - Modify: `src/game/magic.rs`
 
-- [ ] **Step 1: Add test module**
+- [ ] **Step 1: Add the ECS test module**
+
+Append after the existing `#[cfg(test)] mod tests`:
 
 ```rust
 #[cfg(test)]
@@ -345,30 +409,46 @@ mod ecs_tests {
     use super::*;
     use hecs::World;
     use crate::game::ecs::resources::Resources;
-    use crate::game::ecs::components::{Inventory, HeroStats, Position, Facing, CarrierMount};
+    use crate::game::ecs::components::{Inventory, HeroStats, Position, Facing, CarrierMount, EnemyKind, Health, ArenaDummy, Speed, Loot, SpriteRef};
+    use crate::game::ecs::spawn::spawn_enemy;
+    use crate::game::direction::Direction;
+
+    fn test_hero(vitality: i16, brave: i16) -> HeroStats {
+        HeroStats {
+            vitality,
+            brave,
+            luck: 20,
+            kind: 15,
+            wealth: 20,
+            hunger: 0,
+            fatigue: 0,
+            gold: 0,
+        }
+    }
+
+    fn spawn_hero_with_inv(world: &mut World, slot: usize, count: u8) -> hecs::Entity {
+        let mut stuff = [0u8; 36];
+        stuff[slot] = count;
+        world.spawn((
+            Inventory { stuff },
+            test_hero(30, 200),
+            Position::new(0.0, 0.0),
+            Facing::new(Direction::N),
+            CarrierMount::default(),
+        ))
+    }
 
     #[test]
     fn lantern_adds_light_timer() {
         let mut world = World::new();
-        let hero = world.spawn((
-            Inventory { stuff: [0; 32], /* set stuff[9] = 1 */ },
-            HeroStats::default(),
-            Position::new(0.0, 0.0),
-            Facing::default(),
-            CarrierMount { riding: 0 },
-        ));
-        
+        let hero = spawn_hero_with_inv(&mut world, ITEM_LANTERN, 1);
         let mut res = Resources::new(hero);
         res.clock.light_timer = 0;
-        
-        // Set inventory to have lantern
-        if let Ok(mut inv) = world.get_mut::<Inventory>(hero) {
-            inv.stuff[9] = 1;
-        }
-        
-        let result = magic_dispatch_ecs(9, &mut world, &mut res);
-        assert!(matches!(result, MagicResult::Applied));
-        assert_eq!(res.clock.light_timer, 760);
+
+        let result = magic_dispatch_ecs(ITEM_LANTERN, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Applied);
+        assert_eq!(res.clock.light_timer, LIGHT_TIMER_INCREMENT);
+        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_LANTERN], 0);
     }
 
     #[test]
@@ -376,63 +456,195 @@ mod ecs_tests {
         let mut world = World::new();
         let hero = world.spawn((
             Inventory::empty(),
-            HeroStats::default(),
+            test_hero(30, 0),
             Position::new(0.0, 0.0),
-            Facing::default(),
-            CarrierMount { riding: 0 },
+            Facing::new(Direction::N),
+            CarrierMount::default(),
         ));
-        
         let mut res = Resources::new(hero);
-        let result = magic_dispatch_ecs(14, &mut world, &mut res);
-        assert!(matches!(result, MagicResult::NoOwned));
+
+        let result = magic_dispatch_ecs(ITEM_SKULL, &mut world, &mut res);
+        assert_eq!(result, MagicResult::NoOwned);
     }
 
     #[test]
     fn vial_heals_vitality_uncapped() {
         let mut world = World::new();
-        let hero = world.spawn((
-            Inventory { stuff: [0; 32] },
-            HeroStats { vitality: 30, ..Default::default() },
-            Position::new(0.0, 0.0),
-            Facing::default(),
-            CarrierMount { riding: 0 },
-        ));
-        
+        let hero = spawn_hero_with_inv(&mut world, ITEM_VIAL, 1);
         let mut res = Resources::new(hero);
-        
-        // Set inventory to have vial
-        if let Ok(mut inv) = world.get_mut::<Inventory>(hero) {
-            inv.stuff[10] = 1;
-        }
-        
-        let result = magic_dispatch_ecs(10, &mut world, &mut res);
+
+        let result = magic_dispatch_ecs(ITEM_VIAL, &mut world, &mut res);
         assert!(matches!(result, MagicResult::Healed { capped: false }));
-        
-        if let Ok(stats) = world.get::<HeroStats>(hero) {
-            assert_eq!(stats.vitality, 80); // 30 + 50, uncapped
-        }
+        let stats = world.get::<&HeroStats>(hero).unwrap();
+        assert!(stats.vitality > 30 && stats.vitality <= 30 + 11);
+    }
+
+    #[test]
+    fn vial_heal_capped_by_brave() {
+        let mut world = World::new();
+        let mut stuff = [0u8; 36];
+        stuff[ITEM_VIAL] = 1;
+        let hero = world.spawn((
+            Inventory { stuff },
+            test_hero(38, 20), // cap = 15 + 20/4 = 20
+            Position::new(0.0, 0.0),
+            Facing::new(Direction::N),
+            CarrierMount::default(),
+        ));
+        let mut res = Resources::new(hero);
+
+        let result = magic_dispatch_ecs(ITEM_VIAL, &mut world, &mut res);
+        assert!(matches!(result, MagicResult::Healed { capped: true }));
+        let stats = world.get::<&HeroStats>(hero).unwrap();
+        assert_eq!(stats.vitality, 20);
     }
 
     #[test]
     fn ring_blocked_when_riding_returns_suppressed() {
         let mut world = World::new();
+        let mut stuff = [0u8; 36];
+        stuff[ITEM_RING] = 1;
         let hero = world.spawn((
-            Inventory { stuff: [0; 32] },
-            HeroStats::default(),
+            Inventory { stuff },
+            test_hero(30, 0),
             Position::new(0.0, 0.0),
-            Facing::default(),
-            CarrierMount { riding: 2 }, // Riding bird
+            Facing::new(Direction::N),
+            CarrierMount { riding: 2, ..Default::default() },
         ));
-        
         let mut res = Resources::new(hero);
-        
-        // Set inventory to have ring
-        if let Ok(mut inv) = world.get_mut::<Inventory>(hero) {
-            inv.stuff[13] = 1;
-        }
-        
-        let result = magic_dispatch_ecs(13, &mut world, &mut res);
-        assert!(matches!(result, MagicResult::Suppressed));
+
+        let result = magic_dispatch_ecs(ITEM_RING, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Suppressed);
+        assert_eq!(res.clock.freeze_timer, 0);
+    }
+
+    #[test]
+    fn ring_allowed_on_foot() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_RING, 1);
+        let mut res = Resources::new(hero);
+
+        let result = magic_dispatch_ecs(ITEM_RING, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Applied);
+        assert_eq!(res.clock.freeze_timer, FREEZE_TIMER_INCREMENT);
+    }
+
+    #[test]
+    fn orb_adds_secret_timer() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_ORB, 1);
+        let mut res = Resources::new(hero);
+        res.clock.secret_timer = 0;
+
+        let result = magic_dispatch_ecs(ITEM_ORB, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Applied);
+        assert_eq!(res.clock.secret_timer, SECRET_TIMER_INCREMENT);
+    }
+
+    #[test]
+    fn totem_sets_viewstatus_overworld() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let mut res = Resources::new(hero);
+        res.region.region_num = 7;
+
+        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Applied);
+        assert_eq!(res.view.viewstatus, 1);
+    }
+
+    #[test]
+    fn totem_suppressed_underground_without_cheat() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let mut res = Resources::new(hero);
+        res.region.region_num = 8;
+        res.brother.cheat1 = false;
+
+        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Suppressed);
+        assert_eq!(res.view.viewstatus, 0);
+    }
+
+    #[test]
+    fn totem_allowed_underground_with_cheat() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let mut res = Resources::new(hero);
+        res.region.region_num = 8;
+        res.brother.cheat1 = true;
+
+        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Applied);
+        assert_eq!(res.view.viewstatus, 1);
+    }
+
+    #[test]
+    fn stone_ring_teleports_hero() {
+        let mut world = World::new();
+        let mut stuff = [0u8; 36];
+        stuff[ITEM_STONE_RING] = 1;
+        let hero = world.spawn((
+            Inventory { stuff },
+            test_hero(30, 200),
+            Position::new(((54u16 << 8) | 85) as f32, ((43u16 << 8) | 64) as f32),
+            Facing::new(Direction::NW),
+            CarrierMount::default(),
+        ));
+        let mut res = Resources::new(hero);
+        let mut map = crate::game::world_data::WorldData::empty();
+        map.map_mem[43 * 128 + 54] = STONE_RING_SECTOR as u8;
+        res.map.world = Some(map);
+
+        let result = magic_dispatch_ecs(ITEM_STONE_RING, &mut world, &mut res);
+        assert!(matches!(result, MagicResult::StoneTeleport { capped: false }));
+        let pos = world.get::<&Position>(hero).unwrap();
+        let expected_x = ((71u16 << 8) | 85) as f32;
+        let expected_y = ((77u16 << 8) | 64) as f32;
+        assert!((pos.x - expected_x).abs() < 0.1);
+        assert!((pos.y - expected_y).abs() < 0.1);
+    }
+
+    #[test]
+    fn stone_ring_wrong_sector_suppressed() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_STONE_RING, 1);
+        let mut res = Resources::new(hero);
+        let map = crate::game::world_data::WorldData::empty();
+        // Deliberately leave sector index 0 at the hero position.
+        res.map.world = Some(map);
+
+        let result = magic_dispatch_ecs(ITEM_STONE_RING, &mut world, &mut res);
+        assert_eq!(result, MagicResult::Suppressed);
+        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_STONE_RING], 1);
+    }
+
+    #[test]
+    fn skull_mass_kill_affects_race_lt_7() {
+        let mut world = World::new();
+        let hero = spawn_hero_with_inv(&mut world, ITEM_SKULL, 1);
+        let mut res = Resources::new(hero);
+        res.region.battleflag = true;
+
+        let killable = spawn_enemy(&mut world, 10.0, 10.0, 1, 3, 10, 0, 0, 0, 0, 0);
+        let immune = spawn_enemy(&mut world, 20.0, 20.0, 1, 7, 10, 0, 0, 0, 0, 0);
+        let dummy = world.spawn((
+            crate::game::ecs::components::Enemy,
+            ArenaDummy,
+            Position::new(30.0, 30.0),
+            Facing::new(Direction::N),
+            EnemyKind { npc_type: 1, race: 3 },
+            Health::new(10),
+            Speed { speed: 0 },
+            Loot::default(),
+            SpriteRef { cfile_idx: 0 },
+        ));
+
+        let result = magic_dispatch_ecs(ITEM_SKULL, &mut world, &mut res);
+        assert!(matches!(result, MagicResult::MassKill { in_battle: true, .. }));
+        assert!(world.get::<&Health>(killable).unwrap().vitality <= 0);
+        assert!(world.get::<&Health>(immune).unwrap().vitality > 0);
+        assert!(world.get::<&Health>(dummy).unwrap().vitality > 0);
     }
 }
 ```
@@ -443,7 +655,7 @@ mod ecs_tests {
 cargo test magic::ecs_tests 2>&1 | grep "^test result"
 ```
 
-Expected: all 4 tests pass.
+Expected: all tests pass.
 
 ---
 
@@ -457,20 +669,17 @@ cargo build 2>&1 | grep "^error"
 
 Expected: no errors.
 
-- [ ] **Step 2: Test magic menu in game**
-
-Manual test with running game:
-1. Start game with hero that has magic items
-2. Open MAGIC menu
-3. Cast each spell type
-4. Verify effects match legacy behavior
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 2: Run the full test suite**
 
 ```bash
-git add src/game/magic.rs src/game/ecs/resources.rs src/game/ecs/scene.rs src/game/world_data.rs
-git commit -m "feat(ecs): port magic system to ECS architecture"
+cargo test 2>&1 | grep "^test result"
 ```
+
+Expected: all tests pass.
+
+- [ ] **Step 3: Manual review / validation**
+
+Do **not** commit. Leave the changes on the feature branch for the user to validate.
 
 ---
 
@@ -478,10 +687,10 @@ git commit -m "feat(ecs): port magic system to ECS architecture"
 
 ```bash
 cargo build 2>&1 | grep "^error"
-cargo test magic::ecs_tests 2>&1 | grep "^test result"
+cargo test 2>&1 | grep "^test result"
 ```
 
-Both succeed. Magic system is fully ported to ECS.
+Both succeed. The magic system is fully ported to ECS and preserves the original spec behavior.
 
 ---
 
@@ -490,23 +699,26 @@ Both succeed. Magic system is fully ported to ECS.
 - `docs/spec/magic.md` §19 — complete magic specification
 - `docs/reqs/magic.md` R-MAGIC-001 through R-MAGIC-010
 - `reference/logic/magic.md` (research branch) — fmain.c logic trace
+- `reference/logic/dialog_system.md` (research branch) — hardcoded scroll messages
 
 ## Test plan
 
-- Lantern adds light_timer
-- Skull with no inventory returns NoOwned
-- Vial heals vitality (uncapped case)
-- Ring blocked when riding > 1 returns Suppressed
-- Stone ring teleports when centered on sector 144
-- Totem sets viewstatus = 1 (map view)
-- Orb adds secret_timer
-- Mass kill affects enemies with race < 7
+- Lantern adds `light_timer`
+- Skull with no inventory returns `NoOwned`
+- Vial heals vitality (uncapped and capped cases)
+- Ring blocked when `riding > 1` returns `Suppressed`
+- Stone ring teleports when centered on the correct map sector
+- Totem sets `viewstatus = 1` (map view)
+- Totem suppressed underground without `cheat1`
+- Orb adds `secret_timer`
+- Mass kill affects enemies with `race < 7` and ignores arena dummies
+- `CastSpell` wired in `dispatch_menu_action` with canonical messages
 
 ## Files touched
 
 | File | Change |
 |------|--------|
-| `src/game/ecs/resources.rs` | Replace VFX placeholders |
-| `src/game/magic.rs` | Add `magic_dispatch_ecs()` + tests |
-| `src/game/ecs/scene.rs` | Wire CastSpell in dispatch_menu_action |
-| `src/game/world_data.rs` | Add `compute_sector()` |
+| `src/game/ecs/resources.rs` | Replace VFX placeholders with `WitchEffect` / `TeleportEffect` |
+| `src/game/world_data.rs` | Add `WorldData::sector_at_pos()` helper + test |
+| `src/game/magic.rs` | Add `magic_dispatch_ecs()` + ECS helpers + tests |
+| `src/game/ecs/scene.rs` | Wire `CastSpell` in `dispatch_menu_action()` |

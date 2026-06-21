@@ -20,6 +20,7 @@ use crate::game::ecs::spawn::{spawn_bones, spawn_hero};
 use crate::game::ecs::systems;
 use crate::game::game_library::GameLibrary;
 use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
+use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_STONE_RING};
 use crate::game::menu::{MenuAction, MenuState};
 use crate::game::palette::{amiga_color_to_rgba, Palette, PALETTE_SIZE};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
@@ -351,7 +352,7 @@ impl EcsScene {
 
     /// Route a MenuAction emitted by MenuState to the appropriate ECS operation.
     /// Returns true if the scene should quit.
-    fn dispatch_menu_action(&mut self, action: MenuAction, _resources: &mut SceneResources<'_, '_>) -> bool {
+    fn dispatch_menu_action(&mut self, action: MenuAction, game_lib: &GameLibrary, _resources: &mut SceneResources<'_, '_>) -> bool {
         match action {
             MenuAction::SwitchMode(_) => {}
 
@@ -442,7 +443,33 @@ impl EcsScene {
             }
             MenuAction::GiveGold | MenuAction::GiveWrit | MenuAction::GiveBone => {}
             MenuAction::TryKey(_) => {}
-            MenuAction::CastSpell(_) => {}
+            MenuAction::CastSpell(hit) => {
+                let item_idx = ITEM_STONE_RING + hit as usize;
+                let result = magic_dispatch_ecs(item_idx, &mut self.world, &mut self.res);
+                let name = game_lib
+                    .get_brother(self.res.brother.active_brother)
+                    .map(|b| b.name.as_str())
+                    .unwrap_or("Hero");
+
+                match result {
+                    MagicResult::NoOwned => {
+                        self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                            text: crate::game::events::event_msg(&game_lib.narr, 21, name),
+                        });
+                    }
+                    MagicResult::Healed { capped: false } | MagicResult::StoneTeleport { capped: false } => {
+                        self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                            text: "That feels a lot better!".to_string(),
+                        });
+                    }
+                    MagicResult::MassKill { in_battle: true, .. } => {
+                        self.res.events.message.push(crate::game::ecs::events::MessageEvent {
+                            text: crate::game::events::event_msg(&game_lib.narr, 34, name),
+                        });
+                    }
+                    _ => {}
+                }
+            }
             MenuAction::SummonTurtle => {}
             MenuAction::UseSunstone => {}
             MenuAction::None => {}
@@ -1312,7 +1339,7 @@ impl Scene for EcsScene {
         // Drain menu actions queued from handle_event() (runs outside ECS borrow).
         let pending: Vec<MenuAction> = std::mem::take(&mut self.pending_menu_actions);
         for action in pending {
-            if self.dispatch_menu_action(action, resources) {
+            if self.dispatch_menu_action(action, game_lib, resources) {
                 return SceneResult::Quit;
             }
         }

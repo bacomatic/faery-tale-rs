@@ -139,6 +139,14 @@ impl WorldData {
         self.map_mem[(my * 128 + mx).min(MAP_MEM_SIZE - 1)]
     }
 
+    /// Sector index at absolute world pixel coordinates.
+    /// Mirrors the original `hero_sector` update: `mapxy[hero_x / 256][hero_y / 256]`.
+    pub fn sector_at_pos(&self, x: f32, y: f32) -> u16 {
+        let mx = (x as u16 >> 8) as usize;
+        let my = (y as u16 >> 8) as usize;
+        self.sector_at(mx, my) as u16
+    }
+
     /// Look up the tile within a sector at local position (lx, ly).
     /// sec_num: sector index from map_mem. lx: 0..16, ly: 0..8
     pub fn tile_at(&self, sec_num: u8, lx: usize, ly: usize) -> u8 {
@@ -184,4 +192,19 @@ impl WorldData {
 pub fn load_shadow_mem(adf: &AdfDisk, block: u32, count: u32) -> Vec<u8> {
     let data = adf.load_blocks(block, count);
     data.to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sector_at_pos_reads_map_mem() {
+        let mut w = WorldData::empty();
+        // Set sector (54, 43) to index 144.
+        w.map_mem[43 * 128 + 54] = 144;
+        let x = ((54u16 << 8) | 85) as f32;
+        let y = ((43u16 << 8) | 64) as f32;
+        assert_eq!(w.sector_at_pos(x, y), 144);
+    }
 }
