@@ -26,7 +26,7 @@
 | P | `2025-01-01-ecs-plan-p-carrier-system.md` | ✅ Written |
 | Q | `2025-01-01-ecs-plan-q-sleep-system.md` | ✅ Written |
 | R | `2025-01-01-ecs-plan-r-brother-succession.md` | ✅ Done |
-| S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Written |
+| S | `2025-01-01-ecs-plan-s-setfig-sprites.md` | ✅ Done |
 | T | `2025-01-01-ecs-plan-t-weapon-overlays.md` | ✅ Written |
 | U | `2025-01-01-ecs-plan-u-save-load-keys.md` | ✅ Written |
 | V | `2025-01-01-ecs-plan-v-quest-state.md` | ✅ Done |

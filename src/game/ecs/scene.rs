@@ -610,7 +610,7 @@ impl EcsScene {
     ) {
         use crate::game::ecs::components::{Enemy, GroundItem, SetFig};
         use crate::game::ecs::spawn::{spawn_enemy, spawn_setfig};
-        use crate::game::npc::{NpcTable, NPC_TYPE_HUMAN, NPC_TYPE_NONE, RACE_ENEMY};
+        use crate::game::npc::{NpcTable, NPC_TYPE_NONE, NPC_TYPE_HUMAN};
         use crate::game::ecs::components::WorldObj;
 
         // 1. Despawn all Enemy, SetFig, and GroundItem entities.
@@ -667,39 +667,51 @@ impl EcsScene {
 
         let renderer = crate::game::map_renderer::MapRenderer::new(&world_data, shadow_mem);
 
-        // 3. Spawn NPCs for this region.
+        // 3a. Spawn SetFig NPCs (ob_stat=3) from the world object list for this region.
+        // Setfigs live in game_lib.objects — NOT in the NPC carrier table.
+        // ob_id is the setfig type index (0–13); goal is its index within the region's list
+        // (matching fmain2.c:1275 `goal = i`).
+        {
+            let mut goal: u8 = 0;
+            for obj_cfg in game_lib.objects.iter().filter(|o| o.region == region) {
+                if obj_cfg.ob_stat == 3 {
+                    let cfile_idx = crate::game::sprites::SETFIG_TABLE
+                        .get(obj_cfg.ob_id as usize)
+                        .map(|e| e.cfile_entry)
+                        .unwrap_or(13);
+                    let obj = WorldObj {
+                        ob_id:   obj_cfg.ob_id,
+                        ob_stat: 3,
+                        region,
+                        visible: true,
+                        goal,
+                    };
+                    spawn_setfig(&mut self.world, obj_cfg.x as f32, obj_cfg.y as f32, obj, cfile_idx);
+                }
+                goal = goal.wrapping_add(1);
+            }
+        }
+
+        // 3b. Spawn enemy NPCs from the carrier table for this region.
         let npc_table = NpcTable::load(&adf, region);
         for npc in &npc_table.npcs {
-            if !npc.active || npc.npc_type == NPC_TYPE_NONE { continue; }
-            let x = npc.x as f32;
-            let y = npc.y as f32;
-            if npc.npc_type == NPC_TYPE_HUMAN && npc.race != RACE_ENEMY {
-                // SetFig: stationary NPC (shopkeeper, beggar, etc.)
-                let cfile_idx = 13u8; // default setfig sprite sheet
-                let obj = WorldObj {
-                    ob_id:   npc.race,
-                    ob_stat: 1,
-                    region,
-                    visible: true,
-                    goal:    0,
-                };
-                spawn_setfig(&mut self.world, x, y, obj, cfile_idx);
-            } else {
-                // Enemy NPC.
-                let cfile_idx = npc_type_to_cfile(npc.npc_type, npc.race).unwrap_or(6) as u8;
-                spawn_enemy(
-                    &mut self.world,
-                    x, y,
-                    npc.npc_type,
-                    npc.race,
-                    npc.vitality,
-                    npc.weapon,
-                    npc.gold,
-                    npc.speed,
-                    npc.cleverness,
-                    cfile_idx,
-                );
+            if !npc.active || npc.npc_type == NPC_TYPE_NONE || npc.npc_type == NPC_TYPE_HUMAN {
+                continue; // human setfigs come from game_lib.objects above
             }
+            let cfile_idx = npc_type_to_cfile(npc.npc_type, npc.race).unwrap_or(6) as u8;
+            spawn_enemy(
+                &mut self.world,
+                npc.x as f32,
+                npc.y as f32,
+                npc.npc_type,
+                npc.race,
+                npc.vitality,
+                npc.weapon,
+                npc.gold,
+                npc.speed,
+                npc.cleverness,
+                cfile_idx,
+            );
         }
 
         // 4. Zones.
@@ -781,36 +793,36 @@ impl EcsScene {
             return;
         }
 
-        // Step 2: blit sprites.  Temporarily take the framebuf out of the renderer
-        // so we can pass both framebuf (mut) and res.sprites (immut) simultaneously.
-        let mut framebuf = if let Some(r) = self.res.map.renderer.as_mut() {
-            std::mem::take(&mut r.framebuf)
-        } else {
-            return;
-        };
-        let cycle        = self.res.clock.cycle as usize;
-        let hero_entity  = self.res.hero_entity;
-        let blitted_sprites = blit_actors_inner(
-            &self.world,
-            hero_entity,
-            &self.res.sprites.sheets,
-            self.res.sprites.object_sprites.as_ref(),
-            cycle,
-            map_x,
-            map_y,
-            &mut framebuf,
-        );
-        // Put the framebuf back.
-        if let Some(r) = self.res.map.renderer.as_mut() {
-            r.framebuf = framebuf;
-        }
+        // Step 2: blit sprites then immediately apply per-sprite depth masking.
+        // Masking is interleaved with blitting (back-to-front) so each closer sprite
+        // draws over the terrain re-stamped by sprites behind it — matching the
+        // original save_blit → mask_blit → shape_blit per-actor pass (fmain.c:2412-2609).
+        let cycle       = self.res.clock.cycle as usize;
+        let hero_entity = self.res.hero_entity;
 
-        // Step 2b: apply depth masking — re-stamp tile pixels over each sprite
-        // where shadow_mem says the actor is behind terrain (walls, trees, etc.).
+        // Compute hero sector before mutably borrowing the renderer (both live in res.map).
+        // Used by mask type 3 (bridge): when hero_sector == 48 the bridge tiles don't
+        // mask the hero (fmain.c:3149-3179, should_mask_tile case 3).
+        use crate::game::ecs::components::Position;
+        let hero_sector = self.world
+            .get::<&Position>(hero_entity)
+            .ok()
+            .and_then(|pos| self.res.map.world.as_ref()
+                .map(|w| w.sector_at_pos(pos.x, pos.y)))
+            .unwrap_or(0);
+
         if let Some(renderer) = self.res.map.renderer.as_mut() {
-            for sprite in &blitted_sprites {
-                crate::game::sprite_mask::apply_sprite_mask(renderer, sprite, 0, 0);
-            }
+            blit_actors_inner(
+                &self.world,
+                hero_entity,
+                &self.res.sprites.sheets,
+                self.res.sprites.object_sprites.as_ref(),
+                cycle,
+                map_x,
+                map_y,
+                hero_sector,
+                renderer,
+            );
         }
 
         // Step 3: convert indexed framebuf to RGBA and blit to canvas.
@@ -1181,16 +1193,16 @@ impl EcsScene {
 /// file: Day=0, Battle=1, Night=2, Zone=4, Dungeon=5, Death=6.
 fn compute_mood(
     vitality: i16,
-    in_encounter_zone: bool,
+    in_astral_zone: bool,
     battleflag: bool,
     region_num: u8,
     lightlevel: u16,
 ) -> u8 {
-    if vitality <= 0        { return 6; } // death
-    if in_encounter_zone    { return 4; } // zone (astral plane)
-    if battleflag           { return 1; } // battle
-    if region_num > 7       { return 5; } // dungeon
-    if lightlevel > 120     { 0 } else    { 2 } // day / night
+    if vitality <= 0    { return 6; } // death
+    if in_astral_zone   { return 4; } // astral plane (etype 52) — R-AUDIO-011
+    if battleflag       { return 1; } // battle
+    if region_num > 7   { return 5; } // dungeon
+    if lightlevel > 120 { 0 } else   { 2 } // day / night
 }
 
 impl EcsScene {
@@ -1214,9 +1226,15 @@ impl EcsScene {
                 .map(|s| s.vitality)
                 .unwrap_or(100);
 
+            // Astral zone (etype 52) is the only zone that overrides music (R-AUDIO-011).
+            let in_astral_zone = self.res.encounter.last_zone
+                .and_then(|idx| self.res.zones.get(idx))
+                .map(|z| z.etype == 52)
+                .unwrap_or(false);
+
             let mood = compute_mood(
                 vitality,
-                self.res.encounter.in_encounter_zone,
+                in_astral_zone,
                 self.res.region.battleflag,
                 self.res.region.region_num,
                 self.res.clock.lightlevel,
@@ -1547,10 +1565,10 @@ fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
     }
 }
 
-/// Blit all visible actors (hero + enemies) into the indexed framebuf.
-/// Takes individual fields to avoid borrow conflicts with the framebuf.
+/// Blit all visible actors (hero, enemies, setfigs) into the indexed framebuf,
+/// interleaving per-sprite depth masking immediately after each blit.
 /// Must be called after `MapRenderer::compose()` and before palette conversion.
-/// Returns the list of blitted sprites so the caller can apply depth masking.
+/// Sprites are Y-sorted (painter's algorithm) before blitting.
 fn blit_actors_inner(
     world: &World,
     hero_entity: hecs::Entity,
@@ -1559,11 +1577,13 @@ fn blit_actors_inner(
     cycle: usize,
     map_x: u16,
     map_y: u16,
-    framebuf: &mut Vec<u8>,
-) -> Vec<crate::game::sprite_mask::BlittedSprite> {
+    hero_sector: u16,
+    renderer: &mut crate::game::map_renderer::MapRenderer,
+) {
     use crate::game::actor::ActorState;
     use crate::game::ecs::components::{
         ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Position,
+        SetFig, WorldObj,
     };
     use crate::game::npc::NpcState;
     use crate::game::sprite_mask::BlittedSprite;
@@ -1571,7 +1591,12 @@ fn blit_actors_inner(
 
     let fb_w = MAP_DST_W as i32;
     let fb_h = MAP_DST_H as i32;
-    let mut blitted: Vec<BlittedSprite> = Vec::new();
+
+    // Pending draws: (descriptor, owned pixel data).
+    // Collected from all actor passes, then Y-sorted (ground ascending) before blitting
+    // so that actors further back (lower ground-line Y) render behind closer actors.
+    // Matches the original bubble-sort at fmain.c:2367-2393.
+    let mut pending: Vec<(BlittedSprite, Vec<u8>)> = Vec::new();
 
     // ── Hero ──────────────────────────────────────────────────────────────────
     type HeroQuery<'a> = (
@@ -1611,15 +1636,14 @@ fn blit_actors_inner(
                 {
                     if let Some(obj_sheet) = object_sprites {
                         if let Some(fp) = obj_sheet.frame_pixels(bubble_inum) {
-                            blit_sprite_to_framebuf(fp, rel_x, bub_y, bub_rows, framebuf, fb_w, fb_h);
-                            blitted.push(BlittedSprite {
+                            pending.push((BlittedSprite {
                                 screen_x: rel_x,
                                 screen_y: bub_y,
                                 width:    SPRITE_W,
                                 height:   bub_rows,
                                 ground:   rel_y + SPRITE_H as i32,
                                 is_falling: false,
-                            });
+                            }, fp.to_vec()));
                         }
                     }
                 }
@@ -1667,15 +1691,14 @@ fn blit_actors_inner(
                     };
 
                     if let Some(fp) = sheet.frame_pixels(body_frame) {
-                        blit_sprite_to_framebuf(fp, rel_x, draw_y, body_rows, framebuf, fb_w, fb_h);
-                        blitted.push(BlittedSprite {
+                        pending.push((BlittedSprite {
                             screen_x: rel_x,
                             screen_y: draw_y,
                             width:    SPRITE_W,
                             height:   body_rows,
                             ground:   rel_y + SPRITE_H as i32,
                             is_falling: false,
-                        });
+                        }, fp.to_vec()));
                     }
                 }
             }
@@ -1710,19 +1733,56 @@ fn blit_actors_inner(
         } % sheet.num_frames.max(1);
 
         if let Some(fp) = sheet.frame_pixels(frame) {
-            blit_sprite_to_framebuf(fp, rel_x, rel_y, SPRITE_H, framebuf, fb_w, fb_h);
-            blitted.push(BlittedSprite {
+            pending.push((BlittedSprite {
                 screen_x: rel_x,
                 screen_y: rel_y,
                 width:    SPRITE_W,
                 height:   SPRITE_H,
                 ground:   rel_y + SPRITE_H as i32,
                 is_falling: false,
-            });
+            }, fp.to_vec()));
         }
     }
 
-    blitted
+    // ── SetFigs ──────────────────────────────────────────────────────────────
+    let mut setfig_q = world.query::<(&SetFig, &Position, &WorldObj)>();
+    for (_, pos, obj) in setfig_q.iter() {
+        // Setfig type index = race byte with the 0x80 setfig bit stripped (fmain.c:3374).
+        let k = (obj.ob_id & 0x7f) as usize;
+        let Some(entry) = crate::game::sprites::SETFIG_TABLE.get(k) else { continue; };
+        let cfile_idx = entry.cfile_entry as usize;
+        let Some(Some(ref sheet)) = sheets.get(cfile_idx) else { continue; };
+        let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
+        if rel_x <= -(SPRITE_W as i32) || rel_x >= fb_w
+            || rel_y <= -(SPRITE_H as i32) || rel_y >= fb_h
+        {
+            continue;
+        }
+        // Idle pose for this setfig type is SETFIG_TABLE[k].image_base.
+        if let Some(fp) = sheet.frame_pixels(entry.image_base as usize) {
+            pending.push((BlittedSprite {
+                screen_x: rel_x,
+                screen_y: rel_y,
+                width:    SPRITE_W,
+                height:   SPRITE_H,
+                ground:   rel_y + SPRITE_H as i32,
+                is_falling: false,
+            }, fp.to_vec()));
+        }
+    }
+
+    // ── Y-sort, blit, and mask (interleaved per sprite) ───────────────────────
+    // Sort back-to-front by ground-line Y (ascending) — painter's algorithm.
+    // Mirrors fmain.c:2367-2393 bubble sort on anim_index[] by Y coordinate.
+    pending.sort_by_key(|(s, _)| s.ground);
+
+    // Blit and mask each sprite in order: closer sprites draw over both the
+    // farther sprite's pixels AND any terrain re-stamped by the farther sprite's mask.
+    // This matches the original per-actor save_blit → mask_blit → shape_blit loop.
+    for (sprite, pixels) in pending {
+        blit_sprite_to_framebuf(&pixels, sprite.screen_x, sprite.screen_y, sprite.height, &mut renderer.framebuf, fb_w, fb_h);
+        crate::game::sprite_mask::apply_sprite_mask(renderer, &sprite, hero_sector, 0);
+    }
 }
 
 // ── Compass helpers ───────────────────────────────────────────────────────────
@@ -2027,5 +2087,57 @@ mod tests {
             scene.res.events.item.push(ItemEvent::TakeItem { entity });
         }
         assert_eq!(scene.res.events.item.len(), 1);
+    }
+
+    #[test]
+    fn setfig_race_resolves_to_table_entry() {
+        use crate::game::ecs::components::{SetFig, Position, WorldObj};
+        use crate::game::sprites::SETFIG_TABLE;
+        let mut world = hecs::World::new();
+        // Priest = setfig index 1 → race byte 0x81.
+        world.spawn((
+            SetFig,
+            Position { x: 100.0, y: 200.0 },
+            WorldObj { ob_id: 0x81, ob_stat: 1, region: 0, visible: true, goal: 0 },
+        ));
+        let mut q = world.query::<(&SetFig, &WorldObj)>();
+        let (_, obj) = q.iter().next().unwrap();
+        let entry = SETFIG_TABLE[(obj.ob_id & 0x7f) as usize];
+        assert_eq!(entry.cfile_entry, 13, "priest is on cfile 13");
+        assert_eq!(entry.image_base, 4, "priest idle frame is 4, not 0");
+    }
+
+    #[test]
+    fn setfig_query_finds_entity() {
+        use crate::game::ecs::components::{SetFig, Enemy, Position, WorldObj, EnemyKind};
+        let mut world = hecs::World::new();
+        world.spawn((
+            SetFig,
+            Position { x: 10.0, y: 10.0 },
+            WorldObj { ob_id: 0x82, ob_stat: 1, region: 0, visible: true, goal: 0 }, // guard
+        ));
+        world.spawn((
+            Enemy,
+            Position { x: 20.0, y: 20.0 },
+            EnemyKind { npc_type: 0, race: 0 },
+        ));
+        let mut setfig_q = world.query::<(&SetFig, &Position, &WorldObj)>();
+        assert_eq!(setfig_q.iter().count(), 1);
+    }
+
+    #[test]
+    fn setfig_not_rendered_when_offscreen() {
+        use crate::game::sprites::{SPRITE_W, SPRITE_H};
+        // Simulate: camera at (0,0), framebuffer 320x200.
+        let fb_w: i32 = 320;
+        let fb_h: i32 = 200;
+        // SetFig positioned far to the left — rel_x will be deeply negative.
+        let rel_x: i32 = -(SPRITE_W as i32) - 1;
+        let rel_y: i32 = 50;
+        let culled = rel_x <= -(SPRITE_W as i32)
+            || rel_x >= fb_w
+            || rel_y <= -(SPRITE_H as i32)
+            || rel_y >= fb_h;
+        assert!(culled, "SetFig outside framebuffer bounds must be culled");
     }
 }
