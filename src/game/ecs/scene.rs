@@ -14,7 +14,7 @@ use sdl3::video::Window;
 use crate::game::colors::RGB4;
 use crate::game::debug_tui::DebugConsole;
 use crate::game::direction::Direction;
-use crate::game::ecs::components::{Bones, BrotherKind, HeroStats, Inventory};
+use crate::game::ecs::components::{Bones, BrotherKind, HeroStats, Inventory, Position, SetFig, WorldObj};
 use crate::game::ecs::resources::Resources;
 use crate::game::ecs::spawn::{spawn_bones, spawn_hero};
 use crate::game::ecs::systems;
@@ -22,6 +22,7 @@ use crate::game::game_library::GameLibrary;
 use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
 use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_BLUE_STONE};
 use crate::game::menu::{MenuAction, MenuState};
+use crate::game::shop::{buy_slot_ecs, BuyOutcome, BuyResult};
 use crate::game::palette::{amiga_color_to_rgba, Palette, PALETTE_SIZE};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
 
@@ -355,6 +356,25 @@ impl EcsScene {
         self.res.narrative.push(NarrEvent::Placard { text, hold_ticks });
     }
 
+    /// Returns true if a bartender NPC (SetFig with ob_id == 8) is within
+    /// Chebyshev distance 32 of the hero.
+    ///
+    /// Mirrors the legacy `has_shopkeeper_nearby` guard from `shop.rs`.
+    fn has_shopkeeper_nearby(&self) -> bool {
+        let hero_pos = match self.world.get::<&Position>(self.res.hero_entity) {
+            Ok(p) => (p.x, p.y),
+            Err(_) => return false,
+        };
+        self.world
+            .query::<(&Position, &WorldObj)>()
+            .with::<&SetFig>()
+            .iter()
+            .any(|(pos, obj)| {
+                obj.ob_id == 8
+                    && (pos.x - hero_pos.0).abs().max((pos.y - hero_pos.1).abs()) < 32.0
+            })
+    }
+
     /// Route a MenuAction emitted by MenuState to the appropriate ECS operation.
     /// Returns true if the scene should quit.
     fn dispatch_menu_action(&mut self, action: MenuAction, game_lib: &GameLibrary, _resources: &mut SceneResources<'_, '_>) -> bool {
@@ -366,7 +386,7 @@ impl EcsScene {
             }
 
             MenuAction::Take => {
-                use crate::game::ecs::components::{Loot, Position, WorldObj};
+                use crate::game::ecs::components::Loot;
                 use crate::game::ecs::events::ItemEvent;
                 let hero_pos = self.world
                     .get::<&Position>(self.res.hero_entity)
@@ -424,9 +444,35 @@ impl EcsScene {
             }
 
             MenuAction::Yell | MenuAction::Say | MenuAction::Ask => {}
-            MenuAction::BuyItem(_) => {
-                // Shop purchase is implemented in Plan M (buy_slot_ecs + bartender
-                // proximity guard).
+            MenuAction::BuyItem(hit) => {
+                // Guard: player must be adjacent to a bartender.
+                if !self.has_shopkeeper_nearby() {
+                    return self.quit_requested;
+                }
+
+                let name = self.res.brother.active_name.clone();
+                let slot = hit as usize;
+                let text = match buy_slot_ecs(slot, &mut self.world, &mut self.res) {
+                    // Slot out of range — silent.
+                    BuyResult::Silent => None,
+                    // Hardcoded denial string (dialog_system.md, fmain.c:3440).
+                    BuyResult::NotEnough => Some("Not enough money!".to_string()),
+                    // Food → event_msg[22]; Arrows → event_msg[23]
+                    // (faery.toml [narr].event_msg, via events::event_msg; `%` → hero name).
+                    BuyResult::Bought(BuyOutcome::Food) =>
+                        Some(crate::game::events::event_msg(&game_lib.narr, 22, &name)),
+                    BuyResult::Bought(BuyOutcome::Arrows) =>
+                        Some(crate::game::events::event_msg(&game_lib.narr, 23, &name)),
+                    // Generic item → hardcoded "% bought a {item}." (dialog_system.md,
+                    // fmain.c:3436-3437). Item name from inv_list[].name.
+                    BuyResult::Bought(BuyOutcome::Item { inv_idx }) => Some(format!(
+                        "{name} bought a {}.",
+                        crate::game::world_objects::stuff_index_name(inv_idx)
+                    )),
+                };
+                if let Some(text) = text {
+                    self.res.events.message.push(crate::game::ecs::events::MessageEvent { text });
+                }
             }
             MenuAction::GiveGold | MenuAction::GiveWrit | MenuAction::GiveBone => {}
             MenuAction::TryKey(_) => {}
@@ -803,73 +849,102 @@ impl EcsScene {
     }
 
     /// Render the inventory overlay (viewstatus == 1).
-    /// Shows all 35 inventory slots in a 7-column grid over the map area.
-    /// Pressing any key (handled in handle_event) dismisses it.
+    ///
+    /// Mirrors `render_inventory_items_page` (fmain.c:3120-3145):
+    /// - Each inv_list[] slot is placed at `(xoff + INV_ICON_X_OFFSET, yoff)` in lores coords.
+    /// - The sprite icon is taken from frame `image_number` of the OBJECTS sheet.
+    /// - Only rows `img_off .. img_off+img_height` of that frame are blitted.
+    /// - For stackable items (ydelta > 0) the icon is repeated `min(count, maxshown)` times,
+    ///   each copy offset downward by `ydelta` pixels.
+    /// - Gold slots (31+) are not rendered here.
+    /// All lores coords are scaled 2× for the canvas.
     fn render_inventory(&mut self, canvas: &mut Canvas<Window>) {
         use crate::game::ecs::components::Inventory;
+        use crate::game::sprites::{INV_LIST, OBJ_SPRITE_H, SPRITE_W};
+
+        // INV_ICON_X_OFFSET = 20 (fmain.c:3131)
+        const INV_ICON_X_OFFSET: i32 = 20;
+        // All lores coords are scaled ×2 onto the canvas.
+        const SCALE: i32 = 2;
 
         let stuff = match self.world.get::<&Inventory>(self.res.hero_entity) {
             Ok(inv) => inv.stuff,
             Err(_) => return,
         };
 
+        // Clear playfield to black.
         canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
         canvas.fill_rect(sdl3::rect::Rect::new(
             PLAYFIELD_X, PLAYFIELD_Y, PLAYFIELD_CANVAS_W, PLAYFIELD_CANVAS_H,
         )).ok();
 
-        const COLS: usize = 7;
-        const CELL_W: u32 = 40;
-        const CELL_H: u32 = 40;
+        let obj_sheet = match self.res.sprites.object_sprites.as_ref() {
+            Some(s) => s,
+            None => return,
+        };
+        let pal = self.res.palette.current_palette;
 
-        for slot in 0..35usize {
+        for slot in 0..INV_LIST.len() {
             let count = stuff[slot];
-            let col = (slot % COLS) as i32;
-            let row = (slot / COLS) as i32;
-            let cell_x = PLAYFIELD_X + col * CELL_W as i32;
-            let cell_y = PLAYFIELD_Y + row * CELL_H as i32;
-
-            if count > 0 {
-                canvas.set_draw_color(sdl3::pixels::Color::RGB(40, 30, 10));
-            } else {
-                canvas.set_draw_color(sdl3::pixels::Color::RGB(15, 10, 5));
-            }
-            canvas.fill_rect(sdl3::rect::Rect::new(
-                cell_x + 1, cell_y + 1, CELL_W - 2, CELL_H - 2,
-            )).ok();
-
             if count == 0 { continue; }
 
-            // Build a 16×16 ARGB pixel buffer for the object sprite.
-            let mut rgba_buf: Vec<u8> = Vec::with_capacity(16 * 16 * 4);
-            let have_sprite = if let Some(ref obj_sheet) = self.res.sprites.object_sprites {
-                if let Some(fp) = obj_sheet.frame_pixels(slot) {
-                    let pal = &self.res.palette.current_palette;
-                    for &idx in fp.iter().take(16 * 16) {
-                        let color = if idx == 31 { 0u32 } else { pal[(idx & 31) as usize] };
-                        rgba_buf.push((color & 0xFF) as u8);
-                        rgba_buf.push(((color >> 8) & 0xFF) as u8);
-                        rgba_buf.push(((color >> 16) & 0xFF) as u8);
-                        rgba_buf.push(if idx == 31 { 0 } else { 0xFF });
-                    }
-                    true
-                } else { false }
-            } else { false };
+            let entry = &INV_LIST[slot];
+            let frame = entry.image_number as usize;
 
-            if have_sprite && rgba_buf.len() == 16 * 16 * 4 {
-                let tc = canvas.texture_creator();
+            let frame_pixels = match obj_sheet.frame_pixels(frame) {
+                Some(fp) => fp,
+                None => continue,
+            };
+
+            // Number of copies to draw (capped by maxshown).
+            let copies = (count as usize).min(entry.maxshown as usize);
+
+            // Base lores destination (fmain.c:3131-3132).
+            let base_lores_x = entry.xoff as i32 + INV_ICON_X_OFFSET;
+            let base_lores_y = entry.yoff as i32;
+
+            // img_off and img_height define the sub-rect within the 16-row frame.
+            let img_off    = entry.img_off as usize;
+            let img_height = entry.img_height as usize;
+
+            // Build the ARGB pixel buffer once per slot (same icon data for every copy).
+            let mut rgba_buf: Vec<u8> = Vec::with_capacity(SPRITE_W * img_height * 4);
+            for row in img_off..(img_off + img_height).min(OBJ_SPRITE_H) {
+                for col in 0..SPRITE_W {
+                    let idx = frame_pixels[row * SPRITE_W + col];
+                    let transparent = idx == 31;
+                    let color = if transparent { 0u32 } else { pal[(idx & 31) as usize] };
+                    rgba_buf.push((color & 0xFF) as u8);
+                    rgba_buf.push(((color >> 8) & 0xFF) as u8);
+                    rgba_buf.push(((color >> 16) & 0xFF) as u8);
+                    rgba_buf.push(if transparent { 0 } else { 0xFF });
+                }
+            }
+
+            let tc = canvas.texture_creator();
+            for copy in 0..copies {
+                let lores_y = base_lores_y + copy as i32 * entry.ydelta as i32;
+
+                let dst_x = PLAYFIELD_X + base_lores_x * SCALE;
+                let dst_y = PLAYFIELD_Y + lores_y * SCALE;
+                let dst_w = (SPRITE_W as i32 * SCALE) as u32;
+                let dst_h = (img_height as i32 * SCALE) as u32;
+
                 if let Ok(surface) = sdl3::surface::Surface::from_data(
-                    &mut rgba_buf, 16, 16, 16 * 4,
+                    &mut rgba_buf,
+                    SPRITE_W as u32,
+                    img_height as u32,
+                    (SPRITE_W * 4) as u32,
                     sdl3::pixels::PixelFormat::ARGB8888,
                 ) {
                     if let Ok(mut tex) = tc.create_texture_from_surface(&surface) {
                         tex.set_scale_mode(sdl3::render::ScaleMode::Nearest);
-                        let dst = sdl3::rect::Rect::new(cell_x + 4, cell_y + 2, 32, 32);
-                        let _ = canvas.copy(&tex, None, dst);
+                        let _ = canvas.copy(&tex, None,
+                            sdl3::rect::Rect::new(dst_x, dst_y, dst_w, dst_h));
                     }
                 }
             }
-            // TODO(Plan J render): wire topaz font for item labels per spec §14.x.
+            drop(rgba_buf);
         }
     }
 

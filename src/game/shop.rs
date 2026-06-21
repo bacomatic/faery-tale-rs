@@ -8,6 +8,10 @@
 //! (setfig race byte `0x88`).  Every commercial interaction flows through
 //! a single seven-slot dispatch; there is no inn, temple, or weapon shop.
 
+use hecs::World;
+
+use crate::game::ecs::components::{HeroStats, Inventory};
+use crate::game::ecs::resources::Resources;
 use crate::game::game_state::GameState;
 use crate::game::npc::{Npc, RACE_SHOPKEEPER};
 
@@ -86,6 +90,70 @@ pub fn buy_slot(state: &mut GameState, slot: usize) -> BuyResult {
         _ => {
             let s = state.stuff_mut();
             s[inv_idx] = s[inv_idx].saturating_add(1);
+            BuyResult::Bought(BuyOutcome::Item { inv_idx })
+        }
+    }
+}
+
+/// ECS-backed shop purchase.
+///
+/// Validates the slot, checks hero wealth, deducts gold, and delivers the item
+/// into `Inventory.stuff`. Uses the same `JTRANS` table and `BuyResult`/`BuyOutcome`
+/// types as the legacy `buy_slot()` implementation.
+///
+/// Wealth check is strict: `wealth <= price` fails (exact money is not enough).
+pub fn buy_slot_ecs(slot: usize, world: &mut World, res: &mut Resources) -> BuyResult {
+    if slot >= JTRANS.len() {
+        return BuyResult::Silent;
+    }
+
+    let (inv_idx, price) = JTRANS[slot];
+
+    // Check wealth — strict: wealth must be *strictly greater than* price.
+    {
+        let stats = world
+            .get::<&HeroStats>(res.hero_entity)
+            .expect("hero entity must have HeroStats");
+        if stats.wealth <= price {
+            return BuyResult::NotEnough;
+        }
+    }
+
+    // Deduct gold from HeroStats.
+    {
+        let mut stats = world
+            .get::<&mut HeroStats>(res.hero_entity)
+            .expect("hero entity must have HeroStats");
+        stats.wealth -= price;
+    }
+
+    // Deliver item.
+    match inv_idx {
+        // Food: sentinel slot — no inventory grant. Applies eat(50): hunger
+        // is reduced by 50, clamped at 0 (fmain.c:3433 → eat(50), fmain2.c:1706).
+        0 => {
+            let mut stats = world
+                .get::<&mut HeroStats>(res.hero_entity)
+                .expect("hero entity must have HeroStats");
+            stats.hunger = (stats.hunger - 50).max(0);
+            BuyResult::Bought(BuyOutcome::Food)
+        }
+
+        // Arrows: bundle of 10.
+        8 => {
+            let mut inv = world
+                .get::<&mut Inventory>(res.hero_entity)
+                .expect("hero entity must have Inventory");
+            inv.stuff[8] = inv.stuff[8].saturating_add(10);
+            BuyResult::Bought(BuyOutcome::Arrows)
+        }
+
+        // Generic item: increment by 1.
+        _ => {
+            let mut inv = world
+                .get::<&mut Inventory>(res.hero_entity)
+                .expect("hero entity must have Inventory");
+            inv.stuff[inv_idx] = inv.stuff[inv_idx].saturating_add(1);
             BuyResult::Bought(BuyOutcome::Item { inv_idx })
         }
     }
@@ -212,5 +280,119 @@ mod tests {
         let r = buy_slot(&mut state, 7);
         assert_eq!(r, BuyResult::Silent);
         assert_eq!(state.wealth, 999);
+    }
+}
+
+#[cfg(test)]
+mod ecs_tests {
+    use super::*;
+    use hecs::World;
+    use crate::game::ecs::resources::Resources;
+    use crate::game::ecs::components::{HeroStats, Inventory};
+
+    /// Spawn a minimal hero with the given wealth and return (World, Resources).
+    fn setup(wealth: i16) -> (World, Resources) {
+        let mut world = World::new();
+        let hero = world.spawn((
+            HeroStats { vitality: 100, brave: 50, luck: 50, kind: 50, wealth, hunger: 0, fatigue: 0, gold: 0 },
+            Inventory::empty(),
+        ));
+        let res = Resources::new(hero);
+        (world, res)
+    }
+
+    #[test]
+    fn food_deducts_wealth_eats_does_not_increment_stuff() {
+        let (mut world, mut res) = setup(10);
+        world.get::<&mut HeroStats>(res.hero_entity).unwrap().hunger = 80;
+
+        let result = buy_slot_ecs(0, &mut world, &mut res);
+
+        assert!(matches!(result, BuyResult::Bought(BuyOutcome::Food)),
+            "expected Bought(Food), got {:?}", result);
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        // wealth was 10, Food costs 3 → 7 remaining
+        assert_eq!(stats.wealth, 7);
+        // eat(50): hunger 80 → 30
+        assert_eq!(stats.hunger, 30, "Food must reduce hunger by 50 (eat(50))");
+
+        // stuff[0] must remain 0 — Food does NOT increment inventory
+        let inv = world.get::<&Inventory>(res.hero_entity).unwrap();
+        assert_eq!(inv.stuff[0], 0, "Food must not increment stuff[0]");
+    }
+
+    #[test]
+    fn food_hunger_clamps_at_zero() {
+        let (mut world, mut res) = setup(10);
+        world.get::<&mut HeroStats>(res.hero_entity).unwrap().hunger = 20;
+
+        buy_slot_ecs(0, &mut world, &mut res);
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.hunger, 0, "hunger must clamp at 0");
+    }
+
+    #[test]
+    fn arrows_add_ten_to_stuff_8() {
+        let (mut world, mut res) = setup(50);
+        {
+            let mut inv = world.get::<&mut Inventory>(res.hero_entity).unwrap();
+            inv.stuff[8] = 5;
+        }
+
+        let result = buy_slot_ecs(1, &mut world, &mut res);
+
+        assert!(matches!(result, BuyResult::Bought(BuyOutcome::Arrows)),
+            "expected Bought(Arrows), got {:?}", result);
+
+        let inv = world.get::<&Inventory>(res.hero_entity).unwrap();
+        assert_eq!(inv.stuff[8], 15, "arrows must increase by 10");
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.wealth, 40, "price 10 deducted from 50");
+    }
+
+    #[test]
+    fn exact_wealth_returns_not_enough() {
+        let sword_price = JTRANS[4].1; // Sword costs 45
+        let (mut world, mut res) = setup(sword_price);
+
+        let result = buy_slot_ecs(4, &mut world, &mut res);
+
+        assert!(matches!(result, BuyResult::NotEnough),
+            "expected NotEnough when wealth == price, got {:?}", result);
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.wealth, sword_price, "wealth must not change on NotEnough");
+    }
+
+    #[test]
+    fn generic_item_increments_inv_idx() {
+        let (mut world, mut res) = setup(100);
+
+        let result = buy_slot_ecs(2, &mut world, &mut res);
+
+        assert!(matches!(result, BuyResult::Bought(BuyOutcome::Item { inv_idx: 11 })),
+            "expected Bought(Item {{ inv_idx: 11 }}), got {:?}", result);
+
+        let inv = world.get::<&Inventory>(res.hero_entity).unwrap();
+        assert_eq!(inv.stuff[11], 1);
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.wealth, 85, "price 15 deducted from 100");
+    }
+
+    #[test]
+    fn out_of_range_slot_returns_silent() {
+        let (mut world, mut res) = setup(999);
+
+        let result = buy_slot_ecs(7, &mut world, &mut res);
+
+        assert!(matches!(result, BuyResult::Silent),
+            "expected Silent for slot >= JTRANS.len(), got {:?}", result);
+
+        let stats = world.get::<&HeroStats>(res.hero_entity).unwrap();
+        assert_eq!(stats.wealth, 999);
     }
 }

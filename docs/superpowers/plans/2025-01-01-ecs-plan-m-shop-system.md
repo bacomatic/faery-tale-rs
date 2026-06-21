@@ -1,7 +1,7 @@
 ---
 title: "Plan M — Shop System (ECS)"
 plan: M
-status: draft
+status: done
 depends_on: [I, J]
 touches: [src/game/shop.rs, src/game/ecs/scene.rs]
 ---
