@@ -13,3 +13,4 @@ tools/results/
 
 # Local LLM config
 tools/.env
+/graphify-out
