@@ -118,9 +118,6 @@ const HIBAR_NATIVE_H:     u32 = 57;
 const HIBAR_H:            u32 = HIBAR_NATIVE_H * 2;
 const HIBAR_Y:            i32 = CANVAS_MARGIN_Y + PLAYFIELD_CANVAS_H as i32 + 6;
 
-/// Satiation amount per food slot (stuff[22..=27]). Source: docs/spec/survival.md §18.3.
-const FOOD_SATIATION: [i16; 6] = [25, 35, 45, 55, 65, 80];
-
 pub struct EcsScene {
     pub world:          World,
     pub res:            Resources,
@@ -191,6 +188,10 @@ impl EcsScene {
 
         let mut res = Resources::new(hero);
         res.region.region_num = start_region;
+        res.brother.active_name = game_lib
+            .get_brother(0)
+            .map(|b| b.name.clone())
+            .unwrap_or_else(|| "Hero".to_string());
 
         // Populate compass hit-regions from the library data (comptable).
         if let Some(cfg) = game_lib.get_compass() {
@@ -298,6 +299,10 @@ impl EcsScene {
                     );
                     self.res.hero_entity = new_hero;
                     self.res.brother.active_brother = successor as usize;
+                    self.res.brother.active_name = game_lib
+                        .get_brother(successor as usize)
+                        .map(|b| b.name.clone())
+                        .unwrap_or_else(|| "Hero".to_string());
                     self.res.brother.brother = successor + 1;
                     self.res.region.new_region = 3;
                     self.res.clock.daynight = 8000;
@@ -419,27 +424,9 @@ impl EcsScene {
             }
 
             MenuAction::Yell | MenuAction::Say | MenuAction::Ask => {}
-            MenuAction::BuyItem(n) => {
-                // When no active shop, treat BuyItem(n) as "eat food item in slot (22 + n)".
-                // Shop context will be wired in Plan M; for now all BuyItem routes to eat.
-                use crate::game::ecs::components::{HeroStats, Inventory};
-                let food_slot = 22usize + (n as usize).min(5);
-                let satiation = FOOD_SATIATION[(n as usize).min(5)];
-                let mut ate = false;
-                if let Ok(mut inv) = self.world.get::<&mut Inventory>(self.res.hero_entity) {
-                    if inv.stuff[food_slot] > 0 {
-                        inv.stuff[food_slot] -= 1;
-                        ate = true;
-                    }
-                }
-                if ate {
-                    if let Ok(mut stats) = self.world.get::<&mut HeroStats>(self.res.hero_entity) {
-                        stats.hunger = (stats.hunger - satiation).max(0);
-                    }
-                    self.res.events.message.push(crate::game::ecs::events::MessageEvent {
-                        text: "Eaten.".to_string(),
-                    });
-                }
+            MenuAction::BuyItem(_) => {
+                // Shop purchase is implemented in Plan M (buy_slot_ecs + bartender
+                // proximity guard).
             }
             MenuAction::GiveGold | MenuAction::GiveWrit | MenuAction::GiveBone => {}
             MenuAction::TryKey(_) => {}

@@ -17,7 +17,7 @@
 | H | `2025-01-01-ecs-plan-h-door-system.md` | ✅ Done |
 | I | `2025-01-01-ecs-plan-i-menu-system.md` | ✅ Done |
 | J | `2025-01-01-ecs-plan-j-inventory-screen.md` | ✅ Done |
-| J2 | `2025-01-01-ecs-plan-j2-item-text-and-food-fix.md` | ✅ Written (fixes shipped J fidelity bugs) |
+| J2 | `2025-01-01-ecs-plan-j2-item-text-and-food-fix.md` | ✅ Done |
 | K | `2025-01-01-ecs-plan-k-magic-system.md` | ✅ Done |
 | L | `2025-01-01-ecs-plan-l-narrative-queue.md` | ✅ Done |
 | M | `2025-01-01-ecs-plan-m-shop-system.md` | ✅ Written |

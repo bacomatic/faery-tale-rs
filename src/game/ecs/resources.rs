@@ -116,6 +116,8 @@ pub struct BrotherRoster {
     pub safe_flag:      bool,
     pub cheat1:         bool,
     pub god_mode:       GodModeFlags,
+    /// Display name of the active brother (for "%"-substituted scroll text).
+    pub active_name:    String,
     /// Inventories for the two inactive brothers.
     pub inactive_inventories: [[u8; 36]; 3],
 }
@@ -129,6 +131,7 @@ impl Default for BrotherRoster {
             safe_flag:            false,
             cheat1:               false,
             god_mode:             GodModeFlags::empty(),
+            active_name:          String::new(),
             inactive_inventories: [[0u8; 36]; 3],
         }
     }
