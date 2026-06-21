@@ -591,6 +591,65 @@ mod tests {
         assert_eq!(item_name_to_id("orc"), None);
         assert_eq!(item_name_to_id(""), None);
     }
+
+    // ── INV_LIST integrity tests ──────────────────────────────────────────────
+
+    /// Every entry's image_number must be a valid OBJECTS frame index (< 116).
+    #[test]
+    fn inv_list_image_numbers_in_range() {
+        let max = CFILE_FRAME_COUNTS[3]; // 116
+        for (i, entry) in INV_LIST.iter().enumerate() {
+            assert!(
+                (entry.image_number as usize) < max,
+                "INV_LIST[{}] image_number {} >= frame count {}",
+                i, entry.image_number, max
+            );
+        }
+    }
+
+    /// img_off + img_height must not exceed OBJ_SPRITE_H (16).
+    #[test]
+    fn inv_list_img_subregion_in_bounds() {
+        for (i, entry) in INV_LIST.iter().enumerate() {
+            let end = entry.img_off as usize + entry.img_height as usize;
+            assert!(
+                end <= OBJ_SPRITE_H,
+                "INV_LIST[{}] img_off({}) + img_height({}) = {} > OBJ_SPRITE_H({})",
+                i, entry.img_off, entry.img_height, end, OBJ_SPRITE_H
+            );
+        }
+    }
+
+    /// Spot-check canonical image_number values from fmain.c:428.
+    #[test]
+    fn inv_list_canonical_image_numbers() {
+        assert_eq!(INV_LIST[0].image_number, 12, "Dirk");
+        assert_eq!(INV_LIST[1].image_number, 9,  "Mace");
+        assert_eq!(INV_LIST[2].image_number, 8,  "Sword");
+        assert_eq!(INV_LIST[3].image_number, 10, "Bow");
+        assert_eq!(INV_LIST[8].image_number, 3,  "Arrows");
+    }
+
+    /// Weapons (slots 0–7) all share xoff=10 and are stacked by yoff increments of 10.
+    #[test]
+    fn inv_list_weapon_positions() {
+        for slot in 0..8 {
+            assert_eq!(INV_LIST[slot].xoff, 10, "slot {} xoff", slot);
+            assert_eq!(INV_LIST[slot].yoff, slot as u8 * 10, "slot {} yoff", slot);
+            assert_eq!(INV_LIST[slot].ydelta, 0, "slot {} ydelta", slot);
+            assert_eq!(INV_LIST[slot].maxshown, 1, "slot {} maxshown", slot);
+        }
+    }
+
+    /// Arrows (slot 8) are in a separate column and are stackable.
+    #[test]
+    fn inv_list_arrows_stackable() {
+        let arrows = &INV_LIST[8];
+        assert_eq!(arrows.xoff, 30);
+        assert_eq!(arrows.yoff, 0);
+        assert_eq!(arrows.ydelta, 3);
+        assert!(arrows.maxshown > 1);
+    }
 }
 
 /// A loaded sprite sheet: palette-index pixel data.

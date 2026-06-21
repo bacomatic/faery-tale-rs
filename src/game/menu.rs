@@ -584,13 +584,27 @@ impl MenuState {
                 self.gomenu(MenuMode::File);
                 MenuAction::None
             }
-            (MenuMode::Use, 0..=4) => MenuAction::SetWeapon(hit),
-            (MenuMode::Use, 6) => MenuAction::SummonTurtle,
+            (MenuMode::Use, 0..=4) => {
+                self.gomenu(MenuMode::Items);
+                MenuAction::SetWeapon(hit + 1)
+            }
+            (MenuMode::Use, 5) => {
+                // Lasso: no USE effect; falls through to Items (fmain.c:3466).
+                self.gomenu(MenuMode::Items);
+                MenuAction::None
+            }
+            (MenuMode::Use, 6) => {
+                self.gomenu(MenuMode::Items);
+                MenuAction::SummonTurtle
+            }
             (MenuMode::Use, 7) => {
                 self.gomenu(MenuMode::Keys);
                 MenuAction::None
             }
-            (MenuMode::Use, 8) => MenuAction::UseSunstone,
+            (MenuMode::Use, 8) => {
+                self.gomenu(MenuMode::Items);
+                MenuAction::UseSunstone
+            }
             (MenuMode::SaveX, 5) => {
                 self.save_pending = true;
                 self.gomenu(MenuMode::File);
@@ -765,6 +779,39 @@ mod tests {
         ms.gomenu(MenuMode::Keys);
         let action = ms.handle_key(b'1');
         assert!(matches!(action, MenuAction::TryKey(0)));
+        assert_eq!(ms.cmode, MenuMode::Keys);
+    }
+
+    /// Clicking a weapon slot in the Use menu must produce SetWeapon(hit + 1)
+    /// so that weapon codes 1..=5 map to Dirk..Wand (fmain.c:3450: weapon = hit + 1).
+    #[test]
+    fn test_use_weapon_dispatch_is_hit_plus_one() {
+        let mut ms = MenuState::new();
+        ms.gomenu(MenuMode::Use);
+        // Enable all weapon slots so dispatch_do_option doesn't hit a "don't have one" guard.
+        for i in 0..5 {
+            ms.menus[MenuMode::Use as usize].enabled[i] = 1;
+        }
+        for hit in 0u8..=4 {
+            ms.gomenu(MenuMode::Use);
+            let action = ms.dispatch_do_option(hit);
+            assert_eq!(
+                action,
+                MenuAction::SetWeapon(hit + 1),
+                "Use hit {} should emit SetWeapon({}) but got {:?}",
+                hit, hit + 1, action
+            );
+            assert_eq!(ms.cmode, MenuMode::Items,
+                "Use hit {} should return to Items menu", hit);
+        }
+    }
+
+    /// Key slot (hit 7) in the Use menu must open the Keys submenu, not return to Items.
+    #[test]
+    fn test_use_key_slot_opens_keys_menu() {
+        let mut ms = MenuState::new();
+        ms.gomenu(MenuMode::Use);
+        ms.dispatch_do_option(7);
         assert_eq!(ms.cmode, MenuMode::Keys);
     }
 
