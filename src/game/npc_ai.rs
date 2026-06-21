@@ -967,10 +967,10 @@ mod tests {
         // SPEC §19.2: Gold Ring cast increments freeze_timer by FREEZE_TIMER_INCREMENT.
         // (a) cast applies freeze effect to game state.
         use crate::game::game_state::GameState;
-        use crate::game::magic::{use_magic, FREEZE_TIMER_INCREMENT, ITEM_RING};
+        use crate::game::magic::{use_magic, FREEZE_TIMER_INCREMENT, ITEM_GOLD_RING};
         let mut state = GameState::new();
-        state.stuff_mut()[ITEM_RING] = 1;
-        let _ = use_magic(&mut state, ITEM_RING);
+        state.stuff_mut()[ITEM_GOLD_RING] = 1;
+        let _ = use_magic(&mut state, ITEM_GOLD_RING);
         assert!(
             state.freeze_timer > 0,
             "freeze_timer must be > 0 after cast"

@@ -188,7 +188,7 @@ extraction needs updating.
 
 **Files touched:** `game/magic.rs`, `ecs/scene.rs`, `ecs/resources.rs`.
 
-**Verify:** unit test — using Lantern (stuff[10]) sets `light_timer > 0`.
+**Verify:** unit test — using Green Jewel (stuff[10]) sets `light_timer > 0`.
 
 ---
 
@@ -562,7 +562,9 @@ calls `dc.update_status(status)`), populate the currently-empty fields:
 - `hero_environ`: from `ActorMotion.environ`.
 - `active_carrier` / `active_carrier_name`: from `CarrierMount.active_carrier`
   + `carrier_name()`.
-- `jewel_timer`, `totem_timer`, `freeze_timer`: from `res.clock`.
+- `jewel_timer` (Green Jewel): from `res.clock.light_timer`.
+- `orb_timer` (Crystal Orb): from `res.clock.secret_timer`.
+- `freeze_timer` (Gold Ring): from `res.clock.freeze_timer`.
 
 **Quest state (currently zeroed):** wire from `QuestState` resource once Plan V
 lands; leave zeroed until then.

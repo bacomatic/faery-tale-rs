@@ -67,7 +67,7 @@ DebugSnapshot {
     lightlevel: u16,                // 0–300 triangle wave
     time_period: String,            // "Night", "Morning", "Midday", "Evening"
     light_timer: u16,               // Green Jewel spell remaining
-    secret_timer: u16,              // Bird Totem spell remaining
+    secret_timer: u16,              // Crystal Orb spell remaining
     freeze_timer: u16,              // Gold Ring time-stop remaining
     is_paused: bool,                // game loop paused by debug command
 
@@ -282,7 +282,7 @@ These are modern debug affordances not present in the original game; they expose
 | `/god` | Toggle all god-mode flags on/off |
 | `/god <flag>` | Toggle a specific flag: `noclip`, `invincible`, `ohk` (one-hit kill), `reach` (infinite weapon reach), `all`, `off` |
 | `/noclip` | Shortcut for `/god noclip` |
-| `/magic <effect>` | Sticky-enable a magic effect that otherwise times out: `light` (Green Jewel), `secret` (Bird Totem), `freeze` (Gold Ring). Toggles off when applied a second time. |
+| `/magic <effect>` | Sticky-enable a magic effect that otherwise times out: `jewel` (Green Jewel), `orb` (Crystal Orb), `ring` (Gold Ring). Toggles off when applied a second time. |
 | `/swan` | Summon the swan carrier at the hero's position |
 | `/time <HH:MM>` | Jump the daynight clock to a specific time |
 | `/time <period>` | Jump to a named time period: `dawn`, `noon`, `dusk`, `midnight` |

@@ -123,8 +123,8 @@ pub struct DebugSnapshot {
     pub active_carrier_name: String,
     /// Light-timer tick count (Green Jewel spell).
     pub jewel_timer: u16,
-    /// Totem (Bird Totem / map) active indicator tick count.
-    pub totem_timer: u16,
+    /// Crystal Orb secret-timer tick count.
+    pub orb_timer: u16,
     /// Freeze (Gold Ring) timer tick count.
     pub freeze_timer: u16,
 
@@ -166,8 +166,8 @@ pub struct HeroExtras {
     pub active_carrier_name: String,
     /// Light-timer tick count (Green Jewel spell).
     pub jewel_timer: u16,
-    /// Totem (Bird Totem / map) active indicator tick count.
-    pub totem_timer: u16,
+    /// Crystal Orb secret-timer tick count.
+    pub orb_timer: u16,
     /// Freeze (Gold Ring) timer tick count.
     pub freeze_timer: u16,
 }
@@ -326,7 +326,7 @@ pub fn build_ecs_hero_extras(
     }
 
     extras.jewel_timer = res.clock.light_timer.max(0) as u16;
-    extras.totem_timer = res.clock.secret_timer.max(0) as u16;
+    extras.orb_timer = res.clock.secret_timer.max(0) as u16;
     extras.freeze_timer = res.clock.freeze_timer.max(0) as u16;
 
     extras
@@ -752,7 +752,7 @@ mod tests {
         assert_eq!(extras.active_carrier, 1);
         assert_eq!(extras.active_carrier_name, carrier_name(1));
         assert_eq!(extras.jewel_timer, 100);
-        assert_eq!(extras.totem_timer, 200);
+        assert_eq!(extras.orb_timer, 200);
         assert_eq!(extras.freeze_timer, 300);
     }
 

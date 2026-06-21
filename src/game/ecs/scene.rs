@@ -20,7 +20,7 @@ use crate::game::ecs::spawn::{spawn_bones, spawn_hero};
 use crate::game::ecs::systems;
 use crate::game::game_library::GameLibrary;
 use crate::game::map_renderer::{MAP_DST_H, MAP_DST_W};
-use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_STONE_RING};
+use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_BLUE_STONE};
 use crate::game::menu::{MenuAction, MenuState};
 use crate::game::palette::{amiga_color_to_rgba, Palette, PALETTE_SIZE};
 use crate::game::scene::{Scene, SceneResources, SceneResult};
@@ -444,7 +444,7 @@ impl EcsScene {
             MenuAction::GiveGold | MenuAction::GiveWrit | MenuAction::GiveBone => {}
             MenuAction::TryKey(_) => {}
             MenuAction::CastSpell(hit) => {
-                let item_idx = ITEM_STONE_RING + hit as usize;
+                let item_idx = ITEM_BLUE_STONE + hit as usize;
                 let result = magic_dispatch_ecs(item_idx, &mut self.world, &mut self.res);
                 let name = game_lib
                     .get_brother(self.res.brother.active_brother)

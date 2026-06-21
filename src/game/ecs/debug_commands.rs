@@ -5,7 +5,7 @@
 
 use hecs::World;
 
-use crate::game::debug_command::DebugCommand;
+use crate::game::debug_command::{DebugCommand, MagicEffect};
 use crate::game::ecs::components::Position;
 use crate::game::ecs::resources::Resources;
 
@@ -19,6 +19,31 @@ pub fn handle(cmd: DebugCommand, world: &mut World, res: &mut Resources) {
         DebugCommand::TeleportCoords { x, y } => {
             if let Ok(mut pos) = world.get::<&mut Position>(res.hero_entity) {
                 pos.set(x as f32, y as f32);
+            }
+        }
+
+        DebugCommand::ToggleMagicEffect { effect } => {
+            // Toggle the corresponding sticky flag and ensure the timer is
+            // active when sticky is enabled, so the effect is actually visible.
+            match effect {
+                MagicEffect::Jewel => {
+                    res.clock.light_sticky = !res.clock.light_sticky;
+                    if res.clock.light_sticky && res.clock.light_timer <= 0 {
+                        res.clock.light_timer = 1;
+                    }
+                }
+                MagicEffect::Orb => {
+                    res.clock.secret_sticky = !res.clock.secret_sticky;
+                    if res.clock.secret_sticky && res.clock.secret_timer <= 0 {
+                        res.clock.secret_timer = 1;
+                    }
+                }
+                MagicEffect::Ring => {
+                    res.clock.freeze_sticky = !res.clock.freeze_sticky;
+                    if res.clock.freeze_sticky && res.clock.freeze_timer <= 0 {
+                        res.clock.freeze_timer = 1;
+                    }
+                }
             }
         }
 
@@ -84,5 +109,39 @@ mod tests {
         let (mut world, mut res) = make_world_and_res();
         // InstaKill is not yet wired; should silently do nothing.
         handle(DebugCommand::InstaKill, &mut world, &mut res);
+    }
+
+    #[test]
+    fn toggle_magic_jewel_sticky_and_timer() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Jewel }, &mut world, &mut res);
+        assert!(res.clock.light_sticky);
+        assert!(res.clock.light_timer > 0);
+    }
+
+    #[test]
+    fn toggle_magic_orb_sticky_and_timer() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Orb }, &mut world, &mut res);
+        assert!(res.clock.secret_sticky);
+        assert!(res.clock.secret_timer > 0);
+    }
+
+    #[test]
+    fn toggle_magic_ring_sticky_and_timer() {
+        let (mut world, mut res) = make_world_and_res();
+        handle(DebugCommand::ToggleMagicEffect { effect: MagicEffect::Ring }, &mut world, &mut res);
+        assert!(res.clock.freeze_sticky);
+        assert!(res.clock.freeze_timer > 0);
+    }
+
+    #[test]
+    fn toggle_magic_effect_turns_off_sticky() {
+        let (mut world, mut res) = make_world_and_res();
+        let cmd = DebugCommand::ToggleMagicEffect { effect: MagicEffect::Orb };
+        handle(cmd.clone(), &mut world, &mut res);
+        assert!(res.clock.secret_sticky);
+        handle(cmd, &mut world, &mut res);
+        assert!(!res.clock.secret_sticky);
     }
 }

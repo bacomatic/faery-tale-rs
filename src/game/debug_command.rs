@@ -20,9 +20,9 @@ pub enum BrotherId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MagicEffect {
-    Light,
-    Secret,
-    Freeze,
+    Jewel,  // Green Jewel light effect
+    Orb,    // Crystal Orb secret effect
+    Ring,   // Gold Ring freeze effect
 }
 
 pub const DEFAULT_TICK_RATE_HZ: u32 = 15;

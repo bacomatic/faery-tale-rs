@@ -581,9 +581,9 @@ impl DebugConsole {
                 Line::from(vec![
                     styled_label("Jewel:"),
                     Span::raw(format!("{} ", status.jewel_timer)),
-                    styled_label("Totem:"),
-                    Span::raw(format!("{} ", status.totem_timer)),
-                    styled_label("Frz:"),
+                    styled_label("Orb:"),
+                    Span::raw(format!("{} ", status.orb_timer)),
+                    styled_label("Ring:"),
                     Span::raw(format!("{}", status.freeze_timer)),
                 ]),
                 Line::from(vec![

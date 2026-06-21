@@ -170,8 +170,8 @@ pub fn build_hero_extras(
     }
     
     // Timer values from Resources
-    extras.jewel_timer = res.clock.jewel_timer;
-    extras.totem_timer = res.clock.totem_timer;
+    extras.jewel_timer = res.clock.light_timer;
+    extras.orb_timer = res.clock.secret_timer;
     extras.freeze_timer = res.clock.freeze_timer;
     
     extras
@@ -200,9 +200,9 @@ pub struct HeroExtras {
     pub hero_environ: u8,
     pub active_carrier: u8,
     pub active_carrier_name: String,
-    pub jewel_timer: u32,
-    pub totem_timer: u32,
-    pub freeze_timer: u32,
+    pub jewel_timer: u16,
+    pub orb_timer: u16,
+    pub freeze_timer: u16,
 }
 ```
 
@@ -288,7 +288,7 @@ snapshot.hero_environ = hero_extras.hero_environ;
 snapshot.active_carrier = hero_extras.active_carrier;
 snapshot.active_carrier_name = hero_extras.active_carrier_name;
 snapshot.jewel_timer = hero_extras.jewel_timer;
-snapshot.totem_timer = hero_extras.totem_timer;
+snapshot.orb_timer = hero_extras.orb_timer;
 snapshot.freeze_timer = hero_extras.freeze_timer;
 
 // Or if using HeroExtras struct:
@@ -465,8 +465,8 @@ mod tests {
         ));
         
         let mut res = Resources::new(hero);
-        res.clock.jewel_timer = 100;
-        res.clock.totem_timer = 200;
+        res.clock.light_timer = 100;
+        res.clock.secret_timer = 200;
         res.clock.freeze_timer = 300;
         
         let extras = build_hero_extras(&world, hero, &res);
@@ -479,7 +479,7 @@ mod tests {
         assert_eq!(extras.active_carrier, 1);
         assert_eq!(extras.active_carrier_name, "Raft");
         assert_eq!(extras.jewel_timer, 100);
-        assert_eq!(extras.totem_timer, 200);
+        assert_eq!(extras.orb_timer, 200);
         assert_eq!(extras.freeze_timer, 300);
     }
     

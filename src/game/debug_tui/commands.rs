@@ -121,7 +121,7 @@ impl DebugConsole {
                 "/tp"   | "teleport" => "/tp safe | ring <N> | <x> <y> | <location>\n  e.g. /tp 200 150   /tp tavern   /tp ring 0",
                 "/god"  | "god"      => "/god [noclip|invincible|ohk|reach|all|off]  — toggle god mode flag.",
                 "/noclip"           => "/noclip — shortcut for /god noclip.",
-                "/magic"| "magic"    => "/magic <light|secret|freeze> — toggle sticky magic effect.",
+                "/magic"| "magic"    => "/magic <jewel|orb|ring> — toggle sticky magic effect.",
                 "/swan" | "swan"     => "/swan — summon the swan.",
                 "/time" | "time"     => "/time <HH:MM> | dawn | noon | dusk | midnight | hold | resume\n  /time hold — freeze time.  /time resume — unfreeze.",
                 "/brother"          => "/brother <julian|phillip|kevin>",
@@ -166,7 +166,7 @@ impl DebugConsole {
             "  /tp <x> <y>    teleport (also: /tp safe | ring <N> | <location>)",
             "  /god [flag]    god mode: noclip/invincible/ohk/reach/all/off",
             "  /noclip        toggle noclip shortcut",
-            "  /magic <m>     sticky magic: light/secret/freeze",
+            "  /magic <m>     sticky magic: jewel/orb/ring",
             "  /swan          summon the swan",
             "  /time <t>      set time: HH:MM or dawn/noon/dusk/midnight/hold/resume",
             "  /brother <b>   switch to julian/phillip/kevin",
@@ -311,7 +311,7 @@ impl DebugConsole {
             ),
             format!("  Arrows  : {}", get(8)),
             format!(
-                "  Magic   : vial={} jewel={} totem={} flute={} ring={} skull={} staff={}",
+                "  Magic   : blue={} jewel={} vial={} orb={} totem={} ring={} skull={}",
                 get(9),
                 get(10),
                 get(11),
@@ -565,11 +565,11 @@ impl DebugConsole {
 
     fn cmd_magic(&mut self, args: &[&str]) {
         let effect = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
-            Some("light") => MagicEffect::Light,
-            Some("secret") => MagicEffect::Secret,
-            Some("freeze") => MagicEffect::Freeze,
+            Some("jewel") => MagicEffect::Jewel,
+            Some("orb") => MagicEffect::Orb,
+            Some("ring") => MagicEffect::Ring,
             _ => {
-                self.log("Usage: /magic <light|secret|freeze>");
+                self.log("Usage: /magic <jewel|orb|ring>");
                 return;
             }
         };

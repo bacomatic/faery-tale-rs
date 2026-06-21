@@ -147,7 +147,7 @@ Add after the existing `use_magic()` function:
 /// Mirrors `use_magic()` (fmain.c:3300-3365) and `docs/spec/magic.md` §19.
 /// Scroll messages are the caller's responsibility.
 pub fn magic_dispatch_ecs(item_idx: usize, world: &mut World, res: &mut Resources) -> MagicResult {
-    if item_idx < ITEM_STONE_RING || item_idx > ITEM_SKULL {
+    if item_idx < ITEM_BLUE_STONE || item_idx > ITEM_JADE_SKULL {
         return MagicResult::NoOwned;
     }
 
@@ -162,27 +162,27 @@ pub fn magic_dispatch_ecs(item_idx: usize, world: &mut World, res: &mut Resource
     drop(inventory);
 
     let result = match item_idx {
-        ITEM_STONE_RING => stone_ring_effect_ecs(world, res, hero),
-        ITEM_LANTERN => {
+        ITEM_BLUE_STONE => stone_ring_effect_ecs(world, res, hero),
+        ITEM_GREEN_JEWEL => {
             res.clock.light_timer = res.clock.light_timer.saturating_add(LIGHT_TIMER_INCREMENT);
             MagicResult::Applied
         }
-        ITEM_VIAL => {
+        ITEM_GLASS_VIAL => {
             let capped = apply_vial_heal_ecs(world, hero);
             MagicResult::Healed { capped }
         }
-        ITEM_ORB => {
+        ITEM_CRYSTAL_ORB => {
             res.clock.secret_timer = res.clock.secret_timer.saturating_add(SECRET_TIMER_INCREMENT);
             MagicResult::Applied
         }
-        ITEM_TOTEM => {
+        ITEM_BIRD_TOTEM => {
             if res.region.region_num > 7 && !res.brother.cheat1 {
                 return MagicResult::Suppressed;
             }
             res.view.viewstatus = 1;
             MagicResult::Applied
         }
-        ITEM_RING => {
+        ITEM_GOLD_RING => {
             if let Ok(cm) = world.get::<&CarrierMount>(hero) {
                 if cm.riding > 1 {
                     return MagicResult::Suppressed;
@@ -191,7 +191,7 @@ pub fn magic_dispatch_ecs(item_idx: usize, world: &mut World, res: &mut Resource
             res.clock.freeze_timer = res.clock.freeze_timer.saturating_add(FREEZE_TIMER_INCREMENT);
             MagicResult::Applied
         }
-        ITEM_SKULL => skull_effect_ecs(world, res, hero),
+        ITEM_JADE_SKULL => skull_effect_ecs(world, res, hero),
         _ => return MagicResult::NoOwned,
     };
 
@@ -313,7 +313,7 @@ Expected: no errors.
 Near the top of the file, add:
 
 ```rust
-use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_STONE_RING};
+use crate::game::magic::{magic_dispatch_ecs, MagicResult, ITEM_BLUE_STONE};
 ```
 
 - [ ] **Step 2: Add `game_lib` parameter to `dispatch_menu_action()`**
@@ -356,7 +356,7 @@ with:
 
 ```rust
 MenuAction::CastSpell(hit) => {
-    let item_idx = ITEM_STONE_RING + hit as usize;
+    let item_idx = ITEM_BLUE_STONE + hit as usize;
     let result = magic_dispatch_ecs(item_idx, &mut self.world, &mut self.res);
     let name = game_lib
         .get_brother(self.res.brother.active_brother)
@@ -439,16 +439,16 @@ mod ecs_tests {
     }
 
     #[test]
-    fn lantern_adds_light_timer() {
+    fn green_jewel_adds_light_timer() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_LANTERN, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_GREEN_JEWEL, 1);
         let mut res = Resources::new(hero);
         res.clock.light_timer = 0;
 
-        let result = magic_dispatch_ecs(ITEM_LANTERN, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_GREEN_JEWEL, &mut world, &mut res);
         assert_eq!(result, MagicResult::Applied);
         assert_eq!(res.clock.light_timer, LIGHT_TIMER_INCREMENT);
-        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_LANTERN], 0);
+        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_GREEN_JEWEL], 0);
     }
 
     #[test]
@@ -463,17 +463,17 @@ mod ecs_tests {
         ));
         let mut res = Resources::new(hero);
 
-        let result = magic_dispatch_ecs(ITEM_SKULL, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_JADE_SKULL, &mut world, &mut res);
         assert_eq!(result, MagicResult::NoOwned);
     }
 
     #[test]
     fn vial_heals_vitality_uncapped() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_VIAL, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_GLASS_VIAL, 1);
         let mut res = Resources::new(hero);
 
-        let result = magic_dispatch_ecs(ITEM_VIAL, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_GLASS_VIAL, &mut world, &mut res);
         assert!(matches!(result, MagicResult::Healed { capped: false }));
         let stats = world.get::<&HeroStats>(hero).unwrap();
         assert!(stats.vitality > 30 && stats.vitality <= 30 + 11);
@@ -483,7 +483,7 @@ mod ecs_tests {
     fn vial_heal_capped_by_brave() {
         let mut world = World::new();
         let mut stuff = [0u8; 36];
-        stuff[ITEM_VIAL] = 1;
+        stuff[ITEM_GLASS_VIAL] = 1;
         let hero = world.spawn((
             Inventory { stuff },
             test_hero(38, 20), // cap = 15 + 20/4 = 20
@@ -493,7 +493,7 @@ mod ecs_tests {
         ));
         let mut res = Resources::new(hero);
 
-        let result = magic_dispatch_ecs(ITEM_VIAL, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_GLASS_VIAL, &mut world, &mut res);
         assert!(matches!(result, MagicResult::Healed { capped: true }));
         let stats = world.get::<&HeroStats>(hero).unwrap();
         assert_eq!(stats.vitality, 20);
@@ -503,7 +503,7 @@ mod ecs_tests {
     fn ring_blocked_when_riding_returns_suppressed() {
         let mut world = World::new();
         let mut stuff = [0u8; 36];
-        stuff[ITEM_RING] = 1;
+        stuff[ITEM_GOLD_RING] = 1;
         let hero = world.spawn((
             Inventory { stuff },
             test_hero(30, 0),
@@ -513,7 +513,7 @@ mod ecs_tests {
         ));
         let mut res = Resources::new(hero);
 
-        let result = magic_dispatch_ecs(ITEM_RING, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_GOLD_RING, &mut world, &mut res);
         assert_eq!(result, MagicResult::Suppressed);
         assert_eq!(res.clock.freeze_timer, 0);
     }
@@ -521,10 +521,10 @@ mod ecs_tests {
     #[test]
     fn ring_allowed_on_foot() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_RING, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_GOLD_RING, 1);
         let mut res = Resources::new(hero);
 
-        let result = magic_dispatch_ecs(ITEM_RING, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_GOLD_RING, &mut world, &mut res);
         assert_eq!(result, MagicResult::Applied);
         assert_eq!(res.clock.freeze_timer, FREEZE_TIMER_INCREMENT);
     }
@@ -532,11 +532,11 @@ mod ecs_tests {
     #[test]
     fn orb_adds_secret_timer() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_ORB, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_CRYSTAL_ORB, 1);
         let mut res = Resources::new(hero);
         res.clock.secret_timer = 0;
 
-        let result = magic_dispatch_ecs(ITEM_ORB, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_CRYSTAL_ORB, &mut world, &mut res);
         assert_eq!(result, MagicResult::Applied);
         assert_eq!(res.clock.secret_timer, SECRET_TIMER_INCREMENT);
     }
@@ -544,11 +544,11 @@ mod ecs_tests {
     #[test]
     fn totem_sets_viewstatus_overworld() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_BIRD_TOTEM, 1);
         let mut res = Resources::new(hero);
         res.region.region_num = 7;
 
-        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_BIRD_TOTEM, &mut world, &mut res);
         assert_eq!(result, MagicResult::Applied);
         assert_eq!(res.view.viewstatus, 1);
     }
@@ -556,12 +556,12 @@ mod ecs_tests {
     #[test]
     fn totem_suppressed_underground_without_cheat() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_BIRD_TOTEM, 1);
         let mut res = Resources::new(hero);
         res.region.region_num = 8;
         res.brother.cheat1 = false;
 
-        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_BIRD_TOTEM, &mut world, &mut res);
         assert_eq!(result, MagicResult::Suppressed);
         assert_eq!(res.view.viewstatus, 0);
     }
@@ -569,12 +569,12 @@ mod ecs_tests {
     #[test]
     fn totem_allowed_underground_with_cheat() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_TOTEM, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_BIRD_TOTEM, 1);
         let mut res = Resources::new(hero);
         res.region.region_num = 8;
         res.brother.cheat1 = true;
 
-        let result = magic_dispatch_ecs(ITEM_TOTEM, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_BIRD_TOTEM, &mut world, &mut res);
         assert_eq!(result, MagicResult::Applied);
         assert_eq!(res.view.viewstatus, 1);
     }
@@ -583,7 +583,7 @@ mod ecs_tests {
     fn stone_ring_teleports_hero() {
         let mut world = World::new();
         let mut stuff = [0u8; 36];
-        stuff[ITEM_STONE_RING] = 1;
+        stuff[ITEM_BLUE_STONE] = 1;
         let hero = world.spawn((
             Inventory { stuff },
             test_hero(30, 200),
@@ -596,7 +596,7 @@ mod ecs_tests {
         map.map_mem[43 * 128 + 54] = STONE_RING_SECTOR as u8;
         res.map.world = Some(map);
 
-        let result = magic_dispatch_ecs(ITEM_STONE_RING, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_BLUE_STONE, &mut world, &mut res);
         assert!(matches!(result, MagicResult::StoneTeleport { capped: false }));
         let pos = world.get::<&Position>(hero).unwrap();
         let expected_x = ((71u16 << 8) | 85) as f32;
@@ -608,21 +608,21 @@ mod ecs_tests {
     #[test]
     fn stone_ring_wrong_sector_suppressed() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_STONE_RING, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_BLUE_STONE, 1);
         let mut res = Resources::new(hero);
         let map = crate::game::world_data::WorldData::empty();
         // Deliberately leave sector index 0 at the hero position.
         res.map.world = Some(map);
 
-        let result = magic_dispatch_ecs(ITEM_STONE_RING, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_BLUE_STONE, &mut world, &mut res);
         assert_eq!(result, MagicResult::Suppressed);
-        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_STONE_RING], 1);
+        assert_eq!(world.get::<&Inventory>(hero).unwrap().stuff[ITEM_BLUE_STONE], 1);
     }
 
     #[test]
     fn skull_mass_kill_affects_race_lt_7() {
         let mut world = World::new();
-        let hero = spawn_hero_with_inv(&mut world, ITEM_SKULL, 1);
+        let hero = spawn_hero_with_inv(&mut world, ITEM_JADE_SKULL, 1);
         let mut res = Resources::new(hero);
         res.region.battleflag = true;
 
@@ -640,7 +640,7 @@ mod ecs_tests {
             SpriteRef { cfile_idx: 0 },
         ));
 
-        let result = magic_dispatch_ecs(ITEM_SKULL, &mut world, &mut res);
+        let result = magic_dispatch_ecs(ITEM_JADE_SKULL, &mut world, &mut res);
         assert!(matches!(result, MagicResult::MassKill { in_battle: true, .. }));
         assert!(world.get::<&Health>(killable).unwrap().vitality <= 0);
         assert!(world.get::<&Health>(immune).unwrap().vitality > 0);
@@ -703,7 +703,7 @@ Both succeed. The magic system is fully ported to ECS and preserves the original
 
 ## Test plan
 
-- Lantern adds `light_timer`
+- Green Jewel adds `light_timer`
 - Skull with no inventory returns `NoOwned`
 - Vial heals vitality (uncapped and capped cases)
 - Ring blocked when `riding > 1` returns `Suppressed`

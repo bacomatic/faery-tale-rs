@@ -819,7 +819,7 @@ pub fn main() -> Result<(), String> {
                     active_carrier: hero_extras.active_carrier,
                     active_carrier_name: hero_extras.active_carrier_name,
                     jewel_timer: hero_extras.jewel_timer,
-                    totem_timer: hero_extras.totem_timer,
+                    orb_timer: hero_extras.orb_timer,
                     freeze_timer: hero_extras.freeze_timer,
                     actors: build_ecs_actor_snapshots(&ecs.world, ecs.res.hero_entity, 20),
                     princess_captive: ecs.res.quest.princess_rescues < 3,
