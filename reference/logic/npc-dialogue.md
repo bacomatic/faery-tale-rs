@@ -161,7 +161,7 @@ def priest_speech() -> None:
             speak(39)                                    # narr.asm — "Ah! You have a writ... Here is one of the golden statues..."
             ob_listg[10].ob_stat = 1                     # fmain.c:3385 — 1 = ground/pickable statue
         else:
-            speak(19)                                    # narr.asm — "already gave the golden statue"
+            speak(19)                                    # narr.asm — "I'm afraid I cannot help you, young man. I already gave the golden statue to the other young man."
         return
     if kind < 10:                                        # fmain.c:3388 — 10 = priest kindness gate
         speak(40)                                        # narr.asm — "Repent, Sinner!"
@@ -188,12 +188,12 @@ Calls: `speak`
 def bartender_speech() -> None:
     """Bartender speech: fatigue<5 morning greeting; else time-of-day split."""
     if fatigue < 5:                                      # fmain.c:3406 — 5 = rested-sleep threshold
-        speak(13)                                        # narr.asm — "Good Morning..."
+        speak(13)                                        # narr.asm — "Good Morning." said the tavern keeper. "Hope you slept well."
         return
     if dayperiod > 7:                                    # fmain.c:3407 — 7 = evening dayperiod cutoff
-        speak(12)                                        # narr.asm — "Would you like to buy something?"
+        speak(12)                                        # narr.asm — "Would you like to buy something?" said the tavern keeper. "Or do you just need lodging for the night?"
         return
-    speak(14)                                            # narr.asm — "Have a drink!"
+    speak(14)                                            # narr.asm — "Have a drink!" said the tavern keeper.
 ```
 
 **Branch coverage.** The three cases are mutually exclusive: rested hero
@@ -266,7 +266,7 @@ address them.
 
 - **GIVE dispatch** is not re-documented here. The `CMODE_GIVE` branch at
   `fmain.c:3490-3505` dispatches gold-to-beggar (`speak(24 + goal)`),
-  bone-to-spectre (`speak(48)` + shard drop), generic gold thanks
+  bone-to-spectre (`speak(48)` + shard drop), gold-to-non-beggar thanks
   (`speak(50)`), and no-match silence. See
   [`give_item_to_npc`](quests.md#give_item_to_npc) for the pseudo-code.
 - **Guard behavior.** Cases 2 and 3 (front / back guards) both fire

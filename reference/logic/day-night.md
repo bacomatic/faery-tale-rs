@@ -51,13 +51,13 @@ def tick_daynight() -> None:
         dayperiod = bucket
         match dayperiod:
             case 0:
-                event(28)                                     # fmain.c:2032 — speak "midnight" (narr.asm:45)
+                event(28)                                     # fmain.c:2032 — 28 = "It was midnight."
             case 4:                                           # fmain.c:2033 — 4 = morning bucket
-                event(29)                                     # fmain.c:2033 — speak "morning"
+                event(29)                                     # fmain.c:2033 — 29 = "It was morning."
             case 6:                                           # fmain.c:2034 — 6 = midday bucket
-                event(30)                                     # fmain.c:2034 — speak "midday"
+                event(30)                                     # fmain.c:2034 — 30 = "It was midday."
             case 9:                                           # fmain.c:2035 — 9 = evening bucket
-                event(31)                                     # fmain.c:2035 — speak "evening"
+                event(31)                                     # fmain.c:2035 — 31 = "Evening was drawing near."
     day_fade()                                                # fmain.c:2038 — per-tick palette refresh
     if (daynight & 0x3ff) == 0:                               # fmain.c:2040 — 0x3ff = every 1024 ticks
         if anim_list[0].vitality < (15 + brave / 4):          # fmain.c:2041 — 15 = base HP cap; 4 = brave divisor
@@ -167,7 +167,7 @@ def hunger_fatigue_tick() -> None:
             if hunger > 30 and stuff[STUFF_FOOD]:             # fmain.c:2195 — 30 = auto-eat hunger threshold
                 stuff[STUFF_FOOD] = stuff[STUFF_FOOD] - 1
                 hunger = hunger - 30                          # fmain.c:2196 — 30 = hunger satisfied per ration
-                event(37)                                     # fmain.c:2196 — speak "You eat some food"
+                event(37)                                     # fmain.c:2196 — 37 = "% ate one of his apples."
     if (daynight & 7) == 0 and not battleflag:                # fmain.c:2198 — 7 = every-8-tick mask (music refresh)
         setmood(0)
     if (daynight & 127) != 0:                                 # fmain.c:2199 — 127 = every-128-tick mask (hunger cadence)
@@ -179,7 +179,7 @@ def hunger_fatigue_tick() -> None:
     hunger = hunger + 1                                       # fmain.c:2201
     fatigue = fatigue + 1                                     # fmain.c:2202
     if hunger == 35:                                          # fmain.c:2203 — 35 = first-hunger warning
-        event(0)                                              # fmain.c:2203 — speak "getting hungry"
+        event(0)                                              # fmain.c:2203 — 0 = "% was getting rather hungry."
     elif hunger == 60:                                        # fmain.c:2204 — 60 = second-hunger warning
         event(1)
     elif (hunger & 7) == 0:                                   # fmain.c:2205 — 7 = every-8-hunger-tick inner cadence
@@ -190,16 +190,16 @@ def hunger_fatigue_tick() -> None:
             if hunger > 90:                                   # fmain.c:2209 — 90 = chronic-hunger complaint
                 event(2)
         elif fatigue > 170:                                   # fmain.c:2211 — 170 = forced-sleep fatigue cap
-            event(12)                                         # fmain.c:2212 — speak "collapse"
+            event(12)                                         # fmain.c:2212 — 12 = "% just couldn't stay awake any longer!"
             anim_list[0].state = STATE_SLEEP
         elif hunger > 140:                                    # fmain.c:2213 — 140 = starve-sleep cap
-            event(24)                                         # fmain.c:2214 — speak "faint from hunger"
+            event(24)                                         # fmain.c:2214 — 24 = "% passed out from hunger!"
             hunger = 130                                      # fmain.c:2214 — 130 = post-faint hunger reset
             anim_list[0].state = STATE_SLEEP
     if fatigue == 70:                                         # fmain.c:2218 — 70 = first-fatigue warning
-        event(3)                                              # fmain.c:2218 — speak "weary"
+        event(3)                                              # fmain.c:2218 — 3 = "% was getting tired."
     elif hunger == 90:                                        # fmain.c:2219 — 90 = hunger-echo warning (distinct from 2209)
-        event(4)                                              # fmain.c:2219 — speak "starving"
+        event(4)                                              # fmain.c:2219 — 4 = "% was getting sleepy."
 ```
 
 ## Notes

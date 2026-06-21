@@ -357,8 +357,8 @@ Magic items use `stuff[4+hit]` where hit ranges 5–11:
 | 10 | stuff[14] | Gold Ring | `freeze_timer += 100` — freezes all enemies (not while riding) |
 | 11 | stuff[15] | Jade Skull | Kill spell: kills all visible enemies with `vitality > 0`, `type==ENEMY`, and `race < 7`. Decrements `brave` per kill. |
 
-- Guard: `if (hit < 5 || stuff[4+hit] == 0) event(21)` — "if only I had some Magic!" — `fmain.c:3303`
-- Guard: `if (extn->v3 == 9) speak(59)` — magic doesn't work in some area — `fmain.c:3304`
+- Guard: `if (hit < 5 || stuff[4+hit] == 0) event(21)` — "% does not have that item." — `fmain.c:3303`
+- Guard: `if (extn->v3 == 9) speak(59)` — "Your magic won't work here, fool!" — `fmain.c:3304`
 - **Consumption**: `if (!--stuff[4+hit]) set_options()` — `fmain.c:3365`. Decrements count; if now zero, updates menu to grey out.
 
 ### USE Mode — `fmain.c:3444-3467`

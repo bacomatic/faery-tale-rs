@@ -44,10 +44,10 @@ def dohit(i: int, j: int, fc: int, wt: int) -> None:
     # witch (race 0x89) is immune unless player holds the sunstone (stuff[7]).
     if anim_list[0].weapon < 4:                           # fmain2.c:231, 4 = ranged-weapon cutoff (bow/wand)
         if anim_list[j].race == 9:                        # fmain2.c:232, 9 = necromancer race
-            speak(58)                                     # fmain2.c:232, 58 = "can't hurt me with that"
+            speak(58)                                     # fmain2.c:232, 58 = "Stupid fool, you can't hurt me with that!"
             return
         if anim_list[j].race == 0x89 and stuff[7] == 0:   # fmain2.c:233, 0x89 = witch race; 7 = sunstone stuff[] slot
-            speak(58)                                     # fmain2.c:233, 58 = "can't hurt me with that"
+            speak(58)                                     # fmain2.c:233, 58 = "Stupid fool, you can't hurt me with that!"
             return
     # fmain2.c:234 — spectre (0x8a) and ghost (0x8b) silently ignore all damage.
     if anim_list[j].race == 0x8a or anim_list[j].race == 0x8b:  # fmain2.c:234, 0x8a = spectre race, 0x8b = ghost race

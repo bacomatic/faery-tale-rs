@@ -62,17 +62,17 @@ Before speech dispatch, if the target is a SETFIG with `can_talk=1`, the NPC ent
 #### NPC-Specific Speech
 
 **Wizard** (`fmain.c:3380-3381`):
-- `kind < 10` → `speak(35)` — "Away with you, ruffian!"
+- `kind < 10` → `speak(35)` — "Away with you, young ruffian!"
 - `kind >= 10` → `speak(27 + an->goal)` — goal selects from 8 different hints (speak 27–34)
 
 **Priest** (`fmain.c:3382-3394`):
-- Has writ (`stuff[28]`): if `ob_listg[10].ob_stat == 0` → `speak(39)`, gives gold statue, sets stat=1. Else → `speak(19)` — "already gave the statue"
+- Has writ (`stuff[28]`): if `ob_listg[10].ob_stat == 0` → `speak(39)`, gives gold statue, sets stat=1. Else → `speak(19)` — "I'm afraid I cannot help you... already gave the golden statue to the other young man."
 - `kind < 10` → `speak(40)` — "Repent, Sinner!"
 - `kind >= 10` → `speak(36 + daynight%3)` — rotating hints. Also heals player to max vitality (`15 + brave/4`) — `fmain.c:3390-3391`
 
 **Bartender** (`fmain.c:3405-3407`):
-- `fatigue < 5` → `speak(13)` — "Good Morning"
-- `fatigue >= 5 && dayperiod > 7` → `speak(12)` — "Would you like to buy something?"
+- `fatigue < 5` → `speak(13)` — "Good Morning... Hope you slept well."
+- `fatigue >= 5 && dayperiod > 7` → `speak(12)` — "Would you like to buy something? Or do you just need lodging for the night?"
 - Else → `speak(14)` — "Have a drink!"
 
 **Other NPCs**: Guard → `speak(15)`, Princess → `speak(16)` (gated by `ob_list8[9].ob_stat`), King → `speak(17)` (same gate), Noble → `speak(20)`, Sorceress → `speak(45)` (first visit gives statue, luck boost on returns — `fmain.c:3400-3402`), Witch → `speak(46)`, Spectre → `speak(47)`, Ghost → `speak(49)`, Ranger → region-based (`speak(22)` in region 2, else `speak(53+goal)` — `fmain.c:3411-3413`), Beggar → `speak(23)` — `fmain.c:3414`.

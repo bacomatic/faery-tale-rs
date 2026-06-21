@@ -61,12 +61,12 @@ def give_item_to_npc(hit: int) -> None:
         if k == 0x8d:                                        # fmain.c:3498 — 0x8d = beggar setfig race
             speak(24 + anim_list[nearest_person].goal)       # fmain.c:3498 — 24..26 = beggar prophecies
         else:
-            speak(50)                                        # fmain.c:3499 — 50 = generic "thank you"
+            speak(50)                                        # fmain.c:3499 — 50 = "% gave him some gold coins. Why, thank you, young sir!"
     elif hit == 8 and stuff[29]:                             # fmain.c:3501 — 8 = GIVE "Bone", 29 = bone slot
         if k != 0x8a:                                        # fmain.c:3502 — 0x8a = spectre setfig race
-            speak(21)                                        # fmain.c:3502 — 21 = "no use for it"
+            speak(21)                                        # fmain.c:3502 — 21 = "Sorry, I have no use for it."
         else:
-            speak(48)                                        # fmain.c:3503 — 48 = "take this crystal shard"
+            speak(48)                                        # fmain.c:3503 — 48 = "% gave him the ancient bones. Good! That spirit now rests quietly in my halls. Take this crystal shard."
             stuff[29] = 0                                    # fmain.c:3503 — consume the bone
             leave_item(nearest_person, 140)                  # fmain.c:3503 — 140 = Crystal Shard object id
     gomenu(CMODE_ITEMS)                                      # fmain.c:3507 — return to the top-level ITEMS menu

@@ -330,7 +330,7 @@ Inventory display names from `fmain.c:390-420`:
    }
    ```
    - If target is NOT the spectre (race ≠ 0x8a): `speak(21)` — "Sorry, I have no use for it."
-   - If target IS the spectre (race 0x8a): `speak(48)` — "% gave him the ancient bones. Good! Take this crystal shard." Then `stuff[29] = 0` (bone consumed) and `leave_item(nearest_person,140)` drops object 140 (Crystal Shard).
+   - If target IS the spectre (race 0x8a): `speak(48)` — "% gave him the ancient bones. Good! That spirit now rests quietly in my halls. Take this crystal shard." Then `stuff[29] = 0` (bone consumed) and `leave_item(nearest_person,140)` drops object 140 (Crystal Shard).
 
 2. **GIVE menu availability** — `fmain.c:3542`:
    ```c
@@ -636,7 +636,7 @@ Inventory display names from `fmain.c:390-420`:
 
 7. **stuff[22] (Talisman) check location**: The win condition is checked at the `pickup:` label in the TAKE handler, meaning it fires after ANY successful item pickup. If stuff[22] was somehow > 0 during a different item pickup, the win would trigger. The cheat key explicitly clears stuff[22] to prevent this.
 
-8. **Sorceress vs Priest statue revelation**: The sorceress reveals her statue unconditionally on first talk (`ob_listg[9].ob_stat == 0`). The priest requires the Writ (`stuff[28]`). On subsequent visits, the sorceress gives luck boosts, the priest says "I already gave the statue."
+8. **Sorceress vs Priest statue revelation**: The sorceress reveals her statue unconditionally on first talk (`ob_listg[9].ob_stat == 0`). The priest requires the Writ (`stuff[28]`). On subsequent visits, the sorceress gives luck boosts, the priest says "I'm afraid I cannot help you... I already gave the golden statue to the other young man."
 
 9. **Fruit (stuff[24]) pickup is hunger-gated**: When hunger < 15, fruit is stored; when hunger ≥ 15, it's eaten immediately. This is the only item with pickup behavior that varies based on player state.
 

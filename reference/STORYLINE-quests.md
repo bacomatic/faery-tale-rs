@@ -169,21 +169,4 @@ Four transport modes exist, each unlocking new areas of the world. All carriers 
 
 Source: `load_carrier()` — `fmain.c:2784-2802`. Extent zones — `fmain.c:2680-2720`.
 
-### 2.5 Magic Items
-
-Seven magic items (`stuff[9]`–`stuff[15]`) provide tactical advantages. All require weapon slot selection and are consumed on use via the MAGIC menu (`fmain.c:3301-3324`).
-
-| Item | stuff[] | Effect | Source |
-|------|---------|--------|--------|
-| Blue Stone | stuff[9] | Teleport to Great Stone Ring (sector 144) | `fmain.c:3312` |
-| Green Jewel | stuff[10] | Teleport to last-visited inn | `fmain.c:3315` |
-| Gold Ring | stuff[11] | Freeze all enemies on screen | `fmain.c:3308` — blocked when `riding > 1` |
-| Crystal Orb | stuff[12] | Start `secret_timer` — reveals hidden objects (`ob_stat == 5`) | `fmain.c:3310` |
-| Vial | stuff[13] | Full heal: vitality = `15 + brave/4` | `fmain.c:3319` |
-| Jade Skull | stuff[14] | Kill all enemies on screen | `fmain.c:3321` |
-| Red Gem | stuff[15] | *(Listed in `inv_list` but no effect code found)* | — |
-
-> **Note**: The Crystal Orb (`stuff[12]`) is uniquely valuable — it reveals hidden ground objects by setting `secret_timer`, which cycles `ob_stat` between 5 and 6 (visible/hidden) each frame. Objects with `ob_stat == 5` have their `race` temporarily set to 0, making them pickable.
-
 ---
-

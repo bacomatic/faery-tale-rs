@@ -1076,7 +1076,7 @@ def no_motion_tick() -> None:
         if hunger > 30 and stuff[24] != 0:                # fmain.c:2221, 30 = auto-eat hunger gate; 24 = food slot
             stuff[24] = stuff[24] - 1                     # fmain.c:2221, 24 = food inventory slot
             hunger = hunger - 30                          # fmain.c:2222, 30 = food-ration relief
-            event(37)                                     # fmain.c:2222, 37 = "you eat some food"
+            event(37)                                     # fmain.c:2222, 37 = "% ate one of his apples."
 
     # 14o — ambient music refresh (fmain.c:2225), every 8 ticks out of combat.
     if (daynight & 7) == 0 and not battleflag:            # fmain.c:2225, 7 = 8-tick cadence

@@ -36,7 +36,7 @@ Weapon is equipped via USE menu: `anim_list[0].weapon = hit + 1` (`fmain.c:3448-
 
 #### Magic Consumables (stuff[9–15], `MAGICBASE=9`)
 
-All consumed on use (`--stuff[4+hit]` at `fmain.c:3365`). Guarded by `extn->v3 == 9` check — magic doesn't work in certain areas (`fmain.c:3304`).
+All consumed on use (`--stuff[4+hit]` at `fmain.c:3365`). Guarded by `extn->v3 == 9` check — anti-magic zone blocks magic with `speak(59)` "Your magic won't work here, fool!" (`fmain.c:3304`).
 
 | Index | Item | Effect | Source |
 |-------|------|--------|--------|
@@ -74,7 +74,7 @@ Used via the KEYS submenu (`fmain.c:3468-3485`). The handler tries 9 directions 
 | 26 | Book | Vestigial — defined in inventory system but no world placement, no handler, not obtainable | — |
 | 27 | Herb | Vestigial — defined in inventory system but no world placement, no handler, not obtainable | — |
 | 28 | Writ | **Royal commission**: obtained from `rescue()` after saving the princess (`fmain2.c:1598`). Also grants `princess++`, 100 gold, and 3 of each key type (`stuff[16..21] += 3`). Shown to Priest triggers `speak(39)` and reveals a gold statue (`fmain.c:3383-3386`). GIVE menu entry exists but has no handler — the Writ functions only as a passive dialogue check. | `fmain.c:3383` |
-| 29 | Bone | **Spectre trade**: found underground at `(3723, 39340)` in ob_list9 (`fmain2.c:1167`). Given to Spectre (race `0x8a`): `speak(48)` "Take this crystal shard", drops crystal shard (`fmain.c:3501-3503`). Non-spectre NPCs reject it: `speak(21)`. | `fmain.c:3501` |
+| 29 | Bone | **Spectre trade**: found underground at `(3723, 39340)` in ob_list9 (`fmain2.c:1167`). Given to Spectre (race `0x8a`): `speak(48)` "...Take this crystal shard.", drops crystal shard (`fmain.c:3501-3503`). Non-spectre NPCs reject it: `speak(21)`. | `fmain.c:3501` |
 | 30 | Crystal Shard | **Dungeon hidden passages**: overrides terrain type 12 blocking in collision check (`fmain.c:1609`). Type-12 walls (terra set 8, tile 93) appear in dungeon labyrinth sectors (2, 3, 5–9, 11–12, 35) and doom tower sectors 137–138 near the stargate portal to the spirit world. Never consumed. Obtained from Spectre trade (see Bone above). | `fmain.c:1611` |
 
 ##### 10.1.1 Gold Statue Locations

@@ -78,9 +78,9 @@ def take_command() -> None:
     elif j == 20:                                            # fmain.c:3160 — 20 = SCRAP of paper (0x14)
         event(17)                                            # fmain.c:3161 — 17 = "% picked up a scrap of paper."
         if region_num > LATE_GAME_REGION_THRESHOLD:          # fmain.c:3162 — see SYMBOLS LATE_GAME_REGION_THRESHOLD
-            event(19)                                        # fmain.c:3162 — 19 = Wraith Lord crypt rendezvous hint (late-game)
+            event(19)                                        # fmain.c:3162 — 19 = "It read: "Meet me at midnight at the Crypt. Signed, the Wraith Lord.""
         else:
-            event(18)                                        # fmain.c:3162 — 18 = "Find the turtle!" hint (early-game)
+            event(18)                                        # fmain.c:3162 — 18 = "It read: "Find the turtle!""
         taken = 1                                            # fmain.c:3163 — goto pickup
     elif j == 148:                                           # fmain.c:3165 — 148 = FRUIT object id
         if hunger < 15:                                      # fmain.c:3166 — 15 = satiation floor for stashing
@@ -227,7 +227,7 @@ def search_body(target: int) -> None:
     if an.weapon < 0:                                        # fmain.c:3249 — -1 means already looted
         return
     if an.vitality != 0 and freeze_timer == 0:               # fmain.c:3250 — not dead and not frozen
-        event(35)                                            # fmain.c:3285 — 35 = "it is still alive!" message
+        event(35)                                            # fmain.c:3285 — 35 = "No time for that now!"
         return
     extract("% searched the body and found")                 # fmain.c:3251 — % = current brother's name
     print("")                                                # fmain.c:3252 — newline
@@ -337,9 +337,9 @@ def look_command() -> None:
             change_object(i, 1)                              # fmain.c:3294 — 1 = OB_STAT_VISIBLE
         i = i + 1
     if flag != 0:                                            # fmain.c:3297 — at least one reveal
-        event(38)                                            # fmain.c:3297 — 38 = "you find something hidden"
+        event(38)                                            # fmain.c:3297 — 38 = "% discovered a hidden object."
     else:
-        event(20)                                            # fmain.c:3297 — 20 = "you find nothing"
+        event(20)                                            # fmain.c:3297 — 20 = "% looked around but discovered nothing."
 ```
 
 ## Notes

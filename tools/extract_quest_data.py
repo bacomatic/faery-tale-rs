@@ -290,7 +290,7 @@ NPC_DIALOGUE = {
         ],
         "goal_messages": {
             0: {"speech": 27, "hint": "Kind deeds → friend from the sea (turtle)"},
-            1: {"speech": 28, "hint": "Seek the place darker than night (Tombs of Hemsath / dungeons)"},
+            1: {"speech": 28, "hint": "Seek the place that is darker than night (Tombs of Hemsath / dungeons)"},
             2: {"speech": 29, "hint": "Crystal Orb reveals hidden things"},
             3: {"speech": 30, "hint": "Witch lives in Grimwood, gaze is death"},
             4: {"speech": 31, "hint": "Only sunlight destroys the Witch"},
@@ -436,7 +436,7 @@ NPC_DIALOGUE = {
             "effect": "wealth -= 2, kind may increase (if rand64() > kind), beggar speaks hint",
             "routing": [
                 {"condition": "nearest is beggar (0x8d)", "speech": "24 + goal", "description": "Beggar gives hint based on goal (object list index)"},
-                {"condition": "nearest is not beggar", "speech": 50, "description": "Generic thanks"},
+                {"condition": "nearest is not beggar", "speech": 50, "description": "NPC thanks for gold"},
             ],
             "citation": "fmain.c:3493-3499",
         },
@@ -595,7 +595,7 @@ QUEST_ITEMS = [
         "stuff_index": 7,
         "name": "Sun Stone",
         "how_obtained": "Found as world object in region 8 (interiors).",
-        "gates": "Two effects: (1) USE when witch on screen → speak(60), makes witch vulnerable. (2) Combat gate: without Sun Stone, attacks on witch (race 0x89) are blocked (speak 58 'can't hurt me'). Citation: fmain2.c:231-234",
+        "gates": "Two effects: (1) USE when witch on screen → speak(60), makes witch vulnerable. (2) Combat gate: without Sun Stone, attacks on witch (race 0x89) are blocked (speak 58 'Stupid fool, you can't hurt me with that!'). Citation: fmain2.c:231-234",
         "citation": "fmain.c:3462, fmain2.c:233",
     },
     {

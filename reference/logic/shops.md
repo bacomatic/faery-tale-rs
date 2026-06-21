@@ -100,12 +100,12 @@ def buy_dispatch(hit: int) -> None:
     wealth = wealth - j                                   # fmain.c:3431 — deduct price
     prq(7)                                                # fmain.c:3432 — 7 = stats-line refresh priority
     if i == 0:                                            # fmain.c:3433 — sentinel: Food slot
-        event(22)                                         # narr.asm event_msg[22] — "% ate some food"
+        event(22)                                         # narr.asm event_msg[22] — "% bought some food and ate it."
         eat(50)                                           # fmain.c:3433; fmain2.c:1706 — 50 = hunger delta for one meal
         return
     if i == 8:                                            # fmain.c:3434 — sentinel: arrow bundle (stuff[8] == arrows)
         stuff[i] = stuff[i] + 10                          # fmain.c:3434 — 10 = arrows per purchase
-        event(23)                                         # narr.asm event_msg[23] — "% bought 10 arrows"
+        event(23)                                         # narr.asm event_msg[23] — "% bought some arrows."
         return
     stuff[i] = stuff[i] + 1                               # fmain.c:3436 — single-item grant
     extract("% bought a ")                                # fmain.c:3436 — % expands to hero name
@@ -129,7 +129,7 @@ def buy_dispatch(hit: int) -> None:
   non-bartender. The player's only feedback for "wrong target" is silence
   from `buy_dispatch`.
 - `eat(50)` at `fmain2.c:1704-1708` clamps `hunger` at 0 and fires a separate
-  `event(13)` "starvation cleared" narration whenever the meal takes hunger
+  `event(13)` "% was feeling quite full." narration whenever the meal takes hunger
   below zero; this is an implicit chain reaction of the Food purchase.
 - The `% bought a <Glass Vial/Mace/Sword/Bow/Bird Totem>` string uses the raw
   `inv_list[i].name` field unmodified; there is no "the" or plural handling.

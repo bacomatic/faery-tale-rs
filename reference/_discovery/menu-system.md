@@ -383,7 +383,7 @@ Called at end of every `do_option()` (fmain.c:3507: `set_options();`).
 
 ### case MAGIC (fmain.c:3299-3367)
 
-Guard: if `hit < 5` or `stuff[4+hit] == 0`, prints "if only I had some magic!" (`event(21)`). Also blocked if `extn->v3 == 9` → `speak(59)`. — fmain.c:3301-3302
+Guard: if `hit < 5` or `stuff[4+hit] == 0`, prints "% does not have that item." (`event(21)`). Also blocked if `extn->v3 == 9` → `speak(59)` "Your magic won't work here, fool!". — fmain.c:3301-3302
 
 | hit | Spell     | Effect | Source |
 |-----|-----------|--------|--------|

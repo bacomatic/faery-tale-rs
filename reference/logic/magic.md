@@ -106,10 +106,10 @@ def magic_dispatch(hit: int) -> None:
     # Slot mapping: stuff[4+hit] — 5→stuff[9] Blue Stone, 6→Green Jewel, 7→Glass Vial, 8→Crystal Orb,
     # 9→Bird Totem, 10→Gold Ring, 11→Jade Skull.
     if hit < 5 or stuff[4 + hit] == 0:                       # fmain.c:3303 — no magic owned
-        event(21)                                            # fmain.c:3303 — 21 = "if only I had some magic!"
+        event(21)                                            # fmain.c:3303 — 21 = "% does not have that item."
         return
     if extn.v3 == 9:                                         # fmain.c:3304 — extent dampener on magic (astral zone)
-        speak(59)                                            # fmain.c:3304 — 59 = "magic doesn't work here"
+        speak(59)                                            # fmain.c:3304 — 59 = "Your magic won't work here, fool!"
         return
     if hit == 5:                                             # fmain.c:3326 — Blue Stone: stone-circle teleport
         if hero_sector != 144:                               # fmain.c:3327 — 144 = stone-circle sector id
@@ -189,7 +189,7 @@ def magic_dispatch(hit: int) -> None:
                 checkdead(i, 0)                              # fmain.c:3359 — ENEMY death bookkeeping
                 brave = brave - 1                            # fmain.c:3359 — 1 bravery lost per killed foe
             i = i + 1
-        if battleflag:                                       # fmain.c:3362 — 34 = "all fall before you" recap
+        if battleflag:                                       # fmain.c:3362 — event(34): "They're all dead!" he cried.
             event(34)                                        # fmain.c:3362 — event index 34
     # Consumption epilogue (single-line `if (!--stuff[4+hit])` in the C source at fmain.c:3365).
     if stuff[4 + hit] - 1 == 0:                              # fmain.c:3365 — MAGICBASE=4; decrement slot; 0 ⇒ disable menu row

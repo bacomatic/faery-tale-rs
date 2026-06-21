@@ -139,10 +139,10 @@ This triggers once per NPC (`last_person` tracking prevents re-triggering for th
 
 ### Wizard Speech Selection
 Wizard speech depends on `kind` stat AND the wizard's `goal` field (set from object list position):
-- `kind < 10` → speak(35) "Away with you, ruffian!" — `fmain.c:3380`
+- `kind < 10` → speak(35) "Away with you, young ruffian!" — `fmain.c:3380`
 - `kind >= 10` → speak(27 + an->goal) — `fmain.c:3381`
   - goal 0 → speak(27): "Kind deeds could gain thee a friend from the sea."
-  - goal 1 → speak(28): "Seek the place darker than night..."
+  - goal 1 → speak(28): "Seek the place that is darker than night..."
   - goal 2 → speak(29): Crystal Orb hint
   - goal 3 → speak(30): Witch location
   - goal 4 → speak(31): Sun defeats Witch
@@ -154,18 +154,18 @@ Wizard speech depends on `kind` stat AND the wizard's `goal` field (set from obj
 Three progression stages — `fmain.c:3382-3394`:
 1. If `stuff[28]` (has writ):
    - If `ob_listg[10].ob_stat == 0`: speak(39) — gives golden statue, sets ob_listg[10].ob_stat = 1
-   - Else: speak(19) — "already gave the statue"
+   - Else: speak(19) — "I'm afraid I cannot help you, young man. I already gave the golden statue to the other young man."
 2. If `kind < 10`: speak(40) — "Repent, Sinner!"
 3. If `kind >= 10`: speak(36 + daynight%3) — rotating hints. Also heals player to max vitality. The three speeches:
    - daynight%3==0 → speak(36): Spirit plane warning
    - daynight%3==1 → speak(37): Stone circle hint
-   - daynight%3==2 → speak(38): "I shall Heal all your wounds"
+   - daynight%3==2 → speak(38): "Since you are brave of heart, I shall Heal all your wounds."
 
 ### Bartender Speech Selection
 Three conditions — `fmain.c:3405-3407`:
-- `fatigue < 5` → speak(13): "Good Morning. Hope you slept well."
-- `fatigue >= 5 && dayperiod > 7` → speak(12): "Would you like to buy something? Or do you just need lodging?"
-- else → speak(14): "Have a drink!"
+- `fatigue < 5` → speak(13): "Good Morning." said the tavern keeper. "Hope you slept well."
+- `fatigue >= 5 && dayperiod > 7` → speak(12): "Would you like to buy something?" said the tavern keeper. "Or do you just need lodging for the night?"
+- else → speak(14): "Have a drink!" said the tavern keeper."
 
 ## Give System
 
@@ -186,13 +186,13 @@ Enabled status set in `set_options()` — `fmain.c:3538-3542`:
 - Deducts 2 gold from wealth
 - If `rand64() > kind` → `kind++` (kindness stat increase, probabilistic)
 - If target is Beggar (race 0x8d) → speak(24 + an->goal) — beggar-specific prophecy based on object list position
-- Else → speak(50) — generic "thank you" for gold
+- Else → speak(50) — "% gave him some gold coins. Why, thank you, young sir!"
 
 ### Give Bone (hit==8) — `fmain.c:3501-3503`
 - Requires `stuff[29] != 0` (has bone)
 - If target is NOT Spectre (race != 0x8a) → speak(21) "Sorry, I have no use for it."
 - If target IS Spectre (race 0x8a):
-  - speak(48) — "Good! Take this crystal shard."
+  - speak(48) — "% gave him the ancient bones. Good! That spirit now rests quietly in my halls. Take this crystal shard."
   - `stuff[29] = 0` — bone consumed
   - `leave_item(nearest_person, 140)` — drops crystal shard (object 140) at spectre's location
 

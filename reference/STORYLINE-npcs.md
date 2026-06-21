@@ -18,10 +18,10 @@ Wizards appear in multiple locations with different `goal` values (set from thei
 ```mermaid
 flowchart TD
     TALK_WIZ[Talk to Wizard] --> KIND_CHECK{kind >= 10?}
-    KIND_CHECK -->|No| RUDE["speak(35): Away with you, ruffian!"]
+    KIND_CHECK -->|No| RUDE["speak(35): Away with you, young ruffian!"]
     KIND_CHECK -->|Yes| GOAL_SWITCH{Wizard goal value}
     GOAL_SWITCH -->|0| S27["speak(27): Kind deeds gain a friend from the sea"]
-    GOAL_SWITCH -->|1| S28["speak(28): Seek the place darker than night"]
+    GOAL_SWITCH -->|1| S28["speak(28): Seek the place that is darker than night"]
     GOAL_SWITCH -->|2| S29["speak(29): Crystal Orb helps find concealed things"]
     GOAL_SWITCH -->|3| S30["speak(30): Witch lives in dim forest of Grimwood"]
     GOAL_SWITCH -->|4| S31["speak(31): Only light of the Sun destroys Witch's Evil"]
@@ -41,7 +41,7 @@ flowchart TD
     TALK_PRIEST[Talk to Priest] --> HAS_WRIT{stuff 28 Writ?}
     HAS_WRIT -->|Yes| ALREADY_GIVEN{ob_listg 10 .ob_stat?}
     ALREADY_GIVEN -->|0 first time| S39["speak(39): Here is a golden statue<br>Sets ob_listg[10].ob_stat = 1"]
-    ALREADY_GIVEN -->|1 already given| S19["speak(19): Already gave the statue"]
+    ALREADY_GIVEN -->|1 already given| S19["speak(19): Already gave the golden statue..."]
     HAS_WRIT -->|No| KIND_CHECK2{kind >= 10?}
     KIND_CHECK2 -->|No| S40["speak(40): Repent, Sinner!"]
     KIND_CHECK2 -->|Yes| ROTATE{daynight % 3}
@@ -94,9 +94,9 @@ flowchart TD
     TALK_WITCH[Talk to Witch] --> S46["speak(46): Look into my eyes and Die!!"]
     PROXIMITY[Proximity auto-speak] --> S46
     ATTACK[Attack Witch] --> HAS_SUN{stuff 7 Sun Stone?}
-    HAS_SUN -->|No| S58["speak(58): Can't hurt me with that!"]
+    HAS_SUN -->|No| S58["speak(58): Stupid fool, you can't hurt me with that!"]
     HAS_SUN -->|Yes| DAMAGE[Normal damage applies]
-    USE_SUN[USE Sun Stone with witchflag] --> S60["speak(60): Sunstone made witch vulnerable!"]
+    USE_SUN[USE Sun Stone with witchflag] --> S60["speak(60): The Sunstone has made the witch vulnerable!"]
 ```
 
 Source: Talk — `fmain.c:3408`. Auto-speak — `fmain.c:2099`. Combat immunity — `fmain2.c:231-233`. Sun Stone USE — `fmain.c:3462`.
@@ -106,8 +106,8 @@ Source: Talk — `fmain.c:3408`. Auto-speak — `fmain.c:2099`. Combat immunity 
 ```mermaid
 flowchart TD
     TALK_SPECTRE[Talk to Spectre] --> S47["speak(47): HE has usurped my place...<br>Bring me bones of the ancient King"]
-    GIVE_BONE[Give Bone to Spectre] --> S48["speak(48): Take this crystal shard<br>stuff 29 cleared, object 140 dropped"]
-    GIVE_OTHER[Give Bone to non-Spectre] --> S21["speak(21): Sorry, no use for it"]
+    GIVE_BONE[Give Bone to Spectre] --> S48["speak(48): ...Take this crystal shard.<br>stuff 29 cleared, object 140 dropped"]
+    GIVE_OTHER[Give Bone to non-Spectre] --> S21["speak(21): Sorry, I have no use for it."]
 ```
 
 Source: Talk — `fmain.c:3409`. Give Bone — `fmain.c:3501-3503`. The Spectre only appears at night (`lightlevel < 40` → `ob_listg[5].ob_stat = 3` — `fmain.c:2027-2028`).
@@ -282,7 +282,7 @@ sequenceDiagram
     Hero->>Wizard: Talk (Say/Ask/Yell)
 
     alt kind < 10
-        Wizard->>Hero: speak(35) "Away with you, ruffian!"
+        Wizard->>Hero: speak(35) "Away with you, young ruffian!"
     else kind >= 10
         Note over Wizard: speak(27 + goal)<br>Goal set by object list position
         Wizard->>Hero: Hint based on goal (0-7)
@@ -316,7 +316,7 @@ sequenceDiagram
             Priest->>Hero: speak(39) "Here is a golden statue"
             Note over Priest: ob_listg[10].ob_stat = 1
         else Already given
-            Priest->>Hero: speak(19) "Already gave the statue"
+            Priest->>Hero: speak(19) "Already gave the golden statue..."
         end
     else No Writ
         alt kind < 10
@@ -339,12 +339,12 @@ sequenceDiagram
     Note over Spectre: Only visible at night<br>lightlevel < 40
 
     Hero->>Spectre: Talk
-    Spectre->>Hero: speak(47) "Bring me bones of the ancient King"
+    Spectre->>Hero: speak(47) "...Bring me bones of the ancient King."
 
     Note over Hero: Find King's Bone<br>ob_list9[8] at (3723, 39340)
 
     Hero->>Spectre: Give Bone
-    Spectre->>Hero: speak(48) "Take this crystal shard"
+    Spectre->>Hero: speak(48) "...Take this crystal shard."
     Note over Hero: stuff[29] = 0 (bone consumed)<br>Object 140 (shard) dropped
     Note over Hero: stuff[30] = Crystal Shard<br>Passwall through terrain type 12
 ```
@@ -356,11 +356,11 @@ flowchart TD
     APPROACH[Approach Witch] --> AUTO["Auto-speak(46):<br>Look into my eyes and Die!!"]
     ATTACK[Attack Witch] --> WEAPON{Weapon type?}
     WEAPON -->|"Melee (< bow)"| SUN{stuff 7 Sun Stone?}
-    SUN -->|No| IMMUNE["speak(58): Can't hurt me!<br>No damage"]
+    SUN -->|No| IMMUNE["speak(58): Stupid fool...<br>can't hurt me with that!"]
     SUN -->|Yes| DAMAGE[Normal damage applies]
     WEAPON -->|"Ranged (bow/wand)"| DAMAGE
 
-    USE_SUNSTONE[USE Sun Stone<br>when witchflag set] --> VULNERABLE["speak(60):<br>Sunstone made witch vulnerable!"]
+    USE_SUNSTONE[USE Sun Stone<br>when witchflag set] --> VULNERABLE["speak(60):<br>The Sunstone has made<br>the witch vulnerable!"]
 
     WITCH_DIES[Witch dies] --> LASSO_DROP["Drops Golden Lasso<br>leave_item(i, 27)"]
 ```
@@ -374,10 +374,10 @@ flowchart TD
     ENTER_ARENA[Enter Necromancer Extent<br>9563-10144, 33883-34462] --> SPAWN["Necromancer spawns<br>Race 9, 50 HP, Wand"]
     SPAWN --> AUTO["Auto-speak(43):<br>So this is the so-called Hero..."]
 
-    MAGIC_ATTEMPT[Use Magic] --> BLOCKED["speak(59):<br>Your magic won't work here!"]
+    MAGIC_ATTEMPT[Use Magic] --> BLOCKED["speak(59):<br>Your magic won't work here, fool!"]
 
     ATTACK[Attack Necromancer] --> WEAPON{Weapon type?}
-    WEAPON -->|"Melee (< bow)"| IMMUNE["speak(58): Can't hurt me!"]
+    WEAPON -->|"Melee (< bow)"| IMMUNE["speak(58): Stupid fool...<br>can't hurt me with that!"]
     WEAPON -->|"Bow or Wand"| DAMAGE[Damage dealt]
 
     DAMAGE --> DEAD{vitality == 0?}

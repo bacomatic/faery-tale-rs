@@ -203,7 +203,7 @@ Defined at `fmain.c:3102-3507`. Dispatches on `cmode` and `hit` (menu entry inde
 
 #### MAGIC (`fmain.c:3299-3367`)
 
-Guard: `stuff[4+hit] == 0` → `event(21)` "if only I had some magic!". Blocked in necromancer extent: `speak(59)` — `fmain.c:3301-3302`.
+Guard: `stuff[4+hit] == 0` → `event(21)` "% does not have that item.". Blocked in necromancer extent: `speak(59)` "Your magic won't work here, fool!" — `fmain.c:3301-3302`.
 
 | hit | Spell | Effect |
 |-----|-------|--------|
