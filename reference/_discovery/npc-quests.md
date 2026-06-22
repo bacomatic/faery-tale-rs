@@ -620,7 +620,7 @@ Since `goodfairy` is `unsigned char`, starting at 0:
 - Frames 57-136: If luck >= 1 and state DEAD: goodfairy counts from 199 → 120. No action.
 - **Frame 137** (goodfairy reaches 119): Fairy sprite appears, positioned at `hero_x + 119*2 - 20 = hero_x + 218`. Approaches player over subsequent frames.
 - Frames 137-236: Fairy animates closer (goodfairy 119 → 20). Fairy at `hero_x + goodfairy*2 - 20`.
-- **Frame 237** (goodfairy reaches 19): `--goodfairy < 20` → glow effect (no-op). Continues for 18 more frames.
+- **Frame 237** (goodfairy reaches 19): `--goodfairy < 20` → no-op (the source comment says "do ressurection effect/glow" but no actual effect is implemented). The fairy sprite disappears and the corpse remains visible for 18 more frames.
 - **Frame 255** (goodfairy reaches 1): `goodfairy == 1` → `revive(FALSE)` — **resurrection at safe spot**.
 
 ### Key Insight

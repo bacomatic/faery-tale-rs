@@ -1,0 +1,11 @@
+# Ignore image files, they are only for reference and don't contain any valuable data
+*.png
+*.jpg
+*.gif
+*.mov
+*.mp4
+game/
+sprite_output/
+ToArchive/
+tools/
+

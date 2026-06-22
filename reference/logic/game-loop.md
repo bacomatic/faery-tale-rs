@@ -159,7 +159,7 @@ def resolve_player_state() -> None:
             s = STATE_STILL
         else:
             goodfairy = goodfairy - 1
-            if goodfairy >= 20:                           # fmain.c:1391, 20 = end-of-effect threshold
+            if goodfairy >= 20:                           # fmain.c:1391, 20 = no-op / fairy-sprite cutoff
                 if luck < 1 and goodfairy < 200:          # fmain.c:1392, 200 = normal fairy cap
                     revive(True)
                     s = STATE_STILL
@@ -233,6 +233,8 @@ def resolve_player_state() -> None:
         s = STATE_STILL
     player.state = s
 ```
+
+**Death/fall timing:** The ladder above is the control switch; the exact tick count of the `STATE_DYING` animation, the `goodfairy` countdown, and the fairy sprite approach are documented in [death-sequence.md](death-sequence.md).
 
 ## actor_tick
 
@@ -598,9 +600,11 @@ def death_step(i: i16, an: Shape, d: i8, s: i8) -> None:
 ```
 
 Notes:
-- `STATE_DYING` reuses `an.tactic` as the death-anim countdown (4
-  ticks each at the high frame, 4 ticks at the low frame, then DEAD).
-  The transition from DYING to DEAD also runs the post-step decrement
+- `STATE_DYING` reuses `an.tactic` as the death-anim countdown (3
+  ticks at the high frame, 4 ticks at the low frame, then DEAD on the
+  8th tick). See [death-sequence.md](death-sequence.md) for the full
+  tick-by-tick timing.
+- The transition from DYING to DEAD also runs the post-step decrement
   at `fmain.c:1747-1757` which fires `checkdead` for race-specific
   loot drops; that is shown in the actor_tick spec above and not
   duplicated here.
@@ -1289,16 +1293,18 @@ def render_sprites() -> None:
     driven vertical masking.
 
     Two counters drive the per-actor inner loop (fmain.c:2389, 2395-2608):
-      pass     — raw iteration counter, 0→1→2; reset to 0 per actor.
-      passmode — semantic label, 0=body / 1=weapon; derived by
-                 resolve_pass_params from pass and facing each time through
-                 the `newpass:` label.
+      pass_counter — raw iteration counter, 0→1→2; reset to 0 per actor.
+                     (The original source calls this variable `pass`; we
+                     rename it here because `pass` is a Python reserved keyword.)
+      passmode     — semantic label, 0=body / 1=weapon; derived by
+                     resolve_pass_params from pass_counter and facing each
+                     time through the `newpass:` label.
 
-    The loop continues (`goto newpass`) while pass==1 after
+    The loop continues (`goto newpass`) while pass_counter==1 after
     resolve_pass_params has incremented it.  Armed actors therefore visit
-    `newpass:` exactly twice: pass goes 0→1 on the first visit (loop
+    `newpass:` exactly twice: pass_counter goes 0→1 on the first visit (loop
     continues), then 1→2 on the second (loop ends).  Unarmed actors visit
-    once: needs_weapon_pass() returns False so pass stays 0, no loop-back.
+    once: needs_weapon_pass() returns False so pass_counter stays 0, no loop-back.
 
     IMPORTANT — each pass allocates its own shape_queue slot:
       `shp = shape_queue[obcount]` is evaluated *before* `obcount++`
@@ -1309,8 +1315,8 @@ def render_sprites() -> None:
 
     The `offscreen:` label (fmain.c:2608) is shared between the normal
     off-screen reject and the save-budget exhaustion break.  In both cases
-    `obcount` is NOT incremented for the skipped pass; but if pass==1 the
-    actor still gets its second pass (which may itself be on-screen)."""
+    `obcount` is NOT incremented for the skipped pass; but if pass_counter==1
+    the actor still gets its second pass (which may itself be on-screen)."""
     fp_drawing.obcount = 0                                # fmain.c:2378
     fp_drawing.saveused = 0                               # fmain.c:2378
     crack = 0                                             # fmain.c:2378 — free-slot index into planes[]
@@ -1321,22 +1327,22 @@ def render_sprites() -> None:
         i = anim_index[j]
         an = anim_list[i]
         an.visible = 0
-        pass = 0                                          # fmain.c:2389 — reset per actor
+        pass_counter = 0                                  # fmain.c:2389 — reset per actor
 
-        # newpass: label — re-entered for the weapon pass when pass==1.
+        # newpass: label — re-entered for the weapon pass when pass_counter==1.
         while True:                                       # fmain.c:2395 newpass:
-            # fmain.c:2400-2409 — derive passmode from pass and facing; increment pass.
-            passmode = resolve_pass_params(an, pass)      # mutates pass in place
+            # fmain.c:2400-2409 — derive passmode from pass_counter and facing; increment pass_counter.
+            passmode = resolve_pass_params(an, pass_counter)  # mutates pass_counter in place
             # fmain.c:2420-2465 — type/frame dispatch: hero, enemy, carrier, dragon, setfig, falling, fiery-death.
-            clip = select_atype_inum(an, i, passmode, pass)
+            clip = select_atype_inum(an, i, passmode, pass_counter)
             if clip.offscreen:
-                if pass == 1:                             # fmain.c:2608 — offscreen: label; weapon pass pending
+                if pass_counter == 1:                     # fmain.c:2608 — offscreen: label; weapon pass pending
                     continue                              # fmain.c:2608 — goto newpass
                 break                                     # fmain.c:2608 — done with this actor
             # fmain.c:2468-2531 — apply map scroll bias, clip to playfield, compute blit geometry.
             clip = compute_shape_clip(an, i, passmode, clip)
             if clip.offscreen:
-                if pass == 1:
+                if pass_counter == 1:
                     continue
                 break
             # fmain.c:2535 — each pass claims its own shape_queue slot at current obcount.
@@ -1363,9 +1369,9 @@ def render_sprites() -> None:
             an.visible = True                             # fmain.c:2603
             DisownBlitter()                               # fmain.c:2604
             fp_drawing.obcount = fp_drawing.obcount + 1   # fmain.c:2606 — advance slot; weapon will use next
-            if pass == 1:                                 # fmain.c:2608 — offscreen: label; weapon pass pending
+            if pass_counter == 1:                         # fmain.c:2608 — offscreen: label; weapon pass pending
                 continue                                  # fmain.c:2608 — goto newpass for weapon
-            break                                         # fmain.c:2608 — pass==2; done with actor
+            break                                         # fmain.c:2608 — pass_counter==2; done with actor
         j = j + 1
 
     WaitBlit()                                            # fmain.c:2610

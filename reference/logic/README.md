@@ -20,7 +20,7 @@ tools/run.sh lint_logic.py
 1. [STYLE.md](STYLE.md) — learn the grammar.
 2. [SYMBOLS.md](SYMBOLS.md) — skim the registry.
 3. `game-loop.md` *(Wave 2)* — the canonical per-frame sequence.
-4. Subsystem reference docs in order of gameplay centrality (Wave 3+): combat → movement → encounters → quests → npc-dialogue → save-load → shops → brother-succession → visual-effects.
+4. Subsystem reference docs in order of gameplay centrality (Wave 3+): combat → movement → encounters → quests → npc-dialogue → save-load → shops → brother-succession → death-sequence → visual-effects.
 
 ---
 

@@ -69,7 +69,7 @@ Locals introduced in this file:
 - `cwide: u8` — sprite source modulus in bytes (`xsize / 8`).
 - `ground: i16` — Y of the actor's feet in screen pixels (`ystart + 32`).
 - `passmode: i8` — `0` = body pass, `1` = weapon-overlay pass.
-- `pass: i8` — running pass counter inside the actor loop (0 → 1 → 2).
+- `pass_counter: i8` — running pass counter inside the actor loop (0 → 1 → 2). The original source calls this variable `pass`; it is renamed here because `pass` is a Python reserved keyword.
 - `crack: i8` — small-shape backsave-slot index (0..4).
 - `backalloc: object` — bump pointer into the per-page backsave pool.
 - `aoff, boff, bmod, shift, wmask: i16` — blitter pointer/mod/shift state set
@@ -187,22 +187,26 @@ Called by: `render_sprites`
 Calls: none
 
 ```pseudo
-def resolve_pass_params(an: Shape, pass: i8) -> i8:
+def resolve_pass_params(an: Shape, pass_counter: i8) -> i8:
     """Derive passmode (0=body, 1=weapon) from the raw pass counter and the
     actor's facing / weapon class.
 
-    `pass` is a monotone counter, initialised to 0 per actor and incremented
-    here once per call (fmain.c:2408).  `passmode` is the *semantic* label
-    produced by optionally XOR-ing `pass` with 1 before the increment:
+    The original source calls this variable `pass`; it is renamed here to
+    `pass_counter` because `pass` is a Python reserved keyword.
 
-      pass=0 → incremented to 1.  XOR gives 1 if flipped, 0 if not.
-      pass=1 → incremented to 2.  XOR gives 0 if flipped, 1 if not.
+    `pass_counter` is a monotone counter, initialised to 0 per actor and
+    incremented here once per call (fmain.c:2408).  `passmode` is the *semantic*
+    label produced by optionally XOR-ing `pass_counter` with 1 before the
+    increment:
 
-    The caller (`render_sprites`) loops back to this function while pass==1
-    (i.e. exactly one weapon pass was requested) and stops when pass==2.
-    The two calls therefore produce complementary passmode values — one call
-    yields passmode=0 (body) and the other passmode=1 (weapon).  Which call
-    produces which depends on facing:
+      pass_counter=0 → incremented to 1.  XOR gives 1 if flipped, 0 if not.
+      pass_counter=1 → incremented to 2.  XOR gives 0 if flipped, 1 if not.
+
+    The caller (`render_sprites`) loops back to this function while
+    pass_counter==1 (i.e. exactly one weapon pass was requested) and stops
+    when pass_counter==2. The two calls therefore produce complementary
+    passmode values — one call yields passmode=0 (body) and the other
+    passmode=1 (weapon).  Which call produces which depends on facing:
 
     * Facing toward camera (DIR_SE/S/SW/E/W — `(facing-2)&4` truthy):
         first call:  passmode = 0 ^ 1 = 1  → weapon drawn first
@@ -214,18 +218,18 @@ def resolve_pass_params(an: Shape, pass: i8) -> i8:
     The bow-while-walking override replaces the passmode rule with a
     facing-bit test (fmain.c:2404-2407); see §bow-state-boundary below.
 
-    Returns passmode for this iteration; mutates pass in place."""
+    Returns passmode for this iteration; mutates pass_counter in place."""
     if an.needs_weapon_pass():              # fmain.c:2400-2401 — gate; see needs_weapon_pass
         if (an.facing - 2) & 4:            # fmain.c:2402 — DIR_SE/S/SW/E/W (east-to-west arc)
-            passmode = pass ^ 1             # fmain.c:2402 — XOR flips 0→1 and 1→0
+            passmode = pass_counter ^ 1       # fmain.c:2402 — XOR flips 0→1 and 1→0
         else:
-            passmode = pass                 # fmain.c:2403 — no flip; body then weapon
+            passmode = pass_counter         # fmain.c:2403 — no flip; body then weapon
         if an.weapon == 4 and an.state < 24:  # fmain.c:2404 — WEAPON_BOW walking (state < STATE_SHOOT1)
             if (an.facing & 4) == 0:        # fmain.c:2405 — north-quadrant facings (NW/N/NE/E)
-                passmode = pass ^ 1         # fmain.c:2405 — weapon first for northward bow
+                passmode = pass_counter ^ 1   # fmain.c:2405 — weapon first for northward bow
             else:
-                passmode = pass             # fmain.c:2406 — body first for southward bow
-        pass = pass + 1                     # fmain.c:2408 — advance counter; caller loops while pass==1
+                passmode = pass_counter       # fmain.c:2406 — body first for southward bow
+        pass_counter = pass_counter + 1     # fmain.c:2408 — advance counter; caller loops while pass_counter==1
     else:
         passmode = 0                        # unarmed: single body-only pass
     return passmode
@@ -261,7 +265,7 @@ Called by: `render_sprites`
 Calls: `bow_x`, `bow_y`, `statelist`, `WEAPON_BOW`, `WEAPON_WAND`
 
 ```pseudo
-def select_atype_inum(an: Shape, i: i16, passmode: i8, pass_count: i8) -> ShapeClip:
+def select_atype_inum(an: Shape, i: i16, passmode: i8, pass_counter: i8) -> ShapeClip:
     """Pick (atype, inum) for the current pass and apply the per-state
     weapon-pixel offsets on top of an.rel_x / an.rel_y. Returns a partially
     populated ShapeClip with fields xstart, ystart, ground, atype, inum
@@ -781,7 +785,7 @@ def render_inventory_items_page(bm: object) -> None:
 
   A port must replicate both sites: the body-pass substitution and the
   explicit weapon-pass skip. Because `render_sprites` continues to the
-  weapon pass when `pass==1` (even after an off-screen body pass), a
+  weapon pass when `pass_counter==1` (even after an off-screen body pass), a
   port that only handles site 1 will still attempt to render the weapon
   overlay, producing a floating weapon sprite above the submerged actor.
 
@@ -795,18 +799,20 @@ def render_inventory_items_page(bm: object) -> None:
   field to `inv_list` and read it here.
 
 - **Two-pass coupling — pass counter vs passmode.** The source uses two
-  separate variables at `fmain.c:2389`: `pass` (the raw iteration
-  counter, 0→1→2) and `passmode` (the semantic label, 0=body /
-  1=weapon). `resolve_pass_params` derives `passmode` from `pass` via an
-  optional XOR-1 based on facing, then increments `pass`. The
-  `goto newpass` at `fmain.c:2608` fires when `pass==1`, i.e. exactly
-  once per armed actor. The XOR ensures the two iterations always
-  produce complementary passmode values. Facing toward camera (DIR_S /
-  SE / SW / E / W): first iteration passmode=1 (weapon), second
-  passmode=0 (body) — body occludes weapon. Facing away (DIR_N / NW /
-  NE): first iteration passmode=0 (body), second passmode=1 (weapon) —
-  weapon occludes body. Each pass allocates its own `shape_queue` slot
-  and calls `save_blit` independently (`fmain.c:2535, 2561, 2606`).
+  separate variables at `fmain.c:2389`: a raw iteration counter
+  (0→1→2; the C source calls it `pass`, renamed here to `pass_counter`
+  because `pass` is a Python reserved keyword) and `passmode` (the
+  semantic label, 0=body / 1=weapon). `resolve_pass_params` derives
+  `passmode` from `pass_counter` via an optional XOR-1 based on facing,
+  then increments `pass_counter`. The `goto newpass` at `fmain.c:2608`
+  fires when `pass_counter==1`, i.e. exactly once per armed actor. The
+  XOR ensures the two iterations always produce complementary passmode
+  values. Facing toward camera (DIR_S / SE / SW / E / W): first
+  iteration passmode=1 (weapon), second passmode=0 (body) — body
+  occludes weapon. Facing away (DIR_N / NW / NE): first iteration
+  passmode=0 (body), second passmode=1 (weapon) — weapon occludes body.
+  Each pass allocates its own `shape_queue` slot and calls `save_blit`
+  independently (`fmain.c:2535, 2561, 2606`).
 
 - **Rendering vs. logic-tier scope.** The blitter primitives
   (`save_blit`, `mask_blit`, `shape_blit`, `clear_blit`, `make_mask`,

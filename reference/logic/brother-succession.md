@@ -280,6 +280,7 @@ def pickup_brother_bones(x: i16) -> None:
 
 ## See also
 
+- [death-sequence.md](death-sequence.md) — clock-tick timing of the death animation, the `goodfairy` countdown, and the fairy approach.
 - [game-loop.md#resolve_player_state](game-loop.md#resolve_player_state) — the phase 7 ladder that decides between fairy rescue, fall return, and brother succession based on `goodfairy`, `luck`, and `state`.
 - [combat.md#checkdead](combat.md#checkdead) — sets `STATE_DYING`, decrements `luck` on hero death, and thereby arms the succession branch.
 - [save-load.md#mod1save](save-load.md#mod1save) — serialises `julstuff`, `philstuff`, `kevstuff`, then re-seats `stuff = blist[brother-1].stuff` on load.
