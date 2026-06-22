@@ -1,4 +1,17 @@
-# Ignore image files, they are only for reference and don't contain any valuable data
+# Keep only original source files at the repo root and the reference/ docs.
+# Ignore hidden files and directories at root.
+/.*/
+# Ignore everything else at the root level.
+/*
+# Re-include original source files.
+!*.c
+!*.h
+!*.asm
+!makefile
+# Re-include the reference documentation tree.
+!reference/
+
+# Existing media/build-output ignores (kept for explicitness)
 *.png
 *.jpg
 *.gif
@@ -8,4 +21,3 @@ game/
 sprite_output/
 ToArchive/
 tools/
-
