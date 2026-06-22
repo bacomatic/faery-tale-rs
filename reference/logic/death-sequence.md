@@ -121,7 +121,7 @@ Tick counting starts at the first game loop frame after `checkdead()` fires.
 | Luck gate | 199 | 1 tick | `luck < 1` → `revive(TRUE)` (brother succession); `state == FALL` → `revive(FALSE)` (fall recovery); otherwise continue | `fmain.c:1391-1393` |
 | Rescue decision hold | 199 → 120 | 80 ticks | If `luck >= 1` and `STATE_DEAD`, nothing visible happens | `fmain.c:1390-1393` |
 | Fairy approach | 119 → 20 | 100 ticks | Fairy sprite appears and flies toward hero | `fmain.c:1394-1406` |
-| Fairy off / pre-resurrection pause | 19 → 2 | 18 ticks | No sprite; the source comment says "do ressurection effect/glow" but the actual branch is a no-op (`;`) | `fmain.c:1390` |
+| Fairy hold / pre-resurrection pause | 19 → 2 | 18 ticks | Fairy stays on screen at `hero_x + 20` but is no longer updated; the source comment says "do ressurection effect/glow" but the actual branch is a no-op (`;`) | `fmain.c:1390` |
 | Fairy rescue | 1 | 1 tick | `revive(FALSE)` — same brother restored at last safe zone | `fmain.c:1389` |
 
 ### Total timing
@@ -146,10 +146,10 @@ fairy_y = hero_y
 | 137 | 119 | +218 | 100 or 101 | First fairy frame; sprite appears far right of hero |
 | 138 | 118 | +216 | 101 or 100 | Alternates with `cycle & 1` |
 | ... | ... | ... | ... | Approaches 2 px per tick |
-| 236 | 20 | +20 | 100 or 101 | Last visible fairy frame |
+| 236 | 20 | +20 | 100 or 101 | Last fairy update; sprite stops beside the corpse |
 
 - The sprite frame alternates between `100` and `101` every tick based on the global `cycle` counter (`an->index = 100 + (cycle & 1)`).
-- The fairy is not rendered once `goodfairy < 20`; the `--goodfairy < 20` branch is taken before the sprite placement block, and the comment about a "ressurection effect/glow" is not implemented in the actual code.
+- Once `goodfairy` drops below `20`, the fairy sprite is no longer updated (the `--goodfairy < 20` branch is a no-op), but it remains on screen at its last position next to the player's corpse. The comment about a "ressurection effect/glow" is not implemented in the actual code.
 - `battleflag` is forced to `FALSE` and AI is suspended (`fmain.c:2112`) while the fairy is on screen.
 
 ---
@@ -192,8 +192,8 @@ After `tactic >= 30`, `death_step` skips the frame selection (`goto cpx`) but th
 | Corpse appears | 8 | 8 | `STATE_DEAD`, frame 82; `goodfairy = 255` |
 | Luck gate / fall recovery | 57 | 57 | `revive(TRUE)` if `luck < 1`; `revive(FALSE)` if `STATE_FALL` |
 | Fairy appears | 137 | 137 | `OBJECTS` sprite at `hero_x + 218` |
-| Fairy reaches hero | 236 | 236 | Last visible fairy frame at `hero_x + 20` |
-| Fairy off / pre-resurrection pause | 237–254 | 237–254 | No visible sprite; source comment is a no-op |
+| Fairy stops beside hero | 236 | 236 | Last update at `hero_x + 20`; sprite stays on screen |
+| Fairy hold / pre-resurrection pause | 237–254 | 237–254 | Fairy remains on screen at `hero_x + 20`; no further updates; source comment is a no-op |
 | Fairy rescue | 255 | 255 | `revive(FALSE)` restores same brother at safe zone |
 
 ---
