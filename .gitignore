@@ -57,6 +57,7 @@ Cargo.lock
 
 # Local tooling session data
 .memsearch/
+graphify-out/
 .github/context-mode/
 .github/hooks
 .windsurf/
