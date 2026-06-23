@@ -163,6 +163,21 @@ pub fn award_loot(state: &mut GameState, npc: &Npc) {
     // Additional item drops handled by npc-106
 }
 
+/// Fight-animation transition table from fmain.c:138-146.
+/// `TRANS_LIST[s][rand4(tick)]` gives the next fight substate (0-8).
+/// Forward cycle via index 0: 0→1→2→3→4→5→6→8→0.
+pub const TRANS_LIST: [[u8; 4]; 9] = [
+    [1, 8, 0, 1], // state 0
+    [2, 0, 1, 0], // state 1
+    [3, 1, 2, 8], // state 2
+    [4, 2, 3, 7], // state 3
+    [5, 3, 4, 6], // state 4
+    [6, 4, 5, 5], // state 5
+    [8, 5, 6, 4], // state 6
+    [8, 6, 7, 3], // state 7
+    [0, 6, 8, 2], // state 8
+];
+
 /// Random 0–3 from game tick, matching original rand4() used by trans_list.
 /// Uses tick-seeded hash to avoid SystemTime dependency in animation loop.
 pub fn rand4(tick: u32) -> usize {
@@ -184,7 +199,7 @@ pub fn melee_rand(max: u32) -> u32 {
 }
 
 /// Port of original `bitrand(mask)` — `rand() & mask`.
-/// For combat: `bitrand(2)` returns 0, 1, or 2 (mask 0b10 → values 0..=2).
+/// `bitrand(2)` = `rand() & 0b10` → values {0, 2} (not 0–2; bit mask, not modulo).
 pub fn bitrand(mask: u32) -> u32 {
     melee_rand(u32::MAX) & mask
 }
@@ -208,12 +223,12 @@ pub fn weapon_tip(abs_x: i32, abs_y: i32, facing: Direction, wt: i16) -> (i32, i
     (abs_x + ox + jitter_x, abs_y + oy + jitter_y)
 }
 
-/// Compute melee reach for a combatant.
-/// For hero (is_hero=true): (brave/20) + 5, capped at 15, min 4.
-/// For NPCs: 2 + rand4(tick), capped at 15.
+/// Compute melee reach for a combatant (fmain.c:2249-2250).
+/// Hero: `(brave/20) + 5`, capped at 15 (min is 5 at brave=0).
+/// NPC:  `2 + rand4(tick)` = 2–5, capped at 15.
 pub fn combat_reach(is_hero: bool, brave: i16, tick: u32) -> i16 {
     let bv = if is_hero {
-        ((brave / 20) + 5).max(4)
+        (brave / 20) + 5
     } else {
         2 + rand4(tick) as i16
     };

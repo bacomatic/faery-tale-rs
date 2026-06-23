@@ -202,7 +202,7 @@ When player is DEAD or FALL, `goodfairy` countdown (u8, starts at 0):
 | 255→200 | ~56 frames | Death sequence — corpse visible, death song |
 | 199→120 | ~80 frames | **Luck gate**: luck < 1 → `revive(TRUE)` (brother succession); FALL → `revive(FALSE)` (non-lethal) |
 | 119→20 | ~100 frames | Fairy sprite flies toward hero (only if luck ≥ 1) |
-| 19→2 | ~18 frames | Resurrection glow effect |
+| 19→1 | ~19 frames | Fairy sprite stationary at `hero_x + 20` |
 | 1 | 1 frame | `revive(FALSE)` — fairy rescue, same character |
 
 Luck cannot change during DEAD state. Fairy rescues from starting stats: Julian 3, Phillip 6, Kevin 3 (each death costs 5 luck; falls cost 2).

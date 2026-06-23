@@ -57,11 +57,21 @@ pub fn run(world: &mut World, res: &mut Resources) {
 
     let dir = res.input_direction;
 
-    // Sinking actors cannot move — input is suppressed (fmain.c:1796 STATE_SINK).
+    // Fighting and sinking actors cannot move from directional input.
+    // resolve_player_state() returns immediately on fire_button_down (fmain.c:1439),
+    // and fighting_step falls into the cpx tail (no position commit, fmain.c:1716).
     // update_environ still runs every tick so k continues ramping.
-    if dir == Direction::None || matches!(current_state, ActorState::Sinking) {
+    if dir == Direction::None
+        || matches!(current_state, ActorState::Sinking | ActorState::Fighting(_))
+    {
         if let Ok(mut motion) = world.get::<&mut ActorMotion>(res.hero_entity) {
             motion.moving = false;
+        }
+        // fmain.c:1432 — while fighting, directional input still rotates facing.
+        if matches!(current_state, ActorState::Fighting(_)) && dir != Direction::None {
+            if let Ok(mut facing) = world.get::<&mut Facing>(res.hero_entity) {
+                facing.dir = dir;
+            }
         }
         // update_environ runs every tick regardless of movement (fmain.c actor_tick Phase 9).
         let (new_k, new_state) = apply_environ_hero(j_current, environ, &current_state);
@@ -301,6 +311,30 @@ mod tests {
         super::run(&mut world, &mut res);
         let facing = world.get::<&Facing>(res.hero_entity).unwrap();
         assert_eq!(facing.dir, Direction::S);
+    }
+
+    #[test]
+    fn no_move_when_fighting() {
+        use crate::game::ecs::components::CombatState;
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        world.get::<&mut CombatState>(res.hero_entity).unwrap().state = ActorState::Fighting(0);
+        res.input_direction = Direction::N;
+        super::run(&mut world, &mut res);
+        let pos = world.get::<&Position>(res.hero_entity).unwrap();
+        assert_eq!(pos.y, 200.0, "directional input must not move hero while fighting");
+    }
+
+    #[test]
+    fn facing_updates_while_fighting() {
+        use crate::game::ecs::components::CombatState;
+        use crate::game::actor::ActorState;
+        let (mut world, mut res) = make_world_and_res();
+        world.get::<&mut CombatState>(res.hero_entity).unwrap().state = ActorState::Fighting(0);
+        res.input_direction = Direction::S;
+        super::run(&mut world, &mut res);
+        let facing = world.get::<&Facing>(res.hero_entity).unwrap();
+        assert_eq!(facing.dir, Direction::S, "facing must update from input while fighting (fmain.c:1432)");
     }
 
     #[test]

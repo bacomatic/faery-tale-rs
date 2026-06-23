@@ -45,6 +45,11 @@ struct InputState {
     /// Gamepad left-stick contribution, each axis clamped to {-1, 0, +1}.
     gamepad_x: i32,
     gamepad_y: i32,
+    /// Fire/attack held state — true whenever at least one source holds the attack input.
+    /// Sources: keyboard (Kp0), gamepad South button, right mouse button on compass.
+    fire_keyboard: bool,
+    fire_gamepad:  bool,
+    fire_mouse:    bool,
 }
 
 impl InputState {
@@ -57,7 +62,14 @@ impl InputState {
             pressed_movement_keys: HashSet::new(),
             gamepad_x: 0,
             gamepad_y: 0,
+            fire_keyboard: false,
+            fire_gamepad:  false,
+            fire_mouse:    false,
         }
+    }
+
+    fn fire(&self) -> bool {
+        self.fire_keyboard || self.fire_gamepad || self.fire_mouse
     }
 
     /// Recompute up/down/left/right by summing contributions from all held
@@ -144,6 +156,7 @@ pub struct EcsScene {
     show_start_placard: bool,
     /// True until the first update() call has been processed.
     first_update: bool,
+
 }
 
 impl EcsScene {
@@ -823,6 +836,8 @@ impl EcsScene {
                 map_y,
                 hero_sector,
                 renderer,
+                self.res.encounter.hero_dying_countdown,
+                self.res.encounter.dying,
             );
         }
 
@@ -1157,6 +1172,7 @@ impl EcsScene {
         self.update_menu_options();
         // sleep system not yet ported — skipped
         self.res.input_direction = self.input.to_direction();
+        self.res.input_fire      = self.input.fire();
         systems::movement::run(&mut self.world, &mut self.res);
         systems::carrier::run(&mut self.world, &mut self.res);
         systems::collision::run(&self.world, &mut self.res);
@@ -1165,6 +1181,7 @@ impl EcsScene {
         systems::npc_ai::run(&mut self.world, &mut self.res);
         systems::npc_movement::run(&mut self.world, &mut self.res);
         systems::combat::run(&mut self.world, &mut self.res);
+        systems::damage::run(&mut self.world, &mut self.res);
         systems::missile::run(&mut self.world, &mut self.res);
         systems::encounter::run(&mut self.world, &mut self.res);
         systems::proximity::run(&self.world, &mut self.res);
@@ -1271,6 +1288,10 @@ impl Scene for EcsScene {
                         self.input.recompute();
                         true
                     }
+                    Keycode::Kp0 => {
+                        self.input.fire_keyboard = true;
+                        true
+                    }
                     _ => {
                         let menu_byte: Option<u8> = match kc {
                             Keycode::F1 => Some(10),
@@ -1312,7 +1333,30 @@ impl Scene for EcsScene {
                         self.input.recompute();
                         true
                     }
+                    Keycode::Kp0 => {
+                        self.input.fire_keyboard = false;
+                        true
+                    }
                     _ => false,
+                }
+            }
+            // Gamepad buttons.
+            Event::ControllerButtonDown { button, .. } => {
+                use sdl3::gamepad::Button;
+                if *button == Button::South {
+                    self.input.fire_gamepad = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::ControllerButtonUp { button, .. } => {
+                use sdl3::gamepad::Button;
+                if *button == Button::South {
+                    self.input.fire_gamepad = false;
+                    true
+                } else {
+                    false
                 }
             }
             // Gamepad left stick → aggregate into direction.
@@ -1340,17 +1384,24 @@ impl Scene for EcsScene {
                     _ => false,
                 }
             }
-            Event::MouseButtonDown { x, y, .. } => {
+            Event::MouseButtonDown { x, y, mouse_btn, .. } => {
                 // Clear inventory view on any interaction
                 if self.res.view.viewstatus == 1 {
                     self.res.view.viewstatus = 0;
                     return true;
                 }
+                let nx = *x as i32;
+                let ny = (*y as i32 - HIBAR_Y) / 2; // native y within hibar
+                // Right click on compass (native x 567..615, y 15..39) → attack held.
+                if *mouse_btn == sdl3::mouse::MouseButton::Right
+                    && nx >= 567 && nx < 615 && ny >= 15 && ny < 39
+                {
+                    self.input.fire_mouse = true;
+                    return true;
+                }
                 // Menu buttons occupy 2 columns × 6 rows in the right side of the
                 // hibar (native x 430..534, native y 2..55).  Canvas → native:
                 // native_x = canvas_x (both 640 wide), native_y = (canvas_y - HIBAR_Y) / 2.
-                let nx = *x as i32;
-                let ny = (*y as i32 - HIBAR_Y) / 2; // native y within hibar
                 if nx >= 430 && nx < 534 && ny >= 2 && ny < 55 {
                     let col = if nx < 482 { 0 } else { 1 };
                     let row = (ny - 2) / 9; // rows 0..5
@@ -1363,10 +1414,15 @@ impl Scene for EcsScene {
                 }
                 false
             }
-            Event::MouseButtonUp { x, y, .. } => {
+            Event::MouseButtonUp { x, y, mouse_btn, .. } => {
                 // Clear inventory view on any interaction
                 if self.res.view.viewstatus == 1 {
                     self.res.view.viewstatus = 0;
+                    return true;
+                }
+                // Release right-click fire.
+                if *mouse_btn == sdl3::mouse::MouseButton::Right {
+                    self.input.fire_mouse = false;
                     return true;
                 }
                 // End of click - execute action if over the same slot
@@ -1632,6 +1688,20 @@ fn npc_type_to_cfile(npc_type: u8, race: u8) -> Option<usize> {
     }
 }
 
+/// Select the hero STATELIST index during the DYING animation.
+/// Reference: reference/logic/death-sequence.md — tactic counts 7→0 over 7 ticks;
+/// frames 80/81 swap depending on facing.
+fn hero_dying_statelist_index(countdown: u8, facing: Direction) -> usize {
+    // Amiga facing: d==0 or d>4 → one frame; d==1..4 → the other.
+    // Discriminants: NW=0, N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7, None=9.
+    let group_a = matches!(facing, Direction::NW | Direction::S | Direction::SW | Direction::W | Direction::None);
+    if countdown > 4 {
+        if group_a { 80 } else { 81 }
+    } else {
+        if group_a { 81 } else { 80 }
+    }
+}
+
 /// Blit all visible actors (hero, enemies, setfigs) into the indexed framebuf,
 /// interleaving per-sprite depth masking immediately after each blit.
 /// Must be called after `MapRenderer::compose()` and before palette conversion.
@@ -1646,11 +1716,13 @@ fn blit_actors_inner(
     map_y: u16,
     hero_sector: u16,
     renderer: &mut crate::game::map_renderer::MapRenderer,
+    hero_dying_countdown: u8,
+    encounter_dying: bool,
 ) {
     use crate::game::actor::ActorState;
     use crate::game::ecs::components::{
-        ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, Hero, Loot,
-        Position, SetFig, WorldObj,
+        ActorMotion, AiState, BrotherKind, CombatState, Enemy, Facing, FrustFlag, GoodFairy,
+        Hero, Loot, Position, SetFig, WorldObj,
     };
     use crate::game::npc::NpcState;
     use crate::game::sprite_mask::BlittedSprite;
@@ -1733,7 +1805,13 @@ fn blit_actors_inner(
                     let is_moving   = motion_opt.map(|m: &ActorMotion| m.moving).unwrap_or(false);
                     let frustflag   = frust_opt.map(|f: &FrustFlag| f.count).unwrap_or(0);
 
-                    let frame = if frustflag >= 41 {
+                    let frame = if hero_dying_countdown > 0 {
+                        // fmain.c:1719-1722: DYING animation frames 80/81 swap by facing.
+                        hero_dying_statelist_index(hero_dying_countdown, hero_facing)
+                    } else if encounter_dying {
+                        // Goodfairy countdown running — corpse frame (statelist 82).
+                        82
+                    } else if frustflag >= 41 {
                         40
                     } else if frustflag >= 21 {
                         84 + ((cycle >> 1) & 1)
@@ -1748,8 +1826,10 @@ fn blit_actors_inner(
                         if is_moving { frame_base + cycle % 8 } else { frame_base + 1 }
                     };
 
-                    // Frustration, fighting, and sinking frames are statelist indices.
-                    let needs_statelist = frustflag >= 21
+                    // Frustration, fighting, sinking, and dying frames are statelist indices.
+                    let needs_statelist = hero_dying_countdown > 0
+                        || encounter_dying
+                        || frustflag >= 21
                         || matches!(combat_state, Some(ActorState::Fighting(_)) | Some(ActorState::Sinking));
                     let body_frame = if needs_statelist {
                         STATELIST.get(frame).map(|e| e.figure as usize).unwrap_or(frame)
@@ -1985,6 +2065,32 @@ fn blit_actors_inner(
                 ground:   rel_y + SPRITE_H as i32,
                 is_falling: false,
             }, fp.to_vec()));
+        }
+    }
+
+    // ── Good Fairy ────────────────────────────────────────────────────────────
+    use crate::game::sprites::OBJ_SPRITE_H;
+    let mut fairy_q = world.query::<(&GoodFairy, &Position)>();
+    for (_, pos) in fairy_q.iter() {
+        let (rel_x, rel_y) = actor_rel_pos(pos.x, pos.y, map_x, map_y);
+        if rel_x <= -(SPRITE_W as i32) || rel_x >= fb_w
+            || rel_y <= -(OBJ_SPRITE_H as i32) || rel_y >= fb_h
+        {
+            continue;
+        }
+        // OBJECTS sheet frames 100/101 alternating (reference/_discovery/brother-succession.md).
+        let frame_inum = 100 + (cycle & 1);
+        if let Some(obj_sheet) = object_sprites {
+            if let Some(fp) = obj_sheet.frame_pixels(frame_inum) {
+                pending.push((BlittedSprite {
+                    screen_x: rel_x,
+                    screen_y: rel_y,
+                    width:    SPRITE_W,
+                    height:   OBJ_SPRITE_H,
+                    ground:   rel_y + OBJ_SPRITE_H as i32,
+                    is_falling: false,
+                }, fp.to_vec()));
+            }
         }
     }
 
@@ -2358,10 +2464,36 @@ mod tests {
         assert!(culled, "SetFig outside framebuffer bounds must be culled");
     }
 
+    // ── hero_dying_statelist_index tests ─────────────────────────────────────
+
+    use crate::game::direction::Direction;
+
+    #[test]
+    fn hero_dying_frames_swap_by_facing() {
+        // Phase A (countdown > 4): facing d==0 or d>4 → 80; d==1..4 → 81.
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::NW), 80);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::S),  80);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::SW), 80);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::W),  80);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::N),  81);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::NE), 81);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::E),  81);
+        assert_eq!(super::hero_dying_statelist_index(7, Direction::SE), 81);
+
+        // Phase B (countdown 1..4): swapped.
+        assert_eq!(super::hero_dying_statelist_index(4, Direction::NW), 81);
+        assert_eq!(super::hero_dying_statelist_index(3, Direction::S),  81);
+        assert_eq!(super::hero_dying_statelist_index(2, Direction::SW), 81);
+        assert_eq!(super::hero_dying_statelist_index(1, Direction::W),  81);
+        assert_eq!(super::hero_dying_statelist_index(4, Direction::N),  80);
+        assert_eq!(super::hero_dying_statelist_index(3, Direction::NE), 80);
+        assert_eq!(super::hero_dying_statelist_index(2, Direction::E),  80);
+        assert_eq!(super::hero_dying_statelist_index(1, Direction::SE), 80);
+    }
+
     // ── enemy_frame tests ─────────────────────────────────────────────────────
     // All frame numbers are verified against actor-animation-catalog.md.
 
-    use crate::game::direction::Direction;
     use crate::game::npc::{NpcState, RACE_DARK_KNIGHT, RACE_LORAII, RACE_SNAKE, RACE_WRAITH};
     use crate::game::ecs::scene::enemy_frame;
 

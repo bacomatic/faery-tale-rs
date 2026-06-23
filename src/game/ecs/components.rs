@@ -37,6 +37,10 @@ pub struct Missile;
 #[derive(Debug, Clone, Copy)]
 pub struct Carrier;
 
+/// Marks the good fairy entity spawned during the hero rescue sequence.
+#[derive(Debug, Clone, Copy)]
+pub struct GoodFairy;
+
 // ── Shared components (used by multiple entity types) ────────────────────────
 
 /// World-space position in pixels. All entity types share this component.
@@ -191,19 +195,22 @@ pub struct EnemyKind {
 /// Enemy AI state: goal, tactic, animation state, cleverness.
 #[derive(Debug, Clone)]
 pub struct AiState {
-    pub goal:       Goal,
-    pub tactic:     Tactic,
-    pub state:      NpcState,
-    pub cleverness: u8,
+    pub goal:            Goal,
+    pub tactic:          Tactic,
+    pub state:           NpcState,
+    pub cleverness:      u8,
+    /// Current fight-animation substate (0-8), advanced via TRANS_LIST each tick.
+    pub fight_substate:  u8,
 }
 
 impl Default for AiState {
     fn default() -> Self {
         Self {
-            goal:       Goal::None,
-            tactic:     Tactic::None,
-            state:      NpcState::Still,
-            cleverness: 0,
+            goal:           Goal::None,
+            tactic:         Tactic::None,
+            state:          NpcState::Still,
+            cleverness:     0,
+            fight_substate: 0,
         }
     }
 }

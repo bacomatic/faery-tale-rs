@@ -31,8 +31,22 @@ Activates when hero's state is DEAD or FALL. Uses `goodfairy` counter (`unsigned
 | 255–200 | 2–57 | **Death sequence plays.** Death animation and death song always complete fully before any rescue decision. |
 | 199–120 | 58–137 | **Luck gate**: `luck < 1` → `revive(TRUE)` (brother succession). FALL state → `revive(FALSE)` (non-lethal recovery). `luck >= 1` and DEAD → countdown continues toward fairy rescue. |
 | 119–20 | 138–237 | Fairy sprite visible, flying toward hero. `battleflag = FALSE`. AI suspended. |
-| 19–2 | 238–255 | Resurrection glow effect. |
+| 19–1 | 238–256 | Fairy sprite stationary at `hero_x + 20`. |
 | 1 | 256 | `revive(FALSE)` — fairy rescues hero, same brother continues. |
+
+> **Implementation note — intentional deviation from reference:**
+> The Rust port initialises `goodfairy` at **330** (not 255) and uses a `u16`.
+> Screen recordings of the original game measured the full death sequence at
+> ~22 seconds at 15 Hz (~330 ticks). The reference C code uses an `unsigned char`
+> that wraps 0→255, giving only ~17 seconds — this is believed to be a timing
+> artifact of the original running at a different effective tick rate on PAL/NTSC
+> hardware. The phase boundary that matters (`goodfairy == 119` for fairy spawn,
+> `goodfairy == 1` for fade trigger) is **unchanged**; only the initial value and
+> the pre-fairy duration differ. Do **not** change the initial value back to 255.
+>
+> Additionally, the fairy sprite has **no explicit despawn** before the fade: she
+> remains visible (stationary at `hero_x + 20`) until the fade-to-black covers
+> her, then is despawned when `revival_pending` fires.
 
 **Key design property**: The luck gate is **fully deterministic** with no random element. `checkdead()` sets `luck -= 5` on hero death. Luck cannot change during DEAD state because:
 

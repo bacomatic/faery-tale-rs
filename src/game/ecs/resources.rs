@@ -240,7 +240,7 @@ impl Default for EncounterTables {
 }
 
 /// Encounter, arena, and death-sequence state.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EncounterContext {
     pub in_encounter_zone:    bool,
     pub arena_mode:           bool,
@@ -250,11 +250,44 @@ pub struct EncounterContext {
     pub arena_damage_enabled: bool,
     pub sleeping:             bool,
     pub dying:                bool,
+    /// 7-tick hero dying animation counter (7→0). Drives frames 80/81/82 before goodfairy starts.
+    pub hero_dying_countdown: u8,
     pub fiery_death:          bool,
     pub death_type:           usize,
-    pub goodfairy:            i16,
+    /// Goodfairy rescue countdown: 330→0. Zero when not active.
+    pub goodfairy:            u16,
     pub luck_gate_fired:      bool,
     pub last_zone:            Option<usize>,
+    /// Last known safe position for fairy rescue (default: Tambry).
+    pub safe_pos:             (f32, f32),
+    /// Region at last safe position.
+    pub safe_r:               u8,
+    /// The spawned good fairy entity (alive during goodfairy 119→1).
+    pub fairy_entity:         Option<Entity>,
+}
+
+impl Default for EncounterContext {
+    fn default() -> Self {
+        Self {
+            in_encounter_zone:    false,
+            arena_mode:           false,
+            arena_zone:           (0, 0, 0, 0),
+            in_arena_zone:        false,
+            arena_encounter_idx:  0,
+            arena_damage_enabled: false,
+            sleeping:             false,
+            dying:                false,
+            hero_dying_countdown: 0,
+            fiery_death:          false,
+            death_type:           0,
+            goodfairy:            0,
+            luck_gate_fired:      false,
+            last_zone:            None,
+            safe_pos:             (19036.0, 15755.0),
+            safe_r:               3,
+            fairy_entity:         None,
+        }
+    }
 }
 
 // ── VFX ───────────────────────────────────────────────────────────────────────
@@ -382,6 +415,9 @@ pub struct Resources {
 
     /// Current hero movement direction, derived from InputState each tick.
     pub input_direction: crate::game::direction::Direction,
+    /// True for exactly one tick when the fire/attack button was pressed.
+    /// Set by handle_event(), cleared by input::run() after being consumed.
+    pub input_fire: bool,
 
     /// Stable handle for the hero entity (set at spawn, never changes mid-session).
     pub hero_entity: Entity,
@@ -422,6 +458,7 @@ impl Resources {
             quest:          QuestState::default(),
             encounter_tables:    EncounterTables::default(),
             input_direction:     crate::game::direction::Direction::None,
+            input_fire:          false,
             hero_entity:         placeholder,
             carrier_entity:      None,
             last_speech_entity:  None,

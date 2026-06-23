@@ -676,6 +676,7 @@ mod tests {
                     goal: Goal::Attack1,
                     tactic: Tactic::Pursue,
                     cleverness: 0,
+                    fight_substate: 0,
                 },
                 Health::new(30),
                 Loot { weapon: 2, gold: 0, looted: false },

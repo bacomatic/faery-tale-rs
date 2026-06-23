@@ -20,9 +20,9 @@ impl DebugConsole {
             "/help" | "/h" | "/?" => self.cmd_help(args),
             "/kill" => self.cmd_kill(args),
             "/die" => {
-                self.push_cmd(DebugCommand::AdjustStat {
+                self.push_cmd(DebugCommand::SetStat {
                     stat: StatId::Vitality,
-                    delta: -9999,
+                    value: 0,
                 });
                 self.log("Player vitality set to zero.");
             }

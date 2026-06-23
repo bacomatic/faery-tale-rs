@@ -78,7 +78,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Agent working rules
 
-- **use context-mode to read large documents or perform semantic searches** Reference docs on the `research` branch are pre-indexed in context-mode — use `ctx_search` first, then fall back to `ctx_fetch_and_index` for content not yet in the index. `reference/README.md` on that branch is the entry point for the reference documentation.
+- **use graphify to search reference documentation** — the research branch is indexed in the graphify global graph under the tag `faery-tale-research`. Query it with `graphify query "<topic>" --graph ~/.graphify/global-graph.json`. For reference-only queries, add `--filter repo=faery-tale-research`. See `docs/REFERENCE.md` for details.
 - **Always follow `docs/GUIDELINES.md`** when writing, reviewing, or refactoring Rust code in this repository. If there is any conflict, stop and ask for clarification. **NEVER MAKE ASSUMPTIONS**
 - Avoid unrelated refactors while touching gameplay-critical code.
 - **Use test-driven development for substantial work**: start by writing tests that fail based on the relevant `docs/spec/` and `docs/reqs/` subsystem files, then implement the code against those tests. This is applicable to both new features and bug fixes.
@@ -104,8 +104,11 @@ Refer to docs/REFERENCE.md for information about the reference documentation.
 ## Game mechanics research order
 
 When investigating any game mechanic (combat, movement, AI, timings, formulas, etc.):
-1. **First**: the research is the authoritative source of truth for verified mechanics.
-2. Search `reference/ARCHITECTURE.md` for subsystem structure/data flow and `reference/STORYLINE.md` for quest/scenario flow.
+1. **First**: query the graphify global graph for verified mechanics:
+   ```
+   graphify query "<mechanic>" --graph ~/.graphify/global-graph.json --filter repo=faery-tale-research
+   ```
+2. For subsystem structure/data flow, query `ARCHITECTURE` or `STORYLINE` topics in the same graph.
 3. Use the relevant `docs/spec/` subsystem file (local) to resolve implementation details and keep the port internally consistent.
 4. Do not create competing source-of-truth documents unless the user explicitly requests it.
 5. If any information is missing, unclear, ambiguous or contradictory, stop immediately and ask for clarification.

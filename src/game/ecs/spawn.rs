@@ -59,6 +59,7 @@ pub fn spawn_enemy(
             tactic: Tactic::Pursue,
             state: NpcState::Still,
             cleverness,
+            fight_substate: 0,
         },
         Health::new(vitality),
         Speed { speed },

@@ -13,6 +13,7 @@ pub mod zone;
 pub mod npc_ai;
 pub mod npc_movement;
 pub mod combat;
+pub mod damage;
 pub mod missile;
 pub mod encounter;
 pub mod proximity;

@@ -13,6 +13,7 @@ use crate::game::ecs::resources::Resources;
 use crate::game::actor::Goal;
 use crate::game::npc::NpcState;
 use crate::game::npc_ai::tick_npc_ecs;
+use crate::game::combat::{rand4, TRANS_LIST};
 
 pub fn run(world: &mut World, res: &mut Resources) {
     let hero_pos = match world.get::<&Position>(res.hero_entity) {
@@ -72,7 +73,7 @@ pub fn run(world: &mut World, res: &mut Resources) {
             }
         };
 
-        if matches!(state, NpcState::Dead) { continue; }
+        if matches!(state, NpcState::Dead | NpcState::Dying | NpcState::Sinking) { continue; }
 
         // Freeze gate: hostile NPCs (race < 7) skip AI when frozen.
         if freeze && race < 7 { continue; }
@@ -118,6 +119,14 @@ pub fn run(world: &mut World, res: &mut Resources) {
                 weapon,
                 race,
             );
+
+            // Advance fight-animation substate via trans_list (fmain.c:1712).
+            if matches!(ai.state, NpcState::Fighting) {
+                let s = ai.fight_substate as usize;
+                ai.fight_substate = TRANS_LIST[s][rand4(tick)];
+            } else {
+                ai.fight_substate = 0;
+            }
         }
     }
 }
