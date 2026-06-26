@@ -1,0 +1,355 @@
+{
+  "items": {
+    "22": {
+      "cross_cutting": [
+        "item-use/pickup"
+      ],
+      "name": "Talisman",
+      "read_regions": [
+        "item-use/pickup"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 3244,
+          "region": "item-use/pickup",
+          "text": "if (stuff[22])"
+        }
+      ],
+      "write_regions": [
+        "menu-handling"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 1299,
+          "region": "menu-handling",
+          "text": "{\tstuff[rnd(GOLDBASE)]+=3; set_options(); stuff[22]=0; }"
+        }
+      ]
+    },
+    "23": {
+      "cross_cutting": [
+        "combat/shooting"
+      ],
+      "name": "Rose",
+      "read_regions": [
+        "combat/shooting"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 1844,
+          "region": "combat/shooting",
+          "text": "{\tif (i==0 && stuff[23]) an->environ = 0;"
+        }
+      ],
+      "write_regions": [],
+      "writes": []
+    },
+    "24": {
+      "cross_cutting": [],
+      "name": "Fruit",
+      "read_regions": [
+        "daynight/survival"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 2195,
+          "region": "daynight/survival",
+          "text": "if (hunger > 30 && stuff[24])"
+        }
+      ],
+      "write_regions": [
+        "daynight/survival",
+        "item-use/pickup"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 2196,
+          "region": "daynight/survival",
+          "text": "{\tstuff[24]--; hunger -= 30; event(37);  }"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3166,
+          "region": "item-use/pickup",
+          "text": "{\tif (hunger < 15) { stuff[24]++; event(36); }"
+        }
+      ]
+    },
+    "25": {
+      "cross_cutting": [
+        "environment/doors",
+        "save/load/misc"
+      ],
+      "name": "Gold Statue",
+      "read_regions": [
+        "environment/doors",
+        "save/load/misc"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 1919,
+          "region": "environment/doors",
+          "text": "if (d->type == DESERT && (stuff[STATBASE]<5)) break;"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3594,
+          "region": "save/load/misc",
+          "text": "if (new_region == 4 && stuff[STATBASE] < 5) /* are we in desert sector */"
+        }
+      ],
+      "write_regions": [],
+      "writes": []
+    },
+    "28": {
+      "cross_cutting": [
+        "save/load/misc"
+      ],
+      "name": "Writ",
+      "read_regions": [
+        "save/load/misc"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 3383,
+          "region": "save/load/misc",
+          "text": "if (stuff[28])"
+        }
+      ],
+      "write_regions": [
+        "save/load/win"
+      ],
+      "writes": [
+        {
+          "file": "fmain2.c",
+          "line": 1598,
+          "region": "save/load/win",
+          "text": "stuff[28] = 1;"
+        }
+      ]
+    },
+    "29": {
+      "cross_cutting": [],
+      "name": "Bone",
+      "read_regions": [
+        "save/load/misc"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 3501,
+          "region": "save/load/misc",
+          "text": "else if (hit == 8 && stuff[29]) /* spectre */"
+        }
+      ],
+      "write_regions": [
+        "save/load/misc"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 3503,
+          "region": "save/load/misc",
+          "text": "else { speak(48); stuff[29] = 0; leave_item(nearest_person,140); }"
+        }
+      ]
+    },
+    "30": {
+      "cross_cutting": [
+        "movement/collision"
+      ],
+      "name": "Shard",
+      "read_regions": [
+        "movement/collision"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 1609,
+          "region": "movement/collision",
+          "text": "if (stuff[30] && j==12) goto newloc;"
+        }
+      ],
+      "write_regions": [],
+      "writes": []
+    },
+    "35": {
+      "cross_cutting": [
+        "globals/init",
+        "item-use/pickup"
+      ],
+      "name": "Quiver",
+      "read_regions": [
+        "globals/init",
+        "item-use/pickup"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 432,
+          "region": "globals/init",
+          "text": "UBYTE *stuff, julstuff[ARROWBASE], philstuff[ARROWBASE], kevstuff[ARROWBASE];"
+        },
+        {
+          "file": "fmain.c",
+          "line": 432,
+          "region": "globals/init",
+          "text": "UBYTE *stuff, julstuff[ARROWBASE], philstuff[ARROWBASE], kevstuff[ARROWBASE];"
+        },
+        {
+          "file": "fmain.c",
+          "line": 432,
+          "region": "globals/init",
+          "text": "UBYTE *stuff, julstuff[ARROWBASE], philstuff[ARROWBASE], kevstuff[ARROWBASE];"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3150,
+          "region": "item-use/pickup",
+          "text": "stuff[ARROWBASE] = 0;"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3243,
+          "region": "item-use/pickup",
+          "text": "stuff[8] += (stuff[ARROWBASE] * 10);"
+        }
+      ],
+      "write_regions": [],
+      "writes": []
+    },
+    "5": {
+      "cross_cutting": [
+        "carrier/mounting"
+      ],
+      "name": "Turtle",
+      "read_regions": [
+        "carrier/mounting"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 1498,
+          "region": "carrier/mounting",
+          "text": "{\tif (raftprox && wcarry == 3 && stuff[5])"
+        }
+      ],
+      "write_regions": [
+        "menu-handling"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 1294,
+          "region": "menu-handling",
+          "text": "{\tif (active_carrier == 11) stuff[5] = 1;"
+        }
+      ]
+    },
+    "6": {
+      "cross_cutting": [],
+      "name": "Sea Shell",
+      "read_regions": [
+        "save/load/misc"
+      ],
+      "reads": [
+        {
+          "file": "fmain.c",
+          "line": 3419,
+          "region": "save/load/misc",
+          "text": "{\tif (stuff[6]) speak(57); /* check if has shell */"
+        }
+      ],
+      "write_regions": [
+        "save/load/misc"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 3420,
+          "region": "save/load/misc",
+          "text": "else { stuff[6] = 1; speak(56); }"
+        }
+      ]
+    },
+    "7": {
+      "cross_cutting": [],
+      "name": "Sun Stone",
+      "read_regions": [],
+      "reads": [],
+      "write_regions": [
+        "movement-helpers"
+      ],
+      "writes": [
+        {
+          "file": "fmain2.c",
+          "line": 233,
+          "region": "movement-helpers",
+          "text": "(anim_list[j].race == 0x89 && stuff[7] == 0) ))"
+        }
+      ]
+    },
+    "8": {
+      "cross_cutting": [],
+      "name": "Arrows",
+      "read_regions": [],
+      "reads": [],
+      "write_regions": [
+        "item-use/pickup",
+        "movement/collision"
+      ],
+      "writes": [
+        {
+          "file": "fmain.c",
+          "line": 1677,
+          "region": "movement/collision",
+          "text": "if (i==0) {\tif (stuff[8]==0) goto cpx; else stuff[8]--; }"
+        },
+        {
+          "file": "fmain.c",
+          "line": 1677,
+          "region": "movement/collision",
+          "text": "if (i==0) {\tif (stuff[8]==0) goto cpx; else stuff[8]--; }"
+        },
+        {
+          "file": "fmain.c",
+          "line": 1693,
+          "region": "movement/collision",
+          "text": "if (i==0 && stuff[8] == 0)"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3243,
+          "region": "item-use/pickup",
+          "text": "stuff[8] += (stuff[ARROWBASE] * 10);"
+        },
+        {
+          "file": "fmain.c",
+          "line": 3263,
+          "region": "item-use/pickup",
+          "text": "stuff[8] += j;"
+        }
+      ]
+    }
+  },
+  "source_files": [
+    "copyimage.c",
+    "fincludes.c",
+    "fmain.c",
+    "fmain2.c",
+    "form.c",
+    "hdrive.c",
+    "iffsubs.c",
+    "mtrack.c",
+    "rtrack.c",
+    "terrain.c",
+    "text.c"
+  ]
+}

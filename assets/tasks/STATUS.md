@@ -12,7 +12,7 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
 | [T0.2](T0.2-carray-baseline.md) C-array baseline | **DONE** ✅ | — | Verified PASS. Extended `tools/extract_table.py` (N-D + char-literal parse, `--json`); `diroffs` fixture. |
 | [T1.1](T1.1-palettes.md) Palettes | **DONE** ✅ | T0.1, T0.2 | Verified PASS. `tools/extract_palettes.py` → 6 palette JSONs; Rust `palette.rs` oracle confirmed. |
 | [T1.2](T1.2-tables.md) Gameplay tables | **DONE** ✅ | T0.2 | Verified PASS. 11 tables → `assets/tables/`; enum/symbol resolution confirmed; `extract_table.py` matcher improved (newline-tolerant). |
-| [T1.3](T1.3-item-quest.md) Item/quest fold-in | **TODO** | T0.1 | Deps met — ready. |
+| [T1.3](T1.3-item-quest.md) Item/quest fold-in | **DONE** ✅ | T0.1 | Verified PASS. `tools/fold_item_quest_tables.py` → `item_effects.json`, `quest_data.json`. Dropped redundant `encounter_chart`/`setfig_table` copies (T1.2 is authoritative). |
 | [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
 | [T2.1](T2.1-sprites.md) Sprites | **TODO** | T0.1 | Deps met — ready. |
 | [T2.2](T2.2-tiles.md) Tile atlas | TODO | T0.1 | |
@@ -52,5 +52,16 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
   hand-transcribed; `enum obytes` resolved independently (RED_KEY=242, WHITE_KEY=154 confirmed in `src/fmain2.c`);
   file_index sectors (32 outdoor / 96 indoor) and 40-block image groups confirmed; determinism + `.gitkeep` removal OK.
 
+- **T1.3** — `tools/fold_item_quest_tables.py` (thin adapter reusing `extract_item_effects.py` +
+  `extract_quest_data.py`) emits `assets/tables/item_effects.json` + `quest_data.json`. Verified PASS:
+  valid JSON, no name collision, item_effects `stuff[N]` citations spot-checked against `src/`, quest speeches/
+  quest_items matched source, deterministic, pytest 7/7.
+  **Finding handled:** the verifier found `quest_data`'s embedded `encounter_chart` copy contradicts
+  `src/fmain.c:52-63` / the byte-exact T1.2 `encounter_chart.json` (a pre-existing error in
+  `tools/extract_quest_data.py`). Fix: the fold tool now drops the redundant `encounter_chart`/`setfig_table`
+  copies so T1.2 remains the single source of truth.
+- **Follow-up (open):** `tools/extract_quest_data.py` ENCOUNTER_CHART rows 0–4 are wrong vs source — fix at the
+  extractor if that tool is used elsewhere. Not blocking the asset bundle.
+
 ## Next
-Wave 0, T1.1, T1.2 complete. Remaining Wave 1: T1.3, T1.4. Wave 2 (T2.1–T2.8) unblocked.
+Wave 0, T1.1, T1.2, T1.3 complete. Remaining Wave 1: **T1.4** (narrative text). Wave 2 (T2.1–T2.8) unblocked.
