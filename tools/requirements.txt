@@ -1,5 +1,7 @@
 machine68k>=0.4
 pytest>=8.0
+pillow>=10.0
+numpy>=1.26
 langchain-openai>=0.2
 langgraph>=0.2
 fastapi>=0.115
