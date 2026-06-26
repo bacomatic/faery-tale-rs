@@ -21,6 +21,92 @@ from datetime import date
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Standard C single-char escape sequences -> code point.
+C_ESCAPES = {
+    'a': 7, 'b': 8, 'f': 12, 'n': 10, 'r': 13, 't': 9, 'v': 11,
+    '0': 0, '\\': 92, "'": 39, '"': 34, '?': 63,
+}
+
+
+def parse_c_value(token):
+    """Parse a single C scalar literal: hex, decimal, char, or fall back to str."""
+    t = token.strip()
+    if not t:
+        return None
+    # Character literal: 'A', '\n', '\x1b', '\033'
+    if len(t) >= 3 and t[0] == "'" and t[-1] == "'":
+        body = t[1:-1]
+        if body.startswith('\\'):
+            esc = body[1:]
+            if esc and esc[0] in ('x', 'X'):
+                return int(esc[1:], 16)
+            if esc and esc[0].isdigit():
+                return int(esc, 8)
+            if len(esc) == 1 and esc in C_ESCAPES:
+                return C_ESCAPES[esc]
+            return ord(esc[0]) if esc else 0
+        return ord(body[0])
+    # Numeric literal (hex with optional sign, or decimal/negative).
+    try:
+        if 'x' in t.lower():
+            return int(t, 16)
+        return int(t, 10)
+    except ValueError:
+        return t
+
+
+def _split_top_level(text):
+    """Split *text* on commas at brace depth 0, respecting char literals."""
+    items = []
+    buf = []
+    depth = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "'":  # char literal — copy verbatim incl. escaped chars
+            buf.append(c)
+            i += 1
+            while i < n:
+                buf.append(text[i])
+                if text[i] == '\\' and i + 1 < n:
+                    buf.append(text[i + 1])
+                    i += 2
+                    continue
+                if text[i] == "'":
+                    i += 1
+                    break
+                i += 1
+            continue
+        if c == '{':
+            depth += 1
+            buf.append(c)
+        elif c == '}':
+            depth -= 1
+            buf.append(c)
+        elif c == ',' and depth == 0:
+            items.append(''.join(buf))
+            buf = []
+        else:
+            buf.append(c)
+        i += 1
+    if ''.join(buf).strip():
+        items.append(''.join(buf))
+    return items
+
+
+def parse_c_initializer(text):
+    """Recursively parse a brace-delimited C initializer into nested ints.
+
+    A ``{...}`` group becomes a list; scalar tokens become parsed values.
+    Handles arbitrary nesting (1-D and N-D) and hex/decimal/char literals.
+    """
+    t = text.strip()
+    if t.startswith('{') and t.endswith('}'):
+        inner = t[1:-1]
+        return [parse_c_initializer(p) for p in _split_top_level(inner) if p.strip()]
+    return parse_c_value(t)
+
 # Assembly data directives: label dc.b/dc.w/dc.l values
 ASM_LABEL_RE = re.compile(r'^(\w+)\s+dc\.(b|w|l)\s+(.+)', re.IGNORECASE)
 ASM_CONT_RE = re.compile(r'^\s+dc\.(b|w|l)\s+(.+)', re.IGNORECASE)
@@ -140,25 +226,29 @@ def extract_c_arrays(filepath):
         # Remove comments
         inner = re.sub(r'/\*.*?\*/', '', inner, flags=re.DOTALL)
         inner = re.sub(r'//.*$', '', inner, flags=re.MULTILINE)
-        # Parse values
-        values = []
-        for v in inner.split(','):
-            v = v.strip()
-            if not v:
-                continue
-            try:
-                if v.startswith('0x') or v.startswith('0X'):
-                    values.append(int(v, 16))
-                elif v.startswith('-'):
-                    values.append(int(v))
-                else:
-                    values.append(int(v))
-            except ValueError:
-                values.append(v)
+        # Recursively parse into nested ints (preserves N-D structure).
+        values = parse_c_initializer('{' + inner + '}')
 
-        tables[name] = {'type': 'c_array', 'values': values, 'line': line_num}
+        tables[name] = {
+            'type': 'c_array',
+            'values': values,
+            'shape': _shape(values),
+            'line': line_num,
+        }
 
     return tables
+
+
+def _shape(values):
+    """Return the dimensions of a (possibly ragged) nested list as a tuple."""
+    if not isinstance(values, list):
+        return ()
+    dims = [len(values)]
+    if values and all(isinstance(v, list) for v in values):
+        sub = [_shape(v) for v in values]
+        if len(set(sub)) == 1 and sub[0]:
+            dims.extend(sub[0])
+    return tuple(dims)
 
 
 def extract_tables(filepath):
@@ -179,6 +269,8 @@ def format_table(name, table):
     lines.append(f"  Label: {name}")
     lines.append(f"  Type:  {table['type']}")
     lines.append(f"  Line:  {table['line']}")
+    if 'shape' in table:
+        lines.append(f"  Shape: {table['shape']}")
     lines.append(f"  Count: {len(table['values'])}")
     lines.append(f"  Values: {table['values']}")
 
@@ -224,6 +316,8 @@ def main():
     parser.add_argument('labels', nargs='*', help='Table/array labels to extract')
     parser.add_argument('--list', action='store_true', help='List all tables found in the file')
     parser.add_argument('--no-results', action='store_true', help='Skip writing results file')
+    parser.add_argument('--json', metavar='PATH',
+                        help='Write extracted labels as deterministic JSON to PATH')
     args = parser.parse_args()
 
     filepath = os.path.join(REPO_ROOT, args.source)
@@ -251,6 +345,20 @@ def main():
         else:
             missing.append(label)
             print(f"\n  Label '{label}' not found in {args.source}")
+
+    if args.json and found:
+        from asset_common import write_json
+        payload = {
+            label: {
+                'source': args.source,
+                'line': tables[label]['line'],
+                'shape': list(tables[label].get('shape', ())),
+                'values': tables[label]['values'],
+            }
+            for label in found
+        }
+        write_json(args.json, payload)
+        print(f"\nJSON written to: {args.json}")
 
     if not args.no_results:
         out_path = write_results(args.source, args.labels, tables)

@@ -10,6 +10,10 @@ file points you to a specific section.
 - **Pixel-/byte-exact conversion only.** No gameplay/engine/rendering/creative changes.
 - Every new extractor ships with `pytest` cases under `tools/tests/`.
 - Output goes under `assets/<subdir>/` per the plan's Output layout.
+- **`.gitkeep` cleanup:** the `assets/` subdirs ship with `.gitkeep` placeholders. When your
+  task writes real files into a directory, **`git rm` that directory's `.gitkeep`** in the same
+  change — a `.gitkeep` must exist only in dirs that are still empty. The Verifier confirms no
+  `.gitkeep` remains alongside real output.
 - JSON: stable key ordering, deterministic byte output (re-runs must be identical).
 - Amiga color conversion: 12-bit `0x0RGB` → `rgba8` by nibble-replication (`0xF → 0xFF`).
 - Transparency convention: sprite/tile **index 31** = transparent.
