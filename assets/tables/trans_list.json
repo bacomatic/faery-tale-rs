@@ -1,0 +1,72 @@
+{
+  "fields": [
+    "newstate_0",
+    "newstate_1",
+    "newstate_2",
+    "newstate_3"
+  ],
+  "line": 139,
+  "name": "trans_list",
+  "rows": [
+    {
+      "newstate_0": 1,
+      "newstate_1": 8,
+      "newstate_2": 0,
+      "newstate_3": 1
+    },
+    {
+      "newstate_0": 2,
+      "newstate_1": 0,
+      "newstate_2": 1,
+      "newstate_3": 0
+    },
+    {
+      "newstate_0": 3,
+      "newstate_1": 1,
+      "newstate_2": 2,
+      "newstate_3": 8
+    },
+    {
+      "newstate_0": 4,
+      "newstate_1": 2,
+      "newstate_2": 3,
+      "newstate_3": 7
+    },
+    {
+      "newstate_0": 5,
+      "newstate_1": 3,
+      "newstate_2": 4,
+      "newstate_3": 6
+    },
+    {
+      "newstate_0": 6,
+      "newstate_1": 4,
+      "newstate_2": 5,
+      "newstate_3": 5
+    },
+    {
+      "newstate_0": 8,
+      "newstate_1": 5,
+      "newstate_2": 6,
+      "newstate_3": 4
+    },
+    {
+      "newstate_0": 8,
+      "newstate_1": 6,
+      "newstate_2": 7,
+      "newstate_3": 3
+    },
+    {
+      "newstate_0": 0,
+      "newstate_1": 6,
+      "newstate_2": 8,
+      "newstate_3": 2
+    }
+  ],
+  "semantics": "9 struct transition entries (fmain.c:138-146). Fight-swing animation transitions; next state = trans_list[state].newstate[rnd(4)].",
+  "shape": [
+    9,
+    4
+  ],
+  "source": "src/fmain.c"
+}

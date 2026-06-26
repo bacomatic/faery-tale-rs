@@ -1,0 +1,27 @@
+{
+  "line": 1010,
+  "name": "diroffs",
+  "semantics": "16-entry walk/fight base selector (fmain.c:1010). 0-7 pick walk bases, 8-15 pick fight/shoot bases for statelist.",
+  "shape": [
+    16
+  ],
+  "source": "src/fmain.c",
+  "values": [
+    16,
+    16,
+    24,
+    24,
+    0,
+    0,
+    8,
+    8,
+    56,
+    56,
+    68,
+    68,
+    32,
+    32,
+    44,
+    44
+  ]
+}

@@ -11,7 +11,7 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
 | [T0.1](T0.1-scaffolding.md) Scaffolding & shared helpers | **DONE** ✅ | — | Verified PASS. `tools/asset_common.py` + tests (16 pass), `assets/` tree, `game` symlink (gitignored). |
 | [T0.2](T0.2-carray-baseline.md) C-array baseline | **DONE** ✅ | — | Verified PASS. Extended `tools/extract_table.py` (N-D + char-literal parse, `--json`); `diroffs` fixture. |
 | [T1.1](T1.1-palettes.md) Palettes | **DONE** ✅ | T0.1, T0.2 | Verified PASS. `tools/extract_palettes.py` → 6 palette JSONs; Rust `palette.rs` oracle confirmed. |
-| [T1.2](T1.2-tables.md) Gameplay tables | **TODO** | T0.2 | Deps met — ready. |
+| [T1.2](T1.2-tables.md) Gameplay tables | **DONE** ✅ | T0.2 | Verified PASS. 11 tables → `assets/tables/`; enum/symbol resolution confirmed; `extract_table.py` matcher improved (newline-tolerant). |
 | [T1.3](T1.3-item-quest.md) Item/quest fold-in | **TODO** | T0.1 | Deps met — ready. |
 | [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
 | [T2.1](T2.1-sprites.md) Sprites | **TODO** | T0.1 | Deps met — ready. |
@@ -46,5 +46,11 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
   Rust `palette.rs` `(r<<4)|r` == Python `*17` nibble-replication; pytest 19/19; `.gitkeep` removed.
   Doc nit: `pagecolors`/`sun_colors` actually live in `src/fmain2.c` (not fmain.c); extractor scans both, so no impact.
 
+- **T1.2** — `tools/extract_tables.py` emits all 11 gameplay tables to `assets/tables/`. Also improved
+  `tools/extract_table.py`'s declaration matcher (whole-file, newline-tolerant, type-agnostic; first-def-wins) —
+  T0.2 tests stay green. Verified PASS: counts exact; statelist/setfig_table/file_index first+last rows
+  hand-transcribed; `enum obytes` resolved independently (RED_KEY=242, WHITE_KEY=154 confirmed in `src/fmain2.c`);
+  file_index sectors (32 outdoor / 96 indoor) and 40-block image groups confirmed; determinism + `.gitkeep` removal OK.
+
 ## Next
-Wave 0 + T1.1 complete. Remaining Wave 1: T1.2, T1.3, T1.4. Wave 2 (T2.1–T2.8) unblocked.
+Wave 0, T1.1, T1.2 complete. Remaining Wave 1: T1.3, T1.4. Wave 2 (T2.1–T2.8) unblocked.

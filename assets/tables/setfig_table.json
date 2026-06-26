@@ -1,0 +1,87 @@
+{
+  "fields": [
+    "cfile_entry",
+    "image_base",
+    "can_talk"
+  ],
+  "line": 24,
+  "name": "setfig_table",
+  "rows": [
+    {
+      "can_talk": 1,
+      "cfile_entry": 13,
+      "image_base": 0
+    },
+    {
+      "can_talk": 1,
+      "cfile_entry": 13,
+      "image_base": 4
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 14,
+      "image_base": 0
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 14,
+      "image_base": 1
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 14,
+      "image_base": 2
+    },
+    {
+      "can_talk": 1,
+      "cfile_entry": 14,
+      "image_base": 4
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 14,
+      "image_base": 6
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 14,
+      "image_base": 7
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 15,
+      "image_base": 0
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 16,
+      "image_base": 0
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 16,
+      "image_base": 6
+    },
+    {
+      "can_talk": 0,
+      "cfile_entry": 16,
+      "image_base": 7
+    },
+    {
+      "can_talk": 1,
+      "cfile_entry": 17,
+      "image_base": 0
+    },
+    {
+      "can_talk": 1,
+      "cfile_entry": 17,
+      "image_base": 4
+    }
+  ],
+  "semantics": "14 NPC type descriptors (fmain.c:24-37). cfile_entry = image file (seq_list index), image_base = sub-image offset, can_talk = enables TALKING visual effect.",
+  "shape": [
+    14,
+    3
+  ],
+  "source": "src/fmain.c"
+}

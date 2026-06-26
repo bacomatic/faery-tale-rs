@@ -1,0 +1,540 @@
+{
+  "fields": [
+    "figure",
+    "wpn_no",
+    "wpn_x",
+    "wpn_y"
+  ],
+  "line": 154,
+  "name": "statelist",
+  "rows": [
+    {
+      "figure": 0,
+      "wpn_no": 11,
+      "wpn_x": -2,
+      "wpn_y": 11
+    },
+    {
+      "figure": 1,
+      "wpn_no": 11,
+      "wpn_x": -3,
+      "wpn_y": 11
+    },
+    {
+      "figure": 2,
+      "wpn_no": 11,
+      "wpn_x": -3,
+      "wpn_y": 10
+    },
+    {
+      "figure": 3,
+      "wpn_no": 11,
+      "wpn_x": -3,
+      "wpn_y": 9
+    },
+    {
+      "figure": 4,
+      "wpn_no": 11,
+      "wpn_x": -3,
+      "wpn_y": 10
+    },
+    {
+      "figure": 5,
+      "wpn_no": 11,
+      "wpn_x": -3,
+      "wpn_y": 11
+    },
+    {
+      "figure": 6,
+      "wpn_no": 11,
+      "wpn_x": -2,
+      "wpn_y": 11
+    },
+    {
+      "figure": 7,
+      "wpn_no": 11,
+      "wpn_x": -1,
+      "wpn_y": 11
+    },
+    {
+      "figure": 8,
+      "wpn_no": 9,
+      "wpn_x": -12,
+      "wpn_y": 11
+    },
+    {
+      "figure": 9,
+      "wpn_no": 9,
+      "wpn_x": -11,
+      "wpn_y": 12
+    },
+    {
+      "figure": 10,
+      "wpn_no": 9,
+      "wpn_x": -8,
+      "wpn_y": 13
+    },
+    {
+      "figure": 11,
+      "wpn_no": 9,
+      "wpn_x": -4,
+      "wpn_y": 13
+    },
+    {
+      "figure": 12,
+      "wpn_no": 9,
+      "wpn_x": 0,
+      "wpn_y": 13
+    },
+    {
+      "figure": 13,
+      "wpn_no": 9,
+      "wpn_x": -4,
+      "wpn_y": 13
+    },
+    {
+      "figure": 14,
+      "wpn_no": 9,
+      "wpn_x": -8,
+      "wpn_y": 13
+    },
+    {
+      "figure": 15,
+      "wpn_no": 9,
+      "wpn_x": -11,
+      "wpn_y": 12
+    },
+    {
+      "figure": 16,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 1
+    },
+    {
+      "figure": 17,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 2
+    },
+    {
+      "figure": 18,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 3
+    },
+    {
+      "figure": 19,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 4
+    },
+    {
+      "figure": 20,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 3
+    },
+    {
+      "figure": 21,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 2
+    },
+    {
+      "figure": 22,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 1
+    },
+    {
+      "figure": 23,
+      "wpn_no": 14,
+      "wpn_x": -1,
+      "wpn_y": 1
+    },
+    {
+      "figure": 24,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 12
+    },
+    {
+      "figure": 25,
+      "wpn_no": 10,
+      "wpn_x": 3,
+      "wpn_y": 12
+    },
+    {
+      "figure": 26,
+      "wpn_no": 10,
+      "wpn_x": 2,
+      "wpn_y": 12
+    },
+    {
+      "figure": 27,
+      "wpn_no": 10,
+      "wpn_x": 3,
+      "wpn_y": 12
+    },
+    {
+      "figure": 28,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 12
+    },
+    {
+      "figure": 29,
+      "wpn_no": 10,
+      "wpn_x": 6,
+      "wpn_y": 12
+    },
+    {
+      "figure": 30,
+      "wpn_no": 10,
+      "wpn_x": 6,
+      "wpn_y": 11
+    },
+    {
+      "figure": 31,
+      "wpn_no": 10,
+      "wpn_x": 6,
+      "wpn_y": 12
+    },
+    {
+      "figure": 32,
+      "wpn_no": 11,
+      "wpn_x": -2,
+      "wpn_y": 12
+    },
+    {
+      "figure": 32,
+      "wpn_no": 10,
+      "wpn_x": 0,
+      "wpn_y": 12
+    },
+    {
+      "figure": 33,
+      "wpn_no": 0,
+      "wpn_x": 2,
+      "wpn_y": 10
+    },
+    {
+      "figure": 34,
+      "wpn_no": 1,
+      "wpn_x": 4,
+      "wpn_y": 6
+    },
+    {
+      "figure": 34,
+      "wpn_no": 2,
+      "wpn_x": 1,
+      "wpn_y": 4
+    },
+    {
+      "figure": 34,
+      "wpn_no": 3,
+      "wpn_x": 0,
+      "wpn_y": 4
+    },
+    {
+      "figure": 36,
+      "wpn_no": 4,
+      "wpn_x": -5,
+      "wpn_y": 0
+    },
+    {
+      "figure": 36,
+      "wpn_no": 5,
+      "wpn_x": -10,
+      "wpn_y": 1
+    },
+    {
+      "figure": 35,
+      "wpn_no": 12,
+      "wpn_x": -5,
+      "wpn_y": 5
+    },
+    {
+      "figure": 36,
+      "wpn_no": 0,
+      "wpn_x": 0,
+      "wpn_y": 6
+    },
+    {
+      "figure": 38,
+      "wpn_no": 85,
+      "wpn_x": -6,
+      "wpn_y": 5
+    },
+    {
+      "figure": 37,
+      "wpn_no": 81,
+      "wpn_x": -6,
+      "wpn_y": 5
+    },
+    {
+      "figure": 40,
+      "wpn_no": 9,
+      "wpn_x": -7,
+      "wpn_y": 12
+    },
+    {
+      "figure": 40,
+      "wpn_no": 8,
+      "wpn_x": -9,
+      "wpn_y": 9
+    },
+    {
+      "figure": 41,
+      "wpn_no": 7,
+      "wpn_x": -10,
+      "wpn_y": 5
+    },
+    {
+      "figure": 42,
+      "wpn_no": 7,
+      "wpn_x": -12,
+      "wpn_y": 4
+    },
+    {
+      "figure": 42,
+      "wpn_no": 6,
+      "wpn_x": -12,
+      "wpn_y": 3
+    },
+    {
+      "figure": 42,
+      "wpn_no": 5,
+      "wpn_x": -12,
+      "wpn_y": 3
+    },
+    {
+      "figure": 44,
+      "wpn_no": 5,
+      "wpn_x": -8,
+      "wpn_y": 3
+    },
+    {
+      "figure": 44,
+      "wpn_no": 14,
+      "wpn_x": -7,
+      "wpn_y": 6
+    },
+    {
+      "figure": 43,
+      "wpn_no": 13,
+      "wpn_x": -7,
+      "wpn_y": 8
+    },
+    {
+      "figure": 42,
+      "wpn_no": 5,
+      "wpn_x": -12,
+      "wpn_y": 3
+    },
+    {
+      "figure": 46,
+      "wpn_no": 86,
+      "wpn_x": -3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 45,
+      "wpn_no": 82,
+      "wpn_x": -3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 48,
+      "wpn_no": 14,
+      "wpn_x": -3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 48,
+      "wpn_no": 6,
+      "wpn_x": -3,
+      "wpn_y": -1
+    },
+    {
+      "figure": 49,
+      "wpn_no": 5,
+      "wpn_x": -2,
+      "wpn_y": -3
+    },
+    {
+      "figure": 50,
+      "wpn_no": 5,
+      "wpn_x": -3,
+      "wpn_y": -4
+    },
+    {
+      "figure": 50,
+      "wpn_no": 4,
+      "wpn_x": 0,
+      "wpn_y": 0
+    },
+    {
+      "figure": 50,
+      "wpn_no": 3,
+      "wpn_x": 3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 52,
+      "wpn_no": 4,
+      "wpn_x": 6,
+      "wpn_y": 1
+    },
+    {
+      "figure": 52,
+      "wpn_no": 15,
+      "wpn_x": 7,
+      "wpn_y": 3
+    },
+    {
+      "figure": 51,
+      "wpn_no": 14,
+      "wpn_x": 1,
+      "wpn_y": 6
+    },
+    {
+      "figure": 50,
+      "wpn_no": 4,
+      "wpn_x": 0,
+      "wpn_y": 0
+    },
+    {
+      "figure": 54,
+      "wpn_no": 87,
+      "wpn_x": 3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 53,
+      "wpn_no": 83,
+      "wpn_x": 3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 56,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 11
+    },
+    {
+      "figure": 56,
+      "wpn_no": 0,
+      "wpn_x": 6,
+      "wpn_y": 9
+    },
+    {
+      "figure": 57,
+      "wpn_no": 1,
+      "wpn_x": 10,
+      "wpn_y": 6
+    },
+    {
+      "figure": 58,
+      "wpn_no": 1,
+      "wpn_x": 10,
+      "wpn_y": 5
+    },
+    {
+      "figure": 58,
+      "wpn_no": 2,
+      "wpn_x": 7,
+      "wpn_y": 3
+    },
+    {
+      "figure": 58,
+      "wpn_no": 3,
+      "wpn_x": 6,
+      "wpn_y": 3
+    },
+    {
+      "figure": 60,
+      "wpn_no": 4,
+      "wpn_x": 1,
+      "wpn_y": 0
+    },
+    {
+      "figure": 60,
+      "wpn_no": 3,
+      "wpn_x": 3,
+      "wpn_y": 2
+    },
+    {
+      "figure": 59,
+      "wpn_no": 15,
+      "wpn_x": 4,
+      "wpn_y": 1
+    },
+    {
+      "figure": 58,
+      "wpn_no": 4,
+      "wpn_x": 5,
+      "wpn_y": 1
+    },
+    {
+      "figure": 62,
+      "wpn_no": 84,
+      "wpn_x": 3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 61,
+      "wpn_no": 80,
+      "wpn_x": 3,
+      "wpn_y": 0
+    },
+    {
+      "figure": 47,
+      "wpn_no": 0,
+      "wpn_x": 5,
+      "wpn_y": 11
+    },
+    {
+      "figure": 63,
+      "wpn_no": 0,
+      "wpn_x": 6,
+      "wpn_y": 9
+    },
+    {
+      "figure": 39,
+      "wpn_no": 0,
+      "wpn_x": 6,
+      "wpn_y": 9
+    },
+    {
+      "figure": 55,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 11
+    },
+    {
+      "figure": 64,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 11
+    },
+    {
+      "figure": 65,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 11
+    },
+    {
+      "figure": 66,
+      "wpn_no": 10,
+      "wpn_x": 5,
+      "wpn_y": 11
+    }
+  ],
+  "semantics": "87 struct state entries (fmain.c:143-205). Maps (motion_state, facing, frame) -> (figure image, weapon overlay index, weapon x/y offset). 0-7 south walk, 8-15 west walk, 16-23 north walk, 24-31 east walk, 32-79 fight blocks (12 states x 4 facings), 80-82 death, 83 sink, 84-85 oscillation, 86 asleep.",
+  "shape": [
+    87,
+    4
+  ],
+  "source": "src/fmain.c"
+}

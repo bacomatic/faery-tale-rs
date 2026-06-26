@@ -118,6 +118,14 @@ C_ARRAY_START_RE = re.compile(
     re.IGNORECASE
 )
 
+# Newline-tolerant, type-agnostic array-definition matcher. Captures the array
+# *name* (the identifier immediately before the dimension brackets) for any
+# ``name[...] = {`` definition, regardless of the preceding type. This catches
+# struct/typedef arrays declared as ``} statelist[87] = {`` or
+# ``struct need file_index[10] = {`` — and the ``{`` may sit on the line *after*
+# the ``=`` — which the type-keyword form above misses. ``\s`` spans newlines.
+C_ARRAY_DECL_RE = re.compile(r'(\w+)\s*((?:\[\s*\d*\s*\])+)\s*=\s*\{')
+
 
 def parse_asm_values(text):
     """Parse comma-separated assembly values, stripping comments."""
@@ -197,22 +205,25 @@ def extract_asm_tables(filepath):
 
 
 def extract_c_arrays(filepath):
-    """Extract C array initializers from a C source file."""
+    """Extract C array initializers from a C source file.
+
+    Scans the whole file (not line-by-line) with a newline-tolerant,
+    type-agnostic matcher so struct/typedef arrays (``} statelist[87] = {``,
+    ``struct need file_index[10] = {``) and ``{``-on-next-line definitions are
+    all captured. The first definition of a given name wins (a later in-function
+    assignment to the same name does not clobber the table).
+    """
     tables = {}
 
     with open(filepath, 'r', errors='replace') as f:
         content = f.read()
-        lines = content.split('\n')
 
-    for line_num, line in enumerate(lines, 1):
-        m = C_ARRAY_START_RE.search(line)
-        if not m:
-            continue
-
+    for m in C_ARRAY_DECL_RE.finditer(content):
         name = m.group(1)
-        # Find the opening brace and collect everything to the closing brace
-        start_pos = content.index(line)
-        brace_start = content.index('{', start_pos)
+        if name in tables:
+            continue  # keep the first (definition) occurrence
+        # The match ends at the opening brace; collect to its matching close.
+        brace_start = m.end() - 1
         depth = 1
         pos = brace_start + 1
         while pos < len(content) and depth > 0:
@@ -233,7 +244,7 @@ def extract_c_arrays(filepath):
             'type': 'c_array',
             'values': values,
             'shape': _shape(values),
-            'line': line_num,
+            'line': content.count('\n', 0, m.start()) + 1,
         }
 
     return tables

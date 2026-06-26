@@ -1,0 +1,382 @@
+{
+  "fields": [
+    "image_number",
+    "xoff",
+    "yoff",
+    "ydelta",
+    "img_off",
+    "img_height",
+    "maxshown",
+    "name"
+  ],
+  "line": 380,
+  "name": "inv_list",
+  "rows": [
+    {
+      "image_number": 12,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 1,
+      "name": "Dirk",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 0
+    },
+    {
+      "image_number": 9,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 1,
+      "name": "Mace",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 10
+    },
+    {
+      "image_number": 8,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 1,
+      "name": "Sword",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 20
+    },
+    {
+      "image_number": 10,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 1,
+      "name": "Bow",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 30
+    },
+    {
+      "image_number": 17,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Magic Wand",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 40
+    },
+    {
+      "image_number": 27,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 1,
+      "name": "Golden Lasso",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 50
+    },
+    {
+      "image_number": 23,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Sea Shell",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 60
+    },
+    {
+      "image_number": 27,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Sun Stone",
+      "xoff": 10,
+      "ydelta": 0,
+      "yoff": 70
+    },
+    {
+      "image_number": 3,
+      "img_height": 1,
+      "img_off": 7,
+      "maxshown": 45,
+      "name": "Arrows",
+      "xoff": 30,
+      "ydelta": 3,
+      "yoff": 0
+    },
+    {
+      "image_number": 18,
+      "img_height": 8,
+      "img_off": 0,
+      "maxshown": 15,
+      "name": "Blue Stone",
+      "xoff": 50,
+      "ydelta": 9,
+      "yoff": 0
+    },
+    {
+      "image_number": 19,
+      "img_height": 5,
+      "img_off": 0,
+      "maxshown": 23,
+      "name": "Green Jewel",
+      "xoff": 65,
+      "ydelta": 6,
+      "yoff": 0
+    },
+    {
+      "image_number": 22,
+      "img_height": 7,
+      "img_off": 0,
+      "maxshown": 17,
+      "name": "Glass Vial",
+      "xoff": 80,
+      "ydelta": 8,
+      "yoff": 0
+    },
+    {
+      "image_number": 21,
+      "img_height": 6,
+      "img_off": 0,
+      "maxshown": 20,
+      "name": "Crystal Orb",
+      "xoff": 95,
+      "ydelta": 7,
+      "yoff": 0
+    },
+    {
+      "image_number": 23,
+      "img_height": 9,
+      "img_off": 0,
+      "maxshown": 14,
+      "name": "Bird Totem",
+      "xoff": 110,
+      "ydelta": 10,
+      "yoff": 0
+    },
+    {
+      "image_number": 17,
+      "img_height": 5,
+      "img_off": 0,
+      "maxshown": 23,
+      "name": "Gold Ring",
+      "xoff": 125,
+      "ydelta": 6,
+      "yoff": 0
+    },
+    {
+      "image_number": 24,
+      "img_height": 9,
+      "img_off": 0,
+      "maxshown": 14,
+      "name": "Jade Skull",
+      "xoff": 140,
+      "ydelta": 10,
+      "yoff": 0
+    },
+    {
+      "image_number": 25,
+      "img_height": 5,
+      "img_off": 0,
+      "maxshown": 25,
+      "name": "Gold Key",
+      "xoff": 160,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 25,
+      "img_height": 5,
+      "img_off": 8,
+      "maxshown": 25,
+      "name": "Green Key",
+      "xoff": 172,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 114,
+      "img_height": 5,
+      "img_off": 0,
+      "maxshown": 25,
+      "name": "Blue Key",
+      "xoff": 184,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 114,
+      "img_height": 5,
+      "img_off": 8,
+      "maxshown": 25,
+      "name": "Red Key",
+      "xoff": 196,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 26,
+      "img_height": 5,
+      "img_off": 0,
+      "maxshown": 25,
+      "name": "Grey Key",
+      "xoff": 208,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 26,
+      "img_height": 5,
+      "img_off": 8,
+      "maxshown": 25,
+      "name": "White Key",
+      "xoff": 220,
+      "ydelta": 5,
+      "yoff": 0
+    },
+    {
+      "image_number": 11,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Talisman",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 80
+    },
+    {
+      "image_number": 19,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Rose",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 90
+    },
+    {
+      "image_number": 20,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Fruit",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 100
+    },
+    {
+      "image_number": 21,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 5,
+      "name": "Gold Statue",
+      "xoff": 232,
+      "ydelta": 10,
+      "yoff": 0
+    },
+    {
+      "image_number": 22,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Book",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 110
+    },
+    {
+      "image_number": 8,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Herb",
+      "xoff": 14,
+      "ydelta": 0,
+      "yoff": 80
+    },
+    {
+      "image_number": 9,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Writ",
+      "xoff": 14,
+      "ydelta": 0,
+      "yoff": 90
+    },
+    {
+      "image_number": 10,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Bone",
+      "xoff": 14,
+      "ydelta": 0,
+      "yoff": 100
+    },
+    {
+      "image_number": 12,
+      "img_height": 8,
+      "img_off": 8,
+      "maxshown": 1,
+      "name": "Shard",
+      "xoff": 14,
+      "ydelta": 0,
+      "yoff": 110
+    },
+    {
+      "image_number": 0,
+      "img_height": 0,
+      "img_off": 0,
+      "maxshown": 2,
+      "name": "2 Gold Pieces",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 0
+    },
+    {
+      "image_number": 0,
+      "img_height": 0,
+      "img_off": 0,
+      "maxshown": 5,
+      "name": "5 Gold Pieces",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 0
+    },
+    {
+      "image_number": 0,
+      "img_height": 0,
+      "img_off": 0,
+      "maxshown": 10,
+      "name": "10 Gold Pieces",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 0
+    },
+    {
+      "image_number": 0,
+      "img_height": 0,
+      "img_off": 0,
+      "maxshown": 100,
+      "name": "100 Gold Pieces",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 0
+    },
+    {
+      "image_number": 0,
+      "img_height": 0,
+      "img_off": 0,
+      "maxshown": 0,
+      "name": "quiver of arrows",
+      "xoff": 0,
+      "ydelta": 0,
+      "yoff": 0
+    }
+  ],
+  "semantics": "36 struct inv_item entries (fmain.c:380-418). Inventory item display descriptors; maxshown doubles as gold value for coins. name is the display string.",
+  "shape": [
+    36,
+    8
+  ],
+  "source": "src/fmain.c"
+}

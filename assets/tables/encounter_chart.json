@@ -1,0 +1,108 @@
+{
+  "fields": [
+    "hitpoints",
+    "agressive",
+    "arms",
+    "cleverness",
+    "treasure",
+    "file_id"
+  ],
+  "line": 52,
+  "name": "encounter_chart",
+  "rows": [
+    {
+      "agressive": 1,
+      "arms": 2,
+      "cleverness": 0,
+      "file_id": 6,
+      "hitpoints": 18,
+      "treasure": 2
+    },
+    {
+      "agressive": 1,
+      "arms": 4,
+      "cleverness": 1,
+      "file_id": 6,
+      "hitpoints": 12,
+      "treasure": 1
+    },
+    {
+      "agressive": 1,
+      "arms": 6,
+      "cleverness": 1,
+      "file_id": 7,
+      "hitpoints": 16,
+      "treasure": 4
+    },
+    {
+      "agressive": 1,
+      "arms": 3,
+      "cleverness": 0,
+      "file_id": 7,
+      "hitpoints": 8,
+      "treasure": 3
+    },
+    {
+      "agressive": 1,
+      "arms": 6,
+      "cleverness": 1,
+      "file_id": 8,
+      "hitpoints": 16,
+      "treasure": 0
+    },
+    {
+      "agressive": 1,
+      "arms": 3,
+      "cleverness": 0,
+      "file_id": 7,
+      "hitpoints": 9,
+      "treasure": 0
+    },
+    {
+      "agressive": 1,
+      "arms": 6,
+      "cleverness": 1,
+      "file_id": 8,
+      "hitpoints": 10,
+      "treasure": 0
+    },
+    {
+      "agressive": 1,
+      "arms": 7,
+      "cleverness": 1,
+      "file_id": 8,
+      "hitpoints": 40,
+      "treasure": 0
+    },
+    {
+      "agressive": 1,
+      "arms": 6,
+      "cleverness": 1,
+      "file_id": 9,
+      "hitpoints": 12,
+      "treasure": 0
+    },
+    {
+      "agressive": 1,
+      "arms": 5,
+      "cleverness": 0,
+      "file_id": 9,
+      "hitpoints": 50,
+      "treasure": 0
+    },
+    {
+      "agressive": 0,
+      "arms": 0,
+      "cleverness": 0,
+      "file_id": 9,
+      "hitpoints": 4,
+      "treasure": 0
+    }
+  ],
+  "semantics": "11 struct encounter entries (fmain.c:54-64). Per-race combat stats; indexed by character.race. agressive (sic) is vestigial; arms indexes weapon_probs, treasure indexes treasure_probs, cleverness picks ATTACK1/2.",
+  "shape": [
+    11,
+    6
+  ],
+  "source": "src/fmain.c"
+}

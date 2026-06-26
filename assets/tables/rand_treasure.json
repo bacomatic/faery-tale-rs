@@ -1,0 +1,27 @@
+{
+  "line": 987,
+  "name": "rand_treasure",
+  "semantics": "16 enum-obytes object ids (fmain2.c:987-991). Random treasure scattered into a region: rand_treasure[rnd(15)] (fmain2.c:1236). Resolved from enum obytes.",
+  "shape": [
+    16
+  ],
+  "source": "src/fmain2.c",
+  "values": [
+    16,
+    16,
+    16,
+    16,
+    15,
+    13,
+    25,
+    11,
+    26,
+    26,
+    26,
+    242,
+    23,
+    22,
+    154,
+    15
+  ]
+}

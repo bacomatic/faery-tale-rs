@@ -1,0 +1,133 @@
+{
+  "fields": [
+    "image_0",
+    "image_1",
+    "image_2",
+    "image_3",
+    "terra1",
+    "terra2",
+    "sector",
+    "region",
+    "setchar"
+  ],
+  "line": 615,
+  "name": "file_index",
+  "rows": [
+    {
+      "image_0": 320,
+      "image_1": 480,
+      "image_2": 520,
+      "image_3": 560,
+      "region": 160,
+      "sector": 32,
+      "setchar": 22,
+      "terra1": 0,
+      "terra2": 1
+    },
+    {
+      "image_0": 320,
+      "image_1": 360,
+      "image_2": 400,
+      "image_3": 440,
+      "region": 160,
+      "sector": 32,
+      "setchar": 21,
+      "terra1": 2,
+      "terra2": 3
+    },
+    {
+      "image_0": 320,
+      "image_1": 360,
+      "image_2": 520,
+      "image_3": 560,
+      "region": 168,
+      "sector": 32,
+      "setchar": 22,
+      "terra1": 2,
+      "terra2": 1
+    },
+    {
+      "image_0": 320,
+      "image_1": 360,
+      "image_2": 400,
+      "image_3": 440,
+      "region": 168,
+      "sector": 32,
+      "setchar": 21,
+      "terra1": 2,
+      "terra2": 3
+    },
+    {
+      "image_0": 320,
+      "image_1": 480,
+      "image_2": 520,
+      "image_3": 600,
+      "region": 176,
+      "sector": 32,
+      "setchar": 0,
+      "terra1": 0,
+      "terra2": 4
+    },
+    {
+      "image_0": 320,
+      "image_1": 280,
+      "image_2": 240,
+      "image_3": 200,
+      "region": 176,
+      "sector": 32,
+      "setchar": 23,
+      "terra1": 5,
+      "terra2": 6
+    },
+    {
+      "image_0": 320,
+      "image_1": 640,
+      "image_2": 520,
+      "image_3": 600,
+      "region": 184,
+      "sector": 32,
+      "setchar": 0,
+      "terra1": 7,
+      "terra2": 4
+    },
+    {
+      "image_0": 320,
+      "image_1": 280,
+      "image_2": 240,
+      "image_3": 200,
+      "region": 184,
+      "sector": 32,
+      "setchar": 24,
+      "terra1": 5,
+      "terra2": 6
+    },
+    {
+      "image_0": 680,
+      "image_1": 720,
+      "image_2": 800,
+      "image_3": 840,
+      "region": 192,
+      "sector": 96,
+      "setchar": 0,
+      "terra1": 8,
+      "terra2": 9
+    },
+    {
+      "image_0": 680,
+      "image_1": 760,
+      "image_2": 800,
+      "image_3": 840,
+      "region": 192,
+      "sector": 96,
+      "setchar": 0,
+      "terra1": 10,
+      "terra2": 9
+    }
+  ],
+  "semantics": "10 struct need entries (fmain.c:615-625), one per region F1-F10. Asset-loading descriptor: image[4] file indices, terra1/terra2 terrain files, sector, region map, setchar.",
+  "shape": [
+    10,
+    9
+  ],
+  "source": "src/fmain.c"
+}
