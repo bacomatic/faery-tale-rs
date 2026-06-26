@@ -14,3 +14,10 @@ tools/results/
 # Local LLM config
 tools/.env
 /graphify-out
+
+# ignore experiment output but keep the scripts
+/experiment/shaders/frames
+
+# local convenience symlink to the sibling game assets (see assets/tasks/_SHARED.md)
+/game
+
