@@ -1,8 +1,8 @@
 {
   "color_index": 31,
   "default": {
-    "amiga12": "0x0bdf",
     "index": 31,
+    "rgb4": "0x0bdf",
     "rgba8": [
       187,
       221,
@@ -12,8 +12,8 @@
   },
   "regions": {
     "4": {
-      "amiga12": "0x0980",
       "index": 31,
+      "rgb4": "0x0980",
       "rgba8": [
         153,
         136,
@@ -22,8 +22,8 @@
       ]
     },
     "9": {
-      "amiga12": "0x0445",
       "index": 31,
+      "rgb4": "0x0445",
       "rgba8": [
         68,
         68,

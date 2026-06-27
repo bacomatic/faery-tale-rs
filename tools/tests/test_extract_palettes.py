@@ -85,16 +85,16 @@ def test_sun_colors_endpoints(arrays):
 def test_make_entry(value, rgba):
     entry = ep.make_entry(7, value)
     assert entry["index"] == 7
-    assert entry["amiga12"] == f"0x0{value:03x}"
+    assert entry["rgb4"] == f"0x0{value:03x}"
     assert tuple(entry["rgba8"]) == rgba
 
 
-def test_entries_rgba_consistent_with_amiga12(arrays):
-    # Every emitted rgba8 must match asset_common's conversion of amiga12.
+def test_entries_rgba_consistent_with_rgb4(arrays):
+    # Every emitted rgba8 must match asset_common's conversion of rgb4.
     for values in arrays.values():
         for entry in ep.build_palette(values):
-            v = int(entry["amiga12"], 16)
-            assert tuple(entry["rgba8"]) == ac.amiga12_to_rgba8(v)
+            v = int(entry["rgb4"], 16)
+            assert tuple(entry["rgba8"]) == ac.rgb4_to_rgba8(v)
 
 
 # --- region overrides ------------------------------------------------------
@@ -102,9 +102,9 @@ def test_entries_rgba_consistent_with_amiga12(arrays):
 def test_region_overrides():
     ov = ep.build_region_overrides()
     assert ov["color_index"] == 31
-    assert ov["default"]["amiga12"] == "0x0bdf"
-    assert ov["regions"]["4"]["amiga12"] == "0x0980"
-    assert ov["regions"]["9"]["amiga12"] == "0x0445"
+    assert ov["default"]["rgb4"] == "0x0bdf"
+    assert ov["regions"]["4"]["rgb4"] == "0x0980"
+    assert ov["regions"]["9"]["rgb4"] == "0x0445"
     # Index is always 31 across overrides.
     assert ov["default"]["index"] == 31
     assert all(r["index"] == 31 for r in ov["regions"].values())
@@ -122,7 +122,7 @@ def test_main_writes_deterministic_json(tmp_path):
 
     page = json.loads((out / "pagecolors.json").read_text())
     assert len(page) == 32
-    assert page[31] == {"index": 31, "amiga12": "0x0bdf",
+    assert page[31] == {"index": 31, "rgb4": "0x0bdf",
                         "rgba8": [187, 221, 255, 255]}
 
     # Re-run must be byte-identical (deterministic output).

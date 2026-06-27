@@ -3,7 +3,8 @@
 All conversions here are *pixel-/byte-exact*. No gameplay, engine, rendering,
 or creative changes. See ``assets/tasks/_SHARED.md`` for the conventions:
 
-* Amiga 12-bit colour ``0x0RGB`` -> ``rgba8`` by nibble replication (``0xF -> 0xFF``).
+* RGB4 colour (the Amiga OCS 12-bit ``0x0RGB`` value, 4 bits per channel)
+  -> ``rgba8`` by nibble replication (``0xF -> 0xFF``).
 * Transparency convention: sprite/tile palette index **31** is transparent.
 * Highlight mask: 1 bit/pixel, set where the source palette index is in
   **16..24** (inclusive); pixels with no highlight (which includes the
@@ -74,18 +75,18 @@ def build_arg_parser(description: str = "") -> argparse.ArgumentParser:
 # --------------------------------------------------------------------------- #
 # Colour conversion
 # --------------------------------------------------------------------------- #
-def amiga12_to_rgba8(v: int) -> tuple[int, int, int, int]:
-    """Convert a 12-bit Amiga colour ``0x0RGB`` to ``(r, g, b, a)`` bytes.
+def rgb4_to_rgba8(v: int) -> tuple[int, int, int, int]:
+    """Convert an RGB4 colour ``0x0RGB`` (Amiga OCS 12-bit) to ``(r, g, b, a)`` bytes.
 
     Each 4-bit channel is nibble-replicated (``0xF -> 0xFF``, ``0x1 -> 0x11``).
     Alpha is always 255 (opaque); transparency is handled per-pixel via the
     palette index, not the colour value.
 
-    >>> amiga12_to_rgba8(0x0FFF)
+    >>> rgb4_to_rgba8(0x0FFF)
     (255, 255, 255, 255)
-    >>> amiga12_to_rgba8(0x0123)
+    >>> rgb4_to_rgba8(0x0123)
     (17, 34, 51, 255)
-    >>> amiga12_to_rgba8(0x0F0F)
+    >>> rgb4_to_rgba8(0x0F0F)
     (255, 0, 255, 255)
     """
     v &= 0xFFF

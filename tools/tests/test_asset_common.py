@@ -18,7 +18,7 @@ from PIL import Image  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
-# amiga12_to_rgba8
+# rgb4_to_rgba8
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     "v,expected",
@@ -33,8 +33,8 @@ from PIL import Image  # noqa: E402
         (0xF123, (0x11, 0x22, 0x33, 255)),
     ],
 )
-def test_amiga12_to_rgba8(v, expected):
-    assert ac.amiga12_to_rgba8(v) == expected
+def test_rgb4_to_rgba8(v, expected):
+    assert ac.rgb4_to_rgba8(v) == expected
 
 
 # --------------------------------------------------------------------------- #

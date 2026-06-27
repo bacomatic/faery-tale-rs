@@ -41,7 +41,7 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
   tree — **pre-existing**, not from this work. Worth fixing separately.
 
 - **T1.1** — `tools/extract_palettes.py` emits `pagecolors/textcolors/introcolors/sun_colors/blackcolors/region_overrides`
-  JSON ({index, amiga12, rgba8}). Verified PASS: `pagecolors` 0/16/24/31 hand-transcribed from `src/fmain2.c`;
+  JSON ({index, rgb4, rgba8}). Verified PASS: `pagecolors` 0/16/24/31 hand-transcribed from `src/fmain2.c`;
   counts (32/20/32/53/32) confirmed; region overrides (4=0x0980, 9=0x0445, default 0x0bdf) hand-converted;
   Rust `palette.rs` `(r<<4)|r` == Python `*17` nibble-replication; pytest 19/19; `.gitkeep` removed.
   Doc nit: `pagecolors`/`sun_colors` actually live in `src/fmain2.c` (not fmain.c); extractor scans both, so no impact.

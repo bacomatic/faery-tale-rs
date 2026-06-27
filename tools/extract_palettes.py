@@ -18,9 +18,10 @@ before every fade. Only colour index 31 varies by region:
 
 This extractor is a *byte-exact* converter: it pulls the raw C arrays (reusing
 the generic extractor in ``extract_table.py``) and emits, for every entry,
-``{index, amiga12, rgba8}`` where ``amiga12`` is the canonical ``0x0RGB`` string
-and ``rgba8`` is produced by ``asset_common.amiga12_to_rgba8`` (nibble
-replication). No gameplay, engine, or creative changes.
+``{index, rgb4, rgba8}`` where ``rgb4`` is the canonical ``0x0RGB`` string
+(the Amiga OCS 12-bit value, 4 bits per channel) and ``rgba8`` is produced by
+``asset_common.rgb4_to_rgba8`` (nibble replication). No gameplay, engine, or
+creative changes.
 
 Usage::
 
@@ -60,17 +61,17 @@ REGION_OVERRIDES = {4: 0x0980, 9: 0x0445}
 COLOR31_DEFAULT = 0x0BDF
 
 
-def amiga12_str(v: int) -> str:
-    """Render a 12-bit Amiga colour as the canonical ``0x0RGB`` string."""
+def rgb4_str(v: int) -> str:
+    """Render an RGB4 colour (Amiga OCS 12-bit) as the canonical ``0x0RGB`` string."""
     return f"0x0{v & 0xFFF:03x}"
 
 
 def make_entry(index: int, value: int) -> dict:
-    """Build a ``{index, amiga12, rgba8}`` record for one colour."""
+    """Build a ``{index, rgb4, rgba8}`` record for one colour."""
     return {
         "index": index,
-        "amiga12": amiga12_str(value),
-        "rgba8": list(ac.amiga12_to_rgba8(value)),
+        "rgb4": rgb4_str(value),
+        "rgba8": list(ac.rgb4_to_rgba8(value)),
     }
 
 

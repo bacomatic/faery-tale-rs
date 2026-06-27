@@ -15,7 +15,9 @@ file points you to a specific section.
   change — a `.gitkeep` must exist only in dirs that are still empty. The Verifier confirms no
   `.gitkeep` remains alongside real output.
 - JSON: stable key ordering, deterministic byte output (re-runs must be identical).
-- Amiga color conversion: 12-bit `0x0RGB` → `rgba8` by nibble-replication (`0xF → 0xFF`).
+- Color conversion: `rgb4` (the Amiga OCS 12-bit `0x0RGB` value, 4 bits/channel) → `rgba8`
+  by nibble-replication (`0xF → 0xFF`). The palette JSON key is `rgb4`; the helper is
+  `asset_common.rgb4_to_rgba8`.
 - Transparency convention: sprite/tile **index 31** = transparent.
 - Highlight mask: 1 bit/pixel, set where source palette index ∈ **16–24**; transparency
   follows index 31.

@@ -111,7 +111,7 @@ def decode_tile_indices(mem, T):
 
 def palette_rgba(amiga_pal):
     """12-bit palette -> list[32] of (r,g,b,a) with idx31 transparent."""
-    return [fp.amiga12_to_rgba8(amiga_pal[i], i) for i in range(32)]
+    return [fp.rgb4_to_rgba8(amiga_pal[i], i) for i in range(32)]
 
 
 def bake_image(grid, rgba_pal):
@@ -164,8 +164,8 @@ def main():
         palettes[lv] = amiga
         entries = []
         for i in range(32):
-            r, g, b, _ = fp.amiga12_to_rgba8(amiga[i], i)
-            entries.append({"index": i, "amiga12": f"0x{amiga[i]:03X}",
+            r, g, b, _ = fp.rgb4_to_rgba8(amiga[i], i)
+            entries.append({"index": i, "rgb4": f"0x{amiga[i]:03X}",
                             "rgba8": [r, g, b, 255 if i != 31 else 0]})
         lut["levels"][str(lv)] = entries
     with open(args.lut, "w") as f:

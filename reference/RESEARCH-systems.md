@@ -104,7 +104,7 @@ Region transitions are triggered by crossing outdoor boundaries (`gen_mini()` at
 
 ### 17.7 Frame Timing
 
-The frame rate is locked to vertical blank. `pagechange()` at `fmain.c:2993-3005` calls `WaitBOVP(&vp_text)`, blocking until the next VBLANK period. On PAL Amiga this is ~50 Hz, NTSC ~60 Hz. One main loop iteration = one frame = one VBLANK.
+The frame rate is locked to vertical blank. `pagechange()` at `fmain.c:2993-3005` calls `WaitBOVP(&vp_text)`, blocking until the next VBLANK period. On NTSC Amiga this is ~60 Hz, PAL is irrelevant for this project. One main loop iteration = one frame = one VBLANK.
 
 Exceptions: `continue` statements at `fmain.c:1374` (viewstatus 1/4) and `fmain.c:1378` (pause) skip page-flip and use `Delay(1)` instead.
 

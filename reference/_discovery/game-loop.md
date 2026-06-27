@@ -391,7 +391,7 @@ Swaps `fp_drawing`/`fp_viewing` pointers, rebuilds copper list for new view, loa
 
 ## Frame Timing
 
-**The frame rate is locked to the vertical blank (VBLANK)**. `pagechange()` calls `WaitBOVP(&vp_text)` which blocks until the next vertical blanking period of the text viewport. On PAL Amiga this is ~50 Hz, on NTSC ~60 Hz.
+**The frame rate is locked to the vertical blank (VBLANK)**. `pagechange()` calls `WaitBOVP(&vp_text)` which blocks until the next vertical blanking period of the text viewport. On NTSC Amiga this is ~60 Hz, PAL is irrelevant for this project.
 
 There is **one iteration of the main while loop per frame** (one tick = one pagechange = one VBLANK). However:
 - The `continue` statements at fmain.c:1374 (viewstatus 1/4 wait) and fmain.c:1378 (pause) skip the pagechange entirely and use `Delay(1)` instead — these still produce ~1 tick delay but no actual frame rendering.

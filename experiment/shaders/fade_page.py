@@ -29,8 +29,8 @@ def expand4(n):
     return (n << 4) | n
 
 
-def amiga12_to_rgba8(c, index=None):
-    """12-bit 0x0RGB -> (r,g,b,a) 8-bit. Alpha 0 only for sprite index 31."""
+def rgb4_to_rgba8(c, index=None):
+    """RGB4 0x0RGB (Amiga OCS 12-bit) -> (r,g,b,a) 8-bit. Alpha 0 only for sprite index 31."""
     r = expand4((c >> 8) & 0xF)
     g = expand4((c >> 4) & 0xF)
     b = expand4(c & 0xF)

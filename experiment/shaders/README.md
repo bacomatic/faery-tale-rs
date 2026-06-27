@@ -10,7 +10,7 @@ See **`FINDINGS.md`** for the verdict and **`DECOMPOSITION.md`** for the exact `
 |------|------------|
 | `fade_page.py` | Verbatim integer port of `fade_page()` (`src/fmain2.c:377-419`) — the reference oracle. |
 | `extract_experiment.py` | ADF → indexed hero (julian) + F8 terrain → `daynight_lut.json` + baked `frames/`. |
-| `daynight_lut.json` | **The concrete RGB table**: per light level × 32 palette entries (`amiga12` + `rgba8`). |
+| `daynight_lut.json` | **The concrete RGB table**: per light level × 32 palette entries (`rgb4` + `rgba8`). |
 | `daynight_bank.glsl` | Rebuttal #1 — sample/cross-fade a prebaked per-level RGBA bank (no runtime index). |
 | `daynight_live.glsl` | Rebuttal #2 — full `fade_page()` live from full-bright RGBA + 1-bit `highlight_mask`. |
 | `compare.py` | Bit-exact proof: bank == live == `fade_page()` at every level. Exit 0 = refuted. |

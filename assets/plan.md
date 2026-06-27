@@ -58,7 +58,7 @@ assets/
   palettes/
     pagecolors.json  textcolors.json  introcolors.json  sun_colors.json
     region_overrides.json       # per-region color-31 variants (desert/dungeon)
-    # each: {index, amiga12 (0x0RGB), rgba8} so both exact + convenient forms exist
+    # each: {index, rgb4 (0x0RGB Amiga OCS 12-bit), rgba8} so both exact + convenient forms exist
   tiles/                        # background tile atlas, per region
     region_<NN>/atlas_indexed.png  atlas_rgba.png  atlas_highlightmask.png  tiles.json
   sprites/                      # one folder + atlas PER actor type (18 cfiles)
@@ -110,7 +110,8 @@ existing tool; **[new]** = new extractor module.
 3. **Palettes** — **[new]** `tools/extract_palettes.py`. Extract `pagecolors`, `textcolors`,
    `introcolors`, `sun_colors`, `blackcolors` from `fmain.c`, plus per-region color-31 overrides
    (`fade_page` in `fmain2.c`: region 4 = 0x0980, region 9 = 0x0445, else 0x0bdf). Emit both
-   `amiga12` and `rgba8` per entry. Reuse `extract_table.py` to pull the raw C arrays.
+   `rgb4` (the Amiga OCS 12-bit `0x0RGB` value) and `rgba8` per entry. Reuse `extract_table.py`
+   to pull the raw C arrays.
 4. **Shadow/collision masks** — **[new]** `tools/extract_masks.py`. 256 entries × 64 B (32 rows ×
    2 B, 1 bit/pixel) from ADF. Emit indexed PNG + JSON bit layout.
 5. **IFF screens** — **[new]** `tools/extract_screens.py`. Parse IFF/ILBM (BMHD/CMAP/BODY,
