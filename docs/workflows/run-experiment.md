@@ -1,11 +1,10 @@
----
-description: "Run an experiment to verify a research claim — writes and executes a verification script in tools/, reports pass/fail results"
-agent: "experimenter"
-argument-hint: "Describe what to verify (e.g., 'validate all source citations in RESEARCH.md', 'extract direction vectors from fsubs.asm', 'verify combat damage formula')"
----
-Run an experiment to verify the research claim described below. Follow the full experiment workflow: check for existing tools, write or extend a script, run it, save results, and report findings.
+# Workflow: Run an Experiment
 
-**Experiment:** {{ input }}
+*Run an experiment to verify a research claim — writes and executes a verification script in `tools/`, reports pass/fail results.*
+
+**Input:** what to verify (e.g., "validate all source citations in RESEARCH.md", "extract direction vectors from fsubs.asm", "verify combat damage formula").
+
+Follow the full experiment workflow: check for existing tools, write or extend a script, run it, save results, and report findings. This is the [experimenter](../agents/experimenter.md) role's procedure.
 
 ## Step 1: Understand the claim
 
@@ -13,7 +12,7 @@ Read the relevant documentation and source code to understand what is being clai
 
 ## Step 2: Complete the Reuse Checklist (MANDATORY)
 
-List the `tools/` directory and read the Tool Inventory in the experimenter agent definition. For each existing tool, state whether it applies to this experiment and why. You must explicitly write one of:
+List the `tools/` directory and read the Tool Inventory in the [experimenter agent definition](../agents/experimenter.md). For each existing tool, state whether it applies to this experiment and why. You must explicitly write one of:
 - "Extending `<script>.py` because: ..."
 - "Importing from `<script>.py` because it provides: ..."
 - "Creating new script because no existing tool provides: ... Checked: `<tool1>` (no, because ...), `<tool2>` (no, because ...)"
@@ -43,7 +42,7 @@ Execute the script from the repo root. Capture all output. Read the FULL output 
 
 Write structured results to `tools/results/` including: experiment name, command to reproduce, pass/fail status, and detailed findings.
 
-## Step 6: Report
+## Step 7: Report
 
 Present a clear summary:
 - **Status**: PASS, FAIL, PARTIAL, or NEEDS_HUMAN_REVIEW

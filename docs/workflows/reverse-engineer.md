@@ -1,11 +1,10 @@
----
-description: "Run a reverse-engineering pass — uses the high-level scan to decompose topics, then dispatches discovery/researcher/experimenter agents in iterative waves"
-agent: "agent"
-argument-hint: "Describe scope (e.g., 'full codebase scan', 'all combat-related systems', 'everything in fmain2.c')"
----
-Run a structured reverse-engineering pass as described below. You are the **top-level orchestrator**. You do NOT do research yourself — you plan, decompose, dispatch one agent at a time, and review their output.
+# Workflow: Reverse-Engineer Pass
 
-**Scope:** {{ input }}
+*Run a structured reverse-engineering pass — uses the high-level scan to decompose topics, then dispatches discovery/researcher/experimenter agents in iterative waves.*
+
+**Input:** a scope description (e.g., "full codebase scan", "all combat-related systems", "everything in fmain2.c").
+
+You are the **top-level orchestrator**. You do NOT do research yourself — you plan, decompose, dispatch one agent at a time, and review their output.
 
 ## Iron Laws
 
@@ -30,7 +29,7 @@ No agent dispatches other agents. You are the only dispatcher.
 
 ## Phase 1: Ensure High-Level Scan Exists
 
-Check if `reference/_discovery/high_level_scan.md` exists and has content. 
+Check if `reference/_discovery/high_level_scan.md` exists and has content.
 
 - **If it exists**: Read it. This is your topic map. Skip directly to Phase 2.
 - **If it doesn't exist**: Dispatch the `scanner` agent with prompt: "Perform a full codebase survey." After it completes, read `reference/_discovery/high_level_scan.md` — do NOT trust the summary, read the file.

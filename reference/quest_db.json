@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated": "2026-06-21T00:25:38.058098+00:00",
+    "generated": "2026-07-01T17:14:16.928323+00:00",
     "generator": "tools/extract_quest_data.py",
     "description": "Quest and narrative database for The Faery Tale Adventure (1987 Amiga). Contains all dialogue text, NPC routing logic, quest item chains, transport system, and game progression data extracted from the original source code.",
     "source_files": [
@@ -145,30 +145,30 @@
       "name": "Ogre",
       "hp": 18,
       "aggressive": true,
-      "arms": 3,
-      "cleverness": 1,
-      "treasure": 0,
-      "file_id": 2
+      "arms": 2,
+      "cleverness": 0,
+      "treasure": 2,
+      "file_id": 6
     },
     {
       "race": 1,
       "name": "Orc",
-      "hp": 10,
+      "hp": 12,
       "aggressive": true,
-      "arms": 3,
-      "cleverness": 0,
-      "treasure": 0,
-      "file_id": 3
+      "arms": 4,
+      "cleverness": 1,
+      "treasure": 1,
+      "file_id": 6
     },
     {
       "race": 2,
       "name": "Wraith",
-      "hp": 15,
+      "hp": 16,
       "aggressive": true,
-      "arms": 3,
-      "cleverness": 0,
-      "treasure": 1,
-      "file_id": 4
+      "arms": 6,
+      "cleverness": 1,
+      "treasure": 4,
+      "file_id": 7
     },
     {
       "race": 3,
@@ -177,18 +177,18 @@
       "aggressive": true,
       "arms": 3,
       "cleverness": 0,
-      "treasure": 0,
-      "file_id": 4
+      "treasure": 3,
+      "file_id": 7
     },
     {
       "race": 4,
       "name": "Snake",
-      "hp": 6,
+      "hp": 16,
       "aggressive": true,
-      "arms": 1,
-      "cleverness": 0,
+      "arms": 6,
+      "cleverness": 1,
       "treasure": 0,
-      "file_id": 6
+      "file_id": 8
     },
     {
       "race": 5,

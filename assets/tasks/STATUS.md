@@ -60,8 +60,10 @@ States: `TODO` · `IN PROGRESS` · `IMPLEMENTED (awaiting verify)` · `DONE` (ve
   `src/fmain.c:52-63` / the byte-exact T1.2 `encounter_chart.json` (a pre-existing error in
   `tools/extract_quest_data.py`). Fix: the fold tool now drops the redundant `encounter_chart`/`setfig_table`
   copies so T1.2 remains the single source of truth.
-- **Follow-up (open):** `tools/extract_quest_data.py` ENCOUNTER_CHART rows 0–4 are wrong vs source — fix at the
-  extractor if that tool is used elsewhere. Not blocking the asset bundle.
+- **Follow-up (resolved):** `tools/extract_quest_data.py` ENCOUNTER_CHART rows 0–4 (Ogre/Orc/Wraith/Skeleton/Snake)
+  hand-transcribed wrong vs `src/fmain.c:52-63`. Corrected the literals in place; rows 5–10 were already correct.
+  Regenerated `reference/quest_db.json` (`--validate` passes; only the 5 rows + timestamp changed).
+  `assets/tables/quest_data.json` unaffected — T1.3's fold tool already drops the redundant `encounter_chart` copy.
 
 ## Next
 Wave 0, T1.1, T1.2, T1.3 complete. Remaining Wave 1: **T1.4** (narrative text). Wave 2 (T2.1–T2.8) unblocked.

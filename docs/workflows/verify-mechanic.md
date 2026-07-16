@@ -1,11 +1,10 @@
----
-description: "Verify a game mechanic by reading original source code, citing specific lines, and reporting findings for documentation"
-agent: "agent"
-argument-hint: "Describe the mechanic or system to verify (e.g., 'direction encoding', 'lava damage', 'door system')"
----
-Verify the game mechanic described below by following this strict workflow. Do NOT guess or infer from game behavior — all claims must be traced to source code.
+# Workflow: Verify a Mechanic
 
-**Mechanic to verify:** {{ input }}
+*Verify a game mechanic by reading original source code, citing specific lines, and reporting findings for documentation.*
+
+**Input:** the mechanic or system to verify (e.g., "direction encoding", "lava damage", "door system").
+
+Verify the mechanic by following this strict workflow. Do NOT guess or infer from game behavior — all claims must be traced to source code.
 
 ## Iron Law
 
@@ -17,7 +16,7 @@ If you haven't read the actual source line in this session, you cannot cite it. 
 
 ## Step 1: Identify relevant source files
 
-Search the original source files for code implementing this mechanic. Start with the key files listed in [copilot-instructions.md](../copilot-instructions.md) and expand as needed. Remember: source files are READ-ONLY — do not edit them.
+Search the original source files for code implementing this mechanic. Start with the key files listed in [project-overview.md](../project-overview.md) and expand as needed. Remember: source files are READ-ONLY — do not edit them.
 
 ## Step 2: Read and trace the logic
 

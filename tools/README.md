@@ -1,6 +1,6 @@
 # tools/ — Experiment Scripts for Research Verification
 
-This directory contains scripts that mechanically verify research claims made in the `reference/` documentation against the original 1987 source code. Scripts are created and run by the `@experimenter` agent, either standalone or as a subagent spawned by `@researcher`.
+This directory contains scripts that mechanically verify research claims made in the `reference/` documentation against the original 1987 source code. Scripts are created and run by the experimenter agent, either standalone or as a subagent dispatched by the orchestrator.
 
 ## Setup
 
@@ -130,4 +130,4 @@ Scripts may only **read** the original source files (`.c`, `.asm`, `.h`, `.i`, `
 
 ## Adding New Experiments
 
-The `@experimenter` agent creates new scripts as needed during verification. Before creating a new script, check if an existing one already handles the verification type — prefer extending over duplicating. See [tools-conventions.instructions.md](../.github/instructions/tools-conventions.instructions.md) for full conventions.
+The experimenter agent creates new scripts as needed during verification. Before creating a new script, check if an existing one already handles the verification type — prefer extending over duplicating. See [docs/tools-conventions.md](../docs/tools-conventions.md) for full conventions.

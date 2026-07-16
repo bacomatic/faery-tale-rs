@@ -117,11 +117,11 @@ SETFIG_TABLE = [
 
 # encounter_chart[] — fmain.c:52-63
 ENCOUNTER_CHART = [
-    {"race": 0, "name": "Ogre", "hp": 18, "aggressive": True, "arms": 3, "cleverness": 1, "treasure": 0, "file_id": 2},
-    {"race": 1, "name": "Orc", "hp": 10, "aggressive": True, "arms": 3, "cleverness": 0, "treasure": 0, "file_id": 3},
-    {"race": 2, "name": "Wraith", "hp": 15, "aggressive": True, "arms": 3, "cleverness": 0, "treasure": 1, "file_id": 4},
-    {"race": 3, "name": "Skeleton", "hp": 8, "aggressive": True, "arms": 3, "cleverness": 0, "treasure": 0, "file_id": 4},
-    {"race": 4, "name": "Snake", "hp": 6, "aggressive": True, "arms": 1, "cleverness": 0, "treasure": 0, "file_id": 6},
+    {"race": 0, "name": "Ogre", "hp": 18, "aggressive": True, "arms": 2, "cleverness": 0, "treasure": 2, "file_id": 6},
+    {"race": 1, "name": "Orc", "hp": 12, "aggressive": True, "arms": 4, "cleverness": 1, "treasure": 1, "file_id": 6},
+    {"race": 2, "name": "Wraith", "hp": 16, "aggressive": True, "arms": 6, "cleverness": 1, "treasure": 4, "file_id": 7},
+    {"race": 3, "name": "Skeleton", "hp": 8, "aggressive": True, "arms": 3, "cleverness": 0, "treasure": 3, "file_id": 7},
+    {"race": 4, "name": "Snake", "hp": 16, "aggressive": True, "arms": 6, "cleverness": 1, "treasure": 0, "file_id": 8},
     {"race": 5, "name": "Salamander", "hp": 9, "aggressive": True, "arms": 3, "cleverness": 0, "treasure": 0, "file_id": 7},
     {"race": 6, "name": "Spider", "hp": 10, "aggressive": True, "arms": 6, "cleverness": 1, "treasure": 0, "file_id": 8},
     {"race": 7, "name": "Dream Knight", "hp": 40, "aggressive": True, "arms": 7, "cleverness": 1, "treasure": 0, "file_id": 8},

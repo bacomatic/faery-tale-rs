@@ -1,12 +1,10 @@
----
-description: "Use when creating or editing experiment scripts — enforces naming conventions, result format, source read-only constraint, and tool reuse policy"
-applyTo: "tools/**"
----
 # Tools Directory Conventions
+
+Applies when creating or editing scripts under `tools/`.
 
 ## Source Files Are Read-Only
 
-Never edit `.c`, `.asm`, `.h`, `.i`, `.p` files, `makefile`, `AztecC.Err`, `fta.br`, `notes`, or anything in `game/` or `ToArchive/`. Scripts may only **read** source files to extract or verify information.
+Never edit `.c`, `.asm`, `.h`, `.i`, `.p` files, `makefile`, `AztecC.Err`, `fta.br`, `notes`, or anything in `src/`, `game/`, or `ToArchive/`. Scripts may only **read** source files to extract or verify information.
 
 ## Write Scope
 
@@ -58,7 +56,7 @@ Details:
 
 ## Script Requirements
 
-- Scripts must be runnable from the repo root: `python tools/<script>.py`
+- Scripts must be runnable from the repo root: `python tools/<script>.py` (or `tools/run.sh <script>.py` to use `.toolenv`)
 - Use `argparse` or equivalent for configurable scripts
 - Print a clear summary to stdout; write detailed results to `tools/results/`
 - Exit code 0 for PASS, 1 for FAIL, 2 for PARTIAL/NEEDS_HUMAN_REVIEW
