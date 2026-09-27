@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Extract the gameplay lookup tables from the original Faery Tale C source.
 
-This is a *byte-exact* converter (T1.2). It pulls each named C array from the
-1987 source via the generic extractor in ``extract_table.py`` (brace-aware,
-N-D, newline-tolerant) and emits one deterministic JSON per table under
-``assets/tables/``. Field names and short semantics are attached from
+The output is a set of *temporary* tables for other extractors (e.g. T2.1
+sprite animation names, T2.2 per-region tile sets); nothing here ships in
+``assets/``. It pulls each named C array from the 1987 source via the generic
+extractor in ``extract_table.py`` (brace-aware, N-D, newline-tolerant) and
+emits one deterministic JSON per table under ``tools/results/tables/``. Field
+names and short semantics are attached from
 ``reference/RESEARCH-data-structures.md``. No gameplay/engine/creative changes.
 
 Symbolic initializers are resolved to their compile-time integer values so the
@@ -25,7 +27,7 @@ Tables exported (shape / count):
 Usage::
 
     python tools/extract_tables.py
-    python tools/extract_tables.py --src-dir src/ --out-dir assets/tables
+    python tools/extract_tables.py --src-dir src/ --out-dir tools/results/tables
 """
 
 from __future__ import annotations
@@ -118,38 +120,38 @@ STRUCT_FIELDS = {
 }
 
 SEMANTICS = {
-    "statelist": "87 struct state entries (fmain.c:143-205). Maps "
+    "statelist": "87 struct state entries (fmain.c:154-204). Maps "
                  "(motion_state, facing, frame) -> (figure image, weapon "
                  "overlay index, weapon x/y offset). 0-7 south walk, 8-15 west "
                  "walk, 16-23 north walk, 24-31 east walk, 32-79 fight blocks "
                  "(12 states x 4 facings), 80-82 death, 83 sink, 84-85 "
                  "oscillation, 86 asleep.",
-    "encounter_chart": "11 struct encounter entries (fmain.c:54-64). Per-race "
+    "encounter_chart": "11 struct encounter entries (fmain.c:52-64). Per-race "
                        "combat stats; indexed by character.race. agressive "
                        "(sic) is vestigial; arms indexes weapon_probs, treasure "
                        "indexes treasure_probs, cleverness picks ATTACK1/2.",
-    "inv_list": "36 struct inv_item entries (fmain.c:380-418). Inventory item "
+    "inv_list": "36 struct inv_item entries (fmain.c:380-424). Inventory item "
                 "display descriptors; maxshown doubles as gold value for coins. "
                 "name is the display string.",
-    "weapon_probs": "8 groups of 4 (fmain2.c:860-868). Weapon-at-spawn lookup: "
+    "weapon_probs": "8 groups of 4 (fmain2.c:860-869). Weapon-at-spawn lookup: "
                     "weapon_probs[arms*4 + rnd(4)]. 0=none 1=dirk 2=mace "
                     "3=sword 4=bow 5=wand 8=touch.",
     "treasure_probs": "5 groups of 8 (fmain2.c:852-858). Loot-on-search lookup: "
                       "treasure_probs[treasure*8 + rnd(8)]. Values are object ids.",
-    "rand_treasure": "16 enum-obytes object ids (fmain2.c:987-991). Random "
+    "rand_treasure": "16 enum-obytes object ids (fmain2.c:987-992). Random "
                      "treasure scattered into a region: rand_treasure[rnd(15)] "
                      "(fmain2.c:1236). Resolved from enum obytes.",
     "diroffs": "16-entry walk/fight base selector (fmain.c:1010). 0-7 pick walk "
                "bases, 8-15 pick fight/shoot bases for statelist.",
-    "fallstates": "24 UBYTE (fmain2.c:871-874), logically 4 rows x 6. Death/fall "
+    "fallstates": "24 UBYTE (fmain2.c:871-875), logically 4 rows x 6. Death/fall "
                   "animation state targets; fallstates[j].",
-    "setfig_table": "14 NPC type descriptors (fmain.c:24-37). cfile_entry = "
+    "setfig_table": "14 NPC type descriptors (fmain.c:24-39). cfile_entry = "
                     "image file (seq_list index), image_base = sub-image offset, "
                     "can_talk = enables TALKING visual effect.",
-    "file_index": "10 struct need entries (fmain.c:615-625), one per region "
+    "file_index": "10 struct need entries (fmain.c:615-626), one per region "
                   "F1-F10. Asset-loading descriptor: image[4] file indices, "
                   "terra1/terra2 terrain files, sector, region map, setchar.",
-    "trans_list": "9 struct transition entries (fmain.c:138-146). Fight-swing "
+    "trans_list": "9 struct transition entries (fmain.c:139-148). Fight-swing "
                   "animation transitions; next state = "
                   "trans_list[state].newstate[rnd(4)].",
 }
@@ -212,8 +214,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--src-dir", type=Path, default=REPO_ROOT / "src",
                         help="Original C source directory (default: src/).")
     parser.add_argument("--out-dir", type=Path,
-                        default=REPO_ROOT / "assets" / "tables",
-                        help="Output directory (default: assets/tables).")
+                        default=REPO_ROOT / "tools" / "results" / "tables",
+                        help="Output directory (default: tools/results/tables).")
     args = parser.parse_args(argv)
 
     enum_obytes = parse_enum((args.src_dir / "fmain2.c").read_text(errors="replace"),

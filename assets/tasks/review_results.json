@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "rounds": [
+    {
+      "task": "T1.1",
+      "submitted_at": "2026-09-27T01:56:35+00:00",
+      "verdict": "ACCEPT",
+      "notes": "",
+      "items": [
+        {
+          "resource": "palettes",
+          "id": "pagecolors",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "palettes",
+          "id": "textcolors",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "palettes",
+          "id": "introcolors",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "palettes",
+          "id": "sun_colors",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "palettes",
+          "id": "blackcolors",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "palettes",
+          "id": "region_overrides",
+          "status": "ok",
+          "note": ""
+        }
+      ],
+      "files": {
+        "assets/palettes/blackcolors.json": "17b63ca181202c9b0c60eafce7ec2879384f634a7340b2c0edd6a6eb435b87a6",
+        "assets/palettes/introcolors.json": "4c6d97ef48538b71912fc19b9e1fc461b5c1d06598febe725dee3db87e52db1e",
+        "assets/palettes/pagecolors.json": "8477385ffa239cbfbd270ccdf8663f05a7c800d5b5bdeaaeb2bb387ec29b93d3",
+        "assets/palettes/previews/blackcolors.png": "7c52dbfd1e333e0b065ae0191ca5c1a259addcc6c9c07e19e2bc7ee6ee92b153",
+        "assets/palettes/previews/introcolors.png": "f9c0979937188f2f1b7972872f260e117444e15629f671c1e7e726620a6fc860",
+        "assets/palettes/previews/pagecolors.png": "4ec7bfdf2253a1768794ce7c085789471fb214406a718aaeeaf5d658b775c7a2",
+        "assets/palettes/previews/pagecolors_region4.png": "2b17865c4368cda936f92c1e2a05a9bbb07d96432a7431e4fd116d61543815ae",
+        "assets/palettes/previews/pagecolors_region9.png": "1eddd95db071174a4412fc2e4fa845587a2ee0afe0c1dc4d13a7781ed202e1f2",
+        "assets/palettes/previews/pagecolors_region9_secret_timer.png": "91f8e179d71770e2e373a24b034e9581bafd1696baf7c466e8c3365fb645129a",
+        "assets/palettes/previews/sun_colors.png": "f92b7d7f9360c155c8bfed62dc4e4d7d9aae7450bc9ea38bc024b612cc1ab9cf",
+        "assets/palettes/previews/textcolors.png": "71a3268fc5b49c188c30efb7e8fe3aeef0a64d3040c7406c962621615d39336d",
+        "assets/palettes/region_overrides.json": "1fd2b3bd0b1a0a5f3b175baa8331231428440629d71a0a18c7a1fd441f27aff1",
+        "assets/palettes/sun_colors.json": "ff75b0ac3b2641b020ebb1eb1c7f4d5c056e91e236fa93fd17d3559bcb9559fd",
+        "assets/palettes/textcolors.json": "83a4717b1d34ac592434aa58c8d4822661e0dff7009a428a8b0086e1645f6d10"
+      }
+    },
+    {
+      "task": "T1.2",
+      "submitted_at": "2026-09-27T02:04:05+00:00",
+      "verdict": "ACCEPT",
+      "notes": "",
+      "items": [
+        {
+          "resource": "tables",
+          "id": "statelist",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "encounter_chart",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "inv_list",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "weapon_probs",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "treasure_probs",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "rand_treasure",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "diroffs",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "fallstates",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "setfig_table",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "file_index",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "trans_list",
+          "status": "ok",
+          "note": ""
+        }
+      ],
+      "files": {
+        "assets/tables/diroffs.json": "6ae557d898a9777ba8dc0eeca9548c1161d40fbb4464e0546889aff75e5c5b72",
+        "assets/tables/encounter_chart.json": "520ad113f1f902c29df291215804cfa2d0660eec756041da5950ae9cfa56e47c",
+        "assets/tables/fallstates.json": "3c58868f1d06118ea1007bf49196b32fccda2f3e5cd477bbcf2f0a381a005370",
+        "assets/tables/file_index.json": "b470623fef02f241d53d2cb8dbeae16a6b4d405350da47cc869b4e33cc010f62",
+        "assets/tables/inv_list.json": "c69ef7d3c720e7235bf6d960cd8cb046cf94ed1e32028628bf2db14c5259563b",
+        "assets/tables/rand_treasure.json": "554af3da9629a38a6b429d877396d432c1f6b4c9969d2d783d5df94184ca8789",
+        "assets/tables/setfig_table.json": "b0ff646cfc4a7d84da11c57b375e9236aba56db3761c1c73deee2b144227509c",
+        "assets/tables/statelist.json": "d3bbd4b0f5ad2dafbadb6680b4b5b6568b04cc6c3272a17f9f6b40dd8acfddd4",
+        "assets/tables/trans_list.json": "988ec3a4b92dce3506ed632ed04101def9d16827004db7344f2dc6e30ec07c40",
+        "assets/tables/treasure_probs.json": "ce6a1531b2041f862ded64ed8d29121158c12f5afe0a5009be441474dec78079",
+        "assets/tables/weapon_probs.json": "3e1f01889e742991434c02efd968e8471cc3d9bdb53ccef3657d38c1e0f05e51"
+      }
+    },
+    {
+      "task": "T1.3",
+      "submitted_at": "2026-09-27T02:19:41+00:00",
+      "verdict": "REJECT",
+      "notes": "",
+      "items": [
+        {
+          "resource": "tables",
+          "id": "item_effects",
+          "status": "ok",
+          "note": ""
+        },
+        {
+          "resource": "tables",
+          "id": "quest_data",
+          "status": "problem",
+          "note": "Dragon does not drop the talisman on death, correct that note. goal_messages states Crystal Orb is needed to see the hidden city, this is also incorrect, you need all five golden statues. magic_effects: the MAGIC block in fmain.c:3301 is the MAGIC menu handler, the \"hit\" is which button was clicked. It says \"Glass Vial\" is not used in MAGIC handler, which is blatantly wrong, it's handled on line 3348, same with the \"Jade Skull\" it's handled on line 3355."
+        }
+      ],
+      "files": {
+        "assets/tables/item_effects.json": "dc9f64e5ca69dce51fcf63c05d2eebd8c19c665e38224ea6a7c293bec92fae9b",
+        "assets/tables/quest_data.json": "de899404bf86c12bfcf6b6662857aa536b4a8c9b6ce25fccb4c5998355164744"
+      }
+    }
+  ]
+}

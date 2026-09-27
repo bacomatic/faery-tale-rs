@@ -13,7 +13,7 @@ Task-specific guidance for agents working in this repository. The always-on cont
 
 ## Agent role definitions
 
-Detailed role prompts in [`agents/`](agents/): [scanner](agents/scanner.md) · [discovery](agents/discovery.md) · [researcher](agents/researcher.md) · [experimenter](agents/experimenter.md) · [research assistant](agents/research.md).
+Detailed role prompts in [`agents/`](agents/): [scanner](agents/scanner.md) · [discovery](agents/discovery.md) · [researcher](agents/researcher.md) · [experimenter](agents/experimenter.md).
 
 ## Workflow procedures
 

@@ -13,6 +13,12 @@ Scripts and results must stay within `tools/`:
 - Results: `tools/results/<name>.txt` or `tools/results/<name>.json`
 - Do not write files outside of `tools/`.
 
+## When a Script Is Warranted
+
+Agents extract; scripts only decode. Write a script only for binary input, data too large to
+transcribe reliably, or a check that has to be computed (e.g. 68k emulation). It must genuinely read
+the original input. Never wrap hand-typed data in a script.
+
 ## Reuse Before Creating
 
 Before creating a new script, check what already exists in `tools/`. If an existing script covers the same verification type, extend it (add arguments, new modes) rather than creating a duplicate.

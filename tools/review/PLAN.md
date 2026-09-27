@@ -12,7 +12,7 @@ site (`site/PLAN.md`), which keeps its own plan.
   Frontend is **built on demand**; `dist/` and `node_modules/` are gitignored.
 - **Instructions ship as data:** one **`verify.json` per resource subdir**, discovered recursively
   (`assets/**/verify.json`, e.g. `audio/verify.json` and `audio/sfx/verify.json`). Items are tagged
-  with their task ID; for example `tables/verify.json` holds both T1.2 and T1.3 items. `files` are
+  with their task ID, so one file can hold items from several tasks. `files` are
   relative to the `verify.json`'s own directory and may not escape it. Items for bundle-root files
   (`FORMATS.md`/`formats/`, `manifest.json`, the T4.2 final walkthrough) live in the root
   `assets/verify.json`; discovery includes it. `assets/tasks/` is not scanned.
@@ -20,7 +20,8 @@ site (`site/PLAN.md`), which keeps its own plan.
   `assets/VERIFY.md`**; the app's task list replaces it (T4.2).
 - **`verify.json` may be hand-authored or emitted by an extractor.** Either way, the app validates it
   against a shared schema and flags problems.
-- **Previews still ship** under `assets/<subdir>/previews/`, including palette swatch PNGs (T1.5).
+- **Previews still ship** under `assets/<subdir>/previews/` for non-perceivable data (music, world
+  maps). Palettes have none: the app's swatch view replaces them.
   The app also **renders data natively** (swatches, tables, text) and shows shipped previews where
   they exist.
 - **Review unit:** one page per task with **itemized** checks. Each item gets **OK / Problem + an

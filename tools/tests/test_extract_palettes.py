@@ -110,6 +110,16 @@ def test_region_overrides():
     assert all(r["index"] == 31 for r in ov["regions"].values())
 
 
+def test_region9_secret_timer_variant():
+    # fmain2.c:383: if (secret_timer) pagecolors[31] = 0x00f0;
+    cond = ep.build_region_overrides()["conditional_regions"]
+    assert set(cond) == {"9"}
+    assert cond["9"]["rgb4"] == "0x00f0"
+    assert tuple(cond["9"]["rgba8"]) == (0, 255, 0, 255)
+    assert cond["9"]["index"] == 31
+    assert "secret_timer" in cond["9"]["condition"]
+
+
 # --- end-to-end emission ---------------------------------------------------
 
 def test_main_writes_deterministic_json(tmp_path):

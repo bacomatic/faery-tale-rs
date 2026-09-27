@@ -10,13 +10,13 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 |---|---|---|---|
 | [T0.1](T0.1-scaffolding.md) Scaffolding & shared helpers | **DONE** ✅ | — | Verified PASS. `tools/asset_common.py` + tests (16 pass), `assets/` tree. |
 | [T0.2](T0.2-carray-baseline.md) C-array baseline | **DONE** ✅ | — | Verified PASS. Extended `tools/extract_table.py` (N-D + char-literal parse, `--json`); `diroffs` fixture. |
-| [T1.1](T1.1-palettes.md) Palettes | **REOPENED** | T0.1, T0.2 | JSON extracted (old-model PASS). Missing `palettes/verify.json` + swatch previews — see T1.5. |
-| [T1.2](T1.2-tables.md) Gameplay tables | **REOPENED** | T0.2 | 11 tables extracted (old-model PASS). Missing `tables/verify.json` — see T1.5. |
-| [T1.3](T1.3-item-quest.md) Item/quest fold-in | **REOPENED** | T0.1 | JSON extracted (old-model PASS). Missing T1.3 items in `tables/verify.json`; duplicate narrative text vs T1.4 — see T1.5. |
+| [T1.1](T1.1-palettes.md) Palettes | **IMPLEMENTED (awaiting review)** | T0.1, T0.2 | T1.5 A–B: `palettes/verify.json`, region-9 `secret_timer` variant added (swatch previews later removed). |
+| [T1.2](T1.2-tables.md) Gameplay tables | **DROPPED** | — | Not assets: constants stay in `reference/`, art bindings go into T2.1, `file_index` is used by T2.2/T2.5. `assets/tables/` deleted. |
+| T1.3 Item/quest data | **DROPPED** | — | Behavior, not an asset: already spec'd in `reference/logic/magic.md`, `menu-system.md`, `brother-succession.md`. |
 | [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
-| [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **TODO** | T1.1–T1.3; Part C: T1.4 | Parts A–B ready now. |
+| [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **IMPLEMENTED (awaiting review)** | T1.1 | Parts A–B done; Part C cancelled. T1.2 part moot (dropped). Reviewed via the T1.1 page. |
 | [T2.1](T2.1-sprites.md) Sprites | **TODO** | T0.1, T1.1 | Deps met — ready. |
-| [T2.2](T2.2-tiles.md) Tile atlas | TODO | T0.1, T1.1, T1.2 | Deps met — ready. |
+| [T2.2](T2.2-tiles.md) Tile atlas | TODO | T0.1, T1.1 | Deps met — ready. |
 | [T2.3](T2.3-masks.md) Shadow/collision masks | TODO | T0.1 | |
 | [T2.4](T2.4-screens.md) IFF screens | TODO | T0.1 | |
 | [T2.5](T2.5-world.md) World data | TODO | T0.1 | |
@@ -37,9 +37,9 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
   deterministic output); added `tools/tests/test_extract_table.py` (18 pass) + `tools/tests/fixtures/diroffs.json`.
   Independently verified PASS: `diroffs` hand-transcribed from `src/fmain.c:1010` matches fixture exactly;
   `fallstates` (24 entries) extracted & hex-checked; synthetic N-D/char parsing confirmed.
-- **Known unrelated failures:** `test_lint_logic::test_check_file_header_passes_on_valid_fixture` and
-  `test_research_agent::TestConfig::test_default_values` (config default 60 vs expected 15) fail on a clean
-  tree — **pre-existing**, not from this work. Worth fixing separately.
+- **Known unrelated failures (resolved 2026-09-26):** `test_lint_logic::test_check_file_header_passes_on_valid_fixture`
+  (the linter looked for sources at the repo root instead of `src/`; fixed) and
+  `test_research_agent::TestConfig::test_default_values` (deleted with `research_agent/`).
 
 - **T1.1** — `tools/extract_palettes.py` emits `pagecolors/textcolors/introcolors/sun_colors/blackcolors/region_overrides`
   JSON ({index, rgb4, rgba8}). Verified PASS: `pagecolors` 0/16/24/31 hand-transcribed from `src/fmain2.c`;
@@ -120,8 +120,44 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
   in the app (root-level items live in `assets/verify.json`). Next: Phases 1–3 (backend, frontend,
   viewers); T1.5's human review needs them.
 
+- **T1.5 Parts A–B (2026-09-26)** — done in-session (no subagent). Part A: T0.1/T0.2 get no Reviewer
+  step; T1.1–T1.3 docs fixed (citations, outputs, perception-style verification); `blackcolors` +
+  `previews/` added to the plan layout. Part B: `tools/render_palette_previews.py` →
+  `assets/palettes/previews/` (8 PNGs, pixel-checked against the JSON); `palettes/verify.json` (6 items);
+  `tables/verify.json` (11 T1.2 + 2 T1.3 items); `SEMANTICS` ranges fixed (only `semantics` lines changed
+  on regeneration). The review app reports 0 validation problems and every count matches.
+  **New findings:** (1) `region_overrides.json` was missing region 9's `secret_timer` color-31 value
+  `0x00f0` (`fmain2.c:383`). It is now emitted under `conditional_regions` (extractor + test updated).
+  (2) `quest_data.json` `events` (39) also duplicates T1.4's `event_msg` and was added to Part C.
+
+- **T1.3 redesign (2026-09-26)** — the user flagged T1.3 as confusing and its MAGIC data as broken.
+  Investigation: `extract_quest_data.py` reads no source (hand-typed constants). `magic_effects` gets
+  3 of 7 cases wrong (Vial = HEAL, Skull = kill spell, Stone mis-cited) and misses the case-5→7
+  fall-through and the no-charge `return`s (`fmain.c:3301-3366`); `inventory[34]` has the wrong gold
+  name. User decision: ship only source-extracted data. The plan is written in the T1.3 task file
+  (no code changed). Open question: keep or drop `item_effects.json`. It also makes T1.5 Part C
+  unnecessary. `reference/RESEARCH-items-world.md:43-49` citations are stale (fix is part of the plan).
+
+- **Agent-first rule + tools cleanup (2026-09-26)** — user decision, applied globally (`AGENTS.md`,
+  `_SHARED.md`, `plan.md`, `docs/tools-conventions.md`): **agents extract; scripts only decode**
+  (binary or too-large input, and they must genuinely parse the original). Deleted: `extract_quest_data.py`,
+  `extract_item_effects.py`, `fold_item_quest_tables.py` (+test), `verify_cycle_overflow.py` (unreferenced),
+  `render_palette_previews.py` + `assets/palettes/previews/` (the app's swatch view covers them),
+  `research_agent/` (+test, `.env.example`, `docs/agents/research.md`, its 4 deps), and
+  `assets/tables/{quest_data,item_effects}.json` with their `verify.json` items. Kept: the cheat tools.
+  T1.3 was rewritten as agent-authored. T1.5 Part C was cancelled. `reference/quest_db.json`'s wrong `magic_effects` and "20 Gold Pieces"
+  (source: "100 Gold Pieces", `fmain.c:418`) were fixed 2026-09-26.
+
+- **"Behavior is not an asset" (2026-09-26)** — user decision: the goal is a new game that looks and feels
+  the same, so `assets/` holds sensory content only (`plan.md`, `_SHARED.md`). **T1.3 dropped** (item
+  effects, menus and brother stats are already in `reference/logic/magic.md`, `menu-system.md`,
+  `brother-succession.md`). **T1.2 dropped**, `assets/tables/` deleted; the split is recorded in the T1.2
+  task file, and `tools/extract_tables.py` now writes temporary tables to `tools/results/tables/`.
+  Reference fixes: `RESEARCH-items-world.md` MAGIC citations corrected; `logic/magic.md` corrected (an
+  on-tile Blue Stone with no matching stone still heals and is consumed, `fmain.c:3331-3348`).
+  `validate_citations.py` and `lint_logic.py` fixed to read `src/` (5588/5588 citations valid; lint clean).
+
 ## Next
-Wave 0 complete. T1.1–T1.3 reopened → **T1.5** Parts A–B (ready now). Remaining Wave 1: **T1.4**
-(narrative text, scope extended — see Plan review log entry), then T1.5 Part C. Wave 2 (T2.1–T2.8) unblocked. Side track: build the browser site in small
-bursts per [`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next). **Everything above is uncommitted**
-— commit (with user consent) before dispatching subagents.
+Wave 0 complete. **Human re-review of T1.1** in the review app (stale after the preview removal). Remaining
+Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Wave 2 (T2.1–T2.8) unblocked. Side track: build the browser site in small bursts per
+[`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next). T1.5 Parts A–B changes are uncommitted, left for review.

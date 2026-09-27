@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "tasks": {
+    "T1.1": {
+      "title": "Palettes",
+      "summary": "Five palettes from the C source plus the fade_page colour-31 region overrides, each entry as {index, rgb4, rgba8}. The review app draws the swatches from the JSON. Check counts, glance at swatches, and compare a few values to the cited source."
+    }
+  },
+  "items": [
+    {
+      "id": "pagecolors",
+      "task": "T1.1",
+      "title": "pagecolors \u2014 main page palette",
+      "view": "palette",
+      "files": ["pagecolors.json"],
+      "look_for": "32 swatches. Spot values: [0] 0x0000 \u2192 (0,0,0) black; [1] 0x0fff \u2192 (255,255,255) white; [16] 0x0040 \u2192 (0,68,0) dark green; [24] 0x0c00 \u2192 (204,0,0) red; [31] 0x0bdf \u2192 (187,221,255) pale blue.",
+      "citations": ["src/fmain2.c:367-371"],
+      "counts": [{ "label": "entries", "file": "pagecolors.json", "path": "", "expect": 32 }]
+    },
+    {
+      "id": "textcolors",
+      "task": "T1.1",
+      "title": "textcolors \u2014 text/status palette",
+      "view": "palette",
+      "files": ["textcolors.json"],
+      "look_for": "20 swatches. Spot values: [0] 0x0000 black; [1] 0x0fff white; [2] 0x0c00 \u2192 (204,0,0) red; [19] 0x0c70 \u2192 (204,119,0) orange-brown (the last entry).",
+      "citations": ["src/fmain.c:476-479"],
+      "counts": [{ "label": "entries", "file": "textcolors.json", "path": "", "expect": 20 }]
+    },
+    {
+      "id": "introcolors",
+      "task": "T1.1",
+      "title": "introcolors \u2014 intro palette",
+      "view": "palette",
+      "files": ["introcolors.json"],
+      "look_for": "32 swatches. Spot values: [0] 0x0000 black; [1] 0x0fff white; [31] 0x0eee \u2192 (238,238,238) light grey.",
+      "citations": ["src/fmain.c:484-488"],
+      "counts": [{ "label": "entries", "file": "introcolors.json", "path": "", "expect": 32 }]
+    },
+    {
+      "id": "sun_colors",
+      "task": "T1.1",
+      "title": "sun_colors \u2014 sun colour ramp",
+      "view": "palette",
+      "files": ["sun_colors.json"],
+      "look_for": "53 swatches forming a ramp: starts at 0x000 black, rises through dark blues and purples, then turns pink and orange (0xF9x-0xF8x) toward the end. The final entry [52] 0x076f \u2192 (119,102,255) is a blue-violet, breaking the ramp; [26] is 0x076e \u2192 (119,102,238).",
+      "citations": ["src/fmain2.c:1569-1576"],
+      "counts": [{ "label": "entries", "file": "sun_colors.json", "path": "", "expect": 53 }]
+    },
+    {
+      "id": "blackcolors",
+      "task": "T1.1",
+      "title": "blackcolors \u2014 all-black palette",
+      "view": "palette",
+      "files": ["blackcolors.json"],
+      "look_for": "32 swatches, all black: every entry is 0x0000 \u2192 (0,0,0).",
+      "citations": ["src/fmain.c:481-482"],
+      "counts": [{ "label": "entries", "file": "blackcolors.json", "path": "", "expect": 32 }]
+    },
+    {
+      "id": "region_overrides",
+      "task": "T1.1",
+      "title": "region_overrides \u2014 fade_page colour-31 variants",
+      "view": "palette",
+      "files": ["region_overrides.json"],
+      "look_for": "Colour 31 only. Region 4 = 0x0980 \u2192 (153,136,0) olive; region 9 = 0x0445 \u2192 (68,68,85) dark grey-blue; region 9 while secret_timer is non-zero = 0x00f0 \u2192 (0,255,0) bright green; all other regions = 0x0bdf (same as pagecolors[31]).",
+      "citations": ["src/fmain2.c:381-386"],
+      "counts": [
+        { "label": "regions", "file": "region_overrides.json", "path": "regions", "expect": 2 },
+        { "label": "conditional", "file": "region_overrides.json", "path": "conditional_regions", "expect": 1 }
+      ]
+    }
+  ]
+}

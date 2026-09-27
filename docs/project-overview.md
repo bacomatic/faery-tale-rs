@@ -14,7 +14,6 @@ Agents may only read source files to verify or extract information for documenta
 
 ```
 src/                Original source code (Aztec C + 68000 assembly) — READ ONLY
-                    (moved from repo root during the reorg; same read-only rule)
 reference/
   README.md         Documentation index — the entry point for all reference docs
   ARCHITECTURE.md   System architecture overview, Mermaid diagrams, display geometry
@@ -23,8 +22,6 @@ reference/
   logic/            Normative pseudo-code specifications for branching functions
   world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
   _discovery/       Raw findings from discovery agents — working notes, not final reference docs
-game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
-ToArchive/          Original distribution package — READ ONLY
 tools/              Verification scripts and 68k assembly testing (run via tools/run.sh)
 assets/tasks/       Self-contained asset-extraction pipeline (own conventions — see its README)
 docs/               Agent-facing contract docs (this directory)

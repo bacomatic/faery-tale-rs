@@ -62,7 +62,6 @@ Build/serve:
 - [ ] Extend `gen.py`: generate `content/gallery/*.md` pages (markdown with inline HTML):
   - **Palettes** — from `assets/palettes/*.json`: swatch grid per palette (colored `<span>`s from
     `rgba8`), index + `rgb4` labels.
-  - **Tables** — from `assets/tables/*.json`: HTML tables (cap rows at ~100).
   - **Sprites (pre-bundle)** — thumbnail grid of `sprite_output/*.png` grouped by actor prefix;
     CSS `image-rendering: pixelated`, click = open full size.
   - **Day/night experiment** — grid of `experiment/shaders/` baked frames if present.

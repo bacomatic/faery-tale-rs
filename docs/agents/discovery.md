@@ -45,7 +45,6 @@ Given a game mechanic (e.g., "terrain collision", "combat damage"), trace the fu
 ### 3. Analysis Tool Execution
 Run existing analysis tools in `tools/` to gather structured data:
 
-- `tools/extract_item_effects.py` — cross-reference map of all `stuff[N]` inventory item usage
 - `tools/decode_map_data.py` — terrain attributes, region maps, sector data from `game/image`
 - `tools/extract_table.py` — data table extraction from source files
 - `tools/validate_citations.py` — verify `file:line` references point to described code

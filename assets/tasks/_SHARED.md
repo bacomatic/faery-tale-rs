@@ -10,11 +10,19 @@ you write under `tools/` is a **byproduct kept for provenance** — it is not ma
 required to re-run, and its repeatability is **not** an acceptance criterion. Do not build
 orchestration/drivers/regeneration harnesses for their own sake.
 
+**Agents extract; scripts only decode.** Read the source and write the data yourself, citing every
+value (`file:line`) and re-reading each citation. Write a script only when the input is **binary**
+(bitplanes, samples, map/sector files) or **too large to transcribe reliably** (e.g. an 87-row C
+array). A script must genuinely parse the original input — never embed hand-typed data in one. The
+review app's citations are the check either way.
+
 ## Producer rules
-- Extraction is done in **Python** under `tools/`. Never hardcode absolute or external paths. Honor
-  `--game-dir` (default `src/assets`) and `--src-dir` (default `src/`). All original data lives
-  in-repo under `src/`.
-- **Pixel-/byte-exact conversion only.** No gameplay/engine/rendering/creative changes.
+- Scripts (where the rule above allows one) are **Python** under `tools/`. Never hardcode
+  absolute or external paths. Honor `--game-dir` (default `src/assets`) and `--src-dir` (default
+  `src/`). All original data lives in-repo under `src/`.
+- **Sensory content only, converted losslessly** (pixels, colors, samples, glyphs, text). No
+  gameplay/engine/rendering/creative changes. Behavior and its constants are not assets: they are
+  specified in `reference/logic/` (see `plan.md`, "Behavior is not an asset").
 - Output goes under `assets/<subdir>/` per the plan's Output layout — the emitted files are the
   real output.
 - **Ship manual verification instructions as data.** Each task adds its items to a

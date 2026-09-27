@@ -13,7 +13,7 @@ In addition, ``fade_page`` (``fmain2.c``) patches ``pagecolors[31]`` per region
 before every fade. Only colour index 31 varies by region:
 
 * region 4 (desert)   -> ``0x0980``
-* region 9 (dungeons) -> ``0x0445``
+* region 9 (dungeons) -> ``0x0445``, or ``0x00f0`` while ``secret_timer`` is non-zero
 * all other regions   -> ``0x0bdf`` (the default already in ``pagecolors[31]``)
 
 This extractor is a *byte-exact* converter: it pulls the raw C arrays (reusing
@@ -54,10 +54,10 @@ SOURCE_FILES = ["fmain.c", "fmain2.c"]
 
 # Region colour-31 overrides, from fade_page() in fmain2.c. The non-default
 # regions patch pagecolors[31] before fading; everyone else uses the default.
-# (region 9 also has a transient secret_timer value 0x00f0, which is a runtime
-# effect, not a stored palette override, so it is intentionally excluded.)
+# Region 9 uses 0x00f0 instead while secret_timer is non-zero (fmain2.c:383).
 COLOR31_INDEX = 31
 REGION_OVERRIDES = {4: 0x0980, 9: 0x0445}
+CONDITIONAL_OVERRIDES = {9: ("secret_timer != 0 (fmain2.c:383)", 0x00F0)}
 COLOR31_DEFAULT = 0x0BDF
 
 
@@ -133,6 +133,10 @@ def build_region_overrides() -> dict:
     """Build the colour-31 region-override record."""
     return {
         "color_index": COLOR31_INDEX,
+        "conditional_regions": {
+            str(region): {"condition": cond, **make_entry(COLOR31_INDEX, value)}
+            for region, (cond, value) in sorted(CONDITIONAL_OVERRIDES.items())
+        },
         "default": make_entry(COLOR31_INDEX, COLOR31_DEFAULT),
         "regions": {
             str(region): make_entry(COLOR31_INDEX, value)

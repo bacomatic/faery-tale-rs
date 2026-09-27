@@ -1,21 +1,21 @@
 # Task index — Asset Extraction
 
 Decomposition of [`../plan.md`](../plan.md). Each task is a self-contained file. **The deliverable
-is the extracted `assets/`; tools are byproducts kept for provenance** (see `_SHARED.md`). Each
-task is done by an **Implementer** agent and accepted by a **separate Reviewer** who inspects the
-emitted assets (human-in-the-loop verification).
+is the extracted `assets/`; agents extract, and scripts are written only to decode binary or very
+large inputs** (see `_SHARED.md`). Each task is done by an **Implementer** agent and accepted by
+a **separate Reviewer** who inspects the emitted assets (human-in-the-loop verification).
 
 | Task | Title | Depends on |
 |---|---|---|
 | [T0.1](T0.1-scaffolding.md) | Repo scaffolding & shared helpers | — |
 | [T0.2](T0.2-carray-baseline.md) | C-array extraction baseline | — |
 | [T1.1](T1.1-palettes.md) | Palettes extractor | T0.1, T0.2 |
-| [T1.2](T1.2-tables.md) | Gameplay tables extractor | T0.2 |
-| [T1.3](T1.3-item-quest.md) | Item/quest data fold-in | T0.1 |
+| [T1.2](T1.2-tables.md) | ~~Gameplay tables~~ **dropped**: constants in `reference/`, art bindings folded into T2.1 | — |
+| T1.3 | ~~Item/quest data~~ **dropped**: behavior spec'd in `reference/logic/` (`magic.md`, `menu-system.md`, `brother-succession.md`) | — |
 | [T1.4](T1.4-text.md) | Narrative text extractor | T0.1 |
-| [T1.5](T1.5-retrofit-done.md) | Retrofit done tasks to current acceptance model | T1.1–T1.3 (Part C: T1.4) |
+| [T1.5](T1.5-retrofit-done.md) | Retrofit done tasks to current acceptance model | T1.1 |
 | [T2.1](T2.1-sprites.md) | Sprites extractor extension | T0.1, T1.1 |
-| [T2.2](T2.2-tiles.md) | Background tile atlas extractor | T0.1, T1.1, T1.2 |
+| [T2.2](T2.2-tiles.md) | Background tile atlas extractor | T0.1, T1.1 |
 | [T2.3](T2.3-masks.md) | Shadow/collision masks extractor | T0.1 |
 | [T2.4](T2.4-screens.md) | IFF/ILBM screens extractor | T0.1 |
 | [T2.5](T2.5-world.md) | World data extension | T0.1 |
@@ -30,7 +30,7 @@ emitted assets (human-in-the-loop verification).
 ## Waves (parallel within a wave)
 ```
 Wave 0:  T0.1  T0.2
-Wave 1:  T1.1  T1.2  T1.3  T1.4  T1.5 (Parts A–B now; Part C after T1.4)
+Wave 1:  T1.1  T1.4  T1.5
 Wave 2:  T2.1  T2.2  T2.3  T2.4  T2.5  T2.6  T2.7  T2.8
 Wave 3:  T3.1  T3.2
 Wave 4:  T4.1  T4.2

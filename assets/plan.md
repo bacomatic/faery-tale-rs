@@ -21,13 +21,26 @@ kept only as a **historical record** of how an asset was produced (provenance). 
 maintained, are **not** required to re-run, and their repeatability is **not** an acceptance
 criterion. Do not build orchestration, drivers, or regeneration harnesses for their own sake.
 
-**Hard requirement: pixel-/byte-exact fidelity.** A 16×N sprite must convert to the identical
-pixels; every table value and palette entry must match the original bit-for-bit. This is a
-*format conversion only* — no gameplay, rendering, or engine work, and no creative changes.
+**Agents extract; scripts only decode.** The implementer agent reads the source and writes the
+data directly, citing every value. A script is warranted only when the input is **binary**
+(bitplanes, samples, map/sector files) or **too large to transcribe reliably** (e.g. an 87-row C
+array), and then it must genuinely parse the original input — never embed hand-typed data in a
+script.
+
+**Scope: sensory content, reproduced faithfully.** The goal is a new game that looks, sounds and
+feels the same. The bundle holds what can't be expressed as behavior: graphics, palettes, fonts,
+audio, narrative text, world maps. Convert these losslessly (a sprite keeps its exact pixels, a
+palette its exact colors), which is the simplest way to make it look the same. This is a *format
+conversion only* — no gameplay, rendering, or engine work, and no creative changes.
+
+**Behavior is not an asset.** What the game *does* (item effects, menus, combat, AI) and the
+constants it uses are specified at behavioral fidelity in `reference/logic/` (+ `RESEARCH-*.md`).
+Do not mirror the original's internal tables or data layouts into `assets/` for their own sake.
 
 ### Decisions locked with the user
-- **Extraction language:** Python, built by extending the existing `tools/`. Scripts are kept for
-  provenance only — they are byproducts, not a maintained deliverable.
+- **Extraction method:** agent-authored data by default; Python scripts under `tools/` only where
+  the rule above allows. Scripts are kept for provenance only — they are byproducts, not a
+  maintained deliverable.
 - **Verification is human-in-the-loop, by perception only.** There is no automated acceptance
   harness. The human reviewer verifies the **final** assets visually, by listening, or by
   glancing at tables/JSON — never by re-extracting, hand-decoding, or writing verification code.
@@ -100,7 +113,7 @@ assets/
   <subdir>/verify.json          # per-resource review items for the review app (ships; listed in manifest)
   formats/                      # one .md per resource type (field semantics, units, conventions)
   palettes/
-    pagecolors.json  textcolors.json  introcolors.json  sun_colors.json
+    pagecolors.json  textcolors.json  introcolors.json  sun_colors.json  blackcolors.json
     region_overrides.json       # per-region color-31 variants (desert/dungeon)
     # each: {index, rgb4 (0x0RGB Amiga OCS 12-bit), rgba8} so both exact + convenient forms exist
   tiles/                        # background tile atlas, per region
@@ -122,10 +135,6 @@ assets/
     moonlight_blue.glsl  green_jewel.glsl
     daynight_live.glsl  daynight_bank.glsl   # full day/night incl. veg boost (RGBA + highlight_mask)
     README.md                   # maps each effect → indexed-path vs RGBA+shader; pseudocode
-  tables/                       # all hardcoded gameplay tables → JSON
-    statelist.json encounter_chart.json inv_list.json weapon_probs.json
-    treasure_probs.json rand_treasure.json diroffs.json fallstates.json
-    setfig_table.json file_index.json trans_list.json
   text/
     event_msg.json speeches.json place_msg.json inside_msg.json
     question.json placard_text.json place_tbl.json inside_tbl.json
@@ -237,13 +246,14 @@ existing tool; **[new]** = new extractor module.
     they declare beyond these two files.
 
 ### Tables & text (extract C-source constants → JSON)
-11. **Gameplay tables** — `tools/extract_table.py` **[reuse/extend]** (generic C-array
-    extractor). Export each to `assets/tables/*.json`: `statelist` (87×4), `encounter_chart`
-    (11×6), `inv_list` (36), `weapon_probs` (32), `treasure_probs` (40), `rand_treasure` (16),
-    `diroffs` (16), `fallstates` (24), `setfig_table` (14×3), `file_index` (10×9), `trans_list`
-    (9×4). Field names/semantics from the inventory + `reference/RESEARCH-data-structures.md`.
-12. **Item/quest data** — `tools/extract_item_effects.py`, `tools/extract_quest_data.py`
-    **[reuse]** → fold their JSON into `assets/tables/`.
+11. **Gameplay tables** — **dropped (not an asset).** Game-design constants (`encounter_chart`,
+    `weapon_probs`, `treasure_probs`, `rand_treasure`, `trans_list`) live in `reference/`. Art
+    bindings (`statelist`, `diroffs`, `fallstates`, `setfig_table`, `inv_list`) become named
+    metadata in the sprite atlases (item 2 / T2.1). `file_index` only organizes tiles and world
+    data per region (T2.2/T2.5). `tools/extract_tables.py` can write temporary copies to
+    `tools/results/tables/` for those extractors. See T1.2.
+12. **Item/quest data** — **dropped (not an asset).** Item effects, menu shape and brother stats are
+    behavior, specified in `reference/logic/` (`magic.md`, `menu-system.md`, `brother-succession.md`).
 13. **Narrative text** — **[new]** `tools/extract_text.py`. Pull the `dc.b` message strings from
     `src/narr.asm` (`_event_msg`, `_speeches`, `_place_msg`, `_inside_msg`) →
     `event_msg.json`, `speeches.json`, `place_msg.json`, `inside_msg.json`.

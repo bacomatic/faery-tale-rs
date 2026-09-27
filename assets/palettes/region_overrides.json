@@ -1,5 +1,18 @@
 {
   "color_index": 31,
+  "conditional_regions": {
+    "9": {
+      "condition": "secret_timer != 0 (fmain2.c:383)",
+      "index": 31,
+      "rgb4": "0x00f0",
+      "rgba8": [
+        0,
+        255,
+        0,
+        255
+      ]
+    }
+  },
   "default": {
     "index": 31,
     "rgb4": "0x0bdf",

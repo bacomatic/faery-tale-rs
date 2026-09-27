@@ -23,7 +23,6 @@ Full definitions in [`agents/`](agents/):
 - **[Discovery](agents/discovery.md)** traces mechanics across source files and writes raw findings to `reference/_discovery/`. It does NOT write final documentation or dispatch other agents.
 - **[Researcher](agents/researcher.md)** reviews discovery files in `reference/_discovery/`, synthesizes findings, and writes final documentation to `reference/`. It does NOT do systematic code exploration, dispatch agents, or write to `reference/_discovery/`.
 - **[Experimenter](agents/experimenter.md)** writes and runs verification scripts under `tools/`. It does NOT write documentation or discovery files.
-- **[Research assistant](agents/research.md)** answers natural-language questions by reasoning over the reference documentation via a locally-hosted LLM server.
 
 ## Iterative Wave Workflow
 
