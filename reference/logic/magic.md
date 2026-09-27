@@ -31,10 +31,10 @@ trace every passive magic effect from one location.
 |---|---|---|---|
 | 4 | Magic Wand | Weapon (`weapon == 5`) | Ranged fireball (mt=9), can damage Necromancer / masked Witch — [combat.md#missile_step](combat.md#missile_step), [combat.md#dohit](combat.md#dohit) |
 | 7 | Sun Stone | Passive | Holding lifts masked-Witch (race `0x89`) damage immunity in [combat.md#dohit](combat.md#dohit) (`fmain2.c:233`); USE while `witchflag` is set plays `speak(60)` — [inventory.md#use_dispatch](inventory.md#use_dispatch) |
-| 9 | Blue Stone | Spell | Stone-circle ring teleport + heal fall-through — [magic_dispatch](#magic_dispatch) `case 5` (`fmain.c:3326-3354`) |
+| 9 | Blue Stone | Spell | Stone-circle ring teleport (spec omits the source's heal fall-through, a bug: missing `break`) — [magic_dispatch](#magic_dispatch) `case 5` (`fmain.c:3326-3354`) |
 | 10 | Green Jewel | Spell | `light_timer += 760` — [magic_dispatch](#magic_dispatch) `case 6` (`fmain.c:3306`); brightens dark areas via [visual-effects.md#fade_page](visual-effects.md#fade_page) and [day-night.md#day_fade](day-night.md#day_fade) |
 | 11 | Glass Vial | Spell | Heal `vitality += rand8() + 4` clamped at `15 + brave/4` — [magic_dispatch](#magic_dispatch) `case 7` (`fmain.c:3348-3354`) |
-| 12 | Crystal Orb | Spell | `secret_timer += 360` — [magic_dispatch](#magic_dispatch) `case 8` (`fmain.c:3307`); recolors Region 9 sky in [visual-effects.md#fade_page](visual-effects.md#fade_page) |
+| 12 | Crystal Orb | Spell | `secret_timer += 360` — [magic_dispatch](#magic_dispatch) `case 8` (`fmain.c:3307`); reveals hidden passages by recoloring palette color 31 in Region 9 (dungeons and caves, `fmain.c:625`) in [visual-effects.md#fade_page](visual-effects.md#fade_page) |
 | 13 | Bird Totem | Spell | Overhead-map "+" marker for the hero — [magic_dispatch](#magic_dispatch) `case 9` (`fmain.c:3309-3325`); gated to `region_num <= 7` unless `cheat1` |
 | 14 | Gold Ring | Spell | `freeze_timer += 100` — [magic_dispatch](#magic_dispatch) `case 10` (`fmain.c:3308`); inhibited while mounted (`riding > 1`) |
 | 15 | Jade Skull | Spell | Mass-kill all live enemies with `race < 7` — [magic_dispatch](#magic_dispatch) `case 11` (`fmain.c:3355-3363`) |
@@ -47,7 +47,7 @@ trace every passive magic effect from one location.
 | Timer | Set by | Decremented by | Read sites |
 |---|---|---|---|
 | `light_timer` | Green Jewel (`magic_dispatch` case 6) | `decrement_timers` (`fmain.c:1380`) | `day_fade` raises night-floor by 200 (`fmain2.c:1655`); `fade_page` lifts red-channel to match green when set (`fmain2.c:407`) |
-| `secret_timer` | Crystal Orb (`magic_dispatch` case 8) | `decrement_timers` (`fmain.c:1381`) | `fade_page` recolors Region 9 sky to bright green when set (`fmain2.c:383-384`) |
+| `secret_timer` | Crystal Orb (`magic_dispatch` case 8) | `decrement_timers` (`fmain.c:1381`) | `fade_page` turns Region 9 color 31 from `0x0445` to bright green `0x00f0` when set, making hidden passages visible (`fmain2.c:382-384`) |
 | `freeze_timer` | Gold Ring (`magic_dispatch` case 10) | `decrement_timers` (`fmain.c:1382`) | Skips actor `i > 0` ticks ([game-loop.md#actor_tick](game-loop.md#actor_tick) `fmain.c:1473`); halts `daynight++` (`fmain.c:2023`); jumps past `find_place` and encounter logic (`fmain.c:2048`); blocks NPC melee swings ([game-loop.md#melee_hit_detection](game-loop.md#melee_hit_detection) `fmain.c:2240,2260`); blocks all missile flight (`fmain.c:2267`); flagged on body-search to allow looting frozen actors (`fmain.c:3250`) |
 
 All three timers are zeroed on revive / brother succession (`fmain.c:2852`)
@@ -120,7 +120,6 @@ def magic_dispatch(hit: int) -> None:
         x = hero_x >> 8                                      # fmain.c:3330 — sector-relative X of the stone
         y = hero_y >> 8                                      # fmain.c:3330 — sector-relative Y of the stone
         i = 0
-        found = 0
         while i < 11:                                        # fmain.c:3331 — 11 = stone_list pair count
             if stone_list[i + i] == x and stone_list[i + i + 1] == y:  # fmain.c:3332 — match current stone
                 i = i + anim_list[0].facing + 1              # fmain.c:3333 — step `facing+1` stones forward
@@ -133,19 +132,13 @@ def magic_dispatch(hit: int) -> None:
                 if riding != 0:                              # fmain.c:3338 — drag mount along with hero
                     anim_list[wcarry].abs_x = anim_list[0].abs_x
                     anim_list[wcarry].abs_y = anim_list[0].abs_y
-                found = 1
                 break
             i = i + 1
-        if found == 0:                                       # fmain.c:3347 — no sibling found
-            return
-        # Case 5 has no `break` in the C source (fmain.c:3347) — fall through into the Glass Vial heal.
-        anim_list[0].vitality = anim_list[0].vitality + rand8() + 4  # fmain.c:3349 — 4 = min heal bonus
-        cap = 15 + brave // 4                                # fmain.c:3350 — 15 = VIT_BASE, 4 = VIT_BRAVE_DIV
-        if anim_list[0].vitality > cap:                      # fmain.c:3350 — clamp overheal
-            anim_list[0].vitality = cap
-        else:
-            print("That feels a lot better!")                # fmain.c:3352 — only print if cap not hit
-        prq(4)                                               # fmain.c:3353 — HUD vitality refresh
+        # No `return` after the loop (fmain.c:3344-3345): an on-tile hero whose stone matches no
+        # stone_list entry does not teleport but still reaches the decrement.
+        # Deviation from source: case 5 has no `break` (fmain.c:3347) and falls through into the
+        # Glass Vial heal (fmain.c:3348-3353). That is a bug; the spec ends case 5 here as intended.
+        # See the "Blue Stone fall-through (bug)" note below.
     elif hit == 6:                                           # fmain.c:3306 — Green Jewel: illumination
         light_timer = light_timer + 760                      # fmain.c:3306 — 760 = illumination ticks
     elif hit == 7:                                           # fmain.c:3348 — Glass Vial: heal
@@ -201,15 +194,22 @@ def magic_dispatch(hit: int) -> None:
 
 **Consumption gate.** The decrement epilogue at `fmain.c:3365` runs only for
 branches that fall through to the bottom of the MAGIC switch. Blue Stone
-(wrong sector or off-tile or no sibling stone), Bird Totem (`region_num > 7`
-without `cheat1`), and Gold Ring (`riding > 1`) all short-circuit with
-`return`, preserving the charge so the player is not penalised for a
-precondition miss.
+(wrong sector or off-tile), Bird Totem (`region_num > 7` without `cheat1`),
+and Gold Ring (`riding > 1`) all short-circuit with `return`, preserving the
+charge so the player is not penalised for a precondition miss. A Blue Stone
+used on-tile in sector 144 where no `stone_list` pair matches is *not*
+refunded: the search loop (`fmain.c:3331-3344`) ends without a `return`, so
+the charge is spent without a teleport (the original also heals here, via the
+fall-through bug below).
 
-**Blue Stone fall-through.** The C `case 5:` at `fmain.c:3326` has no
+**Blue Stone fall-through (bug).** The C `case 5:` at `fmain.c:3326` has no
 `break` before `case 7:` at `fmain.c:3348`, so every successful stone
 teleport also runs the Glass Vial heal — a single Blue Stone use both
-teleports *and* heals. This is documented in
+teleports *and* heals. The project owner classifies this as a bug in the
+original, not intended behavior (2026-09-26). The pseudo-code above follows
+the intended behavior (case 5 ends before the heal), a deliberate deviation
+from the source. A port that wants the original behavior runs the Glass Vial
+heal after a Blue Stone use that reaches the decrement. This is documented in
 [RESEARCH §10](../RESEARCH.md#10-inventory--items) and verified by the lack of
 `break;` between the `xfer()` call and the `vitality += rand8()+4` block.
 

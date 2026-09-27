@@ -48,16 +48,16 @@ Calls: `LoadRGB4`, `pagecolors`, `fader`, `vp_page`, `region_num`, `secret_timer
 ```pseudo
 def fade_page(r: i32, g: i32, b: i32, limit: bool, colors: list) -> None:
     """Scale a 32-entry palette by per-channel weights with night/torch/sky adjustments."""
-    # -------- Border color for the UI frame (color 31) depends on region.  fmain2.c:381-386
-    if region_num == 4:                                  # fmain2.c:381 — region 4 = desert
-        pagecolors[31] = 0x0980                          # fmain2.c:381 — 31 = border slot; 0x0980 = amber
-    elif region_num == 9:                                # fmain2.c:382 — region 9 = citadel
-        if secret_timer:
-            pagecolors[31] = 0x00f0                      # fmain2.c:384 — 0x00f0 = bright green
+    # -------- Playfield palette entry 31 depends on region.               fmain2.c:381-386
+    if region_num == 4:                                  # fmain2.c:381 — region 4 = desert area (fmain.c:620)
+        pagecolors[31] = 0x0980                          # fmain2.c:381 — 0x0980 = amber
+    elif region_num == 9:                                # fmain2.c:382 — region 9 = dungeons and caves (fmain.c:625)
+        if secret_timer:                                 # fmain2.c:383 — Crystal Orb active
+            pagecolors[31] = 0x00f0                      # fmain2.c:383 — 0x00f0 = bright green; reveals hidden passages
         else:
-            pagecolors[31] = 0x0445                      # fmain2.c:385 — 0x0445 = dark default
+            pagecolors[31] = 0x0445                      # fmain2.c:384 — 0x0445 = dark grey-blue
     else:
-        pagecolors[31] = 0x0bdf                          # fmain2.c:386 — 0x0bdf = light-blue border
+        pagecolors[31] = 0x0bdf                          # fmain2.c:386 — 0x0bdf = light blue
 
     # -------- Clamp channel weights to [0, 100].                           fmain2.c:388-390
     if r > 100:                                          # fmain2.c:388 — 100 = full brightness
@@ -386,7 +386,7 @@ Several short routines are not given their own entries because each is ≤3 line
 
 - **`stillscreen()`** — `fmain2.c:631-634`. Zeroes `fp_drawing.ri_page.RxOffset` and `RyOffset` and calls `pagechange()`. Used by [`map_message`](#map_message) and the inventory/book screens (`fmain.c:3141-3143`) to freeze scroll for a static full-screen image.
 - **`skipint()`** — `fmain2.c:836`. One-liner: sets and returns `skipp = (getkey() == ' ')`. The intro chain in `main` and [`copypage`](#copypage) poll it to abort the intro when the player presses space.
-- **Flasher border blink** — `fmain.c:1368-1370`. Not a function; in the main loop's `viewstatus == 1` branch, `SetRGB4(vp_page, 31, 15, 15, 15)` or `(0,0,0)` is called on alternating 16-tick intervals using `flasher & 16`, blinking color 31 (the dialogue cursor / prompt highlight).
+- **Flasher marker blink** — `fmain.c:1367-1370`. Not a function; in the main loop's `viewstatus == 1 || viewstatus == 4` branch, `SetRGB4(vp_page, 31, 15, 15, 15)` is called when `flasher & 16` and `viewstatus == 1`, else `(0,0,0)`. Only the Bird Totem map sets `viewstatus = 1` (`fmain.c:3322`), and it draws the hero's "+" marker in pen 31 (`fmain.c:3318-3320`), so the marker blinks white/black every 16 ticks. On the inventory screen (`viewstatus = 4`, `fmain.c:3144`) color 31 stays black.
 - **`xfer()` viewstatus = 99** — `fmain.c:2625-2645`. Not a visual effect per se, but the teleport entry point sets `viewstatus = 99` to force a full redraw and recolor on the next tick. Included here because `colorplay()` is often scheduled alongside it.
 - **Unlinked assembly duplicates** — `fsupp.asm:1-26` (`_colorplay`), `fsupp.asm:27-34` (`_stillscreen`), `fsupp.asm:36-42` (`_skipint`). The makefile does **not** assemble or link `fsupp.asm`; the live versions are the C ones in `fmain2.c`. Porters should ignore these.
 - **Witch beam XOR rendering** (`witch_fx`, `fmain2.c:917-965`) is a combat-layer per-tick renderer, not a cinematic transition. See `reference/_discovery/visual-effects.md` for the full trace; it will be documented with combat drawing in a future wave.

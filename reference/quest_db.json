@@ -1,7 +1,7 @@
 {
   "metadata": {
     "generated": "2026-07-01T17:14:16.928323+00:00",
-    "generator": "tools/extract_quest_data.py",
+    "generator": "tools/extract_quest_data.py (removed 2026-09-26; it held hand-typed constants and parsed no source)",
     "description": "Quest and narrative database for The Faery Tale Adventure (1987 Amiga). Contains all dialogue text, NPC routing logic, quest item chains, transport system, and game progression data extracted from the original source code.",
     "source_files": [
       "fmain.c (core game loop, dialogue, combat, items)",
@@ -427,9 +427,9 @@
     },
     {
       "index": 34,
-      "name": "20 Gold Pieces",
+      "name": "100 Gold Pieces",
       "category": "gold",
-      "value": 20
+      "value": 100
     }
   ],
   "stuff_indices": {
@@ -467,7 +467,7 @@
     "31": "2 Gold Pieces",
     "32": "5 Gold Pieces",
     "33": "10 Gold Pieces",
-    "34": "20 Gold Pieces"
+    "34": "100 Gold Pieces"
   },
   "speeches": {
     "0": {
@@ -1381,50 +1381,50 @@
       "stuff_index": 9,
       "name": "Blue Stone",
       "menu_hit": 5,
-      "effect": "Teleport (stone_list coordinates). Cannot use indoors (region > 7 without cheat).",
-      "citation": "fmain.c:3309-3324"
+      "effect": "Only in sector 144 on a stone tile, else no effect and no charge used. Teleports facing+1 stones around the 11-stone stone_list ring, then falls through (no break) into the Glass Vial heal; this fall-through is a bug in the original, not intended behavior. On-tile with no matching stone: heals only, charge used.",
+      "citation": "fmain.c:3326-3354"
     },
     {
       "stuff_index": 10,
       "name": "Green Jewel",
       "menu_hit": 6,
-      "effect": "Night vision: light_timer += 760",
+      "effect": "light_timer += 760; while set, day_fade raises the light floor to 200 and fade_page lifts red to green.",
       "citation": "fmain.c:3306"
     },
     {
       "stuff_index": 11,
       "name": "Glass Vial",
       "menu_hit": 7,
-      "effect": "Unknown/unused in MAGIC handler (hit==7 not handled in MAGIC case)",
-      "citation": "fmain.c:3301-3325"
+      "effect": "Heal: vitality += rand8() + 4, capped at 15 + brave/4; prints \"That feels a lot better!\" only if not capped.",
+      "citation": "fmain.c:3348-3354"
     },
     {
       "stuff_index": 12,
       "name": "Crystal Orb",
       "menu_hit": 8,
-      "effect": "Reveals map: secret_timer += 360 (shows hidden objects)",
+      "effect": "Reveals hidden passages: secret_timer += 360; while set, fade_page turns palette color 31 in region 9 (dungeons and caves, fmain.c:625) from 0x0445 to bright green 0x00f0, changing the appearance of tiles drawn in that color (fmain2.c:382-384).",
       "citation": "fmain.c:3307"
     },
     {
       "stuff_index": 13,
       "name": "Bird Totem",
       "menu_hit": 9,
-      "effect": "Overhead map view (bigdraw). Cannot use indoors without cheat.",
-      "citation": "fmain.c:3309-3324"
+      "effect": "Overhead map view (bigdraw) with a '+' at the hero. No effect and no charge used when region_num > 7 without cheat1.",
+      "citation": "fmain.c:3309-3325"
     },
     {
       "stuff_index": 14,
       "name": "Gold Ring",
       "menu_hit": 10,
-      "effect": "Freeze enemies: freeze_timer += 100. Cannot use while riding.",
+      "effect": "Freeze enemies: freeze_timer += 100. No effect and no charge used while riding > 1.",
       "citation": "fmain.c:3308"
     },
     {
       "stuff_index": 15,
       "name": "Jade Skull",
       "menu_hit": 11,
-      "effect": "Not in MAGIC switch (hit values 5-10 only). Possibly consumed as treasure.",
-      "citation": "fmain.c:3305"
+      "effect": "Kills every live ENEMY with race < 7 (spares Dark Knight, Loraii, Necromancer, set-figures); brave -1 per kill; event(34) if in battle.",
+      "citation": "fmain.c:3355-3363"
     }
   ],
   "quest_flow": {

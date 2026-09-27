@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = REPO_ROOT / "src"
 LOGIC_DIR = REPO_ROOT / "reference" / "logic"
 RESULTS_DIR = REPO_ROOT / "tools" / "results"
 RESULTS_FILE = RESULTS_DIR / "lint_logic.txt"
@@ -32,7 +33,7 @@ SOURCE_EXTS = {".c", ".asm", ".h", ".i", ".p"}
 
 def _source_line_counts() -> dict[str, int]:
     counts: dict[str, int] = {}
-    for entry in REPO_ROOT.iterdir():
+    for entry in SRC_DIR.iterdir():
         if entry.is_file() and entry.suffix.lower() in SOURCE_EXTS:
             with entry.open("r", errors="replace") as fh:
                 counts[entry.name] = sum(1 for _ in fh)

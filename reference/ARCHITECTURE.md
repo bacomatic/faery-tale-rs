@@ -813,7 +813,7 @@ See [§3.6](#36-screen-configurations) for the per-scene configuration table and
 
 ### 9.4 Day/Night Palette
 
-`fade_page(r,g,b,limit,colors)` (`fmain2.c:377-420`) scales each RGB channel of the 32-color palette by percentage. During gameplay (`limit=TRUE`), enforces minimum brightness floors (R≥10, G≥25, B≥60) and a blue tint bias for night scenes. Sky/water colors (indices 16–24) receive additional blue boosting at dusk/dawn. Region-specific color 31 overrides: amber for desert, green for astral plane with `secret_timer`, otherwise light blue (`fmain2.c:381-386`).
+`fade_page(r,g,b,limit,colors)` (`fmain2.c:377-420`) scales each RGB channel of the 32-color palette by percentage. During gameplay (`limit=TRUE`), enforces minimum brightness floors (R≥10, G≥25, B≥60) and a blue tint bias for night scenes. Sky/water colors (indices 16–24) receive additional blue boosting at dusk/dawn. Region-specific color 31 overrides: amber (`0x0980`) for the desert (region 4); in dungeons and caves (region 9) dark `0x0445`, or bright green `0x00f0` while the Crystal Orb's `secret_timer` runs, which reveals hidden passages; otherwise light blue `0x0bdf` (`fmain2.c:381-386`, regions per `file_index` `fmain.c:620,625`).
 
 `light_timer > 0` shifts the palette warmer (R boosted to ≥ G), creating the **Green Jewel's temporary light-magic effect** rather than a torch system (`fmain.c:3306`, `fmain2.c:406`).
 
@@ -828,9 +828,9 @@ See [§3.6](#36-screen-configurations) for the per-scene configuration table and
 5. First frame holds 60 ticks (~1 second), subsequent frames 9 ticks (~150 ms) each (`fmain2.c:1629-1630`).
 6. Final hold of 30 ticks, then fade to full black (`fmain2.c:1632-1633`).
 
-### 9.6 Flasher Border Blink
+### 9.6 Flasher Marker Blink
 
-During `viewstatus == 1` (dialogue mode), color register 31 blinks white↔black every 16 frames (~0.27 s), gated by `flasher & 16` (`fmain.c:1368-1370`). `flasher` increments every main-loop tick (`fmain.c:1276`), so bit 4 toggles at a steady cadence. Any pixels using color 31 — the text border/highlight color — produce a blinking cursor/prompt effect.
+During `viewstatus == 1`, color register 31 blinks white↔black every 16 frames (~0.27 s), gated by `flasher & 16` (`fmain.c:1367-1370`). `flasher` increments every main-loop tick (`fmain.c:1276`), so bit 4 toggles at a steady cadence. Only the Bird Totem's overhead map sets `viewstatus = 1` (`fmain.c:3322`; the source comment calls state 1 "big", `fmain.c:583`), and that map draws the hero's "+" marker in pen 31 (`fmain.c:3318-3320`), so the marker blinks. On the inventory screen (`viewstatus = 4`, `fmain.c:3144`) the same branch holds color 31 black.
 
 ### 9.7 Full-Screen Message Transitions
 

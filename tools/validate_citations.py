@@ -28,13 +28,14 @@ SOURCE_EXTENSIONS = {'.c', '.asm', '.h', '.i', '.p'}
 
 # Repo root is parent of tools/
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_DIR = os.path.join(REPO_ROOT, 'src')
 
 
 def find_source_files():
     """Build a map of filename -> (full_path, line_count) for all source files."""
     sources = {}
-    for entry in os.listdir(REPO_ROOT):
-        full = os.path.join(REPO_ROOT, entry)
+    for entry in os.listdir(SRC_DIR):
+        full = os.path.join(SRC_DIR, entry)
         if not os.path.isfile(full):
             continue
         _, ext = os.path.splitext(entry)

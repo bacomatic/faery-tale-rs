@@ -36,17 +36,17 @@ Weapon is equipped via USE menu: `anim_list[0].weapon = hit + 1` (`fmain.c:3448-
 
 #### Magic Consumables (stuff[9–15], `MAGICBASE=9`)
 
-All consumed on use (`--stuff[4+hit]` at `fmain.c:3365`). Guarded by `extn->v3 == 9` check — anti-magic zone blocks magic with `speak(59)` "Your magic won't work here, fool!" (`fmain.c:3304`).
+Consumed on use (`--stuff[4+hit]` at `fmain.c:3365`), except when a precondition `return`s first (Blue Stone off a stone tile, Bird Totem when `region_num > 7` without `cheat1`, Gold Ring while riding). Guarded by `extn->v3 == 9` check — anti-magic zone blocks magic with `speak(59)` "Your magic won't work here, fool!" (`fmain.c:3304`). Normative behavior: [logic/magic.md#magic_dispatch](logic/magic.md#magic_dispatch).
 
 | Index | Item | Effect | Source |
 |-------|------|--------|--------|
-| 9 | Blue Stone | Teleport via stone circle (only at sector 144) | `fmain.c:3306-3313` |
+| 9 | Blue Stone | Teleport via stone circle (only at sector 144), then falls through into the Glass Vial heal (no `break`). **Bug:** the heal is not intended behavior | `fmain.c:3326-3354` |
 | 10 | Green Jewel | `light_timer += 760` — temporary light-magic effect that brightens dark outdoor areas | `fmain.c:3306` |
-| 11 | Glass Vial | Heal: `vitality += rand8() + 4` (4–11), capped at `15 + brave/4` | `fmain.c:3317-3319` |
-| 12 | Crystal Orb | `secret_timer += 360` — reveals hidden passages | `fmain.c:3321` |
-| 13 | Bird Totem | Renders overhead map with player position | `fmain.c:3323-3340` |
-| 14 | Gold Ring | `freeze_timer += 100` — freezes all enemies (disabled while riding) | `fmain.c:3342-3348` |
-| 15 | Jade Skull | Kill spell: kills all visible enemies with `vitality > 0`, `type == ENEMY`, `race < 7`. **Decrements `brave`** per kill. | `fmain.c:3350-3363` |
+| 11 | Glass Vial | Heal: `vitality += rand8() + 4` (4–11), capped at `15 + brave/4` | `fmain.c:3348-3354` |
+| 12 | Crystal Orb | `secret_timer += 360` — reveals hidden passages | `fmain.c:3307` |
+| 13 | Bird Totem | Renders overhead map with player position | `fmain.c:3309-3325` |
+| 14 | Gold Ring | `freeze_timer += 100` — freezes all enemies (disabled while riding) | `fmain.c:3308` |
+| 15 | Jade Skull | Kill spell: kills all visible enemies with `vitality > 0`, `type == ENEMY`, `race < 7`. **Decrements `brave`** per kill. | `fmain.c:3355-3363` |
 
 The Jade Skull's `brave--` per kill is notable — it's the only item that *reduces* bravery, counterbalancing the kill-based `brave++` from normal combat.
 
