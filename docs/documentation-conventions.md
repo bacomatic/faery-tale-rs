@@ -29,7 +29,7 @@ Pseudo-code lives only in `reference/logic/`. Do not add pseudo-code blocks to `
 
 - The grammar is defined in [`reference/logic/STYLE.md`](../reference/logic/STYLE.md).
 - Global identifiers, enums, structs, constants, and table refs are declared in [`reference/logic/SYMBOLS.md`](../reference/logic/SYMBOLS.md). SYMBOLS.md changes are orchestrator-reviewed; agents propose additions in their report rather than edit it directly.
-- Run `tools/run.sh lint_logic.py` after any change under `reference/logic/`. A clean lint is required before the task is considered complete.
+- Run `mise run lint` after any change under `reference/logic/`. A clean lint is required before the task is considered complete.
 
 ## Verification Workflow
 

@@ -4,7 +4,7 @@ A static MkDocs (Material) site that browses the whole research corpus. Designed
 in **small bursts** — each phase below is independent, ~15–45 min, and leaves the site working.
 
 ## Decisions (locked with the user, 2026-08-30)
-- **Engine:** MkDocs + Material theme (already installed in `.toolenv`; dep recorded in
+- **Engine:** MkDocs + Material theme (installed in the mise-managed `.venv`; dep recorded in
   `tools/requirements.txt`).
 - **v1 scope:** docs + search + clickable source citations + asset gallery.
 - **Built site is committed** (browsable straight from a checkout). Config + generator scripts
@@ -24,8 +24,8 @@ site/
 
 Build/serve:
 ```
-.toolenv/bin/python site/gen.py           # stage + generate + mkdocs build → site/build/
-.toolenv/bin/python -m http.server -d site/build 8000
+mise exec -- python site/gen.py           # stage + generate + mkdocs build → site/build/
+mise exec -- python -m http.server -d site/build 8000
 ```
 
 ## Phases (do in order; each ends with a working site)

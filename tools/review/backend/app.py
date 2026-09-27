@@ -1,6 +1,6 @@
 """FastAPI routes for the review app. Run with:
 
-    .toolenv/bin/python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765
+    mise exec -- python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765
 """
 from __future__ import annotations
 

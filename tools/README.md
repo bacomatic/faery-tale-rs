@@ -4,11 +4,12 @@ This directory contains scripts that mechanically verify research claims made in
 
 ## Setup
 
-All tools run from a shared virtual environment at `.toolenv/`. The `tools/run.sh` wrapper creates it automatically on first use:
+All tools run from a shared virtual environment at `.venv/`, created and activated by mise (`mise.toml`):
 
 ```bash
-# First run creates .toolenv and installs dependencies from tools/requirements.txt
-tools/run.sh verify_asm.py --help
+# Once: install pinned Python/Node/uv, create .venv, install tools/requirements.txt
+mise install && mise run setup
+mise exec -- python tools/verify_asm.py --help
 ```
 
 `verify_asm.py` also requires the GNU 68k cross-assembler (system package):
@@ -20,19 +21,19 @@ sudo apt-get install binutils-m68k-linux-gnu
 
 ```bash
 # Validate all source citations in documentation
-tools/run.sh validate_citations.py
+mise run validate
 
 # Extract a data table from source and display it
-tools/run.sh extract_table.py fsubs.asm xdir ydir
+mise exec -- python tools/extract_table.py fsubs.asm xdir ydir
 
 # Assemble and execute a 68k snippet to verify assembly logic
-tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
+mise exec -- python tools/verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 
 # Run any script with --help for options
-tools/run.sh <script>.py --help
+mise exec -- python tools/<script>.py --help
 
 # Lint reference/logic/*.md strict pseudo-code
-tools/run.sh lint_logic.py
+mise run lint
 ```
 
 ## Naming Conventions
@@ -52,20 +53,20 @@ tools/run.sh lint_logic.py
 **Examples:**
 ```bash
 # Simple arithmetic with step-by-step trace
-tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
+mise exec -- python tools/verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 
 # Set initial state and inspect specific registers
-tools/run.sh verify_asm.py -c "add.l d1,d0" --set-reg d0=100,d1=50 --regs d0
+mise exec -- python tools/verify_asm.py -c "add.l d1,d0" --set-reg d0=100,d1=50 --regs d0
 
 # Memory operations
-tools/run.sh verify_asm.py -c "move.w (a0),d0" \
+mise exec -- python tools/verify_asm.py -c "move.w (a0),d0" \
   --set-reg a0=0x2000 --set-mem 0x2000=0xBEEF --regs d0 --mem 0x2000:4
 
 # Assembly from a file
-tools/run.sh verify_asm.py snippet.s --trace
+mise exec -- python tools/verify_asm.py snippet.s --trace
 
 # JSON output for scripting
-tools/run.sh verify_asm.py -c "moveq #5,d0" --json
+mise exec -- python tools/verify_asm.py -c "moveq #5,d0" --json
 ```
 
 Uses Motorola syntax (matching the FTA source files) via `--register-prefix-optional`. Supports labels, `dc.b`/`dc.w`/`dc.l` data directives, and all 68000 addressing modes.

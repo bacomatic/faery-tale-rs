@@ -18,11 +18,10 @@ reference/
 game/               Runtime binary assets (images, fonts, music, map sectors) — READ ONLY
 ToArchive/          Original distribution package — READ ONLY
 tools/              Verification scripts and 68k assembly testing
-  run.sh            Venv wrapper — runs any tool script via .toolenv
   verify_asm.py     Assemble & execute 68k snippets (GNU as + machine68k)
   validate_citations.py   Check doc citations against source files
   extract_table.py        Pull data tables from source
-  requirements.txt  Python dependencies for .toolenv
+  requirements.txt  Python dependencies for the mise-managed .venv
 AGENTS.md           Canonical agent contract (behavioral guidelines, critical directives, doc map)
 docs/               Agent-facing task docs linked from AGENTS.md
   project-overview.md          Purpose, layout, read-only rules, source-file map, spatial DB
@@ -46,12 +45,13 @@ The documentation is three-tiered:
 
 ## Prerequisites
 
-- **Python 3.10+** — for verification tools
+- **[mise](https://mise.jdx.dev)** — installs the pinned Python, Node and uv from `mise.toml`
 - **binutils-m68k-linux-gnu** — GNU cross-assembler for 68000, used by `verify_asm.py`
   ```bash
   sudo apt-get install binutils-m68k-linux-gnu
   ```
-- **Python dependencies** are installed automatically into `.toolenv/` on first use of `tools/run.sh`
+- **Python and npm dependencies:** `mise install && mise run setup` creates `.venv/` and installs
+  `tools/requirements.txt` plus the review app's npm packages
 
 ## Agent Architecture: Flat Iterative Model
 
@@ -117,17 +117,17 @@ Agents log questions in [PROBLEMS.md](reference/PROBLEMS.md) whenever they encou
 
 ## Verification Tools
 
-All tools run via `tools/run.sh`, which manages a shared `.toolenv/` virtual environment:
+All tools run through mise, which activates the shared `.venv/` (`mise tasks` lists the shortcuts):
 
 ```bash
 # Validate source citations in documentation
-tools/run.sh validate_citations.py
+mise run validate
 
 # Extract data tables from source
-tools/run.sh extract_table.py fsubs.asm xdir ydir
+mise exec -- python tools/extract_table.py fsubs.asm xdir ydir
 
 # Assemble and execute 68k code to verify assembly logic
-tools/run.sh verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
+mise exec -- python tools/verify_asm.py -c "moveq #42,d0; moveq #10,d1; add.l d1,d0" --trace
 ```
 
 `verify_asm.py` uses `m68k-linux-gnu-as` (GNU cross-assembler) and `machine68k` (Musashi-based CPU emulator) to assemble and execute 68000 code snippets. It accepts Motorola syntax matching the FTA source files, supports labels, data directives, step-by-step tracing, initial register/memory setup, and JSON output. See [tools/README.md](tools/README.md) for full usage.

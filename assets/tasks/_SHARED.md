@@ -75,12 +75,13 @@ useful to porting efforts too, human ones especially), but the extracted data re
 of truth. List them in the manifest like any other shipped file.
 
 ## Python environment — IMPORTANT
-This repo runs tools via the **`.toolenv` venv**, not system Python.
-- Run tools/tests with `.toolenv/bin/python` (e.g. `.toolenv/bin/python -m pytest tools/tests/...`).
+This repo runs tools via **mise** (`mise.toml`), which activates the `.venv` it creates. Not system Python.
+- Run tools/tests with `mise exec -- python` (e.g. `mise exec -- python -m pytest tools/tests/...`).
   Plain `pytest` is **not** on PATH.
-- `tools/run.sh` auto-provisions `.toolenv` from `tools/requirements.txt` — add new deps there.
+- `mise install && mise run setup` provisions `.venv` from `tools/requirements.txt` — add new deps there,
+  then rerun `mise run setup`.
 - The venv has **no `pip` binary**; install with **`uv`** (`uv pip install ...`), do not call `pip` directly.
-- Pillow + numpy are already installed in `.toolenv`.
+- Pillow + numpy are already installed in `.venv`.
 
 ## Do not commit
 Leave all changes staged/untracked for human review. No git commits, no attribution lines.

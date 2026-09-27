@@ -7,8 +7,8 @@ site (`site/PLAN.md`), which keeps its own plan.
 
 ## Decisions (locked with the user, 2026-09-26)
 - **Separate app** (not part of the MkDocs site), under **`tools/review/`**.
-- **Stack:** FastAPI backend (runs in `.toolenv`; `fastapi`/`uvicorn`/pydantic already in
-  `tools/requirements.txt`) + **React + Vite + TypeScript** frontend. Node via nvm (v24).
+- **Stack:** FastAPI backend (runs in the mise-managed `.venv`; `fastapi`/`uvicorn`/pydantic already in
+  `tools/requirements.txt`) + **React + Vite + TypeScript** frontend. Node 24 via mise.
   Frontend is **built on demand**; `dist/` and `node_modules/` are gitignored.
 - **Instructions ship as data:** one **`verify.json` per resource subdir**, discovered recursively
   (`assets/**/verify.json`, e.g. `audio/verify.json` and `audio/sfx/verify.json`). Items are tagged
@@ -62,7 +62,7 @@ Run (details go in README):
 ```
 # review session
 (cd tools/review/frontend && npm install && npm run build)
-.toolenv/bin/python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765
+mise exec -- python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765
 # UI development: backend as above + `npm run dev` (Vite proxies /api and /files to :8765)
 ```
 

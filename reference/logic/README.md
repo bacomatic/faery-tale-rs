@@ -10,7 +10,7 @@ This directory contains strict, linter-backed pseudo-code specifications for eve
 
 **Lint:**
 ```bash
-tools/run.sh lint_logic.py
+mise run lint
 ```
 
 ---

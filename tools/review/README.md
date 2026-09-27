@@ -4,14 +4,15 @@ Local web app for human review of the `assets/` bundle. Design and schema: [`PLA
 
 ## Review session
 ```
-(cd tools/review/frontend && npm install && npm run build)   # Node via nvm (v24)
-.toolenv/bin/python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765
+mise run setup          # once: .venv + npm deps
+mise run review:build   # build frontend/dist/
+mise run review         # serve on :8765
 ```
 Open <http://127.0.0.1:8765>. The backend serves the built `frontend/dist/` at `/`.
 
 ## UI development
-Run the backend as above, then `npm run dev` in `tools/review/frontend/` (Vite proxies `/api` and
-`/files` to `:8765`). `npm run typecheck` runs `tsc` only.
+Run `mise run review`, then `mise run review:dev` (Vite proxies `/api` and `/files` to `:8765`).
+`mise exec -- npm --prefix tools/review/frontend run typecheck` runs `tsc` only.
 
 ## Writes
 - `assets/tasks/review_results.json` — append-only review rounds (on submit).
@@ -19,10 +20,10 @@ Run the backend as above, then `npm run dev` in `tools/review/frontend/` (Vite p
 
 ## Author aids
 - `backend/verify.schema.json` — JSON Schema for `verify.json`. Regenerate after editing
-  `backend/models.py`: `.toolenv/bin/python tools/review/backend/models.py`.
+  `backend/models.py`: `mise exec -- python tools/review/backend/models.py`.
 - `GET /api/validation` lists every problem across all `verify.json` files.
 
 ## Tests
 ```
-.toolenv/bin/python -m pytest tools/tests/test_review_backend.py
+mise exec -- python -m pytest tools/tests/test_review_backend.py
 ```

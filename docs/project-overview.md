@@ -22,7 +22,7 @@ reference/
   logic/            Normative pseudo-code specifications for branching functions
   world_db.json     Unified spatial database: objects, doors, extents, terrain by region/sector
   _discovery/       Raw findings from discovery agents — working notes, not final reference docs
-tools/              Verification scripts and 68k assembly testing (run via tools/run.sh)
+tools/              Verification scripts and 68k assembly testing (run via mise; see mise.toml)
 assets/tasks/       Self-contained asset-extraction pipeline (own conventions — see its README)
 docs/               Agent-facing contract docs (this directory)
 ```

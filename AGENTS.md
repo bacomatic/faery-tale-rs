@@ -56,7 +56,7 @@ Transform tasks into verifiable goals:
 - "Verify a formula" → "Extract it from source programmatically, compare against documented values"
 
 For multi-step tasks, state a brief plan with a verification step per item, and actually run it
-(citation re-read, pytest, `tools/run.sh validate_citations.py`, diff against `world_db.json` or an
+(citation re-read, pytest, `mise run validate`, diff against `world_db.json` or an
 oracle). Strong success criteria let you loop independently.
 
 ## Critical Directives
@@ -96,6 +96,6 @@ Read the relevant doc when a task calls for it (see [`docs/README.md`](docs/READ
 | Touching anything under `assets/` | `assets/tasks/README.md`, `assets/tasks/_SHARED.md`, `assets/tasks/STATUS.md` |
 
 **Note on the asset pipeline:** `assets/tasks/` is a separate, self-contained asset-extraction
-pipeline. Tools there run via `.toolenv/bin/python` (not system Python/pytest), deps are installed
+pipeline. Tools there run via `mise exec -- python` (not system Python/pytest), deps are installed
 via `uv`, and work is left staged/uncommitted for human review rather than committed. Read its docs
 before touching anything under `assets/`.

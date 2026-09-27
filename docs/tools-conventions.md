@@ -62,7 +62,7 @@ Details:
 
 ## Script Requirements
 
-- Scripts must be runnable from the repo root: `python tools/<script>.py` (or `tools/run.sh <script>.py` to use `.toolenv`)
+- Scripts must be runnable from the repo root: `python tools/<script>.py` (or `mise exec -- python tools/<script>.py` to use the mise-managed `.venv`)
 - Use `argparse` or equivalent for configurable scripts
 - Print a clear summary to stdout; write detailed results to `tools/results/`
 - Exit code 0 for PASS, 1 for FAIL, 2 for PARTIAL/NEEDS_HUMAN_REVIEW

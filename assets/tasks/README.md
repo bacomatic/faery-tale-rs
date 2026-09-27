@@ -58,4 +58,4 @@ a (fresh) Implementer. Record every transition in `STATUS.md`.
 
 To resume: read `STATUS.md`, pick the next `TODO` task whose dependencies are all `DONE`, and
 dispatch the Implementer→Reviewer pair. Honor the env notes in `_SHARED.md`
-(`.toolenv` venv, `uv` for installs).
+(mise-managed `.venv`, `uv` for installs).

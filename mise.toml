@@ -1,0 +1,40 @@
+[tools]
+python = "3.12"
+node = "24"
+uv = "0.11"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Install Python deps into .venv and the review app's npm deps"
+run = [
+  "uv pip install -r tools/requirements.txt",
+  "npm --prefix tools/review/frontend ci",
+]
+
+[tasks.test]
+description = "Run the tools test suite"
+run = "python -m pytest tools/tests"
+
+[tasks.validate]
+description = "Check every source citation in the docs"
+run = "python tools/validate_citations.py"
+
+[tasks.lint]
+description = "Lint reference/logic/"
+run = "python tools/lint_logic.py"
+
+[tasks."review:build"]
+description = "Build the review app frontend"
+dir = "tools/review/frontend"
+run = "npm run build"
+
+[tasks.review]
+description = "Serve the review app on http://127.0.0.1:8765"
+run = "python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765"
+
+[tasks."review:dev"]
+description = "Vite dev server for the review app (run `mise run review` too)"
+dir = "tools/review/frontend"
+run = "npm run dev"
