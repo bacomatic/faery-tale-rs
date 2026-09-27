@@ -4,17 +4,36 @@ This file holds the rules common to every task so individual task files stay sma
 Read **this file + your one task file**. Read [`../plan.md`](../plan.md) only if your task
 file points you to a specific section.
 
+## The product is the assets, not the tools
+This is a **one-time extraction**. The deliverable is the committed `assets/` bundle. Any script
+you write under `tools/` is a **byproduct kept for provenance** — it is not maintained, is not
+required to re-run, and its repeatability is **not** an acceptance criterion. Do not build
+orchestration/drivers/regeneration harnesses for their own sake.
+
 ## Producer rules
-- Producer is **Python** under `tools/`. Never hardcode the sibling path. Honor
-  `--game-dir` (default `../faery-tale-rs/game`) and `--src-dir` (default `src/`).
+- Extraction is done in **Python** under `tools/`. Never hardcode absolute or external paths. Honor
+  `--game-dir` (default `src/assets`) and `--src-dir` (default `src/`). All original data lives
+  in-repo under `src/`.
 - **Pixel-/byte-exact conversion only.** No gameplay/engine/rendering/creative changes.
-- Every new extractor ships with `pytest` cases under `tools/tests/`.
-- Output goes under `assets/<subdir>/` per the plan's Output layout.
+- Output goes under `assets/<subdir>/` per the plan's Output layout — the emitted files are the
+  real output.
+- **Ship manual verification instructions as data.** Each task adds its items to a
+  `verify.json` in its `assets/` subdir (one file per subdir; items tagged with the task ID;
+  schema in [`tools/review/PLAN.md`](../../tools/review/PLAN.md)). The review app renders them for
+  the human reviewer. Content must suit the asset type: for **images**, pair each file with a short
+  `look_for` description **derived from source/reference**; for **JSON tables/text**, expected
+  `counts` + spot values with source `citations`; for **audio**, expected counts + a one-line
+  “what you should hear” cue; for **palettes**, a few `rgb4`→`rgba8` values with citations.
+  `verify.json` may be hand-written or emitted by the extractor; the app validates it either way.
+  It ships with the bundle and is listed in the manifest.
+- `pytest` cases under `tools/tests/` are **optional aids** the implementer may add while
+  extracting; they are not a deliverable and not the acceptance gate.
 - **`.gitkeep` cleanup:** the `assets/` subdirs ship with `.gitkeep` placeholders. When your
   task writes real files into a directory, **`git rm` that directory's `.gitkeep`** in the same
-  change — a `.gitkeep` must exist only in dirs that are still empty. The Verifier confirms no
+  change — a `.gitkeep` must exist only in dirs that are still empty. The Reviewer confirms no
   `.gitkeep` remains alongside real output.
-- JSON: stable key ordering, deterministic byte output (re-runs must be identical).
+- JSON: stable key ordering and clean, readable byte output. (Determinism across re-runs is a
+  nicety, not a requirement — the shipped file is what matters, not its reproducibility.)
 - Color conversion: `rgb4` (the Amiga OCS 12-bit `0x0RGB` value, 4 bits/channel) → `rgba8`
   by nibble-replication (`0xF → 0xFF`). The palette JSON key is `rgb4`; the helper is
   `asset_common.rgb4_to_rgba8`.
@@ -23,21 +42,29 @@ file points you to a specific section.
   follows index 31.
 
 ## Roles — IMPORTANT
-Every task has two roles, performed by **two different agents**:
-1. **Implementer** — does the "Implementation" section, runs the "Implementer self-check".
-2. **Verifier** — a *separate* agent that performs the "Verification" section. The Verifier
-   must **not** trust the Implementer's claims or reuse the Implementer's verification code.
-   Re-derive results independently (fresh decode, fresh checksums, manual byte inspection,
-   oracle diff), then report PASS/FAIL with evidence.
+Verification is **human-in-the-loop**. Every task has two roles:
+1. **Implementer** (agent) — does the "Implementation" section, produces the assets, and authors
+   the task's `verify.json` items. The "Implementer self-check" (round-trips, spot decodes, regression
+   diffs) is an **optional aid** run while extracting — not a gate.
+2. **Reviewer** (the human) — verifies the **final** assets **by perception only**: open the
+   images, play the audio, eyeball tables/JSON (against a cited source line only when it's a
+   quick glance), working through the task's page in the **review app** (`tools/review/`) and
+   marking each item OK/Problem. The Reviewer never re-extracts, hand-decodes, or writes code to
+   verify. `verify.json` items must be written for this: minutes per task, file ↔ "what you
+   should see/hear", stated expected counts. Verdicts are appended to
+   `assets/tasks/review_results.json`.
 
-A task is **not done** until the Verifier reports PASS. If FAIL, the Verifier files specific
-findings and the task returns to an Implementer.
+Anything perception misses will surface during port implementation and can be revisited then —
+this is a labor of love, not a AAA production gate. A task is **done** when the Reviewer accepts
+the assets; on REJECT the findings go back to an Implementer.
 
-## Rust oracle
-Where a Rust decoder exists in the sibling `../faery-tale-rs` checkout
-(`tile_atlas.rs`, `iff_image.rs`, `palette.rs`, `songs.rs`, `audio.rs`, `font.rs`,
-`world_data.rs`), its output is the canonical reference. Verifiers diff Python output
-against the Rust oracle (via a small Rust harness or existing tests).
+## Previews (for non-perceivable assets)
+Where an asset can't be judged by looking at its JSON (music event streams, world/terra grids,
+envelopes), the Implementer also emits **preview artifacts** — e.g. a rendered audio preview per
+track, a colored PNG render of each region map — under the resource's `assets/<subdir>/previews/`.
+Previews are **non-authoritative convenience artifacts**: they ship with the bundle (they are
+useful to porting efforts too, human ones especially), but the extracted data remains the source
+of truth. List them in the manifest like any other shipped file.
 
 ## Python environment — IMPORTANT
 This repo runs tools via the **`.toolenv` venv**, not system Python.
