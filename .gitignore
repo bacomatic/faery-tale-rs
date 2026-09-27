@@ -19,3 +19,7 @@ tools/.env
 # ignore experiment output but keep the scripts
 /experiment/shaders/frames
 
+# review app drafts (tools/review/PLAN.md)
+tools/review/.drafts/
+tools/review/frontend/node_modules/
+tools/review/frontend/dist/

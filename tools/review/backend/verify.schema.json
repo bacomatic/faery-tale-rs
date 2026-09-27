@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "Count": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "glob": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Glob"
+        },
+        "expect": {
+          "minimum": 0,
+          "title": "Expect",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "expect"
+      ],
+      "title": "Count",
+      "type": "object"
+    },
+    "Item": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "task": {
+          "pattern": "^T\\d+(\\.\\d+)*$",
+          "title": "Task",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "view": {
+          "enum": [
+            "palette",
+            "table",
+            "text",
+            "image",
+            "json",
+            "image-grid",
+            "audio",
+            "markdown",
+            "code"
+          ],
+          "title": "View",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "look_for": {
+          "title": "Look For",
+          "type": "string"
+        },
+        "citations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "counts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Count"
+          },
+          "title": "Counts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "task",
+        "title",
+        "view",
+        "files",
+        "look_for"
+      ],
+      "title": "Item",
+      "type": "object"
+    },
+    "TaskInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "TaskInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "tasks": {
+      "default": {},
+      "patternProperties": {
+        "^T\\d+(\\.\\d+)*$": {
+          "$ref": "#/$defs/TaskInfo"
+        }
+      },
+      "title": "Tasks",
+      "type": "object"
+    },
+    "items": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Item"
+      },
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version"
+  ],
+  "title": "VerifyFile",
+  "type": "object"
+}
