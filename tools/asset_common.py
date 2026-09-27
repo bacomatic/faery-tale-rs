@@ -24,8 +24,8 @@ import zlib
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-# Default locations (never hardcode the sibling path elsewhere -- use these).
-DEFAULT_GAME_DIR = "../faery-tale-rs/game"
+# Default locations
+DEFAULT_GAME_DIR = "src/assets"
 DEFAULT_SRC_DIR = "src/"
 
 # Conventions
@@ -40,10 +40,10 @@ HIGHLIGHT_HI = 24  # inclusive
 def add_io_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add the standard ``--game-dir`` / ``--src-dir`` options to *parser*.
 
-    ``--game-dir`` defaults to the sibling checkout's ``game/`` directory. The
-    repo ships a ``game`` symlink pointing there; if that symlink/dir is not
-    available, point ``--game-dir`` at any directory containing an extracted
-    disk image (the ``--image`` alternative).
+    ``--game-dir`` defaults to the in-repo ``src/assets`` directory, which holds
+    the original game data files (disk image, songs, v6, fonts). To decode from
+    a different location, point ``--game-dir`` at any directory containing an
+    extracted disk image (the ``--image`` alternative).
     """
     parser.add_argument(
         "--game-dir",
@@ -51,9 +51,8 @@ def add_io_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         type=Path,
         help=(
             "Directory containing the original game files "
-            f"(default: {DEFAULT_GAME_DIR}). The repo's 'game' symlink points "
-            "here. If unavailable, pass a directory holding an extracted disk "
-            "image instead (the --image alternative)."
+            f"(default: {DEFAULT_GAME_DIR}). Pass a different directory holding "
+            "an extracted disk image if needed (the --image alternative)."
         ),
     )
     parser.add_argument(

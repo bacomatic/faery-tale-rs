@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 from datetime import date
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IMAGE_PATH = os.path.join(REPO_ROOT, 'game', 'image')
+IMAGE_PATH = os.path.join(REPO_ROOT, 'src', 'assets', 'image')
 
 BLOCK_SIZE = 512
 

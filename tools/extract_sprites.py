@@ -14,7 +14,7 @@ import struct
 import os
 from PIL import Image
 
-GAME_IMAGE = os.path.join(os.path.dirname(__file__), "../game/image")
+GAME_IMAGE = os.path.join(os.path.dirname(__file__), "../src/assets/image")
 BLOCK_SIZE = 512
 NUM_PLANES = 5
 

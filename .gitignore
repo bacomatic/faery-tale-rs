@@ -19,6 +19,3 @@ tools/.env
 # ignore experiment output but keep the scripts
 /experiment/shaders/frames
 
-# local convenience symlink to the sibling game assets (see assets/tasks/_SHARED.md)
-/game
-
