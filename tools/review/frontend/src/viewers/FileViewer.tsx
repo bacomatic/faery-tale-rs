@@ -3,6 +3,7 @@ import { fileUrl } from "../api";
 import ImageViewer from "./ImageViewer";
 import JsonViewer, { JsonTree, type Json } from "./JsonViewer";
 import PaletteViewer from "./PaletteViewer";
+import SpriteViewer from "./SpriteViewer";
 import StringsViewer from "./StringsViewer";
 import TableViewer from "./TableViewer";
 import { useFetched } from "./useFetched";
@@ -46,6 +47,7 @@ function NativeJson({ path, View }: { path: string; View: Native }) {
 export default function FileViewer({ path, view }: { path: string; view: string }) {
   let body;
   if (IMAGE.test(path)) body = <ImageViewer path={path} />;
+  else if (JSON_FILE.test(path) && view === "sprite") body = <SpriteViewer path={path} />;
   else if (JSON_FILE.test(path))
     body = NATIVE[view] ? <NativeJson path={path} View={NATIVE[view]} /> : <JsonViewer path={path} />;
   else if (TEXT.test(path)) body = <TextViewer path={path} />;

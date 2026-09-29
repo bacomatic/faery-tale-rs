@@ -38,6 +38,9 @@ site (`site/PLAN.md`), which keeps its own plan.
   **REJECT requires at least one Problem item or a task-level note.**
 - **Staleness:** each submitted round records **SHA-256 of the files it covered**. The task list flags
   an ACCEPT as **stale** if any of those files changed or the task's item set changed.
+- **Carried-over OK:** an item marked OK in the latest round whose covered files (`files` + count
+  targets) still hash the same gets `carried_ok` in `GET /api/tasks/{task}`. The task page pre-marks it
+  OK (a draft mark wins) and collapses it; the reviewer can expand it and change the mark.
 
 ## Layout (target)
 ```

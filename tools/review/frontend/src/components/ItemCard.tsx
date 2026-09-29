@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ItemDetail, Status } from "../types";
 import FileViewer from "../viewers/FileViewer";
 import CitationLink from "./CitationLink";
@@ -21,7 +22,9 @@ export default function ItemCard({
   onChange: (m: Mark) => void;
 }) {
   const toggle = (s: Exclude<Status, null>) => onChange({ ...mark, status: mark.status === s ? null : s });
-  const shown = item.resolved_files.slice(0, MAX_FILES);
+  const [all, setAll] = useState(false);
+  const [collapsed, setCollapsed] = useState(item.carried_ok);
+  const shown = all ? item.resolved_files : item.resolved_files.slice(0, MAX_FILES);
   return (
     <article className={`card item mark-${mark.status ?? "none"}`}>
       <header className="item-head">
@@ -29,8 +32,12 @@ export default function ItemCard({
           <h3>{item.title}</h3>
           <div className="muted small">
             <code>{item.resource || "."}/{item.id}</code> · view <code>{item.view}</code>
+            {item.carried_ok && <> · OK in previous round, files unchanged</>}
           </div>
         </div>
+        {item.carried_ok && (
+          <button onClick={() => setCollapsed(!collapsed)}>{collapsed ? "Show" : "Hide"}</button>
+        )}
         <div className="mark-buttons">
           <button className={`ok ${mark.status === "ok" ? "active" : ""}`} onClick={() => toggle("ok")}>
             OK
@@ -43,6 +50,8 @@ export default function ItemCard({
           </button>
         </div>
       </header>
+      {!collapsed && (
+        <>
       <ProblemList problems={item.problems} />
       <p className="look-for">{item.look_for}</p>
       {item.count_results.length > 0 && (
@@ -64,8 +73,10 @@ export default function ItemCard({
         {shown.map((f) => (
           <FileViewer key={f} path={f} view={item.view} />
         ))}
-        {item.resolved_files.length > shown.length && (
-          <p className="muted small">+{item.resolved_files.length - shown.length} more files not shown</p>
+        {item.resolved_files.length > MAX_FILES && (
+          <button onClick={() => setAll(!all)}>
+            {all ? `Show first ${MAX_FILES} only` : `Show ${item.resolved_files.length - MAX_FILES} more files`}
+          </button>
         )}
       </div>
       <textarea
@@ -74,6 +85,8 @@ export default function ItemCard({
         value={mark.note}
         onChange={(e) => onChange({ ...mark, note: e.target.value })}
       />
+        </>
+      )}
     </article>
   );
 }

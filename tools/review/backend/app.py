@@ -52,7 +52,7 @@ def create_app(store: Store, dist: Optional[Path] = DIST) -> FastAPI:
     @app.get("/files/{path:path}")
     def files(path: str):
         try:
-            return FileResponse(call(store.asset_file, path))
+            return FileResponse(call(store.asset_file, path), headers={"Cache-Control": "no-cache"})
         except HTTPException as e:
             raise HTTPException(404, "not found") if e.status_code == 400 else e
 

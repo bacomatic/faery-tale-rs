@@ -76,7 +76,8 @@
             "image-grid",
             "audio",
             "markdown",
-            "code"
+            "code",
+            "sprite"
           ],
           "title": "View",
           "type": "string"

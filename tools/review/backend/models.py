@@ -15,7 +15,7 @@ ItemId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$
 
 ViewKind = Literal[
     "palette", "table", "text", "image", "json",
-    "image-grid", "audio", "markdown", "code",
+    "image-grid", "audio", "markdown", "code", "sprite",
 ]
 Status = Optional[Literal["ok", "problem"]]
 Verdict = Literal["ACCEPT", "REJECT"]

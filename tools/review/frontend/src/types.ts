@@ -51,6 +51,7 @@ export interface ItemDetail {
   counts: Count[];
   resolved_files: string[];
   count_results: CountResult[];
+  carried_ok: boolean;
   problems: Problem[];
 }
 

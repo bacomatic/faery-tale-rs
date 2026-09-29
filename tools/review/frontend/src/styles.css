@@ -8,6 +8,8 @@
   --ok: #4fb477;
   --problem: #e0625a;
   --warn: #d8a13a;
+  --check-a: #2a2d34;
+  --check-b: #22252b;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
   color: var(--text);
@@ -27,7 +29,11 @@ h3 { font-size: 1rem; margin: 0; }
   position: sticky; top: 0; z-index: 10;
   padding: 0.6rem 1.25rem; background: #0f1115; border-bottom: 1px solid var(--border);
   font-weight: 600;
+  display: flex; align-items: center; gap: 0.5rem;
 }
+.backdrop-picker { margin-left: auto; display: flex; align-items: center; gap: 0.3rem; font-weight: normal; }
+.backdrop-picker button { width: 1.4rem; height: 1.4rem; padding: 0; border: 2px solid var(--border); border-radius: 4px; cursor: pointer; }
+.backdrop-picker button.active { border-color: var(--accent); }
 .crumb { color: var(--muted); margin-left: 0.4rem; }
 main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
 
@@ -106,9 +112,22 @@ textarea.note {
 .zoom button.active { border-color: var(--accent); color: var(--accent); }
 .image-frame {
   overflow: auto; max-height: 600px; padding: 0.5rem;
-  background: repeating-conic-gradient(#2a2d34 0% 25%, #22252b 0% 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(var(--check-a) 0% 25%, var(--check-b) 0% 50%) 0 0 / 16px 16px;
 }
 .image-frame img { image-rendering: pixelated; display: block; }
+
+.sprite-controls .zoom { flex-wrap: wrap; }
+.sprite-stage { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.sprite-stage .image-frame canvas { display: block; }
+.compass { display: grid; grid-template-columns: repeat(3, 2.6rem); gap: 0.2rem; }
+.compass button { padding: 0.2rem 0; font-size: 0.8rem; }
+.compass button.active { border-color: var(--accent); color: var(--accent); }
+.compass.disabled { opacity: 0.4; }
+.sprite-info { display: flex; flex-direction: column; gap: 0.3rem; max-width: 32rem; }
+.sequence { display: flex; flex-wrap: wrap; gap: 0.25rem; font-family: monospace; }
+.sequence span { padding: 0 0.25rem; border: 1px solid var(--border); border-radius: 3px; }
+.sequence span.current { border-color: var(--accent); color: var(--accent); }
+.sprite-notes { margin: 0.5rem 0 0; padding-left: 1.2rem; }
 
 .meta { margin-right: 1rem; }
 

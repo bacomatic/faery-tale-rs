@@ -276,6 +276,25 @@ def test_staleness_on_item_set_change(repo, store):
     assert state(store)["state"] == "stale"
 
 
+def carried(store, task="T1.2"):
+    return {i["id"]: i["carried_ok"] for i in store.task_detail(task)["items_detail"]}
+
+
+def test_carried_ok_needs_ok_mark_and_unchanged_files(repo, store):
+    assert carried(store) == {"a": False, "pngs": False}
+    submit(store, "REJECT", [mark("a", "ok"), mark("pngs", "problem")])
+    assert carried(store) == {"a": True, "pngs": False}
+    write(repo / "assets" / "tables" / "a.json", {"rows": [1, 2, 3], "changed": 1})
+    assert carried(store) == {"a": False, "pngs": False}
+
+
+def test_carried_ok_cleared_by_new_matching_file(repo, store):
+    submit(store, "ACCEPT", [mark("a", "ok"), mark("pngs", "ok")])
+    assert carried(store) == {"a": True, "pngs": True}
+    write(repo / "assets" / "tables" / "sub" / "z.png", "png")
+    assert carried(store) == {"a": True, "pngs": False}
+
+
 def test_reject_never_stale(repo, store):
     submit(store, "REJECT", notes="bad")
     write(repo / "assets" / "tables" / "a.json", [])
@@ -325,7 +344,8 @@ def test_api_files_served_and_traversal_blocked(client, store):
     for rel in ["../secret.txt", "tables/../../secret.txt", "/etc/passwd"]:
         with pytest.raises(ValueError):
             store.asset_file(rel)
-    assert client.get("/files/tables/b.json").json() == [1, 2]
+    r = client.get("/files/tables/b.json")
+    assert r.json() == [1, 2] and r.headers["cache-control"] == "no-cache"
     for p in ["/files/../secret.txt", "/files/%2e%2e/secret.txt",
               "/files/tables/%2e%2e/%2e%2e/secret.txt", "/files/tables/nope.json",
               "/files/%2Fetc%2Fpasswd"]:

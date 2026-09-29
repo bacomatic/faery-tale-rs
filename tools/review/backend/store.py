@@ -277,16 +277,20 @@ class Store:
         out["ok"] = out["actual"] == c.expect
         return out
 
+    def item_files(self, resource: str, item) -> set[Path]:
+        paths: set[Path] = set()
+        base = self.resource_dir(resource)
+        for pat in list(item.files) + [c.file or c.glob for c in item.counts]:
+            try:
+                paths.update(p.resolve() for p in expand(base, pat))
+            except ValueError:
+                pass
+        return paths
+
     def covered_files(self, bundle: Bundle, task: str) -> list[Path]:
         paths: set[Path] = set()
         for resource, item in bundle.items.get(task, []):
-            base = self.resource_dir(resource)
-            pats = list(item.files) + [c.file or c.glob for c in item.counts]
-            for pat in pats:
-                try:
-                    paths.update(p.resolve() for p in expand(base, pat))
-                except ValueError:
-                    pass
+            paths |= self.item_files(resource, item)
         return sorted(paths)
 
     def file_hashes(self, bundle: Bundle, task: str) -> dict[str, str]:
@@ -395,8 +399,14 @@ class Store:
         if task not in bundle.task_ids():
             raise NotFound(f"unknown task {task!r}")
         resource, info = bundle.tasks.get(task, ("", TaskInfo(title=task)))
+        rounds = self.rounds(task)
+        latest = rounds[-1] if rounds else None
+        ok_then = {(m.resource, m.id) for m in latest.items if m.status == "ok"} if latest else set()
         items = []
         for res, it in bundle.items.get(task, []):
+            covered = self.item_files(res, it)
+            carried_ok = ((res, it.id) in ok_then and bool(covered)
+                          and all(latest.files.get(self.rel(p)) == sha256(p) for p in covered))
             base = self.resource_dir(res)
             files: list[str] = []
             for pat in it.files:
@@ -407,10 +417,10 @@ class Store:
             items.append({
                 "resource": res, **it.model_dump(), "resolved_files": files,
                 "count_results": [self.evaluate_count(res, c) for c in it.counts],
+                "carried_ok": carried_ok,
                 "problems": [p.model_dump() for p in bundle.problems_for(task) if p.item == it.id
                              and p.file == self.rel(base / "verify.json")],
             })
-        rounds = self.rounds(task)
         return {
             **self.task_summary(bundle, task),
             "summary": info.summary, "resource": resource, "items_detail": items,

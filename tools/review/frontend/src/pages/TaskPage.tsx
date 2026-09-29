@@ -38,6 +38,7 @@ export default function TaskPage({ task }: { task: string }) {
   const load = useCallback(async () => {
     const d = await api.task(task);
     const m: Marks = {};
+    for (const it of d.items_detail) if (it.carried_ok) m[keyOf(it.resource, it.id)] = { status: "ok", note: "" };
     for (const it of d.draft?.items ?? []) m[keyOf(it.resource, it.id)] = { status: it.status, note: it.note };
     dirty.current = false;
     setDetail(d);
@@ -100,6 +101,7 @@ export default function TaskPage({ task }: { task: string }) {
   const statuses = items.map((it) => (marks[keyOf(it.resource, it.id)] ?? EMPTY).status);
   const problemCount = statuses.filter((s) => s === "problem").length;
   const unmarkedCount = statuses.filter((s) => !s).length;
+  const carriedCount = items.filter((it) => it.carried_ok).length;
 
   return (
     <>
@@ -124,12 +126,20 @@ export default function TaskPage({ task }: { task: string }) {
           <ProblemList problems={detail.task_problems} />
         </section>
       )}
+      {carriedCount > 0 && (
+        <p className="panel">
+          {carriedCount} of {items.length} items were OK in the previous round and their files are unchanged; they are
+          pre-marked OK and collapsed.
+        </p>
+      )}
       {err && <p className="panel panel-error">{err}</p>}
       {flash && <p className="panel panel-ok">{flash}</p>}
 
       {items.map((it) => {
         const k = keyOf(it.resource, it.id);
-        return <ItemCard key={k} item={it} mark={marks[k] ?? EMPTY} onChange={(m) => setMark(k, m)} />;
+        return (
+          <ItemCard key={`${k}:${it.carried_ok}`} item={it} mark={marks[k] ?? EMPTY} onChange={(m) => setMark(k, m)} />
+        );
       })}
 
       <VerdictBar
