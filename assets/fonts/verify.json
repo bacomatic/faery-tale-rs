@@ -1,0 +1,196 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/fmain.c:774-775",
+        "src/fmain.c:782",
+        "src/fmain.c:1168",
+        "src/fmain.c:2860",
+        "src/fmain2.c:1550",
+        "src/fmain2.c:1586"
+      ],
+      "counts": [
+        {
+          "expect": 96,
+          "glob": "amber_9/glyphs/*.png",
+          "label": "glyph PNGs"
+        },
+        {
+          "expect": 97,
+          "file": "amber_9/amber_9.json",
+          "label": "char_loc entries",
+          "path": "glyphs"
+        }
+      ],
+      "files": [
+        "amber_9/amber_9_atlas.png",
+        "amber_9/amber_9.json"
+      ],
+      "id": "amber_9-atlas",
+      "look_for": "The raw tf_CharData strip: every character 32..127 (ASCII ' '..'\\x7f') in code order, left to right, 9 px tall, then the default glyph; the game's in-game message/placard face. Nothing clipped or scrambled. JSON: y_size 9, baseline 7, x_size 10, modulo 96, 97 char_loc entries.",
+      "task": "T2.8",
+      "title": " 9 — glyph atlas (768x9)",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:774-775",
+        "src/fmain.c:782",
+        "src/fmain.c:1168",
+        "src/fmain.c:2860",
+        "src/fmain2.c:1550",
+        "src/fmain2.c:1586"
+      ],
+      "files": [
+        "amber_9/glyphs/065.png"
+      ],
+      "id": "amber_9-glyph-065",
+      "look_for": "The capital letter A: 'A' (12x9 px).",
+      "task": "T2.8",
+      "title": " 9 — glyph 65 'A'",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:774-775",
+        "src/fmain.c:782",
+        "src/fmain.c:1168",
+        "src/fmain.c:2860",
+        "src/fmain2.c:1550",
+        "src/fmain2.c:1586"
+      ],
+      "files": [
+        "amber_9/glyphs/048.png"
+      ],
+      "id": "amber_9-glyph-048",
+      "look_for": "The digit zero: '0' (9x9 px).",
+      "task": "T2.8",
+      "title": " 9 — glyph 48 '0'",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:774-775",
+        "src/fmain.c:782",
+        "src/fmain.c:1168",
+        "src/fmain.c:2860",
+        "src/fmain2.c:1550",
+        "src/fmain2.c:1586"
+      ],
+      "files": [
+        "amber_9/glyphs/127.png"
+      ],
+      "id": "amber_9-glyph-127",
+      "look_for": "The last character, code 127: None (10x9 px).",
+      "task": "T2.8",
+      "title": " 9 — glyph 127 None",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:650",
+        "src/fmain.c:778",
+        "src/fmain.c:779-781",
+        "src/fmain.c:2881",
+        "src/fmain2.c:1481"
+      ],
+      "counts": [
+        {
+          "expect": 225,
+          "glob": "topaz_8/glyphs/*.png",
+          "label": "glyph PNGs"
+        },
+        {
+          "expect": 225,
+          "file": "topaz_8/topaz_8.json",
+          "label": "char_loc entries",
+          "path": "glyphs"
+        }
+      ],
+      "files": [
+        "topaz_8/topaz_8_atlas.png",
+        "topaz_8/topaz_8.json"
+      ],
+      "id": "topaz_8-atlas",
+      "look_for": "The raw tf_CharData strip: every character 32..255 (ASCII ' '..'ÿ') in code order, left to right, 8 px tall, then the default glyph; the familiar Amiga system font (topaz-8). Nothing clipped or scrambled. JSON: y_size 8, baseline 6, x_size 8, modulo 192, 225 char_loc entries.",
+      "task": "T2.8",
+      "title": " 8 — glyph atlas (1536x8)",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:650",
+        "src/fmain.c:778",
+        "src/fmain.c:779-781",
+        "src/fmain.c:2881",
+        "src/fmain2.c:1481"
+      ],
+      "files": [
+        "topaz_8/glyphs/065.png"
+      ],
+      "id": "topaz_8-glyph-065",
+      "look_for": "The capital letter A: 'A' (8x8 px).",
+      "task": "T2.8",
+      "title": " 8 — glyph 65 'A'",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:650",
+        "src/fmain.c:778",
+        "src/fmain.c:779-781",
+        "src/fmain.c:2881",
+        "src/fmain2.c:1481"
+      ],
+      "files": [
+        "topaz_8/glyphs/048.png"
+      ],
+      "id": "topaz_8-glyph-048",
+      "look_for": "The digit zero: '0' (8x8 px).",
+      "task": "T2.8",
+      "title": " 8 — glyph 48 '0'",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:650",
+        "src/fmain.c:778",
+        "src/fmain.c:779-781",
+        "src/fmain.c:2881",
+        "src/fmain2.c:1481"
+      ],
+      "files": [
+        "topaz_8/glyphs/032.png"
+      ],
+      "id": "topaz_8-glyph-032",
+      "look_for": "The first character, code 32: ' ' (8x8 px).",
+      "task": "T2.8",
+      "title": " 8 — glyph 32 ' '",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:650",
+        "src/fmain.c:778",
+        "src/fmain.c:779-781",
+        "src/fmain.c:2881",
+        "src/fmain2.c:1481"
+      ],
+      "files": [
+        "topaz_8/glyphs/255.png"
+      ],
+      "id": "topaz_8-glyph-255",
+      "look_for": "The last character, code 255: None (8x8 px).",
+      "task": "T2.8",
+      "title": " 8 — glyph 255 None",
+      "view": "image"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.8": {
+      "summary": "The two DiskFont size files the game uses: Amber/9 (LoadSeg, in-game text) and Topaz/8 (stand-in for the ROM topaz-8 the game opens with OpenFont). Per font: the raw glyph atlas, one PNG per character, and the TextFont metrics JSON. Check each atlas reads as a full character set and the listed glyphs show the expected character.",
+      "title": "Fonts"
+    }
+  }
+}
