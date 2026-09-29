@@ -1,0 +1,237 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/fmain2.c:760-776",
+        "src/gdriver.asm:116-139",
+        "src/gdriver.asm:202-235",
+        "src/fmain.c:669-672"
+      ],
+      "counts": [
+        {
+          "expect": 28,
+          "glob": "music/track_*.json",
+          "label": "track JSONs"
+        },
+        {
+          "expect": 28,
+          "glob": "music/previews/track_*.wav",
+          "label": "track previews"
+        },
+        {
+          "expect": 7,
+          "glob": "music/previews/song_*.wav",
+          "label": "song (4-voice) previews"
+        },
+        {
+          "expect": 78,
+          "file": "music/format.json",
+          "label": "period table entries",
+          "path": "period_table.entries"
+        },
+        {
+          "expect": 64,
+          "file": "music/format.json",
+          "label": "duration table entries",
+          "path": "duration_table.values"
+        },
+        {
+          "expect": 12,
+          "file": "music/format.json",
+          "label": "instrument table entries",
+          "path": "instrument_table.values"
+        }
+      ],
+      "files": [
+        "music/format.json",
+        "music/track_00.json"
+      ],
+      "id": "music-format",
+      "look_for": "format.json: commands 0x00-0x7f note / 0x80 rest / 0x81 instrument / 0x90 tempo / 0xff end; period table starts 1440,0 and ends 135,28 (gdriver.asm:204,222); duration row 0 is 26880..210 (gdriver.asm:228); instrument words 0x0000 x4, 0x0005, 0x0202, 0x0101, 0x0103, 0x0004, 0x0504, 0x0100, 0x0500 (fmain.c:670-672). track_00.json: every event carries its raw byte pair next to the decoded meaning.",
+      "task": "T2.6",
+      "title": "Music event format + 28 decoded tracks",
+      "view": "json"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2948",
+        "src/fmain.c:2951-2954"
+      ],
+      "files": [
+        "music/previews/song_0.wav",
+        "music/previews/track_00.wav",
+        "music/previews/track_01.wav",
+        "music/previews/track_02.wav",
+        "music/previews/track_03.wav"
+      ],
+      "id": "song-0-day",
+      "look_for": "Overworld daytime theme (tracks 0-3): what plays outdoors in daylight (lightlevel > 120, no battle). song_0 is the 4-voice mix; track_NN are the single voices.",
+      "task": "T2.6",
+      "title": "Song 0 — overworld, daytime",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2942",
+        "src/fmain.c:2951-2954"
+      ],
+      "files": [
+        "music/previews/song_1.wav",
+        "music/previews/track_04.wav",
+        "music/previews/track_05.wav",
+        "music/previews/track_06.wav",
+        "music/previews/track_07.wav"
+      ],
+      "id": "song-1-combat",
+      "look_for": "Combat theme (tracks 4-7): what plays while battleflag is set. song_1 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 1 — combat",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2949",
+        "src/fmain.c:2951-2954"
+      ],
+      "files": [
+        "music/previews/song_2.wav",
+        "music/previews/track_08.wav",
+        "music/previews/track_09.wav",
+        "music/previews/track_10.wav",
+        "music/previews/track_11.wav"
+      ],
+      "id": "song-2-night",
+      "look_for": "Overworld night theme (tracks 8-11): what plays outdoors when lightlevel <= 120. song_2 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 2 — overworld, night",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1182",
+        "src/fmain.c:1244"
+      ],
+      "files": [
+        "music/previews/song_3.wav",
+        "music/previews/track_12.wav",
+        "music/previews/track_13.wav",
+        "music/previews/track_14.wav",
+        "music/previews/track_15.wav"
+      ],
+      "id": "song-3-title",
+      "look_for": "Title/intro theme (tracks 12-15): started by main() right after the score loads and heard over the intro pages until stopscore() at fmain.c:1244. song_3 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 3 — title / intro",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2939-2941",
+        "src/fmain.c:353"
+      ],
+      "files": [
+        "music/previews/song_4.wav",
+        "music/previews/track_16.wav",
+        "music/previews/track_17.wav",
+        "music/previews/track_18.wav",
+        "music/previews/track_19.wav"
+      ],
+      "id": "song-4-astral",
+      "look_for": "Astral (spirit) plane theme (tracks 16-19): what plays inside the box (0x2400,0x8200)-(0x3100,0x8a00), the 'astral plane' extent. song_4 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 4 — astral plane",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2943-2947",
+        "src/fmain.c:624-625"
+      ],
+      "files": [
+        "music/previews/song_5.wav",
+        "music/previews/track_20.wav",
+        "music/previews/track_21.wav",
+        "music/previews/track_22.wav",
+        "music/previews/track_23.wav"
+      ],
+      "id": "song-5-indoors",
+      "look_for": "Indoor theme (tracks 20-23): what plays in region 8 (inside of buildings) and 9 (dungeons and caves). Rendered with the default instrument 10 (0x0100); the region-9 swap to 0x0307 is not modelled. song_5 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 5 — indoors / dungeons",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2938",
+        "src/fmain.c:2951-2954"
+      ],
+      "files": [
+        "music/previews/song_6.wav",
+        "music/previews/track_24.wav",
+        "music/previews/track_25.wav",
+        "music/previews/track_26.wav",
+        "music/previews/track_27.wav"
+      ],
+      "id": "song-6-death",
+      "look_for": "Death theme (tracks 24-27): what plays when the hero's vitality reaches 0. song_6 is the 4-voice mix.",
+      "task": "T2.6",
+      "title": "Song 6 — death",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:663",
+        "src/fmain.c:931-936",
+        "src/gdriver.asm:162-165",
+        "src/gdriver.asm:181-193"
+      ],
+      "counts": [
+        {
+          "expect": 8,
+          "file": "instruments/waveforms.json",
+          "label": "waveforms",
+          "path": "waveforms"
+        }
+      ],
+      "files": [
+        "instruments/waveforms.json"
+      ],
+      "id": "waveforms",
+      "look_for": "8 waveforms of 128 signed samples (-128..127) from v6 bytes 0-1023; octave_slices lists the 64/32/16/8-byte cycles at offsets 0/64/96/112; v6_unread holds the bytes the game never reads: 1024-2047 and the last 20 (fmain.c:931-936; the Seek mode 0 is OFFSET_CURRENT).",
+      "task": "T2.6",
+      "title": "Instrument waveforms (v6)",
+      "view": "json"
+    },
+    {
+      "citations": [
+        "src/fmain.c:664",
+        "src/fmain.c:933-934",
+        "src/gdriver.asm:98-104",
+        "src/gdriver.asm:167-175"
+      ],
+      "counts": [
+        {
+          "expect": 10,
+          "file": "instruments/envelopes.json",
+          "label": "envelopes",
+          "path": "envelopes"
+        }
+      ],
+      "files": [
+        "instruments/envelopes.json"
+      ],
+      "id": "envelopes",
+      "look_for": "10 envelopes of 256 bytes from v6 bytes 2048-4607 (Seek(file,S_WAVBUF,0) is OFFSET_CURRENT, fmain.c:933); byte 0 is the starting volume, one byte per vertical blank follows, and hold_from marks the first >= 128 (negative = hold) byte.",
+      "task": "T2.6",
+      "title": "Volume envelopes (v6)",
+      "view": "json"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.6": {
+      "summary": "28 decoded music tracks (7 songs x 4 Paula voices) with the event format, period/duration/instrument tables, plus the v6 waveforms and envelopes. Listen to the song_N.wav mixes (and single-voice track_NN.wav renders) to recognise each theme; the WAVs are rough non-authoritative renders (see music/previews/README.md).",
+      "title": "Music + instruments"
+    }
+  }
+}

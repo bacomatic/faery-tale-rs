@@ -1,0 +1,2331 @@
+{
+  "counts": {
+    "end": 1,
+    "note": 135,
+    "rest": 8,
+    "set_instrument": 1,
+    "set_tempo": 1
+  },
+  "event_count": 146,
+  "events": [
+    {
+      "kind": "set_tempo",
+      "offset": 0,
+      "raw": [
+        144,
+        255
+      ],
+      "tempo": 255
+    },
+    {
+      "envelope": 0,
+      "instrument": 11,
+      "kind": "set_instrument",
+      "offset": 2,
+      "raw": [
+        129,
+        11
+      ],
+      "waveform": 5
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 4,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 6,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 8,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 10,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 12,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 14,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 16,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 2,
+      "duration_counts": 6720,
+      "kind": "rest",
+      "offset": 18,
+      "raw": [
+        128,
+        2
+      ],
+      "tie": false
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 20,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 22,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 24,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 26,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 28,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 30,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 32,
+      "period": 453,
+      "raw": [
+        44,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 34,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 36,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 38,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 40,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 42,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 44,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 46,
+      "period": 453,
+      "raw": [
+        32,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 48,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 50,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 52,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 54,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 56,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 58,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 60,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 62,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 64,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 66,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 68,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 70,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 72,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 74,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 76,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 78,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 80,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 82,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 84,
+      "period": 302,
+      "raw": [
+        39,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 86,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 88,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 90,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 92,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 94,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 96,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 98,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 100,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 102,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 49,
+      "note_name": "E5",
+      "offset": 104,
+      "period": 339,
+      "raw": [
+        49,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 106,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 108,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 110,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 112,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 114,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 116,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 118,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 120,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 122,
+      "period": 453,
+      "raw": [
+        44,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 49,
+      "note_name": "E5",
+      "offset": 124,
+      "period": 339,
+      "raw": [
+        49,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 126,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 128,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 130,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 132,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 134,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 136,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 138,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 140,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 41,
+      "note_name": "G#4",
+      "offset": 142,
+      "period": 269,
+      "raw": [
+        41,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 144,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 146,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 0,
+      "duration_counts": 26880,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 148,
+      "period": 302,
+      "raw": [
+        51,
+        0
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 150,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 152,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 154,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 156,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 158,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 160,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 162,
+      "period": 453,
+      "raw": [
+        44,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 164,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 166,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 168,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 170,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 172,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 174,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 176,
+      "period": 453,
+      "raw": [
+        32,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 178,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 180,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 182,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 184,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 32,
+      "note_name": "B3",
+      "offset": 186,
+      "period": 453,
+      "raw": [
+        32,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 188,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 190,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 192,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 194,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 196,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 198,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 200,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 18,
+      "duration_counts": 4480,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 202,
+      "period": 404,
+      "raw": [
+        46,
+        18
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 204,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 9,
+      "duration_counts": 20160,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 206,
+      "period": 302,
+      "raw": [
+        51,
+        9
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 208,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 210,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 212,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 214,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 216,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 218,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 53,
+      "note_name": "G#5",
+      "offset": 220,
+      "period": 269,
+      "raw": [
+        53,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 222,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 49,
+      "note_name": "E5",
+      "offset": 224,
+      "period": 339,
+      "raw": [
+        49,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 226,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 228,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 230,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 232,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 234,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 236,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 238,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 240,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 242,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 53,
+      "note_name": "G#5",
+      "offset": 244,
+      "period": 269,
+      "raw": [
+        53,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 48,
+      "note_name": "D#5",
+      "offset": 246,
+      "period": 360,
+      "raw": [
+        48,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 248,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 41,
+      "note_name": "G#4",
+      "offset": 250,
+      "period": 269,
+      "raw": [
+        41,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 252,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 53,
+      "note_name": "G#5",
+      "offset": 254,
+      "period": 269,
+      "raw": [
+        53,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 256,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 49,
+      "note_name": "E5",
+      "offset": 258,
+      "period": 339,
+      "raw": [
+        49,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 260,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 53,
+      "note_name": "G#5",
+      "offset": 262,
+      "period": 269,
+      "raw": [
+        53,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 49,
+      "note_name": "E5",
+      "offset": 264,
+      "period": 339,
+      "raw": [
+        49,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 51,
+      "note_name": "F#5",
+      "offset": 266,
+      "period": 302,
+      "raw": [
+        51,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 268,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 270,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 39,
+      "note_name": "F#4",
+      "offset": 272,
+      "period": 302,
+      "raw": [
+        39,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 34,
+      "note_name": "C#4",
+      "offset": 274,
+      "period": 404,
+      "raw": [
+        34,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 16
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 43,
+      "note_name": "A#4",
+      "offset": 276,
+      "period": 480,
+      "raw": [
+        43,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 46,
+      "note_name": "C#5",
+      "offset": 278,
+      "period": 404,
+      "raw": [
+        46,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 18,
+      "duration_counts": 4480,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 280,
+      "period": 453,
+      "raw": [
+        44,
+        18
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 282,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 18,
+      "duration_counts": 4480,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 284,
+      "period": 453,
+      "raw": [
+        44,
+        18
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 19,
+      "duration_counts": 2240,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 286,
+      "period": 453,
+      "raw": [
+        44,
+        19
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "chord": false,
+      "duration_code": 1,
+      "duration_counts": 13440,
+      "kind": "note",
+      "note": 44,
+      "note_name": "B4",
+      "offset": 288,
+      "period": 453,
+      "raw": [
+        44,
+        1
+      ],
+      "tie": false,
+      "wave_offset": 24
+    },
+    {
+      "kind": "end",
+      "loop": true,
+      "offset": 290,
+      "raw": [
+        255,
+        1
+      ]
+    }
+  ],
+  "format": "format.json",
+  "initial_instrument": {
+    "citations": [
+      "src/gdriver.asm:376-380",
+      "src/gdriver.asm:26-27",
+      "src/fmain.c:669-672"
+    ],
+    "envelope": 0,
+    "note": "playscore() seeds voice 0 from new_wave[0] (0x0000); high byte = waveform, low byte = envelope.",
+    "waveform": 0
+  },
+  "loop": true,
+  "song": 4,
+  "source": {
+    "bytes": 292,
+    "citations": [
+      "src/fmain2.c:765-772"
+    ],
+    "file": "songs",
+    "offset": 3856,
+    "packlen_words": 146
+  },
+  "theme": {
+    "citations": [
+      "src/fmain.c:2939-2941",
+      "src/fmain.c:353"
+    ],
+    "name": "astral",
+    "played_when": "Astral-plane theme: setmood() picks tracks 16-19 while the hero is inside the box (0x2400,0x8200)-(0x3100,0x8a00), the 'astral plane' extent.",
+    "title": "Astral (spirit) plane"
+  },
+  "track": 16,
+  "trailing_bytes_after_end": 0,
+  "voice": 0
+}
