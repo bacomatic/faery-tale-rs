@@ -1,0 +1,325 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/fmain.c:616",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591",
+        "src/fsubs.asm:750-771"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_00/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_00/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_00/atlas_rgba.png",
+        "region_00/atlas_indexed.png",
+        "region_00/atlas_highlightmask.png",
+        "region_00/tiles.json"
+      ],
+      "id": "tiles_region_00",
+      "look_for": "F1 'snowy region': 256 tiles of 16x32 in a 16x16 grid. Rows 1-4 = 'wild' (blocks 320, shared by every outdoor region: grass, trees, water, paths), rows 5-8 = 'palace' (480), rows 9-12 = 'swamp' (520), rows 13-16 = 'mountain2' (560). Every tile should be a clean, unstriped 16x32 image; colour 31 is the default light blue.",
+      "task": "T2.2",
+      "title": "Region 0 (F1) — snowy region",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:617",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_01/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_01/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_01/atlas_rgba.png",
+        "region_01/atlas_indexed.png",
+        "region_01/atlas_highlightmask.png",
+        "region_01/tiles.json"
+      ],
+      "id": "tiles_region_01",
+      "look_for": "F2 'witch wood': rows 1-4 'wild' (320), rows 5-8 'build' (360, village buildings), rows 9-12 'rock' (400), rows 13-16 'tower' (440). Same four groups as region 3 (F4), so the two atlases are identical by source.",
+      "task": "T2.2",
+      "title": "Region 1 (F2) — witch wood",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:618",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_02/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_02/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_02/atlas_rgba.png",
+        "region_02/atlas_indexed.png",
+        "region_02/atlas_highlightmask.png",
+        "region_02/tiles.json"
+      ],
+      "id": "tiles_region_02",
+      "look_for": "F3 'swampy region': rows 1-4 'wild' (320), rows 5-8 'build' (360), rows 9-12 'swamp' (520), rows 13-16 'mountain2' (560). Rows 1-4 match region 0; rows 5-8 match region 1; rows 9-16 match region 0.",
+      "task": "T2.2",
+      "title": "Region 2 (F3) — swampy region",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:619",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_03/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_03/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_03/atlas_rgba.png",
+        "region_03/atlas_indexed.png",
+        "region_03/atlas_highlightmask.png",
+        "region_03/tiles.json"
+      ],
+      "id": "tiles_region_03",
+      "look_for": "F4 'plains and rocks': rows 1-4 'wild' (320), rows 5-8 'build' (360), rows 9-12 'rock' (400), rows 13-16 'tower' (440). Identical to region 1 (F2) by source (same image blocks).",
+      "task": "T2.2",
+      "title": "Region 3 (F4) — plains and rocks",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:620",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591",
+        "src/fmain2.c:381"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_04/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_04/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_04/atlas_rgba.png",
+        "region_04/atlas_indexed.png",
+        "region_04/atlas_highlightmask.png",
+        "region_04/tiles.json"
+      ],
+      "id": "tiles_region_04",
+      "look_for": "F5 'desert area': rows 1-4 'wild' (320), rows 5-8 'palace' (480), rows 9-12 'swamp' (520), rows 13-16 'mountain3' (600). In the RGBA atlas every pixel of palette index 31 is the desert override 0x0980 (dark sandy yellow) instead of the default light blue — compare with region 0 rows 1-4, which share the same 'wild' tiles.",
+      "task": "T2.2",
+      "title": "Region 4 (F5) — desert area (colour 31 = 0x0980)",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:621",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_05/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_05/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_05/atlas_rgba.png",
+        "region_05/atlas_indexed.png",
+        "region_05/atlas_highlightmask.png",
+        "region_05/tiles.json"
+      ],
+      "id": "tiles_region_05",
+      "look_for": "F6 'bay / city / farms': rows 1-4 'wild' (320), rows 5-8 'castle' (280), rows 9-12 'field' (240, farmland), rows 13-16 'mountain1' (200). Same four groups as region 7 (F8), so the two atlases are identical by source.",
+      "task": "T2.2",
+      "title": "Region 5 (F6) — bay / city / farms",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:622",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_06/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_06/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_06/atlas_rgba.png",
+        "region_06/atlas_indexed.png",
+        "region_06/atlas_highlightmask.png",
+        "region_06/tiles.json"
+      ],
+      "id": "tiles_region_06",
+      "look_for": "F7 'volcanic': rows 1-4 'wild' (320), rows 5-8 'doom' (640, the only region using this group), rows 9-12 'swamp' (520), rows 13-16 'mountain3' (600).",
+      "task": "T2.2",
+      "title": "Region 6 (F7) — volcanic",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:623",
+        "src/mtrack.c:30-46",
+        "src/fmain.c:3575-3591",
+        "src/fmain2.c:412-413"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_07/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_07/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_07/atlas_rgba.png",
+        "region_07/atlas_indexed.png",
+        "region_07/atlas_highlightmask.png",
+        "region_07/tiles.json"
+      ],
+      "id": "tiles_region_07",
+      "look_for": "F8 'forest and wilderness': rows 1-4 'wild' (320), rows 5-8 'castle' (280), rows 9-12 'field' (240), rows 13-16 'mountain1' (200); identical to region 5 (F6). Good atlas for the highlight mask: set bits (indices 16-24, the entries fade_page night-boosts) should sit on the green foliage and blue water pixels, not on paths or buildings.",
+      "task": "T2.2",
+      "title": "Region 7 (F8) — forest and wilderness",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:624",
+        "src/mtrack.c:42-46",
+        "src/fmain.c:3575-3591"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_08/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_08/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_08/atlas_rgba.png",
+        "region_08/atlas_indexed.png",
+        "region_08/atlas_highlightmask.png",
+        "region_08/tiles.json"
+      ],
+      "id": "tiles_region_08",
+      "look_for": "F9 'inside of buildings': rows 1-4 'under' (680), rows 5-8 'furnish' (720, furniture), rows 9-12 'inside' (800, interior walls/floors), rows 13-16 'astral' (840). No outdoor 'wild' tiles here.",
+      "task": "T2.2",
+      "title": "Region 8 (F9) — inside of buildings",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:625",
+        "src/mtrack.c:42-46",
+        "src/fmain.c:3575-3591",
+        "src/fmain2.c:382-384"
+      ],
+      "counts": [
+        {
+          "expect": 3,
+          "glob": "region_09/atlas_*.png",
+          "label": "atlas PNGs"
+        },
+        {
+          "expect": 256,
+          "file": "region_09/tiles.json",
+          "label": "tiles",
+          "path": "tiles"
+        }
+      ],
+      "files": [
+        "region_09/atlas_rgba.png",
+        "region_09/atlas_indexed.png",
+        "region_09/atlas_highlightmask.png",
+        "region_09/tiles.json"
+      ],
+      "id": "tiles_region_09",
+      "look_for": "F10 'dungeons and caves': rows 1-4 'under' (680), rows 5-8 'cave' (760, the only region using this group), rows 9-12 'inside' (800), rows 13-16 'astral' (840). In the RGBA atlas palette index 31 is the dungeon override 0x0445 (dark blue-grey) instead of light blue — compare rows 1-4 and 9-16 with region 8, which share those tiles. (The secret_timer variant 0x00f0 is not rendered.)",
+      "task": "T2.2",
+      "title": "Region 9 (F10) — dungeons and caves (colour 31 = 0x0445)",
+      "view": "image"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.2": {
+      "summary": "One background tile atlas per region (file_index[0..9] = F1..F10): 256 tiles of 16x32 px in a 16-column grid, decoded from the four 40-block image groups each region loads (rows 1-4 = group 0, 5-8 = group 1, 9-12 = group 2, 13-16 = group 3). Check the RGBA atlas is recognizable terrain (not garbage/striped), the indexed twin shows the same imagery, and the highlight mask (palette 16-24) sits on vegetation/water pixels. Regions 4 and 9 render palette index 31 with their fade_page override colour.",
+      "title": "Background tiles"
+    }
+  }
+}
