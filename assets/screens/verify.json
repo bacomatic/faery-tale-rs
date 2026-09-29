@@ -1,0 +1,172 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/iffsubs.c:28-38",
+        "src/iffsubs.c:139-189",
+        "src/iffsubs.c:164",
+        "src/iffsubs.c:141"
+      ],
+      "counts": [
+        {
+          "expect": 9,
+          "glob": "*.png",
+          "label": "screen PNGs"
+        },
+        {
+          "expect": 9,
+          "file": "screens.json",
+          "label": "screens.json entries",
+          "path": "screens"
+        }
+      ],
+      "files": [
+        "screens.json"
+      ],
+      "id": "screens_json",
+      "look_for": "Nine entries in the order page0, p1a, p1b, p2a, p2b, p3a, p3b, winpic, hiscreen. Sizes: page0/winpic 320x200 x5 planes, p1a/p2a/p3a 112x147, p1b 128x127, p2b 136x76, p3b 136x78, hiscreen 640x57 x4 planes; all compression 1 (ByteRun1), masking 2, aspect 10:11. cmap_differs_at is empty for the seven intro screens, lists indices 1 and 28 for winpic, and is non-empty for hiscreen.",
+      "task": "T2.4",
+      "title": "screens.json - 9 screens, BMHD metadata and placement",
+      "view": "json"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1194-1199",
+        "src/fmain.c:484-488",
+        "src/fmain.c:2930"
+      ],
+      "files": [
+        "page0.png"
+      ],
+      "id": "page0",
+      "look_for": "Depicts: an open storybook; left page a framed painting of a walled village with thatched houses under a hilltop castle and crescent moon, right page the illuminated text 'Once upon a time, there lived three brothers in a small village in the land of Holm.' Full-screen title picture: the first thing shown after the legal text, loaded into pageb and copied to both page bitmaps before the playfield zooms open (screen_size 0..160). Palette introcolors: black, white, reds, orange/yellow, greens, and a run of cream/tan/brown tones. No garbled rows.",
+      "task": "T2.4",
+      "title": "page0 - title page, 320x200",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1203",
+        "src/fmain2.c:781-790",
+        "src/iffsubs.c:141"
+      ],
+      "files": [
+        "p1a.png"
+      ],
+      "id": "p1a",
+      "look_for": "Depicts: portrait of a dark-haired man in a red cloak (Julian) against hills. Left-hand leaf of the first intro book page: drawn over page0 at pixel (32,24) (byte x 4) by copypage, then revealed by the flipscan page-turn. Same introcolors palette as page0. A coherent picture, not noise.",
+      "task": "T2.4",
+      "title": "p1a - story page 1, left leaf, 112x147",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1203",
+        "src/fmain2.c:786",
+        "src/fmain2.c:796-833"
+      ],
+      "files": [
+        "p1b.png"
+      ],
+      "id": "p1b",
+      "look_for": "Depicts: parchment placard 'The eldest brother, Julian, was bravest of the three.' with an illuminated initial. Right-hand leaf of intro book page 1: drawn at pixel (168,29) (byte x 21), i.e. the right half of the 320-wide book page (columns 160-295 are the right leaf in flipscan). Introcolors palette.",
+      "task": "T2.4",
+      "title": "p1b - story page 1, right leaf, 128x127",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1204",
+        "src/fmain2.c:785"
+      ],
+      "files": [
+        "p2a.png"
+      ],
+      "id": "p2a",
+      "look_for": "Depicts: portrait of a long-haired man in a blue tunic (Phillip) against a dark forest. Left leaf of intro book page 2, drawn at pixel (32,24) like p1a. Introcolors palette; coherent picture.",
+      "task": "T2.4",
+      "title": "p2a - story page 2, left leaf, 112x147",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1204",
+        "src/fmain2.c:786"
+      ],
+      "files": [
+        "p2b.png"
+      ],
+      "id": "p2b",
+      "look_for": "Depicts: parchment placard 'Phillip, the second brother, was lucky and clever.' Right leaf of intro book page 2, drawn at pixel (160,29) (byte x 20). Shorter than p1b (76 rows). Introcolors palette.",
+      "task": "T2.4",
+      "title": "p2b - story page 2, right leaf, 136x76",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1205-1209",
+        "src/fmain2.c:785"
+      ],
+      "files": [
+        "p3a.png"
+      ],
+      "id": "p3a",
+      "look_for": "Depicts: portrait of a blond man in a yellow tunic (Kevin) in a forest. Left leaf of intro book page 3, drawn at pixel (32,24). The last page before the playfield closes (screen_size 156..0). Introcolors palette.",
+      "task": "T2.4",
+      "title": "p3a - story page 3, left leaf, 112x147",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1205",
+        "src/fmain2.c:786"
+      ],
+      "files": [
+        "p3b.png"
+      ],
+      "id": "p3b",
+      "look_for": "Depicts: parchment placard 'Gentle and kind was the youngest brother, Kevin.' Right leaf of intro book page 3, drawn at pixel (160,33) (byte x 20, y 33 - 4 rows lower than p2b). Introcolors palette.",
+      "task": "T2.4",
+      "title": "p3b - story page 3, right leaf, 136x78",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:1605-1636",
+        "src/fmain2.c:1569-1576",
+        "src/fmain.c:3244-3246"
+      ],
+      "files": [
+        "winpic.png"
+      ],
+      "id": "winpic",
+      "look_for": "Depicts: silhouette of two riders on a horse beneath a tree at sunset, castle on the horizon, starry sky; text 'And they lived...' top-left and '...Happily Ever After!' bottom-right. Full-screen ending picture shown by win_colors() after the victory placard, when the Talisman (stuff[22]) ends the game. Rendered with the first frame of the sunset palette walk (i=25: colours 2-27 are sun_colors[27..52], a blue-violet to orange ramp; 1 and 28 white; 29/30 dark red). Expect a sky gradient scene in those hues; the game then fades it to black over 54 more frames.",
+      "task": "T2.4",
+      "title": "winpic - victory picture, 320x200",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1227",
+        "src/fmain.c:828",
+        "src/fmain.c:1250-1257",
+        "src/fmain.c:476-479"
+      ],
+      "files": [
+        "hiscreen.png"
+      ],
+      "id": "hiscreen",
+      "look_for": "Depicts: a wide empty parchment scroll (left) and a compass rose with N/E/S/W (right) on black. Wide, short hires image: the frame of the status/text bar shown under the playfield in vp_text (bm_text, 640x57, 4 planes). Rendered with textcolors (black, white, red, orange, blue, magenta, green, yellow, ...). Pixels are 2:1 (hires) so it looks horizontally stretched when viewed at 1:1 next to the 320-wide screens.",
+      "task": "T2.4",
+      "title": "hiscreen - status bar frame, 640x57 hires, 4 planes",
+      "view": "image"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.4": {
+      "summary": "The nine ILBM brushes the game loads with unpackbrush() (src/iffsubs.c:139-189), decoded to RGBA PNG. The game never reads the files' CMAP (src/iffsubs.c:157-159); each PNG uses the LoadRGB4 palette that is on the viewport when the screen is shown (introcolors for the intro book, the first win_colors frame for winpic, textcolors for hiscreen) - screens.json records the palette, the file's own CMAP and any difference. Open each PNG: it must be a clean picture with no shifted rows, stripes or noise, at the stated size.",
+      "title": "IFF/ILBM screens"
+    }
+  }
+}
