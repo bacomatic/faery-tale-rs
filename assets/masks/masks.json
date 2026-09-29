@@ -1,0 +1,67 @@
+{
+  "bit_order": "big-endian 16-bit word per row, MSB = leftmost pixel (Amiga bitplane)",
+  "bits_per_pixel": 1,
+  "disk": {
+    "block_count": 24,
+    "block_size": 512,
+    "files": [
+      {
+        "block_count": 8,
+        "block_start": 896,
+        "name": "mask",
+        "source": "src/mtrack.c:48"
+      },
+      {
+        "block_count": 8,
+        "block_start": 904,
+        "name": "mask2",
+        "source": "src/mtrack.c:49"
+      },
+      {
+        "block_count": 8,
+        "block_start": 912,
+        "name": "mask3",
+        "source": "src/mtrack.c:50"
+      }
+    ],
+    "first_block": 896,
+    "image": "src/assets/image",
+    "load": "load_track_range(896,24,shadow_mem,0)",
+    "total_bytes": 12288,
+    "total_bytes_define": "SHADOW_SZ 8192+4096"
+  },
+  "entry_bytes": 64,
+  "entry_count": 192,
+  "height": 32,
+  "indexing": {
+    "applied_when": "terra_mem[cm + 1] & 15 (occlusion code 0..7) permits it",
+    "entry_address": "shadow_mem + n * 64",
+    "entry_source": "byte 0 of the drawn tile's 4-byte terra_mem record: cm = minimap[(xm + xbw) * 6 + ym + ym1] * 4; maskit(xm, ym, blitwide, terra_mem[cm]); terra_mem is unsigned char, so n is the stored byte 0..255; SHADOW_SZ holds entries 0..191 (12288 / 64)",
+    "rows_copied": "32 (8 iterations x 4 words), one word per bitplane row of blitwide words"
+  },
+  "png": "1-bit greyscale; set bit = white/opaque, clear bit = transparent (tRNS 0)",
+  "row_stride_bytes": 2,
+  "set_bit_means": "terrain in front: the sprite pixel under it is hidden (bmask = sprite_mask AND NOT bmask, blitter miniterm $0B50)",
+  "sheet": {
+    "columns": 16,
+    "file": "masks_sheet.png",
+    "note": "entry i at column i % 16, row i // 16"
+  },
+  "sources": {
+    "SHADOW_SZ": "src/fmain.c:642",
+    "bmask_mem is a bitplane": "src/fmain.c:877",
+    "caller / index from terra_mem": "src/fmain.c:2577-2578, 2595",
+    "dest cell offset y*32*mod + x*2": "src/fsubs.asm:1063-1067",
+    "diskmap mask/mask2/mask3": "src/mtrack.c:48-50",
+    "entry * 64": "src/fsubs.asm:1060-1061",
+    "load": "src/fmain.c:1222",
+    "mask_blit D = A AND NOT C": "src/fsubs.asm:1920-1935",
+    "maskit": "src/fsubs.asm:1047-1083",
+    "occlusion code comment": "src/fmain.c:689-691",
+    "occlusion code gate": "src/fmain.c:2579-2594",
+    "row copy loop": "src/fsubs.asm:1069-1080",
+    "shadow_mem alloc": "src/fmain.c:924",
+    "terra_mem unsigned char": "src/fmain.c:652-658"
+  },
+  "width": 16
+}
