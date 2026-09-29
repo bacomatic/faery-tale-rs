@@ -1,0 +1,1641 @@
+{
+  "atlas": "topaz_8_atlas.png",
+  "atlas_size": [
+    1536,
+    8
+  ],
+  "baseline": 6,
+  "bold_smear": 1,
+  "dfh_file_id": 3968,
+  "dfh_name": "",
+  "dfh_revision": 1,
+  "flags": 64,
+  "flags_names": [
+    "FPF_DESIGNED"
+  ],
+  "game_use": {
+    "loaded_at": [
+      "src/fmain.c:650",
+      "src/fmain.c:778"
+    ],
+    "loaded_by": "OpenFont(&topaz_ta) with topaz_ta = {\"topaz.font\", 8, 0, FPF_ROMFONT}",
+    "role": "status bar labels/menus and map-mode text; the disk file stands in for the ROM font",
+    "used_at": [
+      "src/fmain.c:779-781",
+      "src/fmain.c:2881",
+      "src/fmain2.c:1481"
+    ]
+  },
+  "glyph_count": 225,
+  "glyphs": [
+    {
+      "bit_offset": 0,
+      "char": " ",
+      "code": 32,
+      "file": "glyphs/032.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 8,
+      "char": "!",
+      "code": 33,
+      "file": "glyphs/033.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 16,
+      "char": "\"",
+      "code": 34,
+      "file": "glyphs/034.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 24,
+      "char": "#",
+      "code": 35,
+      "file": "glyphs/035.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 32,
+      "char": "$",
+      "code": 36,
+      "file": "glyphs/036.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 40,
+      "char": "%",
+      "code": 37,
+      "file": "glyphs/037.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 48,
+      "char": "&",
+      "code": 38,
+      "file": "glyphs/038.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 56,
+      "char": "'",
+      "code": 39,
+      "file": "glyphs/039.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 64,
+      "char": "(",
+      "code": 40,
+      "file": "glyphs/040.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 72,
+      "char": ")",
+      "code": 41,
+      "file": "glyphs/041.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 80,
+      "char": "*",
+      "code": 42,
+      "file": "glyphs/042.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 88,
+      "char": "+",
+      "code": 43,
+      "file": "glyphs/043.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 96,
+      "char": ",",
+      "code": 44,
+      "file": "glyphs/044.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 104,
+      "char": "-",
+      "code": 45,
+      "file": "glyphs/045.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 112,
+      "char": ".",
+      "code": 46,
+      "file": "glyphs/046.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 120,
+      "char": "/",
+      "code": 47,
+      "file": "glyphs/047.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 128,
+      "char": "0",
+      "code": 48,
+      "file": "glyphs/048.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 136,
+      "char": "1",
+      "code": 49,
+      "file": "glyphs/049.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 144,
+      "char": "2",
+      "code": 50,
+      "file": "glyphs/050.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 152,
+      "char": "3",
+      "code": 51,
+      "file": "glyphs/051.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 160,
+      "char": "4",
+      "code": 52,
+      "file": "glyphs/052.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 168,
+      "char": "5",
+      "code": 53,
+      "file": "glyphs/053.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 176,
+      "char": "6",
+      "code": 54,
+      "file": "glyphs/054.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 184,
+      "char": "7",
+      "code": 55,
+      "file": "glyphs/055.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 192,
+      "char": "8",
+      "code": 56,
+      "file": "glyphs/056.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 200,
+      "char": "9",
+      "code": 57,
+      "file": "glyphs/057.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 208,
+      "char": ":",
+      "code": 58,
+      "file": "glyphs/058.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 216,
+      "char": ";",
+      "code": 59,
+      "file": "glyphs/059.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 224,
+      "char": "<",
+      "code": 60,
+      "file": "glyphs/060.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 232,
+      "char": "=",
+      "code": 61,
+      "file": "glyphs/061.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 240,
+      "char": ">",
+      "code": 62,
+      "file": "glyphs/062.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 248,
+      "char": "?",
+      "code": 63,
+      "file": "glyphs/063.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 256,
+      "char": "@",
+      "code": 64,
+      "file": "glyphs/064.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 264,
+      "char": "A",
+      "code": 65,
+      "file": "glyphs/065.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 272,
+      "char": "B",
+      "code": 66,
+      "file": "glyphs/066.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 280,
+      "char": "C",
+      "code": 67,
+      "file": "glyphs/067.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 288,
+      "char": "D",
+      "code": 68,
+      "file": "glyphs/068.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 296,
+      "char": "E",
+      "code": 69,
+      "file": "glyphs/069.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 304,
+      "char": "F",
+      "code": 70,
+      "file": "glyphs/070.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 312,
+      "char": "G",
+      "code": 71,
+      "file": "glyphs/071.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 320,
+      "char": "H",
+      "code": 72,
+      "file": "glyphs/072.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 328,
+      "char": "I",
+      "code": 73,
+      "file": "glyphs/073.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 336,
+      "char": "J",
+      "code": 74,
+      "file": "glyphs/074.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 344,
+      "char": "K",
+      "code": 75,
+      "file": "glyphs/075.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 352,
+      "char": "L",
+      "code": 76,
+      "file": "glyphs/076.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 360,
+      "char": "M",
+      "code": 77,
+      "file": "glyphs/077.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 368,
+      "char": "N",
+      "code": 78,
+      "file": "glyphs/078.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 376,
+      "char": "O",
+      "code": 79,
+      "file": "glyphs/079.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 384,
+      "char": "P",
+      "code": 80,
+      "file": "glyphs/080.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 392,
+      "char": "Q",
+      "code": 81,
+      "file": "glyphs/081.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 400,
+      "char": "R",
+      "code": 82,
+      "file": "glyphs/082.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 408,
+      "char": "S",
+      "code": 83,
+      "file": "glyphs/083.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 416,
+      "char": "T",
+      "code": 84,
+      "file": "glyphs/084.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 424,
+      "char": "U",
+      "code": 85,
+      "file": "glyphs/085.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 432,
+      "char": "V",
+      "code": 86,
+      "file": "glyphs/086.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 440,
+      "char": "W",
+      "code": 87,
+      "file": "glyphs/087.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 448,
+      "char": "X",
+      "code": 88,
+      "file": "glyphs/088.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 456,
+      "char": "Y",
+      "code": 89,
+      "file": "glyphs/089.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 464,
+      "char": "Z",
+      "code": 90,
+      "file": "glyphs/090.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 472,
+      "char": "[",
+      "code": 91,
+      "file": "glyphs/091.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 480,
+      "char": "\\",
+      "code": 92,
+      "file": "glyphs/092.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 488,
+      "char": "]",
+      "code": 93,
+      "file": "glyphs/093.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 496,
+      "char": "^",
+      "code": 94,
+      "file": "glyphs/094.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 504,
+      "char": "_",
+      "code": 95,
+      "file": "glyphs/095.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 512,
+      "char": "`",
+      "code": 96,
+      "file": "glyphs/096.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 520,
+      "char": "a",
+      "code": 97,
+      "file": "glyphs/097.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 528,
+      "char": "b",
+      "code": 98,
+      "file": "glyphs/098.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 536,
+      "char": "c",
+      "code": 99,
+      "file": "glyphs/099.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 544,
+      "char": "d",
+      "code": 100,
+      "file": "glyphs/100.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 552,
+      "char": "e",
+      "code": 101,
+      "file": "glyphs/101.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 560,
+      "char": "f",
+      "code": 102,
+      "file": "glyphs/102.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 568,
+      "char": "g",
+      "code": 103,
+      "file": "glyphs/103.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 576,
+      "char": "h",
+      "code": 104,
+      "file": "glyphs/104.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 584,
+      "char": "i",
+      "code": 105,
+      "file": "glyphs/105.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 592,
+      "char": "j",
+      "code": 106,
+      "file": "glyphs/106.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 600,
+      "char": "k",
+      "code": 107,
+      "file": "glyphs/107.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 608,
+      "char": "l",
+      "code": 108,
+      "file": "glyphs/108.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 616,
+      "char": "m",
+      "code": 109,
+      "file": "glyphs/109.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 624,
+      "char": "n",
+      "code": 110,
+      "file": "glyphs/110.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 632,
+      "char": "o",
+      "code": 111,
+      "file": "glyphs/111.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 640,
+      "char": "p",
+      "code": 112,
+      "file": "glyphs/112.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 648,
+      "char": "q",
+      "code": 113,
+      "file": "glyphs/113.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 656,
+      "char": "r",
+      "code": 114,
+      "file": "glyphs/114.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 664,
+      "char": "s",
+      "code": 115,
+      "file": "glyphs/115.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 672,
+      "char": "t",
+      "code": 116,
+      "file": "glyphs/116.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 680,
+      "char": "u",
+      "code": 117,
+      "file": "glyphs/117.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 688,
+      "char": "v",
+      "code": 118,
+      "file": "glyphs/118.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 696,
+      "char": "w",
+      "code": 119,
+      "file": "glyphs/119.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 704,
+      "char": "x",
+      "code": 120,
+      "file": "glyphs/120.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 712,
+      "char": "y",
+      "code": 121,
+      "file": "glyphs/121.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 720,
+      "char": "z",
+      "code": 122,
+      "file": "glyphs/122.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 728,
+      "char": "{",
+      "code": 123,
+      "file": "glyphs/123.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 736,
+      "char": "|",
+      "code": 124,
+      "file": "glyphs/124.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 744,
+      "char": "}",
+      "code": 125,
+      "file": "glyphs/125.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 752,
+      "char": "~",
+      "code": 126,
+      "file": "glyphs/126.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 760,
+      "char": null,
+      "code": 127,
+      "file": "glyphs/127.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 128,
+      "file": "glyphs/128.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 129,
+      "file": "glyphs/129.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 130,
+      "file": "glyphs/130.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 131,
+      "file": "glyphs/131.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 132,
+      "file": "glyphs/132.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 133,
+      "file": "glyphs/133.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 134,
+      "file": "glyphs/134.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 135,
+      "file": "glyphs/135.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 136,
+      "file": "glyphs/136.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 137,
+      "file": "glyphs/137.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 138,
+      "file": "glyphs/138.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 139,
+      "file": "glyphs/139.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 140,
+      "file": "glyphs/140.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 141,
+      "file": "glyphs/141.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 142,
+      "file": "glyphs/142.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 143,
+      "file": "glyphs/143.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 144,
+      "file": "glyphs/144.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 145,
+      "file": "glyphs/145.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 146,
+      "file": "glyphs/146.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 147,
+      "file": "glyphs/147.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 148,
+      "file": "glyphs/148.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 149,
+      "file": "glyphs/149.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 150,
+      "file": "glyphs/150.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 151,
+      "file": "glyphs/151.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 152,
+      "file": "glyphs/152.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 153,
+      "file": "glyphs/153.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 154,
+      "file": "glyphs/154.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 155,
+      "file": "glyphs/155.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 156,
+      "file": "glyphs/156.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 157,
+      "file": "glyphs/157.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 158,
+      "file": "glyphs/158.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": 159,
+      "file": "glyphs/159.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 0,
+      "char": null,
+      "code": 160,
+      "file": "glyphs/160.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 776,
+      "char": null,
+      "code": 161,
+      "file": "glyphs/161.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 784,
+      "char": null,
+      "code": 162,
+      "file": "glyphs/162.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 792,
+      "char": null,
+      "code": 163,
+      "file": "glyphs/163.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 800,
+      "char": null,
+      "code": 164,
+      "file": "glyphs/164.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 808,
+      "char": null,
+      "code": 165,
+      "file": "glyphs/165.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 816,
+      "char": null,
+      "code": 166,
+      "file": "glyphs/166.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 824,
+      "char": null,
+      "code": 167,
+      "file": "glyphs/167.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 832,
+      "char": null,
+      "code": 168,
+      "file": "glyphs/168.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 840,
+      "char": null,
+      "code": 169,
+      "file": "glyphs/169.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 848,
+      "char": null,
+      "code": 170,
+      "file": "glyphs/170.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 856,
+      "char": null,
+      "code": 171,
+      "file": "glyphs/171.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 864,
+      "char": null,
+      "code": 172,
+      "file": "glyphs/172.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 872,
+      "char": null,
+      "code": 173,
+      "file": "glyphs/173.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 880,
+      "char": null,
+      "code": 174,
+      "file": "glyphs/174.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 888,
+      "char": null,
+      "code": 175,
+      "file": "glyphs/175.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 896,
+      "char": null,
+      "code": 176,
+      "file": "glyphs/176.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 904,
+      "char": null,
+      "code": 177,
+      "file": "glyphs/177.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 912,
+      "char": null,
+      "code": 178,
+      "file": "glyphs/178.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 920,
+      "char": null,
+      "code": 179,
+      "file": "glyphs/179.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 928,
+      "char": null,
+      "code": 180,
+      "file": "glyphs/180.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 936,
+      "char": null,
+      "code": 181,
+      "file": "glyphs/181.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 944,
+      "char": null,
+      "code": 182,
+      "file": "glyphs/182.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 952,
+      "char": null,
+      "code": 183,
+      "file": "glyphs/183.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 960,
+      "char": null,
+      "code": 184,
+      "file": "glyphs/184.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 968,
+      "char": null,
+      "code": 185,
+      "file": "glyphs/185.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 976,
+      "char": null,
+      "code": 186,
+      "file": "glyphs/186.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 984,
+      "char": null,
+      "code": 187,
+      "file": "glyphs/187.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 992,
+      "char": null,
+      "code": 188,
+      "file": "glyphs/188.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1000,
+      "char": null,
+      "code": 189,
+      "file": "glyphs/189.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1008,
+      "char": null,
+      "code": 190,
+      "file": "glyphs/190.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1016,
+      "char": null,
+      "code": 191,
+      "file": "glyphs/191.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1024,
+      "char": null,
+      "code": 192,
+      "file": "glyphs/192.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1032,
+      "char": null,
+      "code": 193,
+      "file": "glyphs/193.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1040,
+      "char": null,
+      "code": 194,
+      "file": "glyphs/194.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1048,
+      "char": null,
+      "code": 195,
+      "file": "glyphs/195.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1056,
+      "char": null,
+      "code": 196,
+      "file": "glyphs/196.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1064,
+      "char": null,
+      "code": 197,
+      "file": "glyphs/197.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1072,
+      "char": null,
+      "code": 198,
+      "file": "glyphs/198.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1080,
+      "char": null,
+      "code": 199,
+      "file": "glyphs/199.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1088,
+      "char": null,
+      "code": 200,
+      "file": "glyphs/200.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1096,
+      "char": null,
+      "code": 201,
+      "file": "glyphs/201.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1104,
+      "char": null,
+      "code": 202,
+      "file": "glyphs/202.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1112,
+      "char": null,
+      "code": 203,
+      "file": "glyphs/203.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1120,
+      "char": null,
+      "code": 204,
+      "file": "glyphs/204.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1128,
+      "char": null,
+      "code": 205,
+      "file": "glyphs/205.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1136,
+      "char": null,
+      "code": 206,
+      "file": "glyphs/206.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1144,
+      "char": null,
+      "code": 207,
+      "file": "glyphs/207.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1152,
+      "char": null,
+      "code": 208,
+      "file": "glyphs/208.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1160,
+      "char": null,
+      "code": 209,
+      "file": "glyphs/209.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1168,
+      "char": null,
+      "code": 210,
+      "file": "glyphs/210.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1176,
+      "char": null,
+      "code": 211,
+      "file": "glyphs/211.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1184,
+      "char": null,
+      "code": 212,
+      "file": "glyphs/212.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1192,
+      "char": null,
+      "code": 213,
+      "file": "glyphs/213.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1200,
+      "char": null,
+      "code": 214,
+      "file": "glyphs/214.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1208,
+      "char": null,
+      "code": 215,
+      "file": "glyphs/215.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1216,
+      "char": null,
+      "code": 216,
+      "file": "glyphs/216.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1224,
+      "char": null,
+      "code": 217,
+      "file": "glyphs/217.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1232,
+      "char": null,
+      "code": 218,
+      "file": "glyphs/218.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1240,
+      "char": null,
+      "code": 219,
+      "file": "glyphs/219.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1248,
+      "char": null,
+      "code": 220,
+      "file": "glyphs/220.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1256,
+      "char": null,
+      "code": 221,
+      "file": "glyphs/221.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1264,
+      "char": null,
+      "code": 222,
+      "file": "glyphs/222.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1272,
+      "char": null,
+      "code": 223,
+      "file": "glyphs/223.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1280,
+      "char": null,
+      "code": 224,
+      "file": "glyphs/224.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1288,
+      "char": null,
+      "code": 225,
+      "file": "glyphs/225.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1296,
+      "char": null,
+      "code": 226,
+      "file": "glyphs/226.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1304,
+      "char": null,
+      "code": 227,
+      "file": "glyphs/227.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1312,
+      "char": null,
+      "code": 228,
+      "file": "glyphs/228.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1320,
+      "char": null,
+      "code": 229,
+      "file": "glyphs/229.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1328,
+      "char": null,
+      "code": 230,
+      "file": "glyphs/230.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1336,
+      "char": null,
+      "code": 231,
+      "file": "glyphs/231.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1344,
+      "char": null,
+      "code": 232,
+      "file": "glyphs/232.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1352,
+      "char": null,
+      "code": 233,
+      "file": "glyphs/233.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1360,
+      "char": null,
+      "code": 234,
+      "file": "glyphs/234.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1368,
+      "char": null,
+      "code": 235,
+      "file": "glyphs/235.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1376,
+      "char": null,
+      "code": 236,
+      "file": "glyphs/236.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1384,
+      "char": null,
+      "code": 237,
+      "file": "glyphs/237.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1392,
+      "char": null,
+      "code": 238,
+      "file": "glyphs/238.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1400,
+      "char": null,
+      "code": 239,
+      "file": "glyphs/239.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1408,
+      "char": null,
+      "code": 240,
+      "file": "glyphs/240.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1416,
+      "char": null,
+      "code": 241,
+      "file": "glyphs/241.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1424,
+      "char": null,
+      "code": 242,
+      "file": "glyphs/242.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1432,
+      "char": null,
+      "code": 243,
+      "file": "glyphs/243.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1440,
+      "char": null,
+      "code": 244,
+      "file": "glyphs/244.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1448,
+      "char": null,
+      "code": 245,
+      "file": "glyphs/245.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1456,
+      "char": null,
+      "code": 246,
+      "file": "glyphs/246.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1464,
+      "char": null,
+      "code": 247,
+      "file": "glyphs/247.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1472,
+      "char": null,
+      "code": 248,
+      "file": "glyphs/248.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1480,
+      "char": null,
+      "code": 249,
+      "file": "glyphs/249.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1488,
+      "char": null,
+      "code": 250,
+      "file": "glyphs/250.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1496,
+      "char": null,
+      "code": 251,
+      "file": "glyphs/251.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1504,
+      "char": null,
+      "code": 252,
+      "file": "glyphs/252.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1512,
+      "char": null,
+      "code": 253,
+      "file": "glyphs/253.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1520,
+      "char": null,
+      "code": 254,
+      "file": "glyphs/254.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 1528,
+      "char": null,
+      "code": 255,
+      "file": "glyphs/255.png",
+      "width": 8
+    },
+    {
+      "bit_offset": 768,
+      "char": null,
+      "code": null,
+      "file": "glyphs/default.png",
+      "width": 8
+    }
+  ],
+  "has_char_kern": false,
+  "has_char_space": false,
+  "hi_char": 255,
+  "layout": {
+    "code_hunk_bytes": 2548,
+    "code_stub_hex": "70ff4e75",
+    "container": "AmigaDOS hunk executable: HUNK_HEADER, one HUNK_CODE, HUNK_RELOC32, HUNK_END",
+    "disk_font_header_at": 4,
+    "note": "Offsets are from the start of the code hunk data. The game reads the header at (seg<<2)+8, i.e. 4 bytes past the hunk data start (src/fmain.c:775); those 4 bytes are code_stub_hex. Pointer fields are relocatable offsets listed in reloc32_offsets; the OS adds the load address. Glyph pixels: bit (bit_offset + x) of row y in the tf_CharData strip, rows tf_Modulo bytes apart; the last char_loc entry (code null) is the default glyph for out-of-range codes. Glyph files are named by decimal code, e.g. glyphs/065.png = 'A'. A glyph with overflows_strip_by reads that many bits past the end of each strip row (i.e. from the next row's first bytes, and past the strip on the last row), as the blitter does.",
+    "reloc32_offsets": [
+      14,
+      68,
+      92,
+      98
+    ],
+    "structs": [
+      "libraries/diskfont.h: struct DiskFontHeader",
+      "graphics/text.h: struct TextFont"
+    ],
+    "text_font_at": 58,
+    "tf_char_data_at": 110,
+    "tf_char_kern_at": null,
+    "tf_char_loc_at": 1646,
+    "tf_char_space_at": null
+  },
+  "lo_char": 32,
+  "modulo": 192,
+  "name": "topaz_8",
+  "proportional": false,
+  "source_file": "src/assets/fonts/Topaz/8",
+  "style": 0,
+  "style_names": [],
+  "x_size": 8,
+  "y_size": 8
+}

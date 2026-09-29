@@ -1,0 +1,307 @@
+{
+  "collision": {
+    "cell": "2x4 px per tile, one per 8x8 sub-tile (fsubs.asm:548-560)",
+    "color": "feature_type where the sub-tile mask bit is set, else 0/open (fsubs.asm:610-614)",
+    "colors": {
+      "0": {
+        "label": "open",
+        "rgba8": [
+          16,
+          16,
+          16,
+          255
+        ]
+      },
+      "1": {
+        "label": "impassable",
+        "rgba8": [
+          220,
+          40,
+          40,
+          255
+        ]
+      },
+      "10": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          0,
+          120,
+          120,
+          255
+        ]
+      },
+      "11": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          120,
+          120,
+          0,
+          255
+        ]
+      },
+      "12": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          140,
+          80,
+          30,
+          255
+        ]
+      },
+      "13": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          150,
+          150,
+          150,
+          255
+        ]
+      },
+      "14": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          150,
+          200,
+          255,
+          255
+        ]
+      },
+      "15": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "2": {
+        "label": "sink",
+        "rgba8": [
+          40,
+          80,
+          220,
+          255
+        ]
+      },
+      "3": {
+        "label": "slow/brush",
+        "rgba8": [
+          40,
+          160,
+          40,
+          255
+        ]
+      },
+      "4": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          230,
+          140,
+          30,
+          255
+        ]
+      },
+      "5": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          230,
+          230,
+          40,
+          255
+        ]
+      },
+      "6": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          40,
+          200,
+          200,
+          255
+        ]
+      },
+      "7": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          200,
+          40,
+          200,
+          255
+        ]
+      },
+      "8": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          130,
+          60,
+          200,
+          255
+        ]
+      },
+      "9": {
+        "label": "type not named in fmain.c:684-688",
+        "rgba8": [
+          255,
+          150,
+          180,
+          255
+        ]
+      }
+    }
+  },
+  "map": {
+    "cell": "1x1 px per tile",
+    "color": "pagecolors[big_color & 31] (assets/palettes/pagecolors.json, fmain2.c:367-371), as plotsect renders it (fsubs.asm:1005-1015)"
+  },
+  "maskmode": {
+    "cell": "1x1 px per tile",
+    "color": "mask_mode (byte 1 low nibble, fmain.c:2579-2594)",
+    "colors": {
+      "0": {
+        "label": "never (case 0: skip)",
+        "rgba8": [
+          16,
+          16,
+          16,
+          255
+        ]
+      },
+      "1": {
+        "label": "skip in leftmost blit column (xm==0)",
+        "rgba8": [
+          220,
+          40,
+          40,
+          255
+        ]
+      },
+      "10": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "11": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "12": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "13": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "14": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "15": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "2": {
+        "label": "skip if ystop > 35",
+        "rgba8": [
+          40,
+          80,
+          220,
+          255
+        ]
+      },
+      "3": {
+        "label": "always (bridge exception: hero_sector==48)",
+        "rgba8": [
+          40,
+          160,
+          40,
+          255
+        ]
+      },
+      "4": {
+        "label": "skip if xm==0 or ystop > 35",
+        "rgba8": [
+          230,
+          140,
+          30,
+          255
+        ]
+      },
+      "5": {
+        "label": "skip if xm==0 and ystop > 35",
+        "rgba8": [
+          230,
+          230,
+          40,
+          255
+        ]
+      },
+      "6": {
+        "label": "full mask (tile 64) if above (ym != 0)",
+        "rgba8": [
+          40,
+          200,
+          200,
+          255
+        ]
+      },
+      "7": {
+        "label": "skip if ystop > 20",
+        "rgba8": [
+          200,
+          40,
+          200,
+          255
+        ]
+      },
+      "8": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      "9": {
+        "label": "no switch case: mask always applied",
+        "rgba8": [
+          255,
+          255,
+          255,
+          255
+        ]
+      }
+    }
+  },
+  "note": "Non-authoritative renders of the region JSON. Every preview covers the region grid of 64x32 sectors = 1024x256 tiles (a tile is 16x32 px in game). Colors below are arbitrary except region_N_map.png, which uses the game palette exactly as the magic map does."
+}

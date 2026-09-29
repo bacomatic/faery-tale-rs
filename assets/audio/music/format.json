@@ -1,0 +1,904 @@
+{
+  "duration_table": {
+    "citations": [
+      "src/gdriver.asm:228-235",
+      "src/gdriver.asm:145-148"
+    ],
+    "note": "notevals: 64 words indexed by duration code (8 rows x 8 columns; each column halves the previous)",
+    "values": [
+      26880,
+      13440,
+      6720,
+      3360,
+      1680,
+      840,
+      420,
+      210,
+      40320,
+      20160,
+      10080,
+      5040,
+      2520,
+      1260,
+      630,
+      315,
+      17920,
+      8960,
+      4480,
+      2240,
+      1120,
+      560,
+      280,
+      140,
+      26880,
+      13440,
+      6720,
+      3360,
+      1680,
+      840,
+      420,
+      210,
+      21504,
+      10752,
+      5376,
+      2688,
+      1344,
+      672,
+      336,
+      168,
+      32256,
+      16128,
+      8064,
+      4032,
+      2016,
+      1008,
+      504,
+      252,
+      23040,
+      11520,
+      5760,
+      2880,
+      1440,
+      720,
+      360,
+      180,
+      34560,
+      17280,
+      8640,
+      4320,
+      2160,
+      1080,
+      540,
+      270
+    ]
+  },
+  "event": {
+    "citations": [
+      "src/gdriver.asm:116-139",
+      "src/gdriver.asm:141-148",
+      "src/gdriver.asm:237-258",
+      "src/gdriver.asm:26-27"
+    ],
+    "commands": {
+      "0x00-0x7f": "note: command = ptable index; value bits 0-5 = duration code (notevals index), bit 6 = TIE, bit 7 = CHORD (both cleared and otherwise unused)",
+      "0x80": "rest: value = duration code as for notes; volume set to 0",
+      "0x81": "set instrument: value & 0x0f indexes new_wave[]; the word is written over wave_num/vol_num, so high byte = waveform number, low byte = envelope number",
+      "0x90": "set tempo: tempo = value & 0xff (commented 'NOT SMUS STANDARD')",
+      "0xff": "end of track: value 0 = stop (voice silenced), non-zero = repeat from start",
+      "other": "skipped; the next event is read immediately"
+    },
+    "layout": "2 bytes per event: command byte then value byte (gdriver.asm:120-121)"
+  },
+  "instrument_table": {
+    "citations": [
+      "src/fmain.c:669-672",
+      "src/gdriver.asm:237-242",
+      "src/fmain.c:2945-2946"
+    ],
+    "note": "new_wave[]: word per instrument number; high byte = waveform (0-7), low byte = envelope (0-9). set_instrument masks its value to 0-15 but the table has 12 entries. setmood() rewrites entry 10 to 0x0307 in region 9 and 0x0100 elsewhere indoors.",
+    "values": [
+      {
+        "envelope": 0,
+        "instrument": 0,
+        "waveform": 0,
+        "word": "0x0000"
+      },
+      {
+        "envelope": 0,
+        "instrument": 1,
+        "waveform": 0,
+        "word": "0x0000"
+      },
+      {
+        "envelope": 0,
+        "instrument": 2,
+        "waveform": 0,
+        "word": "0x0000"
+      },
+      {
+        "envelope": 0,
+        "instrument": 3,
+        "waveform": 0,
+        "word": "0x0000"
+      },
+      {
+        "envelope": 5,
+        "instrument": 4,
+        "waveform": 0,
+        "word": "0x0005"
+      },
+      {
+        "envelope": 2,
+        "instrument": 5,
+        "waveform": 2,
+        "word": "0x0202"
+      },
+      {
+        "envelope": 1,
+        "instrument": 6,
+        "waveform": 1,
+        "word": "0x0101"
+      },
+      {
+        "envelope": 3,
+        "instrument": 7,
+        "waveform": 1,
+        "word": "0x0103"
+      },
+      {
+        "envelope": 4,
+        "instrument": 8,
+        "waveform": 0,
+        "word": "0x0004"
+      },
+      {
+        "envelope": 4,
+        "instrument": 9,
+        "waveform": 5,
+        "word": "0x0504"
+      },
+      {
+        "envelope": 0,
+        "instrument": 10,
+        "waveform": 1,
+        "word": "0x0100"
+      },
+      {
+        "envelope": 0,
+        "instrument": 11,
+        "waveform": 5,
+        "word": "0x0500"
+      }
+    ]
+  },
+  "period_table": {
+    "citations": [
+      "src/gdriver.asm:204-222",
+      "src/gdriver.asm:181-193"
+    ],
+    "entries": [
+      {
+        "index": 0,
+        "note_name": "D#1",
+        "period": 1440,
+        "pitch_hz_ntsc": 38.84,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 1,
+        "note_name": "E1",
+        "period": 1356,
+        "pitch_hz_ntsc": 41.25,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 2,
+        "note_name": "F1",
+        "period": 1280,
+        "pitch_hz_ntsc": 43.7,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 3,
+        "note_name": "F#1",
+        "period": 1208,
+        "pitch_hz_ntsc": 46.3,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 4,
+        "note_name": "G1",
+        "period": 1140,
+        "pitch_hz_ntsc": 49.06,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 5,
+        "note_name": "G#1",
+        "period": 1076,
+        "pitch_hz_ntsc": 51.98,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 6,
+        "note_name": "A1",
+        "period": 1016,
+        "pitch_hz_ntsc": 55.05,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 7,
+        "note_name": "A#1",
+        "period": 960,
+        "pitch_hz_ntsc": 58.26,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 8,
+        "note_name": "B1",
+        "period": 906,
+        "pitch_hz_ntsc": 61.73,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 9,
+        "note_name": "C2",
+        "period": 856,
+        "pitch_hz_ntsc": 65.34,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 10,
+        "note_name": "C#2",
+        "period": 808,
+        "pitch_hz_ntsc": 69.22,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 11,
+        "note_name": "D2",
+        "period": 762,
+        "pitch_hz_ntsc": 73.4,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 12,
+        "note_name": "D#2",
+        "period": 720,
+        "pitch_hz_ntsc": 77.68,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 13,
+        "note_name": "E2",
+        "period": 678,
+        "pitch_hz_ntsc": 82.49,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 14,
+        "note_name": "F2",
+        "period": 640,
+        "pitch_hz_ntsc": 87.39,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 15,
+        "note_name": "F#2",
+        "period": 604,
+        "pitch_hz_ntsc": 92.6,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 16,
+        "note_name": "G2",
+        "period": 570,
+        "pitch_hz_ntsc": 98.12,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 17,
+        "note_name": "G#2",
+        "period": 538,
+        "pitch_hz_ntsc": 103.96,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 18,
+        "note_name": "A2",
+        "period": 508,
+        "pitch_hz_ntsc": 110.1,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 19,
+        "note_name": "A#2",
+        "period": 480,
+        "pitch_hz_ntsc": 116.52,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 20,
+        "note_name": "B2",
+        "period": 453,
+        "pitch_hz_ntsc": 123.47,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 21,
+        "note_name": "C3",
+        "period": 428,
+        "pitch_hz_ntsc": 130.68,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 22,
+        "note_name": "C#3",
+        "period": 404,
+        "pitch_hz_ntsc": 138.44,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 23,
+        "note_name": "D3",
+        "period": 381,
+        "pitch_hz_ntsc": 146.8,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 24,
+        "note_name": "D#3",
+        "period": 360,
+        "pitch_hz_ntsc": 155.36,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 25,
+        "note_name": "E3",
+        "period": 339,
+        "pitch_hz_ntsc": 164.99,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 26,
+        "note_name": "F3",
+        "period": 320,
+        "pitch_hz_ntsc": 174.78,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 27,
+        "note_name": "F#3",
+        "period": 302,
+        "pitch_hz_ntsc": 185.2,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 28,
+        "note_name": "G3",
+        "period": 285,
+        "pitch_hz_ntsc": 196.25,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 29,
+        "note_name": "G#3",
+        "period": 269,
+        "pitch_hz_ntsc": 207.92,
+        "wave_len_bytes": 64,
+        "wave_offset": 0,
+        "wave_start_byte": 0
+      },
+      {
+        "index": 30,
+        "note_name": "A3",
+        "period": 508,
+        "pitch_hz_ntsc": 220.2,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 31,
+        "note_name": "A#3",
+        "period": 480,
+        "pitch_hz_ntsc": 233.04,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 32,
+        "note_name": "B3",
+        "period": 453,
+        "pitch_hz_ntsc": 246.93,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 33,
+        "note_name": "C4",
+        "period": 428,
+        "pitch_hz_ntsc": 261.36,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 34,
+        "note_name": "C#4",
+        "period": 404,
+        "pitch_hz_ntsc": 276.88,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 35,
+        "note_name": "D4",
+        "period": 381,
+        "pitch_hz_ntsc": 293.6,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 36,
+        "note_name": "D#4",
+        "period": 360,
+        "pitch_hz_ntsc": 310.72,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 37,
+        "note_name": "E4",
+        "period": 339,
+        "pitch_hz_ntsc": 329.97,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 38,
+        "note_name": "F4",
+        "period": 320,
+        "pitch_hz_ntsc": 349.56,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 39,
+        "note_name": "F#4",
+        "period": 302,
+        "pitch_hz_ntsc": 370.4,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 40,
+        "note_name": "G4",
+        "period": 285,
+        "pitch_hz_ntsc": 392.49,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 41,
+        "note_name": "G#4",
+        "period": 269,
+        "pitch_hz_ntsc": 415.84,
+        "wave_len_bytes": 32,
+        "wave_offset": 16,
+        "wave_start_byte": 64
+      },
+      {
+        "index": 42,
+        "note_name": "A4",
+        "period": 508,
+        "pitch_hz_ntsc": 440.4,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 43,
+        "note_name": "A#4",
+        "period": 480,
+        "pitch_hz_ntsc": 466.09,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 44,
+        "note_name": "B4",
+        "period": 453,
+        "pitch_hz_ntsc": 493.87,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 45,
+        "note_name": "C5",
+        "period": 428,
+        "pitch_hz_ntsc": 522.71,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 46,
+        "note_name": "C#5",
+        "period": 404,
+        "pitch_hz_ntsc": 553.77,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 47,
+        "note_name": "D5",
+        "period": 381,
+        "pitch_hz_ntsc": 587.2,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 48,
+        "note_name": "D#5",
+        "period": 360,
+        "pitch_hz_ntsc": 621.45,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 49,
+        "note_name": "E5",
+        "period": 339,
+        "pitch_hz_ntsc": 659.95,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 50,
+        "note_name": "F5",
+        "period": 320,
+        "pitch_hz_ntsc": 699.13,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 51,
+        "note_name": "F#5",
+        "period": 302,
+        "pitch_hz_ntsc": 740.8,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 52,
+        "note_name": "G5",
+        "period": 285,
+        "pitch_hz_ntsc": 784.99,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 53,
+        "note_name": "G#5",
+        "period": 269,
+        "pitch_hz_ntsc": 831.68,
+        "wave_len_bytes": 16,
+        "wave_offset": 24,
+        "wave_start_byte": 96
+      },
+      {
+        "index": 54,
+        "note_name": "A5",
+        "period": 508,
+        "pitch_hz_ntsc": 880.79,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 55,
+        "note_name": "A#5",
+        "period": 480,
+        "pitch_hz_ntsc": 932.17,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 56,
+        "note_name": "B5",
+        "period": 453,
+        "pitch_hz_ntsc": 987.73,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 57,
+        "note_name": "C6",
+        "period": 428,
+        "pitch_hz_ntsc": 1045.43,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 58,
+        "note_name": "C#6",
+        "period": 404,
+        "pitch_hz_ntsc": 1107.53,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 59,
+        "note_name": "D6",
+        "period": 381,
+        "pitch_hz_ntsc": 1174.39,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 60,
+        "note_name": "D#6",
+        "period": 360,
+        "pitch_hz_ntsc": 1242.9,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 61,
+        "note_name": "E6",
+        "period": 339,
+        "pitch_hz_ntsc": 1319.89,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 62,
+        "note_name": "F6",
+        "period": 320,
+        "pitch_hz_ntsc": 1398.26,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 63,
+        "note_name": "F#6",
+        "period": 302,
+        "pitch_hz_ntsc": 1481.6,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 64,
+        "note_name": "G6",
+        "period": 285,
+        "pitch_hz_ntsc": 1569.98,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 65,
+        "note_name": "G#6",
+        "period": 269,
+        "pitch_hz_ntsc": 1663.36,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 66,
+        "note_name": "A6",
+        "period": 254,
+        "pitch_hz_ntsc": 1761.59,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 67,
+        "note_name": "A#6",
+        "period": 240,
+        "pitch_hz_ntsc": 1864.35,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 68,
+        "note_name": "B6",
+        "period": 226,
+        "pitch_hz_ntsc": 1979.84,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 69,
+        "note_name": "C7",
+        "period": 214,
+        "pitch_hz_ntsc": 2090.86,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 70,
+        "note_name": "C#7",
+        "period": 202,
+        "pitch_hz_ntsc": 2215.06,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 71,
+        "note_name": "D7",
+        "period": 190,
+        "pitch_hz_ntsc": 2354.96,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 72,
+        "note_name": "D#7",
+        "period": 180,
+        "pitch_hz_ntsc": 2485.8,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 73,
+        "note_name": "E7",
+        "period": 170,
+        "pitch_hz_ntsc": 2632.02,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 74,
+        "note_name": "F7",
+        "period": 160,
+        "pitch_hz_ntsc": 2796.52,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 75,
+        "note_name": "F#7",
+        "period": 151,
+        "pitch_hz_ntsc": 2963.2,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 76,
+        "note_name": "G7",
+        "period": 143,
+        "pitch_hz_ntsc": 3128.97,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      },
+      {
+        "index": 77,
+        "note_name": "G#7",
+        "period": 135,
+        "pitch_hz_ntsc": 3314.39,
+        "wave_len_bytes": 8,
+        "wave_offset": 28,
+        "wave_start_byte": 112
+      }
+    ],
+    "note": "ptable: (Paula period, waveform offset) per note index. The waveform slice played starts at offset*4 bytes and is (32-offset) words long, so higher octaves use the shorter 32/16/8-byte cycles stored after the 64-byte one. pitch_hz_ntsc = 3579545 / (period * wave_len_bytes); note_name is the nearest equal-tempered pitch (A4 = 440 Hz) of that figure.",
+    "paula_clock_ntsc_hz": 3579545
+  },
+  "timing": {
+    "citations": [
+      "src/gdriver.asm:65-67",
+      "src/gdriver.asm:149-155",
+      "src/gdriver.asm:429"
+    ],
+    "initial_tempo": 150,
+    "model": "Every vertical blank timeclock += tempo. A note/rest lasts duration_counts timeclock units; the voice is silenced NOTE_GAP counts before the next event (no gap when the duration is shorter than the gap). Instrument/tempo/end events take no time.",
+    "note_gap_counts": 300,
+    "seconds_per_count": "1 / (tempo * vblank_hz); vblank_hz = 60 on NTSC"
+  },
+  "volume": {
+    "citations": [
+      "src/gdriver.asm:98-104",
+      "src/gdriver.asm:167-175"
+    ],
+    "note": "The envelope's first byte is the note's starting volume; each following vertical blank the next byte is written to AUDxVOL, a negative byte (>= 128) holds the current volume (the read pointer does not advance)."
+  }
+}
