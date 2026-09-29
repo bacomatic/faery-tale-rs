@@ -45,13 +45,29 @@ The documentation is three-tiered:
 
 ## Prerequisites
 
-- **[mise](https://mise.jdx.dev)** — installs the pinned Python, Node and uv from `mise.toml`
+- **[mise](https://mise.jdx.dev)** — installs the pinned Python, Node, uv and graphify from `mise.toml`
 - **binutils-m68k-linux-gnu** — GNU cross-assembler for 68000, used by `verify_asm.py`
   ```bash
   sudo apt-get install binutils-m68k-linux-gnu
   ```
 - **Python and npm dependencies:** `mise install && mise run setup` creates `.venv/` and installs
   `tools/requirements.txt` plus the review app's npm packages
+
+### Setup on a fresh clone
+
+```bash
+git clone https://github.com/bacomatic/faery-tale-rs.git faery-tale-research
+cd faery-tale-research
+git checkout research
+mise trust                               # allow this repo's mise.toml
+mise install                             # Python, Node, uv and graphify (pipx:graphifyy)
+mise run setup                           # .venv + tools/requirements.txt, review app npm deps,
+                                         # and graphify-out/.graphify_python for the graphify hook
+git config core.hooksPath .githooks      # enable the graphify post-commit/post-checkout hooks
+mise run test                            # sanity check
+```
+
+Re-run `mise run setup` after upgrading graphify so the hook points at the new install.
 
 ## Agent Architecture: Flat Iterative Model
 

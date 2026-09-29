@@ -2,15 +2,17 @@
 python = "3.12"
 node = "24"
 uv = "0.11"
+"pipx:graphifyy" = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.setup]
-description = "Install Python deps into .venv and the review app's npm deps"
+description = "Install Python deps into .venv, the review app's npm deps, and point the graphify hook at mise's graphify"
 run = [
   "uv pip install -r tools/requirements.txt",
   "npm --prefix tools/review/frontend ci",
+  "mkdir -p graphify-out && head -1 \"$(mise which graphify)\" | sed 's/^#![[:space:]]*//' > graphify-out/.graphify_python",
 ]
 
 [tasks.test]
