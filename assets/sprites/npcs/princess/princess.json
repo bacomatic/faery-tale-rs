@@ -1,0 +1,69 @@
+{
+  "actor": "princess",
+  "can_talk": 0,
+  "cfile": {
+    "index": 14,
+    "sheet": "royal set",
+    "source": "src/fmain2.c:660"
+  },
+  "frame_count": 1,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 14,
+        "frame": 2,
+        "sheet": "royal set"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 2,
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain2.c:1272",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:29",
+      "text": "royal set frame 3 is a second princess pose (image_base + 1, the talking slot). It is unused in the game: can_talk is 0, and TALKING is set only when can_talk is non-zero (fmain.c:3375-3377). Not extracted; see assets/sprites/raw/"
+    },
+    {
+      "source": "src/fmain.c:1412-1416",
+      "text": "no dying/dead (review): this NPC stands in the king's or sorceress's pax extent (fmain.c:354-355) or the princess extent (fmain.c:345), where xtype > 80 turns the hero's attack into SHOOT1 and blocks shooting (fmain.c:1669)"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 4,
+  "setfig_source": "src/fmain.c:29",
+  "sheet": {
+    "columns": 1,
+    "file": "princess_sheet.png",
+    "highlight_mask": "princess_highlightmask.png",
+    "silhouette_mask": "princess_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "princess (setfig 4)",
+  "transparent_index": 31
+}

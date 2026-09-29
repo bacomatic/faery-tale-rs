@@ -1,0 +1,144 @@
+{
+  "actor": "wizard",
+  "can_talk": 1,
+  "cfile": {
+    "index": 13,
+    "sheet": "wizard/priest",
+    "source": "src/fmain2.c:659"
+  },
+  "frame_count": 4,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 13,
+        "frame": 0,
+        "sheet": "wizard/priest"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 13,
+        "frame": 1,
+        "sheet": "wizard/priest"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 13,
+        "frame": 2,
+        "sheet": "wizard/priest"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 13,
+        "frame": 3,
+        "sheet": "wizard/priest"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 0,
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain2.c:1272",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "talking",
+      "label": "Talking",
+      "note": "image_base + rand2() each tick for 15 ticks (tactic, fmain.c:3375-3377)",
+      "playback": "random",
+      "source": "src/fmain.c:1555-1557",
+      "steps": [
+        {
+          "frame": 0
+        },
+        {
+          "frame": 1
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "dying",
+      "label": "Dying",
+      "playback": "loop",
+      "source": "src/fmain.c:1551",
+      "steps": [
+        {
+          "frame": 2
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "dead",
+      "label": "Dead",
+      "playback": "loop",
+      "source": "src/fmain.c:1552",
+      "steps": [
+        {
+          "frame": 3
+        }
+      ]
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 0,
+  "setfig_source": "src/fmain.c:25",
+  "sheet": {
+    "columns": 4,
+    "file": "wizard_sheet.png",
+    "highlight_mask": "wizard_highlightmask.png",
+    "silhouette_mask": "wizard_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "wizard (setfig 0)",
+  "transparent_index": 31
+}

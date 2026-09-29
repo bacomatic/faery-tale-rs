@@ -1,0 +1,826 @@
+{
+  "actor": "woodcutter",
+  "cfile": {
+    "index": 9,
+    "sheet": "necromancer file",
+    "source": "src/fmain2.c:654"
+  },
+  "frame_count": 19,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 9,
+        "frame": 0,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 9,
+        "frame": 2,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 9,
+        "frame": 4,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 9,
+        "frame": 6,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 9,
+        "frame": 8,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 9,
+        "frame": 10,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 9,
+        "frame": 12,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 9,
+        "frame": 14,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 9,
+        "frame": 16,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "origin": {
+        "cfile": 9,
+        "frame": 18,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        144,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "origin": {
+        "cfile": 9,
+        "frame": 20,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        160,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_011.png",
+      "index": 11,
+      "origin": {
+        "cfile": 9,
+        "frame": 22,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        176,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_012.png",
+      "index": 12,
+      "origin": {
+        "cfile": 9,
+        "frame": 24,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        192,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_013.png",
+      "index": 13,
+      "origin": {
+        "cfile": 9,
+        "frame": 26,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        208,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_014.png",
+      "index": 14,
+      "origin": {
+        "cfile": 9,
+        "frame": 28,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        224,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_015.png",
+      "index": 15,
+      "origin": {
+        "cfile": 9,
+        "frame": 30,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        240,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_016.png",
+      "index": 16,
+      "origin": {
+        "cfile": 9,
+        "frame": 38,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        0,
+        32,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_017.png",
+      "index": 17,
+      "origin": {
+        "cfile": 9,
+        "frame": 46,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        16,
+        32,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_018.png",
+      "index": 18,
+      "origin": {
+        "cfile": 9,
+        "frame": 62,
+        "sheet": "necromancer file"
+      },
+      "rect": [
+        32,
+        32,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "enemies",
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 12,
+            "state_index": 25
+          }
+        ],
+        "N": [
+          {
+            "frame": 8,
+            "state_index": 17
+          }
+        ],
+        "NE": [
+          {
+            "frame": 12,
+            "state_index": 25
+          }
+        ],
+        "NW": [
+          {
+            "frame": 8,
+            "state_index": 17
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 1
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 1
+          }
+        ],
+        "SW": [
+          {
+            "frame": 4,
+            "state_index": 9
+          }
+        ],
+        "W": [
+          {
+            "frame": 4,
+            "state_index": 9
+          }
+        ]
+      },
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain.c:1661-1663",
+      "weapons": [
+        0
+      ]
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 12,
+            "state_index": 24
+          },
+          {
+            "frame": 12,
+            "state_index": 25
+          },
+          {
+            "frame": 13,
+            "state_index": 26
+          },
+          {
+            "frame": 13,
+            "state_index": 27
+          },
+          {
+            "frame": 14,
+            "state_index": 28
+          },
+          {
+            "frame": 14,
+            "state_index": 29
+          },
+          {
+            "frame": 15,
+            "state_index": 30
+          },
+          {
+            "frame": 15,
+            "state_index": 31
+          }
+        ],
+        "N": [
+          {
+            "frame": 8,
+            "state_index": 16
+          },
+          {
+            "frame": 8,
+            "state_index": 17
+          },
+          {
+            "frame": 9,
+            "state_index": 18
+          },
+          {
+            "frame": 9,
+            "state_index": 19
+          },
+          {
+            "frame": 10,
+            "state_index": 20
+          },
+          {
+            "frame": 10,
+            "state_index": 21
+          },
+          {
+            "frame": 11,
+            "state_index": 22
+          },
+          {
+            "frame": 11,
+            "state_index": 23
+          }
+        ],
+        "NE": [
+          {
+            "frame": 12,
+            "state_index": 24
+          },
+          {
+            "frame": 12,
+            "state_index": 25
+          },
+          {
+            "frame": 13,
+            "state_index": 26
+          },
+          {
+            "frame": 13,
+            "state_index": 27
+          },
+          {
+            "frame": 14,
+            "state_index": 28
+          },
+          {
+            "frame": 14,
+            "state_index": 29
+          },
+          {
+            "frame": 15,
+            "state_index": 30
+          },
+          {
+            "frame": 15,
+            "state_index": 31
+          }
+        ],
+        "NW": [
+          {
+            "frame": 8,
+            "state_index": 16
+          },
+          {
+            "frame": 8,
+            "state_index": 17
+          },
+          {
+            "frame": 9,
+            "state_index": 18
+          },
+          {
+            "frame": 9,
+            "state_index": 19
+          },
+          {
+            "frame": 10,
+            "state_index": 20
+          },
+          {
+            "frame": 10,
+            "state_index": 21
+          },
+          {
+            "frame": 11,
+            "state_index": 22
+          },
+          {
+            "frame": 11,
+            "state_index": 23
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 0
+          },
+          {
+            "frame": 0,
+            "state_index": 1
+          },
+          {
+            "frame": 1,
+            "state_index": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 3
+          },
+          {
+            "frame": 2,
+            "state_index": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 5
+          },
+          {
+            "frame": 3,
+            "state_index": 6
+          },
+          {
+            "frame": 3,
+            "state_index": 7
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 0
+          },
+          {
+            "frame": 0,
+            "state_index": 1
+          },
+          {
+            "frame": 1,
+            "state_index": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 3
+          },
+          {
+            "frame": 2,
+            "state_index": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 5
+          },
+          {
+            "frame": 3,
+            "state_index": 6
+          },
+          {
+            "frame": 3,
+            "state_index": 7
+          }
+        ],
+        "SW": [
+          {
+            "frame": 4,
+            "state_index": 8
+          },
+          {
+            "frame": 4,
+            "state_index": 9
+          },
+          {
+            "frame": 5,
+            "state_index": 10
+          },
+          {
+            "frame": 5,
+            "state_index": 11
+          },
+          {
+            "frame": 6,
+            "state_index": 12
+          },
+          {
+            "frame": 6,
+            "state_index": 13
+          },
+          {
+            "frame": 7,
+            "state_index": 14
+          },
+          {
+            "frame": 7,
+            "state_index": 15
+          }
+        ],
+        "W": [
+          {
+            "frame": 4,
+            "state_index": 8
+          },
+          {
+            "frame": 4,
+            "state_index": 9
+          },
+          {
+            "frame": 5,
+            "state_index": 10
+          },
+          {
+            "frame": 5,
+            "state_index": 11
+          },
+          {
+            "frame": 6,
+            "state_index": 12
+          },
+          {
+            "frame": 6,
+            "state_index": 13
+          },
+          {
+            "frame": 7,
+            "state_index": 14
+          },
+          {
+            "frame": 7,
+            "state_index": 15
+          }
+        ]
+      },
+      "id": "walk",
+      "label": "Walk",
+      "playback": "loop",
+      "source": "src/fmain.c:1629-1632",
+      "weapons": [
+        0
+      ]
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "N": [
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "NE": [
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "NW": [
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "S": [
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "SE": [
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "SW": [
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ],
+        "W": [
+          {
+            "frame": 17,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 18,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 16,
+            "state_index": 82
+          }
+        ]
+      },
+      "id": "dying",
+      "label": "Dying / dead",
+      "note": "tactic starts at 7 (fmain.c:2773): first frame for tactic 7-5, second for 4-1, then DEAD (no weapon drawn, fmain.c:2400-2401).",
+      "playback": "once",
+      "source": "src/fmain.c:1719-1727",
+      "weapons": [
+        0
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:2460",
+      "text": "even race: every body frame is forced even"
+    },
+    {
+      "source": "src/fmain.c:2151-2152",
+      "text": "what the Necromancer becomes (weapon 0); a hostile actor with weapon < 1 turns CONFUSED / RANDOM, so no fight mode"
+    }
+  ],
+  "overlay_sheet": {
+    "columns": 16,
+    "file": "sprites/objects/objects_sheet.png",
+    "frame_size": [
+      16,
+      16
+    ],
+    "source": "src/fmain.c:2400-2447"
+  },
+  "palette": "palettes/pagecolors.json",
+  "race": 10,
+  "race_source": "src/fmain.c:63",
+  "sheet": {
+    "columns": 16,
+    "file": "woodcutter_sheet.png",
+    "highlight_mask": "woodcutter_highlightmask.png",
+    "silhouette_mask": "woodcutter_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Woodcutter (race 10)",
+  "transparent_index": 31,
+  "weapons": [
+    {
+      "id": 0,
+      "name": "none"
+    }
+  ],
+  "weapons_source": "src/fmain.c:2757-2758"
+}

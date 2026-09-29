@@ -1,0 +1,919 @@
+{
+  "actor": "wraith",
+  "cfile": {
+    "index": 7,
+    "sheet": "ghost file",
+    "source": "src/fmain2.c:652"
+  },
+  "frame_count": 15,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 7,
+        "frame": 0,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 7,
+        "frame": 8,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 7,
+        "frame": 16,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 7,
+        "frame": 24,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 7,
+        "frame": 32,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 7,
+        "frame": 34,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 7,
+        "frame": 38,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 7,
+        "frame": 40,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 7,
+        "frame": 42,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "origin": {
+        "cfile": 7,
+        "frame": 46,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        144,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "origin": {
+        "cfile": 7,
+        "frame": 48,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        160,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_011.png",
+      "index": 11,
+      "origin": {
+        "cfile": 7,
+        "frame": 50,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        176,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_012.png",
+      "index": 12,
+      "origin": {
+        "cfile": 7,
+        "frame": 56,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        192,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_013.png",
+      "index": 13,
+      "origin": {
+        "cfile": 7,
+        "frame": 58,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        208,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_014.png",
+      "index": 14,
+      "origin": {
+        "cfile": 7,
+        "frame": 62,
+        "sheet": "ghost file"
+      },
+      "rect": [
+        224,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "enemies",
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 3,
+            "state_index": 25
+          }
+        ],
+        "N": [
+          {
+            "frame": 2,
+            "state_index": 17
+          }
+        ],
+        "NE": [
+          {
+            "frame": 3,
+            "state_index": 25
+          }
+        ],
+        "NW": [
+          {
+            "frame": 2,
+            "state_index": 17
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 1
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 1
+          }
+        ],
+        "SW": [
+          {
+            "frame": 1,
+            "state_index": 9
+          }
+        ],
+        "W": [
+          {
+            "frame": 1,
+            "state_index": 9
+          }
+        ]
+      },
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain.c:1661-1663",
+      "weapons": [
+        0
+      ]
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 3,
+            "state_index": 24
+          }
+        ],
+        "N": [
+          {
+            "frame": 2,
+            "state_index": 16
+          }
+        ],
+        "NE": [
+          {
+            "frame": 3,
+            "state_index": 24
+          }
+        ],
+        "NW": [
+          {
+            "frame": 2,
+            "state_index": 16
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 0
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 0
+          }
+        ],
+        "SW": [
+          {
+            "frame": 1,
+            "state_index": 8
+          }
+        ],
+        "W": [
+          {
+            "frame": 1,
+            "state_index": 8
+          }
+        ]
+      },
+      "id": "walk",
+      "label": "Walk",
+      "playback": "loop",
+      "source": "src/fmain.c:1629-1632",
+      "weapons": [
+        0
+      ]
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 12,
+            "state_index": 68
+          },
+          {
+            "frame": 12,
+            "state_index": 69
+          },
+          {
+            "frame": 12,
+            "state_index": 70
+          },
+          {
+            "frame": 13,
+            "state_index": 71
+          },
+          {
+            "frame": 13,
+            "state_index": 72
+          },
+          {
+            "frame": 13,
+            "state_index": 73
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          }
+        ],
+        "N": [
+          {
+            "frame": 10,
+            "state_index": 56
+          },
+          {
+            "frame": 10,
+            "state_index": 57
+          },
+          {
+            "frame": 10,
+            "state_index": 58
+          },
+          {
+            "frame": 11,
+            "state_index": 59
+          },
+          {
+            "frame": 11,
+            "state_index": 60
+          },
+          {
+            "frame": 11,
+            "state_index": 61
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          }
+        ],
+        "NE": [
+          {
+            "frame": 12,
+            "state_index": 68
+          },
+          {
+            "frame": 12,
+            "state_index": 69
+          },
+          {
+            "frame": 12,
+            "state_index": 70
+          },
+          {
+            "frame": 13,
+            "state_index": 71
+          },
+          {
+            "frame": 13,
+            "state_index": 72
+          },
+          {
+            "frame": 13,
+            "state_index": 73
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          },
+          {
+            "frame": 13,
+            "state_index": 76
+          }
+        ],
+        "NW": [
+          {
+            "frame": 10,
+            "state_index": 56
+          },
+          {
+            "frame": 10,
+            "state_index": 57
+          },
+          {
+            "frame": 10,
+            "state_index": 58
+          },
+          {
+            "frame": 11,
+            "state_index": 59
+          },
+          {
+            "frame": 11,
+            "state_index": 60
+          },
+          {
+            "frame": 11,
+            "state_index": 61
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          },
+          {
+            "frame": 11,
+            "state_index": 64
+          }
+        ],
+        "S": [
+          {
+            "frame": 4,
+            "state_index": 32
+          },
+          {
+            "frame": 4,
+            "state_index": 33
+          },
+          {
+            "frame": 4,
+            "state_index": 34
+          },
+          {
+            "frame": 5,
+            "state_index": 35
+          },
+          {
+            "frame": 5,
+            "state_index": 36
+          },
+          {
+            "frame": 5,
+            "state_index": 37
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          }
+        ],
+        "SE": [
+          {
+            "frame": 4,
+            "state_index": 32
+          },
+          {
+            "frame": 4,
+            "state_index": 33
+          },
+          {
+            "frame": 4,
+            "state_index": 34
+          },
+          {
+            "frame": 5,
+            "state_index": 35
+          },
+          {
+            "frame": 5,
+            "state_index": 36
+          },
+          {
+            "frame": 5,
+            "state_index": 37
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          },
+          {
+            "frame": 5,
+            "state_index": 40
+          }
+        ],
+        "SW": [
+          {
+            "frame": 7,
+            "state_index": 44
+          },
+          {
+            "frame": 7,
+            "state_index": 45
+          },
+          {
+            "frame": 7,
+            "state_index": 46
+          },
+          {
+            "frame": 8,
+            "state_index": 47
+          },
+          {
+            "frame": 8,
+            "state_index": 48
+          },
+          {
+            "frame": 8,
+            "state_index": 49
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          }
+        ],
+        "W": [
+          {
+            "frame": 7,
+            "state_index": 44
+          },
+          {
+            "frame": 7,
+            "state_index": 45
+          },
+          {
+            "frame": 7,
+            "state_index": 46
+          },
+          {
+            "frame": 8,
+            "state_index": 47
+          },
+          {
+            "frame": 8,
+            "state_index": 48
+          },
+          {
+            "frame": 8,
+            "state_index": 49
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          },
+          {
+            "frame": 8,
+            "state_index": 52
+          }
+        ]
+      },
+      "id": "fight",
+      "label": "Fight (melee)",
+      "note": "Steps are indexed by fight state 0-8; next state = transitions[state][rand4()]. State 7 (and 6 for enemies) is drawn as state 8.",
+      "playback": "transitions",
+      "source": "src/fmain.c:1710-1714",
+      "transitions": [
+        [
+          1,
+          8,
+          0,
+          1
+        ],
+        [
+          2,
+          0,
+          1,
+          0
+        ],
+        [
+          3,
+          1,
+          2,
+          8
+        ],
+        [
+          4,
+          2,
+          3,
+          7
+        ],
+        [
+          5,
+          3,
+          4,
+          6
+        ],
+        [
+          6,
+          4,
+          5,
+          5
+        ],
+        [
+          8,
+          5,
+          6,
+          4
+        ],
+        [
+          8,
+          6,
+          7,
+          3
+        ],
+        [
+          0,
+          6,
+          8,
+          2
+        ]
+      ],
+      "weapons": [
+        0
+      ]
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "N": [
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "NE": [
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "NW": [
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "S": [
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "SE": [
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "SW": [
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ],
+        "W": [
+          {
+            "frame": 9,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 14,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 6,
+            "state_index": 82
+          }
+        ]
+      },
+      "id": "dying",
+      "label": "Dying / dead",
+      "note": "tactic starts at 7 (fmain.c:2773): first frame for tactic 7-5, second for 4-1, then DEAD (no weapon drawn, fmain.c:2400-2401).",
+      "playback": "once",
+      "source": "src/fmain.c:1719-1727",
+      "weapons": [
+        0
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:2460",
+      "text": "even race: every body frame is forced even"
+    },
+    {
+      "source": "src/fmain.c:1632",
+      "text": "walk step never advances"
+    },
+    {
+      "source": "src/fmain.c:2400",
+      "text": "weapon 0 or 8 draws no overlay"
+    }
+  ],
+  "overlay_sheet": {
+    "columns": 16,
+    "file": "sprites/objects/objects_sheet.png",
+    "frame_size": [
+      16,
+      16
+    ],
+    "source": "src/fmain.c:2400-2447"
+  },
+  "palette": "palettes/pagecolors.json",
+  "race": 2,
+  "race_source": "src/fmain.c:55",
+  "sheet": {
+    "columns": 15,
+    "file": "wraith_sheet.png",
+    "highlight_mask": "wraith_highlightmask.png",
+    "silhouette_mask": "wraith_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Wraith (race 2)",
+  "transparent_index": 31,
+  "weapons": [
+    {
+      "id": 0,
+      "name": "none"
+    }
+  ],
+  "weapons_source": "src/fmain.c:2757-2758"
+}

@@ -1,0 +1,390 @@
+{
+  "actor": "turtle",
+  "cfile": {
+    "index": 5,
+    "sheet": "turtle",
+    "source": "src/fmain2.c:650"
+  },
+  "frame_count": 16,
+  "frame_size": [
+    32,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 5,
+        "frame": 0,
+        "sheet": "turtle"
+      },
+      "rect": [
+        0,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 5,
+        "frame": 1,
+        "sheet": "turtle"
+      },
+      "rect": [
+        32,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 5,
+        "frame": 2,
+        "sheet": "turtle"
+      },
+      "rect": [
+        64,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 5,
+        "frame": 3,
+        "sheet": "turtle"
+      },
+      "rect": [
+        96,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 5,
+        "frame": 4,
+        "sheet": "turtle"
+      },
+      "rect": [
+        128,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 5,
+        "frame": 5,
+        "sheet": "turtle"
+      },
+      "rect": [
+        160,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 5,
+        "frame": 6,
+        "sheet": "turtle"
+      },
+      "rect": [
+        192,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 5,
+        "frame": 7,
+        "sheet": "turtle"
+      },
+      "rect": [
+        224,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 5,
+        "frame": 8,
+        "sheet": "turtle"
+      },
+      "rect": [
+        256,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "origin": {
+        "cfile": 5,
+        "frame": 9,
+        "sheet": "turtle"
+      },
+      "rect": [
+        288,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "origin": {
+        "cfile": 5,
+        "frame": 10,
+        "sheet": "turtle"
+      },
+      "rect": [
+        320,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_011.png",
+      "index": 11,
+      "origin": {
+        "cfile": 5,
+        "frame": 11,
+        "sheet": "turtle"
+      },
+      "rect": [
+        352,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_012.png",
+      "index": 12,
+      "origin": {
+        "cfile": 5,
+        "frame": 12,
+        "sheet": "turtle"
+      },
+      "rect": [
+        384,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_013.png",
+      "index": 13,
+      "origin": {
+        "cfile": 5,
+        "frame": 13,
+        "sheet": "turtle"
+      },
+      "rect": [
+        416,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_014.png",
+      "index": 14,
+      "origin": {
+        "cfile": 5,
+        "frame": 14,
+        "sheet": "turtle"
+      },
+      "rect": [
+        448,
+        0,
+        32,
+        32
+      ]
+    },
+    {
+      "file": "frame_015.png",
+      "index": 15,
+      "origin": {
+        "cfile": 5,
+        "frame": 15,
+        "sheet": "turtle"
+      },
+      "rect": [
+        480,
+        0,
+        32,
+        32
+      ]
+    }
+  ],
+  "group": "carriers",
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 6
+          },
+          {
+            "frame": 7
+          }
+        ],
+        "N": [
+          {
+            "frame": 2
+          },
+          {
+            "frame": 3
+          }
+        ],
+        "NE": [
+          {
+            "frame": 4
+          },
+          {
+            "frame": 5
+          }
+        ],
+        "NW": [
+          {
+            "frame": 0
+          },
+          {
+            "frame": 1
+          }
+        ],
+        "S": [
+          {
+            "frame": 10
+          },
+          {
+            "frame": 11
+          }
+        ],
+        "SE": [
+          {
+            "frame": 8
+          },
+          {
+            "frame": 9
+          }
+        ],
+        "SW": [
+          {
+            "frame": 12
+          },
+          {
+            "frame": 13
+          }
+        ],
+        "W": [
+          {
+            "frame": 14
+          },
+          {
+            "frame": 15
+          }
+        ]
+      },
+      "id": "swim",
+      "label": "Swim",
+      "playback": "loop",
+      "source": "src/fmain.c:1539"
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 6
+          }
+        ],
+        "N": [
+          {
+            "frame": 2
+          }
+        ],
+        "NE": [
+          {
+            "frame": 4
+          }
+        ],
+        "NW": [
+          {
+            "frame": 0
+          }
+        ],
+        "S": [
+          {
+            "frame": 10
+          }
+        ],
+        "SE": [
+          {
+            "frame": 8
+          }
+        ],
+        "SW": [
+          {
+            "frame": 12
+          }
+        ],
+        "W": [
+          {
+            "frame": 14
+          }
+        ]
+      },
+      "id": "ridden_idle",
+      "label": "Ridden, hero not walking",
+      "playback": "loop",
+      "source": "src/fmain.c:1513-1518"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 16,
+    "file": "turtle_sheet.png",
+    "highlight_mask": "turtle_highlightmask.png",
+    "silhouette_mask": "turtle_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Turtle",
+  "transparent_index": 31
+}

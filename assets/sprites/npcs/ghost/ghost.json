@@ -1,0 +1,65 @@
+{
+  "actor": "ghost",
+  "can_talk": 0,
+  "cfile": {
+    "index": 16,
+    "sheet": "witch",
+    "source": "src/fmain2.c:663"
+  },
+  "frame_count": 1,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 16,
+        "frame": 7,
+        "sheet": "witch"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 7,
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain2.c:1272",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain2.c:235",
+      "text": "never takes damage (race 0x8a / 0x8b), so no dying/dead frames"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 11,
+  "setfig_source": "src/fmain.c:36",
+  "sheet": {
+    "columns": 1,
+    "file": "ghost_sheet.png",
+    "highlight_mask": "ghost_highlightmask.png",
+    "silhouette_mask": "ghost_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "ghost (setfig 11)",
+  "transparent_index": 31
+}

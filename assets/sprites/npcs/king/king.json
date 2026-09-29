@@ -1,0 +1,96 @@
+{
+  "actor": "king",
+  "can_talk": 1,
+  "cfile": {
+    "index": 14,
+    "sheet": "royal set",
+    "source": "src/fmain2.c:660"
+  },
+  "frame_count": 2,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 14,
+        "frame": 4,
+        "sheet": "royal set"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 14,
+        "frame": 5,
+        "sheet": "royal set"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 4,
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain2.c:1272",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "talking",
+      "label": "Talking",
+      "note": "image_base + rand2() each tick for 15 ticks (tactic, fmain.c:3375-3377)",
+      "playback": "random",
+      "source": "src/fmain.c:1555-1557",
+      "steps": [
+        {
+          "frame": 0
+        },
+        {
+          "frame": 1
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:1412-1416",
+      "text": "no dying/dead (review): this NPC stands in the king's or sorceress's pax extent (fmain.c:354-355) or the princess extent (fmain.c:345), where xtype > 80 turns the hero's attack into SHOOT1 and blocks shooting (fmain.c:1669)"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 5,
+  "setfig_source": "src/fmain.c:30",
+  "sheet": {
+    "columns": 2,
+    "file": "king_sheet.png",
+    "highlight_mask": "king_highlightmask.png",
+    "silhouette_mask": "king_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "king (setfig 5)",
+  "transparent_index": 31
+}

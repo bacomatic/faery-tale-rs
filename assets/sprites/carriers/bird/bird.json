@@ -1,0 +1,234 @@
+{
+  "actor": "bird",
+  "cfile": {
+    "index": 11,
+    "sheet": "bird",
+    "source": "src/fmain2.c:657"
+  },
+  "frame_count": 9,
+  "frame_size": [
+    64,
+    64
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 11,
+        "frame": 0,
+        "sheet": "bird"
+      },
+      "rect": [
+        0,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 11,
+        "frame": 1,
+        "sheet": "bird"
+      },
+      "rect": [
+        64,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 11,
+        "frame": 2,
+        "sheet": "bird"
+      },
+      "rect": [
+        128,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 11,
+        "frame": 3,
+        "sheet": "bird"
+      },
+      "rect": [
+        192,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 11,
+        "frame": 4,
+        "sheet": "bird"
+      },
+      "rect": [
+        256,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 11,
+        "frame": 5,
+        "sheet": "bird"
+      },
+      "rect": [
+        320,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 11,
+        "frame": 6,
+        "sheet": "bird"
+      },
+      "rect": [
+        384,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 11,
+        "frame": 7,
+        "sheet": "bird"
+      },
+      "rect": [
+        448,
+        0,
+        64,
+        64
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 4,
+        "frame": 1,
+        "padded_from": [
+          32,
+          32
+        ],
+        "sheet": "raft"
+      },
+      "rect": [
+        512,
+        0,
+        64,
+        64
+      ]
+    }
+  ],
+  "group": "carriers",
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 3
+          }
+        ],
+        "N": [
+          {
+            "frame": 1
+          }
+        ],
+        "NE": [
+          {
+            "frame": 2
+          }
+        ],
+        "NW": [
+          {
+            "frame": 0
+          }
+        ],
+        "S": [
+          {
+            "frame": 5
+          }
+        ],
+        "SE": [
+          {
+            "frame": 4
+          }
+        ],
+        "SW": [
+          {
+            "frame": 6
+          }
+        ],
+        "W": [
+          {
+            "frame": 7
+          }
+        ]
+      },
+      "id": "fly",
+      "label": "Fly",
+      "playback": "loop",
+      "source": "src/fmain.c:1497-1508"
+    },
+    {
+      "directional": false,
+      "id": "grounded",
+      "label": "Landed (not ridden)",
+      "playback": "loop",
+      "source": "src/fmain.c:2463-2464",
+      "steps": [
+        {
+          "frame": 8
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:2463-2464",
+      "text": "while riding == 0 the swan is drawn from the RAFT sheet, frame 1 (32x32, padded top-left into the 64x64 cell)"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 9,
+    "file": "bird_sheet.png",
+    "highlight_mask": "bird_highlightmask.png",
+    "silhouette_mask": "bird_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Swan (bird)",
+  "transparent_index": 31
+}

@@ -1,0 +1,1359 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/fmain2.c:657",
+        "src/fmain.c:1497-1508",
+        "src/fmain.c:2463-2464"
+      ],
+      "counts": [
+        {
+          "expect": 9,
+          "glob": "carriers/bird/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 9,
+          "file": "carriers/bird/bird.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "carriers/bird/bird.json",
+        "carriers/bird/bird_sheet.png",
+        "carriers/bird/bird_highlightmask.png",
+        "carriers/bird/bird_silhouettemask.png"
+      ],
+      "id": "bird",
+      "look_for": "Golden swan in flight, one frame per facing; 'Landed' shows the golden swan sitting (from the raft sheet).",
+      "task": "T2.1",
+      "title": "Swan (bird) — carriers, 9 frames 64x64",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:656",
+        "src/fmain.c:1482",
+        "src/fmain.c:1485-1487",
+        "src/fmain.c:1483"
+      ],
+      "counts": [
+        {
+          "expect": 5,
+          "glob": "carriers/dragon/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 5,
+          "file": "carriers/dragon/dragon.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "carriers/dragon/dragon.json",
+        "carriers/dragon/dragon_sheet.png",
+        "carriers/dragon/dragon_highlightmask.png",
+        "carriers/dragon/dragon_silhouettemask.png"
+      ],
+      "id": "dragon",
+      "look_for": "Orange dragon: Idle, Firing flickers between 2 frames, Dying collapses, Dead.",
+      "task": "T2.1",
+      "title": "Dragon — carriers, 5 frames 48x40",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:648",
+        "src/fmain.c:2822"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "carriers/raft/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "carriers/raft/raft.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "carriers/raft/raft.json",
+        "carriers/raft/raft_sheet.png",
+        "carriers/raft/raft_highlightmask.png",
+        "carriers/raft/raft_silhouettemask.png"
+      ],
+      "id": "raft",
+      "look_for": "Raft of logs only.",
+      "task": "T2.1",
+      "title": "Raft — carriers, 1 frames 32x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:650",
+        "src/fmain.c:1539",
+        "src/fmain.c:1513-1518"
+      ],
+      "counts": [
+        {
+          "expect": 16,
+          "glob": "carriers/turtle/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 16,
+          "file": "carriers/turtle/turtle.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "carriers/turtle/turtle.json",
+        "carriers/turtle/turtle_sheet.png",
+        "carriers/turtle/turtle_highlightmask.png",
+        "carriers/turtle/turtle_silhouettemask.png"
+      ],
+      "id": "turtle",
+      "look_for": "Grey-shelled green turtle in water spray; Swim alternates 2 frames per facing and faces the chosen direction.",
+      "task": "T2.1",
+      "title": "Turtle — carriers, 16 frames 32x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:653",
+        "src/fmain.c:60",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 24,
+          "glob": "enemies/dknight/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 24,
+          "file": "enemies/dknight/dknight.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/dknight/dknight.json",
+        "enemies/dknight/dknight_sheet.png",
+        "enemies/dknight/dknight_highlightmask.png",
+        "enemies/dknight/dknight_silhouettemask.png"
+      ],
+      "id": "dknight",
+      "look_for": "Dark armoured knight with a sword; Dying shows the standing frame (the game forces index 1). Check walk/fight cycles in all 8 facings and the overlay for each weapon listed.",
+      "task": "T2.1",
+      "title": "DKnight (race 7) — enemies, 24 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:654",
+        "src/fmain.c:61",
+        "src/fmain.c:1809-1816"
+      ],
+      "counts": [
+        {
+          "expect": 10,
+          "glob": "enemies/loraii/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 10,
+          "file": "enemies/loraii/loraii.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/loraii/loraii.json",
+        "enemies/loraii/loraii_sheet.png",
+        "enemies/loraii/loraii_highlightmask.png",
+        "enemies/loraii/loraii_silhouettemask.png"
+      ],
+      "id": "loraii",
+      "look_for": "Three shapes by slot: red orb, blue cubes, yellow pyramids; a star when dying. No facings.",
+      "task": "T2.1",
+      "title": "Loraii (race 8) — enemies, 10 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:654",
+        "src/fmain.c:62",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1671-1673",
+        "src/fmain.c:1747-1755"
+      ],
+      "counts": [
+        {
+          "expect": 22,
+          "glob": "enemies/necromancer/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 22,
+          "file": "enemies/necromancer/necromancer.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/necromancer/necromancer.json",
+        "enemies/necromancer/necromancer_sheet.png",
+        "enemies/necromancer/necromancer_highlightmask.png",
+        "enemies/necromancer/necromancer_silhouettemask.png"
+      ],
+      "id": "necromancer",
+      "look_for": "Black-robed Necromancer with red trim; wand only (Cast mode, no melee). Dying: sparkle, then star; he then becomes the Woodcutter (see the woodcutter set).",
+      "task": "T2.1",
+      "title": "Necromancer (race 9) — enemies, 22 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:651",
+        "src/fmain.c:53",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 27,
+          "glob": "enemies/ogre/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 27,
+          "file": "enemies/ogre/ogre.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/ogre/ogre.json",
+        "enemies/ogre/ogre_sheet.png",
+        "enemies/ogre/ogre_highlightmask.png",
+        "enemies/ogre/ogre_silhouettemask.png"
+      ],
+      "id": "ogre",
+      "look_for": "Grey/black armoured Ogre with yellow eyes (even frames of the ogre file); bloody death poses. Check walk/fight cycles in all 8 facings and the overlay for each weapon listed.",
+      "task": "T2.1",
+      "title": "Ogre (race 0) — enemies, 27 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:651",
+        "src/fmain.c:54",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 31,
+          "glob": "enemies/orcs/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 31,
+          "file": "enemies/orcs/orcs.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/orcs/orcs.json",
+        "enemies/orcs/orcs_sheet.png",
+        "enemies/orcs/orcs_highlightmask.png",
+        "enemies/orcs/orcs_silhouettemask.png"
+      ],
+      "id": "orcs",
+      "look_for": "Brown-clad Orc (odd frames of the ogre file); fights with mace/sword, shoots with the bow.",
+      "task": "T2.1",
+      "title": "Orcs (race 1) — enemies, 31 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:652",
+        "src/fmain.c:56",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 27,
+          "glob": "enemies/skeleton/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 27,
+          "file": "enemies/skeleton/skeleton.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/skeleton/skeleton.json",
+        "enemies/skeleton/skeleton_sheet.png",
+        "enemies/skeleton/skeleton_highlightmask.png",
+        "enemies/skeleton/skeleton_silhouettemask.png"
+      ],
+      "id": "skeleton",
+      "look_for": "White Skeleton (odd frames of the ghost file). Check walk/fight cycles in all 8 facings and the overlay for each weapon listed.",
+      "task": "T2.1",
+      "title": "Skeleton (race 3) — enemies, 27 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:653",
+        "src/fmain.c:57",
+        "src/fmain.c:1804-1805",
+        "src/fmain.c:1804"
+      ],
+      "counts": [
+        {
+          "expect": 11,
+          "glob": "enemies/snake/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 11,
+          "file": "enemies/snake/snake.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/snake/snake.json",
+        "enemies/snake/snake_sheet.png",
+        "enemies/snake/snake_highlightmask.png",
+        "enemies/snake/snake_silhouettemask.png"
+      ],
+      "id": "snake",
+      "look_for": "Orange snake: vertical for S/N, horizontal and wavy for W/E, 2 frames each; coils when dying.",
+      "task": "T2.1",
+      "title": "Snake (race 4) — enemies, 11 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:653",
+        "src/fmain.c:59",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 27,
+          "glob": "enemies/spider/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 27,
+          "file": "enemies/spider/spider.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/spider/spider.json",
+        "enemies/spider/spider_sheet.png",
+        "enemies/spider/spider_highlightmask.png",
+        "enemies/spider/spider_silhouettemask.png"
+      ],
+      "id": "spider",
+      "look_for": "Dark spider with red markings (even frames of the dknight file).",
+      "task": "T2.1",
+      "title": "Spider (race 6) — enemies, 27 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:654",
+        "src/fmain.c:63",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1719-1727"
+      ],
+      "counts": [
+        {
+          "expect": 19,
+          "glob": "enemies/woodcutter/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 19,
+          "file": "enemies/woodcutter/woodcutter.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/woodcutter/woodcutter.json",
+        "enemies/woodcutter/woodcutter_sheet.png",
+        "enemies/woodcutter/woodcutter_highlightmask.png",
+        "enemies/woodcutter/woodcutter_silhouettemask.png"
+      ],
+      "id": "woodcutter",
+      "look_for": "Green-clad Woodcutter: still, walk and dying only (passive, no fight). No Loraii or hero-fall frames.",
+      "task": "T2.1",
+      "title": "Woodcutter (race 10) — enemies, 19 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:652",
+        "src/fmain.c:55",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 15,
+          "glob": "enemies/wraith/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 15,
+          "file": "enemies/wraith/wraith.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "enemies/wraith/wraith.json",
+        "enemies/wraith/wraith_sheet.png",
+        "enemies/wraith/wraith_highlightmask.png",
+        "enemies/wraith/wraith_silhouettemask.png"
+      ],
+      "id": "wraith",
+      "look_for": "Black-robed Wraith; glows blue in fight frames; walk never steps (glides).",
+      "task": "T2.1",
+      "title": "Wraith (race 2) — enemies, 15 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:644",
+        "src/fmain2.c:676",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 73,
+          "glob": "heroes/julian/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 73,
+          "file": "heroes/julian/julian.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "heroes/julian/julian.json",
+        "heroes/julian/julian_sheet.png",
+        "heroes/julian/julian_highlightmask.png",
+        "heroes/julian/julian_silhouettemask.png"
+      ],
+      "id": "julian",
+      "look_for": "Red tunic, grey legs, dark hair. Check: walk cycles smoothly in all 8 facings; Still; Fight with none/dirk/mace/sword (weapon stays in the hand, behind the body for NW/N/SW/W); Shoot (bow) and Cast (wand); bow carried at the side while walking; wand points toward the facing. Dying ends lying down; Fall shows the brother falling and shrinking. Frustrated: shakes his head facing the player (statelist 84/85), then shows statelist 40. With the bow, Dying shows an arrow beside the body (source: hand-weapon rule, k = 0).",
+      "task": "T2.1",
+      "title": "Julian (brother 1) — heroes, 73 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:646",
+        "src/fmain2.c:676",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 73,
+          "glob": "heroes/kevin/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 73,
+          "file": "heroes/kevin/kevin.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "heroes/kevin/kevin.json",
+        "heroes/kevin/kevin_sheet.png",
+        "heroes/kevin/kevin_highlightmask.png",
+        "heroes/kevin/kevin_silhouettemask.png"
+      ],
+      "id": "kevin",
+      "look_for": "Yellow tunic, grey sleeves and legs, blond hair. Check: walk cycles smoothly in all 8 facings; Still; Fight with none/dirk/mace/sword (weapon stays in the hand, behind the body for NW/N/SW/W); Shoot (bow) and Cast (wand); bow carried at the side while walking; wand points toward the facing. Dying ends lying down; Fall shows the brother falling and shrinking. Frustrated: shakes his head facing the player (statelist 84/85), then shows statelist 40. With the bow, Dying shows an arrow beside the body (source: hand-weapon rule, k = 0).",
+      "task": "T2.1",
+      "title": "Kevin (brother 3) — heroes, 73 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:645",
+        "src/fmain2.c:676",
+        "src/fmain.c:1661-1663",
+        "src/fmain.c:1629-1632",
+        "src/fmain.c:1710-1714"
+      ],
+      "counts": [
+        {
+          "expect": 73,
+          "glob": "heroes/phillip/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 73,
+          "file": "heroes/phillip/phillip.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "heroes/phillip/phillip.json",
+        "heroes/phillip/phillip_sheet.png",
+        "heroes/phillip/phillip_highlightmask.png",
+        "heroes/phillip/phillip_silhouettemask.png"
+      ],
+      "id": "phillip",
+      "look_for": "Blue tunic with a red belt, long brown hair. Check: walk cycles smoothly in all 8 facings; Still; Fight with none/dirk/mace/sword (weapon stays in the hand, behind the body for NW/N/SW/W); Shoot (bow) and Cast (wand); bow carried at the side while walking; wand points toward the facing. Dying ends lying down; Fall shows the brother falling and shrinking. Frustrated: shakes his head facing the player (statelist 84/85), then shows statelist 40. With the bow, Dying shows an arrow beside the body (source: hand-weapon rule, k = 0).",
+      "task": "T2.1",
+      "title": "Phillip (brother 2) — heroes, 73 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:662",
+        "src/fmain.c:33",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1551",
+        "src/fmain.c:1552"
+      ],
+      "counts": [
+        {
+          "expect": 8,
+          "glob": "npcs/bartender/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 8,
+          "file": "npcs/bartender/bartender.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/bartender/bartender.json",
+        "npcs/bartender/bartender_sheet.png",
+        "npcs/bartender/bartender_highlightmask.png",
+        "npcs/bartender/bartender_silhouettemask.png"
+      ],
+      "id": "bartender",
+      "look_for": "White-haired bartender in orange and green; all 8 frames. Dying = frame 6, Dead = frame 7 (by art); 'Other frames' holds 1-5.",
+      "task": "T2.1",
+      "title": "bartender (setfig 8) — npcs, 8 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:664",
+        "src/fmain.c:38",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1555-1557",
+        "src/fmain.c:1551"
+      ],
+      "counts": [
+        {
+          "expect": 4,
+          "glob": "npcs/begger/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 4,
+          "file": "npcs/begger/begger.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/begger/begger.json",
+        "npcs/begger/begger_sheet.png",
+        "npcs/begger/begger_highlightmask.png",
+        "npcs/begger/begger_silhouettemask.png"
+      ],
+      "id": "begger",
+      "look_for": "Grey beggar sitting; Talking 2 frames; Dying hurt, Dead slumped.",
+      "task": "T2.1",
+      "title": "begger (setfig 13) — npcs, 4 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:663",
+        "src/fmain.c:36",
+        "src/fmain2.c:1272"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "npcs/ghost/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "npcs/ghost/ghost.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/ghost/ghost.json",
+        "npcs/ghost/ghost_sheet.png",
+        "npcs/ghost/ghost_highlightmask.png",
+        "npcs/ghost/ghost_silhouettemask.png"
+      ],
+      "id": "ghost",
+      "look_for": "White ghost; Still only (immune to damage).",
+      "task": "T2.1",
+      "title": "ghost (setfig 11) — npcs, 1 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:660",
+        "src/fmain.c:27-28",
+        "src/fmain.c:27",
+        "src/fmain.c:28"
+      ],
+      "counts": [
+        {
+          "expect": 2,
+          "glob": "npcs/guard/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 2,
+          "file": "npcs/guard/guard.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/guard/guard.json",
+        "npcs/guard/guard_sheet.png",
+        "npcs/guard/guard_highlightmask.png",
+        "npcs/guard/guard_silhouettemask.png"
+      ],
+      "id": "guard",
+      "look_for": "Green guard in two standing positions: front (setfig 2) and back (setfig 3). No dying/dead.",
+      "task": "T2.1",
+      "title": "guard (setfigs 2, 3) — npcs, 2 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:660",
+        "src/fmain.c:30",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1555-1557"
+      ],
+      "counts": [
+        {
+          "expect": 2,
+          "glob": "npcs/king/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 2,
+          "file": "npcs/king/king.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/king/king.json",
+        "npcs/king/king_sheet.png",
+        "npcs/king/king_highlightmask.png",
+        "npcs/king/king_silhouettemask.png"
+      ],
+      "id": "king",
+      "look_for": "King with a red cape and crown; still and talking (2 frames) only.",
+      "task": "T2.1",
+      "title": "king (setfig 5) — npcs, 2 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:660",
+        "src/fmain.c:31",
+        "src/fmain2.c:1272"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "npcs/noble/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "npcs/noble/noble.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/noble/noble.json",
+        "npcs/noble/noble_sheet.png",
+        "npcs/noble/noble_highlightmask.png",
+        "npcs/noble/noble_silhouettemask.png"
+      ],
+      "id": "noble",
+      "look_for": "Noble in dark blue; still only.",
+      "task": "T2.1",
+      "title": "noble (setfig 6) — npcs, 1 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:659",
+        "src/fmain.c:26",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1555-1557",
+        "src/fmain.c:1551"
+      ],
+      "counts": [
+        {
+          "expect": 4,
+          "glob": "npcs/priest/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 4,
+          "file": "npcs/priest/priest.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/priest/priest.json",
+        "npcs/priest/priest_sheet.png",
+        "npcs/priest/priest_highlightmask.png",
+        "npcs/priest/priest_silhouettemask.png"
+      ],
+      "id": "priest",
+      "look_for": "Black-robed priest with a red sash; Talking 2 frames; Dying/Dead falling poses.",
+      "task": "T2.1",
+      "title": "priest (setfig 1) — npcs, 4 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:660",
+        "src/fmain.c:29",
+        "src/fmain2.c:1272"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "npcs/princess/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "npcs/princess/princess.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/princess/princess.json",
+        "npcs/princess/princess_sheet.png",
+        "npcs/princess/princess_highlightmask.png",
+        "npcs/princess/princess_silhouettemask.png"
+      ],
+      "id": "princess",
+      "look_for": "Princess in a pale blue dress; still only (no dying/dead in the pax area).",
+      "task": "T2.1",
+      "title": "princess (setfig 4) — npcs, 1 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:664",
+        "src/fmain.c:37",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1555-1557",
+        "src/fmain.c:1551"
+      ],
+      "counts": [
+        {
+          "expect": 4,
+          "glob": "npcs/ranger/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 4,
+          "file": "npcs/ranger/ranger.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/ranger/ranger.json",
+        "npcs/ranger/ranger_sheet.png",
+        "npcs/ranger/ranger_highlightmask.png",
+        "npcs/ranger/ranger_silhouettemask.png"
+      ],
+      "id": "ranger",
+      "look_for": "Ranger in blue and green; Talking 2 frames; Dying/Dead falling poses.",
+      "task": "T2.1",
+      "title": "ranger (setfig 12) — npcs, 4 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:660",
+        "src/fmain.c:32",
+        "src/fmain2.c:1272"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "npcs/sorceress/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "npcs/sorceress/sorceress.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/sorceress/sorceress.json",
+        "npcs/sorceress/sorceress_sheet.png",
+        "npcs/sorceress/sorceress_highlightmask.png",
+        "npcs/sorceress/sorceress_silhouettemask.png"
+      ],
+      "id": "sorceress",
+      "look_for": "Sorceress in pale blue; still only.",
+      "task": "T2.1",
+      "title": "sorceress (setfig 7) — npcs, 1 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:663",
+        "src/fmain.c:35",
+        "src/fmain2.c:1272"
+      ],
+      "counts": [
+        {
+          "expect": 1,
+          "glob": "npcs/spectre/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 1,
+          "file": "npcs/spectre/spectre.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/spectre/spectre.json",
+        "npcs/spectre/spectre_sheet.png",
+        "npcs/spectre/spectre_highlightmask.png",
+        "npcs/spectre/spectre_silhouettemask.png"
+      ],
+      "id": "spectre",
+      "look_for": "Dark spectre with a staff; Still only (immune to damage).",
+      "task": "T2.1",
+      "title": "spectre (setfig 10) — npcs, 1 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:663",
+        "src/fmain.c:34",
+        "src/fmain.c:1553-1554",
+        "src/fmain.c:1551",
+        "src/fmain.c:1552"
+      ],
+      "counts": [
+        {
+          "expect": 6,
+          "glob": "npcs/witch/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 6,
+          "file": "npcs/witch/witch.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/witch/witch.json",
+        "npcs/witch/witch_sheet.png",
+        "npcs/witch/witch_highlightmask.png",
+        "npcs/witch/witch_silhouettemask.png"
+      ],
+      "id": "witch",
+      "look_for": "Green-faced hooded witch turning toward the hero (4 views over 8 facings); Dying is fire, Dead embers.",
+      "task": "T2.1",
+      "title": "witch (setfig 9) — npcs, 6 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:659",
+        "src/fmain.c:25",
+        "src/fmain2.c:1272",
+        "src/fmain.c:1555-1557",
+        "src/fmain.c:1551"
+      ],
+      "counts": [
+        {
+          "expect": 4,
+          "glob": "npcs/wizard/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 4,
+          "file": "npcs/wizard/wizard.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "npcs/wizard/wizard.json",
+        "npcs/wizard/wizard_sheet.png",
+        "npcs/wizard/wizard_highlightmask.png",
+        "npcs/wizard/wizard_silhouettemask.png"
+      ],
+      "id": "wizard",
+      "look_for": "Brown-robed wizard; Talking flips between 2 frames; Dying is a yellow glow; Dead is empty.",
+      "task": "T2.1",
+      "title": "wizard (setfig 0) — npcs, 4 frames 16x32",
+      "view": "sprite"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:647",
+        "src/fmain.c:2319-2322",
+        "src/fmain.c:2429-2437",
+        "src/fmain2.c:697-698"
+      ],
+      "counts": [
+        {
+          "expect": 116,
+          "glob": "objects/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 116,
+          "file": "objects/objects.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/objects_sheet.png",
+        "objects/objects_highlightmask.png",
+        "objects/objects_silhouettemask.png",
+        "objects/objects.json"
+      ],
+      "id": "objects",
+      "look_for": "Row 0: 8 arrows (NW..W) then item icons; 81/83 bows, 88 blue burst, 89-96 fireballs, 97/98 bubbles, 100/101 fairy, 102 turtle eggs, 103-110 wand in 8 directions, 114 keys, 115 noise (never fully loaded). JSON: inventory_icons and world_object_ids.",
+      "task": "T2.1",
+      "title": "Objects sheet (items, weapon overlays, effects) — 116 frames 16x16",
+      "view": "json"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2477-2479",
+        "src/fmain.c:2524",
+        "src/fmain.c:380",
+        "src/fmain.c:3170-3171",
+        "src/fmain2.c:1284"
+      ],
+      "counts": [
+        {
+          "expect": 40,
+          "glob": "objects/items/*.png",
+          "label": "item PNGs"
+        },
+        {
+          "expect": 40,
+          "file": "objects/objects.json",
+          "label": "items in objects.json",
+          "path": "items"
+        }
+      ],
+      "files": [
+        "objects/items/arrows.png",
+        "objects/items/sword.png",
+        "objects/items/herb.png",
+        "objects/items/mace.png",
+        "objects/items/writ.png",
+        "objects/items/bow.png",
+        "objects/items/bone.png",
+        "objects/items/quiver_of_arrows.png",
+        "objects/items/talisman.png",
+        "objects/items/dirk.png",
+        "objects/items/shard.png",
+        "objects/items/money.png",
+        "objects/items/urn.png",
+        "objects/items/chest.png",
+        "objects/items/sacks.png",
+        "objects/items/gold_ring.png",
+        "objects/items/magic_wand.png",
+        "objects/items/blue_stone.png",
+        "objects/items/meal.png",
+        "objects/items/green_jewel.png",
+        "objects/items/rose.png",
+        "objects/items/scrap.png",
+        "objects/items/fruit.png",
+        "objects/items/crystal_orb.png",
+        "objects/items/gold_statue.png",
+        "objects/items/glass_vial.png",
+        "objects/items/book.png",
+        "objects/items/bird_totem.png",
+        "objects/items/sea_shell.png",
+        "objects/items/jade_skull.png",
+        "objects/items/gold_key.png",
+        "objects/items/green_key.png",
+        "objects/items/grey_key.png",
+        "objects/items/white_key.png",
+        "objects/items/golden_lasso.png",
+        "objects/items/sun_stone.png",
+        "objects/items/footstool.png",
+        "objects/items/turtle_eggs.png",
+        "objects/items/blue_key.png",
+        "objects/items/red_key.png"
+      ],
+      "id": "object_items",
+      "look_for": "Each PNG shows exactly one item (16x8 for half-frame items such as Sword/Herb, 16x16 otherwise), named after it.",
+      "task": "T2.1",
+      "title": "Object items split into individual PNGs — 40 items",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:643-665",
+        "src/fmain2.c:685-703",
+        "src/fmain.c:2536-2541"
+      ],
+      "counts": [
+        {
+          "expect": 17,
+          "glob": "raw/*.png",
+          "label": "raw sheets"
+        },
+        {
+          "expect": 17,
+          "file": "raw/raw.json",
+          "label": "raw.json sheets",
+          "path": "sheets"
+        }
+      ],
+      "files": [
+        "raw/cfile_00_julian.png",
+        "raw/cfile_01_phillip.png",
+        "raw/cfile_02_kevin.png",
+        "raw/cfile_03_objects.png",
+        "raw/cfile_04_raft.png",
+        "raw/cfile_05_turtle.png",
+        "raw/cfile_06_ogre_file.png",
+        "raw/cfile_07_ghost_file.png",
+        "raw/cfile_08_dknight_file.png",
+        "raw/cfile_09_necromancer_file.png",
+        "raw/cfile_10_dragon.png",
+        "raw/cfile_11_bird.png",
+        "raw/cfile_13_wizard_priest.png",
+        "raw/cfile_14_royal_set.png",
+        "raw/cfile_15_bartender.png",
+        "raw/cfile_16_witch.png",
+        "raw/cfile_17_ranger_begger.png",
+        "raw/raw.json"
+      ],
+      "id": "raw_sheets",
+      "look_for": "Each sheet is one cfile exactly as stored, frames left-to-right in index order (16 per row); no repacking or parity. Objects frame 115 is past the loaded blocks.",
+      "task": "T2.1",
+      "title": "Raw cfile sheets (reference) — 17 sheets, original frame order",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2400-2447"
+      ],
+      "counts": [
+        {
+          "expect": 16,
+          "glob": "objects/weapons/dirk/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 16,
+          "file": "objects/weapons/dirk/dirk.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/weapons/dirk/dirk_sheet.png",
+        "objects/weapons/dirk/dirk.json",
+        "objects/weapons/dirk/dirk_highlightmask.png",
+        "objects/weapons/dirk/dirk_silhouettemask.png"
+      ],
+      "id": "weapon_dirk",
+      "look_for": "Short dirk blade, one frame per statelist wpn_no (64-79).",
+      "task": "T2.1",
+      "title": "Dirk overlay frames — 16 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2400-2447"
+      ],
+      "counts": [
+        {
+          "expect": 16,
+          "glob": "objects/weapons/mace/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 16,
+          "file": "objects/weapons/mace/mace.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/weapons/mace/mace_sheet.png",
+        "objects/weapons/mace/mace.json",
+        "objects/weapons/mace/mace_highlightmask.png",
+        "objects/weapons/mace/mace_silhouettemask.png"
+      ],
+      "id": "weapon_mace",
+      "look_for": "Mace with brown handle and grey head (32-47).",
+      "task": "T2.1",
+      "title": "Mace overlay frames — 16 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2400-2447"
+      ],
+      "counts": [
+        {
+          "expect": 16,
+          "glob": "objects/weapons/sword/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 16,
+          "file": "objects/weapons/sword/sword.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/weapons/sword/sword_sheet.png",
+        "objects/weapons/sword/sword.json",
+        "objects/weapons/sword/sword_highlightmask.png",
+        "objects/weapons/sword/sword_silhouettemask.png"
+      ],
+      "id": "weapon_sword",
+      "look_for": "Long grey sword (48-63).",
+      "task": "T2.1",
+      "title": "Sword overlay frames — 16 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2422-2434",
+        "src/fmain.c:2439-2444",
+        "src/fmain.c:1670-1684"
+      ],
+      "counts": [
+        {
+          "expect": 9,
+          "glob": "objects/weapons/bow/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 9,
+          "file": "objects/weapons/bow/bow.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/weapons/bow/bow_sheet.png",
+        "objects/weapons/bow/bow.json",
+        "objects/weapons/bow/bow_highlightmask.png",
+        "objects/weapons/bow/bow_silhouettemask.png"
+      ],
+      "id": "weapon_bow",
+      "look_for": "Bow at the side (30, 0x51, 0x53) and while shooting (80-87).",
+      "task": "T2.1",
+      "title": "Bow overlay frames — 9 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2400-2447"
+      ],
+      "counts": [
+        {
+          "expect": 8,
+          "glob": "objects/weapons/wand/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 8,
+          "file": "objects/weapons/wand/wand.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/weapons/wand/wand_sheet.png",
+        "objects/weapons/wand/wand.json",
+        "objects/weapons/wand/wand_highlightmask.png",
+        "objects/weapons/wand/wand_silhouettemask.png"
+      ],
+      "id": "weapon_wand",
+      "look_for": "Wand, one frame per facing (103 + facing).",
+      "task": "T2.1",
+      "title": "Wand overlay frames — 8 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2319"
+      ],
+      "counts": [
+        {
+          "expect": 8,
+          "glob": "objects/effects/arrow/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 8,
+          "file": "objects/effects/arrow/arrow.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/effects/arrow/arrow_sheet.png",
+        "objects/effects/arrow/arrow.json",
+        "objects/effects/arrow/arrow_highlightmask.png",
+        "objects/effects/arrow/arrow_silhouettemask.png"
+      ],
+      "id": "effect_arrow",
+      "look_for": "Arrow in flight, one frame per direction (NW, N, NE, E, SE, S, SW, W).",
+      "task": "T2.1",
+      "title": "Arrow (missile type 1) — 8 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2321-2322"
+      ],
+      "counts": [
+        {
+          "expect": 9,
+          "glob": "objects/effects/fireball/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 9,
+          "file": "objects/effects/fireball/fireball.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/effects/fireball/fireball_sheet.png",
+        "objects/effects/fireball/fireball.json",
+        "objects/effects/fireball/fireball_highlightmask.png",
+        "objects/effects/fireball/fireball_silhouettemask.png"
+      ],
+      "id": "effect_fireball",
+      "look_for": "Blue fireball in flight per direction (0x59-0x60), then the impact burst (0x58).",
+      "task": "T2.1",
+      "title": "Fireball (missile type 2) — 9 frames 16x16",
+      "view": "image"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2492-2497"
+      ],
+      "counts": [
+        {
+          "expect": 2,
+          "glob": "objects/effects/bubbles/frame_*.png",
+          "label": "frame PNGs"
+        },
+        {
+          "expect": 2,
+          "file": "objects/effects/bubbles/bubbles.json",
+          "label": "atlas frames",
+          "path": "frames"
+        }
+      ],
+      "files": [
+        "objects/effects/bubbles/bubbles_sheet.png",
+        "objects/effects/bubbles/bubbles.json",
+        "objects/effects/bubbles/bubbles_highlightmask.png",
+        "objects/effects/bubbles/bubbles_silhouettemask.png"
+      ],
+      "id": "effect_bubbles",
+      "look_for": "Two white bubble frames, top 8 rows only (drowning).",
+      "task": "T2.1",
+      "title": "Drowning bubbles — 2 frames 16x16",
+      "view": "image"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.1": {
+      "summary": "One repacked sprite set per actor (3 heroes, 10 enemy races, 13 NPCs, 4 carriers/creatures), the whole objects sheet, and one PNG per object item. Each actor item has an animation player: pick a mode, facing and weapon and check that the cycles and weapon overlays look right. Sheets, highlight masks (palette 16-24) and silhouette masks (non-transparent) are shown below the player.",
+      "title": "Sprites"
+    }
+  }
+}

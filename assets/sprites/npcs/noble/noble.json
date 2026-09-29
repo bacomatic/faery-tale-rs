@@ -1,0 +1,65 @@
+{
+  "actor": "noble",
+  "can_talk": 0,
+  "cfile": {
+    "index": 14,
+    "sheet": "royal set",
+    "source": "src/fmain2.c:660"
+  },
+  "frame_count": 1,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 14,
+        "frame": 6,
+        "sheet": "royal set"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 6,
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain2.c:1272",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:1412-1416",
+      "text": "no dying/dead (review): this NPC stands in the king's or sorceress's pax extent (fmain.c:354-355) or the princess extent (fmain.c:345), where xtype > 80 turns the hero's attack into SHOOT1 and blocks shooting (fmain.c:1669)"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 6,
+  "setfig_source": "src/fmain.c:31",
+  "sheet": {
+    "columns": 1,
+    "file": "noble_sheet.png",
+    "highlight_mask": "noble_highlightmask.png",
+    "silhouette_mask": "noble_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "noble (setfig 6)",
+  "transparent_index": 31
+}

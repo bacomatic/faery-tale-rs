@@ -1,0 +1,55 @@
+{
+  "actor": "raft",
+  "cfile": {
+    "index": 4,
+    "sheet": "raft",
+    "source": "src/fmain2.c:648"
+  },
+  "frame_count": 1,
+  "frame_size": [
+    32,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 4,
+        "frame": 0,
+        "sheet": "raft"
+      },
+      "rect": [
+        0,
+        0,
+        32,
+        32
+      ]
+    }
+  ],
+  "group": "carriers",
+  "modes": [
+    {
+      "directional": false,
+      "id": "still",
+      "label": "Raft",
+      "playback": "loop",
+      "source": "src/fmain.c:2822",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 1,
+    "file": "raft_sheet.png",
+    "highlight_mask": "raft_highlightmask.png",
+    "silhouette_mask": "raft_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Raft",
+  "transparent_index": 31
+}

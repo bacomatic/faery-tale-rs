@@ -1,0 +1,154 @@
+{
+  "actor": "dragon",
+  "cfile": {
+    "index": 10,
+    "sheet": "dragon",
+    "source": "src/fmain2.c:656"
+  },
+  "frame_count": 5,
+  "frame_size": [
+    48,
+    40
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 10,
+        "frame": 0,
+        "sheet": "dragon"
+      },
+      "rect": [
+        0,
+        0,
+        48,
+        40
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 10,
+        "frame": 1,
+        "sheet": "dragon"
+      },
+      "rect": [
+        48,
+        0,
+        48,
+        40
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 10,
+        "frame": 2,
+        "sheet": "dragon"
+      },
+      "rect": [
+        96,
+        0,
+        48,
+        40
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 10,
+        "frame": 3,
+        "sheet": "dragon"
+      },
+      "rect": [
+        144,
+        0,
+        48,
+        40
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 10,
+        "frame": 4,
+        "sheet": "dragon"
+      },
+      "rect": [
+        192,
+        0,
+        48,
+        40
+      ]
+    }
+  ],
+  "group": "carriers",
+  "modes": [
+    {
+      "directional": false,
+      "id": "idle",
+      "label": "Idle",
+      "playback": "loop",
+      "source": "src/fmain.c:1482",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "firing",
+      "label": "Firing",
+      "playback": "random",
+      "source": "src/fmain.c:1485-1487",
+      "steps": [
+        {
+          "frame": 1
+        },
+        {
+          "frame": 2
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "dying",
+      "label": "Dying",
+      "playback": "loop",
+      "source": "src/fmain.c:1483",
+      "steps": [
+        {
+          "frame": 3
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "dead",
+      "label": "Dead",
+      "playback": "loop",
+      "source": "src/fmain.c:1484",
+      "steps": [
+        {
+          "frame": 4
+        }
+      ]
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 5,
+    "file": "dragon_sheet.png",
+    "highlight_mask": "dragon_highlightmask.png",
+    "silhouette_mask": "dragon_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Dragon",
+  "transparent_index": 31
+}

@@ -1,0 +1,244 @@
+{
+  "note": "Each cfile decoded as stored: frame n of a sheet is at file_id * 512 + n * 5 planes * height * width * 2 bytes (fmain.c:2540, fmain2.c:690-698). cfile 12 is skipped (its file_id is Julian's block). loaded_frames: read_shapes loads only numblocks blocks, so later frames are never in memory.",
+  "sheets": [
+    {
+      "cfile": 0,
+      "columns": 16,
+      "file": "cfile_00_julian.png",
+      "file_id": 1376,
+      "frame_count": 67,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "julian",
+      "numblocks": 42,
+      "source": "src/fmain2.c:644"
+    },
+    {
+      "cfile": 1,
+      "columns": 16,
+      "file": "cfile_01_phillip.png",
+      "file_id": 1418,
+      "frame_count": 67,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "phillip",
+      "numblocks": 42,
+      "source": "src/fmain2.c:645"
+    },
+    {
+      "cfile": 2,
+      "columns": 16,
+      "file": "cfile_02_kevin.png",
+      "file_id": 1460,
+      "frame_count": 67,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "kevin",
+      "numblocks": 42,
+      "source": "src/fmain2.c:646"
+    },
+    {
+      "cfile": 3,
+      "columns": 16,
+      "file": "cfile_03_objects.png",
+      "file_id": 1312,
+      "frame_count": 116,
+      "frame_size": [
+        16,
+        16
+      ],
+      "loaded_frames": 115,
+      "name": "objects",
+      "numblocks": 36,
+      "source": "src/fmain2.c:647"
+    },
+    {
+      "cfile": 4,
+      "columns": 2,
+      "file": "cfile_04_raft.png",
+      "file_id": 1348,
+      "frame_count": 2,
+      "frame_size": [
+        32,
+        32
+      ],
+      "name": "raft",
+      "numblocks": 3,
+      "source": "src/fmain2.c:648"
+    },
+    {
+      "cfile": 5,
+      "columns": 16,
+      "file": "cfile_05_turtle.png",
+      "file_id": 1351,
+      "frame_count": 16,
+      "frame_size": [
+        32,
+        32
+      ],
+      "name": "turtle",
+      "numblocks": 20,
+      "source": "src/fmain2.c:650"
+    },
+    {
+      "cfile": 6,
+      "columns": 16,
+      "file": "cfile_06_ogre_file.png",
+      "file_id": 960,
+      "frame_count": 64,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "ogre file",
+      "numblocks": 40,
+      "source": "src/fmain2.c:651"
+    },
+    {
+      "cfile": 7,
+      "columns": 16,
+      "file": "cfile_07_ghost_file.png",
+      "file_id": 1080,
+      "frame_count": 64,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "ghost file",
+      "numblocks": 40,
+      "source": "src/fmain2.c:652"
+    },
+    {
+      "cfile": 8,
+      "columns": 16,
+      "file": "cfile_08_dknight_file.png",
+      "file_id": 1000,
+      "frame_count": 64,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "dknight file",
+      "numblocks": 40,
+      "source": "src/fmain2.c:653"
+    },
+    {
+      "cfile": 9,
+      "columns": 16,
+      "file": "cfile_09_necromancer_file.png",
+      "file_id": 1040,
+      "frame_count": 64,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "necromancer file",
+      "numblocks": 40,
+      "source": "src/fmain2.c:654"
+    },
+    {
+      "cfile": 10,
+      "columns": 5,
+      "file": "cfile_10_dragon.png",
+      "file_id": 1160,
+      "frame_count": 5,
+      "frame_size": [
+        48,
+        40
+      ],
+      "name": "dragon",
+      "numblocks": 12,
+      "source": "src/fmain2.c:656"
+    },
+    {
+      "cfile": 11,
+      "columns": 8,
+      "file": "cfile_11_bird.png",
+      "file_id": 1120,
+      "frame_count": 8,
+      "frame_size": [
+        64,
+        64
+      ],
+      "name": "bird",
+      "numblocks": 40,
+      "source": "src/fmain2.c:657"
+    },
+    {
+      "cfile": 13,
+      "columns": 8,
+      "file": "cfile_13_wizard_priest.png",
+      "file_id": 936,
+      "frame_count": 8,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "wizard/priest",
+      "numblocks": 5,
+      "source": "src/fmain2.c:659"
+    },
+    {
+      "cfile": 14,
+      "columns": 8,
+      "file": "cfile_14_royal_set.png",
+      "file_id": 931,
+      "frame_count": 8,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "royal set",
+      "numblocks": 5,
+      "source": "src/fmain2.c:660"
+    },
+    {
+      "cfile": 15,
+      "columns": 8,
+      "file": "cfile_15_bartender.png",
+      "file_id": 941,
+      "frame_count": 8,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "bartender",
+      "numblocks": 5,
+      "source": "src/fmain2.c:662"
+    },
+    {
+      "cfile": 16,
+      "columns": 8,
+      "file": "cfile_16_witch.png",
+      "file_id": 946,
+      "frame_count": 8,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "witch",
+      "numblocks": 5,
+      "source": "src/fmain2.c:663"
+    },
+    {
+      "cfile": 17,
+      "columns": 8,
+      "file": "cfile_17_ranger_begger.png",
+      "file_id": 951,
+      "frame_count": 8,
+      "frame_size": [
+        16,
+        32
+      ],
+      "name": "ranger/begger",
+      "numblocks": 5,
+      "source": "src/fmain2.c:664"
+    }
+  ]
+}

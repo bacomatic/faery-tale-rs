@@ -210,7 +210,13 @@ def write_highlight_mask(path, idx_array: Sequence[Sequence[int]]) -> None:
     ``31`` -- are 0 and are marked transparent via tRNS. The result is a 1-bit
     greyscale image where the only visible pixels are the highlight ramp.
     """
-    rows = _rows(idx_array)
+    write_bit_mask(path, [[HIGHLIGHT_LO <= int(idx) <= HIGHLIGHT_HI for idx in row]
+                          for row in _rows(idx_array)])
+
+
+def write_bit_mask(path, bits: Sequence[Sequence[int]]) -> None:
+    """Write a 1-bit greyscale PNG: truthy cells white/opaque, others transparent (tRNS 0)."""
+    rows = _rows(bits)
     height = len(rows)
     width = len(rows[0])
 
@@ -221,8 +227,8 @@ def write_highlight_mask(path, idx_array: Sequence[Sequence[int]]) -> None:
         raw.append(0)  # filter type: None
         acc = 0
         nbits = 0
-        for idx in row:
-            bit = 1 if HIGHLIGHT_LO <= int(idx) <= HIGHLIGHT_HI else 0
+        for b in row:
+            bit = 1 if b else 0
             acc = (acc << 1) | bit
             nbits += 1
             if nbits == 8:

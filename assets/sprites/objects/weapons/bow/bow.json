@@ -1,0 +1,255 @@
+{
+  "frame_count": 9,
+  "frame_size": [
+    16,
+    16
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 3,
+        "frame": 30,
+        "sheet": "objects"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "still (state 25)",
+        "still (state 9)",
+        "walk (state 10)",
+        "walk (state 11)",
+        "walk (state 12)",
+        "walk (state 13)",
+        "walk (state 14)",
+        "walk (state 15)",
+        "walk (state 24)",
+        "walk (state 25)",
+        "walk (state 26)",
+        "walk (state 27)",
+        "walk (state 28)",
+        "walk (state 29)",
+        "walk (state 30)",
+        "walk (state 31)",
+        "walk (state 8)",
+        "walk (state 9)"
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 3,
+        "frame": 80,
+        "sheet": "objects"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 79)"
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 3,
+        "frame": 81,
+        "sheet": "objects"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 43)",
+        "still (state 1)",
+        "walk (state 0)",
+        "walk (state 1)",
+        "walk (state 2)",
+        "walk (state 3)",
+        "walk (state 4)",
+        "walk (state 5)",
+        "walk (state 6)",
+        "walk (state 7)"
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 3,
+        "frame": 82,
+        "sheet": "objects"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 55)"
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 3,
+        "frame": 83,
+        "sheet": "objects"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 67)",
+        "still (state 17)",
+        "walk (state 16)",
+        "walk (state 17)",
+        "walk (state 18)",
+        "walk (state 19)",
+        "walk (state 20)",
+        "walk (state 21)",
+        "walk (state 22)",
+        "walk (state 23)"
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 3,
+        "frame": 84,
+        "sheet": "objects"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 78)"
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 3,
+        "frame": 85,
+        "sheet": "objects"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 42)"
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 3,
+        "frame": 86,
+        "sheet": "objects"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 54)"
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 3,
+        "frame": 87,
+        "sheet": "objects"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "shoot_bow (state 66)"
+      ]
+    }
+  ],
+  "name": "bow",
+  "note": "Every OBJECTS frame the actor sets draw for this weapon; used_by lists mode (statelist index).",
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 9,
+    "file": "bow_sheet.png",
+    "highlight_mask": "bow_highlightmask.png",
+    "silhouette_mask": "bow_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "source": "src/fmain.c:2400-2447",
+  "title": "Bow overlay frames",
+  "transparent_index": 31
+}

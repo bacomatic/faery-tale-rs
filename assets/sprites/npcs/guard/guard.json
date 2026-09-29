@@ -1,0 +1,102 @@
+{
+  "actor": "guard",
+  "can_talk": 0,
+  "cfile": {
+    "index": 14,
+    "sheet": "royal set",
+    "source": "src/fmain2.c:660"
+  },
+  "frame_count": 2,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 14,
+        "frame": 0,
+        "sheet": "royal set"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 14,
+        "frame": 1,
+        "sheet": "royal set"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": [
+    0,
+    1
+  ],
+  "modes": [
+    {
+      "directional": false,
+      "id": "still_front",
+      "label": "Standing (front)",
+      "playback": "loop",
+      "source": "src/fmain.c:27",
+      "steps": [
+        {
+          "frame": 0
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "still_back",
+      "label": "Standing (back)",
+      "playback": "loop",
+      "source": "src/fmain.c:28",
+      "steps": [
+        {
+          "frame": 1
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:27-28",
+      "text": "one guard in two standing positions (setfig 2 faces the viewer, setfig 3 faces away)"
+    },
+    {
+      "source": "src/fmain.c:1412-1416",
+      "text": "no dying/dead (review): this NPC stands in the king's or sorceress's pax extent (fmain.c:354-355) or the princess extent (fmain.c:345), where xtype > 80 turns the hero's attack into SHOOT1 and blocks shooting (fmain.c:1669)"
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": [
+    2,
+    3
+  ],
+  "setfig_source": "src/fmain.c:27-28",
+  "sheet": {
+    "columns": 2,
+    "file": "guard_sheet.png",
+    "highlight_mask": "guard_highlightmask.png",
+    "silhouette_mask": "guard_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "guard (setfigs 2, 3)",
+  "transparent_index": 31
+}

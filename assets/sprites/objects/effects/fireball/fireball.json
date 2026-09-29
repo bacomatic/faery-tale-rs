@@ -1,0 +1,220 @@
+{
+  "frame_count": 9,
+  "frame_size": [
+    16,
+    16
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 3,
+        "frame": 89,
+        "sheet": "objects"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight NW"
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 3,
+        "frame": 90,
+        "sheet": "objects"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight N"
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 3,
+        "frame": 91,
+        "sheet": "objects"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight NE"
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 3,
+        "frame": 92,
+        "sheet": "objects"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight E"
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 3,
+        "frame": 93,
+        "sheet": "objects"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight SE"
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 3,
+        "frame": 94,
+        "sheet": "objects"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight S"
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 3,
+        "frame": 95,
+        "sheet": "objects"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight SW"
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 3,
+        "frame": 96,
+        "sheet": "objects"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "flight W"
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 3,
+        "frame": 88,
+        "sheet": "objects"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "impact"
+      ]
+    }
+  ],
+  "name": "fireball",
+  "note": "0x59 + direction in flight (wand, fmain.c:1697; dragon, fmain.c:1490). A hit sets type 3 (fmain.c:2295), drawn as 0x58; the same frame is the lava death (fmain.c:2454)",
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 9,
+    "file": "fireball_sheet.png",
+    "highlight_mask": "fireball_highlightmask.png",
+    "silhouette_mask": "fireball_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "source": "src/fmain.c:2321-2322",
+  "title": "Fireball (missile type 2)",
+  "transparent_index": 31
+}

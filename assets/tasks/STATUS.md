@@ -10,12 +10,12 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 |---|---|---|---|
 | [T0.1](T0.1-scaffolding.md) Scaffolding & shared helpers | **DONE** ✅ | — | Verified PASS. `tools/asset_common.py` + tests (16 pass), `assets/` tree. |
 | [T0.2](T0.2-carray-baseline.md) C-array baseline | **DONE** ✅ | — | Verified PASS. Extended `tools/extract_table.py` (N-D + char-literal parse, `--json`); `diroffs` fixture. |
-| [T1.1](T1.1-palettes.md) Palettes | **IMPLEMENTED (awaiting review)** | T0.1, T0.2 | T1.5 A–B: `palettes/verify.json`, region-9 `secret_timer` variant added (swatch previews later removed). |
+| [T1.1](T1.1-palettes.md) Palettes | **DONE** ✅ | T0.1, T0.2 | ACCEPTED 2026-09-29 (6/6 OK). T1.5 A–B: `palettes/verify.json`, region-9 `secret_timer` variant added (swatch previews later removed). |
 | [T1.2](T1.2-tables.md) Gameplay tables | **DROPPED** | — | Not assets: constants stay in `reference/`, art bindings go into T2.1, `file_index` is used by T2.2/T2.5. `assets/tables/` deleted. |
 | T1.3 Item/quest data | **DROPPED** | — | Behavior, not an asset: already spec'd in `reference/logic/magic.md`, `menu-system.md`, `brother-succession.md`. |
 | [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
-| [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **IMPLEMENTED (awaiting review)** | T1.1 | Parts A–B done; Part C cancelled. T1.2 part moot (dropped). Reviewed via the T1.1 page. |
-| [T2.1](T2.1-sprites.md) Sprites | **TODO** | T0.1, T1.1 | Deps met — ready. |
+| [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **DONE** ✅ | T1.1 | Accepted with T1.1 (2026-09-29). Parts A–B done; Part C cancelled. T1.2 part moot (dropped). Reviewed via the T1.1 page. |
+| [T2.1](T2.1-sprites.md) Sprites | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-29 (round 3, 41/41 OK). Per-actor sets, objects, 40 item PNGs, weapon/effect sheets, raw sheets; `sprites/verify.json` (41 items). |
 | [T2.2](T2.2-tiles.md) Tile atlas | TODO | T0.1, T1.1 | Deps met — ready. |
 | [T2.3](T2.3-masks.md) Shadow/collision masks | TODO | T0.1 | |
 | [T2.4](T2.4-screens.md) IFF screens | TODO | T0.1 | |
@@ -157,7 +157,68 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
   on-tile Blue Stone with no matching stone still heals and is consumed, `fmain.c:3331-3348`).
   `validate_citations.py` and `lint_logic.py` fixed to read `src/` (5588/5588 citations valid; lint clean).
 
+- **T2.1 (2026-09-27)** — done in-session (no subagent). `tools/extract_sprites.py` was rewritten: it reads `cfiles`
+  from `fmain2.c` (the hand-typed CFILES/palette are gone) and the palette from the accepted `pagecolors.json`.
+  It writes indexed frames, a sheet, a 16-24 highlight mask and an atlas JSON per actor, with table-derived
+  `animations`/`facings`/`bow_walk_offsets` (statelist/diroffs/bow_x/bow_y) and, for OBJECTS, `inventory_icons`
+  (inv_list) and `world_object_ids` (enum obytes + itrans). Hand-authored, cited `bindings` (user chose full
+  semantics) cover motion-state -> state_index, weapon overlays, per-race rules for the ENEMY sheets (parity,
+  wraith glide, snake +0x24, Loraii, DKnight), brother falls, SETFIG NPC frames, carriers, dragon, raft and OBJECTS
+  effects. The script keeps `bindings` when it reruns. Self-check: RGBA output is pixel-identical to
+  `sprite_output/` (661 files); indexed round-trip, mask and rect tests pass (`test_extract_sprites.py`, 9 tests);
+  all 185 JSON citation ranges resolve; the review app reports 0 problems and 0 count failures.
+  **Findings:** (1) `cfiles[12]` duplicates Julian's blocks and is never loaded, so it is skipped (user decision).
+  (2) OBJECTS `numblocks` 36 covers 18,432 of 18,560 bytes, so planes 1-4 of frame 115 are never loaded (the
+  frame decodes as noise). (3) Out-of-range or unexpected frame indices (hero fall at tactic 15; noble/sorceress
+  dying; guard/bartender dying art) are logged as `reference/PROBLEMS.md` P25. (4) The hero's early fall frames
+  come from the necromancer ENEMY sheet (falls happen only at xtype 52, where file 9 is loaded).
+
+- **T2.1 revision (2026-09-27)** — user asked for one sprite set per actor plus an animation player in the review app.
+  Decisions (asked): repack per actor with resolved frame lists and per-frame origin; ship highlight and silhouette
+  masks (silhouette = `make_mask`, `fsubs.asm:1619-1653`); weapons = what the game can equip (enemies: `weapon_probs`
+  row, `fmain.c:2757-2758`). `extract_sprites.py` now applies the cited render rules in code (parity, wraith glide,
+  snake +0x24, Loraii slots, DKnight index 1, fight transitions with the state 6/7 -> 8 remap, dying order, bow/wand/hand
+  overlays with draw order, hero fall runs), replacing the hand-written `bindings`. Only `objects.json` keeps its
+  hand-written `bindings`. `asset_common.write_bit_mask` was factored out of the highlight writer. Review app: new
+  `sprite` view kind (`models.py`, schema regenerated) and `SpriteViewer.tsx`. Checks: all 545 actor frames are
+  pixel-identical to their origin in `sprite_output/`; `test_extract_sprites.py` checks masks, rects, modes and overlay
+  rules; full suite passes (158); validate and lint are clean; the review store reports 0 problems, 0 count failures and
+  793/793 files covered. **Correction:** the hero-fall item in P25 was wrong (`tactic++` runs before the draw, so step 3
+  is drawn from OBJECTS); P25 was rewritten, and princess/king indexing and salamander->snake mixing were added. The
+  running review server needs a restart to accept the `sprite` view.
+
+- **T2.1 review round 1 (REJECT, 2026-09-27) processed.** Traced each note in the source:
+  - Heroes: the head shake is statelist 84/85 through `frustflag` (`fmain.c:1654-1658`), not OSCIL. The note is
+    reworded, and Frustrated plays shake x5, then statelist 40. The arrow shown when dying with the bow is correct
+    (hand-weapon rule, k = 0, wpn_no 0, `fmain.c:2422-2444`). Wand while dying is 103 + facing for every brother,
+    so the JSON is identical and any difference comes from the facing picked.
+  - Necromancer: wand only, so no melee (`fmain.c:2164-2166`). Dying ends by turning into the Woodcutter
+    (`fmain.c:1747-1755`), so the Phil-fall DEAD frame is gone. Woodcutter: no fight (weapon 0 turns it
+    CONFUSED, `fmain.c:2151-2152`), so no Loraii or fall frames remain.
+  - Weapons: bow/wand holders never melee. Each mode lists its own weapons, including 0 = none (weapon 0/8 draws no
+    overlay). The viewer now shows only those.
+  - Salamander removed: race 5 is never spawned (P25). Guard merged into one set with front and back standing
+    frames. Royals have no dying/dead (pax extents, review).
+  - Bartender: all 8 frames, Dying = 6 and Dead = 7 by art (user choice A). The source's 2/3 is recorded as a bug
+    in P25 (user, 2026-09-28). Landed swan moved from raft to bird; raft is 1 frame.
+  - Objects: `objects/items/*.png`, one per item, with half-frames split (40 items); `objects.json` `items`.
+  - Checks: sprite tests 10/10 (new review tests written first). Review store: 0 problems, 0 count failures,
+    786/786 files covered.
+  - Added `assets/sprites/raw/` (user request): 17 raw cfile sheets in original frame order plus `raw.json`, with
+    the `raw_sheets` review item. The test checks every frame against `decode_frames`. Covered 804/804.
+  - Added `objects/weapons/{dirk,mace,sword,bow,wand}/` and `objects/effects/{arrow,fireball,bubbles}/` (user
+    request). Weapon sheets hold every overlay frame the actor sets draw (with `used_by`); effects come from
+    `fmain.c:2319-2322` and `2492-2497`. Undrawn rows are blanked. There are 8 new review items, and the review app
+    can now expand truncated file lists. 41 items, 923/923 covered.
+  - Review round 2 (REJECT, 38/41 OK), fixed:
+    - necromancer: Woodcutter frame dropped from Dying; it has its own set (22 frames).
+    - object_items: ob 102 is renamed Turtle eggs (`fmain.c:3170-3171`, `fmain2.c:1284`).
+    - weapon_bow: only bow art is kept (30, 80-87). The hand-weapon frames 0/10/12 stay in the hero JSON only.
+    - Checks: 164 tests pass; 916/916 covered.
+  - **Review round 3: ACCEPT** (2026-09-29T04:21:45Z, 41/41 OK, "Looks good"). The review app now carries
+    unchanged OK items over between rounds and sends `/files/` with `Cache-Control: no-cache`.
+
 ## Next
-Wave 0 complete. **Human re-review of T1.1** in the review app (stale after the preview removal). Remaining
+Wave 0 complete. T2.1, T1.1 and T1.5 accepted (2026-09-29). Remaining
 Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Wave 2 (T2.1–T2.8) unblocked. Side track: build the browser site in small bursts per
-[`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next). T1.5 Parts A–B changes are uncommitted, left for review.
+[`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next).

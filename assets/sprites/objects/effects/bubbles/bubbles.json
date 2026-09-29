@@ -1,0 +1,66 @@
+{
+  "frame_count": 2,
+  "frame_size": [
+    16,
+    16
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 3,
+        "frame": 97,
+        "sheet": "objects"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        8
+      ],
+      "used_by": [
+        "bubbles A"
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 3,
+        "frame": 98,
+        "sheet": "objects"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        8
+      ],
+      "used_by": [
+        "bubbles B"
+      ]
+    }
+  ],
+  "name": "bubbles",
+  "note": "environ > 29: 97 + ((cycle + i) & 1), drawn 8 rows high (ystop = ystart + 7)",
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 2,
+    "file": "bubbles_sheet.png",
+    "highlight_mask": "bubbles_highlightmask.png",
+    "silhouette_mask": "bubbles_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "source": "src/fmain.c:2492-2497",
+  "title": "Drowning bubbles",
+  "transparent_index": 31
+}

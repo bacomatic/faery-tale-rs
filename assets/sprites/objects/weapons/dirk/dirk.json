@@ -1,0 +1,431 @@
+{
+  "frame_count": 16,
+  "frame_size": [
+    16,
+    16
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 3,
+        "frame": 64,
+        "sheet": "objects"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "dying (state 80)",
+        "dying (state 81)",
+        "fight (state 34)",
+        "fight (state 69)"
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 3,
+        "frame": 65,
+        "sheet": "objects"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 35)",
+        "fight (state 70)",
+        "fight (state 71)"
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 3,
+        "frame": 66,
+        "sheet": "objects"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 36)",
+        "fight (state 72)"
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 3,
+        "frame": 67,
+        "sheet": "objects"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 37)",
+        "fight (state 61)",
+        "fight (state 73)"
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 3,
+        "frame": 68,
+        "sheet": "objects"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 38)",
+        "fight (state 60)",
+        "fight (state 62)",
+        "fight (state 74)"
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 3,
+        "frame": 69,
+        "sheet": "objects"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 49)",
+        "fight (state 50)",
+        "fight (state 58)",
+        "fight (state 59)"
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 3,
+        "frame": 70,
+        "sheet": "objects"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 48)",
+        "fight (state 57)"
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 3,
+        "frame": 71,
+        "sheet": "objects"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 46)",
+        "fight (state 47)"
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 3,
+        "frame": 72,
+        "sheet": "objects"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 45)"
+      ]
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "origin": {
+        "cfile": 3,
+        "frame": 73,
+        "sheet": "objects"
+      },
+      "rect": [
+        144,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 44)",
+        "still (state 9)",
+        "walk (state 10)",
+        "walk (state 11)",
+        "walk (state 12)",
+        "walk (state 13)",
+        "walk (state 14)",
+        "walk (state 15)",
+        "walk (state 8)",
+        "walk (state 9)"
+      ]
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "origin": {
+        "cfile": 3,
+        "frame": 74,
+        "sheet": "objects"
+      },
+      "rect": [
+        160,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 33)",
+        "fight (state 68)",
+        "frustrated (state 84)",
+        "frustrated (state 85)",
+        "still (state 25)",
+        "walk (state 24)",
+        "walk (state 25)",
+        "walk (state 26)",
+        "walk (state 27)",
+        "walk (state 28)",
+        "walk (state 29)",
+        "walk (state 30)",
+        "walk (state 31)"
+      ]
+    },
+    {
+      "file": "frame_011.png",
+      "index": 11,
+      "origin": {
+        "cfile": 3,
+        "frame": 75,
+        "sheet": "objects"
+      },
+      "rect": [
+        176,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 32)",
+        "still (state 1)",
+        "walk (state 0)",
+        "walk (state 1)",
+        "walk (state 2)",
+        "walk (state 3)",
+        "walk (state 4)",
+        "walk (state 5)",
+        "walk (state 6)",
+        "walk (state 7)"
+      ]
+    },
+    {
+      "file": "frame_012.png",
+      "index": 12,
+      "origin": {
+        "cfile": 3,
+        "frame": 76,
+        "sheet": "objects"
+      },
+      "rect": [
+        192,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 40)",
+        "frustrated (state 40)"
+      ]
+    },
+    {
+      "file": "frame_013.png",
+      "index": 13,
+      "origin": {
+        "cfile": 3,
+        "frame": 77,
+        "sheet": "objects"
+      },
+      "rect": [
+        208,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 52)"
+      ]
+    },
+    {
+      "file": "frame_014.png",
+      "index": 14,
+      "origin": {
+        "cfile": 3,
+        "frame": 78,
+        "sheet": "objects"
+      },
+      "rect": [
+        224,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 56)",
+        "fight (state 64)",
+        "still (state 17)",
+        "walk (state 16)",
+        "walk (state 17)",
+        "walk (state 18)",
+        "walk (state 19)",
+        "walk (state 20)",
+        "walk (state 21)",
+        "walk (state 22)",
+        "walk (state 23)"
+      ]
+    },
+    {
+      "file": "frame_015.png",
+      "index": 15,
+      "origin": {
+        "cfile": 3,
+        "frame": 79,
+        "sheet": "objects"
+      },
+      "rect": [
+        240,
+        0,
+        16,
+        16
+      ],
+      "rows": [
+        0,
+        16
+      ],
+      "used_by": [
+        "fight (state 76)"
+      ]
+    }
+  ],
+  "name": "dirk",
+  "note": "Every OBJECTS frame the actor sets draw for this weapon; used_by lists mode (statelist index).",
+  "palette": "palettes/pagecolors.json",
+  "sheet": {
+    "columns": 16,
+    "file": "dirk_sheet.png",
+    "highlight_mask": "dirk_highlightmask.png",
+    "silhouette_mask": "dirk_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "source": "src/fmain.c:2400-2447",
+  "title": "Dirk overlay frames",
+  "transparent_index": 31
+}

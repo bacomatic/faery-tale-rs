@@ -1,0 +1,195 @@
+{
+  "actor": "witch",
+  "can_talk": 0,
+  "cfile": {
+    "index": 16,
+    "sheet": "witch",
+    "source": "src/fmain2.c:663"
+  },
+  "frame_count": 6,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 16,
+        "frame": 0,
+        "sheet": "witch"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 16,
+        "frame": 1,
+        "sheet": "witch"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 16,
+        "frame": 2,
+        "sheet": "witch"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 16,
+        "frame": 3,
+        "sheet": "witch"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 16,
+        "frame": 4,
+        "sheet": "witch"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 16,
+        "frame": 5,
+        "sheet": "witch"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "npcs",
+  "image_base": 0,
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 1
+          }
+        ],
+        "N": [
+          {
+            "frame": 0
+          }
+        ],
+        "NE": [
+          {
+            "frame": 1
+          }
+        ],
+        "NW": [
+          {
+            "frame": 0
+          }
+        ],
+        "S": [
+          {
+            "frame": 2
+          }
+        ],
+        "SE": [
+          {
+            "frame": 2
+          }
+        ],
+        "SW": [
+          {
+            "frame": 3
+          }
+        ],
+        "W": [
+          {
+            "frame": 3
+          }
+        ]
+      },
+      "id": "still",
+      "label": "Still (turns to hero)",
+      "playback": "loop",
+      "source": "src/fmain.c:1553-1554"
+    },
+    {
+      "directional": false,
+      "id": "dying",
+      "label": "Dying",
+      "playback": "loop",
+      "source": "src/fmain.c:1551",
+      "steps": [
+        {
+          "frame": 4
+        }
+      ]
+    },
+    {
+      "directional": false,
+      "id": "dead",
+      "label": "Dead",
+      "playback": "loop",
+      "source": "src/fmain.c:1552",
+      "steps": [
+        {
+          "frame": 5
+        }
+      ]
+    }
+  ],
+  "palette": "palettes/pagecolors.json",
+  "setfig": 9,
+  "setfig_source": "src/fmain.c:34",
+  "sheet": {
+    "columns": 6,
+    "file": "witch_sheet.png",
+    "highlight_mask": "witch_highlightmask.png",
+    "silhouette_mask": "witch_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "witch (setfig 9)",
+  "transparent_index": 31
+}

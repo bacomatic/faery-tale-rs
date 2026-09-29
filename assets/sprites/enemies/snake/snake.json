@@ -1,0 +1,673 @@
+{
+  "actor": "snake",
+  "cfile": {
+    "index": 8,
+    "sheet": "dknight file",
+    "source": "src/fmain2.c:653"
+  },
+  "frame_count": 11,
+  "frame_size": [
+    16,
+    32
+  ],
+  "frames": [
+    {
+      "file": "frame_000.png",
+      "index": 0,
+      "origin": {
+        "cfile": 8,
+        "frame": 36,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        0,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_001.png",
+      "index": 1,
+      "origin": {
+        "cfile": 8,
+        "frame": 37,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        16,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_002.png",
+      "index": 2,
+      "origin": {
+        "cfile": 8,
+        "frame": 39,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        32,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_003.png",
+      "index": 3,
+      "origin": {
+        "cfile": 8,
+        "frame": 44,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        48,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_004.png",
+      "index": 4,
+      "origin": {
+        "cfile": 8,
+        "frame": 45,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        64,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_005.png",
+      "index": 5,
+      "origin": {
+        "cfile": 8,
+        "frame": 47,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        80,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_006.png",
+      "index": 6,
+      "origin": {
+        "cfile": 8,
+        "frame": 52,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        96,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_007.png",
+      "index": 7,
+      "origin": {
+        "cfile": 8,
+        "frame": 53,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        112,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_008.png",
+      "index": 8,
+      "origin": {
+        "cfile": 8,
+        "frame": 60,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        128,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_009.png",
+      "index": 9,
+      "origin": {
+        "cfile": 8,
+        "frame": 61,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        144,
+        0,
+        16,
+        32
+      ]
+    },
+    {
+      "file": "frame_010.png",
+      "index": 10,
+      "origin": {
+        "cfile": 8,
+        "frame": 63,
+        "sheet": "dknight file"
+      },
+      "rect": [
+        160,
+        0,
+        16,
+        32
+      ]
+    }
+  ],
+  "group": "enemies",
+  "modes": [
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 2
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 2
+          }
+        ],
+        "N": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 2
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 2
+          }
+        ],
+        "NE": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 2
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 2
+          }
+        ],
+        "NW": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 2
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 2
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 2
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 2
+          }
+        ],
+        "SW": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 2
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 2
+          }
+        ],
+        "W": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 2
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 2
+          }
+        ]
+      },
+      "id": "still",
+      "label": "Still",
+      "playback": "loop",
+      "source": "src/fmain.c:1804-1805"
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 2
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 2
+          }
+        ],
+        "N": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 2
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 2
+          }
+        ],
+        "NE": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 2
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 2
+          }
+        ],
+        "NW": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 2
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 2
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 2
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 2
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 2
+          }
+        ],
+        "SW": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 2
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 2
+          }
+        ],
+        "W": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 2
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 2
+          }
+        ]
+      },
+      "id": "walk",
+      "label": "Walk",
+      "playback": "loop",
+      "source": "src/fmain.c:1804-1805"
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 1
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 1
+          }
+        ],
+        "N": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 1
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 1
+          }
+        ],
+        "NE": [
+          {
+            "frame": 8,
+            "state_index": 24,
+            "ticks": 1
+          },
+          {
+            "frame": 9,
+            "state_index": 25,
+            "ticks": 1
+          }
+        ],
+        "NW": [
+          {
+            "frame": 6,
+            "state_index": 16,
+            "ticks": 1
+          },
+          {
+            "frame": 7,
+            "state_index": 17,
+            "ticks": 1
+          }
+        ],
+        "S": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 1
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 1
+          }
+        ],
+        "SE": [
+          {
+            "frame": 0,
+            "state_index": 0,
+            "ticks": 1
+          },
+          {
+            "frame": 1,
+            "state_index": 1,
+            "ticks": 1
+          }
+        ],
+        "SW": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 1
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 1
+          }
+        ],
+        "W": [
+          {
+            "frame": 3,
+            "state_index": 8,
+            "ticks": 1
+          },
+          {
+            "frame": 4,
+            "state_index": 9,
+            "ticks": 1
+          }
+        ]
+      },
+      "id": "fight",
+      "label": "Fight",
+      "playback": "loop",
+      "source": "src/fmain.c:1804"
+    },
+    {
+      "directional": true,
+      "facings": {
+        "E": [
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "N": [
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "NE": [
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "NW": [
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "S": [
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "SE": [
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 3
+          },
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "SW": [
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ],
+        "W": [
+          {
+            "frame": 5,
+            "state_index": 80,
+            "ticks": 3
+          },
+          {
+            "frame": 10,
+            "state_index": 81,
+            "ticks": 4
+          },
+          {
+            "frame": 2,
+            "state_index": 82
+          }
+        ]
+      },
+      "id": "dying",
+      "label": "Dying / dead",
+      "playback": "once",
+      "source": "src/fmain.c:1719-1727"
+    }
+  ],
+  "notes": [
+    {
+      "source": "src/fmain.c:2459-2460",
+      "text": "no parity; alive frames are statelist figure + 0x24, dying frames are not offset"
+    },
+    {
+      "source": "src/fmain.c:2400",
+      "text": "weapon 0 or 8 draws no overlay"
+    }
+  ],
+  "overlay_sheet": {
+    "columns": 16,
+    "file": "sprites/objects/objects_sheet.png",
+    "frame_size": [
+      16,
+      16
+    ],
+    "source": "src/fmain.c:2400-2447"
+  },
+  "palette": "palettes/pagecolors.json",
+  "race": 4,
+  "race_source": "src/fmain.c:57",
+  "sheet": {
+    "columns": 11,
+    "file": "snake_sheet.png",
+    "highlight_mask": "snake_highlightmask.png",
+    "silhouette_mask": "snake_silhouettemask.png",
+    "silhouette_source": "src/fsubs.asm:1619-1653"
+  },
+  "title": "Snake (race 4)",
+  "transparent_index": 31,
+  "weapons": [
+    {
+      "id": 0,
+      "name": "none"
+    }
+  ],
+  "weapons_source": "src/fmain.c:2757-2758"
+}
