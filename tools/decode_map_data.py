@@ -11,16 +11,25 @@ Usage:
     python tools/decode_map_data.py --region-map 5
     python tools/decode_map_data.py --find-terrain-type 12
     python tools/decode_map_data.py --sector-detail 181
+    python tools/decode_map_data.py --assets          # T2.5: assets/world/
 """
 
 import argparse
+import json
 import os
 import struct
 import sys
 from collections import Counter, defaultdict
 from datetime import date
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
+if TOOLS_DIR not in sys.path:
+    sys.path.insert(0, TOOLS_DIR)
+
+import asset_common as ac  # noqa: E402
+import extract_table as et  # noqa: E402
+
+REPO_ROOT = os.path.dirname(TOOLS_DIR)
 IMAGE_PATH = os.path.join(REPO_ROOT, 'src', 'assets', 'image')
 
 BLOCK_SIZE = 512
@@ -1394,6 +1403,261 @@ def cmd_export_world_db(image_file, output_path):
     print(f'  {total_islands} connectivity islands across {len(FILE_INDEX)} regions')
 
 
+# ---------------------------------------------------------------------------
+# Asset emission (T2.5): assets/world/*.json + assets/world/previews/*.png
+# ---------------------------------------------------------------------------
+
+# terra entry byte 1, high nibble: feature type returned by px_to_im
+# (fsubs.asm:613-614). Named values from the design comment fmain.c:684-685.
+FEATURE_TYPE_LABELS = {0: 'open', 1: 'impassable', 2: 'sink', 3: 'slow/brush'}
+
+# terra entry byte 1, low nibble: k = terra_mem[cm+1] & 15 (fmain.c:2579)
+# selects when the tile's shadow mask is applied over a sprite (fmain.c:2584-2594).
+# Values 8-15 hit no case, so the mask is always applied.
+MASK_MODE_LABELS = {
+    0: 'never (case 0: skip)',
+    1: 'skip in leftmost blit column (xm==0)',
+    2: 'skip if ystop > 35',
+    3: 'always (bridge exception: hero_sector==48)',
+    4: 'skip if xm==0 or ystop > 35',
+    5: 'skip if xm==0 and ystop > 35',
+    6: 'full mask (tile 64) if above (ym != 0)',
+    7: 'skip if ystop > 20',
+}
+
+# Preview colors are arbitrary; the legend is written to previews/legend.json.
+FEATURE_TYPE_COLORS = {
+    0: (16, 16, 16, 255), 1: (220, 40, 40, 255), 2: (40, 80, 220, 255),
+    3: (40, 160, 40, 255), 4: (230, 140, 30, 255), 5: (230, 230, 40, 255),
+    6: (40, 200, 200, 255), 7: (200, 40, 200, 255), 8: (130, 60, 200, 255),
+    9: (255, 150, 180, 255), 10: (0, 120, 120, 255), 11: (120, 120, 0, 255),
+    12: (140, 80, 30, 255), 13: (150, 150, 150, 255), 14: (150, 200, 255, 255),
+    15: (255, 255, 255, 255),
+}
+MASK_MODE_COLORS = {
+    0: (16, 16, 16, 255), 1: (220, 40, 40, 255), 2: (40, 80, 220, 255),
+    3: (40, 160, 40, 255), 4: (230, 140, 30, 255), 5: (230, 230, 40, 255),
+    6: (40, 200, 200, 255), 7: (200, 40, 200, 255),
+}
+for _m in range(8, 16):
+    MASK_MODE_COLORS[_m] = (255, 255, 255, 255)
+
+
+def load_file_index(src_dir):
+    """file_index[10] parsed from fmain.c (never hand-typed); cross-checked
+    against the FILE_INDEX transcription above. Returns (rows, line)."""
+    tbl = et.extract_c_arrays(os.path.join(src_dir, 'fmain.c'))['file_index']
+    rows = tbl['values']
+    for i, row in enumerate(rows):
+        images, t1, t2, sector_blk, region_blk, _ = FILE_INDEX[i]
+        if list(row[:8]) != [*images, t1, t2, sector_blk, region_blk]:
+            raise SystemExit(f'file_index[{i}] in fmain.c differs from FILE_INDEX: {row}')
+    return rows, tbl['line']
+
+
+def load_pagecolors(path):
+    """rgba8 tuples by index from assets/palettes/pagecolors.json (fmain2.c:367-371)."""
+    with open(path) as f:
+        entries = json.load(f)
+    return [tuple(e['rgba8']) for e in sorted(entries, key=lambda e: e['index'])]
+
+
+def decode_terra_mem(terra_mem):
+    """256 entries of the 1024-byte terra_mem the game builds per region.
+
+    terra1 fills tiles 0-127, terra2 tiles 128-255 (fmain.c:3567-3572); the
+    entry for image tile t is terra_mem[t*4 .. t*4+3] (fsubs.asm:607-609) =
+    {maptag, terrain, tiles, big_colors} (terrain.c:61-64).
+    """
+    entries = []
+    for half in (0, 1):
+        for e in decode_terra_block(terra_mem[half * 512:(half + 1) * 512]):
+            entries.append({
+                'tile': half * 128 + e['index'],
+                'maptag': e['maptag'],
+                'feature_type': e['terrain_type'],   # byte 1 >> 4, fsubs.asm:613-614
+                'mask_mode': e['terrain_sub'],       # byte 1 & 15, fmain.c:2579
+                'subtile_mask': e['tiles_mask'],     # byte 2, fsubs.asm:610
+                'big_color': e['big_colors'],        # byte 3, fsubs.asm:1005
+            })
+    return entries
+
+
+def subtile_bit(col, row):
+    """Mask bit px_to_im tests for sub-tile (col = (x>>3)&1, row = (y>>3)&3):
+    start at 0x80, >>4 if x&8, >>1 if y&8, >>2 if y&16 — fsubs.asm:548-560."""
+    return 0x80 >> (4 * col + row)
+
+
+def region_grid(region_data, xreg):
+    """32 rows x 64 cols of sector ids: map_mem[secy*128 + secx + xreg],
+    secx 0-63, secy 0-31 — fsubs.asm:569-594."""
+    return [[region_data[r * 128 + xreg + c] for c in range(64)] for r in range(32)]
+
+
+def sector_pool(sector_data):
+    """256 sectors x 8 rows x 16 tile ids: sector_mem[sec*128 + row*16 + col]
+    — fsubs.asm:596-604."""
+    return [[list(sector_data[s * 128 + r * 16:s * 128 + r * 16 + 16]) for r in range(8)]
+            for s in range(256)]
+
+
+def region_tile_rows(grid, pool):
+    """Whole-region tile ids: 32*8 = 256 rows x 64*16 = 1024 columns."""
+    return [[t for sec in sec_row for t in pool[sec][r]]
+            for sec_row in grid for r in range(8)]
+
+
+def collision_rows(tile_rows, entries):
+    """2x4 pixels per tile, one per sub-tile: feature color where the mask bit
+    is set, else 'open' — mirrors px_to_im (fsubs.asm:610-614)."""
+    out = []
+    for row in tile_rows:
+        for sub_row in range(4):
+            px = []
+            for t in row:
+                e = entries[t]
+                for col in range(2):
+                    hit = e['subtile_mask'] & subtile_bit(col, sub_row)
+                    px.append(FEATURE_TYPE_COLORS[e['feature_type'] if hit else 0])
+            out.append(px)
+    return out
+
+
+def cmd_assets(game_dir, src_dir, out_dir, palette_path):
+    """Emit assets/world: shared sector pools, per-region JSON, previews."""
+    rows, line = load_file_index(src_dir)
+    palette = load_pagecolors(palette_path)
+    previews = os.path.join(out_dir, 'previews')
+
+    sector_blocks = sorted({row[6] for row in rows})
+    pool_name = {blk: 'outdoor' if any(r[6] == blk for r in rows[:8]) else 'indoor'
+                 for blk in sector_blocks}
+
+    with open(os.path.join(game_dir, 'image'), 'rb') as f:
+        pools = {}
+        for blk in sector_blocks:
+            pools[blk] = sector_pool(read_blocks(f, blk, 64))
+            ac.write_json(os.path.join(out_dir, f'sectors_{pool_name[blk]}.json'), {
+                'block': blk, 'block_count': 64,
+                'source': 'src/assets/image; loaded by fmain.c:3557 (file_index.sector, '
+                          'src/fmain.c:615-626)',
+                'sector_size_tiles': [16, 8],
+                'tile_size_px': [16, 32],
+                'note': 'sectors[sec][row][col] = image tile id 0-255, read at '
+                        'sector_mem[sec*128 + row*16 + col] (fsubs.asm:596-604). '
+                        'Tile ids index the region\'s terra entries and its image set.',
+                'sectors': pools[blk],
+            })
+            print(f'sectors_{pool_name[blk]}.json: block {blk}, 256 sectors')
+
+        for i, row in enumerate(rows):
+            images, (t1, t2, sector_blk, region_blk, setchar) = row[:4], row[4:9]
+            xreg, yreg = region_params(i)
+            region_data = read_blocks(f, region_blk, 8)
+            terra_mem = (read_blocks(f, TERRA_BLOCK + t1, 1)
+                         + read_blocks(f, TERRA_BLOCK + t2, 1))
+            grid = region_grid(region_data, xreg)
+            entries = decode_terra_mem(terra_mem)
+            name = FILE_INDEX[i][5]
+
+            ac.write_json(os.path.join(out_dir, f'region_{i}.json'), {
+                'index': i,
+                'name': name,
+                'type': 'outdoor' if i < 8 else 'indoor',
+                'file_index': {
+                    'source': f'src/fmain.c:{line + 1 + i}',
+                    'image': list(images), 'terra1': t1, 'terra2': t2,
+                    'sector': sector_blk, 'region': region_blk, 'setchar': setchar,
+                },
+                'xreg': xreg,
+                'yreg': yreg,
+                'xreg_yreg_source': 'src/fmain.c:2983-2987',
+                'sectors_file': f'sectors_{pool_name[sector_blk]}.json',
+                'region_map': {
+                    'block': region_blk, 'block_count': 8,
+                    'rows': 32, 'cols': 64, 'map_column_offset': xreg,
+                    'note': 'grid[row][col] = sector id into sectors_file; the game reads '
+                            'map_mem[row*128 + col + xreg] (fsubs.asm:586-594), loaded by '
+                            'fmain.c:3562. A cell covers world pixels '
+                            '((col+xreg)*256, (row+yreg)*256) to +256 (fsubs.asm:562-579).',
+                    'grid': grid,
+                },
+                'terra': {
+                    'blocks': [TERRA_BLOCK + t1, TERRA_BLOCK + t2],
+                    'blocks_source': 'src/fmain.c:608, src/fmain.c:3567-3572',
+                    'set_names': [TERRAIN_SET_NAMES[t1], TERRAIN_SET_NAMES[t2]],
+                    'set_names_source': 'src/terrain.c:3-36',
+                    'fields': {
+                        'tile': 'image tile id 0-255; entry at terra_mem[tile*4] '
+                                '(fsubs.asm:607-609); tiles 0-127 from terra1, 128-255 '
+                                'from terra2 (fmain.c:3567-3572)',
+                        'maptag': 'byte 0: shadow-mask tile id passed to maskit '
+                                  '(fmain.c:2595; terrain.c:61)',
+                        'feature_type': 'byte 1 high nibble: terrain feature type returned '
+                                        'by px_to_im when the sub-tile mask bit is set '
+                                        '(fsubs.asm:613-614); 1 impassable, 2 sink, '
+                                        '3 slow/brush (fmain.c:684-685)',
+                        'mask_mode': 'byte 1 low nibble: mask-application mode k '
+                                     '(fmain.c:2579), cases 0-7 at fmain.c:2584-2594 '
+                                     '(design comment fmain.c:689-691); 8-15 hit no case',
+                        'subtile_mask': 'byte 2: 8 sub-tile bits, 2 cols x 4 rows of 8x8 px; '
+                                        'bit = 0x80 >> (4*col + row), col = (x>>3)&1, '
+                                        'row = (y>>3)&3 (fsubs.asm:548-560, 610-611)',
+                        'big_color': 'byte 3: palette index (low 5 bits) used by the '
+                                     'magic-map plotsect (fsubs.asm:1005-1015)',
+                    },
+                    'feature_type_labels': FEATURE_TYPE_LABELS,
+                    'mask_mode_labels': MASK_MODE_LABELS,
+                    'entries': entries,
+                },
+            })
+
+            tile_rows = region_tile_rows(grid, pools[sector_blk])
+            ac.write_rgba_png(
+                os.path.join(previews, f'region_{i}_map.png'),
+                [[palette[entries[t]['big_color'] & 31] for t in r] for r in tile_rows])
+            ac.write_rgba_png(
+                os.path.join(previews, f'region_{i}_collision.png'),
+                collision_rows(tile_rows, entries))
+            ac.write_rgba_png(
+                os.path.join(previews, f'region_{i}_maskmode.png'),
+                [[MASK_MODE_COLORS[entries[t]['mask_mode']] for t in r] for r in tile_rows])
+            used = sorted({s for r in grid for s in r})
+            print(f'region_{i}.json: {name}; terra blocks {TERRA_BLOCK + t1}/{TERRA_BLOCK + t2}; '
+                  f'{len(used)} distinct sectors')
+
+    def color_table(colors, labels, default):
+        return {str(k): {'rgba8': list(c), 'label': labels.get(k, default)}
+                for k, c in sorted(colors.items())}
+
+    ac.write_json(os.path.join(previews, 'legend.json'), {
+        'note': 'Non-authoritative renders of the region JSON. Every preview covers the '
+                'region grid of 64x32 sectors = 1024x256 tiles (a tile is 16x32 px in game). '
+                'Colors below are arbitrary except region_N_map.png, which uses the game '
+                'palette exactly as the magic map does.',
+        'map': {
+            'cell': '1x1 px per tile',
+            'color': 'pagecolors[big_color & 31] (assets/palettes/pagecolors.json, '
+                     'fmain2.c:367-371), as plotsect renders it (fsubs.asm:1005-1015)',
+        },
+        'collision': {
+            'cell': '2x4 px per tile, one per 8x8 sub-tile (fsubs.asm:548-560)',
+            'color': 'feature_type where the sub-tile mask bit is set, else 0/open '
+                     '(fsubs.asm:610-614)',
+            'colors': color_table(FEATURE_TYPE_COLORS, FEATURE_TYPE_LABELS,
+                                  'type not named in fmain.c:684-688'),
+        },
+        'maskmode': {
+            'cell': '1x1 px per tile',
+            'color': 'mask_mode (byte 1 low nibble, fmain.c:2579-2594)',
+            'colors': color_table(MASK_MODE_COLORS, MASK_MODE_LABELS,
+                                  'no switch case: mask always applied'),
+        },
+    })
+    print(f'previews: {3 * len(rows)} PNGs + legend.json under {previews}')
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Decode and navigate world map data from game/image')
@@ -1415,12 +1679,24 @@ def main():
                        help='Generate complete overworld map PNG (all 8 outdoor regions)')
     group.add_argument('--export-world-db', action='store_true',
                        help='Export unified spatial database to reference/world_db.json')
+    group.add_argument('--assets', action='store_true',
+                       help='T2.5: emit assets/world JSON + previews')
 
     parser.add_argument('--region', type=int, default=0,
                         help='Region index for --sector-detail (default: 0)')
     parser.add_argument('--output', help='Write results to this file')
+    ac.add_io_args(parser)
+    parser.add_argument('--out-dir', default=os.path.join(REPO_ROOT, 'assets', 'world'),
+                        help='--assets output directory (default: assets/world)')
+    parser.add_argument('--palette',
+                        default=os.path.join(REPO_ROOT, 'assets', 'palettes', 'pagecolors.json'),
+                        help='--assets palette JSON for the map previews')
 
     args = parser.parse_args()
+
+    if args.assets:
+        cmd_assets(str(args.game_dir), str(args.src_dir), args.out_dir, args.palette)
+        return
 
     if not os.path.exists(IMAGE_PATH):
         print(f'Error: {IMAGE_PATH} not found. The game/image binary is required.')
