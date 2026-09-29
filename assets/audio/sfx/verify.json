@@ -1,0 +1,128 @@
+{
+  "items": [
+    {
+      "citations": [
+        "src/fmain2.c:240",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_0.wav"
+      ],
+      "id": "sfx_0",
+      "look_for": "Hero-hit sound: played when a melee blow lands on the hero (dohit, j==0), `fmain2.c:240`, period 800+bitrand(511). Buffer offset 4, 1012 bytes; about 0.23 s at the nominal 4474 Hz.",
+      "task": "T2.7",
+      "title": "sfx_0 — hero is hit",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:2262",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_1.wav"
+      ],
+      "id": "sfx_1",
+      "look_for": "Near-miss swish: a melee swing that comes close to a target but does not hit, `fmain.c:2262`, period 150+rand256(). Buffer offset 1020, 684 bytes; very short (about 0.03 s at the nominal 23646 Hz).",
+      "task": "T2.7",
+      "title": "sfx_1 — melee near miss",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:238",
+        "src/fmain.c:2293",
+        "src/fmain.c:2375",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_2.wav"
+      ],
+      "id": "sfx_2",
+      "look_for": "Arrow-hit sound: an arrow (or the witch's effect) strikes a figure (dohit with i==-1), `fmain2.c:238`, period 500+rand64(). Buffer offset 1708, 786 bytes; about 0.11 s at the nominal 7159 Hz.",
+      "task": "T2.7",
+      "title": "sfx_2 — arrow hits",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain2.c:241",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_3.wav"
+      ],
+      "id": "sfx_3",
+      "look_for": "Enemy-hit sound: a melee blow lands on a non-hero figure (dohit, j!=0), `fmain2.c:241`, period 400+rand256(). Buffer offset 2498, 1604 bytes; about 0.18 s at the nominal 8949 Hz.",
+      "task": "T2.7",
+      "title": "sfx_3 — enemy is hit",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1680",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_4.wav"
+      ],
+      "id": "sfx_4",
+      "look_for": "Bow-shot sound: an arrow is loosed (SHOOT3 with the bow), `fmain.c:1680`, period 400+rand256(). Buffer offset 4106, 952 bytes; about 0.11 s at the nominal 8949 Hz.",
+      "task": "T2.7",
+      "title": "sfx_4 — arrow loosed",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:1488",
+        "src/fmain.c:1690",
+        "src/fmain2.c:239",
+        "src/fmain.c:1033-1041"
+      ],
+      "files": [
+        "sfx_5.wav"
+      ],
+      "id": "sfx_5",
+      "look_for": "Fire/bolt sound: dragon breathes fire (`fmain.c:1488`) or a wand bolt is fired (`fmain.c:1690`), period 1800+rand256(); also when such a bolt hits (`fmain2.c:239`, period 3200+bitrand(511), lower pitch). Buffer offset 5062, 550 bytes; about 0.28 s at the nominal 1989 Hz.",
+      "task": "T2.7",
+      "title": "sfx_5 — fire / wand bolt",
+      "view": "audio"
+    },
+    {
+      "citations": [
+        "src/fmain.c:645",
+        "src/fmain.c:1028",
+        "src/fmain.c:1033-1041",
+        "src/fmain.c:3616-3619"
+      ],
+      "counts": [
+        {
+          "expect": 6,
+          "glob": "sfx_*.wav",
+          "label": "WAV files"
+        },
+        {
+          "expect": 6,
+          "file": "sfx.json",
+          "label": "sfx.json effects",
+          "path": "effects"
+        }
+      ],
+      "files": [
+        "sfx.json"
+      ],
+      "id": "sfx_json",
+      "look_for": "6 entries (effect 0-5), each with buffer_offset, byte_length, nominal_period/rate and at least one trigger with expr, base, rng and a call-site source. Effect 5 has 3 triggers; offsets are 4, 1020, 1708, 2498, 4106, 5062 and 20 bytes remain after the 6th sample.",
+      "task": "T2.7",
+      "title": "sfx.json — per-effect trigger periods",
+      "view": "json"
+    }
+  ],
+  "schema_version": 1,
+  "tasks": {
+    "T2.7": {
+      "summary": "The 6 PCM sound effects from ADF blocks 920-930, one 8-bit WAV each (byte-exact, signed bytes offset to unsigned). The header rate is nominal (NTSC Paula 3579545 / the trigger's base period); the game randomises the period per trigger, see sfx.json. Play each WAV and check it matches its cue.",
+      "title": "Sound effects"
+    }
+  }
+}

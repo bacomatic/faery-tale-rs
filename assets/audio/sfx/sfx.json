@@ -1,0 +1,150 @@
+{
+  "effects": [
+    {
+      "buffer_offset": 4,
+      "byte_length": 1012,
+      "effect": 0,
+      "file": "sfx_0.wav",
+      "nominal_period": 800,
+      "nominal_rate_hz": 4474,
+      "triggers": [
+        {
+          "base": 800,
+          "expr": "800+bitrand(511)",
+          "rng": "bitrand(511)",
+          "rng_max": 511,
+          "source": "src/fmain2.c:240",
+          "when": "dohit(): a melee blow lands on the hero (j==0) -- the hero is hit"
+        }
+      ]
+    },
+    {
+      "buffer_offset": 1020,
+      "byte_length": 684,
+      "effect": 1,
+      "file": "sfx_1.wav",
+      "nominal_period": 150,
+      "nominal_rate_hz": 23864,
+      "triggers": [
+        {
+          "base": 150,
+          "expr": "150+rand256()",
+          "rng": "rand256()",
+          "rng_max": 255,
+          "source": "src/fmain.c:2262",
+          "when": "melee swing that comes within bv+2 of a target but does not hit (near miss), not for touch attacks (wt==5)"
+        }
+      ]
+    },
+    {
+      "buffer_offset": 1708,
+      "byte_length": 786,
+      "effect": 2,
+      "file": "sfx_2.wav",
+      "nominal_period": 500,
+      "nominal_rate_hz": 7159,
+      "triggers": [
+        {
+          "base": 500,
+          "expr": "500+rand64()",
+          "rng": "rand64()",
+          "rng_max": 63,
+          "source": "src/fmain2.c:238",
+          "when": "dohit(i==-1): an arrow (missile_type 1, fmain.c:1697, 2293) hits a figure, or the witch's effect hits the hero (fmain.c:2375)"
+        }
+      ]
+    },
+    {
+      "buffer_offset": 2498,
+      "byte_length": 1604,
+      "effect": 3,
+      "file": "sfx_3.wav",
+      "nominal_period": 400,
+      "nominal_rate_hz": 8949,
+      "triggers": [
+        {
+          "base": 400,
+          "expr": "400+rand256()",
+          "rng": "rand256()",
+          "rng_max": 255,
+          "source": "src/fmain2.c:241",
+          "when": "dohit(): a melee blow lands on a non-hero figure (j!=0) -- an enemy is hit"
+        }
+      ]
+    },
+    {
+      "buffer_offset": 4106,
+      "byte_length": 952,
+      "effect": 4,
+      "file": "sfx_4.wav",
+      "nominal_period": 400,
+      "nominal_rate_hz": 8949,
+      "triggers": [
+        {
+          "base": 400,
+          "expr": "400+rand256()",
+          "rng": "rand256()",
+          "rng_max": 255,
+          "source": "src/fmain.c:1680",
+          "when": "SHOOT3 with a bow: an arrow is loosed (missile launched, ms->speed=3)"
+        }
+      ]
+    },
+    {
+      "buffer_offset": 5062,
+      "byte_length": 550,
+      "effect": 5,
+      "file": "sfx_5.wav",
+      "nominal_period": 1800,
+      "nominal_rate_hz": 1989,
+      "triggers": [
+        {
+          "base": 1800,
+          "expr": "1800 + rand256()",
+          "rng": "rand256()",
+          "rng_max": 255,
+          "source": "src/fmain.c:1488",
+          "when": "the dragon breathes fire (rand4()==0; missile_type 2, speed 5)"
+        },
+        {
+          "base": 1800,
+          "expr": "1800+rand256()",
+          "rng": "rand256()",
+          "rng_max": 255,
+          "source": "src/fmain.c:1690",
+          "when": "SHOOT1 with the wand (weapon 5): a wand bolt is fired (missile_type 2)"
+        },
+        {
+          "base": 3200,
+          "expr": "3200+bitrand(511)",
+          "rng": "bitrand(511)",
+          "rng_max": 511,
+          "source": "src/fmain2.c:239",
+          "when": "dohit(i==-2): a missile_type-2 bolt (dragon fire / wand bolt, fmain.c:2292) hits a figure"
+        }
+      ]
+    }
+  ],
+  "format": {
+    "citations": [
+      "src/fmain.c:3616-3619",
+      "src/gdriver.asm:296-322",
+      "src/fsubs.asm:308-330"
+    ],
+    "nominal_period_choice": "effect 5 has bases 1800 (fmain.c:1488, 1690) and 3200 (fmain2.c:239); 1800 is used for the header",
+    "playback": "effect(num,speed) -> playsample(sample[num], sample_size[num]/2, speed): length in words to AUD2LEN, speed to AUD2PER, volume 64, channel 2",
+    "sample_rate": "nominal only: NTSC Paula clock 3579545 / nominal_period, rounded. The game plays each trigger at period = base + rng (see triggers); actual rate = 3579545 / period",
+    "wav": "8-bit unsigned mono PCM; each byte = original signed byte XOR 0x80; no resampling or normalisation"
+  },
+  "source": {
+    "buffer_bytes": 5632,
+    "bytes_after_last_sample": 20,
+    "citations": [
+      "src/fmain.c:645",
+      "src/fmain.c:1028",
+      "src/fmain.c:1033-1041"
+    ],
+    "framing": "4-byte big-endian length prefix + that many bytes of 8-bit signed PCM, 6 samples back to back; buffer_offset is the offset of the first PCM byte within the 5632-byte buffer (prefix excluded)",
+    "image_blocks": "920-930"
+  }
+}
