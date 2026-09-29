@@ -105,7 +105,7 @@ Full `statelist` table is in [actors.md](actors.md) and
 | 2 | 2 | Wraith | 7 | `cfiles[7]` | Ghost file |
 | 3 | 3 | Skeleton | 7 | `cfiles[7]` | Ghost file |
 | 4 | 4 | Snake | 8 | `cfiles[8]` | DKnight/Spider file |
-| 5 | 5 | Salamander | 7 | `cfiles[7]` | Ghost file |
+| 5 | 5 | Salamander | 7 | `cfiles[7]` | Ghost file (race never spawned, [§9.5](../../RESEARCH-ai-encounters.md#95-set_encounter--actor-placement-fmainc2736-2770)) |
 | 6 | 6 | Spider | 8 | `cfiles[8]` | DKnight/Spider file |
 | 7 | 7 | Dark Knight | 8 | `cfiles[8]` | DKnight/Spider file |
 | 8 | 8 | Loraii | 9 | `cfiles[9]` | Necromancer/Farmer file |
@@ -135,7 +135,7 @@ Most enemies use the same `an->index` formulas as the hero. Differences:
 | 2 Wraith | even race; walk frame frozen | `statelist[even_index].figure`; walk index never advances |
 | 3 Skeleton | odd race | `statelist[odd_index].figure` |
 | 4 Snake | `an->index += 0x24` if alive | `statelist[index + 36].figure` |
-| 5 Salamander | odd race | `statelist[odd_index].figure` |
+| 5 Salamander | odd race (never spawned) | `statelist[odd_index].figure` |
 | 6 Spider | even race | `statelist[even_index].figure` |
 | 7 Dark Knight | odd race; at `vitality == 0`, `an->state = STILL` (intended), `an->index = 1` | `statelist[odd_index].figure`; zero-HP pose uses frame `statelist[1].figure = 1` |
 | 8 Loraii | even race | `statelist[even_index].figure` |

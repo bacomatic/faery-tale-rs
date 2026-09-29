@@ -126,7 +126,7 @@ into whichever ENEMY sheet is currently loaded.
 | `encounter_chart.file_id` | Identity | `cfiles` index |
 |---|---|---|
 | 6 | Ogre / Orcs | 6 |
-| 7 | Ghost / Wraith / Skeleton / Salamander | 7 |
+| 7 | Ghost / Wraith / Skeleton / Salamander (race 5 never spawned, [§9.5](../../RESEARCH-ai-encounters.md#95-set_encounter--actor-placement-fmainc2736-2770)) | 7 |
 | 8 | Dark Knight / Spider / Snake | 8 |
 | 9 | Necromancer / Loraii / Woodcutter | 9 |
 | 12 | Snake / Salamander (unused at runtime; shares Julian blocks) | 12 |

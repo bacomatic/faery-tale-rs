@@ -190,7 +190,7 @@ When the player talks to enemies, the speech index equals the enemy's `race` val
 | 2 | Wraith | `speak(2)`: "Doom!" |
 | 3 | Skeleton | `speak(3)`: "A clattering of bones" |
 | 4 | Snake | `speak(4)`: "A waste of time to talk to a snake" |
-| 5 | Salamander | `speak(5)`: "..." |
+| 5 | Salamander | `speak(5)`: "..." — unreachable: race 5 is never spawned ([§9.5](RESEARCH-ai-encounters.md#95-set_encounter--actor-placement-fmainc2736-2770)) |
 | 6 | Spider | `speak(6)`: "There was no reply." |
 | 7 | DKnight | `speak(7)`: "Die, foolish mortal!" |
 

@@ -380,9 +380,16 @@ Only 4 enemy actor slots (indices 3–6) exist, so excess `encounter_number` res
 - **Normal**: Random offset from encounter origin: `encounter_x + bitrand(spread) - spread/2` (`fmain.c:2743-2744`). Accept if `proxcheck == 0`.
 - **Astral special**: Also accept if `px_to_im == 7` (ice terrain, `fmain.c:2746`).
 
-#### Race Mixing (`fmain.c:2753-2755`)
+#### Race Mixing (`fmain.c:2752-2754`)
 
 When `mixflag & 2` (and encounter_type ≠ snake): `race = (encounter_type & 0xFFFE) + rand2()`. This allows adjacent types to mix: ogre↔orc (0↔1), wraith↔skeleton (2↔3). `mixflag` is disabled (`= 0`) for `xtype > 49` or `xtype` divisible by 4 (`fmain.c:2059-2060`).
+
+**Salamander (race 5) is never spawned.** `encounter_chart` defines it (`fmain.c:58`), but no code path produces race 5:
+- `encounter_type` is assigned only at `fmain.c:2086-2090` (random: `rand4()` 0–3, swamp 2→4, spider region 6, xtype 49 → 2), `fmain.c:2696` (astral plane → 8), `fmain.c:2704` (`extn->v3`) and `fmain2.c:1547` (reset to 0).
+- No enemy extent has `v3 = 5` (`fmain.c:338-369`). The turtle extent's `v3 = 5` is an xtype-70 carrier and goes to `load_carrier()` (`fmain.c:2716-2719`), not to an encounter.
+- Mixing skips `encounter_type == 4` (`fmain.c:2752`), so the snake type cannot become 5.
+
+`speak(5)` ("...", `narr.asm:360-362`) is therefore unreachable through enemy TALK, and the `cfiles[12]` "snake and salamander" sheet is never loaded (its file_id duplicates Julian's, `fmain2.c:644,658`).
 
 #### Weapon Selection (`fmain.c:2756-2758`)
 

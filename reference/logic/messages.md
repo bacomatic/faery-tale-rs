@@ -102,7 +102,7 @@ line break within the speech.
 | 2 | `"Doom!" wailed the wraith.` | Enemy type 2 (Wraith) |
 | 3 | `A clattering of bones was the only reply.` | Enemy type 3 (Skeleton) |
 | 4 | `% knew that it is a waste of time to talk to a snake.` | Enemy type 4 (Snake) |
-| 5 | `...` | Enemy type 5 (Salamander) |
+| 5 | `...` | Enemy type 5 (Salamander) — unreachable: race 5 is never spawned ([§9.5](../RESEARCH-ai-encounters.md#95-set_encounter--actor-placement-fmainc2736-2770)) |
 | 6 | `There was no reply.` | Enemy type 6 (Loraii) |
 | 7 | `"Die, foolish mortal!" he said.` | Enemy type 7 (Necromancer) — proximity trigger (`fmain.c:2100`) or enemy TALK |
 | 8 | `"No need to shout, son!" he said.` | TALK to any setfig while yelling / too close (`fmain.c:3373`) |

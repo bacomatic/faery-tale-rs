@@ -42,6 +42,24 @@ Reproduction: `python tools/decode_savegame.py game/A.faery` shows `map_x`=18892
 
 ---
 
+### P25. Sprite frame indices that fall outside their sheet or on unexpected art
+
+**Source**: `fmain.c:33`, `fmain.c:1551-1552`, `fmain2.c:662`
+
+**Description**: Found while binding frames for the T2.1 sprite atlases (`assets/sprites/`):
+- **Bartender dying/dead: BUG (user decision, 2026-09-28).** The intended frames are 6 (dying) and 7 (dead); the assets use them. Trace kept for reference: SETFIG frames are `image_base + 2` (dying) and `image_base + 3` (dead) (`fmain.c:1551-1552`). The bartender has `image_base` 0 in cfile 15 (`fmain.c:33`, `fmain2.c:662`), so the source draws frames 2 and 3, which are standing side poses. `checkdead` puts a SETFIG in DYING like any actor (`fmain.c:2772-2774`), but its frame is picked in the SETFIG branch (`fmain.c:1548-1561`). That branch bypasses the generic DYING/DEAD frames 80-82 (`fmain.c:1719-1727`), and the draw maps through `statelist` only for ENEMY/PHIL (`fmain.c:2449-2461`). So `an->index` = frame 2 for the 7 DYING ticks (`fmain.c:1747`), then frame 3. All four bartenders are setfig 8 (`fmain2.c:1086-1089`). The shipped `image` is compiled from this source. Frames 6 and 7 hold the dying and dead art. The T2.1 review reports that the game shows that art when the bartender is killed. No traced code path draws frames 6 or 7.
+
+Settled during the T2.1 review:
+- **Royal-set NPCs (guards, princess, king, noble, sorceress)** would index other characters' art, or frames past the 8-frame sheet, for dying/dead. Per the review they cannot be attacked: they stand in the king's and sorceress's pax extents (`fmain.c:354-355`) or the princess extent (xtype 83, `fmain.c:345`), where the hero's attack becomes SHOOT1 (`fmain.c:1412-1416`) and shooting is blocked (`fmain.c:1669`).
+- **Salamander (race 5) is never spawned.** `encounter_type` is set only to `rand4()` (0-3), 4, 6 or 2 (`fmain.c:2086-2090`), 8 (`fmain.c:2696`), or an extent's `v3` (`fmain.c:2704`), and no encounter extent has `v3` = 5 (`fmain.c:339-369`; the turtle extent's 5 is a carrier file). Mixing skips type 4 (`fmain.c:2752-2753`), so race 5 is unreachable.
+- **Hero dying with the bow draws an arrow, not the bow.** The bow-art branch needs `inum < 32` (`fmain.c:2422`, `fmain.c:2429`). Dying states 80-81 fall through to the hand-weapon rule, which maps the bow to `k = 0` (`fmain.c:2443`). With `wpn_no` 0 (`fmain.c:197`), that draws OBJECTS frame 0, a diagonal arrow. The line names the bow explicitly, so this is not an out-of-range index. The source cannot say whether the bow art was intended. Per the user (2026-09-28), the assets keep the arrow as the source draws it.
+- **Royal set frame 3 (second princess pose) is unused.** The princess has `image_base` 2 and `can_talk` 0 (`fmain.c:29`). Only TALKING draws `image_base + 1` (`fmain.c:1555-1556`), and TALKING is set only when `can_talk` is non-zero (`fmain.c:3375-3377`). The only other index that lands on frame 3 is the front guard's DEAD frame (`fmain.c:1552`), and guards cannot be attacked (see above). The frame is in `assets/sprites/raw/cfile_14_royal_set.png` but is not extracted into the princess set.
+- An earlier version of this entry claimed the hero fall indexes frame 111 of the 64-frame ENEMY sheet at tactic 15. That was wrong: `tactic++` runs before the draw (`fmain.c:1736`), so the draw sees tactic 16 and uses the OBJECTS sheet (`fmain.c:2457`).
+
+**Open questions**: None. The bartender item is recorded as a source bug; a port should draw frames 6 and 7.
+
+---
+
 ## Resolved Problems
 
 These problems have been conclusively answered from the source code.

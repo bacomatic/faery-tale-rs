@@ -334,7 +334,7 @@ A random element selects which of the 4 transition paths to take: `trans_list[st
 
 ### 2.6 setfig_table — NPC Type Descriptors
 
-Defined at `fmain.c:21-37`. Maps NPC type index to image file and speech capability.
+Defined at `fmain.c:22-39`. Maps NPC type index to image file and speech capability.
 
 ```c
 struct { BYTE cfile_entry, image_base, can_talk; }
@@ -342,26 +342,26 @@ struct { BYTE cfile_entry, image_base, can_talk; }
 
 | Index | NPC Type | cfile_entry | image_base | can_talk | Source |
 |-------|----------|-------------|------------|----------|--------|
-| 0 | Wizard | 13 | 0 | 1 | `fmain.c:24` |
-| 1 | Priest | 13 | 4 | 1 | `fmain.c:25` |
-| 2 | Guard (front) | 14 | 0 | 0 | `fmain.c:26` |
-| 3 | Guard (back) | 14 | 1 | 0 | `fmain.c:27` |
-| 4 | Princess | 14 | 2 | 0 | `fmain.c:28` |
-| 5 | King | 14 | 4 | 1 | `fmain.c:29` |
-| 6 | Noble | 14 | 6 | 0 | `fmain.c:30` |
-| 7 | Sorceress | 14 | 7 | 0 | `fmain.c:31` |
-| 8 | Bartender | 15 | 0 | 0 | `fmain.c:32` |
-| 9 | Witch | 16 | 0 | 0 | `fmain.c:33` |
-| 10 | Spectre | 16 | 6 | 0 | `fmain.c:34` |
-| 11 | Ghost | 16 | 7 | 0 | `fmain.c:35` |
-| 12 | Ranger | 17 | 0 | 1 | `fmain.c:36` |
-| 13 | Beggar | 17 | 4 | 1 | `fmain.c:37` |
+| 0 | Wizard | 13 | 0 | 1 | `fmain.c:25` |
+| 1 | Priest | 13 | 4 | 1 | `fmain.c:26` |
+| 2 | Guard (front) | 14 | 0 | 0 | `fmain.c:27` |
+| 3 | Guard (back) | 14 | 1 | 0 | `fmain.c:28` |
+| 4 | Princess | 14 | 2 | 0 | `fmain.c:29` |
+| 5 | King | 14 | 4 | 1 | `fmain.c:30` |
+| 6 | Noble | 14 | 6 | 0 | `fmain.c:31` |
+| 7 | Sorceress | 14 | 7 | 0 | `fmain.c:32` |
+| 8 | Bartender | 15 | 0 | 0 | `fmain.c:33` |
+| 9 | Witch | 16 | 0 | 0 | `fmain.c:34` |
+| 10 | Spectre | 16 | 6 | 0 | `fmain.c:35` |
+| 11 | Ghost | 16 | 7 | 0 | `fmain.c:36` |
+| 12 | Ranger | 17 | 0 | 1 | `fmain.c:37` |
+| 13 | Beggar | 17 | 4 | 1 | `fmain.c:38` |
 
 `cfile_entry` selects the image file (index into `seq_list` loading sequence). `image_base` is the sub-image offset within that file. `can_talk=1` enables the TALKING visual effect (see [§13.2](RESEARCH-npcs-quests.md#132-talk-system)) — it does not gate speech dispatch.
 
 ### 2.7 encounter_chart — Monster Combat Stats
 
-Defined at `fmain.c:42-64`. Struct definition at `fmain.c:42-53`:
+Defined at `fmain.c:45-64`. Struct definition at `fmain.c:45-52`:
 
 ```c
 struct encounter {
@@ -371,17 +371,19 @@ struct encounter {
 
 | Index | Monster | HP | Aggressive | Arms | Cleverness | Treasure | File ID | Source |
 |-------|---------|-----|------------|------|------------|----------|---------|--------|
-| 0 | Ogre | 18 | TRUE | 2 | 0 | 2 | 6 | `fmain.c:54` |
-| 1 | Orcs | 12 | TRUE | 4 | 1 | 1 | 6 | `fmain.c:55` |
-| 2 | Wraith | 16 | TRUE | 6 | 1 | 4 | 7 | `fmain.c:56` |
-| 3 | Skeleton | 8 | TRUE | 3 | 0 | 3 | 7 | `fmain.c:57` |
-| 4 | Snake | 16 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:58` |
-| 5 | Salamander | 9 | TRUE | 3 | 0 | 0 | 7 | `fmain.c:59` |
-| 6 | Spider | 10 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:60` |
-| 7 | DKnight | 40 | TRUE | 7 | 1 | 0 | 8 | `fmain.c:61` |
-| 8 | Loraii | 12 | TRUE | 6 | 1 | 0 | 9 | `fmain.c:62` |
-| 9 | Necromancer | 50 | TRUE | 5 | 0 | 0 | 9 | `fmain.c:63` |
-| 10 | Woodcutter | 4 | 0 | 0 | 0 | 0 | 9 | `fmain.c:64` |
+| 0 | Ogre | 18 | TRUE | 2 | 0 | 2 | 6 | `fmain.c:53` |
+| 1 | Orcs | 12 | TRUE | 4 | 1 | 1 | 6 | `fmain.c:54` |
+| 2 | Wraith | 16 | TRUE | 6 | 1 | 4 | 7 | `fmain.c:55` |
+| 3 | Skeleton | 8 | TRUE | 3 | 0 | 3 | 7 | `fmain.c:56` |
+| 4 | Snake | 16 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:57` |
+| 5 | Salamander | 9 | TRUE | 3 | 0 | 0 | 7 | `fmain.c:58` |
+| 6 | Spider | 10 | TRUE | 6 | 1 | 0 | 8 | `fmain.c:59` |
+| 7 | DKnight | 40 | TRUE | 7 | 1 | 0 | 8 | `fmain.c:60` |
+| 8 | Loraii | 12 | TRUE | 6 | 1 | 0 | 9 | `fmain.c:61` |
+| 9 | Necromancer | 50 | TRUE | 5 | 0 | 0 | 9 | `fmain.c:62` |
+| 10 | Woodcutter | 4 | 0 | 0 | 0 | 0 | 9 | `fmain.c:63` |
+
+Race 5 (Salamander) is defined but never spawned — see [§9.5](RESEARCH-ai-encounters.md#95-set_encounter--actor-placement-fmainc2736-2770).
 
 **Field semantics:**
 

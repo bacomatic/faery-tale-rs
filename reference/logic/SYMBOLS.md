@@ -410,7 +410,7 @@ CARRIER = 5
 DRAGON  = 6
 ```
 
-### 2.7 Monster & setfig race codes (`fmain.c:51-62`, `fmain.c:35-36`)
+### 2.7 Monster & setfig race codes (`fmain.c:53-63`, `fmain.c:35-36`)
 
 ```pseudo
 # ENEMY races — indices into encounter_chart[]
@@ -419,7 +419,7 @@ RACE_ORCS        = 1
 RACE_WRAITH      = 2
 RACE_SKELETON    = 3
 RACE_SNAKE       = 4
-RACE_SALAMANDER  = 5
+RACE_SALAMANDER  = 5    # defined, never spawned (RESEARCH-ai-encounters.md §9.5)
 RACE_SPIDER      = 6
 RACE_DKNIGHT     = 7
 RACE_LORAII      = 8
