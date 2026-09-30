@@ -46,6 +46,9 @@ review app's citations are the check either way.
   by nibble-replication (`0xF → 0xFF`). The palette JSON key is `rgb4`; the helper is
   `asset_common.rgb4_to_rgba8`.
 - Transparency convention: sprite/tile **index 31** = transparent.
+- **Timing is NTSC** (user decision, 2026-09-28: the game does not play correctly on PAL machines):
+  60 Hz vertical blank, Paula clock 3,579,545 Hz. Use these for audio rates and any timing-derived
+  preview.
 - Highlight mask: 1 bit/pixel, set where source palette index ∈ **16–24**; transparency
   follows index 31.
 

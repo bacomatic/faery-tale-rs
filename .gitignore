@@ -23,3 +23,6 @@ tools/.env
 tools/review/.drafts/
 tools/review/frontend/node_modules/
 tools/review/frontend/dist/
+
+# task worktrees
+/.worktrees/

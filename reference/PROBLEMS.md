@@ -42,6 +42,21 @@ Reproduction: `python tools/decode_savegame.py game/A.faery` shows `map_x`=18892
 
 ---
 
+### P26. Unexplained data found while extracting the Wave-2 assets (T2.2–T2.8)
+
+**Source**: see each item.
+
+**Description**: Facts established from the binaries and the code that consumes them; the source does not say why.
+
+1. **`v6` layout and unread bytes.** `open_all` reads `S_WAVBUF` (1024) then `Seek(file, S_WAVBUF, 0)` (`fmain.c:931-936`). AmigaDOS mode `0` is `OFFSET_CURRENT` (`OFFSET_BEGINNING` is -1; `hdrive.c:136` uses the symbol), so the ten envelopes are read from byte **2048**, not 1024. The file bears this out: bytes 1024–2047 hold three lone `0x80` bytes, bytes 2048–4607 hold ten envelope curves, each with a hold byte at index 255. Bytes 1024–2047 and 4608–4627 are never read; their meaning is unknown (kept as hex in `assets/audio/instruments/waveforms.json`). `reference/_discovery/audio.md:538` calls the seek redundant; it is not.
+2. **Amber/9 default glyph overruns its strip.** `tf_CharLoc`'s last entry (the default glyph) is bit offset 766, width 10, but `tf_Modulo` is 96 bytes = 768 bits (`src/assets/fonts/Amber/9`). The last 8 bits of each row are read from the next row's first byte (and, on the last row, from the `tf_CharLoc` table). Both font files also ship an all-zero `dfh_Name`. Whether the overrun is a font-editor artefact cannot be determined from source. `assets/fonts/amber_9/amber_9.json` marks the glyph `overflows_strip_by: 8`.
+3. **Shadow masks 171–191 are all zero** (ADF blocks 896–919, 192 × 64 B). The terra bytes that index them (`fmain.c:2577-2595`) stay below 192 in every terra block (checked by `tools/tests/test_extract_masks.py`), so no code path reads past `SHADOW_SZ`; why 21 slots are blank is not stated.
+4. **Mask-mode design comment disagrees with the code.** `fmain.c:689-691` describes modes 1–4 ("when down", "when right", "always unless flying", "only if below normal level"); the shipped `switch` at `fmain.c:2584-2594` tests different conditions (e.g. case 1 skips when `xm == 0`, case 2 when `ystop > 35`). `assets/world/` labels follow the code.
+5. **SFX buffer tail and repeat.** After the six length-prefixed samples, 20 bytes of the 5,632-byte sample buffer (`fmain.c:645`, blocks 920–930) remain unreferenced. `_playsample` starts DMA with repeat and a voice status of 2 (`gdriver.asm:296-322`); how many times a sample is audibly repeated depends on interrupt timing the source does not state.
+6. **Screen CMAPs vs. displayed palettes.** The game ignores each ILBM's `CMAP` (`iffsubs.c:157-159`) and uses `LoadRGB4` tables. The seven intro files' CMAPs equal `introcolors` exactly; `winpic`'s CMAP differs from the first `win_colors` frame at indices 1 (`0xECA`) and 28 (`0xEFF`), which the game shows as `0xFFF` (`fmain2.c:1614-1630`); `hiscreen`'s 16-entry CMAP matches `textcolors` only at 0–3. Whether the artists' palettes were meant to be used is not answerable from source.
+
+---
+
 ## Resolved Problems
 
 These problems have been conclusively answered from the source code.

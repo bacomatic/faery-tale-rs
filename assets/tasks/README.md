@@ -16,6 +16,7 @@ a **separate Reviewer** who inspects the emitted assets (human-in-the-loop verif
 | [T1.5](T1.5-retrofit-done.md) | Retrofit done tasks to current acceptance model | T1.1 |
 | [T2.1](T2.1-sprites.md) | Sprites extractor extension | T0.1, T1.1 |
 | [T2.2](T2.2-tiles.md) | Background tile atlas extractor | T0.1, T1.1 |
+| [T2.2.1](T2.2.1-master-atlas.md) | Master tile atlas (deduplicated, used tiles only) + reference maps | T2.2, T2.5 |
 | [T2.3](T2.3-masks.md) | Shadow/collision masks extractor | T0.1 |
 | [T2.4](T2.4-screens.md) | IFF/ILBM screens extractor | T0.1 |
 | [T2.5](T2.5-world.md) | World data extension | T0.1 |

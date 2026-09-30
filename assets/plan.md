@@ -159,7 +159,8 @@ existing tool; **[new]** = new extractor module.
 2. **Background tile atlas** — **[new]** `tools/extract_tiles.py`. Decode `image_mem` per region:
    256 tiles, 5 bitplanes, group-major then plane-major. Use the offset formula
    `offset(T,P,R) = (T/64)*20480 + P*4096 + (T%64)*64 + R*2` (tiles are
-   16×16, verified in `experiment/shaders/`). Emit indexed PNG + RGBA PNG + a **1-bit highlight
+   **16×32**, R in 0..31: `next_image` copies 32 scanlines, `fsubs.asm:755-771`; `vsc equ 32`,
+   `fsubs.asm:1701`. `experiment/shaders/` decoded only the top 16 rows). Emit indexed PNG + RGBA PNG + a **1-bit highlight
    mask** PNG (`atlas_highlightmask.png`: 1 where index ∈ 16–24) + `tiles.json` per region. The mask
    drives the night vegetation boost on the RGBA day/night path (Graphics §5a). Region→image-group
    block numbers come from `file_index[]`.
@@ -232,7 +233,7 @@ existing tool; **[new]** = new extractor module.
    **randomized Paula period per trigger** (`effect(num,speed)` → `playsample(...,speed)`,
    `fmain.c:3617-3619`; call sites e.g. `effect(2,500+rand64())` `fmain2.c:238-241`,
    `fmain.c:1488/1680/1690/2262`). WAV header rate = the effect's **base-period rate**
-   (PAL Paula: 3,546,895 / base period), documented as nominal container metadata. Also emit
+   (NTSC Paula: 3,579,545 / base period), documented as nominal container metadata. Also emit
    `sfx.json`: per effect — buffer offset, byte length, and every trigger's period expression
    (base + random range + RNG fn) with call-site citations.
 

@@ -16,13 +16,14 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
 | [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **DONE** ✅ | T1.1 | Accepted with T1.1 (2026-09-29). Parts A–B done; Part C cancelled. T1.2 part moot (dropped). Reviewed via the T1.1 page. |
 | [T2.1](T2.1-sprites.md) Sprites | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-29 (round 3, 41/41 OK). Per-actor sets, objects, 40 item PNGs, weapon/effect sheets, raw sheets; `sprites/verify.json` (41 items). |
-| [T2.2](T2.2-tiles.md) Tile atlas | TODO | T0.1, T1.1 | Deps met — ready. |
-| [T2.3](T2.3-masks.md) Shadow/collision masks | TODO | T0.1 | |
-| [T2.4](T2.4-screens.md) IFF screens | TODO | T0.1 | |
-| [T2.5](T2.5-world.md) World data | TODO | T0.1 | |
-| [T2.6](T2.6-music.md) Music + instruments | TODO | T0.1 | |
-| [T2.7](T2.7-sfx.md) SFX | TODO | T0.1 | |
-| [T2.8](T2.8-fonts.md) Fonts | TODO | T0.1 | |
+| [T2.2](T2.2-tiles.md) Tile atlas | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-30 (10/10 OK). 10 regions × (indexed/RGBA/highlight/shadow atlas + `tiles.json`); tiles are **16×32**. |
+| [T2.2.1](T2.2.1-master-atlas.md) Master tile atlas | **DONE** ✅ | T2.2, T2.5 | ACCEPTED 2026-09-30 (2/2 OK). Added during T2.2 review. 955 unique (art, colour 31, shadow mask) tiles + 2 secret-timer variants (512×960); shadow-mask atlas alongside + per-region reference maps in `master.json`. |
+| [T2.3](T2.3-masks.md) Shadow/collision masks | **DONE** ✅ | T0.1 | ACCEPTED 2026-09-30 (1/1 OK). 192 PNGs + sheet + `masks.json`. |
+| [T2.4](T2.4-screens.md) IFF screens | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/screens`. 9 PNGs + `screens.json`. |
+| [T2.5](T2.5-world.md) World data | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/world`. 10 region JSONs, 2 sector pools, 30 previews. |
+| [T2.6](T2.6-music.md) Music + instruments | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/music`. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
+| [T2.7](T2.7-sfx.md) SFX | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/sfx`. 6 WAVs + `sfx.json`. |
+| [T2.8](T2.8-fonts.md) Fonts | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/fonts`. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
 | [T3.1](T3.1-shaders.md) Reference shaders + light-level renders | TODO | T2.1, T2.2 | GLSL reference-only (port validates); perception deliverable = `shaders/previews/` renders. |
 | [T3.2](T3.2-formats.md) Format spec | TODO | Wave 1 + Wave 2 | |
 | [T4.1](T4.1-manifest.md) Bundle index (manifest) | TODO | Wave 1 + Wave 2 | |
@@ -218,7 +219,79 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
   - **Review round 3: ACCEPT** (2026-09-29T04:21:45Z, 41/41 OK, "Looks good"). The review app now carries
     unchanged OK items over between rounds and sends `/files/` with `Cache-Control: no-cache`.
 
+- **T2.2–T2.8 implemented in parallel (2026-09-28)** — one git worktree per task under `.worktrees/T2.n`
+  (gitignored), one commit per branch `t2/{tiles,masks,screens,world,music,sfx,fonts}`, all off `research`.
+  Implementer subagents wrote the code/verify.json; they could not execute Python in the background, so the
+  extractors were run, debugged and committed in-session. An octopus merge of all seven branches applies cleanly:
+  205 tests pass, the review store reports 0 problems and every count matches. Review app: `FileViewer` now
+  renders `.wav` files with `<audio>` (needed by T2.6/T2.7).
+  - **T2.2**: tiles are **16×32**, not 16×16 as `plan.md` said (`next_image` copies 32 scanlines,
+    `fsubs.asm:755-771`; `vsc equ 32`, `fsubs.asm:1701`; `img_y = map_y>>5`, `fmain.c:1981`); `experiment/shaders/`
+    had decoded only the top half. Plan and task file corrected. Atlases are 256×512. RGBA renders index 31 opaque
+    with the region colour-31 override. Regions 1/3 and 5/7 load identical image blocks (`fmain.c:617-623`).
+  - **T2.3**: entries are indexed by terra byte 0 (`fmain.c:2577-2595`), applied by `_maskit` (`fsubs.asm:1047-1083`)
+    as 32 words → 16×32; set bit = terrain in front. Entries 171–191 are all-zero (P26).
+  - **T2.4**: the loader skips `CMAP` (`iffsubs.c:157-159`), so PNGs use the `LoadRGB4` palette each screen is shown
+    with (`introcolors` / first `win_colors` frame / `textcolors`); CMAPs kept in `screens.json` (diffs in P26).
+  - **T2.5**: sector grids ship as two shared pools (`sectors_outdoor.json` block 32, `sectors_indoor.json` block 96)
+    rather than per region, since `file_index` gives one block per group. Previews are colour-coded (map / collision
+    / mask-mode); region 5 matches `reference/region_5.png`. Mask-mode comment vs code mismatch → P26.
+  - **T2.6**: `Seek(file,S_WAVBUF,0)` is `OFFSET_CURRENT`, so envelopes start at v6 byte **2048** (the first cut used
+    1024 and rendered silence). Instrument word: high byte = waveform, low byte = envelope (`gdriver.asm:241, 377-380`).
+    `ptable` has 78 entries (`gdriver.asm:204-222`). Added 7 four-voice `song_N.wav` mixes besides the 28 per-voice WAVs.
+  - **T2.7**: 8-bit WAVs (signed→unsigned XOR 0x80); effect 5 nominal period 1800 (the launch sites), 3200 at the
+    hit site is recorded in `sfx.json`. `audio.md:425` labels effect 2 "Killing blow?"; it is the arrow/witch hit.
+  - **T2.8**: hunk-wrapped `DiskFontHeader`; Amber/9's default glyph overruns the strip by 8 bits (read linearly, as
+    the blitter does; P26). `dfh_Name` is empty in both files.
+  - **NTSC timing (user decision):** the game does not play correctly on PAL, so T2.6 previews use a 60 Hz
+    vertical blank and T2.6/T2.7 use the 3,579,545 Hz Paula clock (the task files had said PAL; corrected in
+    `plan.md`, `T2.7-sfx.md`, `_SHARED.md`). Cross-checked against the port's sequencer
+    (`faery-tale-rs/src/game/audio.rs`, `songs.rs`): same v6 layout (envelopes at 2048), note gap, rest,
+    instrument/tempo/loop handling and 78-entry ptable.
+  - **T2.2 review note (2026-09-28):** the indexed atlases showed the app background through index 31. User
+    decision: world tiles have no key colour; colour-31 keying applies only to things rendered on top of them.
+    `write_indexed_png` gained `transparent=False`; the indexed atlases were regenerated without tRNS.
+  - **T2.2.1 added (user request during T2.2 review):** `tools/extract_master_atlas.py` reads the T2.2 atlases and
+    the T2.5 map/sector data and emits `assets/tiles/master/`: every tile some sector on a region's map contains
+    (`fsubs.asm:565-604`), deduplicated by index content (tiles with index 31 kept per colour-31 value so the RGBA
+    atlas is exact). 1976 used (region, tile) pairs → 954 master tiles (948 patterns + 6 colour-31 variants);
+    per-region unused counts range from 8 (regions 8/9) to 107 (region 0). `master.json.region_maps` is the
+    256-entry tile→master map per region. Review backend fix: task-ID sort crashed on `T2.2.1` vs `T2.2`.
+  - **T2.2.1 refinement (user: crystal palace tiles were in the secret set).** Regions 8/9 share map data, so
+    "used" is now decided per island (4-connected non-zero sectors) by the region the game loads on entry:
+    `doorlist[].secs` (`fmain.c:1926`), coordinate-derived region for the stargate pair (`fmain.c:1950`, `2632-2637`
+    → 8), necromancer xfer → 9 (`fmain.c:1787`). Region 9 shows 3 of 66 islands (146 tiles used); 16 islands have
+    no entry. The crystal palace (sectors 121-124, `astral` group tiles 221/241-253) is entered with `secs=1` →
+    region 8, so only cave tiles **114 and 115** are secret-timer tiles. Master: 945 tiles from 1874 pairs.
+    Side finding: the stargate loads the astral plane as region **8** (coordinate formula), not 9.
+  - **Secret passages (user: critical gameplay feature).** In region 9 `fade_page` sets colour 31 to `0x00f0`
+    while `secret_timer` runs (Crystal Orb, magic case 8 `fmain.c:3307`; decrement `fmain.c:1381`; `fmain2.c:382-384`),
+    otherwise `0x0445` — the same value as palette index 9, so the passages are invisible until revealed. First cut
+    shipped index-31 masks and a `atlas_rgba_secret.png` per atlas; the user judged that wasteful for two tiles. Final:
+    one set — the master atlas appends the two affected tiles (cave 114/115) once more as **variants** (945, 946),
+    linked in `master.json.index_31.secret_variants`; `tiles.json.index_31` lists the index-31 tiles per region and,
+    for region 9, the timer colour. Indexed atlases stay **verbatim** source indices (an interim 35-entry-palette
+    variant was rejected); instead the review app's image viewer gained a **colour-31 selector** for indexed PNGs
+    (`GET /files/…?color31=<rgb4>` rewrites PLTE entry 31; options from `GET /api/color31` = the four
+    `region_overrides.json` values). Master: 947 tiles.
+  - **T2.3 review question (2026-09-28):** "is this all the masks?" Yes — `shadow_mem` (192 × 64 B, `fmain.c:642`,
+    `1222`) is the game's only stored mask set; sprite silhouettes are computed at run time (T2.1). Cross-checked with
+    the T2.5 terra data: entries 0-170 are referenced, 160 applied with a non-zero occlusion mode, 11 have pixels but
+    are never referenced (18, 44, 84, 85, 93, 94, 147, 148, 154, 159, 160), 171-191 are blank. Recorded in
+    `masks.json.usage`; the arbitrary "entry 0 / entry 191" review items (from the task file's example) were dropped in
+    favour of the contact sheet with these counts.
+  - **Shadow masks alongside the tiles (user request, 2026-09-28).** Every region atlas and the master atlas now
+    ship `atlas_shadowmask.png`: per tile cell, the `assets/masks/` entry named by the tile's terra byte 0 when its
+    occlusion mode (terra byte 1 & 15) is non-zero, else empty (`fmain.c:2577-2595`); `tiles[].mask` / `mask_mode`
+    in `tiles.json` and `master.json`. The master dedup key now includes (mask, mode): 11 tiles share art but differ
+    in mask/mode across sources (e.g. master 182: none in regions 1-2, mask 3 mode 3 in region 3), so they are kept
+    once per combination → 955 + 2 variants = **957** master tiles, a strict 1:1 lookup for art, highlight and shadow.
+    `extract_tiles.py` reads the mask store via `extract_masks` and the terra entries from `assets/world/`.
+  - Doc drift noticed, not fixed: `text-display.md:43` (OpenFont is at `fmain.c:778`), `iff-loading.md` asm/struct
+    line numbers off by 2, `audio.md:162-170` (84-entry ptable) and `:538` (seek "redundant").
+
 ## Next
-Wave 0 complete. T2.1, T1.1 and T1.5 accepted (2026-09-29). Remaining
-Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Wave 2 (T2.1–T2.8) unblocked. Side track: build the browser site in small bursts per
+T2.1, T1.1, T1.5 (2026-09-29) and T2.2, T2.2.1, T2.3 (2026-09-30) accepted. **T2.4–T2.8 await human review** in
+the review app (`mise run review`). Remaining
+Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Side track: build the browser site in small bursts per
 [`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next).
