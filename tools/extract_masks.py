@@ -33,6 +33,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -79,17 +80,40 @@ def encode_masks(bits: np.ndarray) -> bytes:
     return np.packbits(bits, axis=2).tobytes()
 
 
+def mask_usage(world_dir: Path, masks: np.ndarray) -> dict:
+    """Which entries the terra data (T2.5 region JSONs) can apply: byte 0 (`maptag`) of a tile's
+    terra record names the entry, byte 1's low nibble is the occlusion mode; mode 0 never masks
+    (fmain.c:2577-2595). Reported only, so the reviewer knows what to look at."""
+    applied: dict[int, set] = {}
+    for p in sorted(world_dir.glob("region_*.json")):
+        r = json.loads(p.read_text())
+        for e in r["terra"]["entries"]:
+            if e["mask_mode"] != 0:
+                applied.setdefault(e["maptag"], set()).add(r["index"])
+    blank = [i for i, m in enumerate(masks) if not m.any()]
+    return {
+        "applied_entries": sorted(applied),
+        "applied_count": len(applied),
+        "with_pixels_never_applied": [i for i in range(len(masks)) if i not in applied and i not in blank],
+        "blank_entries": blank,
+        "source": "assets/world/region_N.json terra.entries (maptag, mask_mode); src/fmain.c:2577-2595",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     ac.add_io_args(parser)
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "assets" / "masks")
+    parser.add_argument("--world-dir", type=Path, default=REPO_ROOT / "assets" / "world",
+                        help="T2.5 region JSONs; used to report which entries the terra data references")
     args = parser.parse_args(argv)
 
     first, count, files = mask_blocks(args.src_dir)
     image = (args.game_dir / "image").read_bytes()
     masks = decode_masks(image, first, count)
     n = len(masks)
+    usage = mask_usage(args.world_dir, masks)
 
     for i, m in enumerate(masks):
         ac.write_bit_mask(args.out_dir / f"mask_{i:03d}.png", m)
@@ -127,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
             "applied_when": "terra_mem[cm + 1] & 15 (occlusion code 0..7) permits it",
             "rows_copied": "32 (8 iterations x 4 words), one word per bitplane row of blitwide words",
         },
+        "usage": usage,
         "sources": {
             "SHADOW_SZ": "src/fmain.c:642",
             "shadow_mem alloc": "src/fmain.c:924",

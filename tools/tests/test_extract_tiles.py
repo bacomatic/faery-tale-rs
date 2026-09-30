@@ -74,6 +74,26 @@ def test_outputs_and_palette_override(bundle):
         assert idx.size == rgba.size == mask.size == (256, 512)
         a = np.array(idx)
         assert a.max() < 32
+        assert "transparency" not in idx.info  # background tiles: index 31 is not a key colour
+        meta31 = json.loads((d / "tiles.json").read_text())["index_31"]
+        assert meta31["tiles"] == sorted({int(t) for t in np.flatnonzero(
+            (a == 31).reshape(16, 32, 16, 16).any(axis=(1, 3)))})
+        assert ("secret_timer" in meta31) == (r == 9)   # 0x00f0 while the timer runs, fmain2.c:383
+        assert sorted(p.name for p in d.iterdir()) == \
+            ["atlas_highlightmask.png", "atlas_indexed.png", "atlas_rgba.png", "atlas_shadowmask.png", "tiles.json"]
+        # shadow mask cell == assets/masks entry `mask` when mask_mode != 0, else empty (fmain.c:2577-2595)
+        sh = (np.array(Image.open(d / "atlas_shadowmask.png").convert("L")) > 0).reshape(16, 32, 16, 16)
+        tiles_meta = json.loads((d / "tiles.json").read_text())["tiles"]
+        terra = json.loads((REPO / f"assets/world/region_{r}.json").read_text())["terra"]["entries"]
+        for t in (0, 65, 200, 255):
+            cell = sh[t // 16, :, t % 16, :]
+            e, tm = terra[t], tiles_meta[t]
+            assert tm["mask_mode"] == e["mask_mode"] and tm["mask"] == (e["maptag"] if e["mask_mode"] else None)
+            if tm["mask"] is None:
+                assert not cell.any()
+            else:
+                ref = np.array(Image.open(REPO / f"assets/masks/mask_{tm['mask']:03d}.png").convert("L")) > 0
+                assert np.array_equal(cell, ref)
         # mask bit set exactly where index in 16..24
         m = np.array(mask.convert("L")) > 0
         assert np.array_equal(m, (a >= 16) & (a <= 24))
@@ -84,8 +104,8 @@ def test_outputs_and_palette_override(bundle):
         pal[31] = tuple(meta["palette"]["color_31"]["rgba8"])
         assert np.array_equal(np.array(rgba), np.array(pal, dtype=np.uint8)[a])
         assert len(meta["tiles"]) == 256 and meta["tile_size"] == [16, 32]
-        assert meta["tiles"][65] == {"index": 65, "x": 16, "y": 128, "w": 16, "h": 32,
-                                     "group": 1, "block": REGIONS[r]["image_1"]}
+        assert {k: v for k, v in meta["tiles"][65].items() if k not in ("mask", "mask_mode")} == \
+            {"index": 65, "x": 16, "y": 128, "w": 16, "h": 32, "group": 1, "block": REGIONS[r]["image_1"]}
     c31 = {r: json.loads((bundle / f"region_{r:02d}/tiles.json").read_text())["palette"]["color_31"]["rgb4"]
            for r in range(10)}
     assert c31[4] == "0x0980" and c31[9] == "0x0445"

@@ -140,7 +140,7 @@ def _rows(arr: Sequence) -> list:
 # Public PNG writers
 # --------------------------------------------------------------------------- #
 def write_indexed_png(path, idx_array: Sequence[Sequence[int]],
-                      palette: Sequence[Sequence[int]]) -> None:
+                      palette: Sequence[Sequence[int]], *, transparent: bool = True) -> None:
     """Write an 8-bit indexed (palette) PNG.
 
     *idx_array* is a 2D array of palette indices (0..len(palette)-1; the game
@@ -149,7 +149,8 @@ def write_indexed_png(path, idx_array: Sequence[Sequence[int]],
     image round-trips losslessly back to the same indices.
 
     Palette index ``31`` is written as transparent (tRNS), per the project's
-    transparency convention.
+    transparency convention, unless *transparent* is False (background tiles:
+    the game draws colour 31 there and keys it only on things drawn on top).
     """
     rows = _rows(idx_array)
     height = len(rows)
@@ -170,7 +171,7 @@ def write_indexed_png(path, idx_array: Sequence[Sequence[int]],
     # Transparency: index 31 transparent; everything else opaque.
     n = len(palette)
     alpha = [0xFF] * n
-    if n > TRANSPARENT_INDEX:
+    if transparent and n > TRANSPARENT_INDEX:
         alpha[TRANSPARENT_INDEX] = 0x00
     while alpha and alpha[-1] == 0xFF:  # PNG allows omitting trailing opaque
         alpha.pop()

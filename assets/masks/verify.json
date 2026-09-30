@@ -6,6 +6,7 @@
         "src/fmain.c:1222",
         "src/mtrack.c:48-50",
         "src/fsubs.asm:1047-1083",
+        "src/fmain.c:2577-2595",
         "src/fmain.c:2577-2595"
       ],
       "counts": [
@@ -13,6 +14,18 @@
           "expect": 192,
           "glob": "mask_*.png",
           "label": "mask PNGs"
+        },
+        {
+          "expect": 160,
+          "file": "masks.json",
+          "label": "applied entries",
+          "path": "usage.applied_entries"
+        },
+        {
+          "expect": 21,
+          "file": "masks.json",
+          "label": "blank entries",
+          "path": "usage.blank_entries"
         }
       ],
       "files": [
@@ -20,39 +33,9 @@
         "masks.json"
       ],
       "id": "masks_all",
-      "look_for": "192 tiles of 16x32, shown 16 per row in index order (entry i at column i%16, row i/16). White = terrain in front (hides the sprite), transparent = sprite shows. Shapes should read as bottom-anchored terrain silhouettes (tree trunks/canopies, wall and building edges), not noise. masks.json states the bit layout: 64 bytes per entry, one big-endian 16-bit word per row, MSB = leftmost pixel. Entries 171-191 are blank (all-zero).",
+      "look_for": "192 tiles of 16x32, shown 16 per row in index order (entry i at column i%16, row i/16). White = terrain in front (hides the sprite), transparent = sprite shows. Shapes should read as bottom-anchored terrain silhouettes (tree trunks/canopies, wall and building edges), not noise. masks.json states the bit layout: 64 bytes per entry, one big-endian 16-bit word per row, MSB = leftmost pixel. This is the game's complete mask store (shadow_mem, 192 x 64 B). The terra data references entries 0-170: 160 are applied with a non-zero occlusion mode; 11 have pixels but are never referenced ([18, 44, 84, 85, 93, 94, 147, 148, 154, 159, 160]); 171-191 are blank filler. Look at a spread of the referenced ones: tree canopies, wall tops, building edges, bridge rails; none should be noise.",
       "task": "T2.3",
       "title": "Terrain occlusion masks — 192 entries 16x32, 1 bit/pixel (ADF blocks 896-919)",
-      "view": "image"
-    },
-    {
-      "citations": [
-        "src/fsubs.asm:1060-1061",
-        "src/fmain.c:2578",
-        "src/fmain.c:2595"
-      ],
-      "files": [
-        "mask_000.png"
-      ],
-      "id": "mask_000",
-      "look_for": "Entry 0 = the first 64 bytes of block 896 (shadow_mem + 0*64). 16x32; white pixels are where the tile hides a sprite. Compare against the top-left cell of masks_sheet.png. Shape: a single rounded blob (a small canopy/bush), 6-12 px wide, occupying rows 5-26 and widening toward the bottom; empty top and bottom rows.",
-      "task": "T2.3",
-      "title": "Mask entry 0",
-      "view": "image"
-    },
-    {
-      "citations": [
-        "src/fsubs.asm:1060-1061",
-        "src/fmain.c:642",
-        "src/fmain.c:1222"
-      ],
-      "files": [
-        "mask_191.png"
-      ],
-      "id": "mask_191",
-      "look_for": "Entry 191 = the last 64 bytes of block 919 (shadow_mem + 191*64 = 12224..12287, the end of SHADOW_SZ). 16x32; white pixels are where the tile hides a sprite. Compare against the bottom-right cell of masks_sheet.png. Shape: entirely transparent. Entries 171-191 (the last 21) are all-zero in the ADF, so the bottom-right cell of the sheet and the whole last row plus the end of row 10 are blank.",
-      "task": "T2.3",
-      "title": "Mask entry 191 (last)",
       "view": "image"
     }
   ],

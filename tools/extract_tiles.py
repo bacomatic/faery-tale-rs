@@ -30,10 +30,10 @@ the four groups, ``offset(T,P,R) = (T/64)*20480 + P*4096 + (T%64)*64 + R*2``.
 Palette: ``assets/palettes/pagecolors.json`` (accepted T1.1), with colour 31
 replaced per region from ``assets/palettes/region_overrides.json``
 (``fade_page``, ``fmain2.c:381-386``: region 4 -> 0x0980, region 9 -> 0x0445,
-else 0x0bdf). In the RGBA atlas index 31 is drawn **opaque** with that colour:
+else 0x0bdf). Index 31 is drawn **opaque** with that colour in both atlases:
 tiles are the bottom layer and the game shows colour 31 there (that is the
-whole point of the override). The indexed PNG keeps the shared convention
-(index 31 marked transparent via tRNS) so it can be composited like a sprite.
+whole point of the override); colour-31 keying applies only to things drawn on
+top of the tiles, so the indexed PNG carries no tRNS (user decision, 2026-09-28).
 
 Usage::
 
@@ -56,6 +56,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import asset_common as ac  # noqa: E402
+import extract_masks as em  # noqa: E402
 import extract_table as et  # noqa: E402
 
 REPO_ROOT = TOOLS_DIR.parent
@@ -94,14 +95,18 @@ def load_file_index(src_dir: Path) -> list[dict]:
     return regions
 
 
-def load_palette(pagecolors: Path, overrides: Path, region: int) -> tuple[list, dict]:
-    """pagecolors rgba8 list with colour 31 swapped per region (fmain2.c:381-386)."""
+def load_palette(pagecolors: Path, overrides: Path, region: int) -> tuple[list, dict, dict | None]:
+    """pagecolors rgba8 list with colour 31 swapped per region (fmain2.c:381-386).
+
+    Also returns the region's conditional colour-31 variant, if any: region 9 shows colour 31
+    as 0x00f0 while ``secret_timer`` runs (Crystal Orb, fmain.c:3307), which is how hidden
+    passages are revealed (fmain2.c:383)."""
     entries = json.loads(pagecolors.read_text())
     pal = [tuple(e["rgba8"]) for e in sorted(entries, key=lambda e: e["index"])]
     ov = json.loads(overrides.read_text())
     c31 = ov["regions"].get(str(region), ov["default"])
     pal[ov["color_index"]] = tuple(c31["rgba8"])
-    return pal, c31
+    return pal, c31, ov.get("conditional_regions", {}).get(str(region))
 
 
 # --------------------------------------------------------------------------- #
@@ -135,13 +140,47 @@ def pack_atlas(tiles: np.ndarray) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # Output
 # --------------------------------------------------------------------------- #
-def emit_region(entry: dict, image: bytes, palette: list, c31: dict, out: Path) -> dict:
+def tiles_with_index(atlas: np.ndarray, index: int) -> list[int]:
+    rows = NUM_TILES // ATLAS_COLS
+    per_tile = (atlas == index).reshape(rows, TILE_H, ATLAS_COLS, TILE_W).any(axis=(1, 3))
+    return [int(t) for t in np.flatnonzero(per_tile)]
+
+
+def tile_masks(terra: list[dict], masks: np.ndarray) -> tuple[list[dict], np.ndarray]:
+    """Per tile: the shadow mask entry (terra byte 0) and occlusion mode (byte 1 & 15), and the
+    mask pixels the game applies -- entry `maptag` when the mode is non-zero, otherwise none
+    (fmain.c:2577-2595). Returns (per-tile records, (256, 32, 16) bits)."""
+    recs, bits = [], np.zeros((NUM_TILES, TILE_H, TILE_W), dtype=np.uint8)
+    for t, e in enumerate(terra):
+        applied = e["mask_mode"] != 0
+        recs.append({"mask": e["maptag"] if applied else None, "mask_mode": e["mask_mode"]})
+        if applied:
+            bits[t] = masks[e["maptag"]]
+    return recs, bits
+
+
+def emit_region(entry: dict, image: bytes, palette: list, c31: dict, secret: dict | None,
+                terra: list[dict], masks: np.ndarray, out: Path) -> dict:
     blocks = [entry[f"image_{g}"] for g in range(NUM_GROUPS)]
     atlas = pack_atlas(decode_region(image, blocks))
+    mask_recs, mask_bits = tile_masks(terra, masks)
     out.mkdir(parents=True, exist_ok=True)
-    ac.write_indexed_png(out / "atlas_indexed.png", atlas, palette)
+    ac.write_indexed_png(out / "atlas_indexed.png", atlas, palette, transparent=False)
     ac.write_rgba_png(out / "atlas_rgba.png", np.array(palette, dtype=np.uint8)[atlas])
     ac.write_highlight_mask(out / "atlas_highlightmask.png", atlas)
+    ac.write_bit_mask(out / "atlas_shadowmask.png", pack_atlas(mask_bits))
+    index31 = {"tiles": tiles_with_index(atlas, 31),
+               "note": "Tiles containing palette index 31, the only colour fade_page changes per region "
+                       "(and, in region 9, per secret_timer).",
+               "source": "src/fmain2.c:381-386"}
+    if secret:
+        index31["secret_timer"] = {
+            "condition": secret["condition"],
+            "color_31": {"rgb4": secret["rgb4"], "rgba8": list(secret["rgba8"])},
+            "note": "While secret_timer runs (Crystal Orb, magic case 8 fmain.c:3307; decremented "
+                    "fmain.c:1381) colour 31 is this value: the hidden passages become visible. "
+                    "Swap palette entry 31 on the indexed atlas, or use the variant tiles in the master atlas.",
+            "source": "src/fmain2.c:382-384, src/fmain.c:3307, src/fmain.c:1381"}
 
     meta = {
         "region": entry["region"],
@@ -153,7 +192,7 @@ def emit_region(entry: dict, image: bytes, palette: list, c31: dict, out: Path) 
         "tile_count": NUM_TILES,
         "planes": NUM_PLANES,
         "atlas": {"file": "atlas_indexed.png", "rgba": "atlas_rgba.png",
-                  "highlight_mask": "atlas_highlightmask.png",
+                  "highlight_mask": "atlas_highlightmask.png", "shadow_mask": "atlas_shadowmask.png",
                   "columns": ATLAS_COLS, "rows": NUM_TILES // ATLAS_COLS,
                   "width": ATLAS_COLS * TILE_W, "height": (NUM_TILES // ATLAS_COLS) * TILE_H},
         "layout": {
@@ -169,14 +208,26 @@ def emit_region(entry: dict, image: bytes, palette: list, c31: dict, out: Path) 
             "file": "palettes/pagecolors.json",
             "color_31": {"rgb4": c31["rgb4"], "rgba8": list(c31["rgba8"]),
                          "source": "src/fmain2.c:381-386"},
-            "index_31": "transparent (tRNS) in atlas_indexed.png per the shared convention; "
-                        "drawn opaque with color_31 in atlas_rgba.png",
+            "index_31": "opaque (no key colour) in both atlases: tiles are the background, "
+                        "colour-31 keying applies only to things drawn on top of them",
         },
         "highlight_mask": {"indices": [ac.HIGHLIGHT_LO, ac.HIGHLIGHT_HI],
                            "source": "src/fmain2.c:412-413"},
+        "index_31": index31,
+        "shadow_mask": {
+            "note": "atlas_shadowmask.png holds, in the tile's cell, the 16x32 shadow mask (assets/masks/, "
+                    "entry = terra byte 0 'maptag') the game applies over sprites standing behind the tile, "
+                    "or nothing when the tile's occlusion mode (terra byte 1 & 15) is 0. Set bit = terrain in "
+                    "front. The mode decides when the mask is applied (fmain.c:2584-2594): 1 skip when xm==0, "
+                    "2 skip when ystop>35, 3 always (except the bridge in sector 48), 4 skip when xm==0 or "
+                    "ystop>35, 5 skip when xm==0 and ystop>35, 6 use tile 64's mask when ym!=0, 7 skip when "
+                    "ystop>20; a falling actor uses mode 3. Per tile: tiles[].mask / mask_mode.",
+            "source": "src/fmain.c:2577-2595, src/fsubs.asm:1047-1083",
+            "terra_source": f"assets/world/region_{entry['region']}.json terra.entries",
+        },
         "tiles": [{"index": t, "x": (t % ATLAS_COLS) * TILE_W, "y": (t // ATLAS_COLS) * TILE_H,
                    "w": TILE_W, "h": TILE_H, "group": t // TILES_PER_GROUP,
-                   "block": blocks[t // TILES_PER_GROUP]} for t in range(NUM_TILES)],
+                   "block": blocks[t // TILES_PER_GROUP], **mask_recs[t]} for t in range(NUM_TILES)],
     }
     ac.write_json(out / "tiles.json", meta)
     return meta
@@ -188,17 +239,22 @@ def main(argv: list[str] | None = None) -> int:
     ac.add_io_args(parser)
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "assets" / "tiles")
     parser.add_argument("--palette-dir", type=Path, default=REPO_ROOT / "assets" / "palettes")
+    parser.add_argument("--world-dir", type=Path, default=REPO_ROOT / "assets" / "world",
+                        help="T2.5 region JSONs (terra entries -> per-tile shadow mask + mode)")
     parser.add_argument("--region", type=int, default=None, help="region 0-9 (default: all)")
     args = parser.parse_args(argv)
 
     image = (args.game_dir / "image").read_bytes()
+    first, count, _ = em.mask_blocks(args.src_dir)
+    masks = em.decode_masks(image, first, count)
     for entry in load_file_index(args.src_dir):
         r = entry["region"]
         if args.region is not None and r != args.region:
             continue
-        palette, c31 = load_palette(args.palette_dir / "pagecolors.json",
-                                    args.palette_dir / "region_overrides.json", r)
-        emit_region(entry, image, palette, c31, args.out_dir / f"region_{r:02d}")
+        palette, c31, secret = load_palette(args.palette_dir / "pagecolors.json",
+                                            args.palette_dir / "region_overrides.json", r)
+        terra = json.loads((args.world_dir / f"region_{r}.json").read_text())["terra"]["entries"]
+        emit_region(entry, image, palette, c31, secret, terra, masks, args.out_dir / f"region_{r:02d}")
         print(f"region_{r:02d}: {entry['label']} {entry['name']} "
               f"blocks {[entry[f'image_{g}'] for g in range(NUM_GROUPS)]} colour31 {c31['rgb4']}")
     return 0

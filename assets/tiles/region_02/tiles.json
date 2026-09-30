@@ -6,6 +6,7 @@
     "highlight_mask": "atlas_highlightmask.png",
     "rgba": "atlas_rgba.png",
     "rows": 16,
+    "shadow_mask": "atlas_shadowmask.png",
     "width": 256
   },
   "groups": [
@@ -53,6 +54,93 @@
     ],
     "source": "src/fmain2.c:412-413"
   },
+  "index_31": {
+    "note": "Tiles containing palette index 31, the only colour fade_page changes per region (and, in region 9, per secret_timer).",
+    "source": "src/fmain2.c:381-386",
+    "tiles": [
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223,
+      224,
+      226,
+      227,
+      228,
+      229,
+      230,
+      233,
+      234,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255
+    ]
+  },
   "label": "F3",
   "layout": {
     "formula": "offset(T,P,R) = (T/64)*20480 + P*4096 + (T%64)*64 + R*2 within the concatenation of the four image groups",
@@ -71,10 +159,15 @@
       "source": "src/fmain2.c:381-386"
     },
     "file": "palettes/pagecolors.json",
-    "index_31": "transparent (tRNS) in atlas_indexed.png per the shared convention; drawn opaque with color_31 in atlas_rgba.png"
+    "index_31": "opaque (no key colour) in both atlases: tiles are the background, colour-31 keying applies only to things drawn on top of them"
   },
   "planes": 5,
   "region": 2,
+  "shadow_mask": {
+    "note": "atlas_shadowmask.png holds, in the tile's cell, the 16x32 shadow mask (assets/masks/, entry = terra byte 0 'maptag') the game applies over sprites standing behind the tile, or nothing when the tile's occlusion mode (terra byte 1 & 15) is 0. Set bit = terrain in front. The mode decides when the mask is applied (fmain.c:2584-2594): 1 skip when xm==0, 2 skip when ystop>35, 3 always (except the bridge in sector 48), 4 skip when xm==0 or ystop>35, 5 skip when xm==0 and ystop>35, 6 use tile 64's mask when ym!=0, 7 skip when ystop>20; a falling actor uses mode 3. Per tile: tiles[].mask / mask_mode.",
+    "source": "src/fmain.c:2577-2595, src/fsubs.asm:1047-1083",
+    "terra_source": "assets/world/region_2.json terra.entries"
+  },
   "source": "src/fmain.c:618",
   "tile_count": 256,
   "tile_size": [
@@ -88,6 +181,8 @@
       "group": 0,
       "h": 32,
       "index": 0,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 0
@@ -97,6 +192,8 @@
       "group": 0,
       "h": 32,
       "index": 1,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 0
@@ -106,6 +203,8 @@
       "group": 0,
       "h": 32,
       "index": 2,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 0
@@ -115,6 +214,8 @@
       "group": 0,
       "h": 32,
       "index": 3,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 0
@@ -124,6 +225,8 @@
       "group": 0,
       "h": 32,
       "index": 4,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 0
@@ -133,6 +236,8 @@
       "group": 0,
       "h": 32,
       "index": 5,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 0
@@ -142,6 +247,8 @@
       "group": 0,
       "h": 32,
       "index": 6,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 0
@@ -151,6 +258,8 @@
       "group": 0,
       "h": 32,
       "index": 7,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 0
@@ -160,6 +269,8 @@
       "group": 0,
       "h": 32,
       "index": 8,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 0
@@ -169,6 +280,8 @@
       "group": 0,
       "h": 32,
       "index": 9,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 0
@@ -178,6 +291,8 @@
       "group": 0,
       "h": 32,
       "index": 10,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 0
@@ -187,6 +302,8 @@
       "group": 0,
       "h": 32,
       "index": 11,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 0
@@ -196,6 +313,8 @@
       "group": 0,
       "h": 32,
       "index": 12,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 0
@@ -205,6 +324,8 @@
       "group": 0,
       "h": 32,
       "index": 13,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 0
@@ -214,6 +335,8 @@
       "group": 0,
       "h": 32,
       "index": 14,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 0
@@ -223,6 +346,8 @@
       "group": 0,
       "h": 32,
       "index": 15,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 0
@@ -232,6 +357,8 @@
       "group": 0,
       "h": 32,
       "index": 16,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 32
@@ -241,6 +368,8 @@
       "group": 0,
       "h": 32,
       "index": 17,
+      "mask": 0,
+      "mask_mode": 2,
       "w": 16,
       "x": 16,
       "y": 32
@@ -250,6 +379,8 @@
       "group": 0,
       "h": 32,
       "index": 18,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 32
@@ -259,6 +390,8 @@
       "group": 0,
       "h": 32,
       "index": 19,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 32
@@ -268,6 +401,8 @@
       "group": 0,
       "h": 32,
       "index": 20,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 32
@@ -277,6 +412,8 @@
       "group": 0,
       "h": 32,
       "index": 21,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 32
@@ -286,6 +423,8 @@
       "group": 0,
       "h": 32,
       "index": 22,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 32
@@ -295,6 +434,8 @@
       "group": 0,
       "h": 32,
       "index": 23,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 32
@@ -304,6 +445,8 @@
       "group": 0,
       "h": 32,
       "index": 24,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 32
@@ -313,6 +456,8 @@
       "group": 0,
       "h": 32,
       "index": 25,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 32
@@ -322,6 +467,8 @@
       "group": 0,
       "h": 32,
       "index": 26,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 32
@@ -331,6 +478,8 @@
       "group": 0,
       "h": 32,
       "index": 27,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 32
@@ -340,6 +489,8 @@
       "group": 0,
       "h": 32,
       "index": 28,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 32
@@ -349,6 +500,8 @@
       "group": 0,
       "h": 32,
       "index": 29,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 32
@@ -358,6 +511,8 @@
       "group": 0,
       "h": 32,
       "index": 30,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 32
@@ -367,6 +522,8 @@
       "group": 0,
       "h": 32,
       "index": 31,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 32
@@ -376,6 +533,8 @@
       "group": 0,
       "h": 32,
       "index": 32,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 64
@@ -385,6 +544,8 @@
       "group": 0,
       "h": 32,
       "index": 33,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 64
@@ -394,6 +555,8 @@
       "group": 0,
       "h": 32,
       "index": 34,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 64
@@ -403,6 +566,8 @@
       "group": 0,
       "h": 32,
       "index": 35,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 64
@@ -412,6 +577,8 @@
       "group": 0,
       "h": 32,
       "index": 36,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 64
@@ -421,6 +588,8 @@
       "group": 0,
       "h": 32,
       "index": 37,
+      "mask": 1,
+      "mask_mode": 2,
       "w": 16,
       "x": 80,
       "y": 64
@@ -430,6 +599,8 @@
       "group": 0,
       "h": 32,
       "index": 38,
+      "mask": 2,
+      "mask_mode": 2,
       "w": 16,
       "x": 96,
       "y": 64
@@ -439,6 +610,8 @@
       "group": 0,
       "h": 32,
       "index": 39,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 64
@@ -448,6 +621,8 @@
       "group": 0,
       "h": 32,
       "index": 40,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 64
@@ -457,6 +632,8 @@
       "group": 0,
       "h": 32,
       "index": 41,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 64
@@ -466,6 +643,8 @@
       "group": 0,
       "h": 32,
       "index": 42,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 64
@@ -475,6 +654,8 @@
       "group": 0,
       "h": 32,
       "index": 43,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 64
@@ -484,6 +665,8 @@
       "group": 0,
       "h": 32,
       "index": 44,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 64
@@ -493,6 +676,8 @@
       "group": 0,
       "h": 32,
       "index": 45,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 64
@@ -502,6 +687,8 @@
       "group": 0,
       "h": 32,
       "index": 46,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 64
@@ -511,6 +698,8 @@
       "group": 0,
       "h": 32,
       "index": 47,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 64
@@ -520,6 +709,8 @@
       "group": 0,
       "h": 32,
       "index": 48,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 96
@@ -529,6 +720,8 @@
       "group": 0,
       "h": 32,
       "index": 49,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 96
@@ -538,6 +731,8 @@
       "group": 0,
       "h": 32,
       "index": 50,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 96
@@ -547,6 +742,8 @@
       "group": 0,
       "h": 32,
       "index": 51,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 96
@@ -556,6 +753,8 @@
       "group": 0,
       "h": 32,
       "index": 52,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 96
@@ -565,6 +764,8 @@
       "group": 0,
       "h": 32,
       "index": 53,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 96
@@ -574,6 +775,8 @@
       "group": 0,
       "h": 32,
       "index": 54,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 96
@@ -583,6 +786,8 @@
       "group": 0,
       "h": 32,
       "index": 55,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 96
@@ -592,6 +797,8 @@
       "group": 0,
       "h": 32,
       "index": 56,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 96
@@ -601,6 +808,8 @@
       "group": 0,
       "h": 32,
       "index": 57,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 96
@@ -610,6 +819,8 @@
       "group": 0,
       "h": 32,
       "index": 58,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 96
@@ -619,6 +830,8 @@
       "group": 0,
       "h": 32,
       "index": 59,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 96
@@ -628,6 +841,8 @@
       "group": 0,
       "h": 32,
       "index": 60,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 96
@@ -637,6 +852,8 @@
       "group": 0,
       "h": 32,
       "index": 61,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 96
@@ -646,6 +863,8 @@
       "group": 0,
       "h": 32,
       "index": 62,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 96
@@ -655,6 +874,8 @@
       "group": 0,
       "h": 32,
       "index": 63,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 96
@@ -664,6 +885,8 @@
       "group": 1,
       "h": 32,
       "index": 64,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 0,
       "y": 128
@@ -673,6 +896,8 @@
       "group": 1,
       "h": 32,
       "index": 65,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 16,
       "y": 128
@@ -682,6 +907,8 @@
       "group": 1,
       "h": 32,
       "index": 66,
+      "mask": 6,
+      "mask_mode": 1,
       "w": 16,
       "x": 32,
       "y": 128
@@ -691,6 +918,8 @@
       "group": 1,
       "h": 32,
       "index": 67,
+      "mask": 7,
+      "mask_mode": 1,
       "w": 16,
       "x": 48,
       "y": 128
@@ -700,6 +929,8 @@
       "group": 1,
       "h": 32,
       "index": 68,
+      "mask": 6,
+      "mask_mode": 4,
       "w": 16,
       "x": 64,
       "y": 128
@@ -709,6 +940,8 @@
       "group": 1,
       "h": 32,
       "index": 69,
+      "mask": 6,
+      "mask_mode": 1,
       "w": 16,
       "x": 80,
       "y": 128
@@ -718,6 +951,8 @@
       "group": 1,
       "h": 32,
       "index": 70,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 96,
       "y": 128
@@ -727,6 +962,8 @@
       "group": 1,
       "h": 32,
       "index": 71,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 112,
       "y": 128
@@ -736,6 +973,8 @@
       "group": 1,
       "h": 32,
       "index": 72,
+      "mask": 9,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 128
@@ -745,6 +984,8 @@
       "group": 1,
       "h": 32,
       "index": 73,
+      "mask": 10,
+      "mask_mode": 2,
       "w": 16,
       "x": 144,
       "y": 128
@@ -754,6 +995,8 @@
       "group": 1,
       "h": 32,
       "index": 74,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 128
@@ -763,6 +1006,8 @@
       "group": 1,
       "h": 32,
       "index": 75,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 128
@@ -772,6 +1017,8 @@
       "group": 1,
       "h": 32,
       "index": 76,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 128
@@ -781,6 +1028,8 @@
       "group": 1,
       "h": 32,
       "index": 77,
+      "mask": 6,
+      "mask_mode": 1,
       "w": 16,
       "x": 208,
       "y": 128
@@ -790,6 +1039,8 @@
       "group": 1,
       "h": 32,
       "index": 78,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 128
@@ -799,6 +1050,8 @@
       "group": 1,
       "h": 32,
       "index": 79,
+      "mask": 3,
+      "mask_mode": 5,
       "w": 16,
       "x": 240,
       "y": 128
@@ -808,6 +1061,8 @@
       "group": 1,
       "h": 32,
       "index": 80,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 0,
       "y": 160
@@ -817,6 +1072,8 @@
       "group": 1,
       "h": 32,
       "index": 81,
+      "mask": 6,
+      "mask_mode": 4,
       "w": 16,
       "x": 16,
       "y": 160
@@ -826,6 +1083,8 @@
       "group": 1,
       "h": 32,
       "index": 82,
+      "mask": 6,
+      "mask_mode": 1,
       "w": 16,
       "x": 32,
       "y": 160
@@ -835,6 +1094,8 @@
       "group": 1,
       "h": 32,
       "index": 83,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 48,
       "y": 160
@@ -844,6 +1105,8 @@
       "group": 1,
       "h": 32,
       "index": 84,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 160
@@ -853,6 +1116,8 @@
       "group": 1,
       "h": 32,
       "index": 85,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 160
@@ -862,6 +1127,8 @@
       "group": 1,
       "h": 32,
       "index": 86,
+      "mask": 7,
+      "mask_mode": 5,
       "w": 16,
       "x": 96,
       "y": 160
@@ -871,6 +1138,8 @@
       "group": 1,
       "h": 32,
       "index": 87,
+      "mask": 8,
+      "mask_mode": 6,
       "w": 16,
       "x": 112,
       "y": 160
@@ -880,6 +1149,8 @@
       "group": 1,
       "h": 32,
       "index": 88,
+      "mask": 9,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 160
@@ -889,6 +1160,8 @@
       "group": 1,
       "h": 32,
       "index": 89,
+      "mask": 10,
+      "mask_mode": 2,
       "w": 16,
       "x": 144,
       "y": 160
@@ -898,6 +1171,8 @@
       "group": 1,
       "h": 32,
       "index": 90,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 160,
       "y": 160
@@ -907,6 +1182,8 @@
       "group": 1,
       "h": 32,
       "index": 91,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 176,
       "y": 160
@@ -916,6 +1193,8 @@
       "group": 1,
       "h": 32,
       "index": 92,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 192,
       "y": 160
@@ -925,6 +1204,8 @@
       "group": 1,
       "h": 32,
       "index": 93,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 208,
       "y": 160
@@ -934,6 +1215,8 @@
       "group": 1,
       "h": 32,
       "index": 94,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 224,
       "y": 160
@@ -943,6 +1226,8 @@
       "group": 1,
       "h": 32,
       "index": 95,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 240,
       "y": 160
@@ -952,6 +1237,8 @@
       "group": 1,
       "h": 32,
       "index": 96,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 0,
       "y": 192
@@ -961,6 +1248,8 @@
       "group": 1,
       "h": 32,
       "index": 97,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 16,
       "y": 192
@@ -970,6 +1259,8 @@
       "group": 1,
       "h": 32,
       "index": 98,
+      "mask": 0,
+      "mask_mode": 3,
       "w": 16,
       "x": 32,
       "y": 192
@@ -979,6 +1270,8 @@
       "group": 1,
       "h": 32,
       "index": 99,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 48,
       "y": 192
@@ -988,6 +1281,8 @@
       "group": 1,
       "h": 32,
       "index": 100,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 64,
       "y": 192
@@ -997,6 +1292,8 @@
       "group": 1,
       "h": 32,
       "index": 101,
+      "mask": 8,
+      "mask_mode": 3,
       "w": 16,
       "x": 80,
       "y": 192
@@ -1006,6 +1303,8 @@
       "group": 1,
       "h": 32,
       "index": 102,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 192
@@ -1015,6 +1314,8 @@
       "group": 1,
       "h": 32,
       "index": 103,
+      "mask": 4,
+      "mask_mode": 2,
       "w": 16,
       "x": 112,
       "y": 192
@@ -1024,6 +1325,8 @@
       "group": 1,
       "h": 32,
       "index": 104,
+      "mask": 5,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 192
@@ -1033,6 +1336,8 @@
       "group": 1,
       "h": 32,
       "index": 105,
+      "mask": 11,
+      "mask_mode": 1,
       "w": 16,
       "x": 144,
       "y": 192
@@ -1042,6 +1347,8 @@
       "group": 1,
       "h": 32,
       "index": 106,
+      "mask": 12,
+      "mask_mode": 1,
       "w": 16,
       "x": 160,
       "y": 192
@@ -1051,6 +1358,8 @@
       "group": 1,
       "h": 32,
       "index": 107,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 192
@@ -1060,6 +1369,8 @@
       "group": 1,
       "h": 32,
       "index": 108,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 192,
       "y": 192
@@ -1069,6 +1380,8 @@
       "group": 1,
       "h": 32,
       "index": 109,
+      "mask": 6,
+      "mask_mode": 4,
       "w": 16,
       "x": 208,
       "y": 192
@@ -1078,6 +1391,8 @@
       "group": 1,
       "h": 32,
       "index": 110,
+      "mask": 6,
+      "mask_mode": 1,
       "w": 16,
       "x": 224,
       "y": 192
@@ -1087,6 +1402,8 @@
       "group": 1,
       "h": 32,
       "index": 111,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 240,
       "y": 192
@@ -1096,6 +1413,8 @@
       "group": 1,
       "h": 32,
       "index": 112,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 0,
       "y": 224
@@ -1105,6 +1424,8 @@
       "group": 1,
       "h": 32,
       "index": 113,
+      "mask": 13,
+      "mask_mode": 3,
       "w": 16,
       "x": 16,
       "y": 224
@@ -1114,6 +1435,8 @@
       "group": 1,
       "h": 32,
       "index": 114,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 32,
       "y": 224
@@ -1123,6 +1446,8 @@
       "group": 1,
       "h": 32,
       "index": 115,
+      "mask": 3,
+      "mask_mode": 3,
       "w": 16,
       "x": 48,
       "y": 224
@@ -1132,6 +1457,8 @@
       "group": 1,
       "h": 32,
       "index": 116,
+      "mask": 16,
+      "mask_mode": 4,
       "w": 16,
       "x": 64,
       "y": 224
@@ -1141,6 +1468,8 @@
       "group": 1,
       "h": 32,
       "index": 117,
+      "mask": 62,
+      "mask_mode": 2,
       "w": 16,
       "x": 80,
       "y": 224
@@ -1150,6 +1479,8 @@
       "group": 1,
       "h": 32,
       "index": 118,
+      "mask": 17,
+      "mask_mode": 3,
       "w": 16,
       "x": 96,
       "y": 224
@@ -1159,6 +1490,8 @@
       "group": 1,
       "h": 32,
       "index": 119,
+      "mask": 17,
+      "mask_mode": 3,
       "w": 16,
       "x": 112,
       "y": 224
@@ -1168,6 +1501,8 @@
       "group": 1,
       "h": 32,
       "index": 120,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 224
@@ -1177,6 +1512,8 @@
       "group": 1,
       "h": 32,
       "index": 121,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 144,
       "y": 224
@@ -1186,6 +1523,8 @@
       "group": 1,
       "h": 32,
       "index": 122,
+      "mask": 3,
+      "mask_mode": 1,
       "w": 16,
       "x": 160,
       "y": 224
@@ -1195,6 +1534,8 @@
       "group": 1,
       "h": 32,
       "index": 123,
+      "mask": 4,
+      "mask_mode": 2,
       "w": 16,
       "x": 176,
       "y": 224
@@ -1204,6 +1545,8 @@
       "group": 1,
       "h": 32,
       "index": 124,
+      "mask": 5,
+      "mask_mode": 2,
       "w": 16,
       "x": 192,
       "y": 224
@@ -1213,6 +1556,8 @@
       "group": 1,
       "h": 32,
       "index": 125,
+      "mask": 14,
+      "mask_mode": 2,
       "w": 16,
       "x": 208,
       "y": 224
@@ -1222,6 +1567,8 @@
       "group": 1,
       "h": 32,
       "index": 126,
+      "mask": 15,
+      "mask_mode": 2,
       "w": 16,
       "x": 224,
       "y": 224
@@ -1231,6 +1578,8 @@
       "group": 1,
       "h": 32,
       "index": 127,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 224
@@ -1240,6 +1589,8 @@
       "group": 2,
       "h": 32,
       "index": 128,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 256
@@ -1249,6 +1600,8 @@
       "group": 2,
       "h": 32,
       "index": 129,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 256
@@ -1258,6 +1611,8 @@
       "group": 2,
       "h": 32,
       "index": 130,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 256
@@ -1267,6 +1622,8 @@
       "group": 2,
       "h": 32,
       "index": 131,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 256
@@ -1276,6 +1633,8 @@
       "group": 2,
       "h": 32,
       "index": 132,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 256
@@ -1285,6 +1644,8 @@
       "group": 2,
       "h": 32,
       "index": 133,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 256
@@ -1294,6 +1655,8 @@
       "group": 2,
       "h": 32,
       "index": 134,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 256
@@ -1303,6 +1666,8 @@
       "group": 2,
       "h": 32,
       "index": 135,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 256
@@ -1312,6 +1677,8 @@
       "group": 2,
       "h": 32,
       "index": 136,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 256
@@ -1321,6 +1688,8 @@
       "group": 2,
       "h": 32,
       "index": 137,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 256
@@ -1330,6 +1699,8 @@
       "group": 2,
       "h": 32,
       "index": 138,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 256
@@ -1339,6 +1710,8 @@
       "group": 2,
       "h": 32,
       "index": 139,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 256
@@ -1348,6 +1721,8 @@
       "group": 2,
       "h": 32,
       "index": 140,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 256
@@ -1357,6 +1732,8 @@
       "group": 2,
       "h": 32,
       "index": 141,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 256
@@ -1366,6 +1743,8 @@
       "group": 2,
       "h": 32,
       "index": 142,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 256
@@ -1375,6 +1754,8 @@
       "group": 2,
       "h": 32,
       "index": 143,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 256
@@ -1384,6 +1765,8 @@
       "group": 2,
       "h": 32,
       "index": 144,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 288
@@ -1393,6 +1776,8 @@
       "group": 2,
       "h": 32,
       "index": 145,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 288
@@ -1402,6 +1787,8 @@
       "group": 2,
       "h": 32,
       "index": 146,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 288
@@ -1411,6 +1798,8 @@
       "group": 2,
       "h": 32,
       "index": 147,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 288
@@ -1420,6 +1809,8 @@
       "group": 2,
       "h": 32,
       "index": 148,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 288
@@ -1429,6 +1820,8 @@
       "group": 2,
       "h": 32,
       "index": 149,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 288
@@ -1438,6 +1831,8 @@
       "group": 2,
       "h": 32,
       "index": 150,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 288
@@ -1447,6 +1842,8 @@
       "group": 2,
       "h": 32,
       "index": 151,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 288
@@ -1456,6 +1853,8 @@
       "group": 2,
       "h": 32,
       "index": 152,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 288
@@ -1465,6 +1864,8 @@
       "group": 2,
       "h": 32,
       "index": 153,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 288
@@ -1474,6 +1875,8 @@
       "group": 2,
       "h": 32,
       "index": 154,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 288
@@ -1483,6 +1886,8 @@
       "group": 2,
       "h": 32,
       "index": 155,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 288
@@ -1492,6 +1897,8 @@
       "group": 2,
       "h": 32,
       "index": 156,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 288
@@ -1501,6 +1908,8 @@
       "group": 2,
       "h": 32,
       "index": 157,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 288
@@ -1510,6 +1919,8 @@
       "group": 2,
       "h": 32,
       "index": 158,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 288
@@ -1519,6 +1930,8 @@
       "group": 2,
       "h": 32,
       "index": 159,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 288
@@ -1528,6 +1941,8 @@
       "group": 2,
       "h": 32,
       "index": 160,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 320
@@ -1537,6 +1952,8 @@
       "group": 2,
       "h": 32,
       "index": 161,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 320
@@ -1546,6 +1963,8 @@
       "group": 2,
       "h": 32,
       "index": 162,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 320
@@ -1555,6 +1974,8 @@
       "group": 2,
       "h": 32,
       "index": 163,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 320
@@ -1564,6 +1985,8 @@
       "group": 2,
       "h": 32,
       "index": 164,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 320
@@ -1573,6 +1996,8 @@
       "group": 2,
       "h": 32,
       "index": 165,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 320
@@ -1582,6 +2007,8 @@
       "group": 2,
       "h": 32,
       "index": 166,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 320
@@ -1591,6 +2018,8 @@
       "group": 2,
       "h": 32,
       "index": 167,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 320
@@ -1600,6 +2029,8 @@
       "group": 2,
       "h": 32,
       "index": 168,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 320
@@ -1609,6 +2040,8 @@
       "group": 2,
       "h": 32,
       "index": 169,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 320
@@ -1618,6 +2051,8 @@
       "group": 2,
       "h": 32,
       "index": 170,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 320
@@ -1627,6 +2062,8 @@
       "group": 2,
       "h": 32,
       "index": 171,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 320
@@ -1636,6 +2073,8 @@
       "group": 2,
       "h": 32,
       "index": 172,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 320
@@ -1645,6 +2084,8 @@
       "group": 2,
       "h": 32,
       "index": 173,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 320
@@ -1654,6 +2095,8 @@
       "group": 2,
       "h": 32,
       "index": 174,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 320
@@ -1663,6 +2106,8 @@
       "group": 2,
       "h": 32,
       "index": 175,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 320
@@ -1672,6 +2117,8 @@
       "group": 2,
       "h": 32,
       "index": 176,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 352
@@ -1681,6 +2128,8 @@
       "group": 2,
       "h": 32,
       "index": 177,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 352
@@ -1690,6 +2139,8 @@
       "group": 2,
       "h": 32,
       "index": 178,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 352
@@ -1699,6 +2150,8 @@
       "group": 2,
       "h": 32,
       "index": 179,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 352
@@ -1708,6 +2161,8 @@
       "group": 2,
       "h": 32,
       "index": 180,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 352
@@ -1717,6 +2172,8 @@
       "group": 2,
       "h": 32,
       "index": 181,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 352
@@ -1726,6 +2183,8 @@
       "group": 2,
       "h": 32,
       "index": 182,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 352
@@ -1735,6 +2194,8 @@
       "group": 2,
       "h": 32,
       "index": 183,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 352
@@ -1744,6 +2205,8 @@
       "group": 2,
       "h": 32,
       "index": 184,
+      "mask": 60,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 352
@@ -1753,6 +2216,8 @@
       "group": 2,
       "h": 32,
       "index": 185,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 352
@@ -1762,6 +2227,8 @@
       "group": 2,
       "h": 32,
       "index": 186,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 352
@@ -1771,6 +2238,8 @@
       "group": 2,
       "h": 32,
       "index": 187,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 176,
       "y": 352
@@ -1780,6 +2249,8 @@
       "group": 2,
       "h": 32,
       "index": 188,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 352
@@ -1789,6 +2260,8 @@
       "group": 2,
       "h": 32,
       "index": 189,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 352
@@ -1798,6 +2271,8 @@
       "group": 2,
       "h": 32,
       "index": 190,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 352
@@ -1807,6 +2282,8 @@
       "group": 2,
       "h": 32,
       "index": 191,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 352
@@ -1816,6 +2293,8 @@
       "group": 3,
       "h": 32,
       "index": 192,
+      "mask": 86,
+      "mask_mode": 2,
       "w": 16,
       "x": 0,
       "y": 384
@@ -1825,6 +2304,8 @@
       "group": 3,
       "h": 32,
       "index": 193,
+      "mask": 87,
+      "mask_mode": 3,
       "w": 16,
       "x": 16,
       "y": 384
@@ -1834,6 +2315,8 @@
       "group": 3,
       "h": 32,
       "index": 194,
+      "mask": 88,
+      "mask_mode": 3,
       "w": 16,
       "x": 32,
       "y": 384
@@ -1843,6 +2326,8 @@
       "group": 3,
       "h": 32,
       "index": 195,
+      "mask": 89,
+      "mask_mode": 2,
       "w": 16,
       "x": 48,
       "y": 384
@@ -1852,6 +2337,8 @@
       "group": 3,
       "h": 32,
       "index": 196,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 384
@@ -1861,6 +2348,8 @@
       "group": 3,
       "h": 32,
       "index": 197,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 384
@@ -1870,6 +2359,8 @@
       "group": 3,
       "h": 32,
       "index": 198,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 384
@@ -1879,6 +2370,8 @@
       "group": 3,
       "h": 32,
       "index": 199,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 384
@@ -1888,6 +2381,8 @@
       "group": 3,
       "h": 32,
       "index": 200,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 384
@@ -1897,6 +2392,8 @@
       "group": 3,
       "h": 32,
       "index": 201,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 384
@@ -1906,6 +2403,8 @@
       "group": 3,
       "h": 32,
       "index": 202,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 384
@@ -1915,6 +2414,8 @@
       "group": 3,
       "h": 32,
       "index": 203,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 176,
       "y": 384
@@ -1924,6 +2425,8 @@
       "group": 3,
       "h": 32,
       "index": 204,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 192,
       "y": 384
@@ -1933,6 +2436,8 @@
       "group": 3,
       "h": 32,
       "index": 205,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 208,
       "y": 384
@@ -1942,6 +2447,8 @@
       "group": 3,
       "h": 32,
       "index": 206,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 224,
       "y": 384
@@ -1951,6 +2458,8 @@
       "group": 3,
       "h": 32,
       "index": 207,
+      "mask": 91,
+      "mask_mode": 2,
       "w": 16,
       "x": 240,
       "y": 384
@@ -1960,6 +2469,8 @@
       "group": 3,
       "h": 32,
       "index": 208,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 416
@@ -1969,6 +2480,8 @@
       "group": 3,
       "h": 32,
       "index": 209,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 16,
       "y": 416
@@ -1978,6 +2491,8 @@
       "group": 3,
       "h": 32,
       "index": 210,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 416
@@ -1987,6 +2502,8 @@
       "group": 3,
       "h": 32,
       "index": 211,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 48,
       "y": 416
@@ -1996,6 +2513,8 @@
       "group": 3,
       "h": 32,
       "index": 212,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 64,
       "y": 416
@@ -2005,6 +2524,8 @@
       "group": 3,
       "h": 32,
       "index": 213,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 80,
       "y": 416
@@ -2014,6 +2535,8 @@
       "group": 3,
       "h": 32,
       "index": 214,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 96,
       "y": 416
@@ -2023,6 +2546,8 @@
       "group": 3,
       "h": 32,
       "index": 215,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 112,
       "y": 416
@@ -2032,6 +2557,8 @@
       "group": 3,
       "h": 32,
       "index": 216,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 416
@@ -2041,6 +2568,8 @@
       "group": 3,
       "h": 32,
       "index": 217,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 144,
       "y": 416
@@ -2050,6 +2579,8 @@
       "group": 3,
       "h": 32,
       "index": 218,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 160,
       "y": 416
@@ -2059,6 +2590,8 @@
       "group": 3,
       "h": 32,
       "index": 219,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 176,
       "y": 416
@@ -2068,6 +2601,8 @@
       "group": 3,
       "h": 32,
       "index": 220,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 192,
       "y": 416
@@ -2077,6 +2612,8 @@
       "group": 3,
       "h": 32,
       "index": 221,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 208,
       "y": 416
@@ -2086,6 +2623,8 @@
       "group": 3,
       "h": 32,
       "index": 222,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 224,
       "y": 416
@@ -2095,6 +2634,8 @@
       "group": 3,
       "h": 32,
       "index": 223,
+      "mask": 92,
+      "mask_mode": 2,
       "w": 16,
       "x": 240,
       "y": 416
@@ -2104,6 +2645,8 @@
       "group": 3,
       "h": 32,
       "index": 224,
+      "mask": 90,
+      "mask_mode": 2,
       "w": 16,
       "x": 0,
       "y": 448
@@ -2113,6 +2656,8 @@
       "group": 3,
       "h": 32,
       "index": 225,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 16,
       "y": 448
@@ -2122,6 +2667,8 @@
       "group": 3,
       "h": 32,
       "index": 226,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 32,
       "y": 448
@@ -2131,6 +2678,8 @@
       "group": 3,
       "h": 32,
       "index": 227,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 48,
       "y": 448
@@ -2140,6 +2689,8 @@
       "group": 3,
       "h": 32,
       "index": 228,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 64,
       "y": 448
@@ -2149,6 +2700,8 @@
       "group": 3,
       "h": 32,
       "index": 229,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 448
@@ -2158,6 +2711,8 @@
       "group": 3,
       "h": 32,
       "index": 230,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 96,
       "y": 448
@@ -2167,6 +2722,8 @@
       "group": 3,
       "h": 32,
       "index": 231,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 112,
       "y": 448
@@ -2176,6 +2733,8 @@
       "group": 3,
       "h": 32,
       "index": 232,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 128,
       "y": 448
@@ -2185,6 +2744,8 @@
       "group": 3,
       "h": 32,
       "index": 233,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 144,
       "y": 448
@@ -2194,6 +2755,8 @@
       "group": 3,
       "h": 32,
       "index": 234,
+      "mask": 86,
+      "mask_mode": 2,
       "w": 16,
       "x": 160,
       "y": 448
@@ -2203,6 +2766,8 @@
       "group": 3,
       "h": 32,
       "index": 235,
+      "mask": 86,
+      "mask_mode": 2,
       "w": 16,
       "x": 176,
       "y": 448
@@ -2212,6 +2777,8 @@
       "group": 3,
       "h": 32,
       "index": 236,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 448
@@ -2221,6 +2788,8 @@
       "group": 3,
       "h": 32,
       "index": 237,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 208,
       "y": 448
@@ -2230,6 +2799,8 @@
       "group": 3,
       "h": 32,
       "index": 238,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 224,
       "y": 448
@@ -2239,6 +2810,8 @@
       "group": 3,
       "h": 32,
       "index": 239,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 240,
       "y": 448
@@ -2248,6 +2821,8 @@
       "group": 3,
       "h": 32,
       "index": 240,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 0,
       "y": 480
@@ -2257,6 +2832,8 @@
       "group": 3,
       "h": 32,
       "index": 241,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 16,
       "y": 480
@@ -2266,6 +2843,8 @@
       "group": 3,
       "h": 32,
       "index": 242,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 32,
       "y": 480
@@ -2275,6 +2854,8 @@
       "group": 3,
       "h": 32,
       "index": 243,
+      "mask": 3,
+      "mask_mode": 2,
       "w": 16,
       "x": 48,
       "y": 480
@@ -2284,6 +2865,8 @@
       "group": 3,
       "h": 32,
       "index": 244,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 64,
       "y": 480
@@ -2293,6 +2876,8 @@
       "group": 3,
       "h": 32,
       "index": 245,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 80,
       "y": 480
@@ -2302,6 +2887,8 @@
       "group": 3,
       "h": 32,
       "index": 246,
+      "mask": 89,
+      "mask_mode": 2,
       "w": 16,
       "x": 96,
       "y": 480
@@ -2311,6 +2898,8 @@
       "group": 3,
       "h": 32,
       "index": 247,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 112,
       "y": 480
@@ -2320,6 +2909,8 @@
       "group": 3,
       "h": 32,
       "index": 248,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 128,
       "y": 480
@@ -2329,6 +2920,8 @@
       "group": 3,
       "h": 32,
       "index": 249,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 144,
       "y": 480
@@ -2338,6 +2931,8 @@
       "group": 3,
       "h": 32,
       "index": 250,
+      "mask": 45,
+      "mask_mode": 2,
       "w": 16,
       "x": 160,
       "y": 480
@@ -2347,6 +2942,8 @@
       "group": 3,
       "h": 32,
       "index": 251,
+      "mask": 46,
+      "mask_mode": 2,
       "w": 16,
       "x": 176,
       "y": 480
@@ -2356,6 +2953,8 @@
       "group": 3,
       "h": 32,
       "index": 252,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 192,
       "y": 480
@@ -2365,6 +2964,8 @@
       "group": 3,
       "h": 32,
       "index": 253,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 208,
       "y": 480
@@ -2374,6 +2975,8 @@
       "group": 3,
       "h": 32,
       "index": 254,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 224,
       "y": 480
@@ -2383,6 +2986,8 @@
       "group": 3,
       "h": 32,
       "index": 255,
+      "mask": null,
+      "mask_mode": 0,
       "w": 16,
       "x": 240,
       "y": 480
