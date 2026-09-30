@@ -78,6 +78,23 @@ export default function TaskPage({ task }: { task: string }) {
     setNotes(s);
   };
 
+  const discardDraft = async () => {
+    if (!window.confirm(`Discard the draft for ${task}? All unsaved marks and notes will be cleared.`)) return;
+    window.clearTimeout(timer.current);
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.deleteDraft(task);
+      await load();
+      setSave("idle");
+      setFlash("Draft discarded");
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (verdict: Verdict) => {
     window.clearTimeout(timer.current);
     setBusy(true);
@@ -102,6 +119,7 @@ export default function TaskPage({ task }: { task: string }) {
   const problemCount = statuses.filter((s) => s === "problem").length;
   const unmarkedCount = statuses.filter((s) => !s).length;
   const carriedCount = items.filter((it) => it.carried_ok).length;
+  const hasDraft = detail.has_draft || save === "saving" || save === "saved";
 
   return (
     <>
@@ -113,6 +131,11 @@ export default function TaskPage({ task }: { task: string }) {
         <span className={`save save-${save}`}>
           {save === "saving" ? "saving draft…" : save === "saved" ? "draft saved" : save === "error" ? "draft not saved" : ""}
         </span>
+        {hasDraft && (
+          <button className="discard" disabled={busy} onClick={discardDraft} title="Delete the saved draft and clear all marks">
+            Discard draft
+          </button>
+        )}
       </div>
       {detail.summary && <p className="summary">{detail.summary}</p>}
       {detail.stale && (

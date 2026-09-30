@@ -116,8 +116,14 @@ mise exec -- python -m uvicorn app:app --app-dir tools/review/backend --host 127
   What it was meant to mean is unconfirmed, so the viewer treats `$` as plain text. If T1.4 or a
   later task turns up a string that uses `$`, bring back the highlighting in `StringsViewer.tsx`. Show
   a sample value only if the source defines what `$` expands to.
-- **Later, as their tasks land:** `image-grid` (sprite frames / tile atlases / glyphs), `audio`
-  (`<audio>` for SFX + music previews), `markdown` (FORMATS/README docs), `code` (GLSL).
+- `image` colour-31 selector — added 2026-09-28 with T2.2/T2.2.1: for indexed PNGs (colour type 3)
+  the viewer offers the `palettes/region_overrides.json` values (`GET /api/color31`); the backend
+  serves `/files/<png>?color31=<rgb4>` with PLTE entry 31 rewritten and flags indexed PNGs with
+  an `X-Indexed-Png` header.
+- `audio` — added 2026-09-28 with T2.6/T2.7: `FileViewer` renders `.wav/.ogg/.mp3/.flac` files
+  with an `<audio controls>` element (dispatch by extension, like images).
+- **Later, as their tasks land:** `image-grid` (sprite frames / tile atlases / glyphs),
+  `markdown` (FORMATS/README docs), `code` (GLSL).
 - **Citations:** clicking a citation opens the cited lines from `src/` or `reference/`, read-only,
   via `GET /api/source`. `verify.json` citations show exactly the range written, so authors must cite
   a whole data structure through its closing `};`, or deliberately cite just part of it. Table

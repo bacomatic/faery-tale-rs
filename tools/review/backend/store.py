@@ -26,6 +26,30 @@ NON_CODE_RE = re.compile(r"/\*.*?\*/|//.*$|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*
 BLOCK_SCAN_LIMIT = 1000
 
 
+PNG_SIG = b"\x89PNG\r\n\x1a\n"
+
+
+def png_is_indexed(data: bytes) -> bool:
+    """True for PNG colour type 3 (palette)."""
+    return data[:8] == PNG_SIG and data[12:16] == b"IHDR" and data[25] == 3
+
+
+def png_with_palette_entry(data: bytes, index: int, rgb: tuple[int, int, int]) -> bytes:
+    """Return the indexed PNG with palette entry `index` replaced (PLTE rewritten, CRC recomputed)."""
+    import struct
+    import zlib
+    out = bytearray(data[:8])
+    pos = 8
+    while pos < len(data):
+        length, tag = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + length]
+        if tag == b"PLTE" and len(body) >= 3 * (index + 1):
+            body = body[:3 * index] + bytes(rgb) + body[3 * index + 3:]
+        out += struct.pack(">I", len(body)) + tag + body + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF)
+        pos += 12 + length
+    return bytes(out)
+
+
 def block_end(lines: list[str], start: int) -> int:
     """1-based line closing the first `{` block opened at or after `start`; `start` if none."""
     depth, opened, in_comment = 0, False, False
@@ -116,7 +140,7 @@ class Bundle:
 
     def task_ids(self) -> list[str]:
         ids = set(self.tasks) | set(self.items)
-        return sorted(ids, key=lambda t: [int(x) for x in re.findall(r"\d+", t)] + [t])
+        return sorted(ids, key=lambda t: ([int(x) for x in re.findall(r"\d+", t)], t))
 
     def problems_for(self, task: str) -> list[Problem]:
         return [p for p in self.problems if p.task == task]
@@ -147,6 +171,28 @@ class Store:
         if not p.is_file():
             raise NotFound(rel)
         return p
+
+    def color31_options(self) -> list[dict]:
+        """Colour-31 choices from the accepted T1.1 palettes/region_overrides.json (fmain2.c:381-386)."""
+        p = self.assets_dir / "palettes" / "region_overrides.json"
+        if not p.is_file():
+            return []
+        ov = json.loads(p.read_text(encoding="utf-8"))
+        opts = [{"label": f"default {ov['default']['rgb4']}", **ov["default"]}]
+        opts += [{"label": f"region {r} {v['rgb4']}", **v} for r, v in sorted(ov.get("regions", {}).items())]
+        opts += [{"label": f"region {r} {v['condition']} {v['rgb4']}", **v}
+                 for r, v in sorted(ov.get("conditional_regions", {}).items())]
+        return opts
+
+    def asset_bytes(self, rel: str, color31: Optional[str] = None) -> tuple[bytes, bool]:
+        """File bytes and whether it is an indexed PNG; `color31` (rgb4 hex) rewrites palette entry 31."""
+        data = self.asset_file(rel).read_bytes()
+        indexed = png_is_indexed(data)
+        if color31 and indexed:
+            v = int(color31, 16)
+            rgb = tuple(((v >> s) & 0xF) * 17 for s in (8, 4, 0))
+            data = png_with_palette_entry(data, 31, rgb)
+        return data, indexed
 
     def source_lines(self, rel: str, start: Optional[int] = None,
                      end: Optional[int] = None, block: bool = False) -> dict:

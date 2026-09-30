@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from models import DraftBody, Submission
@@ -49,9 +49,17 @@ def create_app(store: Store, dist: Optional[Path] = DIST) -> FastAPI:
                block: bool = False):
         return call(store.source_lines, path, start, end, block)
 
+    @app.get("/api/color31")
+    def color31():
+        return store.color31_options()
+
     @app.get("/files/{path:path}")
-    def files(path: str):
+    def files(path: str, color31: Optional[str] = None):
         try:
+            if path.lower().endswith(".png"):
+                data, indexed = call(store.asset_bytes, path, color31)
+                return Response(data, media_type="image/png",
+                                headers={"Cache-Control": "no-cache", "X-Indexed-Png": "1" if indexed else "0"})
             return FileResponse(call(store.asset_file, path), headers={"Cache-Control": "no-cache"})
         except HTTPException as e:
             raise HTTPException(404, "not found") if e.status_code == 400 else e

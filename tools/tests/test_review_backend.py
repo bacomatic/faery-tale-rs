@@ -401,3 +401,20 @@ def test_api_source(client):
         assert client.get("/api/source", params={"path": path}).status_code == 400, path
     assert client.get("/api/source", params={"path": "src/foo.c", "start": 11}).status_code == 400
     assert client.get("/api/source", params={"path": "src/nope.c"}).status_code == 404
+
+
+def test_color31_rewrite_on_indexed_png(tmp_path):
+    import io
+    from PIL import Image as _Image
+    sys.path.insert(0, str(BACKEND.parents[1]))
+    import asset_common as ac
+    from store import png_is_indexed, png_with_palette_entry
+    pal = [(i, i, i) for i in range(32)]
+    p = tmp_path / "t.png"
+    ac.write_indexed_png(p, [[31, 0], [1, 31]], pal, transparent=False)
+    data = p.read_bytes()
+    assert png_is_indexed(data)
+    out = png_with_palette_entry(data, 31, (0, 255, 0))
+    im = _Image.open(io.BytesIO(out))
+    assert im.getpalette()[93:96] == [0, 255, 0] and list(im.getdata()) == [31, 0, 1, 31]
+    assert not png_is_indexed(b"\x89PNG\r\n\x1a\n" + b"\0" * 30)

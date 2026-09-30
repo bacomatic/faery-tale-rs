@@ -19,6 +19,7 @@ const NATIVE: Record<string, Native> = {
 const IMAGE = /\.(png|gif|jpe?g|webp|bmp)$/i;
 const JSON_FILE = /\.json$/i;
 const TEXT = /\.(md|txt|glsl|frag|vert|csv)$/i;
+const AUDIO = /\.(wav|ogg|mp3|flac)$/i;
 
 function TextViewer({ path }: { path: string }) {
   const { data, err } = useFetched<string>(path, (r) => r.text());
@@ -47,6 +48,7 @@ function NativeJson({ path, View }: { path: string; View: Native }) {
 export default function FileViewer({ path, view }: { path: string; view: string }) {
   let body;
   if (IMAGE.test(path)) body = <ImageViewer path={path} />;
+  else if (AUDIO.test(path)) body = <audio controls preload="metadata" src={fileUrl(path)} />;
   else if (JSON_FILE.test(path) && view === "sprite") body = <SpriteViewer path={path} />;
   else if (JSON_FILE.test(path))
     body = NATIVE[view] ? <NativeJson path={path} View={NATIVE[view]} /> : <JsonViewer path={path} />;
