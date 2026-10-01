@@ -2,21 +2,21 @@
 """T2.2.1 -- master tile atlas: every tile the game can draw, deduplicated.
 
 Inputs are the accepted per-region atlases (T2.2, ``assets/tiles/region_NN/atlas_indexed.png``)
-and the world data (T2.5, ``assets/world/region_N.json`` + ``sectors_*.json``).
+and the world decoded from the ADF (``tools/decode_map_data.load_regions``), segmented into the
+shipped maps by ``tools/extract_maps.py`` (T2.5).
 
-A tile is *used* by a region when a sector referenced by that region's map contains it:
-the tile at a map position is ``sector_mem[map_mem[sec_num]*128 + row*16 + col]``
-(``src/fsubs.asm:565-604``; map block ``file_index[].region``, sector block
-``file_index[].sector``, ``src/fmain.c:3557-3562``).
+A tile is *used* by a region when it appears in a shipped map drawn with that region's tileset:
+the whole overworld for regions 0-7 (``src/fsubs.asm:565-604``, ``fmain.c:3557-3562``), and for
+regions 8/9 -- which share one map and sector pool (``fmain.c:624-625``) -- the interior spaces
+reached with that region loaded (``doorlist[].secs``, ``fmain.c:1926``; stargate
+``fmain.c:2632-2637``; quicksand drop ``fmain.c:1784-1789``).
 
-Regions 8 and 9 share map and sector data (``src/fmain.c:624-625``); there a sector counts for a
-region only if its island (4-connected non-zero sectors) is entered with that region loaded --
-from ``doorlist`` (``fmain.c:1919-1950``) or the necromancer ``xfer`` (``fmain.c:1784-1788``).
-
-Used tiles are deduplicated by palette-index content. A tile that contains index 31 is keyed
-together with the region's colour-31 value (``src/fmain2.c:381-386``) so the RGBA atlas is exact
-for every region. ``master.json`` records each master tile's sources and, per region, a
-256-entry ``tile index -> master index`` reference map (``null`` = never drawn).
+Used tiles are deduplicated by palette-index content. The key also carries the region's colour-31
+value (``src/fmain2.c:381-386``), the shadow mask entry + occlusion mode (``fmain.c:2577-2595``)
+and the collision record -- feature type + sub-tile mask (``fsubs.asm:607-614``) -- so every
+master tile is a complete 1:1 stand-in for an original tile id: art, mask, and walkability.
+``master.json`` records each master tile's sources and, per region, a 256-entry
+``tile index -> master index`` reference map (``null`` = never drawn).
 
 Usage::
 
@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -39,6 +38,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import asset_common as ac  # noqa: E402
+import extract_maps as em  # noqa: E402
 
 REPO_ROOT = TOOLS_DIR.parent
 TILE_W, TILE_H = 16, 32       # fsubs.asm:755-771, fsubs.asm:1701
@@ -61,93 +61,6 @@ def color_31(overrides: dict, region: int) -> dict:
     return overrides["regions"].get(region) or overrides["default"]
 
 
-# --------------------------------------------------------------------------- #
-# Indoor regions 8/9: which islands of the shared map are shown under which region
-# --------------------------------------------------------------------------- #
-INDOOR_YREG = 128   # fmain.c:2983-2987: regions 8/9 use xreg 0, yreg 128
-DOOR_RE = re.compile(r"\{\s*0x([0-9a-f]+),\s*0x([0-9a-f]+),\s*0x([0-9a-f]+),\s*0x([0-9a-f]+),\s*"
-                     r"(\w+)\s*,\s*(\d)\s*\}\s*,?\s*/\*\s*(.*?)\s*\*/", re.I)
-XFER9_RE = re.compile(r"new_region\s*=\s*9;\s*xfer\((0x[0-9a-f]+|\d+),\s*(0x[0-9a-f]+|\d+),\s*FALSE\)", re.I)
-
-
-def indoor_entries(src_dir: Path) -> list[dict]:
-    """Every way into the indoor map, with the region the game loads there.
-
-    - Entering a door from outside: land on xc2, region 8 if secs == 1 else 9 (fmain.c:1919-1927).
-    - Doors whose xc1 is itself indoor (the stargate pair) are only ever matched from inside, on xc2,
-      and land on xc1 with the region derived from the coordinates (fmain.c:1936-1950, 2632-2637):
-      xtest + 2*ytest with ytest = 4 for any indoor y, so region 8 for map columns 0-63.
-    - The necromancer sequence: new_region = 9; xfer(x, y) (fmain.c:1784-1788).
-    """
-    text = (src_dir / "fmain.c").read_text(errors="replace")
-    body = text[text.index("doorlist[DOORCOUNT] = {"):]
-    body = body[:body.index("\n};")]
-    out = []
-    for x1, y1, x2, y2, dtype, secs, name in DOOR_RE.findall(body):
-        x1, y1, x2, y2, secs = int(x1, 16), int(y1, 16), int(x2, 16), int(y2, 16), int(secs)
-        if y1 >> 8 < INDOOR_YREG:
-            out.append({"x": x2, "y": y2, "region": 8 if secs == 1 else 9,
-                        "via": f"door '{name}' (secs={secs})", "source": "src/fmain.c:1926"})
-        else:
-            xt, yt = (x1 >> 8) >> 6 & 1, ((y1 >> 8) >> 5) & 7
-            out.append({"x": x1, "y": y1, "region": xt + 2 * yt,
-                        "via": f"door '{name}' (exit, region from coordinates)",
-                        "source": "src/fmain.c:1950, src/fmain.c:2632-2637"})
-    m = XFER9_RE.search(text)
-    out.append({"x": int(m.group(1), 0), "y": int(m.group(2), 0), "region": 9,
-                "via": "necromancer sequence xfer", "source": "src/fmain.c:1787-1788"})
-    return out
-
-
-def islands(grid: np.ndarray) -> np.ndarray:
-    """Label 4-connected components of non-zero sectors (sector 0 is tile 0, impassable everywhere)."""
-    lab = np.full(grid.shape, -1, dtype=int)
-    n = 0
-    for y, x in zip(*np.nonzero(grid)):
-        if lab[y, x] >= 0:
-            continue
-        stack = [(y, x)]
-        lab[y, x] = n
-        while stack:
-            cy, cx = stack.pop()
-            for ny, nx in ((cy + 1, cx), (cy - 1, cx), (cy, cx + 1), (cy, cx - 1)):
-                if 0 <= ny < grid.shape[0] and 0 <= nx < grid.shape[1] and grid[ny, nx] and lab[ny, nx] < 0:
-                    lab[ny, nx] = n
-                    stack.append((ny, nx))
-        n += 1
-    return lab
-
-
-def indoor_sectors(grid: np.ndarray, entries: list[dict], region: int) -> tuple[np.ndarray, dict]:
-    """Sectors of the islands the game enters with `region` loaded."""
-    lab = islands(grid)
-    per_island: dict[int, set] = {}
-    for e in entries:
-        col, row = e["x"] >> 8, (e["y"] >> 8) - INDOOR_YREG
-        if 0 <= row < grid.shape[0] and 0 <= col < grid.shape[1] and grid[row, col]:
-            per_island.setdefault(int(lab[row, col]), set()).add(e["region"])
-    n = lab.max() + 1
-    mine = [i for i in range(n) if region in per_island.get(i, ())]
-    unreached = [i for i in range(n) if i not in per_island]
-    secs = np.unique(grid[np.isin(lab, mine)]) if mine else np.array([], dtype=int)
-    return secs, {"islands_total": int(n), "islands_shown_in_region": len(mine),
-                  "islands_without_entry": len(unreached)}
-
-
-def used_tiles(world: Path, region: int, entries: list[dict] | None = None) -> tuple[np.ndarray, dict]:
-    r = json.loads((world / f"region_{region}.json").read_text())
-    pool = np.array(json.loads((world / r["sectors_file"]).read_text())["sectors"])
-    grid = np.array(r["region_map"]["grid"])
-    meta = {"name": r["name"], "sectors_file": r["sectors_file"], "map_block": r["region_map"]["block"]}
-    if region >= 8 and entries is not None:
-        sectors, info = indoor_sectors(grid, entries, region)
-        meta.update(info)
-    else:
-        sectors = np.unique(grid)
-    meta["sectors_referenced"] = int(len(sectors))
-    return np.unique(pool[sectors]), meta
-
-
 def split_tiles(a: np.ndarray) -> np.ndarray:
     rows = a.shape[0] // TILE_H
     return a.reshape(rows, TILE_H, SRC_COLS, TILE_W).transpose(0, 2, 1, 3).reshape(-1, TILE_H, TILE_W)
@@ -164,9 +77,11 @@ def region_shadow(tiles: Path, region: int) -> tuple[np.ndarray, list[dict]]:
     return bits.astype(np.uint8), recs
 
 
-def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+def build(tiles: Path, palettes: Path, src_dir: Path, game_dir: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     pal, overrides = load_palette(palettes)
-    entries = indoor_entries(src_dir)
+    world = em.World(game_dir, src_dir)
+    spaces = em.finish_spaces(em.segment(world))
+    used_by_region = em.used_tiles(world, spaces)
     masters: list[dict] = []
     pixels: list[np.ndarray] = []
     shadows: list[np.ndarray] = []
@@ -175,7 +90,10 @@ def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.n
     regions_meta: dict[str, dict] = {}
 
     for region in range(NUM_REGIONS):
-        used, meta = used_tiles(world, region, entries)
+        used = used_by_region[region]
+        terra = world.regions[region]["terra"]
+        meta = {"name": world.regions[region]["name"],
+                "maps": sorted({sp["name"] for sp in spaces if sp["region"] == region}) if region >= 8 else ["overworld"]}
         art = region_tiles(tiles, region)
         shadow_bits, shadow_recs = region_shadow(tiles, region)
         c31 = color_31(overrides, region)
@@ -184,8 +102,9 @@ def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.n
             px = art[t]
             has31 = bool((px == 31).any())
             mask, mode = shadow_recs[t]["mask"], shadow_recs[t]["mask_mode"]
-            # same art but a different shadow mask / occlusion mode is a different master tile
-            key = (px.tobytes(), c31["rgb4"] if has31 else None, mask, mode)
+            ftype, smask = terra[t]["feature_type"], terra[t]["subtile_mask"]
+            # same art but a different shadow mask / occlusion mode / collision is a different master tile
+            key = (px.tobytes(), c31["rgb4"] if has31 else None, mask, mode, ftype, smask)
             m = key_to_master.get(key)
             if m is None:
                 m = len(masters)
@@ -195,7 +114,7 @@ def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.n
                 masters.append({"index": m, "x": (m % MASTER_COLS) * TILE_W, "y": (m // MASTER_COLS) * TILE_H,
                                 "w": TILE_W, "h": TILE_H, "uses_index_31": has31,
                                 "color_31": c31 if has31 else None, "mask": mask, "mask_mode": mode,
-                                "sources": []})
+                                "feature_type": ftype, "subtile_mask": smask, "sources": []})
             masters[m]["sources"].append({"region": region, "tile": t})
             ref[t] = m
         region_maps[str(region)] = ref
@@ -217,6 +136,7 @@ def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.n
                         "w": TILE_W, "h": TILE_H, "uses_index_31": True,
                         "color_31": {"rgb4": cond["rgb4"], "rgba8": list(cond["rgba8"])},
                         "mask": m["mask"], "mask_mode": m["mask_mode"],
+                        "feature_type": m["feature_type"], "subtile_mask": m["subtile_mask"],
                         "variant_of": m["index"], "condition": cond["condition"], "sources": []})
         m["secret_variant"] = v
         secret_variants.append({"tile": m["index"], "variant": v, "sources": m["sources"]})
@@ -242,22 +162,33 @@ def build(tiles: Path, world: Path, palettes: Path, src_dir: Path) -> tuple[np.n
         "count": len(masters),
         "used_pairs": sum(len(m["sources"]) for m in masters),
         "usage": {
-            "rule": "A tile is used by a region when a sector referenced by the region's 32x64 map contains "
-                    "it: tile = sector_mem[map_mem[sec_num]*128 + row*16 + col]. Regions 8 and 9 share one "
-                    "map and sector pool; there a sector counts only if it lies on an island (4-connected "
-                    "non-zero sectors; sector 0 is impassable tile 0) that the game enters with that region "
-                    "loaded -- see indoor_entries. Islands no door or xfer reaches count for neither.",
+            "rule": "A tile is used by a region when it appears in a shipped map (assets/maps) drawn with that "
+                    "region's tileset: the overworld for regions 0-7 (tile = sector_mem[map_mem[sec_num]*128 + "
+                    "row*16 + col]); for regions 8 and 9, which share one map and sector pool, the interior "
+                    "spaces the game enters with that region loaded (door secs, stargate, quicksand drop). "
+                    "Parts of the interior map no entry reaches count for neither.",
             "citations": ["src/fsubs.asm:565-604", "src/fmain.c:3557-3562", "src/fmain.c:615-626",
                           "src/fmain.c:1919-1927", "src/fmain.c:1936-1950", "src/fmain.c:2632-2637",
-                          "src/fmain.c:1784-1788"],
-            "indoor_entries": entries,
+                          "src/fmain.c:1784-1789"],
         },
         "dedup": {
             "rule": "Identical palette-index tiles collapse into one master tile. The key also holds the "
-                    "region's colour-31 value (when the tile uses index 31) and the tile's shadow mask entry "
-                    "and occlusion mode, so atlas_rgba.png and atlas_shadowmask.png are exact 1:1 lookups; "
-                    "art that appears with different masks/modes is kept once per combination.",
-            "citations": ["src/fmain2.c:381-386", "src/fmain.c:2577-2595"],
+                    "region's colour-31 value (when the tile uses index 31), the tile's shadow mask entry and "
+                    "occlusion mode, and its collision record (feature_type, subtile_mask), so every master "
+                    "tile is a complete stand-in for an original tile id: atlas_rgba.png, atlas_shadowmask.png "
+                    "and the walkability are exact 1:1 lookups. Art that appears with different masks/modes/"
+                    "collision is kept once per combination.",
+            "citations": ["src/fmain2.c:381-386", "src/fmain.c:2577-2595", "src/fsubs.asm:607-614"],
+        },
+        "collision": {
+            "fields": "tiles[].feature_type (terra byte 1 high nibble) and tiles[].subtile_mask (terra byte 2)",
+            "rule": "px_to_im(x, y) returns feature_type when subtile_mask has bit 0x80 >> (4*col + row) set "
+                    "for sub-tile col = (x>>3)&1, row = (y>>3)&3 (8x8 px), else 0. prox blocks movement on 1 "
+                    "and on >= 10; proxcheck lets the hero through 8 and 9; 12 passes with the Shard; 15 is "
+                    "an openable door (doorfind). Named types: 1 impassable, 2 sink, 3 slow/brush; 13 is "
+                    "furniture (beds), 15 doors.",
+            "citations": ["src/fsubs.asm:548-614", "src/fsubs.asm:1590-1611", "src/fmain2.c:277-283",
+                          "src/fmain.c:1607-1609", "src/fmain.c:684-685", "src/fmain.c:1081-1125"],
         },
         "shadow_mask": {
             "file": "atlas_shadowmask.png",
@@ -298,10 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--assets-dir", type=Path, default=REPO_ROOT / "assets")
     p.add_argument("--out-dir", type=Path, default=None)
     p.add_argument("--src-dir", type=Path, default=REPO_ROOT / "src")
+    p.add_argument("--game-dir", type=Path, default=REPO_ROOT / "src" / "assets")
     args = p.parse_args(argv)
     assets = args.assets_dir
     out = args.out_dir or assets / "tiles" / "master"
-    atlas, rgba, shadow, meta = build(assets / "tiles", assets / "world", assets / "palettes", args.src_dir)
+    atlas, rgba, shadow, meta = build(assets / "tiles", assets / "palettes", args.src_dir, args.game_dir)
     out.mkdir(parents=True, exist_ok=True)
     pal, _ = load_palette(assets / "palettes")
     ac.write_indexed_png(out / "atlas_indexed.png", atlas, pal, transparent=False)

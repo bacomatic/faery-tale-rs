@@ -359,9 +359,9 @@
         "master/atlas_shadowmask.png"
       ],
       "id": "master_atlas",
-      "look_for": "A 32-column catalogue (512x960) of world tiles in first-use order: snow/ice and 'wild' grass, water and paths first (region 0), then woods, swamp, plains, desert (with its olive colour 31), the bay city and farms, volcanic rock and lava, building interiors, dungeon stone with the dark blue-grey colour 31, and index-0 black padding after the last tile. No two tiles should look identical except colour-31 variants (6 tiles). The indexed and RGBA atlases show the same imagery; the highlight mask lights up on vegetation tiles. The last two tiles (955, 956) are the secret-timer variants of 943/944 (region 9 cave tiles 114/115): identical source indices; in the RGBA atlas their passage pixels are bright green 0x00f0 where the originals are dungeon grey 0x0445. The indexed atlas is verbatim source indices (0-31): use the colour-31 selector in the viewer to preview it with each region_overrides value (default light blue, region 4 olive, region 9 grey, secret green). atlas_shadowmask.png is the 1:1 shadow-mask lookup for the same cells (empty where the tile's occlusion mode is 0); art that appears with different masks/modes is kept once per combination (10 extra tiles).",
+      "look_for": "A 32-column catalogue (512x992) of world tiles in first-use order: snow/ice and 'wild' grass, water and paths first (region 0), then woods, swamp, plains, desert (with its olive colour 31), the bay city and farms, volcanic rock and lava, building interiors, dungeon stone with the dark blue-grey colour 31, and index-0 black padding after the last tile. No two tiles should look identical except colour-31 variants (6 tiles). The indexed and RGBA atlases show the same imagery; the highlight mask lights up on vegetation tiles. The last two tiles (971, 972) are the secret-timer variants of 959/960 (region 9 cave tiles 114/115): identical source indices; in the RGBA atlas their passage pixels are bright green 0x00f0 where the originals are dungeon grey 0x0445. The indexed atlas is verbatim source indices (0-31): use the colour-31 selector in the viewer to preview it with each region_overrides value (default light blue, region 4 olive, region 9 grey, secret green). atlas_shadowmask.png is the 1:1 shadow-mask lookup for the same cells (empty where the tile's occlusion mode is 0); art that appears with different masks/modes is kept once per combination (10 extra tiles), and so is art that appears with different collision records (feature type / sub-tile mask, 23 extra tiles — e.g. the solid black interior tile exists as full wall, top-half wall and open floor).",
       "task": "T2.2.1",
-      "title": "Master atlas — 957 tiles (2 secret-timer variants)",
+      "title": "Master atlas — 973 tiles (2 secret-timer variants)",
       "view": "image"
     },
     {
@@ -372,7 +372,7 @@
       ],
       "counts": [
         {
-          "expect": 957,
+          "expect": 973,
           "file": "master/master.json",
           "label": "master tiles",
           "path": "tiles"
@@ -390,10 +390,16 @@
           "path": "region_maps.0"
         },
         {
-          "expect": 87,
+          "expect": 5,
           "file": "master/master.json",
-          "label": "indoor entries",
-          "path": "usage.indoor_entries"
+          "label": "region 9 maps (dungeons)",
+          "path": "regions.9.maps"
+        },
+        {
+          "expect": 63,
+          "file": "master/master.json",
+          "label": "region 8 maps (interiors + astral)",
+          "path": "regions.8.maps"
         },
         {
           "expect": 2,
@@ -406,7 +412,7 @@
         "master/master.json"
       ],
       "id": "master_json",
-      "look_for": "count 957 tiles = 955 unique (art, colour 31, shadow mask, mode) combinations from 1874 used (region, tile) pairs + 2 secret_timer variants (index_31.secret_variants: tile -> variant; the variants have variant_of and sources []). regions: per region used/unused out of 256 (region 5: 242/14; region 8: 248/8; region 9: 146/110 — only the 3 islands entered as region 9: castle/village/maze-caves, spider/necromancer, dragon cave). usage.indoor_entries lists all 86 doors + the necromancer xfer with the region each loads. tiles[i] lists x/y and every source (region, tile). region_maps has 10 lists of 256 entries; null marks tiles no sector on that region's map contains. tiles[].mask / mask_mode name the shadow mask entry and occlusion mode.",
+      "look_for": "count 973 tiles = 971 unique (art, colour 31, shadow mask, mode, collision) combinations from 1788 used (region, tile) pairs + 2 secret_timer variants (index_31.secret_variants: tile -> variant; the variants have variant_of and sources []). regions: per region used/unused out of 256 and the maps drawn with it (region 5: 242/14; region 8: 217/39, 62 interiors + astral plane; region 9: 91/165, the 5 dungeons). tiles[i] lists x/y and every source (region, tile). region_maps has 10 lists of 256 entries; null marks tiles no shipped map draws with that region. tiles[].mask / mask_mode name the shadow mask entry and occlusion mode; tiles[].feature_type / subtile_mask are the collision record (collision.rule explains px_to_im/prox).",
       "task": "T2.2.1",
       "title": "master.json — sources and region reference maps",
       "view": "json"
@@ -419,7 +425,7 @@
       "title": "Background tiles"
     },
     "T2.2.1": {
-      "summary": "One atlas of every tile the game can draw: for each region the tiles contained in sectors its 32x64 map references (fsubs.asm:565-604), deduplicated by pixel content (tiles containing index 31 are kept per colour-31 value, fmain2.c:381-386). The two tiles the Crystal Orb recolours (secret_timer, region 9) are appended once more as variants: verbatim indices, colour 31 = 0x00f0 in the RGBA atlas. A port draws the variant while the timer runs (or swaps palette entry 31 on the indexed atlas; the viewer's colour-31 selector previews all four region_overrides values). master.json holds per-tile sources and, per region, a 256-entry tile -> master reference map (null = never drawn). Regions 8/9 share map data; a sector counts for the region the game loads when entering its island (doorlist secs, fmain.c:1926; stargate/necromancer xfers), so dungeon tiles are not credited to the crystal palace and vice versa.",
+      "summary": "One atlas of every tile the game can draw: for each region the tiles that appear in the shipped maps (assets/maps) drawn with its tileset (fsubs.asm:565-604), deduplicated by pixel content (tiles containing index 31 are kept per colour-31 value, fmain2.c:381-386; different shadow mask/mode or collision record also keeps a tile apart, so each master tile is a complete stand-in for an original tile id). The two tiles the Crystal Orb recolours (secret_timer, region 9) are appended once more as variants: verbatim indices, colour 31 = 0x00f0 in the RGBA atlas. A port draws the variant while the timer runs (or swaps palette entry 31 on the indexed atlas; the viewer's colour-31 selector previews all four region_overrides values). master.json holds per-tile sources and, per region, a 256-entry tile -> master reference map (null = never drawn). Regions 8/9 share map data; a tile counts for the region the game loads when entering the space it lies in (doorlist secs, fmain.c:1926; stargate; quicksand drop), so dungeon tiles are not credited to the crystal palace and vice versa.",
       "title": "Master tile atlas (deduplicated, used tiles only)"
     }
   }

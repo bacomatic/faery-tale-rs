@@ -20,7 +20,7 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T2.2.1](T2.2.1-master-atlas.md) Master tile atlas | **DONE** ✅ | T2.2, T2.5 | ACCEPTED 2026-09-30 (2/2 OK). Added during T2.2 review. 955 unique (art, colour 31, shadow mask) tiles + 2 secret-timer variants (512×960); shadow-mask atlas alongside + per-region reference maps in `master.json`. |
 | [T2.3](T2.3-masks.md) Shadow/collision masks | **DONE** ✅ | T0.1 | ACCEPTED 2026-09-30 (1/1 OK). 192 PNGs + sheet + `masks.json`. |
 | [T2.4](T2.4-screens.md) IFF screens | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/screens`. 9 PNGs + `screens.json`. |
-| [T2.5](T2.5-world.md) World data | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/world`. 10 region JSONs, 2 sector pools, 30 previews. |
+| [T2.5](T2.5-world.md) World maps | **IMPLEMENTED (awaiting review)** | T0.1, T2.2, T2.2.1 | Redesigned 2026-09-30: `assets/maps/` — overworld + 62 interiors + 5 dungeons + astral plane as index-layer PNGs with previews; `assets/world/` removed. |
 | [T2.6](T2.6-music.md) Music + instruments | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/music`. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
 | [T2.7](T2.7-sfx.md) SFX | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/sfx`. 6 WAVs + `sfx.json`. |
 | [T2.8](T2.8-fonts.md) Fonts | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/fonts`. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
@@ -287,6 +287,22 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
     in mask/mode across sources (e.g. master 182: none in regions 1-2, mask 3 mode 3 in region 3), so they are kept
     once per combination → 955 + 2 variants = **957** master tiles, a strict 1:1 lookup for art, highlight and shadow.
     `extract_tiles.py` reads the mask store via `extract_masks` and the terra entries from `assets/world/`.
+  - **T2.5 redesign (user, 2026-09-30: "walls of JSON I won't review").** The per-region sector/terra JSON bundle
+    (`assets/world/`) is gone. `tools/extract_maps.py` now ships `assets/maps/`: the **overworld** (regions 0-7
+    stitched, 2048×1024 tiles) and every interior space cut out of the shared region-8/9 sheet by a sub-tile
+    walkability flood fill from each entry (door landing `fmain.c:1919-1924`, stargate `1944-1948` + `2632-2637`,
+    quicksand drop `1784-1789`; `px_to_im`/`prox` rules: 1 and ≥10 block, 12 Shard, 15 openable door) → **62
+    interiors**, **5 dungeons** (tombs, dragon cave, maze caves, spider pit, troll cave — *not* one complex; a
+    first tile-granular probe had leaked through partial walls), the **astral plane** (region 8, via the doom-tower
+    stargate). Cells belonging to another space are blanked. Layers are index PNGs (`tiles.png` 8-bit original id,
+    `master.png` 16-bit master index) + `map.json`, decoded by `tools/decode_map_layers.py`; previews rendered from
+    the real tiles with entries ringed in magenta. Format in `assets/maps/README.md`. Collision moved into the
+    master atlas: 21 master tiles had conflicting `(feature_type, subtile_mask)` across sources (same art, different
+    tile id, e.g. region 8's black tile as wall/half-wall/floor), so the dedup key now includes them → 971 + 2
+    variants = **973** master tiles from 1788 used pairs; "used" for regions 8/9 is now "appears in a shipped space".
+    `extract_tiles.py`/`extract_masks.py`/`extract_master_atlas.py` read terra via `decode_map_data.load_regions`.
+    Source bug → P27: cabin-yard gates #4/#5/#9 point into cabins 7/8/6's yards (three `yc2` values) — **corrected in the shipped maps** (user decision, `extract_maps.DOOR_FIXES`, originals kept as `fix.source_yc2`); P26: tile 7 (type 10) is a
+    passage corner; 161/162 (type 13) are beds. The `--assets` legend step (swatch view + `legend.png`) is moot.
   - Doc drift noticed, not fixed: `text-display.md:43` (OpenFont is at `fmain.c:778`), `iff-loading.md` asm/struct
     line numbers off by 2, `audio.md:162-170` (84-entry ptable) and `:538` (seek "redundant").
 

@@ -1,11 +1,9 @@
-"""Self-check aid for tools/decode_map_data.py --assets (T2.5). Not an acceptance gate."""
+"""Self-check aid for tools/decode_map_data.py load_regions (T2.5 world model). Not an acceptance gate."""
 
-import json
 import sys
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOLS = REPO_ROOT / "tools"
@@ -18,11 +16,8 @@ IMAGE = REPO_ROOT / "src" / "assets" / "image"
 
 
 @pytest.fixture(scope="module")
-def bundle(tmp_path_factory):
-    out = tmp_path_factory.mktemp("world")
-    dm.cmd_assets(str(REPO_ROOT / "src" / "assets"), str(REPO_ROOT / "src"), str(out),
-                  str(REPO_ROOT / "assets" / "palettes" / "pagecolors.json"))
-    return out
+def regions():
+    return dm.load_regions(str(REPO_ROOT / "src" / "assets"), str(REPO_ROOT / "src"))
 
 
 def test_file_index_parsed_from_source():
@@ -59,48 +54,35 @@ def test_terra_nibbles_round_trip():
         assert e["big_color"] == raw[3]
 
 
-def test_tambry_at_hero_start(bundle):
+def test_tambry_at_hero_start(regions):
     """Hero start (19036, 15755) in region 3 (fmain.c:2853) lands on a 'village of
     Tambry' sector (narr.asm place table, sectors 64-69)."""
-    region = json.loads((bundle / "region_3.json").read_text())
+    region = regions[3]
     col = (19036 >> 8) - region["xreg"]
     row = (15755 >> 8) - region["yreg"]
     assert (col, row) == (10, 29)
-    sector = region["region_map"]["grid"][row][col]
+    sector = region["grid"][row][col]
     assert dm.lookup_place_name(sector, False) == "village of Tambry"
 
 
-def test_bundle_layout(bundle):
-    assert sorted(p.name for p in bundle.glob("region_*.json")) == [f"region_{i}.json" for i in range(10)]
-    assert (bundle / "sectors_outdoor.json").is_file() and (bundle / "sectors_indoor.json").is_file()
-    assert len(list((bundle / "previews").glob("region_*_map.png"))) == 10
-    assert len(list((bundle / "previews").glob("region_*_collision.png"))) == 10
-    assert len(list((bundle / "previews").glob("region_*_maskmode.png"))) == 10
-    assert (bundle / "previews" / "legend.json").is_file()
-
-    pool = json.loads((bundle / "sectors_outdoor.json").read_text())
-    assert pool["block"] == 32
-    assert len(pool["sectors"]) == 256
-    assert all(len(s) == 8 and all(len(r) == 16 for r in s) for s in pool["sectors"])
-
-    for i in range(10):
-        region = json.loads((bundle / f"region_{i}.json").read_text())
-        assert region["index"] == i
-        assert region["file_index"]["source"] == f"src/fmain.c:{616 + i}"
-        grid = region["region_map"]["grid"]
-        assert len(grid) == 32 and all(len(r) == 64 for r in grid)
-        assert len(region["terra"]["entries"]) == 256
-        assert region["sectors_file"] == ("sectors_outdoor.json" if i < 8 else "sectors_indoor.json")
+def test_region_layout(regions):
+    assert [r["index"] for r in regions] == list(range(10))
+    for i, region in enumerate(regions):
+        assert region["source"] == f"src/fmain.c:{616 + i}"
+        assert len(region["grid"]) == 32 and all(len(r) == 64 for r in region["grid"])
+        assert len(region["pool"]) == 256 and all(len(s) == 8 and all(len(r) == 16 for r in s) for s in region["pool"])
+        assert len(region["tiles"]) == 256 and all(len(r) == 1024 for r in region["tiles"])
+        assert len(region["terra"]) == 256
+        assert region["type"] == ("outdoor" if i < 8 else "indoor")
         assert (region["xreg"], region["yreg"]) == dm.region_params(i)
+    assert regions[0]["file_index"]["sector"] == 32 and regions[8]["file_index"]["sector"] == 96
+    # tile at map (row, col) = pool[grid[row//8][col//16]][row%8][col%16] (fsubs.asm:565-604)
+    r = regions[5]
+    assert r["tiles"][100][300] == r["pool"][r["grid"][12][18]][4][12]
 
-    assert Image.open(bundle / "previews" / "region_0_map.png").size == (1024, 256)
-    assert Image.open(bundle / "previews" / "region_0_collision.png").size == (2048, 1024)
-    assert Image.open(bundle / "previews" / "region_0_maskmode.png").size == (1024, 256)
 
-
-def test_regions_8_and_9_share_map_and_sectors(bundle):
+def test_regions_8_and_9_share_map_and_sectors(regions):
     """file_index rows 8 and 9 name the same sector/region blocks (fmain.c:624-625)."""
-    r8 = json.loads((bundle / "region_8.json").read_text())
-    r9 = json.loads((bundle / "region_9.json").read_text())
-    assert r8["region_map"]["grid"] == r9["region_map"]["grid"]
-    assert r8["terra"]["blocks"] != r9["terra"]["blocks"]
+    assert regions[8]["grid"] == regions[9]["grid"] and regions[8]["pool"] is regions[9]["pool"]
+    assert regions[8]["terra_blocks"] != regions[9]["terra_blocks"]
+    assert regions[8]["terra_blocks"][1] == regions[9]["terra_blocks"][1]   # inside+astral shared

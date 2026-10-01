@@ -203,6 +203,35 @@ def write_rgba_png(path, rgba_array: Sequence[Sequence[Sequence[int]]]) -> None:
                idat=bytes(raw))
 
 
+def write_gray_png(path, values: Sequence[Sequence[int]], *, bit_depth: int = 8) -> None:
+    """Write an 8- or 16-bit greyscale PNG whose sample values are the data.
+
+    Used for index layers (tile ids, master tile ids): every pixel is exactly
+    the stored integer, so the image round-trips losslessly with any PNG reader
+    (16-bit samples are big-endian per the PNG spec).
+    """
+    if bit_depth not in (8, 16):
+        raise ValueError("bit_depth must be 8 or 16")
+    rows = _rows(values)
+    height = len(rows)
+    width = len(rows[0])
+    fmt = ">%dH" % width if bit_depth == 16 else "%dB" % width
+    limit = 1 << bit_depth
+
+    raw = bytearray()
+    for row in rows:
+        if len(row) != width:
+            raise ValueError("all rows must have the same width")
+        vals = [int(v) for v in row]
+        if any(v < 0 or v >= limit for v in vals):
+            raise ValueError(f"value out of range for {bit_depth}-bit samples")
+        raw.append(0)  # filter type: None
+        raw.extend(struct.pack(fmt, *vals))
+
+    _write_png(path, width=width, height=height, bit_depth=bit_depth, color_type=0,
+               idat=bytes(raw))
+
+
 def write_highlight_mask(path, idx_array: Sequence[Sequence[int]]) -> None:
     """Write a 1-bit highlight mask PNG.
 

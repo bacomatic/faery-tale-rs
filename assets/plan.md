@@ -210,11 +210,13 @@ existing tool; **[new]** = new extractor module.
     required**. Cross-reference `formats/palettes.md` and `experiment/shaders/FINDINGS.md`.
 
 ### World data
-6. **Sector / region maps / terra** — `tools/decode_map_data.py` **[extend]** (already 1,467
-   lines of map/sector/terra logic). Emit per-region JSON: sector tile-index grid, region map,
-   and terra/collision flags (high nibble = feature type, low nibble = mask-application mode).
-   Also emit **preview renders** (per-region map PNGs, e.g. tiles composited or color-coded
-   terra) under `assets/world/previews/` so the reviewer can recognize the world by sight.
+6. **World maps** — `tools/extract_maps.py` **[new]** on top of `tools/decode_map_data.py`
+   (`load_regions`). Revised 2026-09-30 (the per-region sector/terra JSON cut was dropped as
+   unreviewable): emit `assets/maps/` — the stitched overworld plus one map per interior space
+   (62 buildings, 5 dungeons, astral plane) cut from the shared indoor sheet by walkability from
+   its doors — as index-layer PNGs (original tile id + master tile id) with `map.json` and a
+   preview rendered from the real tiles. Collision lives on the master tiles (T2.2.1 key extended
+   with feature type + sub-tile mask). Format: `assets/maps/README.md`.
 
 ### Audio
 7. **Music event streams** — **[new]** `tools/extract_music.py`. Parse `src/assets/songs`: 28 tracks,

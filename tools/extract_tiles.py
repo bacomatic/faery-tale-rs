@@ -56,6 +56,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import asset_common as ac  # noqa: E402
+import decode_map_data as dm  # noqa: E402
 import extract_masks as em  # noqa: E402
 import extract_table as et  # noqa: E402
 
@@ -223,7 +224,7 @@ def emit_region(entry: dict, image: bytes, palette: list, c31: dict, secret: dic
                     "ystop>35, 5 skip when xm==0 and ystop>35, 6 use tile 64's mask when ym!=0, 7 skip when "
                     "ystop>20; a falling actor uses mode 3. Per tile: tiles[].mask / mask_mode.",
             "source": "src/fmain.c:2577-2595, src/fsubs.asm:1047-1083",
-            "terra_source": f"assets/world/region_{entry['region']}.json terra.entries",
+            "terra_source": "src/assets/image terra blocks (tools/decode_map_data.load_regions)",
         },
         "tiles": [{"index": t, "x": (t % ATLAS_COLS) * TILE_W, "y": (t // ATLAS_COLS) * TILE_H,
                    "w": TILE_W, "h": TILE_H, "group": t // TILES_PER_GROUP,
@@ -239,21 +240,20 @@ def main(argv: list[str] | None = None) -> int:
     ac.add_io_args(parser)
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "assets" / "tiles")
     parser.add_argument("--palette-dir", type=Path, default=REPO_ROOT / "assets" / "palettes")
-    parser.add_argument("--world-dir", type=Path, default=REPO_ROOT / "assets" / "world",
-                        help="T2.5 region JSONs (terra entries -> per-tile shadow mask + mode)")
     parser.add_argument("--region", type=int, default=None, help="region 0-9 (default: all)")
     args = parser.parse_args(argv)
 
     image = (args.game_dir / "image").read_bytes()
     first, count, _ = em.mask_blocks(args.src_dir)
     masks = em.decode_masks(image, first, count)
+    regions = dm.load_regions(str(args.game_dir), str(args.src_dir))   # terra -> per-tile mask + mode
     for entry in load_file_index(args.src_dir):
         r = entry["region"]
         if args.region is not None and r != args.region:
             continue
         palette, c31, secret = load_palette(args.palette_dir / "pagecolors.json",
                                             args.palette_dir / "region_overrides.json", r)
-        terra = json.loads((args.world_dir / f"region_{r}.json").read_text())["terra"]["entries"]
+        terra = regions[r]["terra"]
         emit_region(entry, image, palette, c31, secret, terra, masks, args.out_dir / f"region_{r:02d}")
         print(f"region_{r:02d}: {entry['label']} {entry['name']} "
               f"blocks {[entry[f'image_{g}'] for g in range(NUM_GROUPS)]} colour31 {c31['rgb4']}")

@@ -1,0 +1,77 @@
+{
+  "blanked_tiles": 350,
+  "citations": [
+    "src/fmain.c:624-625",
+    "src/fmain.c:1892-1955",
+    "src/fmain.c:2625-2645",
+    "src/fsubs.asm:548-614",
+    "src/fsubs.asm:1590-1611",
+    "src/fmain.c:1607-1609"
+  ],
+  "entries": [
+    {
+      "door_type": "STAIR",
+      "kind": "door",
+      "landing_px": [
+        1152,
+        36576
+      ],
+      "landing_tile": [
+        55,
+        47
+      ],
+      "name": "tombs",
+      "outside_px": [
+        13424,
+        19296
+      ],
+      "source": "src/fmain.c:260, src/fmain.c:1919-1927"
+    }
+  ],
+  "kind": "dungeon",
+  "layers": {
+    "master": {
+      "file": "master.png",
+      "png": "16-bit greyscale (big-endian samples)",
+      "value": "master tile index into assets/tiles/master/master.json tiles[] (atlas cell x = tiles[i].x, y = tiles[i].y); 65535 = none"
+    },
+    "tiles": {
+      "file": "tiles.png",
+      "png": "8-bit greyscale",
+      "value": "tile id 0-255 in the map's tileset region (assets/tiles/region_<RR>/, tile t at column t % 16, row t // 16)"
+    }
+  },
+  "name": "tombs",
+  "notes": [
+    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space and were set to tile 0.",
+    "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); 128-255 are shared (fmain.c:624-625)."
+  ],
+  "origin_interior_tile": [
+    17,
+    72
+  ],
+  "origin_world_px": [
+    272,
+    35072
+  ],
+  "preview": {
+    "file": "preview.png",
+    "markers": "magenta: entry landing points",
+    "scale": "1/1"
+  },
+  "size_tiles": [
+    268,
+    162
+  ],
+  "tile_size_px": [
+    16,
+    32
+  ],
+  "tileset": {
+    "dir": "assets/tiles/region_09/",
+    "name": "F10 - dungeons and caves",
+    "region": 9,
+    "source": "src/fmain.c:260, src/fmain.c:1919-1927"
+  },
+  "walkable_subtiles": 70464
+}

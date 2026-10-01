@@ -1,0 +1,77 @@
+{
+  "blanked_tiles": 1810,
+  "citations": [
+    "src/fmain.c:624-625",
+    "src/fmain.c:1892-1955",
+    "src/fmain.c:2625-2645",
+    "src/fsubs.asm:548-614",
+    "src/fsubs.asm:1590-1611",
+    "src/fmain.c:1607-1609"
+  ],
+  "entries": [
+    {
+      "door_type": "CAVE",
+      "kind": "door",
+      "landing_px": [
+        6552,
+        35952
+      ],
+      "landing_tile": [
+        88,
+        43
+      ],
+      "name": "dragon cave",
+      "outside_px": [
+        5008,
+        7008
+      ],
+      "source": "src/fmain.c:244, src/fmain.c:1919-1927"
+    }
+  ],
+  "kind": "dungeon",
+  "layers": {
+    "master": {
+      "file": "master.png",
+      "png": "16-bit greyscale (big-endian samples)",
+      "value": "master tile index into assets/tiles/master/master.json tiles[] (atlas cell x = tiles[i].x, y = tiles[i].y); 65535 = none"
+    },
+    "tiles": {
+      "file": "tiles.png",
+      "png": "8-bit greyscale",
+      "value": "tile id 0-255 in the map's tileset region (assets/tiles/region_<RR>/, tile t at column t % 16, row t // 16)"
+    }
+  },
+  "name": "dragon cave",
+  "notes": [
+    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space and were set to tile 0.",
+    "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); 128-255 are shared (fmain.c:624-625)."
+  ],
+  "origin_interior_tile": [
+    321,
+    56
+  ],
+  "origin_world_px": [
+    5136,
+    34560
+  ],
+  "preview": {
+    "file": "preview.png",
+    "markers": "magenta: entry landing points",
+    "scale": "1/1"
+  },
+  "size_tiles": [
+    321,
+    106
+  ],
+  "tile_size_px": [
+    16,
+    32
+  ],
+  "tileset": {
+    "dir": "assets/tiles/region_09/",
+    "name": "F10 - dungeons and caves",
+    "region": 9,
+    "source": "src/fmain.c:244, src/fmain.c:1919-1927"
+  },
+  "walkable_subtiles": 49649
+}

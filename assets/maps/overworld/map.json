@@ -1,0 +1,1780 @@
+{
+  "citations": [
+    "src/fmain.c:615-626",
+    "src/fmain.c:2983-2987",
+    "src/fsubs.asm:565-604",
+    "src/fmain.c:233-326",
+    "src/fmain.c:1892-1934"
+  ],
+  "doors": [
+    {
+      "inside_px": [
+        10352,
+        35680
+      ],
+      "interior_region": 8,
+      "name": "desert fort",
+      "outside_px": [
+        4464,
+        20576
+      ],
+      "outside_tile": [
+        279,
+        643
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:240",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        10352,
+        35680
+      ],
+      "interior_region": 8,
+      "name": "desert fort",
+      "outside_px": [
+        4464,
+        20576
+      ],
+      "outside_tile": [
+        279,
+        643
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:241",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        10352,
+        35680
+      ],
+      "interior_region": 8,
+      "name": "desert fort",
+      "outside_px": [
+        4464,
+        20576
+      ],
+      "outside_tile": [
+        279,
+        643
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:242",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        10352,
+        35680
+      ],
+      "interior_region": 8,
+      "name": "desert fort",
+      "outside_px": [
+        4464,
+        20576
+      ],
+      "outside_tile": [
+        279,
+        643
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:243",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        6528,
+        35936
+      ],
+      "interior_region": 9,
+      "name": "dragon cave",
+      "outside_px": [
+        5008,
+        7008
+      ],
+      "outside_tile": [
+        313,
+        219
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:244",
+      "type": "CAVE"
+    },
+    {
+      "inside_px": [
+        8816,
+        38560
+      ],
+      "interior_region": 8,
+      "name": "pass fort",
+      "outside_px": [
+        6000,
+        27296
+      ],
+      "outside_tile": [
+        375,
+        853
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:245",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        8048,
+        38560
+      ],
+      "interior_region": 8,
+      "name": "gate fort",
+      "outside_px": [
+        6512,
+        25248
+      ],
+      "outside_tile": [
+        407,
+        789
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:246",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        5024,
+        38304
+      ],
+      "interior_region": 8,
+      "name": "oasis #1",
+      "outside_px": [
+        6816,
+        19360
+      ],
+      "outside_tile": [
+        426,
+        605
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:247",
+      "type": "DESERT"
+    },
+    {
+      "inside_px": [
+        5024,
+        38752
+      ],
+      "interior_region": 8,
+      "name": "oasis #4",
+      "outside_px": [
+        6816,
+        19552
+      ],
+      "outside_tile": [
+        426,
+        611
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:248",
+      "type": "DESERT"
+    },
+    {
+      "inside_px": [
+        5920,
+        38240
+      ],
+      "interior_region": 8,
+      "name": "oasis #2",
+      "outside_px": [
+        6944,
+        19296
+      ],
+      "outside_tile": [
+        434,
+        603
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:249",
+      "type": "DESERT"
+    },
+    {
+      "inside_px": [
+        5504,
+        38272
+      ],
+      "interior_region": 8,
+      "name": "oasis #3",
+      "outside_px": [
+        7040,
+        19328
+      ],
+      "outside_tile": [
+        440,
+        604
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:250",
+      "type": "DESERT"
+    },
+    {
+      "inside_px": [
+        5504,
+        38720
+      ],
+      "interior_region": 8,
+      "name": "oasis #5",
+      "outside_px": [
+        7040,
+        19520
+      ],
+      "outside_tile": [
+        440,
+        610
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:251",
+      "type": "DESERT"
+    },
+    {
+      "inside_px": [
+        10368,
+        40032
+      ],
+      "interior_region": 8,
+      "name": "west keep",
+      "outside_px": [
+        7792,
+        15200
+      ],
+      "outside_tile": [
+        487,
+        475
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:252",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        11904,
+        36256
+      ],
+      "interior_region": 8,
+      "name": "swamp shack",
+      "outside_px": [
+        9344,
+        13216
+      ],
+      "outside_tile": [
+        584,
+        413
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:253",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        10992,
+        37728
+      ],
+      "interior_region": 8,
+      "name": "doom tower",
+      "outside_px": [
+        11264,
+        29024
+      ],
+      "outside_tile": [
+        704,
+        907
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:256",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        12672,
+        39520
+      ],
+      "interior_region": 8,
+      "name": "lakeside keep",
+      "outside_px": [
+        12144,
+        11872
+      ],
+      "outside_tile": [
+        759,
+        371
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:257",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        7280,
+        38560
+      ],
+      "interior_region": 8,
+      "name": "plain fort",
+      "outside_px": [
+        12144,
+        25504
+      ],
+      "outside_tile": [
+        759,
+        797
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:258",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        10112,
+        39104
+      ],
+      "interior_region": 8,
+      "name": "road's end inn",
+      "outside_px": [
+        12672,
+        14528
+      ],
+      "outside_tile": [
+        792,
+        454
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:259",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        1136,
+        36576
+      ],
+      "interior_region": 9,
+      "name": "tombs",
+      "outside_px": [
+        13424,
+        19296
+      ],
+      "outside_tile": [
+        839,
+        603
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:260",
+      "type": "STAIR"
+    },
+    {
+      "inside_px": [
+        12000,
+        37824
+      ],
+      "interior_region": 8,
+      "name": "crystal palace",
+      "outside_px": [
+        15840,
+        7104
+      ],
+      "outside_tile": [
+        990,
+        222
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:261",
+      "type": "CRYST"
+    },
+    {
+      "inside_px": [
+        12032,
+        37824
+      ],
+      "interior_region": 8,
+      "name": "crystal palace",
+      "outside_px": [
+        15872,
+        7104
+      ],
+      "outside_tile": [
+        992,
+        222
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:262",
+      "type": "CRYST"
+    },
+    {
+      "inside_px": [
+        11904,
+        39520
+      ],
+      "interior_region": 8,
+      "name": "coast keepDB",
+      "outside_px": [
+        17008,
+        9568
+      ],
+      "outside_tile": [
+        1063,
+        299
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:263",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        10624,
+        39104
+      ],
+      "interior_region": 8,
+      "name": "friendly inn",
+      "outside_px": [
+        17024,
+        15296
+      ],
+      "outside_tile": [
+        1064,
+        478
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:264",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        9680,
+        38528
+      ],
+      "interior_region": 8,
+      "name": "mountain keep",
+      "outside_px": [
+        17888,
+        21376
+      ],
+      "outside_tile": [
+        1118,
+        668
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:265",
+      "type": "MARBLE"
+    },
+    {
+      "inside_px": [
+        9600,
+        39104
+      ],
+      "interior_region": 8,
+      "name": "forest inn",
+      "outside_px": [
+        18304,
+        12224
+      ],
+      "outside_tile": [
+        1144,
+        382
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:266",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        7264,
+        39488
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #7",
+      "outside_px": [
+        18528,
+        26176
+      ],
+      "outside_tile": [
+        1158,
+        818
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:267",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        7312,
+        39584
+      ],
+      "interior_region": 8,
+      "name": "cabin #7",
+      "outside_px": [
+        18576,
+        26272
+      ],
+      "outside_tile": [
+        1161,
+        821
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:268",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        8800,
+        39488
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #6",
+      "outside_px": [
+        18784,
+        23360
+      ],
+      "outside_tile": [
+        1174,
+        730
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:269",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        8848,
+        39584
+      ],
+      "interior_region": 8,
+      "name": "cabin #6",
+      "outside_px": [
+        18832,
+        23456
+      ],
+      "outside_tile": [
+        1177,
+        733
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:270",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        2976,
+        33472
+      ],
+      "interior_region": 8,
+      "name": "village #2",
+      "outside_px": [
+        18848,
+        15552
+      ],
+      "outside_tile": [
+        1178,
+        486
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:271",
+      "type": "VWOOD"
+    },
+    {
+      "inside_px": [
+        3024,
+        33984
+      ],
+      "interior_region": 8,
+      "name": "village #1.a",
+      "outside_px": [
+        18896,
+        15808
+      ],
+      "outside_tile": [
+        1181,
+        494
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:272",
+      "type": "VWOOD"
+    },
+    {
+      "inside_px": [
+        3024,
+        34048
+      ],
+      "interior_region": 8,
+      "name": "village #1.b",
+      "outside_px": [
+        18896,
+        15872
+      ],
+      "outside_tile": [
+        1181,
+        496
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:273",
+      "type": "VWOOD"
+    },
+    {
+      "inside_px": [
+        3344,
+        33408
+      ],
+      "interior_region": 8,
+      "name": "village #3",
+      "outside_px": [
+        18960,
+        15488
+      ],
+      "outside_tile": [
+        1185,
+        484
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:274",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        3856,
+        33600
+      ],
+      "interior_region": 8,
+      "name": "village #5",
+      "outside_px": [
+        18960,
+        15680
+      ],
+      "outside_tile": [
+        1185,
+        490
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:275",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        3632,
+        34240
+      ],
+      "interior_region": 8,
+      "name": "village #7",
+      "outside_px": [
+        18992,
+        15808
+      ],
+      "outside_tile": [
+        1187,
+        494
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:276",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        4192,
+        34176
+      ],
+      "interior_region": 8,
+      "name": "village #8",
+      "outside_px": [
+        19040,
+        16000
+      ],
+      "outside_tile": [
+        1190,
+        500
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:277",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        4976,
+        33408
+      ],
+      "interior_region": 8,
+      "name": "village #4",
+      "outside_px": [
+        19056,
+        15488
+      ],
+      "outside_tile": [
+        1191,
+        484
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:278",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        4496,
+        33600
+      ],
+      "interior_region": 8,
+      "name": "village #6",
+      "outside_px": [
+        19072,
+        15680
+      ],
+      "outside_tile": [
+        1192,
+        490
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:279",
+      "type": "HWOOD"
+    },
+    {
+      "inside_px": [
+        9600,
+        40032
+      ],
+      "interior_region": 8,
+      "name": "crag keep",
+      "outside_px": [
+        19568,
+        12896
+      ],
+      "outside_tile": [
+        1223,
+        403
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:280",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        8032,
+        40000
+      ],
+      "interior_region": 8,
+      "name": "cabin #2",
+      "outside_px": [
+        19808,
+        21568
+      ],
+      "outside_tile": [
+        1238,
+        674
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:281",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        12416,
+        36224
+      ],
+      "interior_region": 8,
+      "name": "crypt",
+      "outside_px": [
+        19856,
+        17280
+      ],
+      "outside_tile": [
+        1241,
+        540
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:282",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        8080,
+        40096
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #2",
+      "outside_px": [
+        19856,
+        21664
+      ],
+      "outside_tile": [
+        1241,
+        677
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:283",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        10704,
+        38528
+      ],
+      "interior_region": 8,
+      "name": "river keep",
+      "outside_px": [
+        19936,
+        27520
+      ],
+      "outside_tile": [
+        1246,
+        860
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:284",
+      "type": "MARBLE"
+    },
+    {
+      "inside_px": [
+        8800,
+        38976
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #3",
+      "outside_px": [
+        21344,
+        22592
+      ],
+      "outside_tile": [
+        1334,
+        706
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:285",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        8848,
+        39072
+      ],
+      "interior_region": 8,
+      "name": "cabin #3",
+      "outside_px": [
+        21392,
+        22688
+      ],
+      "outside_tile": [
+        1337,
+        709
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:286",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        7264,
+        38976
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #1",
+      "outside_px": [
+        21600,
+        17728
+      ],
+      "outside_tile": [
+        1350,
+        554
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:287",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        11392,
+        36224
+      ],
+      "interior_region": 8,
+      "name": "elf glade",
+      "outside_px": [
+        21616,
+        25728
+      ],
+      "outside_tile": [
+        1351,
+        804
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:288",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        7312,
+        39072
+      ],
+      "interior_region": 8,
+      "name": "cabin #1",
+      "outside_px": [
+        21648,
+        17824
+      ],
+      "outside_tile": [
+        1353,
+        557
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:289",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        5856,
+        33760
+      ],
+      "interior_region": 8,
+      "name": "main castle",
+      "outside_px": [
+        22000,
+        21216
+      ],
+      "outside_tile": [
+        1375,
+        663
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:290",
+      "type": "MARBLE"
+    },
+    {
+      "inside_px": [
+        7104,
+        33984
+      ],
+      "interior_region": 8,
+      "name": "city #15.a",
+      "outside_px": [
+        22208,
+        21440
+      ],
+      "outside_tile": [
+        1388,
+        670
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:291",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        6592,
+        34112
+      ],
+      "interior_region": 8,
+      "name": "city #17",
+      "outside_px": [
+        22208,
+        21568
+      ],
+      "outside_tile": [
+        1388,
+        674
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:292",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        6640,
+        33440
+      ],
+      "interior_region": 8,
+      "name": "city #10",
+      "outside_px": [
+        22256,
+        20896
+      ],
+      "outside_tile": [
+        1391,
+        653
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:293",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        7664,
+        33600
+      ],
+      "interior_region": 8,
+      "name": "city #12",
+      "outside_px": [
+        22272,
+        21056
+      ],
+      "outside_tile": [
+        1392,
+        658
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:294",
+      "type": "VSTON2"
+    },
+    {
+      "inside_px": [
+        7184,
+        34368
+      ],
+      "interior_region": 8,
+      "name": "city #18",
+      "outside_px": [
+        22288,
+        21568
+      ],
+      "outside_tile": [
+        1393,
+        674
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:295",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        6736,
+        33792
+      ],
+      "interior_region": 8,
+      "name": "city #14",
+      "outside_px": [
+        22320,
+        21248
+      ],
+      "outside_tile": [
+        1395,
+        664
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:296",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        7216,
+        33920
+      ],
+      "interior_region": 8,
+      "name": "city #15.b",
+      "outside_px": [
+        22320,
+        21376
+      ],
+      "outside_tile": [
+        1395,
+        668
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:297",
+      "type": "VSTON2"
+    },
+    {
+      "inside_px": [
+        7264,
+        33440
+      ],
+      "interior_region": 8,
+      "name": "city #11",
+      "outside_px": [
+        22352,
+        20896
+      ],
+      "outside_tile": [
+        1397,
+        653
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:298",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        8272,
+        33632
+      ],
+      "interior_region": 8,
+      "name": "city #13",
+      "outside_px": [
+        22352,
+        21088
+      ],
+      "outside_tile": [
+        1397,
+        659
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:299",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        8288,
+        33984
+      ],
+      "interior_region": 8,
+      "name": "city #16",
+      "outside_px": [
+        22368,
+        21440
+      ],
+      "outside_tile": [
+        1398,
+        670
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:300",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        7776,
+        34112
+      ],
+      "interior_region": 8,
+      "name": "city #19",
+      "outside_px": [
+        22368,
+        21568
+      ],
+      "outside_tile": [
+        1398,
+        674
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:301",
+      "type": "HSTON2"
+    },
+    {
+      "fix": {
+        "problem": "reference/PROBLEMS.md P27",
+        "reason": "cabin #4 is at 0x9ca0 (fmain.c:303)",
+        "source_yc2": 39488,
+        "yc2": 40000
+      },
+      "inside_px": [
+        7264,
+        40000
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #4",
+      "outside_px": [
+        22624,
+        23872
+      ],
+      "outside_tile": [
+        1414,
+        746
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:302",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        7312,
+        40096
+      ],
+      "interior_region": 8,
+      "name": "cabin #4",
+      "outside_px": [
+        22672,
+        23968
+      ],
+      "outside_tile": [
+        1417,
+        749
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:303",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        2752,
+        34912
+      ],
+      "interior_region": 9,
+      "name": "troll cave",
+      "outside_px": [
+        22720,
+        11872
+      ],
+      "outside_tile": [
+        1420,
+        371
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:304",
+      "type": "CAVE"
+    },
+    {
+      "fix": {
+        "problem": "reference/PROBLEMS.md P27",
+        "reason": "cabin #9 is at 0x9ca0 (fmain.c:306)",
+        "source_yc2": 39488,
+        "yc2": 40000
+      },
+      "inside_px": [
+        8800,
+        40000
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #9",
+      "outside_px": [
+        22880,
+        28480
+      ],
+      "outside_tile": [
+        1430,
+        890
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:305",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        8848,
+        40096
+      ],
+      "interior_region": 8,
+      "name": "cabin #9",
+      "outside_px": [
+        22928,
+        28576
+      ],
+      "outside_tile": [
+        1433,
+        893
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:306",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        10912,
+        35680
+      ],
+      "interior_region": 8,
+      "name": "unreachable castle",
+      "outside_px": [
+        22944,
+        26464
+      ],
+      "outside_tile": [
+        1434,
+        827
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:307",
+      "type": "STAIR"
+    },
+    {
+      "inside_px": [
+        10192,
+        38528
+      ],
+      "interior_region": 8,
+      "name": "farm keep",
+      "outside_px": [
+        23008,
+        22656
+      ],
+      "outside_tile": [
+        1438,
+        708
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:308",
+      "type": "MARBLE"
+    },
+    {
+      "inside_px": [
+        9600,
+        39520
+      ],
+      "interior_region": 8,
+      "name": "north keep",
+      "outside_px": [
+        24176,
+        6752
+      ],
+      "outside_tile": [
+        1511,
+        211
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:309",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        4544,
+        35680
+      ],
+      "interior_region": 9,
+      "name": "spider exit",
+      "outside_px": [
+        24256,
+        10592
+      ],
+      "outside_tile": [
+        1516,
+        331
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:310",
+      "type": "CAVE"
+    },
+    {
+      "inside_px": [
+        6496,
+        40000
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #10",
+      "outside_px": [
+        24672,
+        29248
+      ],
+      "outside_tile": [
+        1542,
+        914
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:311",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        6544,
+        40096
+      ],
+      "interior_region": 8,
+      "name": "cabin #10",
+      "outside_px": [
+        24720,
+        29344
+      ],
+      "outside_tile": [
+        1545,
+        917
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:312",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        9712,
+        35776
+      ],
+      "interior_region": 8,
+      "name": "mammoth manor",
+      "outside_px": [
+        24816,
+        12992
+      ],
+      "outside_tile": [
+        1551,
+        406
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:313",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        960,
+        34400
+      ],
+      "interior_region": 9,
+      "name": "maze cave 2",
+      "outside_px": [
+        25792,
+        6240
+      ],
+      "outside_tile": [
+        1612,
+        195
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:314",
+      "type": "CAVE"
+    },
+    {
+      "fix": {
+        "problem": "reference/PROBLEMS.md P27",
+        "reason": "cabin #5 is at 0x98a0 (fmain.c:316)",
+        "source_yc2": 39488,
+        "yc2": 38976
+      },
+      "inside_px": [
+        8032,
+        38976
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #5",
+      "outside_px": [
+        25952,
+        23872
+      ],
+      "outside_tile": [
+        1622,
+        746
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:315",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        8080,
+        39072
+      ],
+      "interior_region": 8,
+      "name": "cabin #5",
+      "outside_px": [
+        26000,
+        23968
+      ],
+      "outside_tile": [
+        1625,
+        749
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:316",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        1200,
+        34880
+      ],
+      "interior_region": 9,
+      "name": "maze cave 1",
+      "outside_px": [
+        26048,
+        6688
+      ],
+      "outside_tile": [
+        1628,
+        209
+      ],
+      "secs": 2,
+      "source": "src/fmain.c:317",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        11136,
+        39520
+      ],
+      "interior_region": 8,
+      "name": "glade keep",
+      "outside_px": [
+        26224,
+        10848
+      ],
+      "outside_tile": [
+        1639,
+        339
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:318",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        10992,
+        36960
+      ],
+      "interior_region": 8,
+      "name": "witch's castle",
+      "outside_px": [
+        26624,
+        7008
+      ],
+      "outside_tile": [
+        1664,
+        219
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:319",
+      "type": "BLACK"
+    },
+    {
+      "inside_px": [
+        10320,
+        36224
+      ],
+      "interior_region": 8,
+      "name": "light house",
+      "outside_px": [
+        27472,
+        17280
+      ],
+      "outside_tile": [
+        1717,
+        540
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:320",
+      "type": "HSTON2"
+    },
+    {
+      "inside_px": [
+        11216,
+        38528
+      ],
+      "interior_region": 8,
+      "name": "lonely keep",
+      "outside_px": [
+        27616,
+        31872
+      ],
+      "outside_tile": [
+        1726,
+        996
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:321",
+      "type": "MARBLE"
+    },
+    {
+      "inside_px": [
+        10368,
+        39520
+      ],
+      "interior_region": 8,
+      "name": "sea keep",
+      "outside_px": [
+        27760,
+        11872
+      ],
+      "outside_tile": [
+        1735,
+        371
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:322",
+      "type": "HSTONE"
+    },
+    {
+      "inside_px": [
+        8032,
+        39488
+      ],
+      "interior_region": 8,
+      "name": "cabin yard #8",
+      "outside_px": [
+        28000,
+        26688
+      ],
+      "outside_tile": [
+        1750,
+        834
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:323",
+      "type": "VLOG"
+    },
+    {
+      "inside_px": [
+        8080,
+        39584
+      ],
+      "interior_region": 8,
+      "name": "cabin #8",
+      "outside_px": [
+        28048,
+        26784
+      ],
+      "outside_tile": [
+        1753,
+        837
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:324",
+      "type": "LOG"
+    },
+    {
+      "inside_px": [
+        12752,
+        38528
+      ],
+      "interior_region": 8,
+      "name": "point keep",
+      "outside_px": [
+        28384,
+        21120
+      ],
+      "outside_tile": [
+        1774,
+        660
+      ],
+      "secs": 1,
+      "source": "src/fmain.c:325",
+      "type": "MARBLE"
+    }
+  ],
+  "doors_note": "inside_px is the doorlist xc2/yc2; entries with a 'fix' ship the corrected yc2 (source bug, reference/PROBLEMS.md P27) and keep the original as fix.source_yc2.",
+  "kind": "overworld",
+  "layers": {
+    "master": {
+      "file": "master.png",
+      "png": "16-bit greyscale (big-endian samples)",
+      "value": "master tile index into assets/tiles/master/master.json tiles[] (atlas cell x = tiles[i].x, y = tiles[i].y); 65535 = none"
+    },
+    "tiles": {
+      "file": "tiles.png",
+      "png": "8-bit greyscale",
+      "value": "tile id 0-255 in the map's tileset region (assets/tiles/region_<RR>/, tile t at column t % 16, row t // 16)"
+    }
+  },
+  "name": "overworld",
+  "origin_world_px": [
+    0,
+    0
+  ],
+  "preview": {
+    "file": "preview.png",
+    "markers": "magenta: outside position of every doorlist entry (xc1, yc1) and the quicksand sector 181 cell",
+    "scale": "1/4 (tile = 4x8 px)"
+  },
+  "quicksand": {
+    "cell_px": [
+      24064,
+      9728
+    ],
+    "cell_tile": [
+      1504,
+      304
+    ],
+    "note": "sinking to depth 30 here transfers the hero into the spider pit",
+    "sector": 181,
+    "source": "src/fmain.c:1784-1789"
+  },
+  "size_tiles": [
+    2048,
+    1024
+  ],
+  "tile_size_px": [
+    16,
+    32
+  ],
+  "tileset": {
+    "regions": [
+      {
+        "cols": [
+          0,
+          1023
+        ],
+        "name": "F1 - snowy region",
+        "region": 0,
+        "rows": [
+          0,
+          255
+        ],
+        "source": "src/fmain.c:616"
+      },
+      {
+        "cols": [
+          1024,
+          2047
+        ],
+        "name": "F2 - witch wood",
+        "region": 1,
+        "rows": [
+          0,
+          255
+        ],
+        "source": "src/fmain.c:617"
+      },
+      {
+        "cols": [
+          0,
+          1023
+        ],
+        "name": "F3 - swampy region",
+        "region": 2,
+        "rows": [
+          256,
+          511
+        ],
+        "source": "src/fmain.c:618"
+      },
+      {
+        "cols": [
+          1024,
+          2047
+        ],
+        "name": "F4 - plains and rocks",
+        "region": 3,
+        "rows": [
+          256,
+          511
+        ],
+        "source": "src/fmain.c:619"
+      },
+      {
+        "cols": [
+          0,
+          1023
+        ],
+        "name": "F5 - desert area",
+        "region": 4,
+        "rows": [
+          512,
+          767
+        ],
+        "source": "src/fmain.c:620"
+      },
+      {
+        "cols": [
+          1024,
+          2047
+        ],
+        "name": "F6 - bay / city / farms",
+        "region": 5,
+        "rows": [
+          512,
+          767
+        ],
+        "source": "src/fmain.c:621"
+      },
+      {
+        "cols": [
+          0,
+          1023
+        ],
+        "name": "F7 - volcanic",
+        "region": 6,
+        "rows": [
+          768,
+          1023
+        ],
+        "source": "src/fmain.c:622"
+      },
+      {
+        "cols": [
+          1024,
+          2047
+        ],
+        "name": "F8 - forest and wilderness",
+        "region": 7,
+        "rows": [
+          768,
+          1023
+        ],
+        "source": "src/fmain.c:623"
+      }
+    ],
+    "rule": "region = (row // 256) * 2 + (col // 1024); tiles.png values index that region's tileset (assets/tiles/region_0<region>/)",
+    "source": "src/fmain.c:2983-2987 (xreg/yreg per region), src/fsubs.asm:565-604"
+  }
+}

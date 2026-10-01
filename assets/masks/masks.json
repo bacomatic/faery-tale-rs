@@ -250,7 +250,7 @@
       190,
       191
     ],
-    "source": "assets/world/region_N.json terra.entries (maptag, mask_mode); src/fmain.c:2577-2595",
+    "source": "src/assets/image terra blocks via tools/decode_map_data.load_regions (maptag, mask_mode); src/fmain.c:2577-2595",
     "with_pixels_never_applied": [
       18,
       44,

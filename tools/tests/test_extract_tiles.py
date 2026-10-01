@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+import decode_map_data as dm
 import extract_tiles as xt
 
 REPO = Path(__file__).resolve().parents[2]
@@ -84,7 +85,7 @@ def test_outputs_and_palette_override(bundle):
         # shadow mask cell == assets/masks entry `mask` when mask_mode != 0, else empty (fmain.c:2577-2595)
         sh = (np.array(Image.open(d / "atlas_shadowmask.png").convert("L")) > 0).reshape(16, 32, 16, 16)
         tiles_meta = json.loads((d / "tiles.json").read_text())["tiles"]
-        terra = json.loads((REPO / f"assets/world/region_{r}.json").read_text())["terra"]["entries"]
+        terra = dm.load_regions(str(REPO / "src" / "assets"), str(REPO / "src"))[r]["terra"]
         for t in (0, 65, 200, 255):
             cell = sh[t // 16, :, t % 16, :]
             e, tm = terra[t], tiles_meta[t]

@@ -1,0 +1,788 @@
+{
+  "fields": [
+    "dir",
+    "name",
+    "kind",
+    "size_tiles",
+    "tileset_region",
+    "entries"
+  ],
+  "layers": {
+    "master": {
+      "file": "master.png",
+      "png": "16-bit greyscale (big-endian samples)",
+      "value": "master tile index into assets/tiles/master/master.json tiles[] (atlas cell x = tiles[i].x, y = tiles[i].y); 65535 = none"
+    },
+    "tiles": {
+      "file": "tiles.png",
+      "png": "8-bit greyscale",
+      "value": "tile id 0-255 in the map's tileset region (assets/tiles/region_<RR>/, tile t at column t % 16, row t // 16)"
+    }
+  },
+  "rows": [
+    {
+      "dir": "overworld",
+      "entries": null,
+      "kind": "overworld",
+      "name": "overworld",
+      "size_tiles": [
+        2048,
+        1024
+      ],
+      "tileset_region": "per cell"
+    },
+    {
+      "dir": "astral_plane",
+      "entries": "stargate forwards",
+      "kind": "astral",
+      "name": "astral plane",
+      "size_tiles": [
+        212,
+        68
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "dungeons/dragon_cave",
+      "entries": "dragon cave",
+      "kind": "dungeon",
+      "name": "dragon cave",
+      "size_tiles": [
+        321,
+        106
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "dungeons/maze_caves",
+      "entries": "maze cave 2, maze cave 1",
+      "kind": "dungeon",
+      "name": "maze caves",
+      "size_tiles": [
+        136,
+        46
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "dungeons/spider_pit",
+      "entries": "spider exit, quicksand drop",
+      "kind": "dungeon",
+      "name": "spider pit",
+      "size_tiles": [
+        88,
+        39
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "dungeons/tombs",
+      "entries": "tombs",
+      "kind": "dungeon",
+      "name": "tombs",
+      "size_tiles": [
+        268,
+        162
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "dungeons/troll_cave",
+      "entries": "troll cave",
+      "kind": "dungeon",
+      "name": "troll cave",
+      "size_tiles": [
+        21,
+        23
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "interiors/cabin_1",
+      "entries": "cabin yard #1, cabin #1",
+      "kind": "interior",
+      "name": "cabin 1",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_10",
+      "entries": "cabin yard #10, cabin #10",
+      "kind": "interior",
+      "name": "cabin 10",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_2",
+      "entries": "cabin #2, cabin yard #2",
+      "kind": "interior",
+      "name": "cabin 2",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_3",
+      "entries": "cabin yard #3, cabin #3",
+      "kind": "interior",
+      "name": "cabin 3",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_4",
+      "entries": "cabin yard #4, cabin #4",
+      "kind": "interior",
+      "name": "cabin 4",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_5",
+      "entries": "cabin yard #5, cabin #5",
+      "kind": "interior",
+      "name": "cabin 5",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_6",
+      "entries": "cabin yard #6, cabin #6",
+      "kind": "interior",
+      "name": "cabin 6",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_7",
+      "entries": "cabin yard #7, cabin #7",
+      "kind": "interior",
+      "name": "cabin 7",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_8",
+      "entries": "cabin yard #8, cabin #8",
+      "kind": "interior",
+      "name": "cabin 8",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/cabin_9",
+      "entries": "cabin yard #9, cabin #9",
+      "kind": "interior",
+      "name": "cabin 9",
+      "size_tiles": [
+        12,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_10",
+      "entries": "city #10",
+      "kind": "interior",
+      "name": "city 10",
+      "size_tiles": [
+        10,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_11",
+      "entries": "city #11",
+      "kind": "interior",
+      "name": "city 11",
+      "size_tiles": [
+        8,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_12",
+      "entries": "city #12",
+      "kind": "interior",
+      "name": "city 12",
+      "size_tiles": [
+        10,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_13",
+      "entries": "city #13",
+      "kind": "interior",
+      "name": "city 13",
+      "size_tiles": [
+        8,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_14",
+      "entries": "city #14",
+      "kind": "interior",
+      "name": "city 14",
+      "size_tiles": [
+        10,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_15",
+      "entries": "city #15.a, city #15.b",
+      "kind": "interior",
+      "name": "city 15",
+      "size_tiles": [
+        13,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_16",
+      "entries": "city #16",
+      "kind": "interior",
+      "name": "city 16",
+      "size_tiles": [
+        7,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_17",
+      "entries": "city #17",
+      "kind": "interior",
+      "name": "city 17",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_18",
+      "entries": "city #18",
+      "kind": "interior",
+      "name": "city 18",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/city_19",
+      "entries": "city #19",
+      "kind": "interior",
+      "name": "city 19",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/coast_keep",
+      "entries": "coast keepDB",
+      "kind": "interior",
+      "name": "coast keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/crag_keep",
+      "entries": "crag keep",
+      "kind": "interior",
+      "name": "crag keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/crypt",
+      "entries": "crypt",
+      "kind": "interior",
+      "name": "crypt",
+      "size_tiles": [
+        8,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/crystal_palace",
+      "entries": "crystal palace, crystal palace",
+      "kind": "interior",
+      "name": "crystal palace",
+      "size_tiles": [
+        31,
+        17
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/desert_fort",
+      "entries": "desert fort, desert fort, desert fort, desert fort",
+      "kind": "interior",
+      "name": "desert fort",
+      "size_tiles": [
+        14,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/doom_tower",
+      "entries": "stargate backwards, doom tower",
+      "kind": "interior",
+      "name": "doom tower",
+      "size_tiles": [
+        30,
+        14
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/elf_glade",
+      "entries": "elf glade",
+      "kind": "interior",
+      "name": "elf glade",
+      "size_tiles": [
+        15,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/farm_keep",
+      "entries": "farm keep",
+      "kind": "interior",
+      "name": "farm keep",
+      "size_tiles": [
+        14,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/forest_inn",
+      "entries": "forest inn",
+      "kind": "interior",
+      "name": "forest inn",
+      "size_tiles": [
+        17,
+        11
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/friendly_inn",
+      "entries": "friendly inn",
+      "kind": "interior",
+      "name": "friendly inn",
+      "size_tiles": [
+        17,
+        11
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/gate_fort",
+      "entries": "gate fort",
+      "kind": "interior",
+      "name": "gate fort",
+      "size_tiles": [
+        10,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/glade_keep",
+      "entries": "glade keep",
+      "kind": "interior",
+      "name": "glade keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/lakeside_keep",
+      "entries": "lakeside keep",
+      "kind": "interior",
+      "name": "lakeside keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/light_house",
+      "entries": "light house",
+      "kind": "interior",
+      "name": "light house",
+      "size_tiles": [
+        8,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/lonely_keep",
+      "entries": "lonely keep",
+      "kind": "interior",
+      "name": "lonely keep",
+      "size_tiles": [
+        14,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/main_castle",
+      "entries": "main castle",
+      "kind": "interior",
+      "name": "main castle",
+      "size_tiles": [
+        32,
+        23
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/mammoth_manor",
+      "entries": "mammoth manor",
+      "kind": "interior",
+      "name": "mammoth manor",
+      "size_tiles": [
+        25,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/mountain_keep",
+      "entries": "mountain keep",
+      "kind": "interior",
+      "name": "mountain keep",
+      "size_tiles": [
+        14,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/north_keep",
+      "entries": "north keep",
+      "kind": "interior",
+      "name": "north keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/oasis_1",
+      "entries": "oasis #1",
+      "kind": "interior",
+      "name": "oasis 1",
+      "size_tiles": [
+        13,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/oasis_2",
+      "entries": "oasis #2",
+      "kind": "interior",
+      "name": "oasis 2",
+      "size_tiles": [
+        9,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/oasis_3",
+      "entries": "oasis #3",
+      "kind": "interior",
+      "name": "oasis 3",
+      "size_tiles": [
+        11,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/oasis_4",
+      "entries": "oasis #4",
+      "kind": "interior",
+      "name": "oasis 4",
+      "size_tiles": [
+        13,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/oasis_5",
+      "entries": "oasis #5",
+      "kind": "interior",
+      "name": "oasis 5",
+      "size_tiles": [
+        11,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/pass_fort",
+      "entries": "pass fort",
+      "kind": "interior",
+      "name": "pass fort",
+      "size_tiles": [
+        10,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/plain_fort",
+      "entries": "plain fort",
+      "kind": "interior",
+      "name": "plain fort",
+      "size_tiles": [
+        10,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/point_keep",
+      "entries": "point keep",
+      "kind": "interior",
+      "name": "point keep",
+      "size_tiles": [
+        14,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/river_keep",
+      "entries": "river keep",
+      "kind": "interior",
+      "name": "river keep",
+      "size_tiles": [
+        14,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/roads_end_inn",
+      "entries": "road's end inn",
+      "kind": "interior",
+      "name": "road's end inn",
+      "size_tiles": [
+        17,
+        11
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/sea_keep",
+      "entries": "sea keep",
+      "kind": "interior",
+      "name": "sea keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/swamp_shack",
+      "entries": "swamp shack",
+      "kind": "interior",
+      "name": "swamp shack",
+      "size_tiles": [
+        13,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/unreachable_castle",
+      "entries": "unreachable castle",
+      "kind": "interior",
+      "name": "unreachable castle",
+      "size_tiles": [
+        13,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_1",
+      "entries": "village #1.a, village #1.b",
+      "kind": "interior",
+      "name": "village 1",
+      "size_tiles": [
+        13,
+        11
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_2",
+      "entries": "village #2",
+      "kind": "interior",
+      "name": "village 2",
+      "size_tiles": [
+        13,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_3",
+      "entries": "village #3",
+      "kind": "interior",
+      "name": "village 3",
+      "size_tiles": [
+        13,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_4",
+      "entries": "village #4",
+      "kind": "interior",
+      "name": "village 4",
+      "size_tiles": [
+        11,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_5",
+      "entries": "village #5",
+      "kind": "interior",
+      "name": "village 5",
+      "size_tiles": [
+        10,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_6",
+      "entries": "village #6",
+      "kind": "interior",
+      "name": "village 6",
+      "size_tiles": [
+        10,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_7",
+      "entries": "village #7",
+      "kind": "interior",
+      "name": "village 7",
+      "size_tiles": [
+        13,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/village_8",
+      "entries": "village #8",
+      "kind": "interior",
+      "name": "village 8",
+      "size_tiles": [
+        11,
+        9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/west_keep",
+      "entries": "west keep",
+      "kind": "interior",
+      "name": "west keep",
+      "size_tiles": [
+        17,
+        10
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/witchs_castle",
+      "entries": "witch's castle",
+      "kind": "interior",
+      "name": "witch's castle",
+      "size_tiles": [
+        28,
+        15
+      ],
+      "tileset_region": 8
+    }
+  ],
+  "schema_version": 1,
+  "tile_size_px": [
+    16,
+    32
+  ]
+}

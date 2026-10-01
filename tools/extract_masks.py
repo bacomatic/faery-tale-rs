@@ -33,7 +33,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
@@ -45,6 +44,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import asset_common as ac  # noqa: E402
+import decode_map_data as dm  # noqa: E402
 
 REPO_ROOT = TOOLS_DIR.parent
 BLOCK_SIZE = 512
@@ -80,14 +80,13 @@ def encode_masks(bits: np.ndarray) -> bytes:
     return np.packbits(bits, axis=2).tobytes()
 
 
-def mask_usage(world_dir: Path, masks: np.ndarray) -> dict:
-    """Which entries the terra data (T2.5 region JSONs) can apply: byte 0 (`maptag`) of a tile's
-    terra record names the entry, byte 1's low nibble is the occlusion mode; mode 0 never masks
-    (fmain.c:2577-2595). Reported only, so the reviewer knows what to look at."""
+def mask_usage(regions: list[dict], masks: np.ndarray) -> dict:
+    """Which entries the terra data (decode_map_data.load_regions) can apply: byte 0 (`maptag`) of
+    a tile's terra record names the entry, byte 1's low nibble is the occlusion mode; mode 0 never
+    masks (fmain.c:2577-2595). Reported only, so the reviewer knows what to look at."""
     applied: dict[int, set] = {}
-    for p in sorted(world_dir.glob("region_*.json")):
-        r = json.loads(p.read_text())
-        for e in r["terra"]["entries"]:
+    for r in regions:
+        for e in r["terra"]:
             if e["mask_mode"] != 0:
                 applied.setdefault(e["maptag"], set()).add(r["index"])
     blank = [i for i, m in enumerate(masks) if not m.any()]
@@ -96,7 +95,7 @@ def mask_usage(world_dir: Path, masks: np.ndarray) -> dict:
         "applied_count": len(applied),
         "with_pixels_never_applied": [i for i in range(len(masks)) if i not in applied and i not in blank],
         "blank_entries": blank,
-        "source": "assets/world/region_N.json terra.entries (maptag, mask_mode); src/fmain.c:2577-2595",
+        "source": "src/assets/image terra blocks via tools/decode_map_data.load_regions (maptag, mask_mode); src/fmain.c:2577-2595",
     }
 
 
@@ -105,15 +104,13 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     ac.add_io_args(parser)
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "assets" / "masks")
-    parser.add_argument("--world-dir", type=Path, default=REPO_ROOT / "assets" / "world",
-                        help="T2.5 region JSONs; used to report which entries the terra data references")
     args = parser.parse_args(argv)
 
     first, count, files = mask_blocks(args.src_dir)
     image = (args.game_dir / "image").read_bytes()
     masks = decode_masks(image, first, count)
     n = len(masks)
-    usage = mask_usage(args.world_dir, masks)
+    usage = mask_usage(dm.load_regions(str(args.game_dir), str(args.src_dir)), masks)
 
     for i, m in enumerate(masks):
         ac.write_bit_mask(args.out_dir / f"mask_{i:03d}.png", m)

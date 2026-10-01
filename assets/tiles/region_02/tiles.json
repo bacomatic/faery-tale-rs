@@ -166,7 +166,7 @@
   "shadow_mask": {
     "note": "atlas_shadowmask.png holds, in the tile's cell, the 16x32 shadow mask (assets/masks/, entry = terra byte 0 'maptag') the game applies over sprites standing behind the tile, or nothing when the tile's occlusion mode (terra byte 1 & 15) is 0. Set bit = terrain in front. The mode decides when the mask is applied (fmain.c:2584-2594): 1 skip when xm==0, 2 skip when ystop>35, 3 always (except the bridge in sector 48), 4 skip when xm==0 or ystop>35, 5 skip when xm==0 and ystop>35, 6 use tile 64's mask when ym!=0, 7 skip when ystop>20; a falling actor uses mode 3. Per tile: tiles[].mask / mask_mode.",
     "source": "src/fmain.c:2577-2595, src/fsubs.asm:1047-1083",
-    "terra_source": "assets/world/region_2.json terra.entries"
+    "terra_source": "src/assets/image terra blocks (tools/decode_map_data.load_regions)"
   },
   "source": "src/fmain.c:618",
   "tile_count": 256,
