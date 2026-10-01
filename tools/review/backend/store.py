@@ -14,6 +14,8 @@ from typing import Any, Optional
 
 from pydantic import ValidationError
 
+import compare
+
 from models import (
     Draft, DraftBody, Item, ItemMark, Problem, ResultsFile, Round, Submission,
     TaskInfo, VerifyFile,
@@ -357,6 +359,47 @@ class Store:
         keys_then = {(m.resource, m.id) for m in rnd.items}
         return keys_now != keys_then or self.file_hashes(bundle, task) != rnd.files
 
+    def stale_changes(self, bundle: Bundle, task: str, rnd: Round) -> dict:
+        """What differs between the round's snapshot and now: files (by hash) and item set."""
+        return compare.stale_changes(rnd.files, self.file_hashes(bundle, task),
+                                     {(m.resource, m.id) for m in rnd.items},
+                                     {(res, it.id) for res, it in bundle.items.get(task, [])})
+
+    def compare_stale(self, task: str) -> dict:
+        """For each file that changed since the last ACCEPT, fetch the accepted version from git
+        history (by recorded sha256) and compare content: pixels for PNGs, structure for JSON."""
+        bundle = self.load()
+        if task not in bundle.task_ids():
+            raise NotFound(f"unknown task {task!r}")
+        rounds = self.rounds(task)
+        latest = rounds[-1] if rounds else None
+        if not latest or latest.verdict != "ACCEPT":
+            raise Rejected(f"task {task} has no ACCEPT round to compare against")
+        changes = self.stale_changes(bundle, task, latest)
+        covering: dict[str, list[str]] = {}          # file -> items ("resource/id") whose files include it
+        for res, it in bundle.items.get(task, []):
+            for p in self.item_files(res, it):
+                covering.setdefault(self.rel(p), []).append(f"{res}/{it.id}")   # frontend keyOf()
+        results = []
+        for ch in changes["files"]:
+            rel = ch["file"]
+            entry = {**ch, "accepted_commit": None, "result": None, "items": sorted(covering.get(rel, []))}
+            if ch["status"] == "changed":
+                then, rev = compare.accepted_blob(self.repo_root, rel, latest.files[rel])
+                if then is None:
+                    entry["result"] = {"kind": "missing", "identical": False, "trivial": False,
+                                       "summary": "accepted version not found in git history (uncommitted at accept time?)"}
+                else:
+                    entry["accepted_commit"] = rev
+                    entry["result"] = compare.compare_bytes(rel, then, (self.repo_root / rel).read_bytes())
+            results.append(entry)
+        n_real = sum(1 for r in results if not (r["result"] or {}).get("identical"))
+        return {"task": task, "accepted_at": latest.submitted_at, "items_added": changes["items_added"],
+                "items_removed": changes["items_removed"], "files": results,
+                "trivial_max_changes": compare.TRIVIAL_MAX_CHANGES,
+                "content_changed": n_real, "effectively_unchanged": n_real == 0 and not changes["items_added"]
+                and not changes["items_removed"]}
+
     def submit(self, sub: Submission) -> Round:
         with self._lock:
             bundle = self.load()
@@ -467,9 +510,12 @@ class Store:
                 "problems": [p.model_dump() for p in bundle.problems_for(task) if p.item == it.id
                              and p.file == self.rel(base / "verify.json")],
             })
+        stale_changes = (self.stale_changes(bundle, task, latest)
+                         if latest and latest.verdict == "ACCEPT" and self.is_stale(bundle, task, latest) else None)
         return {
             **self.task_summary(bundle, task),
             "summary": info.summary, "resource": resource, "items_detail": items,
+            "stale_changes": stale_changes,
             "task_problems": [p.model_dump() for p in bundle.problems_for(task)],
             "latest_round": rounds[-1].model_dump() if rounds else None,
             "draft": d.model_dump() if (d := self.get_draft(task)) else None,

@@ -40,6 +40,10 @@ def create_app(store: Store, dist: Optional[Path] = DIST) -> FastAPI:
     def task(task: str):
         return call(store.task_detail, task)
 
+    @app.get("/api/tasks/{task}/compare")
+    def compare_task(task: str):
+        return call(store.compare_stale, task)
+
     @app.get("/api/validation")
     def validation():
         return [p.model_dump() for p in store.load().problems]

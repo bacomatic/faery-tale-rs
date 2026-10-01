@@ -418,3 +418,70 @@ def test_color31_rewrite_on_indexed_png(tmp_path):
     im = _Image.open(io.BytesIO(out))
     assert im.getpalette()[93:96] == [0, 255, 0] and list(im.getdata()) == [31, 0, 1, 31]
     assert not png_is_indexed(b"\x89PNG\r\n\x1a\n" + b"\0" * 30)
+
+
+# --- stale explanation / content comparison ---------------------------------
+
+def git(repo, *args):
+    import subprocess
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def test_stale_changes_listed_in_detail(repo, store):
+    submit(store, "ACCEPT")
+    assert store.task_detail("T1.2")["stale_changes"] is None
+    write(repo / "assets" / "tables" / "sub" / "x.png", "changed")
+    write(repo / "assets" / "tables" / "sub" / "z.png", "png")
+    ch = store.task_detail("T1.2")["stale_changes"]
+    assert ch["files"] == [{"file": "assets/tables/sub/x.png", "status": "changed"},
+                           {"file": "assets/tables/sub/z.png", "status": "added"}]
+    assert ch["items_added"] == [] and ch["items_removed"] == []
+
+
+def test_compare_against_accepted_git_version(repo, store):
+    from PIL import Image
+    import compare
+    git(repo, "init", "-q")
+    git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "add", ".")
+    png = repo / "assets" / "tables" / "sub" / "x.png"
+    Image.new("RGB", (4, 4), (10, 20, 30)).save(png)                 # real PNG, committed then accepted
+    git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "accepted state")
+    submit(store, "ACCEPT")
+    # re-encode the PNG (same pixels), reformat a.json (same structure), really change b.json? (not covered by T1.2)
+    Image.open(png).save(png, optimize=True)
+    a = repo / "assets" / "tables" / "a.json"
+    a.write_text(json.dumps(json.loads(a.read_text()), indent=2))
+    assert state(store)["state"] == "stale"
+    r = store.compare_stale("T1.2")
+    by = {f["file"]: f for f in r["files"]}
+    assert by["assets/tables/a.json"]["result"]["kind"] == "json" and by["assets/tables/a.json"]["result"]["identical"]
+    assert by["assets/tables/sub/x.png"]["accepted_commit"] and by["assets/tables/sub/x.png"]["result"]["identical"]
+    assert r["effectively_unchanged"] and r["content_changed"] == 0
+    assert by["assets/tables/a.json"]["items"] == ["tables/a"] and by["assets/tables/sub/x.png"]["items"] == ["tables/pngs"]
+    assert all(f["result"]["trivial"] for f in r["files"])
+    # now a real change
+    a.write_text(json.dumps({"fields": ["f"], "rows": [{"f": 1}, {"f": 2}, {"f": 9}]}))
+    r = store.compare_stale("T1.2")
+    res = {f["file"]: f["result"] for f in r["files"]}["assets/tables/a.json"]
+    assert not res["identical"] and res["changes"] == [{"path": "rows[2].f", "change": "value", "then": 3, "now": 9}]
+    assert res["trivial"]                                   # one path: OK-able from the diff
+    a.write_text(json.dumps({"fields": ["f"], "rows": [{"f": i} for i in range(20)]}))
+    res = {f["file"]: f["result"] for f in store.compare_stale("T1.2")["files"]}["assets/tables/a.json"]
+    assert not res["trivial"] and len(res["changes"]) > compare.TRIVIAL_MAX_CHANGES
+    assert not r["effectively_unchanged"] and r["content_changed"] == 1
+    # unit: image with differing pixels reports a count
+    buf1, buf2 = __import__("io").BytesIO(), __import__("io").BytesIO()
+    Image.new("L", (4, 4), 0).save(buf1, "PNG"); im = Image.new("L", (4, 4), 0); im.putpixel((1, 1), 9); im.save(buf2, "PNG")
+    assert compare.compare_bytes("x.png", buf1.getvalue(), buf2.getvalue())["pixels_differing"] == 1
+
+
+def test_compare_requires_accept_and_reports_uncommitted(repo, store):
+    with pytest.raises(Rejected):
+        store.compare_stale("T1.2")
+    submit(store, "ACCEPT")
+    write(repo / "assets" / "tables" / "a.json", {"rows": [1]})
+    r = store.compare_stale("T1.2")   # no git history at all -> accepted version not recoverable
+    assert r["files"][0]["result"]["kind"] == "missing" and r["content_changed"] == 1
+    client = TestClient(create_app(store, dist=None))
+    assert client.get("/api/tasks/T1.2/compare").status_code == 200
+    assert client.get("/api/tasks/T1.3/compare").status_code == 409

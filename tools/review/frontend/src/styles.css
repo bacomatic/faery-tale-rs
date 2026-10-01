@@ -45,6 +45,13 @@ main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
 .panel-error { border-color: var(--problem); background: #2a1716; }
 .panel-warn { border-color: var(--warn); background: #2a2214; }
 .panel-ok { border-color: var(--ok); background: #152419; }
+.stale .status { font-size: 0.72rem; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--border); }
+.stale .status-added { color: var(--ok); }
+.stale .status-removed { color: var(--problem); }
+.stale .ok { color: var(--ok); }
+.stale .warn { color: #f0cf8a; }
+.stale button.link { background: none; border: none; color: var(--link, #8ab4f8); cursor: pointer; padding: 0 0.3rem; font-size: 0.8rem; }
+.stale .json-changes { margin: 0.2rem 0 0.4rem 1rem; }
 .problems { margin: 0.25rem 0 0.5rem; padding-left: 1.2rem; color: #f0a9a3; font-size: 0.88rem; }
 
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -90,7 +97,16 @@ textarea.note {
   width: 100%; min-height: 3rem; margin-top: 0.6rem; resize: vertical;
   font: inherit; color: var(--text); background: #16181d; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem;
 }
-.verdict-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem; flex-wrap: wrap; }
+.verdict {
+  position: sticky; top: 2.55rem; z-index: 9;
+  margin: 0 -1.25rem 0.75rem; padding: 0.45rem 1.25rem;
+  background: #0f1115; border-bottom: 1px solid var(--border);
+}
+.verdict-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.verdict .tally .ok { color: var(--ok); }
+.verdict .tally .warn { color: var(--problem); }
+.verdict button.link { background: none; border: none; color: var(--accent); cursor: pointer; margin-left: auto; font-size: 0.85rem; }
+.verdict textarea.note { margin-top: 0.4rem; min-height: 2.2rem; }
 
 .files { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.6rem; }
 .file { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; background: #16181d; }

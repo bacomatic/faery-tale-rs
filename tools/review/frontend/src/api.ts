@@ -1,4 +1,4 @@
-import type { Draft, ItemMark, Problem, Round, SourceLines, TaskDetail, TaskSummary, Verdict } from "./types";
+import type { CompareResult, Draft, ItemMark, Problem, Round, SourceLines, TaskDetail, TaskSummary, Verdict } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -29,6 +29,7 @@ const t = encodeURIComponent;
 export const api = {
   tasks: () => req<TaskSummary[]>("GET", "/api/tasks"),
   task: (task: string) => req<TaskDetail>("GET", `/api/tasks/${t(task)}`),
+  compare: (task: string) => req<CompareResult>("GET", `/api/tasks/${t(task)}/compare`),
   validation: () => req<Problem[]>("GET", "/api/validation"),
   reviews: (task: string) => req<Round[]>("GET", `/api/reviews?task=${t(task)}`),
   source: (path: string, start: number, end: number | null, block = false) =>

@@ -85,6 +85,37 @@ export interface SourceLines {
   lines: string[];
 }
 
+export interface StaleChanges {
+  files: { file: string; status: "changed" | "added" | "removed" }[];
+  items_added: string[];
+  items_removed: string[];
+}
+
+export interface JsonChange {
+  path: string;
+  change: "added" | "removed" | "value";
+  then?: unknown;
+  now?: unknown;
+}
+
+export type FileCompare =
+  | { kind: "image"; identical: boolean; trivial: boolean; summary: string; pixels_differing?: number }
+  | { kind: "json"; identical: boolean; trivial: boolean; summary: string; changes: JsonChange[]; truncated: boolean }
+  | { kind: "bytes"; identical: boolean; trivial: boolean; summary: string; note?: string }
+  | { kind: "missing"; identical: false; trivial: false; summary: string };
+
+export interface CompareResult {
+  task: string;
+  accepted_at: string;
+  items_added: string[];
+  items_removed: string[];
+  // items: "resource/id" keys whose files include this file
+  files: { file: string; status: string; accepted_commit: string | null; result: FileCompare | null; items: string[] }[];
+  trivial_max_changes: number;
+  content_changed: number;
+  effectively_unchanged: boolean;
+}
+
 export interface TaskDetail extends TaskSummary {
   summary: string;
   resource: string;
@@ -92,4 +123,5 @@ export interface TaskDetail extends TaskSummary {
   task_problems: Problem[];
   latest_round: Round | null;
   draft: Draft | null;
+  stale_changes: StaleChanges | null;
 }

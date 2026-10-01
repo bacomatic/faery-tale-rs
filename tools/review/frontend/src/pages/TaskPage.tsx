@@ -3,6 +3,7 @@ import { api, errText } from "../api";
 import HistoryPanel from "../components/HistoryPanel";
 import ItemCard, { type Mark } from "../components/ItemCard";
 import ProblemList from "../components/ProblemList";
+import StalePanel from "../components/StalePanel";
 import StateBadge from "../components/StateBadge";
 import VerdictBar from "../components/VerdictBar";
 import type { ItemMark, TaskDetail, Verdict } from "../types";
@@ -72,6 +73,15 @@ export default function TaskPage({ task }: { task: string }) {
     setFlash(null);
     setMarks((prev) => ({ ...prev, [key]: m }));
   };
+  const okItems = (items: { key: string; note: string }[]) => {
+    dirty.current = true;
+    setFlash(null);
+    setMarks((prev) => {
+      const next = { ...prev };
+      for (const { key, note } of items) next[key] = { status: "ok", note };
+      return next;
+    });
+  };
   const setTaskNotes = (s: string) => {
     dirty.current = true;
     setFlash(null);
@@ -118,8 +128,11 @@ export default function TaskPage({ task }: { task: string }) {
   const statuses = items.map((it) => (marks[keyOf(it.resource, it.id)] ?? EMPTY).status);
   const problemCount = statuses.filter((s) => s === "problem").length;
   const unmarkedCount = statuses.filter((s) => !s).length;
+  const okCount = statuses.filter((s) => s === "ok").length;
   const carriedCount = items.filter((it) => it.carried_ok).length;
   const hasDraft = detail.has_draft || save === "saving" || save === "saved";
+  // keys ("resource/id") marked OK in the latest round; what the stale panel may re-OK from a trivial diff
+  const okThen = new Set((detail.latest_round?.items ?? []).filter((m) => m.status === "ok").map((m) => keyOf(m.resource, m.id)));
 
   return (
     <>
@@ -137,11 +150,20 @@ export default function TaskPage({ task }: { task: string }) {
           </button>
         )}
       </div>
+      <VerdictBar
+        notes={notes}
+        onNotes={setTaskNotes}
+        problemCount={problemCount}
+        unmarkedCount={unmarkedCount}
+        okCount={okCount}
+        total={items.length}
+        invalid={detail.task_problems.length > 0}
+        busy={busy}
+        onSubmit={submit}
+      />
       {detail.summary && <p className="summary">{detail.summary}</p>}
-      {detail.stale && (
-        <p className="panel panel-warn">
-          The last ACCEPT is stale: covered files or the item set changed since it was submitted.
-        </p>
+      {detail.stale && detail.stale_changes && (
+        <StalePanel task={task} changes={detail.stale_changes} okThen={okThen} onOkItems={okItems} />
       )}
       {detail.task_problems.length > 0 && (
         <section className="panel panel-error">
@@ -165,15 +187,6 @@ export default function TaskPage({ task }: { task: string }) {
         );
       })}
 
-      <VerdictBar
-        notes={notes}
-        onNotes={setTaskNotes}
-        problemCount={problemCount}
-        unmarkedCount={unmarkedCount}
-        invalid={detail.task_problems.length > 0}
-        busy={busy}
-        onSubmit={submit}
-      />
       <HistoryPanel task={task} refresh={historyTick} />
     </>
   );
