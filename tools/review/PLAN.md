@@ -122,6 +122,10 @@ mise exec -- python -m uvicorn app:app --app-dir tools/review/backend --host 127
   an `X-Indexed-Png` header.
 - `audio` — added 2026-09-28 with T2.6/T2.7: `FileViewer` renders `.wav/.ogg/.mp3/.flac` files
   with an `<audio controls>` element (dispatch by extension, like images).
+- `shader` — added 2026-10-02 with T3.1: for `.glsl` files, `ShaderViewer.tsx` compiles the file
+  verbatim in WebGL2 (GLSL ES 3.00), reads textures/uniforms from the sibling `shaders.json` and
+  subjects from `previews/previews.json`, exposes the uniforms, and when they match a baked level
+  diffs the GPU output against the Python render (`readPixels` vs the PNG; "identical" expected).
 - **Later, as their tasks land:** `image-grid` (sprite frames / tile atlases / glyphs),
   `markdown` (FORMATS/README docs), `code` (GLSL).
 - **Citations:** clicking a citation opens the cited lines from `src/` or `reference/`, read-only,

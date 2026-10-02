@@ -3,6 +3,7 @@ import { fileUrl } from "../api";
 import ImageViewer from "./ImageViewer";
 import JsonViewer, { JsonTree, type Json } from "./JsonViewer";
 import PaletteViewer from "./PaletteViewer";
+import ShaderViewer from "./ShaderViewer";
 import SpriteViewer from "./SpriteViewer";
 import StringsViewer from "./StringsViewer";
 import TableViewer from "./TableViewer";
@@ -50,6 +51,7 @@ export default function FileViewer({ path, view }: { path: string; view: string 
   if (IMAGE.test(path)) body = <ImageViewer path={path} />;
   else if (AUDIO.test(path)) body = <audio controls preload="metadata" src={fileUrl(path)} />;
   else if (JSON_FILE.test(path) && view === "sprite") body = <SpriteViewer path={path} />;
+  else if (/\.glsl$/i.test(path) && view === "shader") body = <ShaderViewer path={path} />;
   else if (JSON_FILE.test(path))
     body = NATIVE[view] ? <NativeJson path={path} View={NATIVE[view]} /> : <JsonViewer path={path} />;
   else if (TEXT.test(path)) body = <TextViewer path={path} />;

@@ -131,8 +131,7 @@ assets/
   fonts/<font>_<size>/glyphs/*.png  <font>_<size>.json   # per size file (amber_9, topaz_8): glyph atlas + metrics (y_size,baseline,char_loc,width)
   screens/<name>.png            # IFF intro/placard/hi-score images → RGBA PNG
   shaders/                      # reference shaders (reference-only; validated by the port) + light-level reference renders (previews/)
-    fade_to_black.glsl  daynight_dim.glsl  region_crossfade.glsl
-    moonlight_blue.glsl  green_jewel.glsl
+    fade_to_black.glsl
     daynight_live.glsl  daynight_bank.glsl   # full day/night incl. veg boost (RGBA + highlight_mask)
     README.md                   # maps each effect → indexed-path vs RGBA+shader; pseudocode
   text/
@@ -181,11 +180,6 @@ existing tool; **[new]** = new extractor module.
     pseudocode comments — GLSL is generic enough to translate to any pipeline) for each palette
     effect so the porting team can drive the RGBA assets directly:
     - `fade_to_black.glsl` — uniform multiply (also covers fade-from-black / scene transitions).
-    - `daynight_dim.glsl` — `lightlevel`-driven uniform brightness scale.
-    - `region_crossfade.glsl` — lerp between two RGBA region renders over 8 frames.
-    - `moonlight_blue.glsl` — per-pixel blue injection from green (`b += g2*g`), with night
-      channel floors (r≥10%, g≥25%, b≥60%).
-    - `green_jewel.glsl` — per-pixel `r = max(r, g)` boost.
     - `daynight_live.glsl` / `daynight_bank.glsl` — the **full** day/night cycle incl. the
       vegetation night boost (see correction below). Port the verified reference from
       `experiment/shaders/` (`daynight_live.glsl` = live from full-bright RGBA + `highlight_mask`;

@@ -1,0 +1,52 @@
+{
+  "note": "Reference-only GLSL ES 3.00 fragment shaders (validated by the port, runnable verbatim in WebGL2). This file describes each shader's textures and uniforms for the review app's shader viewer; subjects come from previews/previews.json.",
+  "vertex": "Full-screen quad. vUV = (0,0) at the top-left texel of the source image, (1,1) at the bottom-right; textures are sampled with NEAREST filtering and no premultiplied alpha.",
+  "textures": {
+    "indexed": "the subject's indexed PNG (sheet/atlas) decoded to RGBA: full-bright palette, index 31 transparent on sprites",
+    "highlight_mask": "the subject's 1-bit highlight mask PNG (white where index 16..24)",
+    "bank": "sampler2DArray built from the subject's previews/*_light*.png in ascending level order"
+  },
+  "shaders": {
+    "daynight_live.glsl": {
+      "title": "Day/night, live (complete fade_page, limit = TRUE)",
+      "source": ["src/fmain2.c:377-419", "src/fmain2.c:1653-1660"],
+      "textures": {"uBase": "indexed", "uHighlight": "highlight_mask"},
+      "uniforms": [
+        {"name": "uLightlevel", "type": "int", "label": "lightlevel", "min": 0, "max": 300, "default": 180},
+        {"name": "uLightTimer", "type": "bool", "label": "Green Jewel (light_timer)", "default": false}
+      ],
+      "compare": "fade_page"
+    },
+    "daynight_bank.glsl": {
+      "title": "Day/night from the prebaked per-level bank",
+      "source": ["src/fmain2.c:377-419"],
+      "textures": {"uBank": "bank"},
+      "uniforms": [
+        {"name": "uLevel01", "type": "float", "label": "position across layers", "min": 0, "max": 1, "step": 0.001, "default": 1}
+      ],
+      "compare": "bank"
+    },
+    "fade_to_black.glsl": {
+      "title": "Fade to/from black (fade_page, limit = FALSE)",
+      "source": ["src/fmain2.c:623-629", "src/fmain.c:2914-2930", "src/fmain.c:1199-1209"],
+      "textures": {"uBase": "indexed"},
+      "uniforms": [
+        {"name": "uWeight", "type": "ivec3", "label": "weights r, g, b", "min": 0, "max": 100, "default": [100, 100, 100]},
+        {"name": "uLightTimer", "type": "bool", "label": "Green Jewel (light_timer)", "default": false}
+      ],
+      "modes": [
+        {"id": "fade", "label": "fade_down / fade_normal", "param": {"label": "i (one weight for r, g, b)", "min": 0, "max": 100, "step": 5, "default": 100},
+         "rule": "uWeight = (i, i, i); the game steps i by 5 per tick (fmain2.c:623-629)"},
+        {"id": "intro_zoom", "label": "intro zoom (screen_size)", "param": {"label": "x (half playfield width)", "min": 0, "max": 160, "step": 4, "default": 160},
+         "rule": "y = x*5/8 (integer); uWeight = (2y-40, 2y-70, 2y-100); the intro runs x = 0..160 then 156..0 in steps of 4 (fmain.c:1199, 1209)"},
+        {"id": "free", "label": "free (r, g, b separately)"}
+      ],
+      "compare": "full_bright"
+    }
+  },
+  "compare": {
+    "fade_page": "previews/<subject>_light<uLightlevel>.png when uLightlevel is a baked level and the jewel is off; <subject>_jewel_light000.png when the jewel is on at level 0",
+    "bank": "the baked layer when uLevel01 sits exactly on one",
+    "full_bright": "<subject>_light180.png when all weights are 100 and the jewel is off (the original palette)"
+  }
+}

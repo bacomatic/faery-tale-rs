@@ -77,7 +77,8 @@
             "audio",
             "markdown",
             "code",
-            "sprite"
+            "sprite",
+            "shader"
           ],
           "title": "View",
           "type": "string"

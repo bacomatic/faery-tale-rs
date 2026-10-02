@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "tasks": {
+    "T3.1": {
+      "title": "Reference shaders + light-level renders",
+      "summary": "Three reference-only GLSL ES 3.00 fragment shaders (validated by the port, not here) and the light-level reference renders in previews/, made with the bit-exact Python port of fade_page(). Each shader item runs the GLSL live in WebGL2 on any region atlas or outdoor actor sheet: move the uniforms, and pick a baked level to diff the GPU output against the Python render (it must read 'identical'). The preview items are strips of every subject across the light levels: flip through them and check that day/dusk/night/moonlight/Green Jewel look like the game. Only actors that appear outdoors are rendered (review round 1)."
+    }
+  },
+  "items": [
+    {
+      "id": "previews_regions",
+      "task": "T3.1",
+      "title": "Light-level renders — region tile atlases (10 strips)",
+      "view": "image",
+      "files": [
+        "previews/region_*_strip.png"
+      ],
+      "look_for": "Regions 0-7: ten panels left to right — light 0, 95, 105, 111, 120, 136, 150, 165, 180, then 'green jewel, light 0'. Light 180 must equal the shipped atlas_rgba.png (full day = the original palette; weights all 100). Going left the scene dims and turns blue: at light 0 every channel sits on its night floor (r 10, g 25, b 60) and the moonlight term (g2 = 25) pushes blue up — white becomes 0x139, grass/foliage greens (indices 16-19) become near-pure blues 0x012-0x036 with the +2 vegetation boost. The boost steps down at 111 (+1) and ends at 136, so foliage is relatively bluer than other colours only in the left half. Region 4's colour 31 is amber 0x980 (sand) and fades with everything else. The jewel panel is a warm red/magenta night: red weight is 100 and every colour's red is lifted to its green, so foliage reads as bright red (0x412-0xF36) while green and blue stay at night levels. Regions 8 and 9 (indoors) have only light 180 + no jewel: day_fade forces (100,100,100) inside, so there is nothing else to show.",
+      "citations": [
+        "src/fmain2.c:377-419",
+        "src/fmain2.c:1653-1660",
+        "src/fmain.c:2025-2026",
+        "src/fmain.c:3306"
+      ],
+      "counts": [
+        {
+          "label": "region strips",
+          "glob": "previews/region_*_strip.png",
+          "expect": 10
+        },
+        {
+          "label": "region renders",
+          "glob": "previews/region_*_light*.png",
+          "expect": 82
+        }
+      ]
+    },
+    {
+      "id": "previews_heroes",
+      "task": "T3.1",
+      "title": "Light-level renders — heroes (Julian, Phillip, Kevin)",
+      "view": "image",
+      "files": [
+        "previews/julian_strip.png",
+        "previews/phillip_strip.png",
+        "previews/kevin_strip.png"
+      ],
+      "look_for": "Ten panels top to bottom (light 0 … 180, then green jewel at light 0). Light 180 is the shipped sheet. Index 31 stays transparent at every level (checkerboard shows through around every frame; nothing becomes a coloured box). At night the tunics turn deep blue/purple and skin goes dark; the hero's few highlight-range pixels (indices 16-24: greens/blues) get the +2/+1 blue boost at 0-120. The jewel panel is a red night figure (reds at full, green and blue dimmed).",
+      "citations": [
+        "src/fmain2.c:377-419",
+        "src/fmain2.c:1655"
+      ],
+      "counts": [
+        {
+          "label": "julian renders",
+          "glob": "previews/julian_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "phillip renders",
+          "glob": "previews/phillip_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "kevin renders",
+          "glob": "previews/kevin_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "julian jewel",
+          "glob": "previews/julian_jewel_light000.png",
+          "expect": 1
+        }
+      ]
+    },
+    {
+      "id": "previews_enemies",
+      "task": "T3.1",
+      "title": "Light-level renders — enemies (7 outdoor races)",
+      "view": "image",
+      "files": [
+        "previews/ogre_strip.png",
+        "previews/orcs_strip.png",
+        "previews/wraith_strip.png",
+        "previews/skeleton_strip.png",
+        "previews/snake_strip.png",
+        "previews/spider_strip.png",
+        "previews/dknight_strip.png"
+      ],
+      "look_for": "Same ten-panel progression per sheet, transparency preserved. Night figures are blue silhouettes with the moonlight cast; the skeleton's whites become 0x139 blue at light 0 and climb back to white by 180; greens (orc skin, snake) sit in the 16-24 boost band and go bluest. The jewel panel turns everything red. Loraii, the necromancer and the woodcutter are not rendered: they appear only in the astral plane, which is never palette-faded.",
+      "citations": [
+        "src/fmain2.c:377-419"
+      ],
+      "counts": [
+        {
+          "label": "ogre renders",
+          "glob": "previews/ogre_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "orcs renders",
+          "glob": "previews/orcs_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "wraith renders",
+          "glob": "previews/wraith_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "skeleton renders",
+          "glob": "previews/skeleton_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "snake renders",
+          "glob": "previews/snake_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "spider renders",
+          "glob": "previews/spider_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "dknight renders",
+          "glob": "previews/dknight_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "ogre jewel",
+          "glob": "previews/ogre_jewel_light000.png",
+          "expect": 1
+        }
+      ]
+    },
+    {
+      "id": "previews_npcs",
+      "task": "T3.1",
+      "title": "Light-level renders — NPCs seen outdoors (beggar, ranger, spectre, ghost)",
+      "view": "image",
+      "files": [
+        "previews/spectre_strip.png",
+        "previews/ghost_strip.png",
+        "previews/ranger_strip.png",
+        "previews/begger_strip.png"
+      ],
+      "look_for": "Same ten-panel progression per sheet (short strips: 1-4 frames each). Transparency preserved; night = blue cast; jewel = red. Only the four NPCs that appear in the overworld are rendered; the other setfig NPCs live indoors, where day_fade passes (100,100,100), so they are never faded.",
+      "citations": [
+        "src/fmain2.c:377-419",
+        "src/fmain2.c:1657-1659"
+      ],
+      "counts": [
+        {
+          "label": "spectre renders",
+          "glob": "previews/spectre_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "ghost renders",
+          "glob": "previews/ghost_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "ranger renders",
+          "glob": "previews/ranger_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "begger renders",
+          "glob": "previews/begger_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "begger jewel",
+          "glob": "previews/begger_jewel_light000.png",
+          "expect": 1
+        }
+      ]
+    },
+    {
+      "id": "previews_carriers",
+      "task": "T3.1",
+      "title": "Light-level renders — carriers (swan, raft, turtle)",
+      "view": "image",
+      "files": [
+        "previews/bird_strip.png",
+        "previews/raft_strip.png",
+        "previews/turtle_strip.png"
+      ],
+      "look_for": "Same ten-panel progression. The golden swan's yellows (0xF50-0xFA0 range) go dark olive then blue at night; the turtle's greens are in the boost band and read bluest; the raft's browns go nearly black with a blue tinge at light 0. The dragon is not rendered: he only appears in his cave.",
+      "citations": [
+        "src/fmain2.c:377-419"
+      ],
+      "counts": [
+        {
+          "label": "bird renders",
+          "glob": "previews/bird_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "raft renders",
+          "glob": "previews/raft_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "turtle renders",
+          "glob": "previews/turtle_light*.png",
+          "expect": 9
+        },
+        {
+          "label": "bird jewel",
+          "glob": "previews/bird_jewel_light000.png",
+          "expect": 1
+        }
+      ]
+    },
+    {
+      "id": "previews_index",
+      "task": "T3.1",
+      "title": "previews/README.md + previews.json — index of the renders",
+      "view": "markdown",
+      "files": [
+        "previews/README.md",
+        "previews/previews.json"
+      ],
+      "look_for": "The README states the renders are non-authoritative, made with the Python fade_page() port (not the GLSL), lists the light levels and the naming scheme, explains why regions 8/9 have one render and why indoor-only actors are absent. previews.json has 27 subjects (10 regions + 17 outdoor actor sheets).",
+      "citations": [
+        "src/fmain2.c:1653-1660"
+      ],
+      "counts": [
+        {
+          "label": "subjects",
+          "file": "previews/previews.json",
+          "path": "subjects",
+          "expect": 27
+        },
+        {
+          "label": "levels",
+          "file": "previews/previews.json",
+          "path": "levels",
+          "expect": 9
+        },
+        {
+          "label": "strips",
+          "glob": "previews/*_strip.png",
+          "expect": 27
+        },
+        {
+          "label": "light renders",
+          "glob": "previews/*_light*.png",
+          "expect": 252
+        },
+        {
+          "label": "jewel renders",
+          "glob": "previews/*_jewel_light000.png",
+          "expect": 25
+        }
+      ]
+    },
+    {
+      "id": "shader_daynight_live",
+      "task": "T3.1",
+      "title": "daynight_live.glsl — the complete day/night effect, live",
+      "view": "shader",
+      "files": [
+        "daynight_live.glsl"
+      ],
+      "look_for": "Status 'compiled OK'. Drag lightlevel from 180 down to 0 on a region atlas: the scene dims and turns blue continuously, with the foliage boost visible in 0-135. Click each baked level (0, 95, 105, 111, 120, 136, 150, 165, 180) and 'jewel': the diff line must read 'identical' every time — the GPU reproduces the Python fade_page() render pixel for pixel. Try an actor sheet too (transparency must survive). Toggle Green Jewel: the scene goes red at night and barely changes by day.",
+      "citations": [
+        "src/fmain2.c:377-419",
+        "src/fmain2.c:1653-1660"
+      ]
+    },
+    {
+      "id": "shader_daynight_bank",
+      "task": "T3.1",
+      "title": "daynight_bank.glsl — day/night from the prebaked bank",
+      "view": "shader",
+      "files": [
+        "daynight_bank.glsl"
+      ],
+      "look_for": "Status 'compiled OK'. The bank is the subject's nine preview renders as texture layers. Clicking a baked level must read 'identical'; positions between layers show a smooth cross-fade the original never produced (by design, see the shader comment). Indoor regions 8/9 are absent from the subject list (one layer only).",
+      "citations": [
+        "src/fmain2.c:377-419"
+      ]
+    },
+    {
+      "id": "shader_fade_to_black",
+      "task": "T3.1",
+      "title": "fade_to_black.glsl — fade_down / fade_normal / intro zoom",
+      "view": "shader",
+      "files": [
+        "fade_to_black.glsl"
+      ],
+      "look_for": "Status 'compiled OK'. Three modes: 'fade_down / fade_normal' links r, g, b to one weight i (step 5, as the game does) — slide it from 100 to 0 and the scene fades to true black in visible 4-bit steps with no blue cast and no floors; at 100 the diff reads 'identical' to light 180. 'intro zoom' drives the weights as screen_size does from the half-width x (y = x*5/8; weights 2y-40, 2y-70, 2y-100): red leads, blue lags, so the opening zoom warms up from black; x = 160 is full brightness. 'free' exposes the three weights separately.",
+      "citations": [
+        "src/fmain2.c:623-629",
+        "src/fmain.c:2914-2930",
+        "src/fmain.c:1199-1209"
+      ]
+    },
+    {
+      "id": "shaders_readme",
+      "task": "T3.1",
+      "title": "shaders/README.md — effect list, inputs, indexed vs RGBA+mask matrix",
+      "view": "markdown",
+      "files": [
+        "README.md",
+        "shaders.json"
+      ],
+      "look_for": "States plainly that the GLSL is reference-only and validated by the port. Lists the three shaders with their textures/uniforms and source citations. The effects matrix explains: everything is reproducible on RGBA; only the vegetation night boost needs the 1-bit highlight mask (or the baked bank), because it depends on the palette index. Notes the quantised (4-bit) nature of every fade, the indoor rule and colour 31 per region.",
+      "citations": [
+        "src/fmain2.c:377-419",
+        "src/fmain2.c:1653-1660",
+        "src/fmain2.c:381-386"
+      ]
+    }
+  ]
+}

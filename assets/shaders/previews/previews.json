@@ -1,0 +1,879 @@
+{
+  "indoor_regions": [
+    8,
+    9
+  ],
+  "jewel_level": 0,
+  "levels": [
+    0,
+    95,
+    105,
+    111,
+    120,
+    136,
+    150,
+    165,
+    180
+  ],
+  "renderer": "experiment/shaders/fade_page.py (bit-exact port); GLSL is NOT used here",
+  "source": "src/fmain2.c:377-419, src/fmain2.c:1653-1660",
+  "subjects": [
+    {
+      "files": {
+        "0": "region_00_light000.png",
+        "105": "region_00_light105.png",
+        "111": "region_00_light111.png",
+        "120": "region_00_light120.png",
+        "136": "region_00_light136.png",
+        "150": "region_00_light150.png",
+        "165": "region_00_light165.png",
+        "180": "region_00_light180.png",
+        "95": "region_00_light095.png",
+        "jewel": "region_00_jewel_light000.png"
+      },
+      "id": "region_00",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "tiles/region_00/atlas_highlightmask.png",
+        "indexed": "tiles/region_00/atlas_indexed.png"
+      },
+      "strip": "region_00_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_01_light000.png",
+        "105": "region_01_light105.png",
+        "111": "region_01_light111.png",
+        "120": "region_01_light120.png",
+        "136": "region_01_light136.png",
+        "150": "region_01_light150.png",
+        "165": "region_01_light165.png",
+        "180": "region_01_light180.png",
+        "95": "region_01_light095.png",
+        "jewel": "region_01_jewel_light000.png"
+      },
+      "id": "region_01",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 1,
+      "source": {
+        "highlight_mask": "tiles/region_01/atlas_highlightmask.png",
+        "indexed": "tiles/region_01/atlas_indexed.png"
+      },
+      "strip": "region_01_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_02_light000.png",
+        "105": "region_02_light105.png",
+        "111": "region_02_light111.png",
+        "120": "region_02_light120.png",
+        "136": "region_02_light136.png",
+        "150": "region_02_light150.png",
+        "165": "region_02_light165.png",
+        "180": "region_02_light180.png",
+        "95": "region_02_light095.png",
+        "jewel": "region_02_jewel_light000.png"
+      },
+      "id": "region_02",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 2,
+      "source": {
+        "highlight_mask": "tiles/region_02/atlas_highlightmask.png",
+        "indexed": "tiles/region_02/atlas_indexed.png"
+      },
+      "strip": "region_02_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_03_light000.png",
+        "105": "region_03_light105.png",
+        "111": "region_03_light111.png",
+        "120": "region_03_light120.png",
+        "136": "region_03_light136.png",
+        "150": "region_03_light150.png",
+        "165": "region_03_light165.png",
+        "180": "region_03_light180.png",
+        "95": "region_03_light095.png",
+        "jewel": "region_03_jewel_light000.png"
+      },
+      "id": "region_03",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 3,
+      "source": {
+        "highlight_mask": "tiles/region_03/atlas_highlightmask.png",
+        "indexed": "tiles/region_03/atlas_indexed.png"
+      },
+      "strip": "region_03_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_04_light000.png",
+        "105": "region_04_light105.png",
+        "111": "region_04_light111.png",
+        "120": "region_04_light120.png",
+        "136": "region_04_light136.png",
+        "150": "region_04_light150.png",
+        "165": "region_04_light165.png",
+        "180": "region_04_light180.png",
+        "95": "region_04_light095.png",
+        "jewel": "region_04_jewel_light000.png"
+      },
+      "id": "region_04",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 4,
+      "source": {
+        "highlight_mask": "tiles/region_04/atlas_highlightmask.png",
+        "indexed": "tiles/region_04/atlas_indexed.png"
+      },
+      "strip": "region_04_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_05_light000.png",
+        "105": "region_05_light105.png",
+        "111": "region_05_light111.png",
+        "120": "region_05_light120.png",
+        "136": "region_05_light136.png",
+        "150": "region_05_light150.png",
+        "165": "region_05_light165.png",
+        "180": "region_05_light180.png",
+        "95": "region_05_light095.png",
+        "jewel": "region_05_jewel_light000.png"
+      },
+      "id": "region_05",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 5,
+      "source": {
+        "highlight_mask": "tiles/region_05/atlas_highlightmask.png",
+        "indexed": "tiles/region_05/atlas_indexed.png"
+      },
+      "strip": "region_05_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_06_light000.png",
+        "105": "region_06_light105.png",
+        "111": "region_06_light111.png",
+        "120": "region_06_light120.png",
+        "136": "region_06_light136.png",
+        "150": "region_06_light150.png",
+        "165": "region_06_light165.png",
+        "180": "region_06_light180.png",
+        "95": "region_06_light095.png",
+        "jewel": "region_06_jewel_light000.png"
+      },
+      "id": "region_06",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 6,
+      "source": {
+        "highlight_mask": "tiles/region_06/atlas_highlightmask.png",
+        "indexed": "tiles/region_06/atlas_indexed.png"
+      },
+      "strip": "region_06_strip.png"
+    },
+    {
+      "files": {
+        "0": "region_07_light000.png",
+        "105": "region_07_light105.png",
+        "111": "region_07_light111.png",
+        "120": "region_07_light120.png",
+        "136": "region_07_light136.png",
+        "150": "region_07_light150.png",
+        "165": "region_07_light165.png",
+        "180": "region_07_light180.png",
+        "95": "region_07_light095.png",
+        "jewel": "region_07_jewel_light000.png"
+      },
+      "id": "region_07",
+      "kind": "tiles",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 7,
+      "source": {
+        "highlight_mask": "tiles/region_07/atlas_highlightmask.png",
+        "indexed": "tiles/region_07/atlas_indexed.png"
+      },
+      "strip": "region_07_strip.png"
+    },
+    {
+      "files": {
+        "180": "region_08_light180.png"
+      },
+      "id": "region_08",
+      "kind": "tiles",
+      "levels": [
+        180
+      ],
+      "region": 8,
+      "source": {
+        "highlight_mask": "tiles/region_08/atlas_highlightmask.png",
+        "indexed": "tiles/region_08/atlas_indexed.png"
+      },
+      "strip": "region_08_strip.png"
+    },
+    {
+      "files": {
+        "180": "region_09_light180.png"
+      },
+      "id": "region_09",
+      "kind": "tiles",
+      "levels": [
+        180
+      ],
+      "region": 9,
+      "source": {
+        "highlight_mask": "tiles/region_09/atlas_highlightmask.png",
+        "indexed": "tiles/region_09/atlas_indexed.png"
+      },
+      "strip": "region_09_strip.png"
+    },
+    {
+      "files": {
+        "0": "julian_light000.png",
+        "105": "julian_light105.png",
+        "111": "julian_light111.png",
+        "120": "julian_light120.png",
+        "136": "julian_light136.png",
+        "150": "julian_light150.png",
+        "165": "julian_light165.png",
+        "180": "julian_light180.png",
+        "95": "julian_light095.png",
+        "jewel": "julian_jewel_light000.png"
+      },
+      "id": "julian",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/heroes/julian/julian_highlightmask.png",
+        "indexed": "sprites/heroes/julian/julian_sheet.png"
+      },
+      "strip": "julian_strip.png"
+    },
+    {
+      "files": {
+        "0": "kevin_light000.png",
+        "105": "kevin_light105.png",
+        "111": "kevin_light111.png",
+        "120": "kevin_light120.png",
+        "136": "kevin_light136.png",
+        "150": "kevin_light150.png",
+        "165": "kevin_light165.png",
+        "180": "kevin_light180.png",
+        "95": "kevin_light095.png",
+        "jewel": "kevin_jewel_light000.png"
+      },
+      "id": "kevin",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/heroes/kevin/kevin_highlightmask.png",
+        "indexed": "sprites/heroes/kevin/kevin_sheet.png"
+      },
+      "strip": "kevin_strip.png"
+    },
+    {
+      "files": {
+        "0": "phillip_light000.png",
+        "105": "phillip_light105.png",
+        "111": "phillip_light111.png",
+        "120": "phillip_light120.png",
+        "136": "phillip_light136.png",
+        "150": "phillip_light150.png",
+        "165": "phillip_light165.png",
+        "180": "phillip_light180.png",
+        "95": "phillip_light095.png",
+        "jewel": "phillip_jewel_light000.png"
+      },
+      "id": "phillip",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/heroes/phillip/phillip_highlightmask.png",
+        "indexed": "sprites/heroes/phillip/phillip_sheet.png"
+      },
+      "strip": "phillip_strip.png"
+    },
+    {
+      "files": {
+        "0": "dknight_light000.png",
+        "105": "dknight_light105.png",
+        "111": "dknight_light111.png",
+        "120": "dknight_light120.png",
+        "136": "dknight_light136.png",
+        "150": "dknight_light150.png",
+        "165": "dknight_light165.png",
+        "180": "dknight_light180.png",
+        "95": "dknight_light095.png",
+        "jewel": "dknight_jewel_light000.png"
+      },
+      "id": "dknight",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/dknight/dknight_highlightmask.png",
+        "indexed": "sprites/enemies/dknight/dknight_sheet.png"
+      },
+      "strip": "dknight_strip.png"
+    },
+    {
+      "files": {
+        "0": "ogre_light000.png",
+        "105": "ogre_light105.png",
+        "111": "ogre_light111.png",
+        "120": "ogre_light120.png",
+        "136": "ogre_light136.png",
+        "150": "ogre_light150.png",
+        "165": "ogre_light165.png",
+        "180": "ogre_light180.png",
+        "95": "ogre_light095.png",
+        "jewel": "ogre_jewel_light000.png"
+      },
+      "id": "ogre",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/ogre/ogre_highlightmask.png",
+        "indexed": "sprites/enemies/ogre/ogre_sheet.png"
+      },
+      "strip": "ogre_strip.png"
+    },
+    {
+      "files": {
+        "0": "orcs_light000.png",
+        "105": "orcs_light105.png",
+        "111": "orcs_light111.png",
+        "120": "orcs_light120.png",
+        "136": "orcs_light136.png",
+        "150": "orcs_light150.png",
+        "165": "orcs_light165.png",
+        "180": "orcs_light180.png",
+        "95": "orcs_light095.png",
+        "jewel": "orcs_jewel_light000.png"
+      },
+      "id": "orcs",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/orcs/orcs_highlightmask.png",
+        "indexed": "sprites/enemies/orcs/orcs_sheet.png"
+      },
+      "strip": "orcs_strip.png"
+    },
+    {
+      "files": {
+        "0": "skeleton_light000.png",
+        "105": "skeleton_light105.png",
+        "111": "skeleton_light111.png",
+        "120": "skeleton_light120.png",
+        "136": "skeleton_light136.png",
+        "150": "skeleton_light150.png",
+        "165": "skeleton_light165.png",
+        "180": "skeleton_light180.png",
+        "95": "skeleton_light095.png",
+        "jewel": "skeleton_jewel_light000.png"
+      },
+      "id": "skeleton",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/skeleton/skeleton_highlightmask.png",
+        "indexed": "sprites/enemies/skeleton/skeleton_sheet.png"
+      },
+      "strip": "skeleton_strip.png"
+    },
+    {
+      "files": {
+        "0": "snake_light000.png",
+        "105": "snake_light105.png",
+        "111": "snake_light111.png",
+        "120": "snake_light120.png",
+        "136": "snake_light136.png",
+        "150": "snake_light150.png",
+        "165": "snake_light165.png",
+        "180": "snake_light180.png",
+        "95": "snake_light095.png",
+        "jewel": "snake_jewel_light000.png"
+      },
+      "id": "snake",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/snake/snake_highlightmask.png",
+        "indexed": "sprites/enemies/snake/snake_sheet.png"
+      },
+      "strip": "snake_strip.png"
+    },
+    {
+      "files": {
+        "0": "spider_light000.png",
+        "105": "spider_light105.png",
+        "111": "spider_light111.png",
+        "120": "spider_light120.png",
+        "136": "spider_light136.png",
+        "150": "spider_light150.png",
+        "165": "spider_light165.png",
+        "180": "spider_light180.png",
+        "95": "spider_light095.png",
+        "jewel": "spider_jewel_light000.png"
+      },
+      "id": "spider",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/spider/spider_highlightmask.png",
+        "indexed": "sprites/enemies/spider/spider_sheet.png"
+      },
+      "strip": "spider_strip.png"
+    },
+    {
+      "files": {
+        "0": "wraith_light000.png",
+        "105": "wraith_light105.png",
+        "111": "wraith_light111.png",
+        "120": "wraith_light120.png",
+        "136": "wraith_light136.png",
+        "150": "wraith_light150.png",
+        "165": "wraith_light165.png",
+        "180": "wraith_light180.png",
+        "95": "wraith_light095.png",
+        "jewel": "wraith_jewel_light000.png"
+      },
+      "id": "wraith",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/enemies/wraith/wraith_highlightmask.png",
+        "indexed": "sprites/enemies/wraith/wraith_sheet.png"
+      },
+      "strip": "wraith_strip.png"
+    },
+    {
+      "files": {
+        "0": "begger_light000.png",
+        "105": "begger_light105.png",
+        "111": "begger_light111.png",
+        "120": "begger_light120.png",
+        "136": "begger_light136.png",
+        "150": "begger_light150.png",
+        "165": "begger_light165.png",
+        "180": "begger_light180.png",
+        "95": "begger_light095.png",
+        "jewel": "begger_jewel_light000.png"
+      },
+      "id": "begger",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/npcs/begger/begger_highlightmask.png",
+        "indexed": "sprites/npcs/begger/begger_sheet.png"
+      },
+      "strip": "begger_strip.png"
+    },
+    {
+      "files": {
+        "0": "ghost_light000.png",
+        "105": "ghost_light105.png",
+        "111": "ghost_light111.png",
+        "120": "ghost_light120.png",
+        "136": "ghost_light136.png",
+        "150": "ghost_light150.png",
+        "165": "ghost_light165.png",
+        "180": "ghost_light180.png",
+        "95": "ghost_light095.png",
+        "jewel": "ghost_jewel_light000.png"
+      },
+      "id": "ghost",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/npcs/ghost/ghost_highlightmask.png",
+        "indexed": "sprites/npcs/ghost/ghost_sheet.png"
+      },
+      "strip": "ghost_strip.png"
+    },
+    {
+      "files": {
+        "0": "ranger_light000.png",
+        "105": "ranger_light105.png",
+        "111": "ranger_light111.png",
+        "120": "ranger_light120.png",
+        "136": "ranger_light136.png",
+        "150": "ranger_light150.png",
+        "165": "ranger_light165.png",
+        "180": "ranger_light180.png",
+        "95": "ranger_light095.png",
+        "jewel": "ranger_jewel_light000.png"
+      },
+      "id": "ranger",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/npcs/ranger/ranger_highlightmask.png",
+        "indexed": "sprites/npcs/ranger/ranger_sheet.png"
+      },
+      "strip": "ranger_strip.png"
+    },
+    {
+      "files": {
+        "0": "spectre_light000.png",
+        "105": "spectre_light105.png",
+        "111": "spectre_light111.png",
+        "120": "spectre_light120.png",
+        "136": "spectre_light136.png",
+        "150": "spectre_light150.png",
+        "165": "spectre_light165.png",
+        "180": "spectre_light180.png",
+        "95": "spectre_light095.png",
+        "jewel": "spectre_jewel_light000.png"
+      },
+      "id": "spectre",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/npcs/spectre/spectre_highlightmask.png",
+        "indexed": "sprites/npcs/spectre/spectre_sheet.png"
+      },
+      "strip": "spectre_strip.png"
+    },
+    {
+      "files": {
+        "0": "bird_light000.png",
+        "105": "bird_light105.png",
+        "111": "bird_light111.png",
+        "120": "bird_light120.png",
+        "136": "bird_light136.png",
+        "150": "bird_light150.png",
+        "165": "bird_light165.png",
+        "180": "bird_light180.png",
+        "95": "bird_light095.png",
+        "jewel": "bird_jewel_light000.png"
+      },
+      "id": "bird",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/carriers/bird/bird_highlightmask.png",
+        "indexed": "sprites/carriers/bird/bird_sheet.png"
+      },
+      "strip": "bird_strip.png"
+    },
+    {
+      "files": {
+        "0": "raft_light000.png",
+        "105": "raft_light105.png",
+        "111": "raft_light111.png",
+        "120": "raft_light120.png",
+        "136": "raft_light136.png",
+        "150": "raft_light150.png",
+        "165": "raft_light165.png",
+        "180": "raft_light180.png",
+        "95": "raft_light095.png",
+        "jewel": "raft_jewel_light000.png"
+      },
+      "id": "raft",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/carriers/raft/raft_highlightmask.png",
+        "indexed": "sprites/carriers/raft/raft_sheet.png"
+      },
+      "strip": "raft_strip.png"
+    },
+    {
+      "files": {
+        "0": "turtle_light000.png",
+        "105": "turtle_light105.png",
+        "111": "turtle_light111.png",
+        "120": "turtle_light120.png",
+        "136": "turtle_light136.png",
+        "150": "turtle_light150.png",
+        "165": "turtle_light165.png",
+        "180": "turtle_light180.png",
+        "95": "turtle_light095.png",
+        "jewel": "turtle_jewel_light000.png"
+      },
+      "id": "turtle",
+      "kind": "actor",
+      "levels": [
+        0,
+        95,
+        105,
+        111,
+        120,
+        136,
+        150,
+        165,
+        180
+      ],
+      "region": 0,
+      "source": {
+        "highlight_mask": "sprites/carriers/turtle/turtle_highlightmask.png",
+        "indexed": "sprites/carriers/turtle/turtle_sheet.png"
+      },
+      "strip": "turtle_strip.png"
+    }
+  ]
+}
