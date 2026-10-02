@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "tasks": {
+    "T3.2": {
+      "title": "Format spec",
+      "summary": "FORMATS.md at the bundle root plus one formats/*.md per resource type. Skim each next to the real files it describes: every shipped resource has a section, the field names match the JSON, and a porting team could consume the bundle from these pages alone. The palette-effects matrix in formats/palettes.md must tell the same story as shaders/README.md."
+    }
+  },
+  "items": [
+    {
+      "id": "formats_index",
+      "task": "T3.2",
+      "title": "FORMATS.md — bundle index and global conventions",
+      "view": "markdown",
+      "files": ["FORMATS.md"],
+      "look_for": "A table linking every resource directory (palettes, sprites, tiles, masks, maps, screens, text, audio, fonts, shaders) to its formats/*.md page, followed by the conventions: rgb4 -> rgba8 by nibble replication (n*17), indexed PNGs hold verbatim indices, index 31 is transparent on sprites but opaque on tiles, 1-bit mask convention, sheet/atlas cell addressing, 16x32 tiles, NTSC timing, previews are non-authoritative.",
+      "citations": ["src/fmain2.c:367-371", "src/fsubs.asm:750-771"]
+    },
+    {
+      "id": "formats_palettes",
+      "task": "T3.2",
+      "title": "formats/palettes.md — palettes, highlight mask, palette-effects matrix",
+      "view": "markdown",
+      "files": ["formats/palettes.md"],
+      "look_for": "Covers all six palette files (pagecolors 32, textcolors 20, introcolors 32, blackcolors 32, sun_colors 53, region_overrides) with the {index, rgb4, rgba8} entry shape; the colour-31 values 0x0bdf / 0x0980 (region 4) / 0x0445 and 0x00f0 (region 9); the highlight_mask format (1 bit/px, set where index 16-24, transparency follows 31); and the palette-effects matrix saying every fade_page effect is doable on RGBA, the vegetation boost only with the highlight mask or a baked bank, and only colorplay / win_colors need the indexed images. Cross-links shaders/README.md and experiment/shaders/FINDINGS.md.",
+      "citations": ["src/fmain2.c:377-419", "src/fmain2.c:381-386", "src/fmain.c:476-488"]
+    },
+    {
+      "id": "formats_sprites",
+      "task": "T3.2",
+      "title": "formats/sprites.md — actor sets, objects, overlays, raw sheets",
+      "view": "markdown",
+      "files": ["formats/sprites.md"],
+      "look_for": "Open next to sprites/heroes/julian/julian.json: the documented fields (actor, cfile, frame_size, frames[].file/rect/origin, sheet.highlight_mask/silhouette_mask, overlay_sheet, weapons, modes[].playback/directional/facings/steps, step.frame/ticks/state_index/overlays{frame,rows,dx,dy,behind}) are the ones in the file. Also documents objects.json (items, inventory_icons, world_object_ids), the weapons/effects sets (frames[].used_by) and raw/raw.json.",
+      "citations": ["src/fmain2.c:644-662", "src/fmain.c:2400-2447", "src/fsubs.asm:1619-1653"]
+    },
+    {
+      "id": "formats_tiles",
+      "task": "T3.2",
+      "title": "formats/tiles.md — region atlases, master atlas, collision",
+      "view": "markdown",
+      "files": ["formats/tiles.md"],
+      "look_for": "16x32 tiles, 256 per region in 16x16 atlases; the four atlas PNG flavours and that atlas_indexed has no tRNS; tiles.json fields (groups, layout, index_31, tiles[].mask/mask_mode); the master atlas (973 tiles, dedup key, region_maps, secret variants 971/972) and the collision record (feature_type, subtile_mask bit rule, blocked types). Compare with tiles/region_00/tiles.json and tiles/master/master.json.",
+      "citations": ["src/fsubs.asm:750-771", "src/fmain.c:616-625", "src/fsubs.asm:548-614"]
+    },
+    {
+      "id": "formats_masks",
+      "task": "T3.2",
+      "title": "formats/masks.md — shadow masks",
+      "view": "markdown",
+      "files": ["formats/masks.md"],
+      "look_for": "192 entries of 16x32, 1 bit/px, set bit = terrain in front; entry = terra byte 0, mode = terra byte 1 & 15; the 0-7 occlusion mode table; masks.json fields incl. usage counts (160 applied, 171-191 blank, 11 never applied).",
+      "citations": ["src/fmain.c:2577-2595", "src/fsubs.asm:1047-1083", "src/fmain.c:689-691"]
+    },
+    {
+      "id": "formats_maps",
+      "task": "T3.2",
+      "title": "formats/maps.md — maps",
+      "view": "markdown",
+      "files": ["formats/maps.md"],
+      "look_for": "Layer formats (tiles.png 8-bit tile id, master.png 16-bit master index, preview.png non-authoritative), the overworld region rule (row//256)*2 + col//1024, maps.json rows, map.json fields for interiors (entries, origin_*, place_names, blanked_tiles) and the overworld (doors[] with the three P27 fixes, quicksand). Points to maps/README.md for the method.",
+      "citations": ["src/fmain.c:240-325", "src/fmain.c:1919-1927", "src/fmain.c:2983-2987"]
+    },
+    {
+      "id": "formats_screens",
+      "task": "T3.2",
+      "title": "formats/screens.md — IFF screens",
+      "view": "markdown",
+      "files": ["formats/screens.md"],
+      "look_for": "The 9 screens with sizes and the palette each is shown with; that the file CMAP is skipped by the loader and kept only in screens.json; the winpic / win_colors LUT rule; screens.json fields (bmhd, chunks, cmap_rgb4, palette, shown).",
+      "citations": ["src/iffsubs.c:139-189", "src/fmain2.c:1605-1636"]
+    },
+    {
+      "id": "formats_text",
+      "task": "T3.2",
+      "title": "formats/text.md — narrative text",
+      "view": "markdown",
+      "files": ["formats/text.md"],
+      "look_for": "The four string lists with counts (39/27/23/61), the empty-entry rule, % = brother's name and the 37-column wrap; place_tbl/inside_tbl row shape and lookup rule; question.json rows; placard_text segments {text, x_half, x, y} with null positions for name() splices.",
+      "citations": ["src/narr.asm:11-57", "src/fmain2.c:514-548", "src/fsubs.asm:497-536"]
+    },
+    {
+      "id": "formats_audio",
+      "task": "T3.2",
+      "title": "formats/audio.md — music, instruments, SFX, synth model",
+      "view": "markdown",
+      "files": ["formats/audio.md"],
+      "look_for": "Song/theme table (7 songs x 4 voices, which loop); track JSON fields and the five event kinds with their extra fields; the synth model (tempo added per 60 Hz vblank, duration counts, 300-count note gap, ptable period/slice rule and 3579545 Hz clock, instrument word high=waveform low=envelope, envelope byte per vblank with >=128 = hold); waveforms/envelopes files (envelopes at v6 byte 2048); sfx WAVs byte-exact unsigned 8-bit with per-trigger period expressions and the effect 5 dual base.",
+      "citations": ["src/gdriver.asm:116-139", "src/gdriver.asm:204-222", "src/gdriver.asm:65-67", "src/fmain.c:3616-3619"]
+    },
+    {
+      "id": "formats_fonts",
+      "task": "T3.2",
+      "title": "formats/fonts.md — fonts",
+      "view": "markdown",
+      "files": ["formats/fonts.md"],
+      "look_for": "Amber/9 (97 glyphs, proportional, baseline 7) and topaz 8 (225 glyphs, fixed 8x8, ROM font stand-in); the glyph PNG convention; <font>.json fields incl. glyphs[].bit_offset/width/kern/space and overflows_strip_by; how Text() advances the pen.",
+      "citations": ["src/fmain.c:774-782", "src/fmain.c:650"]
+    },
+    {
+      "id": "formats_shaders",
+      "task": "T3.2",
+      "title": "formats/shaders.md — reference shaders and renders",
+      "view": "markdown",
+      "files": ["formats/shaders.md"],
+      "look_for": "States the GLSL is reference-only, lists the six files, documents shaders.json and previews/previews.json shapes, and defers the effects matrix to formats/palettes.md.",
+      "citations": ["src/fmain2.c:377-419"]
+    }
+  ]
+}

@@ -64,7 +64,9 @@ def extract_anchors(md_path: Path) -> set:
 
 
 def main():
-    md_files = sorted(REF_DIR.rglob('*.md'))
+    # Optional: a directory to check instead of reference/ (e.g. `assets`).
+    root = (REPO_ROOT / sys.argv[1]).resolve() if len(sys.argv) > 1 else REF_DIR
+    md_files = sorted(root.rglob('*.md'))
     # Build anchor index for all md files in repo (for cross-refs outside reference/)
     anchor_index = {}
     for mf in md_files:
