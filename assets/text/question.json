@@ -1,0 +1,73 @@
+{
+  "answers_source": "src/fmain2.c:1306-1307",
+  "fields": [
+    "index",
+    "label",
+    "line",
+    "question",
+    "answer"
+  ],
+  "line": 74,
+  "lines": "74-81",
+  "name": "_question",
+  "rows": [
+    {
+      "answer": "LIGHT",
+      "index": 0,
+      "label": "q1",
+      "line": 74,
+      "question": "To Quest for the...?"
+    },
+    {
+      "answer": "HEED",
+      "index": 1,
+      "label": "q2",
+      "line": 75,
+      "question": "Make haste, but take...?"
+    },
+    {
+      "answer": "DEED",
+      "index": 2,
+      "label": "q3",
+      "line": 76,
+      "question": "Scorn murderous...?"
+    },
+    {
+      "answer": "SIGHT",
+      "index": 3,
+      "label": "q4",
+      "line": 77,
+      "question": "Summon the...?"
+    },
+    {
+      "answer": "FLIGHT",
+      "index": 4,
+      "label": "q5",
+      "line": 78,
+      "question": "Wing forth in...?"
+    },
+    {
+      "answer": "CREED",
+      "index": 5,
+      "label": "q6",
+      "line": 79,
+      "question": "Hold fast to your...?"
+    },
+    {
+      "answer": "BLIGHT",
+      "index": 6,
+      "label": "q7",
+      "line": 80,
+      "question": "Defy Ye that...?"
+    },
+    {
+      "answer": "NIGHT",
+      "index": 7,
+      "label": "q8",
+      "line": 81,
+      "question": "In black darker than...?"
+    }
+  ],
+  "semantics": "copy_protect_junk picks j = rand8() and shows question(j), then compares the typed text against answers[j] (src/fmain2.c:1316-1331); the manual's riddle answers, uppercase.",
+  "source": "src/narr.asm"
+}

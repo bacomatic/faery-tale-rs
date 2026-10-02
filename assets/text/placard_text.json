@@ -1,0 +1,609 @@
+{
+  "entries": [
+    {
+      "index": 0,
+      "label": "msg1",
+      "line": 251,
+      "segments": [
+        {
+          "text": "   \"Rescue the Talisman!\"",
+          "x": 20,
+          "x_half": 10,
+          "y": 28
+        },
+        {
+          "text": "was the Mayor's plea.",
+          "x": 20,
+          "x_half": 10,
+          "y": 39
+        },
+        {
+          "text": "\"Only the Talisman can",
+          "x": 20,
+          "x_half": 10,
+          "y": 50
+        },
+        {
+          "text": "protect our village from",
+          "x": 20,
+          "x_half": 10,
+          "y": 61
+        },
+        {
+          "text": "the evil forces of the",
+          "x": 20,
+          "x_half": 10,
+          "y": 72
+        },
+        {
+          "text": "night.\" And so Julian",
+          "x": 20,
+          "x_half": 10,
+          "y": 83
+        },
+        {
+          "text": "set out on his quest to",
+          "x": 20,
+          "x_half": 10,
+          "y": 94
+        },
+        {
+          "text": "recover it.",
+          "x": 20,
+          "x_half": 10,
+          "y": 105
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "label": "msg2",
+      "line": 261,
+      "segments": [
+        {
+          "text": "Unfortunately for Julian,",
+          "x": 24,
+          "x_half": 12,
+          "y": 44
+        },
+        {
+          "text": "his luck had run out.",
+          "x": 24,
+          "x_half": 12,
+          "y": 55
+        },
+        {
+          "text": "Many months passed and",
+          "x": 24,
+          "x_half": 12,
+          "y": 66
+        },
+        {
+          "text": "Julian did not return...",
+          "x": 24,
+          "x_half": 12,
+          "y": 77
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "label": "msg3",
+      "line": 267,
+      "segments": [
+        {
+          "text": "So Phillip set out,",
+          "x": 40,
+          "x_half": 20,
+          "y": 44
+        },
+        {
+          "text": "determined to find his",
+          "x": 40,
+          "x_half": 20,
+          "y": 55
+        },
+        {
+          "text": "brother and complete",
+          "x": 40,
+          "x_half": 20,
+          "y": 66
+        },
+        {
+          "text": "the quest.",
+          "x": 40,
+          "x_half": 20,
+          "y": 77
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "label": "msg4",
+      "line": 273,
+      "segments": [
+        {
+          "text": "But sadly, Phillip's",
+          "x": 24,
+          "x_half": 12,
+          "y": 44
+        },
+        {
+          "text": "cleverness could not save",
+          "x": 24,
+          "x_half": 12,
+          "y": 55
+        },
+        {
+          "text": "him from the same fate",
+          "x": 24,
+          "x_half": 12,
+          "y": 66
+        },
+        {
+          "text": "as his older brother.",
+          "x": 24,
+          "x_half": 12,
+          "y": 77
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "label": "msg5",
+      "line": 279,
+      "segments": [
+        {
+          "text": "So Kevin took up the",
+          "x": 30,
+          "x_half": 15,
+          "y": 30
+        },
+        {
+          "text": "quest, risking all, for",
+          "x": 30,
+          "x_half": 15,
+          "y": 41
+        },
+        {
+          "text": "the village had grown",
+          "x": 30,
+          "x_half": 15,
+          "y": 52
+        },
+        {
+          "text": "desperate. Young and",
+          "x": 30,
+          "x_half": 15,
+          "y": 63
+        },
+        {
+          "text": "inexperienced, his",
+          "x": 30,
+          "x_half": 15,
+          "y": 74
+        },
+        {
+          "text": "chances did not look",
+          "x": 30,
+          "x_half": 15,
+          "y": 85
+        },
+        {
+          "text": "good.",
+          "x": 30,
+          "x_half": 15,
+          "y": 96
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "label": "msg6",
+      "line": 287,
+      "segments": [
+        {
+          "text": "And so ends our sad tale.",
+          "x": 20,
+          "x_half": 10,
+          "y": 31
+        },
+        {
+          "text": "The Lesson of the Story:",
+          "x": 24,
+          "x_half": 12,
+          "y": 45
+        },
+        {
+          "text": "Stay at Home!",
+          "x": 66,
+          "x_half": 33,
+          "y": 88
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "label": "msg7",
+      "line": 292,
+      "segments": [
+        {
+          "text": "Having defeated the",
+          "x": 28,
+          "x_half": 14,
+          "y": 32
+        },
+        {
+          "text": "villanous Necromancer",
+          "x": 28,
+          "x_half": 14,
+          "y": 43
+        },
+        {
+          "text": "and recovered the",
+          "x": 28,
+          "x_half": 14,
+          "y": 54
+        },
+        {
+          "text": "Talisman, ",
+          "x": 28,
+          "x_half": 14,
+          "y": 65
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "label": "msg7a",
+      "line": 297,
+      "segments": [
+        {
+          "text": "returned to Marheim",
+          "x": 28,
+          "x_half": 14,
+          "y": 76
+        },
+        {
+          "text": "where he wed the",
+          "x": 28,
+          "x_half": 14,
+          "y": 87
+        },
+        {
+          "text": "princess...",
+          "x": 28,
+          "x_half": 14,
+          "y": 98
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "label": "msg8",
+      "line": 303,
+      "segments": [
+        {
+          "text": "",
+          "x": 20,
+          "x_half": 10,
+          "y": 26
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "label": "msg8a",
+      "line": 304,
+      "segments": [
+        {
+          "text": " had rescued Katra,",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": "Princess of Marheim.",
+          "x": 20,
+          "x_half": 10,
+          "y": 37
+        },
+        {
+          "text": "Though they had pledged",
+          "x": 20,
+          "x_half": 10,
+          "y": 48
+        },
+        {
+          "text": "their love for each, ",
+          "x": 20,
+          "x_half": 10,
+          "y": 59
+        },
+        {
+          "text": "other, ",
+          "x": 20,
+          "x_half": 10,
+          "y": 70
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "label": "msg8b",
+      "line": 309,
+      "segments": [
+        {
+          "text": " knew that",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": " his quest could not",
+          "x": 20,
+          "x_half": 10,
+          "y": 81
+        },
+        {
+          "text": "be forsaken.",
+          "x": 20,
+          "x_half": 10,
+          "y": 92
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "label": "msg9",
+      "line": 313,
+      "segments": [
+        {
+          "text": "",
+          "x": 20,
+          "x_half": 10,
+          "y": 33
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "label": "msg9a",
+      "line": 314,
+      "segments": [
+        {
+          "text": " had rescued Karla",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": "(Katra's sister), Princess",
+          "x": 20,
+          "x_half": 10,
+          "y": 44
+        },
+        {
+          "text": "of Marheim. Though they",
+          "x": 20,
+          "x_half": 10,
+          "y": 55
+        },
+        {
+          "text": "had pledged their love",
+          "x": 20,
+          "x_half": 10,
+          "y": 66
+        },
+        {
+          "text": "for each other, ",
+          "x": 20,
+          "x_half": 10,
+          "y": 77
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "label": "msg9b",
+      "line": 319,
+      "segments": [
+        {
+          "text": "knew that his quest",
+          "x": 20,
+          "x_half": 10,
+          "y": 88
+        },
+        {
+          "text": "could not be forsaken.",
+          "x": 20,
+          "x_half": 10,
+          "y": 99
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "label": "msg10",
+      "line": 322,
+      "segments": [
+        {
+          "text": "",
+          "x": 20,
+          "x_half": 10,
+          "y": 26
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "label": "msg10a",
+      "line": 323,
+      "segments": [
+        {
+          "text": " had rescued Kandy",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": "(Katra's and Karla's",
+          "x": 20,
+          "x_half": 10,
+          "y": 37
+        },
+        {
+          "text": "sister), Princess of",
+          "x": 20,
+          "x_half": 10,
+          "y": 48
+        },
+        {
+          "text": "Marheim. Though they had",
+          "x": 20,
+          "x_half": 10,
+          "y": 59
+        },
+        {
+          "text": "pledged their love for",
+          "x": 20,
+          "x_half": 10,
+          "y": 70
+        },
+        {
+          "text": "each other, ",
+          "x": 20,
+          "x_half": 10,
+          "y": 81
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "label": "msg10b",
+      "line": 329,
+      "segments": [
+        {
+          "text": " knew ",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": "that his quest could",
+          "x": 20,
+          "x_half": 10,
+          "y": 92
+        },
+        {
+          "text": "not be forsaken.",
+          "x": 20,
+          "x_half": 10,
+          "y": 103
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "label": "msg11",
+      "line": 333,
+      "segments": [
+        {
+          "text": "After seeing the",
+          "x": 70,
+          "x_half": 35,
+          "y": 37
+        },
+        {
+          "text": "princess safely to her",
+          "x": 34,
+          "x_half": 17,
+          "y": 48
+        },
+        {
+          "text": "home city, and with a",
+          "x": 34,
+          "x_half": 17,
+          "y": 59
+        },
+        {
+          "text": "king's gift in gold,",
+          "x": 34,
+          "x_half": 17,
+          "y": 70
+        },
+        {
+          "text": "",
+          "x": 34,
+          "x_half": 17,
+          "y": 81
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "label": "msg11a",
+      "line": 338,
+      "segments": [
+        {
+          "text": " once more set",
+          "x": null,
+          "x_half": null,
+          "y": null
+        },
+        {
+          "text": "out on his quest.",
+          "x": 34,
+          "x_half": 17,
+          "y": 92
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "label": "msg12",
+      "line": 341,
+      "segments": [
+        {
+          "text": "So...",
+          "x": 128,
+          "x_half": 64,
+          "y": 19
+        },
+        {
+          "text": "You, game seeker, would guide the",
+          "x": 34,
+          "x_half": 17,
+          "y": 65
+        },
+        {
+          "text": "brothers to their destiny? You would",
+          "x": 10,
+          "x_half": 5,
+          "y": 75
+        },
+        {
+          "text": "aid them and give directions? Answer,",
+          "x": 10,
+          "x_half": 5,
+          "y": 85
+        },
+        {
+          "text": "then, these three questions and prove",
+          "x": 10,
+          "x_half": 5,
+          "y": 95
+        },
+        {
+          "text": "your fitness to be their advisor:",
+          "x": 10,
+          "x_half": 5,
+          "y": 105
+        }
+      ]
+    }
+  ],
+  "format": "Decoded as _ssp (src/fsubs.asm:497-536): byte 128 = XY marker followed by x/2 and y (pixel x = x_half * 2; the source writes e.g. 21/2, which assembles to 10, so x = 20), text runs end at byte 0 or any byte >= 128, byte 0 (ETX) ends the entry. Segments without a position continue from the current pen position (the caller prints the brother's name in between, e.g. src/fmain2.c:1588).",
+  "name": "_placard_text",
+  "source": "src/narr.asm"
+}

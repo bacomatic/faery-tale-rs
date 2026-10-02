@@ -1,0 +1,31 @@
+{
+  "line": 199,
+  "lines": "199-226",
+  "name": "_inside_msg",
+  "source": "src/narr.asm",
+  "strings": [
+    "",
+    "",
+    "% came to a small chamber.",
+    "% came to a large chamber.",
+    "% came to a long passageway.",
+    "% came to a twisting tunnel.",
+    "% came to a forked intersection.",
+    "He entered the keep.",
+    "He entered the castle.",
+    "He entered the castle of King Mar.",
+    "He entered the sanctuary of the temple.",
+    "% entered the Spirit Plane.",
+    "% came to a large room.",
+    "% came to an octagonal room.",
+    "% traveled along a stone corridor.",
+    "% came to a stone maze.",
+    "He entered a small building.",
+    "He entered the building.",
+    "He entered the tavern.",
+    "He went inside the inn.",
+    "He entered the crypt.",
+    "He walked into the cabin.",
+    "He unlocked the door and entered."
+  ]
+}

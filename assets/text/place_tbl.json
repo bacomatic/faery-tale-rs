@@ -1,0 +1,219 @@
+{
+  "fields": [
+    "lo",
+    "hi",
+    "msg_index",
+    "comment",
+    "line"
+  ],
+  "line": 86,
+  "lines": "86-115",
+  "name": "_place_tbl",
+  "rows": [
+    {
+      "comment": "small keep",
+      "hi": 51,
+      "line": 87,
+      "lo": 51,
+      "msg_index": 19
+    },
+    {
+      "comment": "village",
+      "hi": 69,
+      "line": 88,
+      "lo": 64,
+      "msg_index": 2
+    },
+    {
+      "comment": "vermillion",
+      "hi": 73,
+      "line": 89,
+      "lo": 70,
+      "msg_index": 3
+    },
+    {
+      "comment": "marheim",
+      "hi": 95,
+      "line": 90,
+      "lo": 80,
+      "msg_index": 6
+    },
+    {
+      "comment": "witch castle",
+      "hi": 99,
+      "line": 91,
+      "lo": 96,
+      "msg_index": 7
+    },
+    {
+      "comment": "graveyard",
+      "hi": 139,
+      "line": 92,
+      "lo": 138,
+      "msg_index": 8
+    },
+    {
+      "comment": "stone ring",
+      "hi": 144,
+      "line": 93,
+      "lo": 144,
+      "msg_index": 9
+    },
+    {
+      "comment": "lighthouse",
+      "hi": 147,
+      "line": 94,
+      "lo": 147,
+      "msg_index": 10
+    },
+    {
+      "comment": "small castle",
+      "hi": 148,
+      "line": 95,
+      "lo": 148,
+      "msg_index": 20
+    },
+    {
+      "comment": "desert city",
+      "hi": 162,
+      "line": 96,
+      "lo": 159,
+      "msg_index": 17
+    },
+    {
+      "comment": "desert fort",
+      "hi": 163,
+      "line": 97,
+      "lo": 163,
+      "msg_index": 18
+    },
+    {
+      "comment": "crystal",
+      "hi": 167,
+      "line": 98,
+      "lo": 164,
+      "msg_index": 12
+    },
+    {
+      "comment": "log cabin",
+      "hi": 168,
+      "line": 99,
+      "lo": 168,
+      "msg_index": 21
+    },
+    {
+      "comment": "dark fort",
+      "hi": 170,
+      "line": 100,
+      "lo": 170,
+      "msg_index": 22
+    },
+    {
+      "comment": "doom tower",
+      "hi": 174,
+      "line": 101,
+      "lo": 171,
+      "msg_index": 14
+    },
+    {
+      "comment": "pixie shrine",
+      "hi": 176,
+      "line": 102,
+      "lo": 176,
+      "msg_index": 13
+    },
+    {
+      "comment": "swamp cabin",
+      "hi": 178,
+      "line": 103,
+      "lo": 178,
+      "msg_index": 23
+    },
+    {
+      "comment": "tomb",
+      "hi": 179,
+      "line": 104,
+      "lo": 179,
+      "msg_index": 24
+    },
+    {
+      "comment": "unreachable castle",
+      "hi": 180,
+      "line": 105,
+      "lo": 180,
+      "msg_index": 25
+    },
+    {
+      "comment": "lava / elf - nil",
+      "hi": 180,
+      "line": 106,
+      "lo": 175,
+      "msg_index": 0
+    },
+    {
+      "comment": "swamp",
+      "hi": 221,
+      "line": 107,
+      "lo": 208,
+      "msg_index": 11
+    },
+    {
+      "comment": "oasis",
+      "hi": 243,
+      "line": 108,
+      "lo": 243,
+      "msg_index": 16
+    },
+    {
+      "comment": "nil (interface)",
+      "hi": 252,
+      "line": 109,
+      "lo": 250,
+      "msg_index": 0
+    },
+    {
+      "comment": "dragon cave",
+      "hi": 255,
+      "line": 110,
+      "lo": 255,
+      "msg_index": 26
+    },
+    {
+      "comment": "by mountain type",
+      "hi": 78,
+      "line": 111,
+      "lo": 78,
+      "msg_index": 4
+    },
+    {
+      "comment": "by mountain type",
+      "hi": 239,
+      "line": 112,
+      "lo": 187,
+      "msg_index": 4
+    },
+    {
+      "comment": "nil",
+      "hi": 79,
+      "line": 113,
+      "lo": 0,
+      "msg_index": 0
+    },
+    {
+      "comment": "desert",
+      "hi": 254,
+      "line": 114,
+      "lo": 185,
+      "msg_index": 15
+    },
+    {
+      "comment": "nil",
+      "hi": 255,
+      "line": 115,
+      "lo": 0,
+      "msg_index": 0
+    }
+  ],
+  "semantics": "Rows are scanned in order; the first row with lo <= code <= hi selects msg_index into the matching *_msg list (0 = no message).",
+  "source": "src/narr.asm"
+}

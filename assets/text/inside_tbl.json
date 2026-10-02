@@ -1,0 +1,275 @@
+{
+  "fields": [
+    "lo",
+    "hi",
+    "msg_index",
+    "comment",
+    "line"
+  ],
+  "line": 117,
+  "lines": "117-154",
+  "name": "_inside_tbl",
+  "rows": [
+    {
+      "comment": "small chamber",
+      "hi": 2,
+      "line": 118,
+      "lo": 2,
+      "msg_index": 2
+    },
+    {
+      "comment": "large chamber",
+      "hi": 7,
+      "line": 119,
+      "lo": 7,
+      "msg_index": 3
+    },
+    {
+      "comment": "long passageway",
+      "hi": 4,
+      "line": 120,
+      "lo": 4,
+      "msg_index": 4
+    },
+    {
+      "comment": "twisting tunnel",
+      "hi": 6,
+      "line": 121,
+      "lo": 5,
+      "msg_index": 5
+    },
+    {
+      "comment": "forked intersection",
+      "hi": 10,
+      "line": 122,
+      "lo": 9,
+      "msg_index": 6
+    },
+    {
+      "comment": "keep interior - ITEMIZE??",
+      "hi": 30,
+      "line": 123,
+      "lo": 30,
+      "msg_index": 7
+    },
+    {
+      "comment": "stone corridor",
+      "hi": 33,
+      "line": 124,
+      "lo": 19,
+      "msg_index": 14
+    },
+    {
+      "comment": "stone corridor",
+      "hi": 101,
+      "line": 125,
+      "lo": 101,
+      "msg_index": 14
+    },
+    {
+      "comment": "stone corridor",
+      "hi": 134,
+      "line": 126,
+      "lo": 130,
+      "msg_index": 14
+    },
+    {
+      "comment": "octagonal room",
+      "hi": 36,
+      "line": 127,
+      "lo": 36,
+      "msg_index": 13
+    },
+    {
+      "comment": "large room",
+      "hi": 42,
+      "line": 128,
+      "lo": 37,
+      "msg_index": 12
+    },
+    {
+      "comment": "final arena - special message",
+      "hi": 46,
+      "line": 129,
+      "lo": 46,
+      "msg_index": 0
+    },
+    {
+      "comment": "spirit world",
+      "hi": 59,
+      "line": 130,
+      "lo": 43,
+      "msg_index": 11
+    },
+    {
+      "comment": "spirit world",
+      "hi": 100,
+      "line": 131,
+      "lo": 100,
+      "msg_index": 11
+    },
+    {
+      "comment": "spirit world",
+      "hi": 149,
+      "line": 132,
+      "lo": 143,
+      "msg_index": 11
+    },
+    {
+      "comment": "small building",
+      "hi": 62,
+      "line": 133,
+      "lo": 62,
+      "msg_index": 16
+    },
+    {
+      "comment": "tavern",
+      "hi": 66,
+      "line": 134,
+      "lo": 65,
+      "msg_index": 18
+    },
+    {
+      "comment": "building",
+      "hi": 78,
+      "line": 135,
+      "lo": 60,
+      "msg_index": 17
+    },
+    {
+      "comment": "building",
+      "hi": 82,
+      "line": 136,
+      "lo": 82,
+      "msg_index": 17
+    },
+    {
+      "comment": "building",
+      "hi": 87,
+      "line": 137,
+      "lo": 86,
+      "msg_index": 17
+    },
+    {
+      "comment": "priest's building",
+      "hi": 92,
+      "line": 138,
+      "lo": 92,
+      "msg_index": 17
+    },
+    {
+      "comment": "small buildings",
+      "hi": 95,
+      "line": 139,
+      "lo": 94,
+      "msg_index": 17
+    },
+    {
+      "comment": "building",
+      "hi": 99,
+      "line": 140,
+      "lo": 97,
+      "msg_index": 17
+    },
+    {
+      "comment": "building (desfort)",
+      "hi": 120,
+      "line": 141,
+      "lo": 120,
+      "msg_index": 17
+    },
+    {
+      "comment": "building (desert)",
+      "hi": 119,
+      "line": 142,
+      "lo": 116,
+      "msg_index": 17
+    },
+    {
+      "comment": "building (desert)",
+      "hi": 141,
+      "line": 143,
+      "lo": 139,
+      "msg_index": 17
+    },
+    {
+      "comment": "palace of king mar",
+      "hi": 96,
+      "line": 144,
+      "lo": 79,
+      "msg_index": 9
+    },
+    {
+      "comment": "inn",
+      "hi": 104,
+      "line": 145,
+      "lo": 104,
+      "msg_index": 19
+    },
+    {
+      "comment": "tomb inside",
+      "hi": 114,
+      "line": 146,
+      "lo": 114,
+      "msg_index": 20
+    },
+    {
+      "comment": "castle - ITEMIZE??",
+      "hi": 115,
+      "line": 147,
+      "lo": 105,
+      "msg_index": 8
+    },
+    {
+      "comment": "castle (doom tower)",
+      "hi": 138,
+      "line": 148,
+      "lo": 135,
+      "msg_index": 8
+    },
+    {
+      "comment": "cabin inside",
+      "hi": 125,
+      "line": 149,
+      "lo": 125,
+      "msg_index": 21
+    },
+    {
+      "comment": "elf glade inside",
+      "hi": 127,
+      "line": 150,
+      "lo": 127,
+      "msg_index": 10
+    },
+    {
+      "comment": "unlocked/lighthouse",
+      "hi": 142,
+      "line": 151,
+      "lo": 142,
+      "msg_index": 22
+    },
+    {
+      "comment": "unlocked/entered",
+      "hi": 129,
+      "line": 152,
+      "lo": 121,
+      "msg_index": 22
+    },
+    {
+      "comment": "stone maze",
+      "hi": 161,
+      "line": 153,
+      "lo": 150,
+      "msg_index": 15
+    },
+    {
+      "comment": "nil",
+      "hi": 255,
+      "line": 154,
+      "lo": 0,
+      "msg_index": 0
+    }
+  ],
+  "semantics": "Rows are scanned in order; the first row with lo <= code <= hi selects msg_index into the matching *_msg list (0 = no message).",
+  "source": "src/narr.asm"
+}

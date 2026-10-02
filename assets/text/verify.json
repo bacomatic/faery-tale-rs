@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "tasks": {
+    "T1.4": {
+      "title": "Narrative text",
+      "summary": "Every message in src/narr.asm, parsed from the dc.b directives: four indexed string lists (event/place/inside/speeches), the 8 riddle prompts, the 20 positioned placard entries, and the two place-code → message lookup tables. Check the counts, read a handful of entries for mangled characters, and confirm % (brother's name) placeholders and the empty index-0/1 slots are where the source puts them. No string uses $ (narr.asm:4 documents it, but extract() never substitutes it)."
+    }
+  },
+  "items": [
+    {
+      "id": "event_msg",
+      "task": "T1.4",
+      "title": "event_msg — 39 event messages",
+      "view": "text",
+      "files": ["event_msg.json"],
+      "look_for": "39 strings. [0] \"% was getting rather hungry.\"; [5] \"% was hit and killed!\"; [34] \"They're all dead!\" he cried. (the apostrophe comes from the ',\"'\",' idiom, narr.asm:52); [38] \"% discovered a hidden object.\" is the last entry.",
+      "citations": ["src/narr.asm:11-57"],
+      "counts": [{ "label": "strings", "file": "event_msg.json", "path": "strings", "expect": 39 }]
+    },
+    {
+      "id": "place_msg",
+      "task": "T1.4",
+      "title": "place_msg — 27 place-arrival messages",
+      "view": "text",
+      "files": ["place_msg.json"],
+      "look_for": "27 strings. [0] and [1] are empty (the dc.b 0 placeholder slots, narr.asm:165-166); [2] \"% returned to the village of Tambry.\"; [26] \"% found a cave in the hillside.\" is the last. The commented-out \"He entered the garden area.\" (narr.asm:197) must NOT appear.",
+      "citations": ["src/narr.asm:164-197"],
+      "counts": [{ "label": "strings", "file": "place_msg.json", "path": "strings", "expect": 27 }]
+    },
+    {
+      "id": "inside_msg",
+      "task": "T1.4",
+      "title": "inside_msg — 23 interior-arrival messages",
+      "view": "text",
+      "files": ["inside_msg.json"],
+      "look_for": "23 strings. [0] and [1] empty (narr.asm:200-201); [2] \"% came to a small chamber.\"; [9] \"He entered the castle of King Mar.\"; [22] \"He unlocked the door and entered.\" is the last.",
+      "citations": ["src/narr.asm:199-226"],
+      "counts": [{ "label": "strings", "file": "inside_msg.json", "path": "strings", "expect": 23 }]
+    },
+    {
+      "id": "speeches",
+      "task": "T1.4",
+      "title": "speeches — 61 NPC dialogue entries",
+      "view": "text",
+      "files": ["speeches.json"],
+      "look_for": "61 strings, indexed as the \"; N - …\" comments in the source. [9] the ranger's weather line is one string reassembled from three dc.b lines with embedded apostrophes (\"Nice weather we're having, isn't it?\"). [15] guard: two sentences separated by a carriage return (byte 13) — the second begins \"My business is with the king.\" [52] is empty (the dc.b 0 \"buy from no-one\" slot, narr.asm:502); [53]-[55] are the east/west/south dragon-cave ranger lines; [60] \"The Sunstone has made the witch vulnerable!\" is the last.",
+      "citations": ["src/narr.asm:351-517"],
+      "counts": [{ "label": "strings", "file": "speeches.json", "path": "strings", "expect": 61 }]
+    },
+    {
+      "id": "question",
+      "task": "T1.4",
+      "title": "question — 8 copy-protection riddles with their answers",
+      "view": "table",
+      "files": ["question.json"],
+      "look_for": "8 rows in qq order (q1..q8), question → answer: \"To Quest for the...?\" LIGHT; \"Make haste, but take...?\" HEED; \"Scorn murderous...?\" DEED; \"Summon the...?\" SIGHT; \"Wing forth in...?\" FLIGHT; \"Hold fast to your...?\" CREED; \"Defy Ye that...?\" BLIGHT; \"In black darker than...?\" NIGHT. Answers come from answers[] in fmain2.c, indexed by the same j as question(j).",
+      "citations": ["src/narr.asm:72-81", "src/fmain2.c:1306-1317"],
+      "counts": [{ "label": "rows", "file": "question.json", "path": "rows", "expect": 8 }]
+    },
+    {
+      "id": "placard_text",
+      "task": "T1.4",
+      "title": "placard_text — the 12 placard cards, rendered",
+      "view": "image",
+      "files": ["previews/placard_*.png"],
+      "look_for": "12 cards (320×200) composed from the 20 placard_text.json entries exactly as the call sites chain them, with 'Julian' spliced in where the game calls name(). Cards 01–11: Amber/9 text in red (pen 24) inside the final red Greek-key border of placard(); card 12 (copy-protection lead-in) is white topaz-8 on dark blue with no border. Read each card: 01 intro ('Rescue the Talisman!' … 'recover it.'), 02/04 death cards, 03/05 set-out cards, 06 'Stay at Home!', 07 victory ('villanous' is the source's spelling), 08–10 the three princess rescues (08 keeps the source's stray comma 'for each, other,'), 11 departure, 12 'So...' then four riddle-intro lines. Text must sit inside the border and not clip at the right edge. Previews are non-authoritative; placard_text.json is the data.",
+      "citations": ["src/narr.asm:235-347", "src/fsubs.asm:387-475", "src/fsubs.asm:497-536", "src/fmain.c:2859-2879", "src/fmain2.c:1586-1591", "src/fmain2.c:1607", "src/fmain.c:1229-1235"],
+      "counts": [
+        { "label": "entries", "file": "placard_text.json", "path": "entries", "expect": 20 },
+        { "label": "cards", "glob": "previews/placard_*.png", "expect": 12 }
+      ]
+    },
+    {
+      "id": "place_tbl",
+      "task": "T1.4",
+      "title": "place_tbl — place code → place_msg index (29 rows)",
+      "view": "table",
+      "files": ["place_tbl.json"],
+      "look_for": "29 rows {lo, hi, msg_index, comment} in source order. First row 51,51,19 \"small keep\"; row 1 is 64,69,2 \"village\" (→ the Tambry line); last row 0,255,0 \"nil\" (catch-all). Every msg_index is < 27.",
+      "citations": ["src/narr.asm:86-115"],
+      "counts": [{ "label": "rows", "file": "place_tbl.json", "path": "rows", "expect": 29 }]
+    },
+    {
+      "id": "inside_tbl",
+      "task": "T1.4",
+      "title": "inside_tbl — interior code → inside_msg index (37 rows)",
+      "view": "table",
+      "files": ["inside_tbl.json"],
+      "look_for": "37 rows in source order. First row 2,2,2 \"small chamber\"; row 5 is 30,30,7 \"keep interior - ITEMIZE??\"; row 11 is 46,46,0 \"final arena - special message\"; last row 0,255,0 \"nil\". Every msg_index is < 23.",
+      "citations": ["src/narr.asm:117-154"],
+      "counts": [{ "label": "rows", "file": "inside_tbl.json", "path": "rows", "expect": 37 }]
+    }
+  ]
+}
