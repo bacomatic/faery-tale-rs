@@ -7,6 +7,14 @@
       "file": "sfx_0.wav",
       "nominal_period": 800,
       "nominal_rate_hz": 4474,
+      "previews": [
+        {
+          "file": "previews/sfx_0.wav",
+          "period": 800,
+          "rate_hz": 4474,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 800,
@@ -25,6 +33,14 @@
       "file": "sfx_1.wav",
       "nominal_period": 150,
       "nominal_rate_hz": 23864,
+      "previews": [
+        {
+          "file": "previews/sfx_1.wav",
+          "period": 150,
+          "rate_hz": 23864,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 150,
@@ -43,6 +59,14 @@
       "file": "sfx_2.wav",
       "nominal_period": 500,
       "nominal_rate_hz": 7159,
+      "previews": [
+        {
+          "file": "previews/sfx_2.wav",
+          "period": 500,
+          "rate_hz": 7159,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 500,
@@ -61,6 +85,14 @@
       "file": "sfx_3.wav",
       "nominal_period": 400,
       "nominal_rate_hz": 8949,
+      "previews": [
+        {
+          "file": "previews/sfx_3.wav",
+          "period": 400,
+          "rate_hz": 8949,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 400,
@@ -79,6 +111,14 @@
       "file": "sfx_4.wav",
       "nominal_period": 400,
       "nominal_rate_hz": 8949,
+      "previews": [
+        {
+          "file": "previews/sfx_4.wav",
+          "period": 400,
+          "rate_hz": 8949,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 400,
@@ -97,6 +137,20 @@
       "file": "sfx_5.wav",
       "nominal_period": 1800,
       "nominal_rate_hz": 1989,
+      "previews": [
+        {
+          "file": "previews/sfx_5.wav",
+          "period": 1800,
+          "rate_hz": 1989,
+          "wav_rate_hz": 44100
+        },
+        {
+          "file": "previews/sfx_5_period3200.wav",
+          "period": 3200,
+          "rate_hz": 1119,
+          "wav_rate_hz": 44100
+        }
+      ],
       "triggers": [
         {
           "base": 1800,
@@ -133,6 +187,7 @@
     ],
     "nominal_period_choice": "effect 5 has bases 1800 (fmain.c:1488, 1690) and 3200 (fmain2.c:239); 1800 is used for the header",
     "playback": "effect(num,speed) -> playsample(sample[num], sample_size[num]/2, speed): length in words to AUD2LEN, speed to AUD2PER, volume 64, channel 2",
+    "previews": "previews/*.wav: the same bytes rendered as Paula plays them at the trigger's base period (zero-order hold, i.e. each byte held for period clock ticks), resampled to 44100 Hz so every player accepts them (browsers reject rates below 3000 Hz; effect 5 is 1989 Hz). Non-authoritative.",
     "sample_rate": "nominal only: NTSC Paula clock 3579545 / nominal_period, rounded. The game plays each trigger at period = base + rng (see triggers); actual rate = 3579545 / period",
     "wav": "8-bit unsigned mono PCM; each byte = original signed byte XOR 0x80; no resampling or normalisation"
   },

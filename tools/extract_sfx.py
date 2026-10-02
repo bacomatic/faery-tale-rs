@@ -16,6 +16,12 @@ speed)`` ``fmain.c:3616-3619``; ``speed`` lands in AUD2PER ``gdriver.asm:314``).
 We use the NTSC Paula clock 3,579,545 Hz / the base period at the trigger call
 site; the per-trigger period expressions are written to ``sfx.json``.
 
+Browsers refuse WAVs below 3000 Hz (effect 5's nominal rate is 1989 Hz), so
+``previews/`` holds each effect rendered the way Paula outputs it -- every byte
+held for ``period`` clock ticks (zero-order hold) -- resampled to 44.1 kHz, one
+file per distinct trigger base. Non-authoritative; the ``sfx_<n>.wav`` bytes
+are the asset.
+
 Usage::
 
     python tools/extract_sfx.py            # -> assets/audio/sfx/
@@ -116,6 +122,25 @@ def write_wav(path: Path, pcm: bytes, rate: int) -> None:
         w.writeframes(bytes(b ^ 0x80 for b in pcm))
 
 
+PREVIEW_RATE = 44_100
+
+
+def render_preview(pcm: bytes, period: int, rate: int = PREVIEW_RATE) -> bytes:
+    """Zero-order-hold resample: sample i plays for period/NTSC_PAULA_CLOCK seconds."""
+    paula_rate = NTSC_PAULA_CLOCK / period
+    n_out = int(len(pcm) * rate / paula_rate)
+    return bytes((pcm[min(int(i * paula_rate / rate), len(pcm) - 1)] ^ 0x80) for i in range(n_out))
+
+
+def write_preview(path: Path, data: bytes, rate: int = PREVIEW_RATE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(1)
+        w.setframerate(rate)
+        w.writeframes(data)
+
+
 def main(argv=None) -> int:
     parser = ac.build_arg_parser("Extract the 6 PCM sound effects to assets/audio/sfx/")
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "assets" / "audio" / "sfx")
@@ -129,9 +154,16 @@ def main(argv=None) -> int:
         n = s["index"]
         rate = round(NTSC_PAULA_CLOCK / NOMINAL_BASE[n])
         write_wav(args.out_dir / f"sfx_{n}.wav", s["pcm"], rate)
+        previews = []
+        for base in sorted({t["base"] for t in TRIGGERS[n]}):
+            name = f"sfx_{n}.wav" if base == NOMINAL_BASE[n] else f"sfx_{n}_period{base}.wav"
+            write_preview(args.out_dir / "previews" / name, render_preview(s["pcm"], base))
+            previews.append({"file": f"previews/{name}", "period": base,
+                             "rate_hz": round(NTSC_PAULA_CLOCK / base), "wav_rate_hz": PREVIEW_RATE})
         effects.append({
             "effect": n,
             "file": f"sfx_{n}.wav",
+            "previews": previews,
             "buffer_offset": s["offset"],
             "byte_length": s["length"],
             "nominal_period": NOMINAL_BASE[n],
@@ -163,6 +195,10 @@ def main(argv=None) -> int:
                           "src/fsubs.asm:308-330"],
             "nominal_period_choice": "effect 5 has bases 1800 (fmain.c:1488, 1690) and 3200 "
                                      "(fmain2.c:239); 1800 is used for the header",
+            "previews": "previews/*.wav: the same bytes rendered as Paula plays them at the trigger's "
+                        "base period (zero-order hold, i.e. each byte held for period clock ticks), "
+                        f"resampled to {PREVIEW_RATE} Hz so every player accepts them (browsers reject "
+                        "rates below 3000 Hz; effect 5 is 1989 Hz). Non-authoritative.",
         },
         "effects": effects,
     })

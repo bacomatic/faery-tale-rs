@@ -6,6 +6,7 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_0.wav",
         "sfx_0.wav"
       ],
       "id": "sfx_0",
@@ -20,6 +21,7 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_1.wav",
         "sfx_1.wav"
       ],
       "id": "sfx_1",
@@ -36,6 +38,7 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_2.wav",
         "sfx_2.wav"
       ],
       "id": "sfx_2",
@@ -50,6 +53,7 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_3.wav",
         "sfx_3.wav"
       ],
       "id": "sfx_3",
@@ -64,6 +68,7 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_4.wav",
         "sfx_4.wav"
       ],
       "id": "sfx_4",
@@ -80,10 +85,12 @@
         "src/fmain.c:1033-1041"
       ],
       "files": [
+        "previews/sfx_5.wav",
+        "previews/sfx_5_period3200.wav",
         "sfx_5.wav"
       ],
       "id": "sfx_5",
-      "look_for": "Fire/bolt sound: dragon breathes fire (`fmain.c:1488`) or a wand bolt is fired (`fmain.c:1690`), period 1800+rand256(); also when such a bolt hits (`fmain2.c:239`, period 3200+bitrand(511), lower pitch). Buffer offset 5062, 550 bytes; about 0.28 s at the nominal 1989 Hz.",
+      "look_for": "Fire/bolt sound: dragon breathes fire (`fmain.c:1488`) or a wand bolt is fired (`fmain.c:1690`), period 1800+rand256(); also when such a bolt hits (`fmain2.c:239`, period 3200+bitrand(511), lower pitch). Buffer offset 5062, 550 bytes; about 0.28 s at the nominal 1989 Hz (launch) and 0.49 s at the 3200 hit period — the two previews; the raw sfx_5.wav itself will not play in a browser (rate < 3000 Hz), that is expected, not corruption.",
       "task": "T2.7",
       "title": "sfx_5 — fire / wand bolt",
       "view": "audio"
@@ -121,7 +128,7 @@
   "schema_version": 1,
   "tasks": {
     "T2.7": {
-      "summary": "The 6 PCM sound effects from ADF blocks 920-930, one 8-bit WAV each (byte-exact, signed bytes offset to unsigned). The header rate is nominal (NTSC Paula 3579545 / the trigger's base period); the game randomises the period per trigger, see sfx.json. Play each WAV and check it matches its cue.",
+      "summary": "The 6 PCM sound effects from ADF blocks 920-930, one 8-bit WAV each (byte-exact, signed bytes offset to unsigned). The header rate is nominal (NTSC Paula 3579545 / the trigger's base period); the game randomises the period per trigger, see sfx.json. Play each WAV and check it matches its cue. Listen to previews/ (44.1 kHz zero-order-hold renders at the trigger period); the sfx_N.wav next to it is the byte-exact asset and sfx_5's 1989 Hz header is below what browsers will play.",
       "title": "Sound effects"
     }
   }

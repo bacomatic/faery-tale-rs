@@ -69,3 +69,16 @@ def test_trigger_expressions_are_at_cited_lines():
             text = (SRC / fname).read_text(errors="replace").splitlines()[int(line) - 1]
             assert f"effect({n},{t['expr']})" in text, (t["source"], text)
             assert t["expr"].replace(" ", "").startswith(f"{t['base']}+{t['rng']}")
+
+
+def test_previews_are_zero_order_hold(samples):
+    xs = es
+    pcm = samples[0][5]["pcm"]
+    out = xs.render_preview(pcm, 1800)
+    assert len(out) == int(len(pcm) * 44100 / (xs.NTSC_PAULA_CLOCK / 1800))
+    assert out[0] == pcm[0] ^ 0x80 and out[-1] == pcm[-1] ^ 0x80
+    assert set(out) <= {b ^ 0x80 for b in pcm}            # hold: no new sample values
+    with wave.open(str(OUT / "previews" / "sfx_5_period3200.wav"), "rb") as w:
+        assert w.getframerate() == 44100 and w.getnframes() == len(xs.render_preview(pcm, 3200))
+    assert sorted(p.name for p in (OUT / "previews").iterdir()) == \
+        [f"sfx_{n}.wav" for n in range(6)] + ["sfx_5_period3200.wav"]
