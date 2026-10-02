@@ -19,11 +19,11 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T2.2](T2.2-tiles.md) Tile atlas | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-30 (10/10 OK). 10 regions × (indexed/RGBA/highlight/shadow atlas + `tiles.json`); tiles are **16×32**. |
 | [T2.2.1](T2.2.1-master-atlas.md) Master tile atlas | **DONE** ✅ | T2.2, T2.5 | ACCEPTED 2026-09-30 (2/2 OK). Added during T2.2 review. 955 unique (art, colour 31, shadow mask) tiles + 2 secret-timer variants (512×960); shadow-mask atlas alongside + per-region reference maps in `master.json`. |
 | [T2.3](T2.3-masks.md) Shadow/collision masks | **DONE** ✅ | T0.1 | ACCEPTED 2026-09-30 (1/1 OK). 192 PNGs + sheet + `masks.json`. |
-| [T2.4](T2.4-screens.md) IFF screens | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/screens`. 9 PNGs + `screens.json`. |
+| [T2.4](T2.4-screens.md) IFF screens | **DONE** ✅ | T0.1 | ACCEPTED 2026-09-30. 9 PNGs + `screens.json`. |
 | [T2.5](T2.5-world.md) World maps | **DONE** ✅ | T0.1, T2.2, T2.2.1 | ACCEPTED 2026-10-02 (round 2, 11/11 OK). Redesigned 2026-09-30: `assets/maps/` — overworld + 62 interiors + 5 dungeons + astral plane as index-layer PNGs with previews; `assets/world/` removed. |
-| [T2.6](T2.6-music.md) Music + instruments | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/music`. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
-| [T2.7](T2.7-sfx.md) SFX | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/sfx`. 6 WAVs + `sfx.json`. |
-| [T2.8](T2.8-fonts.md) Fonts | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/fonts`. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
+| [T2.6](T2.6-music.md) Music + instruments | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
+| [T2.7](T2.7-sfx.md) SFX | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. 6 byte-exact WAVs + `sfx.json` + 7 playable 44.1 kHz previews (effect 5's 1989 Hz header is below what browsers play). |
+| [T2.8](T2.8-fonts.md) Fonts | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
 | [T3.1](T3.1-shaders.md) Reference shaders + light-level renders | TODO | T2.1, T2.2 | GLSL reference-only (port validates); perception deliverable = `shaders/previews/` renders. |
 | [T3.2](T3.2-formats.md) Format spec | TODO | Wave 1 + Wave 2 | |
 | [T4.1](T4.1-manifest.md) Bundle index (manifest) | TODO | Wave 1 + Wave 2 | |
@@ -314,7 +314,7 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
     line numbers off by 2, `audio.md:162-170` (84-entry ptable) and `:538` (seek "redundant").
 
 ## Next
-T2.1, T1.1, T1.5 (2026-09-29) and T2.2, T2.2.1, T2.3 (2026-09-30) accepted. **T2.4–T2.8 await human review** in
-the review app (`mise run review`). Remaining
+**Wave 2 is complete:** T2.1, T1.1, T1.5 (2026-09-29), T2.2, T2.2.1, T2.3, T2.4 (2026-09-30), T2.5, T2.6, T2.7,
+T2.8 (2026-10-02) all accepted in the review app (`mise run review`). Remaining
 Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Side track: build the browser site in small bursts per
 [`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next).
