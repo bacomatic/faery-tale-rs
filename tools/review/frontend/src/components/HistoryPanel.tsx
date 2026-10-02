@@ -33,7 +33,11 @@ export default function HistoryPanel({ task, refresh }: { task: string; refresh:
                   {flagged.map((m) => (
                     <li key={`${m.resource}/${m.id}`}>
                       <code>{m.resource || "."}/{m.id}</code> {m.status ?? "unmarked"}
-                      {m.note && `: ${m.note}`}
+                      {m.note && (
+                        <>
+                          : <span className="round-note">{m.note}</span>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>

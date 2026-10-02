@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errText } from "../api";
+import CurrentItemBar from "../components/CurrentItemBar";
 import HistoryPanel from "../components/HistoryPanel";
-import ItemCard, { type Mark } from "../components/ItemCard";
+import ItemCard, { itemDomId, type Mark } from "../components/ItemCard";
 import ProblemList from "../components/ProblemList";
 import StalePanel from "../components/StalePanel";
 import StateBadge from "../components/StateBadge";
@@ -33,6 +34,7 @@ export default function TaskPage({ task }: { task: string }) {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
+  const [current, setCurrent] = useState(0);
   const dirty = useRef(false);
   const timer = useRef<number | undefined>(undefined);
 
@@ -50,6 +52,39 @@ export default function TaskPage({ task }: { task: string }) {
   useEffect(() => {
     load().catch((e) => setErr(errText(e)));
   }, [load]);
+
+  // The "current" item is the last card whose top has scrolled past the sticky header.
+  useEffect(() => {
+    if (!detail) return;
+    const cards = () => detail.items_detail.map((it) => document.getElementById(itemDomId(it)));
+    const onScroll = () => {
+      // Reference line must not depend on the header's height (it changes with the current item's
+      // note fold-out, which would feed back into this choice): use the fixed-height verdict row.
+      const row = document.querySelector<HTMLElement>(".verdict-row");
+      const line = (row?.getBoundingClientRect().bottom ?? 0) + 160;
+      let idx = 0;
+      cards().forEach((el, i) => {
+        if (el && el.getBoundingClientRect().top <= line) idx = i;
+      });
+      setCurrent(idx);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [detail]);
+
+  const jump = (delta: number) => {
+    if (!detail) return;
+    const target = detail.items_detail[Math.max(0, Math.min(detail.items_detail.length - 1, current + delta))];
+    const el = document.getElementById(itemDomId(target));
+    const row = document.querySelector<HTMLElement>(".verdict-row");
+    // land the card just under the detection line so it becomes current without overshooting
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - (row?.getBoundingClientRect().bottom ?? 0) - 150, behavior: "smooth" });
+  };
 
   useEffect(() => {
     if (!dirty.current) return;
@@ -160,7 +195,16 @@ export default function TaskPage({ task }: { task: string }) {
         invalid={detail.task_problems.length > 0}
         busy={busy}
         onSubmit={submit}
-      />
+      >
+        <CurrentItemBar
+          item={items[current] ?? null}
+          index={current}
+          total={items.length}
+          mark={items[current] ? marks[keyOf(items[current].resource, items[current].id)] ?? EMPTY : EMPTY}
+          onChange={(m) => items[current] && setMark(keyOf(items[current].resource, items[current].id), m)}
+          onJump={jump}
+        />
+      </VerdictBar>
       {detail.summary && <p className="summary">{detail.summary}</p>}
       {detail.stale && detail.stale_changes && (
         <StalePanel task={task} changes={detail.stale_changes} okThen={okThen} onOkItems={okItems} />

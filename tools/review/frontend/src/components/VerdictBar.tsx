@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Verdict } from "../types";
 
 // Sticky sub-header under the top bar: verdict buttons always in reach, task notes fold out.
@@ -13,6 +13,7 @@ export default function VerdictBar({
   invalid,
   busy,
   onSubmit,
+  children,
 }: {
   notes: string;
   onNotes: (s: string) => void;
@@ -23,6 +24,7 @@ export default function VerdictBar({
   invalid: boolean;
   busy: boolean;
   onSubmit: (v: Verdict) => void;
+  children?: ReactNode;
 }) {
   const [showNotes, setShowNotes] = useState(false);
   const acceptWhy = invalid
@@ -65,6 +67,7 @@ export default function VerdictBar({
           onChange={(e) => onNotes(e.target.value)}
         />
       )}
+      {children}
     </section>
   );
 }

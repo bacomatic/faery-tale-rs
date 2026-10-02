@@ -12,6 +12,8 @@ export interface Mark {
 
 const MAX_FILES = 24;
 
+export const itemDomId = (item: { resource: string; id: string }) => `item-${item.resource}/${item.id}`;
+
 export default function ItemCard({
   item,
   mark,
@@ -26,7 +28,7 @@ export default function ItemCard({
   const [collapsed, setCollapsed] = useState(item.carried_ok);
   const shown = all ? item.resolved_files : item.resolved_files.slice(0, MAX_FILES);
   return (
-    <article className={`card item mark-${mark.status ?? "none"}`}>
+    <article id={itemDomId(item)} className={`card item mark-${mark.status ?? "none"}`}>
       <header className="item-head">
         <div>
           <h3>{item.title}</h3>
