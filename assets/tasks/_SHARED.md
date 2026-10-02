@@ -85,6 +85,9 @@ This repo runs tools via **mise** (`mise.toml`), which activates the `.venv` it 
   then rerun `mise run setup`.
 - The venv has **no `pip` binary**; install with **`uv`** (`uv pip install ...`), do not call `pip` directly.
 - Pillow + numpy are already installed in `.venv`.
+- **Review server:** `mise run review` (`:8765`) is the human's — never start, kill or probe it; say
+  "restart your review server" when a backend change needs it. For testing, run your own
+  `mise run review:test` (`:8766`, auto-reload) and kill it before you finish the task.
 
 ## Do not commit
 Leave all changes staged/untracked for human review. No git commits, no attribution lines.

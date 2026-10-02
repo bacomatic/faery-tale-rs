@@ -38,6 +38,10 @@ description = "Serve the review app on http://127.0.0.1:8765"
 # terminal's own SIGINT, which force-exits uvicorn mid-shutdown and logs a CancelledError traceback.
 run = "python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8765 --lifespan off"
 
+[tasks."review:test"]
+description = "Agent-only test instance of the review app on http://127.0.0.1:8766 (auto-reloads backend code; the human's `mise run review` on :8765 is never touched)"
+run = "python -m uvicorn app:app --app-dir tools/review/backend --host 127.0.0.1 --port 8766 --lifespan off --reload"
+
 [tasks."review:dev"]
 description = "Vite dev server for the review app (run `mise run review` too)"
 dir = "tools/review/frontend"

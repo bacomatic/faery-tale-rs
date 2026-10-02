@@ -71,6 +71,13 @@ oracle). Strong success criteria let you loop independently.
   Write a script only for binary input or data too large to transcribe reliably, and only if it
   genuinely parses the original, never hand-typed data wrapped in a script.
 
+## Review Server
+
+- `mise run review` on `:8765` is **the human's instance**. Never start, kill, restart or probe it.
+  If a backend change needs a restart, tell the user and leave it to them.
+- For testing the review tool, run **your own** `mise run review:test` on `:8766` (backend
+  auto-reloads) and **kill it before finishing the task** — never leave it in the background.
+
 ## Commit Rules
 
 - Do not commit without user consent, even mid-session. Always ask; never assume, even if consent
