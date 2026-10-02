@@ -13,7 +13,7 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T1.1](T1.1-palettes.md) Palettes | **DONE** ✅ | T0.1, T0.2 | ACCEPTED 2026-09-29 (6/6 OK). T1.5 A–B: `palettes/verify.json`, region-9 `secret_timer` variant added (swatch previews later removed). |
 | [T1.2](T1.2-tables.md) Gameplay tables | **DROPPED** | — | Not assets: constants stay in `reference/`, art bindings go into T2.1, `file_index` is used by T2.2/T2.5. `assets/tables/` deleted. |
 | T1.3 Item/quest data | **DROPPED** | — | Behavior, not an asset: already spec'd in `reference/logic/magic.md`, `menu-system.md`, `brother-succession.md`. |
-| [T1.4](T1.4-text.md) Narrative text | **TODO** | T0.1 | Deps met — ready. |
+| [T1.4](T1.4-text.md) Narrative text | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02 (round 2, by the user in-session). 8 JSON files in `assets/text/` (39/27/23/61 + 8/20/29/37), 12 placard card previews, `text/verify.json` (8 items). |
 | [T1.5](T1.5-retrofit-done.md) Retrofit done tasks | **DONE** ✅ | T1.1 | Accepted with T1.1 (2026-09-29). Parts A–B done; Part C cancelled. T1.2 part moot (dropped). Reviewed via the T1.1 page. |
 | [T2.1](T2.1-sprites.md) Sprites | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-29 (round 3, 41/41 OK). Per-actor sets, objects, 40 item PNGs, weapon/effect sheets, raw sheets; `sprites/verify.json` (41 items). |
 | [T2.2](T2.2-tiles.md) Tile atlas | **DONE** ✅ | T0.1, T1.1 | ACCEPTED 2026-09-30 (10/10 OK). 10 regions × (indexed/RGBA/highlight/shadow atlas + `tiles.json`); tiles are **16×32**. |
@@ -24,8 +24,8 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T2.6](T2.6-music.md) Music + instruments | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
 | [T2.7](T2.7-sfx.md) SFX | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. 6 byte-exact WAVs + `sfx.json` + 7 playable 44.1 kHz previews (effect 5's 1989 Hz header is below what browsers play). |
 | [T2.8](T2.8-fonts.md) Fonts | **DONE** ✅ | T0.1 | ACCEPTED 2026-10-02. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
-| [T3.1](T3.1-shaders.md) Reference shaders + light-level renders | TODO | T2.1, T2.2 | GLSL reference-only (port validates); perception deliverable = `shaders/previews/` renders. |
-| [T3.2](T3.2-formats.md) Format spec | TODO | Wave 1 + Wave 2 | |
+| [T3.1](T3.1-shaders.md) Reference shaders + light-level renders | **DONE** ✅ | T2.1, T2.2 | ACCEPTED 2026-10-02 (round 2). 3 GLSL ES 3.00 shaders (run live in the review app, pixel-identical to the Python renders), 277 preview PNGs + strips, `shaders/verify.json` (10 items). |
+| [T3.2](T3.2-formats.md) Format spec | **IMPLEMENTED (awaiting review)** | Wave 1 + Wave 2 | 2026-10-02. `assets/FORMATS.md` + 10 `formats/*.md`; root `assets/verify.json` (11 items). |
 | [T4.1](T4.1-manifest.md) Bundle index (manifest) | TODO | Wave 1 + Wave 2 | |
 | [T4.2](T4.2-verification.md) Bundle acceptance (human) | TODO | T4.1 | |
 
@@ -313,8 +313,71 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
   - Doc drift noticed, not fixed: `text-display.md:43` (OpenFont is at `fmain.c:778`), `iff-loading.md` asm/struct
     line numbers off by 2, `audio.md:162-170` (84-entry ptable) and `:538` (seek "redundant").
 
+- **T1.4 (2026-10-01)** — done in-session (no subagent). `tools/extract_text.py` parses `src/narr.asm` directly
+  (`;` outside quotes starts a comment; `'…'`/`"…"` literals incl. the `',"'",'` idiom; `equ` symbols `XY`/`ETX`;
+  `a/b` operands with integer division, so `21/2` → 10 → x = 20) and writes `assets/text/`: `event_msg` (39),
+  `place_msg` (27), `inside_msg` (23), `speeches` (61), `question` (8, `qq` order), `placard_text` (20, `mst` order,
+  decoded per `_ssp` `fsubs.asm:497-536` into `{x_half, x, y, text}` segments; a run with no `XY` marker has null
+  position — those entries follow a `name()` call, `fmain2.c:1588`), `place_tbl` (29) and `inside_tbl` (37) as
+  `{lo, hi, msg_index, comment, line}` rows. A `dc.b 0` with no pending string is an empty entry: `place_msg[0..1]`,
+  `inside_msg[0..1]` and `speeches[52]` are `""`; the commented-out `narr.asm:197` line is absent; `q8`'s trailing
+  `dc.w 0` pad (`narr.asm:82`) is skipped. No string contains `$`. Checks: `test_extract_text.py` 10/10, full suite
+  232; review store 0 problems, 8/8 counts match. `.gitkeep` removed. Out of scope, noted: `_titletext`
+  (`fsubs.asm`, also an `_ssp` stream) is not in `narr.asm` and was not extracted.
+  - **Previews (user: "render the placard text, the wall of JSON is not interesting").** `tools/render_placards.py`
+    → `assets/text/previews/placard_*.png`: the 12 cards as the call sites compose them (`fmain.c:2859-2879`,
+    `fmain2.c:1586-1591`, `1607`, `fmain.c:1235`), `name()` spliced as "Julian", Amber/9 drawn like `Text()`
+    (kern, blit at baseline − 7, advance space), the `_placard` meander border simulated from `fsubs.asm:387-475`
+    (final state, pen 24). Finding: the copy-protection lead-in (msg12) is **not** in Amber/9 — `rp_map` keeps
+    `tfont` (topaz-8) from `fmain.c:781` and nothing sets `afont` on it before `placard_text(19)` at line 1235; in
+    Amber/9 its 37-char lines overrun the 320-px page, in topaz-8 they fit. The placard verify item is now the image
+    set (12 cards) with the JSON kept as a count.
+  - **Review round 1 (REJECT, 2026-10-02):** "provide the answers along with the questions". `question.json` is now
+    a table `{index, label, line, question, answer}`; the answers are parsed from `char *answers[]`
+    (`fmain2.c:1306-1307`), which `copy_protect_junk` indexes with the same `j` as `question(j)` (`fmain2.c:1316-1317`).
+    They match the user's list (LIGHT, HEED, DEED, SIGHT, FLIGHT, CREED, BLIGHT, NIGHT).
+  - **Round 2: ACCEPT** (2026-10-02, stated by the user in-session; `review_results.json` holds only the round-1
+    REJECT — submit in the app if the recorded verdict should match).
+
+- **T3.1 (2026-10-02)** — done in-session (no subagent). **Dropped `region_crossfade.glsl`** (user decision): no
+  source for it — overworld region changes are seamless disk loads (`fmain.c:2964-2976`, `3548-3614`), doors cut
+  to `fade_page(100,100,100)` (`fmain.c:1929`), cinematics use `fade_down`/`fade_normal`; removed from `plan.md`
+  and the task file. Shipped: `assets/shaders/{daynight_live,daynight_bank,fade_to_black,daynight_dim,
+  moonlight_blue,green_jewel}.glsl` as **GLSL ES 3.00** (`#version 300 es` first line) so they run verbatim in
+  WebGL2; `shaders.json` (textures/uniforms per shader); `README.md` (effects matrix, driving values).
+  `tools/render_light_levels.py` → `shaders/previews/`: every region atlas (0–7 at levels 0, 95, 105, 111, 120,
+  136, 150, 165, 180 + Green Jewel at 0; 8/9 at 180 only — `day_fade` passes 100,100,100 indoors) and all 30 actor
+  sheets (same spread), 382 renders + 38 jewel + 40 labelled strips + `previews.json`, via
+  `experiment/shaders/fade_page.py` (LUT re-checked equal to `daynight_lut.json` at all 10 levels).
+  **Review app:** new `shader` view kind (`models.py`, schema regenerated) + `ShaderViewer.tsx`: subject
+  picker, uniform sliders, baked-level buttons, and a pixel diff of the GPU output against the Python PNG.
+  Headless-Chrome check (SwiftShader): all 6 shaders compile; `daynight_live` (every level + jewel),
+  `daynight_bank` (every layer) and `fade_to_black` (weights 100) are **pixel-identical** on all 40 subjects
+  (764 comparisons, 0 differing). Review store: 0 problems, all counts match. The running review server was
+  restarted for the new view kind. Note: the jewel renders are strongly red/magenta — that is what the source
+  does (`r` weight 100 with `r1 = max(r1, g1)` while g/b stay at night floors, `fmain2.c:1655, 407`).
+  - **Review round 1 (REJECT, 2026-10-02) processed:**
+    - Renders trimmed to actors that appear outdoors (reviewer: Loraii/necromancer/woodcutter are astral-plane
+      only, the dragon is in his cave, every NPC but beggar/ranger/spectre/ghost is indoors — none is ever
+      palette-faded). `render_light_levels.INDOOR_ONLY_ACTORS`; 27 subjects (10 regions + 17 actors), 252 + 25
+      jewel renders, 27 strips; stale PNGs removed.
+    - **Decomposition shaders dropped** (`daynight_dim`, `moonlight_blue`, `green_jewel`: "the live shader is
+      enough"); removed from `shaders.json`, both READMEs, `formats/shaders.md`, `plan.md`, the task file.
+    - `fade_to_black` gained **modes** in `shaders.json` + the viewer: *fade_down / fade_normal* (one weight `i`,
+      step 5 → `(i,i,i)`), *intro zoom* (`x` 0..160 step 4 → `y = x*5/8`, weights `(2y-40, 2y-70, 2y-100)`,
+      `fmain.c:1199, 1209, 2917, 2930`) and *free*.
+    - Checks on `:8766`: 0 validation problems, all counts match; headless Chrome: 3 shaders compile, every
+      live/bank/fade comparison identical on all 27 subjects. The T3.1 `verify.json` keeps the user's expanded
+      formatting (10 items now).
+  - **Review round 2: ACCEPT** (2026-10-02T17:27Z).
+- **T3.2 (2026-10-02)** — done in-session. `assets/FORMATS.md` (index + global conventions) and
+  `assets/formats/{palettes,sprites,tiles,masks,maps,screens,text,audio,fonts,shaders}.md`, written from the
+  shipped JSON (every field name checked against the real files); the palette-effects matrix and
+  `highlight_mask` format live in `formats/palettes.md`; the audio synth model in `formats/audio.md`.
+  Root `assets/verify.json` created (11 T3.2 items, view `markdown`). `tools/check_md_links.py` now takes an
+  optional directory argument (`… assets` → all links valid; the default `reference/` run still reports its 10
+  pre-existing issues, untouched). `.gitkeep` removed from `shaders/` and `formats/`. 232 tests pass.
+
 ## Next
-**Wave 2 is complete:** T2.1, T1.1, T1.5 (2026-09-29), T2.2, T2.2.1, T2.3, T2.4 (2026-09-30), T2.5, T2.6, T2.7,
-T2.8 (2026-10-02) all accepted in the review app (`mise run review`). Remaining
-Wave 1: **T1.4** (narrative text, scope extended — see Plan review log entry). Side track: build the browser site in small bursts per
-[`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next).
+**T3.1 accepted.** T3.2 (format spec) awaits the human Reviewer in the app. Then Wave 4 (T4.1 manifest, T4.2 bundle acceptance).
+Side track: build the browser site in small bursts per [`site/PLAN.md`](../../site/PLAN.md) (Phase 1 next).
