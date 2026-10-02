@@ -80,7 +80,7 @@ def region_shadow(tiles: Path, region: int) -> tuple[np.ndarray, list[dict]]:
 def build(tiles: Path, palettes: Path, src_dir: Path, game_dir: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     pal, overrides = load_palette(palettes)
     world = em.World(game_dir, src_dir)
-    spaces = em.finish_spaces(em.segment(world))
+    spaces = em.finish_spaces(world, em.segment(world))
     used_by_region = em.used_tiles(world, spaces)
     masters: list[dict] = []
     pixels: list[np.ndarray] = []

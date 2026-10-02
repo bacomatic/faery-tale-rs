@@ -20,7 +20,7 @@ Each map directory contains:
 | `map.json` | name, kind, size, origin, tileset, entries (doors / stargate / quicksand), citations |
 | `tiles.png` | **8-bit greyscale** PNG, pixel value = original tile id 0–255 in the map's tileset region |
 | `master.png` | **16-bit greyscale** PNG (big-endian samples), pixel value = master tile index into `assets/tiles/master/master.json` `tiles[]`; `65535` = none (never occurs in shipped maps) |
-| `preview.png` | non-authoritative render from `assets/tiles/region_<RR>/atlas_rgba.png`; magenta rings mark entry landing points (overworld: door outside positions and the quicksand cell, at 1/4 scale) |
+| `preview.png` | non-authoritative render from `assets/tiles/region_<RR>/atlas_rgba.png`; magenta rings mark entry landing points (overworld: door outside positions and the quicksand cell, at 1/4 scale); cyan outlines mark openable door tiles (type 15) with their `open_list` name — SECRET/TUNNEL are the hidden doors |
 
 One pixel in a layer = one map cell; image width/height = `map.json.size_tiles`. A tile is 16×32 px in
 game (`fsubs.asm:755-771`, `1701`). Rows run top to bottom, columns left to right.
@@ -56,19 +56,29 @@ landing point (door landing `fmain.c:1919-1924`; stargate `fmain.c:1944-1948`, r
 `fmain.c:2632-2637`; quicksand drop `fmain.c:1784-1789`, from overworld sector 181) a flood fill over
 walkable sub-tiles; entries that reach the same tiles form one space. The map is the bounding box of
 the reached tiles, their neighbouring (wall) tiles and a one-tile margin; cells inside that box that
-belong to a different space are set to tile 0 (`map.json.blanked_tiles`). The tileset is the region the
+belong to a different space, or are fragments not connected to this space's tiles, are set to tile 0 (`map.json.blanked_tiles`). The tileset is the region the
 game loads on entry (`doorlist[].secs`, `fmain.c:1926`). One deliberate deviation from the source: the
 three cabin-yard gates that `doorlist` points into the wrong cabin (`reference/PROBLEMS.md` P27) are
 corrected to their own cabins; the affected entries carry `fix.source_yc2` with the original value. `map.json.origin_interior_tile` /
 `origin_world_px` place the crop back on the original sheet; `entries[].landing_tile` is relative to
 the map.
 
+## Names
+
+`map.json.name` (and the directory) is the name settled in review: Marheim castle, Citadel of Doom,
+Forbidden Keep, Witchwood cave, Tambry tavern / `tambry_N`, `marheim_N`, cabins, keeps, forts, inns,
+oases. `source_name` is the name derived from the `doorlist` comment (`fmain.c:240-325`) and
+`place_names` are what the game itself prints for the inside and outside sectors (`narr.asm:86-223`,
+e.g. "castle of King Mar" / "city of Marheim", "Tombs of Hemsath", "Spirit Plane"). Entry labels
+likewise: the stargate pair is shown as "portal to astral plane" / "portal from citadel of doom",
+with the doorlist comment kept in `entries[].door`.
+
 ## Reading the layers
 
 ```python
 import sys; sys.path.insert(0, "tools")
 from decode_map_layers import load_map
-m = load_map("assets/maps/interiors/main_castle")
+m = load_map("assets/maps/interiors/marheim_castle")
 m["tiles"]     # numpy uint8  (rows, cols)
 m["master"]    # numpy uint16 (rows, cols)
 m["region"]    # numpy uint8  tileset region per cell

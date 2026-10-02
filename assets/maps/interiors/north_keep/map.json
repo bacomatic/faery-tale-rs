@@ -10,6 +10,7 @@
   ],
   "entries": [
     {
+      "door": "north keep",
       "door_type": "HSTONE",
       "kind": "door",
       "landing_px": [
@@ -43,7 +44,8 @@
   },
   "name": "north keep",
   "notes": [
-    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space and were set to tile 0.",
+    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space or were fragments not connected to this one, and were set to tile 0.",
+    "name is the shipped name (review decision); source_name derives from the doorlist comment, place_names are what the game prints (narr.asm).",
     "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); 128-255 are shared (fmain.c:624-625)."
   ],
   "origin_interior_tile": [
@@ -54,15 +56,21 @@
     9472,
     39392
   ],
+  "place_names": {
+    "inside": "keep interior",
+    "outside": "small keep",
+    "source": "src/narr.asm:86-223"
+  },
   "preview": {
     "file": "preview.png",
-    "markers": "magenta: entry landing points",
+    "markers": "magenta rings: entry landing points; cyan outlines: openable door tiles (type 15, open_list name; 4 here)",
     "scale": "1/1"
   },
   "size_tiles": [
     17,
     10
   ],
+  "source_name": "north keep",
   "tile_size_px": [
     16,
     32

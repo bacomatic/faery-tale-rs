@@ -33,7 +33,7 @@
     },
     {
       "dir": "astral_plane",
-      "entries": "stargate forwards",
+      "entries": "portal from citadel of doom",
       "kind": "astral",
       "name": "astral plane",
       "size_tiles": [
@@ -50,17 +50,6 @@
       "size_tiles": [
         321,
         106
-      ],
-      "tileset_region": 9
-    },
-    {
-      "dir": "dungeons/maze_caves",
-      "entries": "maze cave 2, maze cave 1",
-      "kind": "dungeon",
-      "name": "maze caves",
-      "size_tiles": [
-        136,
-        46
       ],
       "tileset_region": 9
     },
@@ -94,6 +83,17 @@
       "size_tiles": [
         21,
         23
+      ],
+      "tileset_region": 9
+    },
+    {
+      "dir": "dungeons/witchwood_cave",
+      "entries": "maze cave 2, maze cave 1",
+      "kind": "dungeon",
+      "name": "witchwood cave",
+      "size_tiles": [
+        136,
+        46
       ],
       "tileset_region": 9
     },
@@ -208,112 +208,13 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/city_10",
-      "entries": "city #10",
+      "dir": "interiors/citadel_of_doom",
+      "entries": "portal to astral plane, doom tower",
       "kind": "interior",
-      "name": "city 10",
+      "name": "citadel of doom",
       "size_tiles": [
-        10,
-        6
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_11",
-      "entries": "city #11",
-      "kind": "interior",
-      "name": "city 11",
-      "size_tiles": [
-        8,
-        6
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_12",
-      "entries": "city #12",
-      "kind": "interior",
-      "name": "city 12",
-      "size_tiles": [
-        10,
-        8
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_13",
-      "entries": "city #13",
-      "kind": "interior",
-      "name": "city 13",
-      "size_tiles": [
-        8,
-        8
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_14",
-      "entries": "city #14",
-      "kind": "interior",
-      "name": "city 14",
-      "size_tiles": [
-        10,
-        7
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_15",
-      "entries": "city #15.a, city #15.b",
-      "kind": "interior",
-      "name": "city 15",
-      "size_tiles": [
-        13,
-        8
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_16",
-      "entries": "city #16",
-      "kind": "interior",
-      "name": "city 16",
-      "size_tiles": [
-        7,
-        8
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_17",
-      "entries": "city #17",
-      "kind": "interior",
-      "name": "city 17",
-      "size_tiles": [
-        7,
-        6
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_18",
-      "entries": "city #18",
-      "kind": "interior",
-      "name": "city 18",
-      "size_tiles": [
-        7,
-        6
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/city_19",
-      "entries": "city #19",
-      "kind": "interior",
-      "name": "city 19",
-      "size_tiles": [
-        7,
-        6
+        30,
+        14
       ],
       "tileset_region": 8
     },
@@ -373,17 +274,6 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/doom_tower",
-      "entries": "stargate backwards, doom tower",
-      "kind": "interior",
-      "name": "doom tower",
-      "size_tiles": [
-        30,
-        14
-      ],
-      "tileset_region": 8
-    },
-    {
       "dir": "interiors/elf_glade",
       "entries": "elf glade",
       "kind": "interior",
@@ -402,6 +292,17 @@
       "size_tiles": [
         14,
         8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/forbidden_keep",
+      "entries": "unreachable castle",
+      "kind": "interior",
+      "name": "forbidden keep",
+      "size_tiles": [
+        13,
+        7
       ],
       "tileset_region": 8
     },
@@ -483,17 +384,6 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/main_castle",
-      "entries": "main castle",
-      "kind": "interior",
-      "name": "main castle",
-      "size_tiles": [
-        32,
-        23
-      ],
-      "tileset_region": 8
-    },
-    {
       "dir": "interiors/mammoth_manor",
       "entries": "mammoth manor",
       "kind": "interior",
@@ -501,6 +391,127 @@
       "size_tiles": [
         25,
         8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_10",
+      "entries": "city #10",
+      "kind": "interior",
+      "name": "marheim 10",
+      "size_tiles": [
+        10,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_11",
+      "entries": "city #11",
+      "kind": "interior",
+      "name": "marheim 11",
+      "size_tiles": [
+        8,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_12",
+      "entries": "city #12",
+      "kind": "interior",
+      "name": "marheim 12",
+      "size_tiles": [
+        10,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_13",
+      "entries": "city #13",
+      "kind": "interior",
+      "name": "marheim 13",
+      "size_tiles": [
+        8,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_14",
+      "entries": "city #14",
+      "kind": "interior",
+      "name": "marheim 14",
+      "size_tiles": [
+        10,
+        7
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_15",
+      "entries": "city #15.a, city #15.b",
+      "kind": "interior",
+      "name": "marheim 15",
+      "size_tiles": [
+        13,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_16",
+      "entries": "city #16",
+      "kind": "interior",
+      "name": "marheim 16",
+      "size_tiles": [
+        7,
+        8
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_17",
+      "entries": "city #17",
+      "kind": "interior",
+      "name": "marheim 17",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_18",
+      "entries": "city #18",
+      "kind": "interior",
+      "name": "marheim 18",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_19",
+      "entries": "city #19",
+      "kind": "interior",
+      "name": "marheim 19",
+      "size_tiles": [
+        7,
+        6
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/marheim_castle",
+      "entries": "main castle",
+      "kind": "interior",
+      "name": "marheim castle",
+      "size_tiles": [
+        32,
+        23
       ],
       "tileset_region": 8
     },
@@ -659,32 +670,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/unreachable_castle",
-      "entries": "unreachable castle",
-      "kind": "interior",
-      "name": "unreachable castle",
-      "size_tiles": [
-        13,
-        7
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/village_1",
-      "entries": "village #1.a, village #1.b",
-      "kind": "interior",
-      "name": "village 1",
-      "size_tiles": [
-        13,
-        11
-      ],
-      "tileset_region": 8
-    },
-    {
-      "dir": "interiors/village_2",
+      "dir": "interiors/tambry_2",
       "entries": "village #2",
       "kind": "interior",
-      "name": "village 2",
+      "name": "tambry 2",
       "size_tiles": [
         13,
         7
@@ -692,10 +681,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_3",
+      "dir": "interiors/tambry_3",
       "entries": "village #3",
       "kind": "interior",
-      "name": "village 3",
+      "name": "tambry 3",
       "size_tiles": [
         13,
         7
@@ -703,10 +692,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_4",
+      "dir": "interiors/tambry_4",
       "entries": "village #4",
       "kind": "interior",
-      "name": "village 4",
+      "name": "tambry 4",
       "size_tiles": [
         11,
         7
@@ -714,10 +703,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_5",
+      "dir": "interiors/tambry_5",
       "entries": "village #5",
       "kind": "interior",
-      "name": "village 5",
+      "name": "tambry 5",
       "size_tiles": [
         10,
         9
@@ -725,10 +714,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_6",
+      "dir": "interiors/tambry_6",
       "entries": "village #6",
       "kind": "interior",
-      "name": "village 6",
+      "name": "tambry 6",
       "size_tiles": [
         10,
         9
@@ -736,10 +725,10 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_7",
+      "dir": "interiors/tambry_7",
       "entries": "village #7",
       "kind": "interior",
-      "name": "village 7",
+      "name": "tambry 7",
       "size_tiles": [
         13,
         6
@@ -747,13 +736,24 @@
       "tileset_region": 8
     },
     {
-      "dir": "interiors/village_8",
+      "dir": "interiors/tambry_8",
       "entries": "village #8",
       "kind": "interior",
-      "name": "village 8",
+      "name": "tambry 8",
       "size_tiles": [
         11,
         9
+      ],
+      "tileset_region": 8
+    },
+    {
+      "dir": "interiors/tambry_tavern",
+      "entries": "village #1.a, village #1.b",
+      "kind": "interior",
+      "name": "tambry tavern",
+      "size_tiles": [
+        13,
+        11
       ],
       "tileset_region": 8
     },

@@ -25,7 +25,7 @@ def built():
 @pytest.fixture(scope="module")
 def world():
     w = em.World(ASSETS.parent / "src" / "assets", ASSETS.parent / "src")
-    spaces = em.finish_spaces(em.segment(w))
+    spaces = em.finish_spaces(w, em.segment(w))
     return w, spaces, em.used_tiles(w, spaces)
 
 
@@ -57,7 +57,7 @@ def test_masters_are_unique(built):
     keys = {(master_tile(atlas, m).tobytes(), m["color_31"]["rgb4"] if m["color_31"] else None,
              m["mask"], m["mask_mode"], m["feature_type"], m["subtile_mask"]) for m in meta["tiles"]}
     assert len(keys) == meta["count"] == len(meta["tiles"])
-    assert meta["used_pairs"] == sum(len(m["sources"]) for m in meta["tiles"]) == 1788
+    assert meta["used_pairs"] == sum(len(m["sources"]) for m in meta["tiles"]) == 1787
     assert atlas.max() < 32
 
 

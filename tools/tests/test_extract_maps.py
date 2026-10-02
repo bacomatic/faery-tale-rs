@@ -25,7 +25,7 @@ def world():
 
 @pytest.fixture(scope="module")
 def spaces(world):
-    return em.finish_spaces(em.segment(world))
+    return em.finish_spaces(world, em.segment(world))
 
 
 @pytest.fixture(scope="module")
@@ -84,9 +84,12 @@ def test_spaces(spaces):
     kinds = [sp["kind"] for sp in spaces]
     assert kinds.count("interior") == 62 and kinds.count("dungeon") == 5 and kinds.count("astral") == 1
     assert {sp["name"] for sp in spaces if sp["kind"] == "dungeon"} == \
-        {"tombs", "dragon cave", "troll cave", "maze caves", "spider pit"}
+        {"tombs", "dragon cave", "troll cave", "witchwood cave", "spider pit"}
     assert sorted(e["name"] for e in by_name["spider pit"]["entries"]) == ["quicksand drop", "spider exit"]
-    assert sorted(e["name"] for e in by_name["doom tower"]["entries"]) == ["doom tower", "stargate backwards"]
+    assert sorted(e["name"] for e in by_name["citadel of doom"]["entries"]) == ["doom tower", "stargate backwards"]
+    assert by_name["citadel of doom"]["source_name"] == "doom tower"
+    assert {by_name[n]["source_name"] for n in ("tambry tavern", "tambry 2", "marheim 15", "forbidden keep", "marheim castle")} == \
+        {"village 1", "village 2", "city 15", "unreachable castle", "main castle"}
     assert [e["name"] for e in by_name["astral plane"]["entries"]] == ["stargate forwards"]
     assert by_name["astral plane"]["region"] == 8 and by_name["astral plane"]["bbox"] == (575, 15, 784, 80)
     assert len(by_name["desert fort"]["entries"]) == 4                 # four identical doorlist rows
@@ -115,8 +118,19 @@ def test_bundle_round_trips(bundle, spaces):
         assert not (m["master"] == dl.NO_MASTER).any()
         assert (out / entry["dir"] / "preview.png").is_file()
     # a space's layer equals the interior map crop with foreign tiles blanked
-    castle = next(sp for sp in spaces if sp["name"] == "main castle")
-    m = dl.load_map(out / "interiors" / "main_castle")
+    castle = next(sp for sp in spaces if sp["name"] == "marheim castle")
+    m = dl.load_map(out / "interiors" / "marheim_castle")
+    assert m["meta"]["place_names"] == {"inside": "castle of King Mar", "outside": "city of Marheim", "source": "src/narr.asm:86-223"}
+    assert m["meta"]["source_name"] == "main castle"
+    # the only detached fragment: a wall stub of mammoth manor inside the dragon cave's box
+    dragon = next(sp for sp in spaces if sp["name"] == "dragon cave")
+    ys, xs = np.nonzero(dragon["detached"])
+    assert sorted(zip((xs + dragon["crop"][0]).tolist(), (ys + dragon["crop"][1]).tolist())) == [(596, 90), (596, 91), (596, 92)]
+    assert sum(int(sp["detached"].sum()) for sp in spaces) == 3
+    citadel = dl.load_map(out / "interiors" / "citadel_of_doom")
+    assert [e["name"] for e in citadel["meta"]["entries"]] == ["portal to astral plane", "doom tower"] or \
+        sorted(e["name"] for e in citadel["meta"]["entries"]) == ["doom tower", "portal to astral plane"]
+    assert {e["door"] for e in citadel["meta"]["entries"]} == {"stargate backwards", "doom tower"}
     x0, y0, x1, y1 = castle["crop"]
     world = em.World(GAME, SRC)
     exp = world.interior[y0:y1, x0:x1].copy()

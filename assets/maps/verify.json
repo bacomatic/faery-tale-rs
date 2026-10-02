@@ -3,7 +3,7 @@
   "tasks": {
     "T2.5": {
       "title": "World maps",
-      "summary": "The game world unpacked into loadable maps (README.md): the overworld (regions 0-7 stitched, 2048x1024 tiles), 62 building interiors, 5 dungeons and the astral plane, each cut from the shared indoor sheet by walking from its doors (fmain.c:1919-1927, 1944-1950, 1784-1789; px_to_im/prox fsubs.asm:548-614, 1590-1611). Every map ships tiles.png (8-bit: original tile id in its tileset region) and master.png (16-bit: master atlas index, which also carries collision) plus a preview rendered from the real tiles with entry points ringed in magenta. Review by looking at the previews: each should be a complete, recognisable place with its entrance where you remember it; nothing from a neighbouring building should bleed in."
+      "summary": "The game world unpacked into loadable maps (README.md): the overworld (regions 0-7 stitched, 2048x1024 tiles), 62 building interiors, 5 dungeons and the astral plane, each cut from the shared indoor sheet by walking from its doors (fmain.c:1919-1927, 1944-1950, 1784-1789; px_to_im/prox fsubs.asm:548-614, 1590-1611). Every map ships tiles.png (8-bit: original tile id in its tileset region) and master.png (16-bit: master atlas index, which also carries collision) plus a preview rendered from the real tiles with entry points ringed in magenta and openable doors (gates, secret doors, tunnels) outlined in cyan. Names are the review's (e.g. Marheim castle, Citadel of Doom, Forbidden Keep, Tambry/Marheim houses); each map.json keeps the doorlist comment as source_name and the game's own place names from narr.asm. Review by looking at the previews: each should be a complete, recognisable place with its entrance where you remember it; nothing from a neighbouring building should bleed in."
     }
   },
   "items": [
@@ -12,17 +12,59 @@
       "task": "T2.5",
       "title": "maps.json — 69 maps",
       "view": "table",
-      "files": ["maps.json"],
-      "look_for": "One row per map: overworld, astral plane, 5 dungeons (dragon cave, maze caves, spider pit, tombs, troll cave; region 9), 62 interiors (region 8). The entries column names the doors that lead into each; desert fort has 4 (identical doorlist rows), crystal palace 2, doom tower lists the stargate's return trip, spider pit lists the quicksand drop, cabins list their yard doors.",
-      "citations": ["src/fmain.c:233-326", "src/fmain.c:1926", "src/fmain.c:1784-1789"],
+      "files": [
+        "maps.json"
+      ],
+      "look_for": "One row per map: overworld, astral plane, 5 dungeons (dragon cave, witchwood cave, spider pit, tombs, troll cave; region 9), 62 interiors (region 8): marheim castle + marheim 10-19, tambry tavern + tambry 2-8, citadel of doom, forbidden keep, witch's castle, crystal palace, keeps, forts, inns, cabins, oases. The entries column names what leads in: desert fort has 4 (identical doorlist rows), crystal palace 2, citadel of doom lists its door and the portal back from the astral plane, spider pit the quicksand drop, every cabin its own yard gate and door. Each map directory holds tiles.png / master.png (8- and 16-bit index layers, data not pictures) and preview.png.",
+      "citations": [
+        "src/fmain.c:233-326",
+        "src/fmain.c:1926",
+        "src/fmain.c:1784-1789"
+      ],
       "counts": [
-        { "label": "maps", "file": "maps.json", "path": "rows", "expect": 69 },
-        { "label": "map directories", "glob": "*/map.json", "expect": 2 },
-        { "label": "interiors", "glob": "interiors/*/map.json", "expect": 62 },
-        { "label": "dungeons", "glob": "dungeons/*/map.json", "expect": 5 },
-        { "label": "tile layers", "glob": "**/tiles.png", "expect": 69 },
-        { "label": "master layers", "glob": "**/master.png", "expect": 69 },
-        { "label": "previews", "glob": "**/preview.png", "expect": 69 }
+        {
+          "label": "maps",
+          "file": "maps.json",
+          "path": "rows",
+          "expect": 69
+        },
+        {
+          "label": "interiors",
+          "glob": "interiors/*/map.json",
+          "expect": 62
+        },
+        {
+          "label": "dungeons",
+          "glob": "dungeons/*/map.json",
+          "expect": 5
+        },
+        {
+          "label": "tile layers",
+          "glob": "**/tiles.png",
+          "expect": 69
+        },
+        {
+          "label": "master layers",
+          "glob": "**/master.png",
+          "expect": 69
+        },
+        {
+          "label": "previews",
+          "glob": "**/preview.png",
+          "expect": 69
+        },
+        {
+          "label": "overworld doors",
+          "file": "overworld/map.json",
+          "path": "doors",
+          "expect": 84
+        },
+        {
+          "label": "overworld tileset regions",
+          "file": "overworld/map.json",
+          "path": "tileset.regions",
+          "expect": 8
+        }
       ]
     },
     {
@@ -30,103 +72,232 @@
       "task": "T2.5",
       "title": "Overworld — 2048x1024 tiles, regions F1-F8 stitched",
       "view": "image",
-      "files": ["overworld/preview.png"],
+      "files": [
+        "overworld/preview.png"
+      ],
       "look_for": "The whole continent at 1/4 scale (8192x8192): snowfield top-left, witch wood top-right, swamp and dark forest left of centre, Tambry's roads and the plains in the middle, the Burning Waste desert and the volcanic waste with lava bottom-left, Marheim's grey castle with the orange farm grid on the bay, the mountain ridges of the south-east. No seams or misaligned strips where the eight regions meet (rows 256/512/768, column 1024). Tiny magenta rings sit on every door (zoom in on Tambry or Marheim) and one on the quicksand cell north-east of Tambry.",
-      "citations": ["src/fmain.c:615-623", "src/fmain.c:2983-2987", "src/fsubs.asm:565-604", "src/fmain.c:1784"]
+      "citations": [
+        "src/fmain.c:615-623",
+        "src/fmain.c:2983-2987",
+        "src/fsubs.asm:565-604",
+        "src/fmain.c:1784"
+      ]
     },
     {
       "id": "dungeons",
       "task": "T2.5",
-      "title": "Dungeons — tombs, dragon cave, maze caves, spider pit, troll cave (region 9 tileset)",
+      "title": "Dungeons — tombs, dragon cave, witchwood cave, spider pit, troll cave (region 9 tileset)",
       "view": "image",
-      "files": ["dungeons/tombs/preview.png", "dungeons/dragon_cave/preview.png", "dungeons/maze_caves/preview.png", "dungeons/spider_pit/preview.png", "dungeons/troll_cave/preview.png"],
-      "look_for": "Five separate cave systems in dark dungeon stone, each one connected piece with black outside. Tombs: the long left corridor linking the winding passages at the top, the square grid maze and the lower-left block complex; one ring at the stair entrance. Dragon cave: the big system with its wide room complex on the right. Maze caves: the two maze entrances both ring the same system. Spider pit: two rings — the cave-mouth exit and the quicksand drop point inside. Troll cave: a small cave. Secret doors appear as plain wall segments; nothing from the villages or the astral plane is left inside the boxes.",
-      "citations": ["src/fmain.c:244", "src/fmain.c:260", "src/fmain.c:304", "src/fmain.c:310", "src/fmain.c:314", "src/fmain.c:317", "src/fmain.c:1784-1789", "src/fmain.c:1926"]
+      "files": [
+        "dungeons/tombs/preview.png",
+        "dungeons/dragon_cave/preview.png",
+        "dungeons/witchwood_cave/preview.png",
+        "dungeons/spider_pit/preview.png",
+        "dungeons/troll_cave/preview.png"
+      ],
+      "look_for": "Five separate cave systems in dark dungeon stone, each one connected piece with black outside. Every openable door tile is outlined in cyan with its open_list name: SECRET and TUNNEL are the hidden doors (drawn as plain wall), VGATE/HGATE the visible gates, GOLDEN/BLUE/CABINET the special ones. Tombs (of Hemsath): the long left corridor linking the winding passages, the square grid maze and the lower-left block complex (dense with SECRET/VGATE); one ring at the stair entrance. Dragon cave: the big system with its wide room complex on the right — the stray wall stub that used to float right of centre is gone. Witchwood cave: the two maze-cave entrances ring the same system. Spider pit: two rings — the cave-mouth exit and the quicksand drop point. Troll cave: a small cave.",
+      "citations": [
+        "src/fmain.c:1053-1077",
+        "src/fmain.c:1081-1125",
+        "src/fmain.c:1784-1789",
+        "src/fmain.c:1926",
+        "src/fmain.c:244",
+        "src/fmain.c:260",
+        "src/fmain.c:304",
+        "src/fmain.c:310",
+        "src/fmain.c:314",
+        "src/fmain.c:317"
+      ]
     },
     {
       "id": "astral",
       "task": "T2.5",
-      "title": "Astral plane — 212x68, via the doom-tower stargate",
+      "title": "Astral plane — 212x68, via the portal in the Citadel of Doom",
       "view": "image",
-      "files": ["astral_plane/preview.png", "interiors/doom_tower/preview.png"],
-      "look_for": "A large blue starfield rectangle (the extent 0x2400-0x3100 x 0x8200-0x8a00) with the stargate landing ringed. The doom tower preview shows both its door and the stargate return point (two rings); the stargate sits inside the tower, not in any cave.",
-      "citations": ["src/fmain.c:254-255", "src/fmain.c:353", "src/fmain.c:1944-1950", "src/fmain.c:2632-2637"]
+      "files": [
+        "astral_plane/preview.png",
+        "interiors/citadel_of_doom/preview.png"
+      ],
+      "look_for": "A large blue starfield rectangle (the Spirit Plane extent 0x2400-0x3100 x 0x8200-0x8a00) with the arrival point ringed ('portal from citadel of doom'). The Citadel of Doom preview shows its door and the 'portal to astral plane' ring in the main hall; the portal is inside the citadel, not in any cave.",
+      "citations": [
+        "src/fmain.c:254-255",
+        "src/fmain.c:353",
+        "src/fmain.c:1944-1950",
+        "src/fmain.c:2632-2637"
+      ]
     },
     {
       "id": "castles",
       "task": "T2.5",
-      "title": "Castles and palaces — main castle, witch's castle, crystal palace, mammoth manor, elf glade, unreachable castle",
+      "title": "Castles and palaces — Marheim castle, witch's castle, crystal palace, mammoth manor, elf glade, forbidden keep",
       "view": "image",
-      "files": ["interiors/main_castle/preview.png", "interiors/witchs_castle/preview.png", "interiors/crystal_palace/preview.png", "interiors/mammoth_manor/preview.png", "interiors/elf_glade/preview.png", "interiors/unreachable_castle/preview.png"],
-      "look_for": "Main castle (Marheim): grey walls around green courtyards and two red-carpet throne rooms, door ringed on the right. Witch's castle: dark stone keep. Crystal palace: blue crystal halls, two rings at its double door. Mammoth manor: a long low hall. Elf glade: a walled garden. Unreachable castle: a small stone hall. Each is one building with black around it.",
-      "citations": ["src/fmain.c:290", "src/fmain.c:319", "src/fmain.c:261-262", "src/fmain.c:313", "src/fmain.c:288", "src/fmain.c:307"]
+      "files": [
+        "interiors/marheim_castle/preview.png",
+        "interiors/witchs_castle/preview.png",
+        "interiors/crystal_palace/preview.png",
+        "interiors/mammoth_manor/preview.png",
+        "interiors/elf_glade/preview.png",
+        "interiors/forbidden_keep/preview.png"
+      ],
+      "look_for": "Marheim castle (castle of King Mar): grey walls around green courtyards and two red-carpet throne rooms, door ringed on the right. Witch's castle: dark stone keep. Crystal palace: blue crystal halls, two rings at its double door. Mammoth manor (Vermillion Manor): a long low hall. Elf glade: a walled sanctuary. Forbidden keep (the doorlist's 'unreachable castle', reached by swan to rescue the princess): a small stone hall. Each is one building with black around it; cyan outlines mark openable doors.",
+      "citations": [
+        "src/fmain.c:290",
+        "src/fmain.c:319",
+        "src/fmain.c:261-262",
+        "src/fmain.c:313",
+        "src/fmain.c:288",
+        "src/fmain.c:307"
+      ]
     },
     {
       "id": "keeps",
       "task": "T2.5",
       "title": "Keeps — 7 stone keeps (17x10) and 5 marble keeps (14x8)",
       "view": "image",
-      "files": ["interiors/north_keep/preview.png", "interiors/sea_keep/preview.png", "interiors/glade_keep/preview.png", "interiors/coast_keep/preview.png", "interiors/lakeside_keep/preview.png", "interiors/crag_keep/preview.png", "interiors/west_keep/preview.png", "interiors/mountain_keep/preview.png", "interiors/farm_keep/preview.png", "interiors/river_keep/preview.png", "interiors/lonely_keep/preview.png", "interiors/point_keep/preview.png"],
+      "files": [
+        "interiors/north_keep/preview.png",
+        "interiors/sea_keep/preview.png",
+        "interiors/glade_keep/preview.png",
+        "interiors/coast_keep/preview.png",
+        "interiors/lakeside_keep/preview.png",
+        "interiors/crag_keep/preview.png",
+        "interiors/west_keep/preview.png",
+        "interiors/mountain_keep/preview.png",
+        "interiors/farm_keep/preview.png",
+        "interiors/river_keep/preview.png",
+        "interiors/lonely_keep/preview.png",
+        "interiors/point_keep/preview.png"
+      ],
       "look_for": "Two families of near-identical floor plans (the keeps share sector layouts): seven HSTONE keeps and five MARBLE keeps, each a single walled hall with its door ringed at the bottom. Furnishing differs slightly between them.",
-      "citations": ["src/fmain.c:309", "src/fmain.c:322", "src/fmain.c:318", "src/fmain.c:263", "src/fmain.c:257", "src/fmain.c:280", "src/fmain.c:252", "src/fmain.c:265", "src/fmain.c:308", "src/fmain.c:284", "src/fmain.c:321", "src/fmain.c:325"]
+      "citations": [
+        "src/fmain.c:309",
+        "src/fmain.c:322",
+        "src/fmain.c:318",
+        "src/fmain.c:263",
+        "src/fmain.c:257",
+        "src/fmain.c:280",
+        "src/fmain.c:252",
+        "src/fmain.c:265",
+        "src/fmain.c:308",
+        "src/fmain.c:284",
+        "src/fmain.c:321",
+        "src/fmain.c:325"
+      ]
     },
     {
       "id": "forts-inns",
       "task": "T2.5",
       "title": "Forts and inns — plain/gate/pass fort, desert fort, forest/road's end/friendly inn",
       "view": "image",
-      "files": ["interiors/plain_fort/preview.png", "interiors/gate_fort/preview.png", "interiors/pass_fort/preview.png", "interiors/desert_fort/preview.png", "interiors/forest_inn/preview.png", "interiors/roads_end_inn/preview.png", "interiors/friendly_inn/preview.png"],
+      "files": [
+        "interiors/plain_fort/preview.png",
+        "interiors/gate_fort/preview.png",
+        "interiors/pass_fort/preview.png",
+        "interiors/desert_fort/preview.png",
+        "interiors/forest_inn/preview.png",
+        "interiors/roads_end_inn/preview.png",
+        "interiors/friendly_inn/preview.png"
+      ],
       "look_for": "Three small black-stone forts (10x7) with one ring each; the desert fort with its four coincident rings (one per doorlist row); three identical inn floor plans (17x11) with beds and tables, door ringed at the bottom.",
-      "citations": ["src/fmain.c:258", "src/fmain.c:246", "src/fmain.c:245", "src/fmain.c:240-243", "src/fmain.c:266", "src/fmain.c:259", "src/fmain.c:264"]
+      "citations": [
+        "src/fmain.c:258",
+        "src/fmain.c:246",
+        "src/fmain.c:245",
+        "src/fmain.c:240-243",
+        "src/fmain.c:266",
+        "src/fmain.c:259",
+        "src/fmain.c:264"
+      ]
     },
     {
       "id": "cabins",
       "task": "T2.5",
       "title": "Cabins #1-#10 (12x9 each)",
       "view": "image",
-      "files": ["interiors/cabin_1/preview.png", "interiors/cabin_2/preview.png", "interiors/cabin_3/preview.png", "interiors/cabin_4/preview.png", "interiors/cabin_5/preview.png", "interiors/cabin_6/preview.png", "interiors/cabin_7/preview.png", "interiors/cabin_8/preview.png", "interiors/cabin_9/preview.png", "interiors/cabin_10/preview.png"],
+      "files": [
+        "interiors/cabin_1/preview.png",
+        "interiors/cabin_2/preview.png",
+        "interiors/cabin_3/preview.png",
+        "interiors/cabin_4/preview.png",
+        "interiors/cabin_5/preview.png",
+        "interiors/cabin_6/preview.png",
+        "interiors/cabin_7/preview.png",
+        "interiors/cabin_8/preview.png",
+        "interiors/cabin_9/preview.png",
+        "interiors/cabin_10/preview.png"
+      ],
       "look_for": "Ten log cabins: an orange-floored one-room cabin with a bed, each with a fenced yard. Cabin and yard are one map, two rings each: the yard gate and the cabin door. Cabins 4, 5 and 9 get their gates by correction — the source table sends those gates into cabins 7, 8 and 6 (source bug, PROBLEMS.md P27; the original values are kept in map.json entries[].fix).",
-      "citations": ["src/fmain.c:267-270", "src/fmain.c:281-289", "src/fmain.c:302-306", "src/fmain.c:311-316", "src/fmain.c:323-324"]
+      "citations": [
+        "src/fmain.c:267-270",
+        "src/fmain.c:281-289",
+        "src/fmain.c:302-306",
+        "src/fmain.c:311-316",
+        "src/fmain.c:323-324"
+      ]
     },
     {
       "id": "oases-small",
       "task": "T2.5",
       "title": "Oases #1-#5, swamp shack, light house, crypt",
       "view": "image",
-      "files": ["interiors/oasis_1/preview.png", "interiors/oasis_2/preview.png", "interiors/oasis_3/preview.png", "interiors/oasis_4/preview.png", "interiors/oasis_5/preview.png", "interiors/swamp_shack/preview.png", "interiors/light_house/preview.png", "interiors/crypt/preview.png"],
+      "files": [
+        "interiors/oasis_1/preview.png",
+        "interiors/oasis_2/preview.png",
+        "interiors/oasis_3/preview.png",
+        "interiors/oasis_4/preview.png",
+        "interiors/oasis_5/preview.png",
+        "interiors/swamp_shack/preview.png",
+        "interiors/light_house/preview.png",
+        "interiors/crypt/preview.png"
+      ],
       "look_for": "Five desert oasis interiors (small walled courtyards, DESERT doors), the swamp shack, the light house (a tiny 8x8 room) and the crypt (8x6). One ring each.",
-      "citations": ["src/fmain.c:247-251", "src/fmain.c:253", "src/fmain.c:320", "src/fmain.c:282"]
+      "citations": [
+        "src/fmain.c:247-251",
+        "src/fmain.c:253",
+        "src/fmain.c:320",
+        "src/fmain.c:282"
+      ]
     },
     {
       "id": "village",
       "task": "T2.5",
-      "title": "Tambry — village #1-#8",
+      "title": "Tambry — tavern and houses 2-8",
       "view": "image",
-      "files": ["interiors/village_1/preview.png", "interiors/village_2/preview.png", "interiors/village_3/preview.png", "interiors/village_4/preview.png", "interiors/village_5/preview.png", "interiors/village_6/preview.png", "interiors/village_7/preview.png", "interiors/village_8/preview.png"],
-      "look_for": "Eight small wooden village houses (orange floors, beds, tables). Village #1 has two rings (doors 1.a and 1.b open into the same house). Adjacent houses on the indoor sheet are cut apart: no second house inside a box.",
-      "citations": ["src/fmain.c:271-278"]
+      "files": [
+        "interiors/tambry_tavern/preview.png",
+        "interiors/tambry_2/preview.png",
+        "interiors/tambry_3/preview.png",
+        "interiors/tambry_4/preview.png",
+        "interiors/tambry_5/preview.png",
+        "interiors/tambry_6/preview.png",
+        "interiors/tambry_7/preview.png",
+        "interiors/tambry_8/preview.png"
+      ],
+      "look_for": "The Tambry tavern (two rings: doors 1.a and 1.b open into the same house) and seven small wooden village houses (orange floors, beds, tables). Adjacent houses on the indoor sheet are cut apart: no second house inside a box.",
+      "citations": [
+        "src/fmain.c:271-278"
+      ]
     },
     {
       "id": "city",
       "task": "T2.5",
-      "title": "Marheim — city #10-#19",
+      "title": "Marheim — houses 10-19",
       "view": "image",
-      "files": ["interiors/city_10/preview.png", "interiors/city_11/preview.png", "interiors/city_12/preview.png", "interiors/city_13/preview.png", "interiors/city_14/preview.png", "interiors/city_15/preview.png", "interiors/city_16/preview.png", "interiors/city_17/preview.png", "interiors/city_18/preview.png", "interiors/city_19/preview.png"],
-      "look_for": "Ten stone city houses, several only 3x2 tiles of floor. City #15 has two rings (doors 15.a and 15.b). The houses sit wall-to-wall on the indoor sheet; each map holds exactly one house with shared walls kept and the neighbour's floor blanked.",
-      "citations": ["src/fmain.c:291-301"]
-    },
-    {
-      "id": "layers",
-      "task": "T2.5",
-      "title": "Index layers — tiles.png / master.png (crypt)",
-      "view": "image",
-      "files": ["interiors/crypt/tiles.png", "interiors/crypt/master.png", "interiors/crypt/preview.png"],
-      "look_for": "The two layers are tiny greyscale images the size of the map in tiles (8x6): tiles.png is dark (values 0-255), master.png near-black (values up to ~970 of 65535). They are data, not pictures — the preview is what they render to. tools/decode_map_layers.py assets/maps/interiors/crypt --dump csv prints both as numbers.",
-      "citations": ["src/fsubs.asm:565-604", "src/fmain.c:3557-3562"],
-      "counts": [
-        { "label": "crypt entries", "file": "interiors/crypt/map.json", "path": "entries", "expect": 1 },
-        { "label": "overworld doors", "file": "overworld/map.json", "path": "doors", "expect": 84 },
-        { "label": "overworld tileset regions", "file": "overworld/map.json", "path": "tileset.regions", "expect": 8 }
+      "files": [
+        "interiors/marheim_10/preview.png",
+        "interiors/marheim_11/preview.png",
+        "interiors/marheim_12/preview.png",
+        "interiors/marheim_13/preview.png",
+        "interiors/marheim_14/preview.png",
+        "interiors/marheim_15/preview.png",
+        "interiors/marheim_16/preview.png",
+        "interiors/marheim_17/preview.png",
+        "interiors/marheim_18/preview.png",
+        "interiors/marheim_19/preview.png"
+      ],
+      "look_for": "Ten stone city houses, several only 3x2 tiles of floor. Marheim 15 has two rings (doors 15.a and 15.b). The houses sit wall-to-wall on the indoor sheet; each map holds exactly one house with shared walls kept and the neighbour's floor blanked.",
+      "citations": [
+        "src/fmain.c:291-301"
       ]
     }
   ]

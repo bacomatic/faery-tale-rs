@@ -10,6 +10,7 @@
   ],
   "entries": [
     {
+      "door": "cabin yard #6",
       "door_type": "VLOG",
       "kind": "door",
       "landing_px": [
@@ -28,6 +29,7 @@
       "source": "src/fmain.c:269, src/fmain.c:1919-1927"
     },
     {
+      "door": "cabin #6",
       "door_type": "LOG",
       "kind": "door",
       "landing_px": [
@@ -61,7 +63,8 @@
   },
   "name": "cabin 6",
   "notes": [
-    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space and were set to tile 0.",
+    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space or were fragments not connected to this one, and were set to tile 0.",
+    "name is the shipped name (review decision); source_name derives from the doorlist comment, place_names are what the game prints (narr.asm).",
     "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); 128-255 are shared (fmain.c:624-625)."
   ],
   "origin_interior_tile": [
@@ -72,15 +75,21 @@
     8768,
     39392
   ],
+  "place_names": {
+    "inside": "cabin interior",
+    "outside": "log cabin",
+    "source": "src/narr.asm:86-223"
+  },
   "preview": {
     "file": "preview.png",
-    "markers": "magenta: entry landing points",
+    "markers": "magenta rings: entry landing points; cyan outlines: openable door tiles (type 15, open_list name; 0 here)",
     "scale": "1/1"
   },
   "size_tiles": [
     12,
     9
   ],
+  "source_name": "cabin 6",
   "tile_size_px": [
     16,
     32

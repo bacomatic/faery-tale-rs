@@ -20,7 +20,7 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
 | [T2.2.1](T2.2.1-master-atlas.md) Master tile atlas | **DONE** ✅ | T2.2, T2.5 | ACCEPTED 2026-09-30 (2/2 OK). Added during T2.2 review. 955 unique (art, colour 31, shadow mask) tiles + 2 secret-timer variants (512×960); shadow-mask atlas alongside + per-region reference maps in `master.json`. |
 | [T2.3](T2.3-masks.md) Shadow/collision masks | **DONE** ✅ | T0.1 | ACCEPTED 2026-09-30 (1/1 OK). 192 PNGs + sheet + `masks.json`. |
 | [T2.4](T2.4-screens.md) IFF screens | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/screens`. 9 PNGs + `screens.json`. |
-| [T2.5](T2.5-world.md) World maps | **IMPLEMENTED (awaiting review)** | T0.1, T2.2, T2.2.1 | Redesigned 2026-09-30: `assets/maps/` — overworld + 62 interiors + 5 dungeons + astral plane as index-layer PNGs with previews; `assets/world/` removed. |
+| [T2.5](T2.5-world.md) World maps | **DONE** ✅ | T0.1, T2.2, T2.2.1 | ACCEPTED 2026-10-02 (round 2, 11/11 OK). Redesigned 2026-09-30: `assets/maps/` — overworld + 62 interiors + 5 dungeons + astral plane as index-layer PNGs with previews; `assets/world/` removed. |
 | [T2.6](T2.6-music.md) Music + instruments | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/music`. 28 tracks, `format.json`, waveforms/envelopes, 35 WAV previews. |
 | [T2.7](T2.7-sfx.md) SFX | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/sfx`. 6 WAVs + `sfx.json`. |
 | [T2.8](T2.8-fonts.md) Fonts | **IMPLEMENTED (awaiting review)** | T0.1 | Branch `t2/fonts`. `amber_9` (97 glyphs) + `topaz_8` (225 glyphs). |
@@ -303,6 +303,13 @@ States: `TODO` · `IN PROGRESS` · `REOPENED` (gaps vs current model) · `IMPLEM
     `extract_tiles.py`/`extract_masks.py`/`extract_master_atlas.py` read terra via `decode_map_data.load_regions`.
     Source bug → P27: cabin-yard gates #4/#5/#9 point into cabins 7/8/6's yards (three `yc2` values) — **corrected in the shipped maps** (user decision, `extract_maps.DOOR_FIXES`, originals kept as `fix.source_yc2`); P26: tile 7 (type 10) is a
     passage corner; 161/162 (type 13) are beds. The `--assets` legend step (swatch view + `legend.png`) is moot.
+  - **T2.5 review round 1 (REJECT, 2026-10-01) — renames + fixes:** maps renamed per review (marheim castle,
+    citadel of doom, forbidden keep [= narr.asm's name for the doorlist's "unreachable castle", reached by swan],
+    witchwood cave, tambry tavern/tambry_N, marheim_N); `map.json` keeps `source_name` + narr.asm `place_names`;
+    stargate entries labelled "portal to/from …"; previews outline every openable door tile (type 15) in cyan with
+    its `open_list` name so SECRET/TUNNEL doors are visible; a stray mammoth-manor wall stub inside the dragon
+    cave's box is now blanked (fragments not 8-connected to the space's own tiles are dropped — the only case);
+    the "index layers" verify item was folded into the index item.
   - Doc drift noticed, not fixed: `text-display.md:43` (OpenFont is at `fmain.c:778`), `iff-loading.md` asm/struct
     line numbers off by 2, `audio.md:162-170` (84-entry ptable) and `:538` (seek "redundant").
 

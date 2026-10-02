@@ -2680,7 +2680,7 @@
       null,
       null,
       null,
-      821,
+      null,
       null,
       null,
       null,
@@ -2928,24 +2928,15 @@
         "cabin 7",
         "cabin 8",
         "cabin 9",
-        "city 10",
-        "city 11",
-        "city 12",
-        "city 13",
-        "city 14",
-        "city 15",
-        "city 16",
-        "city 17",
-        "city 18",
-        "city 19",
+        "citadel of doom",
         "coast keep",
         "crag keep",
         "crypt",
         "crystal palace",
         "desert fort",
-        "doom tower",
         "elf glade",
         "farm keep",
+        "forbidden keep",
         "forest inn",
         "friendly inn",
         "gate fort",
@@ -2953,8 +2944,18 @@
         "lakeside keep",
         "light house",
         "lonely keep",
-        "main castle",
         "mammoth manor",
+        "marheim 10",
+        "marheim 11",
+        "marheim 12",
+        "marheim 13",
+        "marheim 14",
+        "marheim 15",
+        "marheim 16",
+        "marheim 17",
+        "marheim 18",
+        "marheim 19",
+        "marheim castle",
         "mountain keep",
         "north keep",
         "oasis 1",
@@ -2969,15 +2970,14 @@
         "road's end inn",
         "sea keep",
         "swamp shack",
-        "unreachable castle",
-        "village 1",
-        "village 2",
-        "village 3",
-        "village 4",
-        "village 5",
-        "village 6",
-        "village 7",
-        "village 8",
+        "tambry 2",
+        "tambry 3",
+        "tambry 4",
+        "tambry 5",
+        "tambry 6",
+        "tambry 7",
+        "tambry 8",
+        "tambry tavern",
         "west keep",
         "witch's castle"
       ],
@@ -2998,14 +2998,14 @@
       },
       "maps": [
         "dragon cave",
-        "maze caves",
         "spider pit",
         "tombs",
-        "troll cave"
+        "troll cave",
+        "witchwood cave"
       ],
       "name": "F10 - dungeons and caves",
-      "tiles_unused": 165,
-      "tiles_used": 91
+      "tiles_unused": 166,
+      "tiles_used": 90
     }
   },
   "shadow_mask": {
@@ -22737,10 +22737,6 @@
         {
           "region": 8,
           "tile": 179
-        },
-        {
-          "region": 9,
-          "tile": 179
         }
       ],
       "subtile_mask": 255,
@@ -25728,5 +25724,5 @@
     ],
     "rule": "A tile is used by a region when it appears in a shipped map (assets/maps) drawn with that region's tileset: the overworld for regions 0-7 (tile = sector_mem[map_mem[sec_num]*128 + row*16 + col]); for regions 8 and 9, which share one map and sector pool, the interior spaces the game enters with that region loaded (door secs, stargate, quicksand drop). Parts of the interior map no entry reaches count for neither."
   },
-  "used_pairs": 1788
+  "used_pairs": 1787
 }

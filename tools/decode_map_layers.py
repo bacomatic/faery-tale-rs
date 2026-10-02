@@ -6,7 +6,7 @@ Each map directory holds ``map.json`` plus two greyscale PNGs whose pixel values
 and ``master.png`` (16-bit, master-atlas tile index; 65535 = none). Importable::
 
     from decode_map_layers import load_map
-    m = load_map("assets/maps/interiors/main_castle")
+    m = load_map("assets/maps/interiors/marheim_castle")
     m["tiles"][row, col], m["master"][row, col], m["meta"]["entries"]
 
 CLI::

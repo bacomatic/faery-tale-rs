@@ -69,6 +69,23 @@ DOOR_RE = re.compile(r"\{\s*0x([0-9a-f]+),\s*0x([0-9a-f]+),\s*0x([0-9a-f]+),\s*0
                      r"(\w+)\s*,\s*(\d)\s*\}\s*,?\s*/\*\s*(.*?)\s*\*/", re.I)
 XFER9_RE = re.compile(r"new_region\s*=\s*9;\s*xfer\((0x[0-9a-f]+|\d+),\s*(0x[0-9a-f]+|\d+),\s*FALSE\)", re.I)
 MARK = (255, 0, 255, 255)          # entry marker colour; asserted not to be a palette colour
+DOOR_MARK = (0, 255, 255, 255)     # openable-door tile outline in previews (type 15: doorfind)
+OPEN_RE = re.compile(r"\{\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\w+)\s*\}\s*,?\s*/\*\s*(.*?)\s*\*/")
+
+# Shipped names (review feedback 2026-10-01). Keys are the names derived from the doorlist comments;
+# every map.json keeps that comment as source_name and the narr.asm place names as place_names.
+RENAMES = {
+    "main castle": "marheim castle",
+    "maze caves": "witchwood cave",
+    "doom tower": "citadel of doom",
+    "unreachable castle": "forbidden keep",      # narr.asm place name; reached by swan
+    "village 1": "tambry tavern",
+}
+RENAME_PREFIX = {"village": "tambry", "city": "marheim"}
+ENTRY_LABELS = {                                 # doorlist comment -> label shown for the entry
+    "stargate backwards": "portal to astral plane",
+    "stargate forwards": "portal from citadel of doom",
+}
 
 # Source bug, fixed in the shipped maps (user decision 2026-09-30, reference/PROBLEMS.md P27): three
 # cabin-yard gates carry the middle cabin row's inside y (0x9a40) although their cabins sit in another
@@ -106,6 +123,15 @@ def parse_doors(src_dir: Path) -> list[dict]:
             doors.append(d)
     assert all(any(d["name"] == n for d in doors) for n in DOOR_FIXES)
     return doors
+
+
+def parse_open_list(src_dir: Path) -> list[dict]:
+    """open_list[17] (fmain.c:1053-1077): openable door tiles by (tile id, image-group block)."""
+    text = (src_dir / "fmain.c").read_text(errors="replace")
+    body = text[text.index("open_list[17] = {"):]
+    body = body[:body.index("\n};")]
+    return [{"tile": int(t), "block": int(b), "key": key, "name": name}
+            for t, b, _, _, _, key, name in OPEN_RE.findall(body)]
 
 
 def quicksand_xfer(src_dir: Path) -> tuple[int, int, int]:
@@ -172,6 +198,7 @@ class World:
             y0, x0 = (r // 2) * MAP_ROWS, (r % 2) * MAP_COLS
             self.overworld[y0:y0 + MAP_ROWS, x0:x0 + MAP_COLS] = self.regions[r]["tiles"]
         self.doors = parse_doors(src_dir)
+        self.open_list = parse_open_list(src_dir)
         self.entries = entry_points(self.doors, self.quicksand, self.outdoor_sector_px)
         self.quicksand_px = self.outdoor_sector_px(QUICKSAND_SECTOR)
 
@@ -182,6 +209,25 @@ class World:
                 if reg["grid"][row][c] == sector]
         assert len(hits) == 1, hits
         return list(hits[0])
+
+    def door_tiles(self, region: int) -> dict[int, str]:
+        """tile id -> open_list name for the openable doors a region's tileset contains
+        (doorfind matches door_id against the tile and map_id against the tile's image block,
+        fmain.c:1094-1098)."""
+        groups = self.regions[region]["file_index"]["image"]
+        return {o["tile"]: o["name"] for o in self.open_list if groups[o["tile"] >> 6] == o["block"]}
+
+    def place_names(self, interior_col_row, outside_px) -> dict:
+        """The game's own names (narr.asm:86-223) for the interior sector and the outside sector."""
+        col, row = interior_col_row
+        inside = dm.lookup_place_name(self.regions[8]["grid"][row][col], True)
+        outside = None
+        if outside_px is not None and outside_px[1] < INDOOR_Y0:
+            oc, orow = outside_px[0] >> 8, outside_px[1] >> 8
+            reg = next(g for g in self.regions[:8]
+                       if g["xreg"] <= oc < g["xreg"] + 64 and g["yreg"] <= orow < g["yreg"] + 32)
+            outside = dm.lookup_place_name(reg["grid"][orow - reg["yreg"]][oc - reg["xreg"]], False)
+        return {"inside": inside, "outside": outside, "source": "src/narr.asm:86-223"}
 
     def walkable(self, region: int) -> np.ndarray:
         """(1024, 2048) bool: sub-tile the hero may occupy, per px_to_im + prox rules."""
@@ -261,10 +307,32 @@ def space_name(sp: dict) -> tuple[str, str]:
         first = next((n for n in names if " yard" not in n), names[0])
         name = re.sub(r" yard|\.a$|\.b$|DB$", "", first).replace("#", "").strip()
     kind = "astral" if name == "astral plane" else "dungeon" if sp["region"] == 9 else "interior"
+    sp["source_name"] = name
+    head, _, tail = name.partition(" ")
+    name = RENAMES.get(name) or (f"{RENAME_PREFIX[head]} {tail}" if head in RENAME_PREFIX else name)
     return name, kind
 
 
-def finish_spaces(spaces: list[dict]) -> list[dict]:
+def attached(nonblank: np.ndarray, seed: np.ndarray) -> np.ndarray:
+    """Non-blank tiles 8-connected (through non-blank tiles) to the seed set."""
+    keep = np.zeros_like(nonblank)
+    q = deque()
+    for y, x in zip(*np.nonzero(seed & nonblank)):
+        keep[y, x] = True
+        q.append((y, x))
+    h, w = nonblank.shape
+    while q:
+        y, x = q.popleft()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w and nonblank[ny, nx] and not keep[ny, nx]:
+                    keep[ny, nx] = True
+                    q.append((ny, nx))
+    return keep
+
+
+def finish_spaces(world: World, spaces: list[dict]) -> list[dict]:
     """Name each space, crop it and blank tiles that belong to another space."""
     for sp in spaces:
         sp["name"], sp["kind"] = space_name(sp)
@@ -278,6 +346,12 @@ def finish_spaces(spaces: list[dict]) -> list[dict]:
         foreign &= ~sp["owned"]
         sp["crop"] = (x0, y0, x1 + 1, y1 + 1)
         sp["foreign"] = foreign[y0:y1 + 1, x0:x1 + 1]
+        # fragments of other structures that survive the ownership test (e.g. a wall stub two tiles
+        # from a neighbour's floor) are not 8-connected to this space's own tiles: blank them too
+        crop = world.interior[y0:y1 + 1, x0:x1 + 1]
+        nonblank = (crop != BLANK_TILE) & ~sp["foreign"]
+        sp["detached"] = nonblank & ~attached(nonblank, sp["owned"][y0:y1 + 1, x0:x1 + 1])
+        sp["foreign"] |= sp["detached"]
     spaces.sort(key=lambda s: (s["kind"], s["name"]))
     names = [s["name"] for s in spaces]
     assert len(set(names)) == len(names), f"duplicate space names: {names}"
@@ -337,6 +411,18 @@ def render(tiles: np.ndarray, atlas: np.ndarray) -> np.ndarray:
     h, w = tiles.shape
     _, th, tw, _ = atlas.shape
     return atlas[tiles].transpose(0, 2, 1, 3, 4).reshape(h * th, w * tw, 4)
+
+
+def mark_doors(img: Image.Image, tiles: np.ndarray, door_tiles: dict[int, str]) -> int:
+    """Outline every openable-door tile (type 15) and label it with its open_list name."""
+    d = ImageDraw.Draw(img)
+    n = 0
+    for y, x in zip(*np.nonzero(np.isin(tiles, list(door_tiles)))):
+        px, py = int(x) * TILE_W, int(y) * TILE_H
+        d.rectangle([px - 1, py - 1, px + TILE_W, py + TILE_H], outline=DOOR_MARK, width=2)
+        d.text((px + TILE_W + 3, py + 2), door_tiles[int(tiles[y, x])], fill=DOOR_MARK)
+        n += 1
+    return n
 
 
 def mark(img: Image.Image, points: list[tuple[int, int, str]], scale: int = 1) -> None:
@@ -428,21 +514,28 @@ def build(world: World, spaces: list[dict], ref: np.ndarray, atlases: dict, out_
         r = sp["region"]
         master = ref[r, tiles]
         prev = Image.fromarray(render(tiles, atlases[r]), "RGBA")
-        pts = [(e["landing"][0] - x0 * TILE_W, e["landing"][1] - INDOOR_Y0 - y0 * TILE_H, e["name"])
+        n_doors = mark_doors(prev, tiles, world.door_tiles(r))
+        pts = [(e["landing"][0] - x0 * TILE_W, e["landing"][1] - INDOOR_Y0 - y0 * TILE_H, ENTRY_LABELS.get(e["name"], e["name"]))
                for e in sp["entries"]]
         mark(prev, pts)
         sub = "" if sp["kind"] == "astral" else f"{sp['kind']}s/"
         d = f"{sub}{slug(sp['name'])}"
+        first = sp["entries"][0]
         meta = {
             "name": sp["name"], "kind": sp["kind"],
+            "source_name": sp["source_name"],
+            "place_names": world.place_names((first["landing"][0] // 256, (first["landing"][1] >> 8) - INDOOR_YREG),
+                                             first["outside"]),
             "size_tiles": [x1 - x0, y1 - y0], "tile_size_px": [TILE_W, TILE_H],
             "origin_interior_tile": [x0, y0],
             "origin_world_px": [x0 * TILE_W, INDOOR_Y0 + y0 * TILE_H],
             "tileset": {"region": r, "name": world.regions[r]["name"], "dir": f"assets/tiles/region_{r:02d}/",
                         "source": sp["entries"][0]["source"]},
             "layers": LAYERS,
-            "preview": {"file": "preview.png", "scale": "1/1", "markers": "magenta: entry landing points"},
-            "entries": [{"name": e["name"], "kind": e["kind"], "door_type": e["door_type"],
+            "preview": {"file": "preview.png", "scale": "1/1",
+                        "markers": "magenta rings: entry landing points; cyan outlines: openable door tiles "
+                                   f"(type 15, open_list name; {n_doors} here)"},
+            "entries": [{"name": ENTRY_LABELS.get(e["name"], e["name"]), "door": e["name"], "kind": e["kind"], "door_type": e["door_type"],
                          "landing_px": e["landing"],
                          "landing_tile": [e["landing"][0] // TILE_W - x0, (e["landing"][1] - INDOOR_Y0) // TILE_H - y0],
                          "outside_px": e["outside"], "source": e["source"],
@@ -451,7 +544,9 @@ def build(world: World, spaces: list[dict], ref: np.ndarray, atlases: dict, out_
             "blanked_tiles": int(sp["foreign"].sum()),
             "notes": ["Reachable area from the listed entries by the px_to_im/prox rules; cropped to those "
                       "tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another "
-                      "space and were set to tile 0.",
+                      "space or were fragments not connected to this one, and were set to tile 0.",
+                      "name is the shipped name (review decision); source_name derives from the doorlist "
+                      "comment, place_names are what the game prints (narr.asm).",
                       "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); "
                       "128-255 are shared (fmain.c:624-625)."],
             "citations": ["src/fmain.c:624-625", "src/fmain.c:1892-1955", "src/fmain.c:2625-2645",
@@ -459,7 +554,7 @@ def build(world: World, spaces: list[dict], ref: np.ndarray, atlases: dict, out_
         }
         write_map(out_dir / d, meta, tiles, master, prev)
         index["rows"].append({"dir": d, "name": sp["name"], "kind": sp["kind"], "size_tiles": meta["size_tiles"],
-                              "tileset_region": r, "entries": ", ".join(e["name"] for e in sp["entries"])})
+                              "tileset_region": r, "entries": ", ".join(ENTRY_LABELS.get(e["name"], e["name"]) for e in sp["entries"])})
     return index
 
 
@@ -476,11 +571,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     world = World(args.game_dir, args.src_dir)
-    spaces = finish_spaces(segment(world))
+    spaces = finish_spaces(world, segment(world))
     ref = load_master(master_dir)
     atlases = region_atlases(args.assets_dir / "tiles")
     pal = {tuple(e["rgba8"]) for e in json.loads((args.assets_dir / "palettes" / "pagecolors.json").read_text())}
-    assert MARK not in pal, "marker colour clashes with the palette"
+    assert MARK not in pal and DOOR_MARK not in pal, "marker colour clashes with the palette"
     index = build(world, spaces, ref, atlases, out)
     ac.write_json(out / "maps.json", index)
     kinds = {}

@@ -10,6 +10,7 @@
   ],
   "entries": [
     {
+      "door": "desert fort",
       "door_type": "HWOOD",
       "kind": "door",
       "landing_px": [
@@ -28,6 +29,7 @@
       "source": "src/fmain.c:240, src/fmain.c:1919-1927"
     },
     {
+      "door": "desert fort",
       "door_type": "HWOOD",
       "kind": "door",
       "landing_px": [
@@ -46,6 +48,7 @@
       "source": "src/fmain.c:241, src/fmain.c:1919-1927"
     },
     {
+      "door": "desert fort",
       "door_type": "HWOOD",
       "kind": "door",
       "landing_px": [
@@ -64,6 +67,7 @@
       "source": "src/fmain.c:242, src/fmain.c:1919-1927"
     },
     {
+      "door": "desert fort",
       "door_type": "HWOOD",
       "kind": "door",
       "landing_px": [
@@ -97,7 +101,8 @@
   },
   "name": "desert fort",
   "notes": [
-    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space and were set to tile 0.",
+    "Reachable area from the listed entries by the px_to_im/prox rules; cropped to those tiles, their neighbours and a 1-tile margin. blanked_tiles cells belonged to another space or were fragments not connected to this one, and were set to tile 0.",
+    "name is the shipped name (review decision); source_name derives from the doorlist comment, place_names are what the game prints (narr.asm).",
     "Tile ids 0-127 differ between the region 8 and 9 tilesets (terra1 / image group 1); 128-255 are shared (fmain.c:624-625)."
   ],
   "origin_interior_tile": [
@@ -108,15 +113,21 @@
     10256,
     35552
   ],
+  "place_names": {
+    "inside": "building",
+    "outside": "outlying fort",
+    "source": "src/narr.asm:86-223"
+  },
   "preview": {
     "file": "preview.png",
-    "markers": "magenta: entry landing points",
+    "markers": "magenta rings: entry landing points; cyan outlines: openable door tiles (type 15, open_list name; 2 here)",
     "scale": "1/1"
   },
   "size_tiles": [
     14,
     7
   ],
+  "source_name": "desert fort",
   "tile_size_px": [
     16,
     32
